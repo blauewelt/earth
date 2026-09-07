@@ -174,9 +174,16 @@ class ConeMAE(nn.Module):
     """The cone-native codec. See the module docstring for what it copies."""
 
     def __init__(self, n_chan, d_model=256, n_heads=8, n_latents=64,
-                 n_layers=6, d_z=32, d_dec=256, dec_layers=2, n_fourier=8):
+                 n_layers=6, d_z=32, d_dec=256, dec_layers=2, n_fourier=8,
+                 n_extra=0):
         super().__init__()
         self.n_chan = int(n_chan)
+        # E-076 section 2.6. `n_extra` widens the DOT projection by that many
+        # per-dot fields ([nr, fp0, fp1] — the local observation density and
+        # the two footprint numbers). It DEFAULTS TO 0, which is the projection
+        # every archived E-069 checkpoint was trained with, so `dot_proj` keeps
+        # its exact shape and those files load bit-identically.
+        self.n_extra = int(n_extra)
         self.d_model = int(d_model)
         self.d_z = int(d_z)
         self.d_dec = int(d_dec)
@@ -190,9 +197,10 @@ class ConeMAE(nn.Module):
         # PixelMAE's patch=3 projection, unchanged: 9 values and 9 observed
         # flags through one Linear (ml/model.py:660).
         self.val_proj = nn.Linear(18, d_model)
-        # A dot is ONE cell: [value, observed]. Same shape of statement as the
-        # patch token, one ninth of the input.
-        self.dot_proj = nn.Linear(2, d_model)
+        # A dot is ONE cell: [value, observed], plus `n_extra` fields that say
+        # what KIND of measurement it is rather than what it measured. Same
+        # shape of statement as the patch token, one ninth of the input.
+        self.dot_proj = nn.Linear(2 + self.n_extra, d_model)
         self.chan_emb = nn.Embedding(n_chan, d_model)
         self.coord = CoordEnc(d_model, n_fourier)
         self.mask_tok = nn.Parameter(torch.zeros(d_model))   # hidden by US
@@ -300,6 +308,23 @@ class ConeMAE(nn.Module):
                   + self.coord(b["dy_km"].to(dt), b["dx_km"].to(dt),
                                b["lag_days"].to(dt), b["depth"].to(dt)))
         dfeat = torch.stack([dv * do, do], dim=-1)               # [B, N, 2]
+        if self.n_extra:
+            # [nr, fp0, fp1], in that order and always that width: an ablation
+            # that withholds one of them ZEROES it (ml/train_cone.py's
+            # --dot-extras) rather than changing the architecture, so the arms
+            # of E-076 section 5's ladder differ in what the model is TOLD and
+            # not in how many parameters it has.
+            ex = b.get("dot_extra")
+            if ex is None:
+                ex = torch.zeros(B, N, self.n_extra, dtype=dt,
+                                 device=dv.device)
+            ex = ex.to(dt)
+            if ex.shape[-1] != self.n_extra:
+                raise ValueError(
+                    f"dot_extra is [..., {ex.shape[-1]}] and this codec was "
+                    f"built for n_extra={self.n_extra}; a mismatch would feed "
+                    f"the footprint into the density's column")
+            dfeat = torch.cat([dfeat, ex], dim=-1)
         dvt = self.dot_proj(dfeat)
         obs_d = b["obs"]
         vis = (obs_d & ~dot_mask).unsqueeze(-1)
@@ -594,6 +619,28 @@ class ConeMAE(nn.Module):
             tgts.append(b["vals"].gather(1, idx).to(dt))
             ws.append(sel.to(dt) * cw[b["chan"].long().gather(1, idx)])
 
+        # ---- D. the WITHHELD PROFILE (E-076 sections 5.1, 7.5) -------------
+        # Masked-profile reconstruction: the profile the sampler took OUT of
+        # the input is asked for at its own 32 (channel, coordinate) pairs.
+        # It is a query block the SAMPLER built, so it needs no draw and no
+        # RNG at all — `forward`'s generator stream is untouched, which is
+        # what keeps every archived cone number reproducible. Present only on
+        # a batch that withheld something; a family-7 batch has no such key
+        # and the query axis is the three families it has always been.
+        pq = b.get("pq_chan")
+        if pq is not None and pq.shape[1] > 0:
+            pc = pq.long()
+            chans.append(pc)
+            dys.append(b["pq_dy_km"].to(dt))
+            dxs.append(b["pq_dx_km"].to(dt))
+            lags.append(b["pq_lag_days"].to(dt))
+            deps.append(b["pq_depth"].to(dt))
+            tgts.append(b["pq_vals"].to(dt))
+            # The channel's own family weight, which for the `rg_*` column IS
+            # FAMILY_W["B"] — the same weight every other query on those
+            # channels carries, so the profile family is not a second scale.
+            ws.append(b["pq_obs"].to(dt) * cw[pc])
+
         return (torch.cat(chans, 1), torch.cat(dys, 1), torch.cat(dxs, 1),
                 torch.cat(lags, 1), torch.cat(deps, 1), torch.cat(tgts, 1),
                 torch.cat(ws, 1))
@@ -636,9 +683,11 @@ class ConeMAE(nn.Module):
 
         DERIVED, never a second construction: `_query_sets` concatenates A
         (anchor reconstruction, C columns), then B (future, C*F columns), then
-        C (hidden dots, whatever the draw returned), in that order and only
-        when the plan asks for them. The first two widths are functions of the
-        plan and of the batch's shapes alone, so the third is the remainder —
+        C (hidden dots, whatever the draw returned) and, on a family-8 batch
+        that withheld a profile, D (that profile's 32 channels), in that order
+        and only when the plan asks for them. Every width but the dots' is a
+        function of the plan and of the batch's shapes alone, so the dots are
+        the remainder —
         which means this cannot drift from the concatenation above the way a
         hand-kept index list would. `n_queries` is the width the concatenation
         actually produced, so a mismatch shows up as a dots span of the wrong
@@ -650,11 +699,18 @@ class ConeMAE(nn.Module):
         n_future = (C * int(fut.shape[-1])
                     if plan.get("future", True) and fut is not None
                     and fut.shape[-1] else 0)
-        n_dots = max(int(n_queries) - n_anchor - n_future, 0)
+        pq = b.get("pq_chan")
+        n_prof = int(pq.shape[1]) if pq is not None else 0
+        n_dots = max(int(n_queries) - n_anchor - n_future - n_prof, 0)
         lo = 0
         spans = {}
-        for name, width in (("anchor", n_anchor), ("future", n_future),
-                            ("dots", n_dots)):
+        fams = [("anchor", n_anchor), ("future", n_future), ("dots", n_dots)]
+        if n_prof:
+            # LAST, because `_query_sets` concatenates it last. The name is
+            # absent from the dict on every batch that withheld nothing, so a
+            # reader that knows only the three families sees exactly them.
+            fams.append(("profile", n_prof))
+        for name, width in fams:
             spans[name] = (lo, lo + width)
             lo += width
         return spans

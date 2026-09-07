@@ -87,6 +87,7 @@ Pure numpy; no scipy. The search is a vectorised brute force over the rows of
 at most seven bins (~15 k rows at Argo's density), which is faster than a tree
 at this size and has no build step to keep in sync with the store.
 """
+import hashlib
 import json
 import os
 
@@ -145,6 +146,118 @@ def offsets_km(lat0, lon0, lat, lon):
     coslat = np.maximum(np.cos(np.radians(0.5 * (lat + float(lat0)))), COS_FLOOR)
     dx = dlon * KM_PER_DEG * coslat
     return dx, dy
+
+
+def write_synthetic_store(path, bin_, time_days, lat, lon, temp, psal,
+                          levels=None, n_bins=N_BINS, note=""):
+    """Write a store from arrays — FOR SMOKE TESTS ONLY.
+
+    The production store is written by
+    `ml/build_family8_argo.py::assemble_store` out of real Argo day files;
+    this is the same LAYOUT (the one this module defines: eleven aligned
+    columns, a CSR bin index, a store.json carrying `N`, `levels` and the
+    sha256 of every file) built from arrays a caller already has, so
+    `ml/train_cone.py --smoke-family8` and `tests/test_cone_profiles.py` can
+    exercise the whole family-8 path on two CPU cores with no network.
+
+    Rows are sorted by `(bin, time_days)` here rather than trusted to be, since
+    that order is what makes `bin_offsets` valid at all.
+    """
+    levels = np.asarray(levels if levels is not None
+                        else [10, 30, 50, 100, 150, 200, 300, 400, 500, 700,
+                              900, 1100, 1300, 1500, 1700, 1900], np.float64)
+    bin_ = np.asarray(bin_, np.int64)
+    time_days = np.asarray(time_days, np.float64)
+    order = np.lexsort((time_days, bin_))
+    bin_, time_days = bin_[order], time_days[order]
+    lat = np.asarray(lat, np.float32)[order]
+    lon = np.asarray(lon, np.float32)[order]
+    temp = np.asarray(temp, np.float32)[order]
+    psal = np.asarray(psal, np.float32)[order]
+    N = len(bin_)
+    cols = {
+        "bin": bin_.astype(np.int16),
+        "time_days": time_days.astype(np.float32),
+        "lat": lat, "lon": lon,
+        "temp": temp.astype(np.float16), "psal": psal.astype(np.float16),
+        "wmo": np.arange(N, dtype=np.int32) + 1900000,
+        "cycle": (np.arange(N) % 300).astype(np.int16),
+        "nlev": np.full(N, len(levels), np.int16),
+        "maxpres": np.full(N, float(levels[-1]), np.float16),
+        "mode": np.full(N, b"D", "|S1"),
+    }
+    os.makedirs(path, exist_ok=True)
+    files = {}
+    for name, arr in cols.items():
+        p = os.path.join(path, name + ".npy")
+        np.save(p, arr)
+        files[name + ".npy"] = p
+    off = np.searchsorted(bin_, np.arange(int(n_bins) + 1, dtype=np.int64),
+                          side="left").astype(np.int64)
+    p = os.path.join(path, "bin_offsets.npy")
+    np.save(p, off)
+    files["bin_offsets.npy"] = p
+    meta = {
+        "N": int(N), "n_bins": int(n_bins),
+        "levels": [float(v) for v in levels],
+        "epoch": "1982-01-01", "pentad_days": PENTAD_DAYS,
+        "recipe": "f8argo_smoke", "stem": "family8_argo_smoke",
+        "normalisation": "RAW — not z-scored and not anomalised",
+        "synthetic": True, "note": note,
+        "footprint": {"log2_fp": LOG2_FP_ARGO, "log2_dt": LOG2_DT_ARGO},
+        "sha256": {n: hashlib.sha256(open(p, "rb").read()).hexdigest()
+                   for n, p in sorted(files.items())},
+    }
+    with open(os.path.join(path, "store.json"), "w") as fh:
+        json.dump(meta, fh, indent=2)
+    return path
+
+
+def verify_store(path, chunk=1 << 22):
+    """Every file's sha256 against `store.json`'s own record. Raises on any
+    mismatch, returns the number of files checked.
+
+    A truncated download is the failure this catches, and it is worth catching
+    at DISPATCH rather than at use: half a `temp.npy` still memmaps, still
+    answers `knearest`, and answers it with whatever the tail of the file
+    happens to be. `ml/train_cone.py --argo-store` calls this before a single
+    step is spent (ml/CLAUDE.md section 0.3 — check a precondition where the
+    inputs are all it has cost you).
+    """
+    path = os.path.abspath(path)
+    mp = os.path.join(path, "store.json")
+    if not os.path.exists(mp):
+        raise FileNotFoundError(
+            f"{mp} is missing — {path} is not a family-8 observation store "
+            f"(docs/FAMILY8_DATA_HANDOVER.md section 2 lists the thirteen "
+            f"files and where to fetch them)")
+    with open(mp) as fh:
+        want = json.load(fh).get("sha256") or {}
+    if not want:
+        raise ValueError(
+            f"{mp} carries no sha256 block, so nothing about this store can "
+            f"be verified. Refusing rather than training on bytes of unknown "
+            f"provenance.")
+    bad = []
+    for name, digest in sorted(want.items()):
+        p = os.path.join(path, name)
+        if not os.path.exists(p):
+            bad.append(f"{name}: missing")
+            continue
+        h = hashlib.sha256()
+        with open(p, "rb") as fh:
+            for blk in iter(lambda: fh.read(chunk), b""):
+                h.update(blk)
+        got = h.hexdigest()
+        if got != digest:
+            bad.append(f"{name}: {got[:12]} != {digest[:12]}")
+    if bad:
+        raise ValueError(
+            f"family-8 store at {path} does not match its own store.json:\n  "
+            + "\n  ".join(bad)
+            + "\nA truncated file still memmaps and still answers a search, "
+              "with whatever its tail happens to hold — re-fetch it.")
+    return len(want)
 
 
 class ArgoStore:

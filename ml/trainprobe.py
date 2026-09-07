@@ -137,10 +137,41 @@ def light_rows(ridx, tr_all, te_all, months):
     return np.arange(0, len(ridx), stride), stride
 
 
-def anomaly_transform(X, moy, t_hold, x_hold, chunk=64, verbose=None):
+def anomaly_transform(X, moy, t_hold, x_hold, chunk=64, verbose=None,
+                      stats=None):
     """The one anomaly transform (train.py --anomaly), in one place: dynamic
     channels become departures from their own train-years monthly
     climatology, then z-scored on train data. Returns (X, dynamic).
+
+    `stats`, when a dict is passed, is FILLED with the three constants this
+    function derives and then throws away — and with nothing else changed
+    about what it computes or writes (tests/test_anomaly_chunked.py and
+    tests/test_one_anomaly_transform.py pin that, and they pass unmodified):
+
+        stats["clim"]  [12, H, W, C] float32 — the train-years monthly
+                       climatology actually subtracted, NaN where a
+                       (month, cell, channel) had no training sample and 0.0
+                       on the static channels, exactly as used below;
+        stats["mu"]    [C] float64 — the pooled anomaly mean subtracted;
+        stats["sd"]    [C] float64 — the pooled anomaly sd, as computed;
+        stats["den"]   [C] float64 — what was actually divided by, i.e.
+                       sd + 1e-6 on dynamic channels and 1.0 on static ones,
+                       so a caller reproducing the chain does not have to
+                       re-derive the static-channel special case;
+        stats["dynamic"] the dynamic-channel list, as returned.
+
+    E-076 §2.5 is why this exists: a family-8 Argo PROFILE has to be put into
+    the same space as the gridded channels — z-scored by the tensor's own
+    `norm`, then anomalised by THIS climatology, evaluated at the profile's
+    own cell and calendar month rather than the anchor's. Recomputing that
+    climatology beside this function would be a second anomaly transform, and
+    tests/test_one_anomaly_transform.py exists to say there is only one.
+
+    Note the memory: `clim` is 12*H*W*C float32 and is normally freed inside
+    this function. Holding a reference in `stats` keeps it alive — 100 MB for
+    family 7's `rg100` group (12 x 181 x 360 x 32), which is what the caller
+    asks for by passing the dict, and 349 MB for the dense group, which is why
+    ml/train_cone.py asks only for the group it needs.
 
     WHY THIS IS CHUNKED OVER TIME AND NOT OVER CHANNELS. The tensor is
     channel-interleaved [T, H, W, C], so `X[..., c]` has a stride of C*itemsize
@@ -297,6 +328,14 @@ def anomaly_transform(X, moy, t_hold, x_hold, chunk=64, verbose=None):
         dynamic = [c for c in range(C)
                    if np.nanstd(smean[:, c], dtype=np.float64) > 1e-6]
         if not dynamic:
+            if stats is not None:
+                # The identity chain, so a caller never gets a half-filled
+                # dict: nothing was subtracted and nothing divided.
+                stats.update(clim=np.zeros((12, H, W, C), np.float32),
+                             mu=np.zeros(C, np.float64),
+                             sd=np.zeros(C, np.float64),
+                             den=np.ones(C, np.float64),
+                             dynamic=dynamic)
             return X, dynamic
 
         with np.errstate(invalid="ignore", divide="ignore"):
@@ -310,6 +349,10 @@ def anomaly_transform(X, moy, t_hold, x_hold, chunk=64, verbose=None):
         # across the same sub-page stride this rewrite exists to avoid.
         stat = np.setdiff1d(np.arange(C), np.asarray(dynamic))
         clim[..., stat] = 0.0
+        if stats is not None:
+            # The SAME array, not a copy: `del clim` below then frees only
+            # this function's own reference. See the docstring on the cost.
+            stats["clim"] = clim
         _say(f"{len(dynamic)}/{C} dynamic channels; climatology done")
 
         # ---- pass 2: write the anomaly, accumulate (n, mean, M2) ----------
@@ -365,6 +408,9 @@ def anomaly_transform(X, moy, t_hold, x_hold, chunk=64, verbose=None):
         mu[stat] = 0.0
         den = sd + 1e-6
         den[stat] = 1.0
+        if stats is not None:
+            stats.update(mu=mu.copy(), sd=sd.copy(), den=den.copy(),
+                         dynamic=list(dynamic))
 
         # ---- pass 3: z-score in place ------------------------------------
         for b, i0 in enumerate(range(0, T, chunk)):

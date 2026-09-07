@@ -57,7 +57,7 @@ on:
         description: "spatial window (global | na) for the family2 recipe. Doubles as a modifier: on a joint: run the loss mode (lse | max | sum, optionally mode@ref or mode@twin), on a stage-2 run unroll:N for the autoregressive unroll, resume2:<tag>[@lr] to CONTINUE an existing stage-2 head (needs optimiser state: only heads written after 2026-08-10 have it), or warm2:<tag>[@lr] for a WARM RESTART from its weights alone with a fresh cosine, where temporal_steps is the EXTRA steps rather than the total (both seeded from the model-checkpoints release if the box lacks the file) — reusing an input the quarter-degree recipe ignores, again because of the 25-input cap"
         default: "global"
       tensor:
-        description: "tensor recipe: family2 (build_dataset + fetchers, 1°) | family3_na025 (0.25° NA monthly) | family4_na025_pentad (0.25° NA 5-day, E-034/E-038) | family5_na025_daily (0.25° NA 1-day, E-038 Phase B; sidecar layout, needs a 400+ GB disk) | family4_na025_pentad_r2 and family5_na025_daily_r2 (E-042: the same tensors plus an appended 40th channel, daily OISST SST — recipes f4r2/f5r2, their own file names, so an r1 build in flight is never overwritten). family4_na025_pentad_r3 (E-069: r2 plus appended cur_u, cur_v — the binned mean GLORYS12 current components cur_speed is the hypotenuse of, which the cone codec needs because advection is a vector — recipe f4r3, its own file name again). family6_na025_cmip6 (E-061: CMIP6 piControl ocean output regridded onto the family-3 axes — an UNLABELLED pretraining corpus of 800 model-years, recipe f6r1, SPARSE sidecar with 3 live channels of 40; it trains nothing by itself and the Train and Probes steps skip it). A VALUE on an existing input, never a 26th input — this file sits at the 25-input ceiling and a 26th makes the WHOLE workflow unparseable."
+        description: "tensor recipe: family2 (build_dataset + fetchers, 1°) | family3_na025 (0.25° NA monthly) | family4_na025_pentad (0.25° NA 5-day, E-034/E-038) | family5_na025_daily (0.25° NA 1-day, E-038 Phase B; sidecar layout, needs a 400+ GB disk) | family4_na025_pentad_r2 and family5_na025_daily_r2 (E-042: the same tensors plus an appended 40th channel, daily OISST SST — recipes f4r2/f5r2, their own file names, so an r1 build in flight is never overwritten). family4_na025_pentad_r3 (E-069: r2 plus appended cur_u, cur_v — the binned mean GLORYS12 current components cur_speed is the hypotenuse of, which the cone codec needs because advection is a vector — recipe f4r3, its own file name again). family6_na025_cmip6 (E-061: CMIP6 piControl ocean output regridded onto the family-3 axes — an UNLABELLED pretraining corpus of 800 model-years, recipe f6r1, SPARSE sidecar with 3 live channels of 40; it trains nothing by itself and the Train and Probes steps skip it). family7_global025_pentad_l0 (E-070: the first tensor covering the WHOLE GLOBE rather than the North Atlantic window, 721 x 1440 cells at 0.25 deg on the same 5-day cadence, three co-registered groups at two resolutions — g025 dense, g100 coarse, rg100 the Argo depth column on live bins only. It is 53 GB and is NOT built on the box: the four files are pulled whole from the public Hub dataset by the 'Seed family 7 from the Hub' step, sha256-verified against the publisher's manifest, and the family-3/4/5 seed and build steps skip. E-076a trains the cone codec on it, and a recipe carrying cone_argo_store additionally pulls the family-8 Argo observation store beside it). A VALUE on an existing input, never a 26th input — this file sits at the 25-input ceiling and a 26th makes the WHOLE workflow unparseable."
         default: "family2"
       sst_channel:
         description: "append monthly OISST as channel 15 (true | false)"
@@ -339,6 +339,41 @@ on:
 #   recipe-only: cone_lr              -> ml/train_cone.py --lr            (3e-4)
 #       The cone trainer's peak learning rate. NOT lr_floor, which already
 #       means two different things depending on whether the run is joint.
+#
+# ---- E-076a, the family-8 arm (ml/family8_store.py + the sparse gather) ----
+# Four more recipe-only keys, same discipline: each is consumed EXACTLY ONCE
+# in the Train step's cone branch as ${RECIPE_<KEY>:-<default>}, and the
+# defaults are ml/train_cone.py's own. They describe an ARM of E-076a — two
+# runs of the same 7 M codec on the same family-7 tensor, differing only in how
+# the Argo interior enters the cone — so they belong with the codec's geometry
+# rather than with a dispatch input.
+#
+#   recipe-only: cone_argo_store      -> ml/train_cone.py --argo-store   (unset)
+#       The DIRECTORY NAME of the family-8 observation store under ml/cache,
+#       e.g. "family8_argo_l0". Setting it does two things: the seed step
+#       pulls that store from the Hub beside the tensor, and the trainer opens
+#       it — refusing unless its store.json's sha256s match its files. Unset
+#       is the family-7 twin: no store, no profile tokens, no common-target
+#       eval (E-076 section 5.1's target IS the nearest real profile, so
+#       scoring it needs the store even on the arm that does not read it as
+#       input — set cone_argo_store with cone_profile_k 0 for that).
+#   recipe-only: cone_profile_k       -> ml/train_cone.py --profile-k       (5)
+#       How many nearest profiles enter the input per anchor. E-076 section
+#       2.3 derives 5 from the array's own density: the fifth neighbour sits
+#       at about one surface correlation length where Argo is dense. 0 with a
+#       store present is the TWIN — the gridded rg100 group is read exactly as
+#       today and the store supplies only the target.
+#   recipe-only: cone_dot_extras      -> ml/train_cone.py --dot-extras  (none)
+#       Comma set of `nr` (log1p of the local observation count) and `fp` (the
+#       two footprint fields of E-076 section 2.6) appended to every dot
+#       token. Naming ANY of them widens the dot projection by three and
+#       zeroes the ones not named, so the ablation arms differ in what the
+#       model is TOLD and not in how many parameters it has. Empty is the
+#       two-number dot every archived checkpoint carries.
+#   recipe-only: cone_profile_drop_p  -> ml/train_cone.py --profile-drop-p (0.5)
+#       Probability, per anchor, that the NEAREST profile is withheld from the
+#       input and added to the decoder's query set instead — the
+#       masked-profile objective the common-target eval scores.
 
 # contents: write ONLY for the live-metrics side channel — the training
 # step pushes metrics.jsonl to an orphan ml-live-<run_number> branch every
@@ -665,6 +700,15 @@ jobs:
           mkdir -p /opt/earth-cache
           rm -rf ml/cache
           ln -s /opt/earth-cache ml/cache
+          # FAMILY 7 SEEDS NOTHING HERE. Its tensor is pulled whole from the
+          # Hub by the next step, and the RG/NCEP/truth archives below are
+          # BUILD inputs only — nothing downstream opens them. Fetching GBs of
+          # them to run a builder that is never called is cost with no effect
+          # (#391's lesson, the same one the family-4 branch's "tensor is the
+          # published pin, skip the fetch entirely" applies one step later).
+          if [ "${RECIPE_TENSOR:-${{ inputs.tensor }}}" = "family7_global025_pentad_l0" ]; then
+            echo "family 7: skipping the RG/wind/truth build inputs — the tensor arrives whole from the Hub"
+          else
           # COLD-START SEED from the data-cache release instead of the origin
           # archives (SIO 504s/timeouts killed five runs on 2026-08-08). The
           # check is COMPLETENESS, not existence: failed origin fetches leave
@@ -755,7 +799,106 @@ jobs:
               "https://github.com/${GITHUB_REPOSITORY}/releases/download/data-cache-v1/base025_na.npz" \
               || rm -f /opt/earth-cache/base025_na.npz
           fi
+          fi
           echo "persistent cache: $(du -sh /opt/earth-cache | cut -f1)"
+
+      # E-070 / E-076a · FAMILY 7 ARRIVES WHOLE, IT IS NOT BUILT. 53 GB of
+      # three co-registered groups, published once and pulled by every box, so
+      # that no two boxes hold different bytes under one filename (the box
+      # effect: ml/CLAUDE.md §7, and the family-3/4 pulls above exist for the
+      # same reason). Its own step rather than more lines inside the seed
+      # block, because that block is 15.9k of the 21,000-char run ceiling and
+      # a workflow that will not parse takes EVERY dispatch in the repo down
+      # (tests/test_workflow_config.py case 1).
+      - name: Seed family 7 from the Hub
+        if: inputs.runner != 'ubuntu-latest'
+        run: |
+          T="${RECIPE_TENSOR:-${{ inputs.tensor }}}"
+          if [ "$T" != "family7_global025_pentad_l0" ]; then
+            echo "tensor is ${T} — nothing to seed"
+            exit 0
+          fi
+          python -c "import huggingface_hub" 2>&1 \
+            || pip install --quiet huggingface_hub
+          python -c "import huggingface_hub, sys; print('huggingface_hub', huggingface_hub.__version__)"
+          # A DISK PRECHECK, sized from the allocation it guards (§5.18): the
+          # canonical files are 53 GB and ml/train_cone.py writes a writable
+          # anomaly-space scratch copy of every group beside them, which is
+          # another ~53 GB. Below 130 GB free this run cannot finish, and it is
+          # cheaper to say so now than 40 minutes into the pull.
+          FREE=$(df -PB1 /opt/earth-cache | awk 'NR==2{print $4}')
+          echo "free on /opt/earth-cache: $((FREE / 1000000000)) GB"
+          if [ "$FREE" -lt 130000000000 ]; then
+            echo "::error::family 7 needs >= 130 GB free (53 GB of tensor + ~53 GB of anomaly scratch); this box has $((FREE / 1000000000)) GB"
+            exit 1
+          fi
+          export STORE="${RECIPE_CONE_ARGO_STORE:-}"
+          python - <<'PY'
+          import hashlib, json, os, sys
+          from huggingface_hub import hf_hub_download
+          REPO, CACHE = "chfrank/earth-tensors", "/opt/earth-cache"
+          STEM = "family7_global025_pentad_l0"
+
+          def sha256(path, chunk=1 << 22):
+              h = hashlib.sha256()
+              with open(path, "rb") as fh:
+                  for b in iter(lambda: fh.read(chunk), b""):
+                      h.update(b)
+              return h.hexdigest()
+
+          def pull(prefix, names, dest):
+              """Fetch `names` from `prefix` into `dest`, sha-verified.
+
+              SKIP BY SIZE, VERIFY BY HASH. Re-hashing 53 GB on a warm box
+              costs minutes for a file nothing wrote, so a file whose size
+              already matches the manifest is left alone; a file this step
+              DOWNLOADS is hashed, because an upload that returned 200 and a
+              download that returned 200 are not evidence of the same bytes
+              (ml/CLAUDE.md §0.2).
+              """
+              os.makedirs(dest, exist_ok=True)
+              man = json.load(open(hf_hub_download(
+                  REPO, f"{prefix}/manifest.json", repo_type="dataset"),
+                  encoding="utf-8"))
+              want = {f["name"]: f for f in man["files"]}
+              missing = [n for n in names if n not in want]
+              if missing:
+                  sys.exit(f"::error::{prefix}/manifest.json does not list "
+                           f"{missing} — refusing to guess what to fetch")
+              for n in names:
+                  rec, out = want[n], os.path.join(dest, n)
+                  if os.path.exists(out) and os.path.getsize(out) == rec["bytes"]:
+                      print(f"  {n}: present at {rec['bytes'] / 1e9:.2f} GB — skipped")
+                      continue
+                  print(f"  {n}: fetching {rec['bytes'] / 1e9:.2f} GB ...",
+                        flush=True)
+                  got = hf_hub_download(REPO, f"{prefix}/{n}",
+                                        repo_type="dataset", local_dir=dest)
+                  if os.path.abspath(got) != os.path.abspath(out):
+                      os.replace(got, out)
+                  h = sha256(out)
+                  if h != rec["sha256"]:
+                      os.remove(out)
+                      sys.exit(f"::error::{n} downloaded with sha256 {h[:12]}, "
+                               f"manifest says {rec['sha256'][:12]} — deleted. "
+                               f"A truncated tensor still memmaps and trains.")
+                  print(f"  {n}: sha256 {h[:12]} verified")
+
+          pull(f"tensors/{STEM}",
+               [f"{STEM}.npz", f"{STEM}_X_g025.npy", f"{STEM}_X_g100.npy",
+                f"{STEM}_X_rg100.npy"], CACHE)
+          store = os.environ.get("STORE", "").strip()
+          if store:
+              # E-076a: the recipe named an observation store, so it is part
+              # of the input and is pulled on the same terms.
+              man = json.load(open(hf_hub_download(
+                  REPO, f"tensors/{store}/manifest.json", repo_type="dataset"),
+                  encoding="utf-8"))
+              pull(f"tensors/{store}", [f["name"] for f in man["files"]],
+                   os.path.join(CACHE, store))
+          print("family 7 seed: complete")
+          PY
+          ls -l /opt/earth-cache/family7_global025_pentad_l0* || true
 
       - name: Restore data cache (GitHub-hosted only)
         if: inputs.runner == 'ubuntu-latest'
@@ -1016,6 +1159,31 @@ jobs:
             # REFUSES a mismatch before writing any of the 33 GB.
             python -u ml/build_family4.py --pentad-dir "$PD" $REV
             fi
+          elif [ "${RECIPE_TENSOR:-${{ inputs.tensor }}}" = "family7_global025_pentad_l0" ]; then
+            # E-070/E-076a. NOTHING IS BUILT HERE. The 53 GB tensor arrived
+            # whole from the Hub in the seed step, sha256-verified against the
+            # publisher's manifest; there is no build_family7 call on a
+            # training box and no build_family4 call either (build_family4
+            # would happily assemble a North Atlantic tensor under this name's
+            # nose and train on it silently). Assert the EFFECT rather than
+            # the intention (ml/CLAUDE.md §0.2): the four files are named, and
+            # a missing one fails the run here instead of at step 1.
+            F7=ml/cache/family7_global025_pentad_l0
+            for f in "$F7.npz" "${F7}_X_g025.npy" "${F7}_X_g100.npy" \
+                     "${F7}_X_rg100.npy"; do
+              if [ ! -s "$f" ]; then
+                echo "::error::$f is missing — the family-7 seed step did not run or did not finish"
+                exit 1
+              fi
+              echo "  $(basename "$f"): $(du -h "$f" | cut -f1)"
+            done
+            if [ -n "${RECIPE_CONE_ARGO_STORE:-}" ]; then
+              if [ ! -s "ml/cache/${RECIPE_CONE_ARGO_STORE}/store.json" ]; then
+                echo "::error::ml/cache/${RECIPE_CONE_ARGO_STORE}/store.json is missing — the recipe asks for the family-8 observation store and the seed step did not deliver it"
+                exit 1
+              fi
+              echo "  family-8 store: $(du -sh "ml/cache/${RECIPE_CONE_ARGO_STORE}" | cut -f1)"
+            fi
           elif [ "${RECIPE_TENSOR:-${{ inputs.tensor }}}" = "family6_na025_cmip6" ]; then
             # E-061. NOT a training tensor: an UNLABELLED pretraining corpus of
             # CMIP6 piControl ocean output, 800 model-years against the 43 the
@@ -1123,6 +1291,10 @@ jobs:
           # assignment is invisible to them, which is how #403 died.
           T="${RECIPE_TENSOR:-$IN_TENSOR}"
           [ "$T" = "family2" ] && T=na_pixels
+          # family7_global025_pentad_l0 needs no case of its own here: the
+          # tensor NAME is the file's stem, so this line already resolves to
+          # ml/cache/family7_global025_pentad_l0.npz, and its three group
+          # sidecars are found beside it by ml/tensor_io.py::load_tensor.
           export TENSOR="ml/cache/${T}.npz"
           mkdir -p ml/runs/actions
           python - <<'EOF'
@@ -1416,6 +1588,10 @@ jobs:
               $([ "${RECIPE_CONE_VELOCITY_PROBE:-true}" = "true" ] && echo --velocity-probe) \
               $([ "${RECIPE_CONE_SNAPSHOT_ABLATION:-false}" = "true" ] && echo --snapshot-ablation) \
               $([ -n "${RECIPE_HOLDOUT_YEARS:-}" ] && echo "--holdout-years=${RECIPE_HOLDOUT_YEARS}") \
+              $([ -n "${RECIPE_CONE_ARGO_STORE:-}" ] && echo "--argo-store=ml/cache/${RECIPE_CONE_ARGO_STORE}") \
+              --profile-k "${RECIPE_CONE_PROFILE_K:-5}" \
+              --dot-extras "${RECIPE_CONE_DOT_EXTRAS:-}" \
+              --profile-drop-p "${RECIPE_CONE_PROFILE_DROP_P:-0.5}" \
               --out ml/runs/actions &
           fi
           # `$!` survives the `fi` — it is the last backgrounded PID of the

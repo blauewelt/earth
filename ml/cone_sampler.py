@@ -50,9 +50,20 @@ Pool discipline (`admissible` / `certify`) generalises c25f6ff's
 anchor is a training anchor only if every bin its cone touches — L_in pentads
 back and every future target forward — is a training bin.
 
+THE SPARSE GATHER (E-076 section 2, family 8). One group may be replaced by
+RAW OBSERVATIONS instead of being read off the grid at all: hand the
+constructor a `profile_store` (ml/family8_store.py::ArgoStore) and, for the
+channels of the `rg100` group, the sunflower dots and the lag-0 patch are NOT
+gathered — per anchor the k nearest Argo profiles become dot tokens carrying
+their own (dy_km, dx_km, lag_days, depth), so the measurement is never
+missing, only far away. `profile_store=None` (the default) is today's
+behaviour to the bit, which is what tests/test_cone_global.py's digest pins.
+
 Pure numpy; no torch. Plan: ml/plans/E069_cone_codec.md section 3,
-ml/plans/E070_family7_build.md sections 1-3.
+ml/plans/E070_family7_build.md sections 1-3,
+ml/plans/E076_family8_nearest_observations.md sections 2, 2.5, 2.6, 5.1.
 """
+import math
 import os
 import sys
 
@@ -73,6 +84,30 @@ PENTAD_DAYS = 5
 # trained on that layout; changing it silently changes what channel 0 means.
 PATCH_DY = np.array([-1, -1, -1, 0, 0, 0, 1, 1, 1], np.int64)
 PATCH_DX = np.array([-1, 0, 1, -1, 0, 1, -1, 0, 1], np.int64)
+
+# ---------------------------------------------------------- the footprint --
+# E-076 section 2.6: two extra numbers per dot saying what the measurement
+# AVERAGED OVER, which its distance cannot say. `log2_fp` is the spatial
+# support in 0.25-degree-cell units (27.83 km) and `log2_dt` the temporal
+# support in pentads; the plan clamps both to [-4, +4], and they are divided
+# by FP_SCALE here so the model reads numbers in [-1, 1].
+#
+# A 1-degree reanalysis value is NOT a 1-degree measurement: NCEP resolves at
+# T62 (~1.9 degrees) and the 1-degree grid is how it is stored, so `g100`
+# carries log2(1.9/0.25). `rg100` is a monthly optimally-interpolated field on
+# a 1-degree grid, hence log2(4) in space and log2(30/5) in time. An Argo
+# profile is a point measurement taken in minutes: both clamp to the floor.
+FP_SCALE = 4.0
+GROUP_FOOTPRINT = {
+    "g025": (0.0, 0.0),
+    "g100": (math.log2(1.9 / 0.25) / FP_SCALE, 0.0),
+    "rg100": (math.log2(4.0) / FP_SCALE, math.log2(30.0 / 5.0) / FP_SCALE),
+}
+PROFILE_FOOTPRINT = (-4.0 / FP_SCALE, -4.0 / FP_SCALE)
+# A single-array tensor (families 2-6) is one 0.25-degree grid sampled at its
+# own resolution, and a group this table does not name gets the same: the
+# honest default for "a cell read at the resolution it is stored at".
+DEFAULT_FOOTPRINT = (0.0, 0.0)
 
 
 def pentad_doy(t):
@@ -339,6 +374,201 @@ def _bin_rows_for(d, g, master_T):
     return np.where(master[pos_c] == src, pos_c, -1).astype(np.int64)
 
 
+class ProfileGather:
+    """The k nearest Argo profiles of one anchor, IN THE MODEL'S SPACE.
+
+    E-076 sections 2.1 and 2.5. `ml/family8_store.py::ArgoStore.knearest` does
+    the search and returns RAW degrees Celsius and PSU; this class does the
+    two things that make those numbers comparable with the tensor's:
+
+      1. the build-time z-score of the group they replace
+         (`norm_rg100`, [Cg, 2] of mean and sd, in the group's channel order);
+      2. `ml/trainprobe.py::anomaly_transform`'s own climatology and pooled
+         moments, captured by its `stats=` argument and evaluated AT THE
+         PROFILE'S OWN CELL AND CALENDAR MONTH — not the anchor's, because the
+         anomaly belongs to where the measurement was made.
+
+            z = (raw - norm_mean_c) / norm_sd_c
+            a = (z - clim[month, y1, x1, c] - mu_c) / den_c
+
+    A (cell, month) with no climatology gives NaN and the channel reads
+    UNOBSERVED there, exactly as the gridded path does — `X - NaN` is NaN and
+    `isfinite` is what makes a cell observed.
+
+    THE BIN AXIS IS ABSOLUTE IN THE STORE AND RELATIVE IN THE TENSOR. A
+    sub-range build numbers its rows from 0 while the store numbers its bins
+    from 1982-01-01, so `bin_index` (the npz's own absolute bins per row) is
+    required to translate, in both directions: the anchor's row -> the bin the
+    search is run at, and a returned profile's bin -> the row whose training
+    flag governs it. A profile whose bin is not on the tensor's axis is not a
+    training observation (the same -1 rule `_bin_rows_for` applies).
+    """
+
+    def __init__(self, store, group, chan_base, norm, stats, k=5,
+                 R_max_km=1000.0, T_max_days=30.0, bin_index=None, T=None):
+        self.store = store
+        self.group = group
+        self.k = int(k)
+        self.R_max_km = float(R_max_km)
+        self.T_max_days = float(T_max_days)
+        self.n_chan = int(group.C)
+        # GLOBAL channel indices, by NAME through the group's own chan list —
+        # never by position, because the concatenation order is a property of
+        # the tensor and not of this file.
+        self.chan = np.arange(chan_base, chan_base + self.n_chan, dtype=np.int64)
+        self.names = list(group.chan)
+        self.depth = np.array([channel_depth_dbar(n) for n in self.names],
+                              np.float32)
+        # Which store column and which of its 16 levels each channel is.
+        levels = np.asarray(store.levels, np.float64)
+        self.value_col, self.level = [], []
+        for n in self.names:
+            if n.startswith("rg_t"):
+                self.value_col.append(0)
+            elif n.startswith("rg_s"):
+                self.value_col.append(1)
+            else:
+                raise ValueError(
+                    f"ProfileGather: channel {n!r} of group {group.name!r} is "
+                    f"neither a temperature (rg_t*) nor a salinity (rg_s*) "
+                    f"column, so the store has no counterpart for it. The "
+                    f"store's 16 levels ARE the rg100 group's "
+                    f"(docs/FAMILY8_DATA_HANDOVER.md section 3); refusing "
+                    f"rather than guessing which value to hand the model.")
+            d = float(channel_depth_dbar(n))
+            j = int(np.argmin(np.abs(levels - d)))
+            if abs(levels[j] - d) > 1e-6:
+                raise ValueError(
+                    f"ProfileGather: channel {n!r} sits at {d} dbar and the "
+                    f"store has no such level ({list(levels)})")
+            self.level.append(j)
+        self.value_col = np.array(self.value_col, np.int64)
+        self.level = np.array(self.level, np.int64)
+
+        norm = np.asarray(norm, np.float64)
+        if norm.shape != (self.n_chan, 2):
+            raise ValueError(
+                f"ProfileGather: norm must be [{self.n_chan}, 2] (the "
+                f"build-time mean and sd of group {group.name!r}), got "
+                f"{norm.shape}. Without it a raw degree Celsius cannot be put "
+                f"into the space the model was trained in.")
+        self.norm_mean, self.norm_sd = norm[:, 0], norm[:, 1]
+        for key in ("clim", "mu"):
+            if key not in (stats or {}):
+                raise ValueError(
+                    f"ProfileGather: the anomaly stats are missing {key!r} — "
+                    f"pass ml/trainprobe.py::anomaly_transform its `stats=` "
+                    f"dict for this group. A profile put into the model's "
+                    f"space by any other climatology is a second anomaly "
+                    f"transform (tests/test_one_anomaly_transform.py).")
+        self.clim = np.asarray(stats["clim"])
+        self.mu = np.asarray(stats["mu"], np.float64)
+        self.den = np.asarray(stats["den"] if "den" in stats
+                              else np.asarray(stats["sd"], np.float64) + 1e-6,
+                              np.float64)
+        if self.clim.shape[0] != 12 or self.clim.shape[-1] != self.n_chan:
+            raise ValueError(
+                f"ProfileGather: clim is {self.clim.shape}, want "
+                f"[12, H, W, {self.n_chan}] for group {group.name!r}")
+        # The group's OWN axes, so a profile lands on the cell the tensor
+        # would have served it from.
+        self.lat0 = float(group.lats[0])
+        self.dlat = float(group.lats[1] - group.lats[0])
+        self.lon0 = float(group.lons[0])
+        self.dlon = float(group.lons[1] - group.lons[0])
+        self.H1, self.W1 = int(group.H), int(group.W)
+        self.wrap1 = abs(self.W1 * self.dlon - 360.0) < 1e-6
+        self.bin_index = (None if bin_index is None
+                          else np.asarray(bin_index, np.int64))
+        self.T = int(T if T is not None else
+                     (len(self.bin_index) if self.bin_index is not None else 0))
+
+    # ------------------------------------------------------------- the axis --
+    def abs_bin(self, t):
+        """The ABSOLUTE pentad bin of master row `t` (identity without an
+        index, which is the full-archive build)."""
+        if self.bin_index is None:
+            return int(t)
+        return int(self.bin_index[int(t)])
+
+    def rows_of_bins(self, bins):
+        """Master row of each ABSOLUTE bin, -1 where the bin is off the axis."""
+        bins = np.asarray(bins, np.int64)
+        if self.bin_index is None:
+            ok = (bins >= 0) & (bins < self.T)
+            return np.where(ok, bins, -1)
+        pos = np.searchsorted(self.bin_index, bins)
+        pos_c = np.clip(pos, 0, len(self.bin_index) - 1)
+        return np.where(self.bin_index[pos_c] == bins, pos_c, -1)
+
+    # ------------------------------------------------------------ the space --
+    def cell_of(self, lat, lon):
+        """`(y1, x1)` of the group's cell nearest a profile's position.
+
+        The same rounding the coarse lookup uses (`floor(v + 0.5)`), on the
+        group's own axes rather than on the master grid, and the longitude
+        wraps only where the axis closes.
+        """
+        y1 = np.floor((np.asarray(lat, np.float64) - self.lat0) / self.dlat
+                      + 0.5).astype(np.int64)
+        x1 = np.floor((np.asarray(lon, np.float64) - self.lon0) / self.dlon
+                      + 0.5).astype(np.int64)
+        y1 = np.clip(y1, 0, self.H1 - 1)
+        x1 = np.mod(x1, self.W1) if self.wrap1 else np.clip(x1, 0, self.W1 - 1)
+        return y1, x1
+
+    @staticmethod
+    def month_of(time_days):
+        """Calendar month index 0..11 of `days since 1982-01-01`."""
+        d = (PENTAD_EPOCH
+             + np.floor(np.asarray(time_days, np.float64)).astype("timedelta64[D]"))
+        return (d.astype("datetime64[M]").astype(np.int64) % 12).astype(np.int64)
+
+    def to_model(self, raw, month, y1, x1):
+        """`(vals [n, Cg] float32, obs [n, Cg] bool)` — the chain of E-076
+        section 2.5, evaluated at the profiles' own cells and months."""
+        raw = np.asarray(raw, np.float64)
+        if raw.size == 0:
+            return (np.zeros(raw.shape, np.float32),
+                    np.zeros(raw.shape, bool))
+        z = (raw - self.norm_mean[None, :]) / self.norm_sd[None, :]
+        cl = np.asarray(self.clim[month, y1, x1, :], np.float64)  # [n, Cg]
+        a = (z - cl - self.mu[None, :]) / self.den[None, :]
+        obs = np.isfinite(a)
+        return np.where(obs, a, 0.0).astype(np.float32), obs
+
+    # ------------------------------------------------------------ the search --
+    def knearest(self, lat, lon, t, k):
+        """`ArgoStore.knearest` at master row `t`, one-sided by construction."""
+        return self.store.knearest(float(lat), float(lon), bin=self.abs_bin(t),
+                                   k=int(k), R_max_km=self.R_max_km,
+                                   T_max_days=self.T_max_days)
+
+    def train_ok(self, res, train_bins):
+        """[k] bool: is each returned slot admissible for a TRAINING sample?
+
+        A profile from a held-out bin must never enter a training input, even
+        though the window rule of `ConeSampler.admissible` already makes that
+        impossible for an admitted anchor (T_max = 30 days reaches back five
+        pentads and the rule admits t-L_in..t). This is the check that says so
+        rather than the argument that says so, and it DROPS a slot rather than
+        shifting the next one up — a shifted slot would silently be a
+        different, farther measurement.
+        """
+        valid = np.asarray(res["valid"], bool).copy()
+        if train_bins is None:
+            return valid
+        rows = np.asarray(res["row"], np.int64)
+        good = np.zeros(len(valid), bool)
+        hit = valid & (rows >= 0)
+        if hit.any():
+            bins = np.asarray(self.store["bin"][rows[hit]], np.int64)
+            mrow = self.rows_of_bins(bins)
+            good[hit] = (mrow >= 0) & np.asarray(train_bins, bool)[
+                np.clip(mrow, 0, max(len(train_bins) - 1, 0))]
+        return valid & good
+
+
 class ConeSampler:
     """Gather the inner cone for anchors (t, y, x) out of X[T, H, W, C].
 
@@ -381,7 +611,10 @@ class ConeSampler:
     """
 
     def __init__(self, X, OBS, lats, lons, chan_names, L_in=6, dlat_deg=0.25,
-                 future_lags=(1, 2)):
+                 future_lags=(1, 2), profile_store=None, profile_k=5,
+                 profile_group="rg100", profile_norm=None, profile_stats=None,
+                 profile_R_max_km=1000.0, profile_T_max_days=30.0,
+                 profile_bin_index=None, train_bins=None):
         self.gs = X if isinstance(X, GroupSet) else None
         self.X, self.OBS = X, OBS
         self.lats = np.asarray(lats, np.float64)
@@ -432,6 +665,82 @@ class ConeSampler:
                     f"{self.gs.chan[:3]}...")
             self._flatX = self._flatO = None
             self._prep_groups()
+        self._prep_profiles(profile_store, profile_k, profile_group,
+                            profile_norm, profile_stats, profile_R_max_km,
+                            profile_T_max_days, profile_bin_index, train_bins)
+
+    # ------------------------------------------------------ the sparse path --
+    def _prep_profiles(self, store, k, group_name, norm, stats, R_max_km,
+                       T_max_days, bin_index, train_bins):
+        """Wire the family-8 observation store in, or leave every attribute at
+        the value that means "today's behaviour" (E-076 section 5).
+
+        `profile_k = 0` is a THIRD state and a deliberate one: the store is
+        opened and the nearest-profile TARGET is available, but no profile dot
+        enters the input and the gridded group is read exactly as it always
+        was. That is the family-7 TWIN of E-076 section 5.1 — the arm that
+        keeps `rg100` and must still be scored on the same measurement — and
+        it is why the two arms can share one eval implementation.
+        """
+        self.train_bins = (None if train_bins is None
+                           else np.asarray(train_bins, bool))
+        self.profile = None
+        self.profile_k = 0
+        self._prof_chan = None          # [Cg] global indices of the group
+        self._dense_ci = None           # channels the DENSE path still reads
+        self._skip = frozenset()        # channels with no sunflower dots
+        # The per-channel footprint (E-076 section 2.6) is a property of the
+        # GROUP a channel lives in, and it is produced on the dense path too,
+        # so the model has one input contract whichever arm is running.
+        self._fp_chan = np.zeros((self.C, 2), np.float32)
+        if self.gs is not None:
+            base = 0
+            for g in self.gs.groups:
+                fp = GROUP_FOOTPRINT.get(g.name, DEFAULT_FOOTPRINT)
+                self._fp_chan[base:base + g.C] = fp
+                base += g.C
+        if store is None:
+            return
+        if self.gs is None:
+            raise ValueError(
+                "ConeSampler: a profile store replaces the channels of ONE "
+                "group of a multi-group tensor, and this tensor is a single "
+                "array with no groups to replace. Refusing rather than "
+                "guessing which of its channels the profiles stand for.")
+        if isinstance(store, str):
+            from family8_store import ArgoStore
+            store = ArgoStore(store)
+        base, grp = 0, None
+        for g in self.gs.groups:
+            if g.name == group_name:
+                grp = g
+                break
+            base += g.C
+        if grp is None:
+            raise ValueError(
+                f"ConeSampler: no group named {group_name!r} in "
+                f"{self.gs.names} — the profile store stands in for a group's "
+                f"channels and there is none of that name.")
+        self.profile = ProfileGather(
+            store, grp, base, norm, stats, k=k, R_max_km=R_max_km,
+            T_max_days=T_max_days, bin_index=bin_index, T=self.T)
+        self.profile_k = int(k)
+        self._prof_chan = self.profile.chan
+        if self.profile_k > 0:
+            # THE GROUP IS NOT READ AT ALL on this arm. Not read and then
+            # discarded — not read: the dense gather is given the other
+            # channels only, so a test can poison the array and see nothing
+            # move (tests/test_cone_profiles.py).
+            self._skip = frozenset(int(c) for c in self._prof_chan)
+            self._dense_ci = np.array(
+                [c for c in range(self.C) if c not in self._skip], np.int64)
+            self._rows = {}             # the dot table changed shape
+
+    @property
+    def n_profile_dots(self):
+        """How many profile dot tokens every anchor carries — k * Cg, always,
+        which is what keeps a batch rectangular however thin the array is."""
+        return 0 if self.profile is None else self.profile_k * self.profile.n_chan
 
     def _prep_groups(self):
         """Per-channel group routing, and each group's flat view."""
@@ -558,6 +867,10 @@ class ConeSampler:
         lat = float(self.lats[y])
         lag, dy, dx, chan = [], [], [], []
         for ci, name in enumerate(self.chan_names):
+            if ci in self._skip:
+                # A channel served by the profile store has no sunflower: its
+                # dots ARE the k nearest observations (E-076 section 2).
+                continue
             for l, ddy, ddx in channel_dots(lat, name, L_in=self.L_in,
                                             dlat_deg=self.dlat_deg):
                 lag.append(l)
@@ -585,8 +898,19 @@ class ConeSampler:
         return self.row(y)["n"]
 
     # --------------------------------------------------------------- sample --
-    def sample(self, anchors):
+    def sample(self, anchors, withhold_nearest=False, train_pool=True):
         """Gather the inner cone, the lag-0 patch and the future targets.
+
+        `withhold_nearest` (family 8 only) drops the NEAREST profile out of the
+        input and returns it as `profile_target`: the masked-profile objective
+        of E-076 section 7.5 and the common target of section 5.1. It may be a
+        single bool or a [B] array, so a batch can withhold on a fraction of
+        its anchors without being split in two.
+
+        `train_pool=True` (the default) applies the constructor's `train_bins`
+        to the profiles, so a TRAINING sample can never read an observation
+        from a held-out bin. An EVAL sample passes `train_pool=False`: dots
+        from held-out bins are what makes a held-out measurement held out.
 
         `anchors` is an int array [B, 3] of (t, y, x). Returns a dict of numpy
         arrays padded to a fixed N = max dot count over the batch:
@@ -603,6 +927,14 @@ class ConeSampler:
           fut_vals[B, C, F], fut_obs[B, C, F]       the anchor at t+f
           ctx[B, 4]       sin/cos of the season, lat/90, lon/180
           anchors[B, 3]   echoed, so a downstream cache is self-describing
+          nr[B, N]        float32 log1p(n_R) on a PROFILE dot, 0 on every
+                          other dot — E-076 section 2.1's local density
+          fp[B, N, 2]     float32 the two footprint fields of section 2.6,
+                          in units of a quarter of the plan's [-4, 4] range
+
+        `nr` and `fp` are produced on BOTH paths, so `ml/cone_codec.py` has one
+        input contract; on the dense path `nr` is all zeros and `fp` is the
+        per-group constant of `GROUP_FOOTPRINT`.
         """
         anchors = np.asarray(anchors, np.int64)
         if anchors.ndim != 2 or anchors.shape[1] != 3:
@@ -614,7 +946,8 @@ class ConeSampler:
         bands = {}
         for i in range(B):
             bands.setdefault(int(y[i]), []).append(i)
-        N = max((self.n_dots(r) for r in bands), default=0)
+        n_prof = self.n_profile_dots
+        N = max((self.n_dots(r) for r in bands), default=0) + n_prof
 
         vals = np.zeros((B, N), np.float32)
         obs = np.zeros((B, N), bool)
@@ -624,6 +957,8 @@ class ConeSampler:
         dx_km = np.zeros((B, N), np.float32)
         lag_days = np.zeros((B, N), np.float32)
         depth = np.zeros((B, N), np.float32)
+        nr = np.zeros((B, N), np.float32)
+        fp = np.zeros((B, N, 2), np.float32)
 
         for r, ii in bands.items():
             R = self.row(r)
@@ -655,6 +990,7 @@ class ConeSampler:
             dx_km[sl] = R["dx_km"][None, :]
             lag_days[sl] = R["lag_days"][None, :]
             depth[sl] = R["depth"][None, :]
+            fp[sl] = self._fp_chan[R["chan"]][None, :, :]
         # A dot the data never observed is still a real token (PixelMAE's
         # `miss_tok`); only a dot that does not EXIST is invalid.
         vals = np.where(valid, vals, 0.0).astype(np.float32)
@@ -666,11 +1002,160 @@ class ConeSampler:
         ctx = np.stack([np.sin(ang), np.cos(ang),
                         self.lats[y] / 90.0, self.lons[x] / 180.0],
                        axis=1).astype(np.float32)
-        return dict(vals=vals, obs=obs, valid=valid, chan=chan,
-                    dy_km=dy_km, dx_km=dx_km, lag_days=lag_days, depth=depth,
-                    patch_vals=patch_vals, patch_obs=patch_obs,
-                    fut_vals=fut_vals, fut_obs=fut_obs, ctx=ctx,
-                    anchors=anchors)
+        out = dict(vals=vals, obs=obs, valid=valid, chan=chan,
+                   dy_km=dy_km, dx_km=dx_km, lag_days=lag_days, depth=depth,
+                   patch_vals=patch_vals, patch_obs=patch_obs,
+                   fut_vals=fut_vals, fut_obs=fut_obs, ctx=ctx,
+                   anchors=anchors, nr=nr, fp=fp)
+        if self.profile is not None:
+            self._gather_profiles(out, anchors, withhold_nearest, train_pool,
+                                  N - n_prof)
+        return out
+
+    # ------------------------------------------------- family 8's dot block --
+    def _gather_profiles(self, out, anchors, withhold_nearest, train_pool,
+                         col0):
+        """Fill the profile dot block (and `profile_target`) in place.
+
+        The block occupies the LAST `k * Cg` columns of the padded dot axis, in
+        slot-major order (slot 0's 32 channels, then slot 1's), so a reader can
+        address slot s channel c at `col0 + s * Cg + c`. Columns between the
+        longest row's dense dots and `col0` are padding and stay invalid.
+
+        One `knearest` per anchor: the search reads at most seven bins of a
+        CSR-sliced store (~5,000 rows on the real archive), which is far
+        cheaper than the dense gather it replaces.
+        """
+        P = self.profile
+        B = anchors.shape[0]
+        Cg = P.n_chan
+        k = self.profile_k
+        wh = np.zeros(B, bool) | np.asarray(withhold_nearest, bool)
+        tb = self.train_bins if train_pool else None
+
+        lev = P.level
+        col = P.value_col
+        tgt = {
+            "valid": np.zeros(B, bool),
+            "temp": np.full((B, P.store.n_levels), np.nan, np.float32),
+            "psal": np.full((B, P.store.n_levels), np.nan, np.float32),
+            "levels": np.asarray(P.store.levels, np.float32),
+            "dy_km": np.zeros(B, np.float32), "dx_km": np.zeros(B, np.float32),
+            "dt_days": np.zeros(B, np.float32),
+            "lat": np.full(B, np.nan, np.float32),
+            "lon": np.full(B, np.nan, np.float32),
+            "time_days": np.full(B, np.nan, np.float32),
+            "y1": np.zeros(B, np.int64), "x1": np.zeros(B, np.int64),
+            "month": np.zeros(B, np.int64), "n_R": np.zeros(B, np.int64),
+            # The ready-made decoder QUERY for the withheld profile: 32
+            # (channel, coordinate) pairs and their targets in the model's
+            # space, so the masked-profile objective rides the existing
+            # dot-query machinery instead of a second one.
+            "q_chan": np.tile(P.chan, (B, 1)),
+            "q_dy_km": np.zeros((B, Cg), np.float32),
+            "q_dx_km": np.zeros((B, Cg), np.float32),
+            "q_lag_days": np.zeros((B, Cg), np.float32),
+            "q_depth": np.tile(P.depth, (B, 1)),
+            "q_vals": np.zeros((B, Cg), np.float32),
+            "q_obs": np.zeros((B, Cg), bool),
+            # PERSISTENCE (E-076 section 7.5's second baseline): the nearest
+            # REMAINING profile's raw values, i.e. the slot the input keeps.
+            "pers_valid": np.zeros(B, bool),
+            "pers_temp": np.full((B, P.store.n_levels), np.nan, np.float32),
+            "pers_psal": np.full((B, P.store.n_levels), np.nan, np.float32),
+        }
+        for i in range(B):
+            ti = int(anchors[i, 0])
+            lat = float(self.lats[int(anchors[i, 1])])
+            lon = float(self.lons[int(anchors[i, 2])])
+            drop = bool(wh[i])
+            if not drop and k == 0:
+                # The twin (k = 0) with nothing withheld asks the store
+                # nothing at all: its input is the gridded group and there is
+                # no target to fetch.
+                continue
+            # WITHHOLDING ALWAYS FETCHES AT LEAST TWO: slot 0 is the target
+            # and slot 1 is the persistence baseline, which is a SCORING
+            # quantity and not an input — so the twin, whose k is 0, still
+            # gets the number E-076 §7.5 says to compare against.
+            n_ask = k + 1 if drop else k
+            res = P.knearest(lat, lon, ti, max(n_ask, 2) if drop else n_ask)
+            ok = P.train_ok(res, tb)
+            n_R = max(int(res["n_R"]) - (1 if drop else 0), 0)
+            tgt["n_R"][i] = n_R
+
+            if drop:
+                if ok[0]:
+                    self._fill_target(tgt, i, P, res, 0)
+                if ok.shape[0] > 1 and ok[1]:
+                    tgt["pers_valid"][i] = True
+                    tgt["pers_temp"][i] = res["temp"][1]
+                    tgt["pers_psal"][i] = res["psal"][1]
+                sl = slice(1, k + 1)
+            else:
+                sl = slice(0, k)
+            if k == 0:
+                continue
+
+            good = ok[sl]                                   # [k]
+            # [2, k, 16] -> [k, Cg]: channel c reads column `col[c]` (temp or
+            # psal) at level `lev[c]`, which is the mapping ProfileGather
+            # derived from the channel NAMES.
+            both = np.stack([res["temp"][sl], res["psal"][sl]], axis=0)
+            raw = both[col, :, lev].T                       # [k, Cg]
+            month = P.month_of(res["time_days"][sl])
+            y1, x1 = P.cell_of(np.nan_to_num(res["lat"][sl], nan=0.0),
+                               np.nan_to_num(res["lon"][sl], nan=0.0))
+            v, o = P.to_model(raw, month, y1, x1)
+            o &= good[:, None]
+            lo = col0
+            hi = lo + k * Cg
+            out["vals"][i, lo:hi] = np.where(o, v, 0.0).reshape(-1)
+            out["obs"][i, lo:hi] = o.reshape(-1)
+            # EVERY slot is a real token, present or missing — that is the
+            # whole point of family 8 (a rectangular k, section 2.2). Only a
+            # slot the search could not fill is `valid=False`, which is the
+            # miss token the codec already has.
+            out["valid"][i, lo:hi] = np.repeat(good, Cg)
+            out["chan"][i, lo:hi] = np.tile(P.chan, k).astype(np.int16)
+            out["dy_km"][i, lo:hi] = np.repeat(
+                np.nan_to_num(res["dy_km"][sl], nan=0.0), Cg)
+            out["dx_km"][i, lo:hi] = np.repeat(
+                np.nan_to_num(res["dx_km"][sl], nan=0.0), Cg)
+            out["lag_days"][i, lo:hi] = np.repeat(
+                np.nan_to_num(res["dt_days"][sl], nan=0.0), Cg)
+            out["depth"][i, lo:hi] = np.tile(P.depth, k)
+            out["nr"][i, lo:hi] = np.log1p(float(n_R))
+            out["fp"][i, lo:hi, 0] = PROFILE_FOOTPRINT[0]
+            out["fp"][i, lo:hi, 1] = PROFILE_FOOTPRINT[1]
+        if bool(wh.any()) or withhold_nearest is True:
+            out["profile_target"] = tgt
+
+    def _fill_target(self, tgt, i, P, res, s):
+        """Slot `s` of one anchor's search, as the withheld TARGET."""
+        tgt["valid"][i] = True
+        tgt["temp"][i] = res["temp"][s]
+        tgt["psal"][i] = res["psal"][s]
+        tgt["dy_km"][i] = res["dy_km"][s]
+        tgt["dx_km"][i] = res["dx_km"][s]
+        tgt["dt_days"][i] = res["dt_days"][s]
+        tgt["lat"][i] = res["lat"][s]
+        tgt["lon"][i] = res["lon"][s]
+        tgt["time_days"][i] = res["time_days"][s]
+        month = int(P.month_of(np.array([res["time_days"][s]]))[0])
+        y1, x1 = P.cell_of(np.array([res["lat"][s]]),
+                           np.array([res["lon"][s]]))
+        tgt["month"][i] = month
+        tgt["y1"][i] = int(y1[0])
+        tgt["x1"][i] = int(x1[0])
+        raw = np.stack([res["temp"][s], res["psal"][s]])[
+            P.value_col, P.level][None, :]                   # [1, Cg]
+        v, o = P.to_model(raw, np.array([month]), y1, x1)
+        tgt["q_vals"][i] = v[0]
+        tgt["q_obs"][i] = o[0]
+        tgt["q_dy_km"][i] = np.float32(res["dy_km"][s])
+        tgt["q_dx_km"][i] = np.float32(res["dx_km"][s])
+        tgt["q_lag_days"][i] = np.float32(res["dt_days"][s])
 
     def _patch(self, t, y, x):
         """The lag-0 3x3 for every channel, [B, C, 9] — `gather_px`'s tokens.
@@ -684,6 +1169,12 @@ class ConeSampler:
         boundary — E-070 D3's "served as the same cell", which is the honest
         answer for a 1 degree field sampled at 0.25 degrees, and the reason
         the patch's shape does not change.
+
+        On the family-8 arm the channels the profile store replaces are NOT
+        READ: they are absent from `_dense_ci`, so the gather never touches
+        their group's array, and their nine cells come back unobserved with a
+        zero value — the miss token the codec already has for "the data does
+        not have this", which is exactly true of a group the arm does not read.
         """
         B = len(t)
         C = self.C
@@ -698,11 +1189,13 @@ class ConeSampler:
         yc = np.clip(yy, 0, self.H - 1)[:, None, :]            # [B, 1, 9]
         xc = np.clip(xx, 0, self.W - 1)[:, None, :]
         tc = np.clip(t, 0, self.T - 1)[:, None, None]
-        cc = np.arange(C, dtype=np.int64)[None, :, None]
+        ci = (np.arange(C, dtype=np.int64) if self._dense_ci is None
+              else self._dense_ci)
+        cc = ci[None, :, None]
         raw, o = self._read(tc, yc, xc, cc)
-        ok3 = np.broadcast_to(ok[:, None, :], (B, C, 9))
+        ok3 = np.broadcast_to(ok[:, None, :], (B, len(ci), 9))
         raw = np.where(np.isfinite(raw) & ok3, raw, 0.0).astype(np.float32)
-        return raw, (o & ok3)
+        return self._scatter_c(raw, o & ok3, ci, B, 9)
 
     def _future(self, t, y, x):
         """The anchor column at t+f for each f in `future_lags`, [B, C, F].
@@ -721,11 +1214,29 @@ class ConeSampler:
         tc = np.clip(tt, 0, self.T - 1)[:, None, :]             # [B, 1, F]
         yc = y[:, None, None]
         xc = x[:, None, None]
-        cc = np.arange(C, dtype=np.int64)[None, :, None]
+        ci = (np.arange(C, dtype=np.int64) if self._dense_ci is None
+              else self._dense_ci)
+        cc = ci[None, :, None]
         raw, o = self._read(tc, yc, xc, cc)
-        ok3 = np.broadcast_to(ok[:, None, :], (B, C, F))
+        ok3 = np.broadcast_to(ok[:, None, :], (B, len(ci), F))
         raw = np.where(np.isfinite(raw) & ok3, raw, 0.0).astype(np.float32)
-        return raw, (o & ok3)
+        return self._scatter_c(raw, o & ok3, ci, B, F)
+
+    def _scatter_c(self, raw, obs, ci, B, W):
+        """Put a gather over a SUBSET of channels back on the [B, C, W] axis.
+
+        A channel that was not gathered reads 0.0 / unobserved — the family-8
+        arm's honest statement about the group it does not read. When every
+        channel was gathered (`ci` is the full range) the arrays are returned
+        untouched, so the dense path is not merely equivalent but identical.
+        """
+        if len(ci) == self.C:
+            return raw, obs
+        v = np.zeros((B, self.C, W), np.float32)
+        o = np.zeros((B, self.C, W), bool)
+        v[:, ci, :] = raw
+        o[:, ci, :] = obs
+        return v, o
 
     # ----------------------------------------------------------- pool rules --
     def bin_span(self):
@@ -775,6 +1286,22 @@ class ConeSampler:
         for a in range(anchors.shape[0]):
             t = int(anchors[a, 0])
             hit = False
+            if self.profile is not None:
+                # E-076 section 2.2's one-sided rule, certified rather than
+                # argued: the store's CSR slice cannot reach past the anchor's
+                # own bin, and the age is measured back from the END of that
+                # bin — so no returned observation may be dated later than
+                # 5 * (bin + 1) days after the epoch. A forecaster that has
+                # seen the next pentad is not a forecaster.
+                P = self.profile
+                res = P.knearest(float(self.lats[int(anchors[a, 1])]),
+                                 float(self.lons[int(anchors[a, 2])]), t,
+                                 max(self.profile_k, 1) + 1)
+                v = np.asarray(res["valid"], bool)
+                if v.any():
+                    tmax = float(np.nanmax(np.asarray(res["time_days"])[v]))
+                    if tmax > PENTAD_DAYS * (P.abs_bin(t) + 1):
+                        hit = True
             for lag in range(0, self.L_in + 1):
                 b = t - lag
                 if b < 0 or b >= T or not bool(train_bins[b]):

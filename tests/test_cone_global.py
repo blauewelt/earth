@@ -50,10 +50,21 @@ import cone                                                        # noqa: E402
 from cone_sampler import (ConeSampler, Group, GroupSet,            # noqa: E402
                           group_time)
 
-# The digest of `ConeSampler.sample`'s ENTIRE output over the fixture below,
-# taken from the code as it stood BEFORE the wrap and the group support were
-# written (2026-09-04). Every array, its dtype, its shape and its bytes.
+# The digest of `ConeSampler.sample`'s output over the fixture below, taken
+# from the code as it stood BEFORE the wrap and the group support were written
+# (2026-09-04). Every array, its dtype, its shape and its bytes.
 NA_DIGEST = "6042073e1a20f00d9e233e16570920ba366dfe359fe13a97eaab51c8162d0180"
+# The keys that digest was taken over. E-076a (2026-09-07) added two MORE
+# arrays to every sample — `nr` and `fp`, the observation density and the
+# footprint fields of E-076 §2.6 — on both the dense and the sparse path, so
+# that ml/cone_codec.py has one input contract. They are excluded here rather
+# than folded in: the assertion below has to keep meaning "the values, flags
+# and coordinates every archived cone number was produced from did not move",
+# and a digest that changed whenever a new diagnostic was added would stop
+# being able to say that. The new arrays get their own assertions below.
+NA_DIGEST_KEYS = ("vals", "obs", "valid", "chan", "dy_km", "dx_km",
+                  "lag_days", "depth", "patch_vals", "patch_obs", "fut_vals",
+                  "fut_obs", "ctx", "anchors")
 
 NA_CHANS = ["cur_speed", "log_mld", "ssh", "tau_x", "tau_y", "tau_x_std",
             "tau_y_std", "sst", "cur_u", "cur_v", "rg_t300", "rg_s300"]
@@ -81,9 +92,9 @@ def _na_anchors():
     return a
 
 
-def _digest(out):
+def _digest(out, keys=None):
     h = hashlib.sha256()
-    for k in sorted(out):
+    for k in sorted(keys if keys is not None else out):
         a = np.ascontiguousarray(out[k])
         h.update(k.encode())
         h.update(str(a.dtype).encode())
@@ -129,12 +140,49 @@ def test_north_atlantic_sample_is_bit_identical_to_before_the_wrap():
     s = ConeSampler(X, np.isfinite(X), lats, lons, NA_CHANS, L_in=6)
     assert s.wrap is False
     out = s.sample(_na_anchors())
-    assert _digest(out) == NA_DIGEST, (
+    assert _digest(out, NA_DIGEST_KEYS) == NA_DIGEST, (
         "the North Atlantic sampling path changed. Every archived cone number "
         "was produced by the code this digest was taken from.")
     # and the edge anchors really did exercise the invalid branch, or the
     # comparison above is vacuous there
     assert not out["valid"][:4].all()
+    # THE TWO NEW ARRAYS, on the dense path (E-076 §2.6). A single-array
+    # tensor is one 0.25-degree grid read at its own resolution, so every
+    # footprint is (0, 0); and `nr` — the local count of raw observations —
+    # is zero on every dot that is not a profile, which here is all of them.
+    assert out["nr"].shape == out["vals"].shape
+    assert out["fp"].shape == out["vals"].shape + (2,)
+    assert not out["nr"].any()
+    assert not out["fp"].any()
+    assert out["nr"].dtype == np.float32 and out["fp"].dtype == np.float32
+    # and nothing was withheld, so there is no target block
+    assert "profile_target" not in out
+
+
+def test_the_footprint_is_the_group_s_and_is_produced_on_the_dense_path():
+    """E-076 §2.6: two numbers saying what a measurement AVERAGED OVER.
+
+    They are constants PER GROUP — a 1-degree `g100` value is really NCEP at
+    T62 (~1.9 degrees), and `rg100` is a monthly field on a 1-degree grid — so
+    the sampler reads them off the group a channel lives in and every dot of
+    that channel carries them. Pinned as numbers rather than as a digest,
+    because the numbers are the plan's and a digest would not say which.
+    """
+    from cone_sampler import FP_SCALE
+    gs = _toy_groups()
+    s = ConeSampler(gs, None, gs.lats, gs.lons, gs.chan, L_in=2)
+    out = s.sample(np.array([[3, 360, 200], [3, 200, 40]], np.int64))
+    R = s.row(360)
+    want = {0: (0.0, 0.0),                       # g025, one 0.25-degree cell
+            1: (np.log2(1.9 / 0.25) / FP_SCALE, 0.0)}       # g100 at T62
+    for ci, (fp0, fp1) in want.items():
+        m = R["chan"] == ci
+        assert m.any()
+        got = out["fp"][0, :R["n"]][m]
+        assert np.allclose(got[:, 0], fp0, atol=1e-6), (ci, got[0])
+        assert np.allclose(got[:, 1], fp1, atol=1e-6), (ci, got[0])
+    assert abs(want[1][0] - 0.7315) < 1e-3       # the plan's "approximately
+    assert not out["nr"].any()                   # 0.73", spelled out
 
 
 # ----------------------------------------------------- the global fixture --

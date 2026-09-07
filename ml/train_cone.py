@@ -61,6 +61,34 @@ SMOKE_CHANS = ["cur_speed", "log_mld", "ssh", "tau_x", "tau_y", "sst",
 PENTAD_EPOCH = np.datetime64("1982-01-01")
 PENTAD_DAYS = 5
 
+# The group the family-8 observation store stands in for (E-076 section 2.4:
+# family 8 changes how a SPARSE channel enters the cone and nothing else).
+PROFILE_GROUP = "rg100"
+# The per-dot extra fields, in the ONE order the model reads them.
+DOT_EXTRA_FIELDS = ("nr", "fp")
+
+
+def dot_extras_of(spec):
+    """`(n_extra, live)` from a `--dot-extras` string.
+
+    Naming any extra widens the dot token to [value, observed, nr, fp0, fp1]
+    and zeroes what was not named, so "n_R withheld" and "the footprint
+    zeroed" — two arms of E-076 section 5's ladder — are the SAME architecture
+    with different inputs, and a difference between them cannot be a
+    difference in parameter count.
+    """
+    names = [s.strip() for s in str(spec or "").split(",") if s.strip()]
+    bad = [n for n in names if n not in DOT_EXTRA_FIELDS]
+    if bad:
+        raise SystemExit(
+            f"--dot-extras {spec!r}: unknown field(s) {bad}. The set is "
+            f"{list(DOT_EXTRA_FIELDS)} — `nr` is log1p of the local "
+            f"observation count and `fp` is the two footprint fields of "
+            f"E-076 section 2.6.")
+    if not names:
+        return 0, ()
+    return 3, tuple(n for n in DOT_EXTRA_FIELDS if n in names)
+
 
 # --------------------------------------------------------------------- CLI --
 def parse(argv=None):
@@ -136,9 +164,49 @@ def parse(argv=None):
                    help="also train an L_in=0 twin in-process and probe it, "
                         "so the two arms share the probe anchors exactly.")
     p.add_argument("--probe-anchors", type=int, default=2048)
+    # ---- E-076a, the family-8 arm. Every default is today's behaviour. -----
+    p.add_argument("--argo-store", default="",
+                   help="directory of the family-8 Argo observation store "
+                        "(ml/family8_store.py). Given, the run REFUSES unless "
+                        "the directory carries a store.json whose sha256s "
+                        "match its files. With --profile-k >= 1 the rg100 "
+                        "group is not read at all and the k nearest profiles "
+                        "become dot tokens (E-076 section 2); with "
+                        "--profile-k 0 the tensor's rg100 group is read "
+                        "exactly as today and the store supplies only the "
+                        "common target of section 5.1 — that is the TWIN arm.")
+    p.add_argument("--profile-k", type=int, default=5,
+                   help="how many nearest profiles enter the input per anchor. "
+                        "E-076 section 2.3 derives 5 from the array's density: "
+                        "the fifth neighbour sits at about one surface "
+                        "correlation length. 0 = the gridded twin.")
+    p.add_argument("--profile-R-max-km", type=float, default=1000.0)
+    p.add_argument("--profile-T-max-days", type=float, default=30.0)
+    p.add_argument("--dot-extras", default="",
+                   help="comma set of `nr` (log1p of the local observation "
+                        "count) and `fp` (the two footprint fields of E-076 "
+                        "section 2.6) to append to every dot token. Empty is "
+                        "today's two-number dot and the architecture every "
+                        "archived checkpoint has. Naming ANY of them widens "
+                        "the dot projection by three and zeroes the ones not "
+                        "named, so an ablation changes what the model is told "
+                        "and not how many parameters it has.")
+    p.add_argument("--profile-drop-p", type=float, default=0.5,
+                   help="probability, per anchor, that the NEAREST profile is "
+                        "withheld from the input and added to the decoder's "
+                        "query set instead — masked-profile reconstruction "
+                        "(E-076 section 7.5), which is the objective the "
+                        "common-target eval scores.")
+    p.add_argument("--profile-eval-n", type=int, default=2048,
+                   help="anchors in the fixed common-target eval set of E-076 "
+                        "section 5.1 (held-out bins, n_R >= 2). 0 = skip it.")
     p.add_argument("--out", default=os.path.join(HERE, "runs", "cone"))
     p.add_argument("--metrics", default="metrics.jsonl")
     p.add_argument("--smoke", action="store_true")
+    p.add_argument("--smoke-family8", action="store_true",
+                   help="--smoke, on a synthetic THREE-GROUP tensor plus a "
+                        "synthetic observation store: the family-8 path end "
+                        "to end on two CPU cores in under a minute.")
     a = p.parse_args(argv)
     if a.holdout_scope != "window":
         raise SystemExit(
@@ -168,6 +236,26 @@ def parse(argv=None):
         a.holdout_years = "1983"
         a.velocity_probe = True
         a.snapshot_ablation = True
+    if a.smoke_family8:
+        # The FAMILY-8 smoke. Same argument as --smoke and a different code
+        # path: three groups, a sparse gather, a withheld profile in the query
+        # set and the common-target eval. The velocity probe and the snapshot
+        # twin are OFF — they answer H1, which this path is not about, and
+        # they would double a run that has to stay under a minute.
+        a.steps, a.batch, a.lr = 60, 16, 2e-3
+        a.d_model, a.n_heads, a.n_latents, a.n_layers = 32, 4, 8, 2
+        a.d_dec, a.dec_layers, a.n_fourier = 32, 2, 4
+        a.n_dot_queries = 32
+        a.eval_every = a.eval_every or 30
+        a.eval_anchors = min(a.eval_anchors, 64)
+        a.certify_n = min(a.certify_n, 64)
+        a.holdout_years = a.holdout_years if a.holdout_years != \
+            "2009,2017,2023" else "2011"
+        a.velocity_probe = False
+        a.snapshot_ablation = False
+        a.profile_k = a.profile_k if a.profile_k >= 0 else 3
+        a.dot_extras = a.dot_extras or "nr,fp"
+        a.profile_eval_n = min(a.profile_eval_n, 64)
     a.eval_every = a.eval_every or max(1, a.steps // 10)
     a.save_every = a.save_every or max(1, a.steps // 4)
     return a
@@ -293,6 +381,174 @@ def smoke_tensor(path, seed=0):
     return path
 
 
+SMOKE_F8_LEVELS = [10.0, 30.0, 50.0, 100.0, 150.0, 200.0, 300.0, 400.0,
+                   500.0, 700.0, 900.0, 1100.0, 1300.0, 1500.0, 1700.0, 1900.0]
+SMOKE_F8_G025 = ["cur_speed", "ssh", "sst", "cur_u", "cur_v"]
+SMOKE_F8_G100 = ["t2m", "skt"]
+SMOKE_F8_CHAN = (["rg_t%d" % int(v) for v in SMOKE_F8_LEVELS]
+                 + ["rg_s%d" % int(v) for v in SMOKE_F8_LEVELS])
+
+
+def smoke_family8(root, seed=0, T=150, b0=2045, ny=48, nx=64):
+    """A synthetic THREE-GROUP tensor plus a synthetic observation store.
+
+    `--smoke` exercises the family-4 path on one dense array; this exercises
+    the family-7/8 path, which is a different one at every step: three groups
+    at two resolutions, a live-bins group, the per-group anomaly transform,
+    the sparse gather, a withheld profile in the query set and the
+    common-target eval. Small on purpose — 48 x 64 cells and 150 pentad bins
+    starting at bin 2045 (2010-01-02), so the whole run is a minute on two
+    CPU cores and the held-out year (2011) sits INSIDE the record, where the
+    interspersed half of E-076 §5.1's split lives.
+
+    THE INTERIOR IS A FUNCTION OF THE SURFACE, deliberately: the depth column
+    is a smooth field driven by the same slowly-varying process as `sst` and
+    `ssh`, so a codec that reads the surface and the neighbouring profiles CAN
+    say something about a withheld profile. Without that the common-target
+    eval would be scoring noise and would pass whatever the code did.
+
+    The profiles are drawn from the SAME field, at random positions and times
+    inside each bin — not at cell centres — so the offsets `(dy_km, dx_km,
+    dt_days)` really carry information and are not a constant the model can
+    ignore. Returns `(tensor_path, store_path)`.
+    """
+    from family8_store import write_synthetic_store
+    from tensor_io import group_path
+    rng = np.random.default_rng(seed)
+    lats = 20.0 + 0.25 * np.arange(ny)
+    lons = -60.0 + 0.25 * np.arange(nx)
+    H1, W1 = ny // 4 + 1, nx // 4 + 1
+    lat1 = 20.0 + np.arange(H1, dtype=np.float64)
+    lon1 = -60.0 + np.arange(W1, dtype=np.float64)
+    bins = b0 + np.arange(T, dtype=np.int64)
+    days = PENTAD_EPOCH + (PENTAD_DAYS * bins).astype("timedelta64[D]")
+    months = np.array([str(d) for d in days])
+
+    yy, xx = np.meshgrid(np.arange(ny), np.arange(nx), indexing="ij")
+
+    TWO_PI = 2.0 * np.pi
+
+    def wave(t, y, x):
+        """ONE scalar field, read by every group and by every profile.
+
+        Two timescales and no third: a SEASONAL term at 73 pentads, which the
+        anomaly transform's monthly climatology removes, and two fast terms at
+        11 and 17 pentads, which it cannot. Both are sampled the same way in
+        every year, so a held-out year is drawn from the same distribution as
+        a training one — a slow wave whose period is the length of the record
+        would put the held-out year at its own phase and the held-out loss
+        would measure the draw rather than the model.
+        """
+        return (np.sin(0.11 * y + 0.09 * x + TWO_PI * t / 73.0)
+                + 0.6 * np.sin(0.11 * y - TWO_PI * t / 11.0)
+                + 0.6 * np.cos(0.09 * x + TWO_PI * t / 17.0))
+
+    def field(t):
+        return wave(t, yy, xx)
+
+    lev = np.asarray(SMOKE_F8_LEVELS)
+    decay = np.exp(-lev / 700.0)                       # [16]
+
+    def column(t, y, x):
+        """The interior at (t, y, x) — the SAME wave with depth, evaluated at
+        fractional y/x and fractional t for a profile."""
+        s = wave(t, y, x)
+        tt = 12.0 + 8.0 * s * decay - 0.004 * lev
+        ss = 35.0 + 0.4 * s * decay + 0.0003 * lev
+        return tt, ss
+
+    g025 = np.empty((T, ny, nx, len(SMOKE_F8_G025)), np.float32)
+    g100 = np.empty((T, H1, W1, len(SMOKE_F8_G100)), np.float32)
+    y1g, x1g = np.meshgrid(np.arange(H1) * 4.0, np.arange(W1) * 4.0,
+                           indexing="ij")
+    for t in range(T):
+        f = field(t)
+        g025[t, :, :, 0] = np.abs(f) + 0.01 * rng.normal(size=(ny, nx))
+        g025[t, :, :, 1] = 0.1 * f
+        g025[t, :, :, 2] = 15.0 + 5.0 * f
+        g025[t, :, :, 3] = np.gradient(f, axis=1)
+        g025[t, :, :, 4] = np.gradient(f, axis=0)
+        c = wave(t, y1g, x1g)
+        g100[t, :, :, 0] = 20.0 + 3.0 * c
+        g100[t, :, :, 1] = 21.0 + 3.0 * c
+    g025[:, :3, :3, :] = np.nan                        # a little land
+
+    # `rg100`: one row per MONTH, into the pentad holding the 15th (E-034 §4),
+    # so eleven bins in twelve have no row at all — the liveness the family-7
+    # reader is built around.
+    live_rows, rg_bins, seen = [], [], set()
+    for t in range(T):
+        d0 = np.datetime64(str(months[t]))
+        ym = str(d0)[:7]
+        mid = np.datetime64(f"{ym}-15")
+        if ym not in seen and d0 <= mid < d0 + np.timedelta64(5, "D"):
+            seen.add(ym)
+            live_rows.append(t)
+            rg_bins.append(int(bins[t]))
+    rg = np.empty((len(live_rows), H1, W1, 32), np.float32)
+    for r, t in enumerate(live_rows):
+        for j in range(H1):
+            for i in range(W1):
+                tt, ss = column(t, j * 4.0, i * 4.0)
+                rg[r, j, i, :16] = tt
+                rg[r, j, i, 16:] = ss
+
+    # Z-SCORE AT BUILD TIME, as ml/build_family7.py does, and keep the (mean,
+    # sd) in `norm_<group>` — the sampler needs `norm_rg100` to put a raw
+    # profile into the tensor's own space (E-076 §2.5).
+    def znorm(A):
+        m = np.nanmean(A, axis=(0, 1, 2))
+        s = np.nanstd(A, axis=(0, 1, 2))
+        s = np.where(s > 1e-6, s, 1.0)
+        return ((A - m) / s).astype(np.float32), np.stack([m, s], axis=1)
+
+    g025, n025 = znorm(g025)
+    g100, n100 = znorm(g100)
+    rg, nrg = znorm(rg)
+
+    # The profiles: 30 per live bin plus a thin scatter elsewhere, at random
+    # fractional positions and times inside their bin.
+    p_bin, p_time, p_lat, p_lon, p_t, p_s = [], [], [], [], [], []
+    for t in range(T):
+        n = 30 if t in live_rows else 8
+        fy = rng.uniform(0, ny - 1, n)
+        fx = rng.uniform(0, nx - 1, n)
+        frac = rng.uniform(0, 1, n)
+        for j in range(n):
+            tt, ss = column(t + frac[j], fy[j], fx[j])
+            # A real profile does not fill every level: the deep ones go
+            # missing far more often (docs/FAMILY8_DATA_HANDOVER.md §3).
+            miss = rng.random(16) < (0.05 + 0.25 * (lev / lev[-1]))
+            tt = np.where(miss, np.nan, tt)
+            ss = np.where(rng.random(16) < 0.1, np.nan, ss)
+            p_bin.append(int(bins[t]))
+            p_time.append(float(PENTAD_DAYS * bins[t] + 5.0 * frac[j]))
+            p_lat.append(float(lats[0] + 0.25 * fy[j]))
+            p_lon.append(float(lons[0] + 0.25 * fx[j]))
+            p_t.append(tt)
+            p_s.append(ss)
+
+    stem = os.path.join(root, "family7_smoke_f8")
+    os.makedirs(root, exist_ok=True)
+    np.save(group_path(stem + ".npz", "g025"), g025)
+    np.save(group_path(stem + ".npz", "g100"), g100)
+    np.save(group_path(stem + ".npz", "rg100"), rg)
+    np.savez(stem + ".npz", groups=np.array(["g025", "g100", "rg100"]),
+             months=months, lats=lats, lons=lons, lat1=lat1, lon1=lon1,
+             chan_g025=np.array(SMOKE_F8_G025),
+             chan_g100=np.array(SMOKE_F8_G100),
+             chan_rg100=np.array(SMOKE_F8_CHAN),
+             bin_index=bins, rg_bin_index=np.array(rg_bins, np.int64),
+             norm_g025=n025, norm_g100=n100, norm_rg100=nrg,
+             recipe=np.array("f7_smoke_f8"))
+    store = write_synthetic_store(
+        os.path.join(root, "family8_argo_smoke"), p_bin, p_time, p_lat, p_lon,
+        np.asarray(p_t, np.float32), np.asarray(p_s, np.float32),
+        levels=SMOKE_F8_LEVELS,
+        note="ml/train_cone.py::smoke_family8 — synthetic, no network")
+    return stem + ".npz", store
+
+
 class FiniteView:
     """`isfinite(X)` derived PER GATHER instead of materialised.
 
@@ -414,7 +670,8 @@ def load_data_family7(a, d, gnames):
     # NaN — a property of the holdout, not of the world.
     ocean = anchor_mask(probe)
 
-    arrays, dynamic = {}, {}
+    arrays, dynamic, group_stats = {}, {}, {}
+    want_stats = bool(getattr(a, "argo_store", ""))
     for g in probe.groups:
         A = g.X
         if isinstance(A, np.memmap) and not A.flags.writeable:
@@ -430,8 +687,16 @@ def load_data_family7(a, d, gnames):
         print(f"  {g.name}: anomaly_transform chunk {ch} "
               f"(peak ~{anomaly_peak_bytes(A.shape, ch, np.dtype(A.dtype).itemsize) / 1e9:.1f} GB, "
               f"{g.T} rows)", flush=True)
+        # E-076 section 2.5: the family-8 arm has to put a RAW profile through
+        # the identical chain, so the climatology and the pooled moments of
+        # the group it replaces are captured here — from the one anomaly
+        # transform, never recomputed beside it. Only for that group: the
+        # dense group's climatology is 349 MB and nothing asks for it.
+        stats = {} if (want_stats and g.name == PROFILE_GROUP) else None
         A, dyn = anomaly_transform(A, gmoy, ghold, np.zeros(g.W, bool),
-                                   chunk=ch)
+                                   chunk=ch, stats=stats)
+        if stats is not None:
+            group_stats[g.name] = stats
         arrays[g.name] = A
         dynamic[g.name] = [int(c) for c in dyn]
         print(f"  {g.name}: anomaly space, {len(dyn)}/{g.C} dynamic "
@@ -456,7 +721,14 @@ def load_data_family7(a, d, gnames):
                             for g in gs.names if f"norm_{g}" in d}}
     return dict(X=gs, OBS=None, months=months, lats=lats, lons=lons,
                 chan=chan, t_hold=t_hold, ocean=ocean, norm=norm,
-                T=T, H=H, W=W, C=C)
+                T=T, H=H, W=W, C=C, stats=group_stats,
+                group_norm={g: np.asarray(d[f"norm_{g}"])
+                            for g in gs.names if f"norm_{g}" in d},
+                # ABSOLUTE pentad bins per master row. The observation store
+                # is indexed by those, this tensor by row, and on any
+                # sub-range build the two differ.
+                bin_index=(np.asarray(d["bin_index"], np.int64)
+                           if "bin_index" in d else None))
 
 
 def load_data(a):
@@ -522,7 +794,8 @@ def load_data(a):
             "tensor_norm": (np.asarray(d["norm"]).tolist()
                             if "norm" in d else None)}
     return dict(X=X, OBS=OBS, months=months, lats=lats, lons=lons, chan=chan,
-                t_hold=t_hold, ocean=ocean, norm=norm, T=T, H=H, W=W, C=C)
+                t_hold=t_hold, ocean=ocean, norm=norm, T=T, H=H, W=W, C=C,
+                stats={}, group_norm={}, bin_index=None)
 
 
 # ------------------------------------------------------------------ anchors --
@@ -543,8 +816,18 @@ def draw_anchors(rng, ts, ys, xs, n):
     return np.stack([ts[it], ys[ip], xs[ip]], axis=1).astype(np.int64)
 
 
-def to_torch(s, chan_depth, device):
-    """The sampler's numpy batch as the tensors ConeMAE.forward reads."""
+def to_torch(s, chan_depth, device, extras=()):
+    """The sampler's numpy batch as the tensors ConeMAE.forward reads.
+
+    `extras` names which of the per-dot extra fields are LIVE (`dot_extras_of`
+    parses the flag). The tensor handed to the model is always three wide when
+    any is live — [nr, fp0, fp1] — with the ones not named zeroed, so the
+    architecture does not move between the arms of E-076 section 5.
+
+    A batch the sampler drew with `withhold_nearest` carries `profile_target`;
+    its ready-made query block travels as the `pq_*` keys, which is what makes
+    masked-profile reconstruction ride the existing dot-query machinery.
+    """
     b = {}
     for k in ("vals", "dy_km", "dx_km", "lag_days", "depth", "patch_vals",
               "fut_vals", "ctx"):
@@ -554,6 +837,24 @@ def to_torch(s, chan_depth, device):
         b[k] = torch.as_tensor(np.ascontiguousarray(s[k]), device=device)
     b["chan"] = torch.as_tensor(s["chan"].astype(np.int64), device=device)
     b["chan_depth"] = chan_depth
+    if extras:
+        nr = np.asarray(s["nr"], np.float32)[..., None]
+        fp = np.asarray(s["fp"], np.float32)
+        cols = [nr if "nr" in extras else np.zeros_like(nr),
+                fp if "fp" in extras else np.zeros_like(fp)]
+        b["dot_extra"] = torch.as_tensor(
+            np.ascontiguousarray(np.concatenate(cols, axis=-1)),
+            dtype=torch.float32, device=device)
+    pt = s.get("profile_target")
+    if pt is not None:
+        b["pq_chan"] = torch.as_tensor(pt["q_chan"].astype(np.int64),
+                                       device=device)
+        for k in ("dy_km", "dx_km", "lag_days", "depth", "vals"):
+            b[f"pq_{k}"] = torch.as_tensor(
+                np.ascontiguousarray(pt[f"q_{k}"]), dtype=torch.float32,
+                device=device)
+        b["pq_obs"] = torch.as_tensor(np.ascontiguousarray(pt["q_obs"]),
+                                      device=device)
     return b
 
 
@@ -586,7 +887,7 @@ LOG_CHANS = ("cur_u", "cur_v", "cur_speed", "ssh", "sst")
 
 
 def eval_loss(model, sampler, anchors, plan, chan_depth, device, batch,
-              seed=12345):
+              seed=12345, extras=()):
     """Held-out loss on a FIXED anchor set with a FIXED mask draw.
 
     The generator is re-seeded at every eval, so two evals differ only in the
@@ -634,8 +935,12 @@ def eval_loss(model, sampler, anchors, plan, chan_depth, device, batch,
            for k in QUERY_FAMILIES}
     with torch.no_grad():
         for i in range(0, len(anchors), batch):
-            s = sampler.sample(anchors[i:i + batch])
-            b = to_torch(s, chan_depth, device)
+            # `train_pool=False`: a HELD-OUT sample may read profiles from
+            # held-out bins, exactly as it may read dots from them — that is
+            # what makes it a held-out measurement rather than a second
+            # training pool.
+            s = sampler.sample(anchors[i:i + batch], train_pool=False)
+            b = to_torch(s, chan_depth, device, extras)
             out = model(b, p)
             n = out["terms"]["wsum"]
             nll += out["terms"]["nll"] * n
@@ -767,6 +1072,263 @@ def chan_mse_line(fam, chan, names=LOG_CHANS, family="anchor"):
     return " · ".join(out)
 
 
+_STORES = {}
+
+
+def open_store(a):
+    """The family-8 store named by `--argo-store`, VERIFIED before it is used.
+
+    The verification is the dispatch-time half of ml/CLAUDE.md §0.3: a
+    truncated `temp.npy` still memmaps and still answers a search, with
+    whatever its tail happens to hold, and the run would train on it and
+    report numbers. Cached per path so the twin arm does not re-hash 234 MB.
+    """
+    from family8_store import ArgoStore, verify_store
+    path = os.path.abspath(a.argo_store)
+    if path in _STORES:
+        return _STORES[path]
+    n = verify_store(path)
+    st = ArgoStore(path)
+    print(f"family 8 store {path}: {len(st):,} profiles over {st.n_bins} "
+          f"pentad bins, {n} files sha256-verified against store.json",
+          flush=True)
+    _STORES[path] = st
+    return st
+
+
+# --------------------------------------------- E-076 §5.1, the common target --
+HELDOUT_SPLITS = ("2021-2024", "interspersed")
+
+
+def heldout_split_of(year):
+    """Which half of the frozen protocol's holdout a year belongs to.
+
+    E-076 §5.1 reads the two apart because they are different questions: the
+    2021-2024 block is the TERMINAL holdout (can the codec do this at the end
+    of the archive, where a forecast would run), while 2008/2009/2016/2017 are
+    interspersed years surrounded by training data.
+    """
+    return HELDOUT_SPLITS[0] if int(year) >= 2021 else HELDOUT_SPLITS[1]
+
+
+class _RMSE:
+    """Squared-error sums per channel, for one population of anchors."""
+
+    def __init__(self, n_chan):
+        self.n = 0
+        self.se = np.zeros((3, n_chan), np.float64)     # model, clim, pers
+        self.cnt = np.zeros((3, n_chan), np.float64)
+
+    def add(self, pred, target, mask, row):
+        d = np.where(mask, np.asarray(pred, np.float64)
+                     - np.asarray(target, np.float64), 0.0)
+        self.se[row] += (d * d).sum(axis=0)
+        self.cnt[row] += mask.sum(axis=0)
+
+    def rmse(self, row, sel):
+        """[len(sel)] RMSE over the channels `sel`, NaN-free: a level nothing
+        scored reports `None` rather than 0.0 or a NaN (ml/CLAUDE.md §5.22)."""
+        out = []
+        for c in sel:
+            k = self.cnt[row, c]
+            out.append(float(np.sqrt(self.se[row, c] / k)) if k > 0 else None)
+        return out
+
+    def record(self, sel_t, sel_s):
+        rec = {"n": int(self.n)}
+        for row, name in ((0, ""), (1, "clim_"), (2, "pers_")):
+            rec[f"{name}rmse_t"] = self.rmse(row, sel_t)
+            rec[f"{name}rmse_s"] = self.rmse(row, sel_s)
+        for var, sel in (("t", sel_t), ("s", sel_s)):
+            # SKILL is the mean over levels of model RMSE / climatology RMSE:
+            # below 1 the model beats predicting the seasonal normal, which is
+            # the bar E-076 §5.1 names first. Levels neither of them scored are
+            # left out rather than counted as a ratio of nothing.
+            num, den = rec[f"rmse_{var}"], rec[f"clim_rmse_{var}"]
+            r = [n / d for n, d in zip(num, den)
+                 if n is not None and d not in (None, 0.0)]
+            rec[f"skill_{var}"] = float(np.mean(r)) if r else None
+        return rec
+
+
+def profile_target_anchors(a, D, sampler, ys, xs, n, seed=20260907):
+    """A FIXED set of held-out anchors with at least two profiles in range.
+
+    E-076 §5.1's protocol: held-out bins, ocean cells, `n_R >= 2` — two,
+    because the eval withholds the nearest profile and still needs one left to
+    read the persistence baseline off. Drawn ONCE with its own seed, so the
+    curve compares models rather than anchor sets, and by rejection because
+    "how many profiles are within 1,000 km of this cell in this pentad" is a
+    property of the observing system that no mask can be precomputed from
+    cheaply.
+    """
+    P = sampler.profile
+    ts = np.flatnonzero(D["t_hold"])
+    ts = ts[(ts - sampler.L_in >= 0) & (ts + max(sampler.future_lags)
+                                        < sampler.T)]
+    if not len(ts) or n <= 0:
+        return np.zeros((0, 3), np.int64)
+    rng = np.random.default_rng(seed)
+    keep, tried = [], 0
+    cap = 200 * n + 10_000
+    while len(keep) < n and tried < cap:
+        cand = draw_anchors(rng, ts, ys, xs, min(4 * n, 4096))
+        tried += len(cand)
+        for t, y, x in cand:
+            res = P.knearest(float(sampler.lats[y]), float(sampler.lons[x]),
+                             int(t), 2)
+            if int(res["n_R"]) >= 2:
+                keep.append((int(t), int(y), int(x)))
+                if len(keep) >= n:
+                    break
+    return np.asarray(keep, np.int64).reshape(-1, 3)
+
+
+def profile_target_eval(model, sampler, anchors, months, chan_depth, device,
+                        batch=64, extras=(), step=0):
+    """E-076 §5.1's COMMON TARGET: the nearest real profile, raw units.
+
+    IDENTICAL CODE FOR BOTH ARMS, which is the whole point of the section. The
+    family-8 arm's input has the target profile withheld (`withhold_nearest`
+    removes it from the token set); the twin's input is the gridded `rg100`
+    column it always had, because `--profile-k 0` leaves the dense path alone.
+    Either way the decoder is asked the same 32 questions at the same
+    coordinates and scored against the same measurement.
+
+    The prediction comes back in the model's anomaly space and is inverted at
+    the PROFILE'S OWN cell and month — the same chain E-076 §2.5 applies going
+    in, read backwards:
+
+        z   = a * den_c + mu_c + clim[month, y1, x1, c]
+        raw = z * norm_sd_c + norm_mean_c
+
+    Three read-outs on identical masks: the model, the CLIMATOLOGY (a = 0, so
+    the seasonal normal at that cell) and PERSISTENCE (the nearest REMAINING
+    profile's own values, copied). A model that does not beat both has not
+    used the displacement information (docs/FAMILY8_DATA_HANDOVER.md §7.5).
+    """
+    P = sampler.profile
+    Cg = P.n_chan
+    # Which columns of the 32 are temperature and which salinity, each in
+    # DEPTH ORDER — the `rmse_t[16]` and `rmse_s[16]` of E-076 §5.1 are per
+    # level, and the channel order is the tensor's, not the store's.
+    idx_t = np.flatnonzero(P.value_col == 0)[np.argsort(
+        P.level[P.value_col == 0], kind="stable")]
+    idx_s = np.flatnonzero(P.value_col == 1)[np.argsort(
+        P.level[P.value_col == 1], kind="stable")]
+    pops = {"all": _RMSE(Cg)}
+    for k in HELDOUT_SPLITS:
+        pops[k] = _RMSE(Cg)
+    model.eval()
+    with torch.no_grad():
+        for i in range(0, len(anchors), batch):
+            aa = anchors[i:i + batch]
+            s = sampler.sample(aa, withhold_nearest=True, train_pool=False)
+            pt = s["profile_target"]
+            b = to_torch(s, chan_depth, device, extras)
+            z, _ = model.encode(b)
+            q = model.query_tokens(b["pq_chan"].long(), b["pq_dy_km"],
+                                   b["pq_dx_km"], b["pq_lag_days"],
+                                   b["pq_depth"])
+            mu, _lv = model.decode_from_z(z, q)
+            a_hat = mu.detach().cpu().numpy().astype(np.float64)
+
+            month, y1, x1 = pt["month"], pt["y1"], pt["x1"]
+            cl = np.asarray(P.clim[month, y1, x1, :], np.float64)   # [B, Cg]
+            def to_raw(a_val):
+                zz = a_val * P.den[None, :] + P.mu[None, :] + cl
+                return zz * P.norm_sd[None, :] + P.norm_mean[None, :]
+            both = np.stack([pt["temp"], pt["psal"]], axis=0)        # [2,B,16]
+            tgt = both[P.value_col, :, P.level].T.astype(np.float64)
+            pers = np.stack([pt["pers_temp"], pt["pers_psal"]],
+                            axis=0)[P.value_col, :, P.level].T.astype(np.float64)
+            # ONE mask for the model and the climatology: `q_obs` is exactly
+            # "the level is filled AND the chain is defined at this cell and
+            # month", so the two baselines are scored on the same targets the
+            # model is. Persistence additionally needs its own profile to have
+            # measured that level.
+            m = np.asarray(pt["q_obs"], bool)
+            mp = m & np.isfinite(pers) & np.asarray(pt["pers_valid"], bool)[:, None]
+            pred = to_raw(a_hat)
+            climp = to_raw(np.zeros_like(a_hat))
+            years = np.array([int(months[int(t)][:4]) for t in aa[:, 0]])
+            groups = [("all", np.ones(len(aa), bool))]
+            for name in HELDOUT_SPLITS:
+                groups.append((name, np.array(
+                    [heldout_split_of(y) == name for y in years])))
+            for name, gm in groups:
+                if not gm.any():
+                    continue
+                acc = pops[name]
+                acc.n += int((m[gm].any(axis=1)).sum())
+                acc.add(pred[gm], tgt[gm], m[gm], 0)
+                acc.add(climp[gm], tgt[gm], m[gm], 1)
+                acc.add(pers[gm], tgt[gm], mp[gm], 2)
+    model.train()
+    rec = {"step": int(step), "n_anchors": int(len(anchors)),
+           "levels": [float(v) for v in P.store.levels]}
+    rec.update(pops["all"].record(idx_t, idx_s))
+    rec["heldout_split"] = {k: pops[k].record(idx_t, idx_s)
+                            for k in HELDOUT_SPLITS}
+    return rec
+
+
+def write_profile_target(out_dir, rec, in_progress=False,
+                         name="profile_target.json"):
+    """`profile_target.json`, written atomically (ml/CLAUDE.md §5.25).
+
+    Temp sibling then `os.replace`, so a reader never catches a half-written
+    file, and every write before the last carries `in_progress` — those
+    numbers are real, and the run they belong to has not finished.
+    """
+    path = os.path.join(out_dir, name)
+    blob = dict(rec)
+    if in_progress:
+        blob["in_progress"] = True
+    tmp = path + ".tmp"
+    with open(tmp, "w") as f:
+        json.dump(blob, f, indent=2)
+    os.replace(tmp, path)
+    return path
+
+
+def profile_line(rec):
+    """One human line: the two skills and the level-500 numbers."""
+    def at(key, j=8):
+        v = (rec.get(key) or [])
+        return "n/a" if j >= len(v) or v[j] is None else f"{v[j]:.3f}"
+    sk = lambda k: ("n/a" if rec.get(k) is None else f"{rec[k]:.3f}")  # noqa: E731
+    return (f"profile target n={rec.get('n', 0)} · skill T {sk('skill_t')} "
+            f"S {sk('skill_s')} · 500 dbar rmse T {at('rmse_t')} "
+            f"(clim {at('clim_rmse_t')}, pers {at('pers_rmse_t')}) °C · "
+            f"S {at('rmse_s')} (clim {at('clim_rmse_s')}, "
+            f"pers {at('pers_rmse_s')}) PSU")
+
+
+def run_profile_eval(a, tag, model, sampler, anchors, D, chan_depth, device,
+                     extras, step, out_dir, name, metrics_path, final):
+    """Score the common target, print it, and publish it — or do nothing.
+
+    Called at every eval point INCLUDING step 0, so the file exists (with its
+    climatology and persistence bars, which no training changes) before the
+    first hour is spent, and is refreshed at every eval afterwards: E-076a's
+    headline is exactly this number, and ml/CLAUDE.md §5.25 says a long job
+    publishes its result as it goes rather than holding it in memory.
+    """
+    if anchors is None or not len(anchors):
+        return None
+    rec = profile_target_eval(model, sampler, anchors, D["months"], chan_depth,
+                              device, batch=a.batch, extras=extras, step=step)
+    rec["arm"] = tag
+    print(f"[{tag}] step {step:>6} · {profile_line(rec)}", flush=True)
+    write_profile_target(out_dir, rec, in_progress=not final, name=name)
+    if metrics_path:
+        with open(metrics_path, "a") as f:
+            f.write(json.dumps({"step": int(step),
+                                "profile_target": rec}) + "\n")
+    return rec
+
+
 def train_one(a, D, L_in, out_dir, metrics_name, ckpt_name, tag, device,
               eval_anchors=None):
     """Train one arm (the cone codec, or its L_in=0 snapshot twin).
@@ -777,9 +1339,18 @@ def train_one(a, D, L_in, out_dir, metrics_name, ckpt_name, tag, device,
     rng = np.random.default_rng(a.seed)
     chan, C = D["chan"], D["C"]
     fut = tuple(int(v) for v in a.future_lags.split(",") if v.strip())
-    sampler = ConeSampler(D["X"], D["OBS"], D["lats"], D["lons"], chan,
-                          L_in=L_in, future_lags=fut)
     train_bins = ~D["t_hold"]
+    n_extra, extras = dot_extras_of(a.dot_extras)
+    store = open_store(a) if a.argo_store else None
+    sampler = ConeSampler(
+        D["X"], D["OBS"], D["lats"], D["lons"], chan, L_in=L_in,
+        future_lags=fut, profile_store=store, profile_k=a.profile_k,
+        profile_group=PROFILE_GROUP,
+        profile_norm=(D.get("group_norm") or {}).get(PROFILE_GROUP),
+        profile_stats=(D.get("stats") or {}).get(PROFILE_GROUP),
+        profile_R_max_km=a.profile_R_max_km,
+        profile_T_max_days=a.profile_T_max_days,
+        profile_bin_index=D.get("bin_index"), train_bins=train_bins)
     ts = admissible_bins(sampler, train_bins)
     ys, xs = np.nonzero(D["ocean"])
     if not len(ts):
@@ -792,6 +1363,13 @@ def train_one(a, D, L_in, out_dir, metrics_name, ckpt_name, tag, device,
     print(f"[{tag}] L_in={L_in} · {n_dots} dot tokens + {C} patch tokens per "
           f"anchor · admissible train bins {len(ts)}/{sampler.T} · "
           f"{len(ys):,} ocean cells", flush=True)
+    if store is not None:
+        print(f"[{tag}] family 8: {len(store):,} profiles · k={a.profile_k} "
+              f"({sampler.n_profile_dots} profile dot tokens per anchor) · "
+              f"R_max {a.profile_R_max_km:g} km · T_max "
+              f"{a.profile_T_max_days:g} d · dot extras "
+              f"{list(extras) or 'none'} (n_extra {n_extra}) · drop-p "
+              f"{a.profile_drop_p:g}", flush=True)
 
     # ---- self-certification (E-059's pattern), BEFORE anything is spent ----
     cert = draw_anchors(rng, ts, ys, xs, min(a.certify_n, 4096))
@@ -808,7 +1386,7 @@ def train_one(a, D, L_in, out_dir, metrics_name, ckpt_name, tag, device,
     model = ConeMAE(C, d_model=a.d_model, n_heads=a.n_heads,
                     n_latents=a.n_latents, n_layers=a.n_layers, d_z=a.d_z,
                     d_dec=a.d_dec, dec_layers=a.dec_layers,
-                    n_fourier=a.n_fourier).to(device)
+                    n_fourier=a.n_fourier, n_extra=n_extra).to(device)
     params = model.param_count()
     print(f"[{tag}] ConeMAE {params:,} params "
           f"({params / 1e6:.3f}M)", flush=True)
@@ -837,6 +1415,25 @@ def train_one(a, D, L_in, out_dir, metrics_name, ckpt_name, tag, device,
             raise SystemExit(f"[{tag}] no held-out bin has a complete cone")
         eval_anchors = draw_anchors(np.random.default_rng(a.seed + 991),
                                     ev_ts, ys, xs, a.eval_anchors)
+
+    # ---- E-076 §5.1's fixed common-target anchor set -----------------------
+    # Drawn ONCE, with its own seed, from held-out bins with at least two
+    # profiles in range: the same anchors at every eval and — because the seed
+    # does not depend on the arm — the same anchors in both arms of E-076a.
+    prof_anchors = None
+    prof_name = ("profile_target.json" if tag == "cone"
+                 else f"profile_target_{tag}.json")
+    if sampler.profile is not None and a.profile_eval_n > 0:
+        prof_anchors = profile_target_anchors(a, D, sampler, ys, xs,
+                                              a.profile_eval_n,
+                                              seed=20260907 + a.seed)
+        print(f"[{tag}] common-target eval: {len(prof_anchors)} held-out "
+              f"anchors with n_R >= 2 (asked for {a.profile_eval_n})",
+              flush=True)
+        if not len(prof_anchors):
+            print(f"[{tag}] ::warning:: no held-out anchor has two profiles "
+                  f"in range — the common target of E-076 §5.1 cannot be "
+                  f"scored on this tensor", flush=True)
 
     metrics_path = (os.path.join(out_dir, metrics_name)
                     if metrics_name and not os.path.isabs(metrics_name)
@@ -870,6 +1467,15 @@ def train_one(a, D, L_in, out_dir, metrics_name, ckpt_name, tag, device,
                 "chan_drop_scope": a.chan_drop_scope,
                 "lag_band_p": a.lag_band_p, "sector_p": a.sector_p,
                 "anchor_hidden_only": bool(a.anchor_hidden_only),
+                # E-076a. The arm is a property of the RUN and this record is
+                # sometimes the only surviving account of it (#387).
+                "argo_store": os.path.basename(a.argo_store.rstrip("/"))
+                              if a.argo_store else None,
+                "profile_k": int(a.profile_k) if a.argo_store else 0,
+                "profile_drop_p": (float(a.profile_drop_p) if a.argo_store
+                                   and a.profile_k else 0.0),
+                "dot_extras": ",".join(extras), "n_extra": int(n_extra),
+                "n_profile_dots": int(sampler.n_profile_dots),
                 "holdout_scope": a.holdout_scope,
                 "holdout_years": a.holdout_years,
                 "lr": a.lr, "seed": a.seed,
@@ -887,14 +1493,21 @@ def train_one(a, D, L_in, out_dir, metrics_name, ckpt_name, tag, device,
                 "chan_drop_scope": a.chan_drop_scope,
                 "lag_band_p": float(a.lag_band_p),
                 "sector_p": float(a.sector_p),
-                "anchor_hidden_only": bool(a.anchor_hidden_only)}
+                "anchor_hidden_only": bool(a.anchor_hidden_only),
+                # E-076a: the dot token's WIDTH is part of the architecture,
+                # so a loader must find it here and not have to re-parse the
+                # flag. An archived E-069 checkpoint has neither key and
+                # rebuilds at n_extra 0, which is what it was trained with.
+                "dot_extras": ",".join(extras), "n_extra": int(n_extra),
+                "profile_k": int(a.profile_k) if a.argo_store else 0}
         torch.save(blob, os.path.join(out_dir, ckpt_name))
 
     loss_every = max(1, a.steps // 200)
     curve = []
     t0 = time.time()
     nll0, mse0, n0, fam0 = eval_loss(model, sampler, eval_anchors, plan,
-                                     chan_depth, device, a.batch)
+                                     chan_depth, device, a.batch,
+                                     extras=extras)
     curve.append({"step": 0, "held_out_nll": nll0, "held_out_mse": mse0,
                   "train_nll": None, "families": fam0})
     print(f"[{tag}] step 0 · held-out nll {nll0:+.4f} mse {mse0:.4f} "
@@ -907,10 +1520,23 @@ def train_one(a, D, L_in, out_dir, metrics_name, ckpt_name, tag, device,
             rec.update(fam_record(fam0))
             rec["wall_s"] = round(time.time() - t0, 1)
             f.write(json.dumps(rec) + "\n")
+    run_profile_eval(a, tag, model, sampler, prof_anchors, D, chan_depth,
+                     device, extras, 0, out_dir, prof_name, metrics_path,
+                     final=False)
 
     for s in range(1, a.steps + 1):
         anchors = draw_anchors(rng, ts, ys, xs, a.batch)
-        b = to_torch(sampler.sample(anchors), chan_depth, device)
+        # E-076 §7.5's masked-profile objective, per anchor: with probability
+        # --profile-drop-p the NEAREST profile is taken out of the input and
+        # the decoder is asked for it instead. A per-anchor draw rather than a
+        # per-batch one, so one batch carries both regimes and the gradient is
+        # not a function of which side of a coin the whole step landed on.
+        drop = (rng.random(len(anchors)) < a.profile_drop_p
+                if (sampler.profile is not None and sampler.profile_k > 0
+                    and a.profile_drop_p > 0.0)
+                else False)
+        b = to_torch(sampler.sample(anchors, withhold_nearest=drop),
+                     chan_depth, device, extras)
         out = model(b, plan)
         opt.zero_grad(set_to_none=True)
         out["loss"].backward()
@@ -928,7 +1554,8 @@ def train_one(a, D, L_in, out_dir, metrics_name, ckpt_name, tag, device,
                     "loss_nei": round(out["terms"]["mse"], 5)}) + "\n")
         if s % a.eval_every == 0 or s == a.steps:
             nll, mse, n, fam = eval_loss(model, sampler, eval_anchors, plan,
-                                         chan_depth, device, a.batch)
+                                         chan_depth, device, a.batch,
+                                         extras=extras)
             curve.append({"step": s, "held_out_nll": nll, "held_out_mse": mse,
                           "train_nll": out["terms"]["nll"], "families": fam})
             print(f"[{tag}] step {s:>6}/{a.steps} · train nll "
@@ -943,12 +1570,16 @@ def train_one(a, D, L_in, out_dir, metrics_name, ckpt_name, tag, device,
                     rec.update(fam_record(fam))
                     rec["wall_s"] = round(time.time() - t0, 1)
                     f.write(json.dumps(rec) + "\n")
+            run_profile_eval(a, tag, model, sampler, prof_anchors, D,
+                             chan_depth, device, extras, s, out_dir,
+                             prof_name, metrics_path, final=(s == a.steps))
         if s % a.save_every == 0:
             save(s)
     save(a.steps)
     return dict(model=model, sampler=sampler, curve=curve, params=params,
                 certificate={"anchors": int(len(cert)), "violations": int(bad)},
                 eval_anchors=eval_anchors, chan_depth=chan_depth, plan=plan,
+                extras=extras, n_extra=n_extra,
                 ckpt=os.path.join(out_dir, ckpt_name))
 
 
@@ -1010,7 +1641,7 @@ def kfold_r2(F, y, groups):
 
 
 def encode_anchors(model, sampler, chan, anchors, chan_depth, device,
-                   batch=64, hide_cur=True):
+                   batch=64, hide_cur=True, extras=()):
     """`(Z, TG, OB)` over `anchors`: the codes, the anchor's own channel values
     and their observed flags.
 
@@ -1028,8 +1659,8 @@ def encode_anchors(model, sampler, chan, anchors, chan_depth, device,
     model.eval()
     with torch.no_grad():
         for i in range(0, len(anchors), batch):
-            s = sampler.sample(anchors[i:i + batch])
-            b = to_torch(s, chan_depth, device)
+            s = sampler.sample(anchors[i:i + batch], train_pool=False)
+            b = to_torch(s, chan_depth, device, extras)
             B = b["patch_vals"].shape[0]
             bb = dict(b)
             if hide_cur:
@@ -1155,7 +1786,7 @@ def raw_patch_probe(sampler, chan, anchors, months, batch=64):
     keep = [i for i, n in enumerate(chan) if not n.startswith("cur_")]
     fs, tg, ob = [], [], []
     for i in range(0, len(anchors), batch):
-        s = sampler.sample(anchors[i:i + batch])
+        s = sampler.sample(anchors[i:i + batch], train_pool=False)
         pv = np.asarray(s["patch_vals"], np.float64)          # [B, C, 9]
         po = np.asarray(s["patch_obs"], np.float64)
         f = np.concatenate([(pv * po)[:, keep, :], po[:, keep, :]], axis=2)
@@ -1176,7 +1807,7 @@ def raw_patch_probe(sampler, chan, anchors, months, batch=64):
 
 
 def velocity_probe(model, sampler, chan, anchors, months, chan_depth, device,
-                   batch=64):
+                   batch=64, extras=()):
     """H1: ridge from z to (cur_u, cur_v), in TWO variants.
 
     `hidden` is the protocol H1 is stated in — the `cur_*` channels are
@@ -1195,7 +1826,8 @@ def velocity_probe(model, sampler, chan, anchors, months, chan_depth, device,
     out = {"folds": how, "n_anchors": int(len(anchors)), "variants": {}}
     for vname, hide in (("hidden", True), ("visible", False)):
         Z, TG, OB = encode_anchors(model, sampler, chan, anchors, chan_depth,
-                                   device, batch=batch, hide_cur=hide)
+                                   device, batch=batch, hide_cur=hide,
+                                   extras=extras)
         res = ridge_to_currents(Z, TG, OB, chan, groups)
         out["variants"][vname] = res
         if vname == "hidden":
@@ -1222,12 +1854,25 @@ def probe_line(arm):
 def main(argv=None):
     a = parse(argv)
     os.makedirs(a.out, exist_ok=True)
+    if a.smoke_family8 and not a.tensor:
+        # The family-8 smoke writes BOTH halves — a three-group tensor and an
+        # observation store aligned to it — because the arm is the pair.
+        a.tensor, store = smoke_family8(a.out, seed=a.seed)
+        a.argo_store = a.argo_store or store
+        print(f"--smoke-family8: synthetic tensor at {a.tensor}, store at "
+              f"{a.argo_store}", flush=True)
     if a.smoke and not a.tensor:
         a.tensor = smoke_tensor(os.path.join(a.out, "smoke_tensor.npz"),
                                 seed=a.seed)
         print(f"--smoke: synthetic tensor at {a.tensor}", flush=True)
     if not a.tensor:
         raise SystemExit("--tensor is required (or --smoke)")
+    if a.argo_store:
+        # BEFORE load_data, which is the 40-minute anomaly transform: a
+        # precondition that depends only on the inputs is checked while the
+        # inputs are all it has cost you (ml/CLAUDE.md §0.3, §5.16). Cached,
+        # so the arms below re-open it for free.
+        open_store(a)
     device = "cuda" if torch.cuda.is_available() else "cpu"
     D = load_data(a)
 
@@ -1255,7 +1900,8 @@ def main(argv=None):
         snap = None
         probe = {"cone": velocity_probe(res["model"], res["sampler"],
                                         D["chan"], pa, D["months"],
-                                        res["chan_depth"], device)}
+                                        res["chan_depth"], device,
+                                        extras=res["extras"])}
         print(f"[probe] cone   cur_u R2 {r2_str(probe['cone']['cur_u'])} · "
               f"cur_v R2 {r2_str(probe['cone']['cur_v'])}", flush=True)
         print(f"[probe] cone   {probe_line(probe['cone'])}", flush=True)
@@ -1264,7 +1910,8 @@ def main(argv=None):
                              "snapshot_codec.pt", "snapshot", device)
             probe["snapshot"] = velocity_probe(snap["model"], snap["sampler"],
                                                D["chan"], pa, D["months"],
-                                               snap["chan_depth"], device)
+                                               snap["chan_depth"], device,
+                                               extras=snap["extras"])
             print(f"[probe] snapshot cur_u R2 "
                   f"{r2_str(probe['snapshot']['cur_u'])} · cur_v R2 "
                   f"{r2_str(probe['snapshot']['cur_v'])}", flush=True)
