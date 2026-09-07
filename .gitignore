@@ -22,3 +22,7 @@ ml/paper/*.synctex.gz
 # worktree-isolated subagents; never repo content
 .claude/
 ml/cache/pangeo-cmip6.csv
+ml/figures/geofm_survey/geospatial-representation-models.pdf
+ml/figures/geofm_survey/notes-pages.pdf
+ml/figures/geofm_survey/notes-pages.pptx
+ml/figures/geofm_survey/titles.json
