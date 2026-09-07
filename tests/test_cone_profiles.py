@@ -702,3 +702,19 @@ def test_train_cone_smoke_family8_end_to_end(tmp_path):
 
 if __name__ == "__main__":                                  # pragma: no cover
     raise SystemExit(pytest.main([__file__, "-q"]))
+
+
+def test_family_weights_cover_every_family7_channel():
+    """Every channel of the REAL family-7 tensor (data/family7_index.json)
+    must resolve to a loss weight — #549/#550/#551 died on `KeyError: 'L'`
+    after the transform, the first time land channels met the cone codec."""
+    import json
+    import os
+    from cone_codec import family_weights
+    idx = json.load(open(os.path.join(os.path.dirname(__file__), "..",
+                                      "data", "family7_index.json")))
+    names = [c for g in ("g025", "g100", "rg100")
+             for c in idx["groups"][g]["chans"]]
+    assert len(names) == 54
+    w = family_weights(names)
+    assert len(w) == 54 and all(x > 0 for x in w)

@@ -384,7 +384,9 @@ def smoke_tensor(path, seed=0):
 SMOKE_F8_LEVELS = [10.0, 30.0, 50.0, 100.0, 150.0, 200.0, 300.0, 400.0,
                    500.0, 700.0, 900.0, 1100.0, 1300.0, 1500.0, 1700.0, 1900.0]
 SMOKE_F8_G025 = ["cur_speed", "ssh", "sst", "cur_u", "cur_v"]
-SMOKE_F8_G100 = ["t2m", "skt"]
+# t2m/skt (family A/C) plus the three LAND channels (family L), so the smoke
+# meets every cone family the real tensor has — #549 died on the one it lacked.
+SMOKE_F8_G100 = ["t2m", "skt", "log_swe", "soilw", "tsoil"]
 SMOKE_F8_CHAN = (["rg_t%d" % int(v) for v in SMOKE_F8_LEVELS]
                  + ["rg_s%d" % int(v) for v in SMOKE_F8_LEVELS])
 
@@ -471,6 +473,8 @@ def smoke_family8(root, seed=0, T=150, b0=2045, ny=48, nx=64):
         c = wave(t, y1g, x1g)
         g100[t, :, :, 0] = 20.0 + 3.0 * c
         g100[t, :, :, 1] = 21.0 + 3.0 * c
+        for k in range(2, g100.shape[-1]):              # the land channels
+            g100[t, :, :, k] = (0.5 + 0.1 * k) * c + 0.3 * k
     g025[:, :3, :3, :] = np.nan                        # a little land
 
     # `rg100`: one row per MONTH, into the pentad holding the 15th (E-034 §4),

@@ -74,7 +74,15 @@ from cone import channel_family                                   # noqa: E402
 # the Argo column — the ocean state the programme forecasts) is up-weighted
 # 2.0; family C (SST, MLD — slow but atmospherically stirred) 1.5; family A
 # (wind stress — fast, wide, 10-day memory) stays at 1.0.
-FAMILY_W = {"A": 1.0, "B": 2.0, "C": 1.5}
+FAMILY_W = {"A": 1.0, "B": 2.0, "C": 1.5,
+            # L — land (snow water equivalent, soil moisture, soil
+            # temperature; family 7's fourth family, reach 400 km, no
+            # advection). Slow like C but not part of the ocean state the
+            # programme forecasts, so the neutral weight. #549/#550/#551
+            # (E-076a's first dispatch) died on this key after a 30-minute
+            # anomaly transform, because no cone codec had trained on a
+            # tensor with land channels before.
+            "L": 1.0}
 
 LOGVAR_MIN, LOGVAR_MAX = -8.0, 8.0
 
