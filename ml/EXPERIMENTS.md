@@ -45,7 +45,7 @@ low-pass).
 ---
 
 <a id="e-076a"></a>
-## E-076a · Does a sparse channel carried as "the k nearest measurements, with distance" beat the same channel as a grid cell that is mostly empty? — DISPATCHED 2026-09-07 21:0xZ as #549 / #550 / #551 (first dispatch #546/#547 died in the provenance step after a verified 53 GB pull — it read a `chan` key family 7 does not have; fixed in `1c7bf20`; #548 was cancelled when its box never registered)
+## E-076a · Does a sparse channel carried as "the k nearest measurements, with distance" beat the same channel as a grid cell that is mostly empty? — DISPATCHED 2026-09-07 22:1xZ as #552 / #553 / #554 (two earlier dispatches died in workflow plumbing that family 7 had never exercised: #546/#547 in the provenance step, which read a `chan` key family 7 does not have, fixed `1c7bf20`; #549/#550/#551 thirty minutes later, after the anomaly transform, on a missing loss weight for the land family, fixed `fe2f294`; #548 was cancelled when its box never registered — ≈ 1 box-hour × 3 spent)
 
 TL;DR — the ablation that decides whether family 8 is built. Two arms of
 the same 7 M-parameter cone codec (the encoder that reads a 30-day cone of
@@ -61,15 +61,15 @@ and salinity at 16 levels, in °C and PSU.
 
 **Dispatch (three runs, one box each, fresh 250 GB RTX 4090 rentals; the
 family-7 tensor is pulled from the Hub with sha256 refusal).**
-- **#549** · E-076a control (the twin), seed 0 · `params` 7.05 M (64 latents × 256 × 6,
+- **#552** · E-076a control (the twin), seed 0 · `params` 7.05 M (64 latents × 256 × 6,
   d_z 32) · `stage` encoder · `data` family7_global025_pentad_l0 + the
   family-8 store attached with k = 0 (never read as input; needed only to
   score the target) · `arch` inner cone lags 0–6, three groups · `steps×batch`
   20,000 × 256 · `resume` none · recipe `f7l0-cone-7M-twin`.
-- **#551** · the same twin at seed 1 — the twin's own seed pair, owed because
+- **#554** · the same twin at seed 1 — the twin's own seed pair, owed because
   this is the first cone codec on family 7 (a new tensor and a new read-out;
   ml/CLAUDE.md §3b: the first result at a tier buys its own replication).
-- **#550** · E-076a family-8 arm, seed 0 · identical, recipe
+- **#553** · E-076a family-8 arm, seed 0 · identical, recipe
   `f7l0-cone-7M-f8argo`: `cone_argo_store family8_argo_l0`, k = 5 within
   30 days and 1,000 km, the nearest profile withheld from the input with
   probability 0.5 per training anchor and reconstructed as a dot query.
@@ -86,8 +86,8 @@ than climatology; lower is better).
 
 **Hypothesis and falsifier.** H: the family-8 arm's temperature skill on
 the terminal years is below the twin's by more than the twin's seed spread
-(|skill(#549) − skill(#551)|), and both arms beat persistence.
-FALSIFIED if #550's skill is not below the twin's by more than that spread —
+(|skill(#552) − skill(#554)|), and both arms beat persistence.
+FALSIFIED if #553's skill is not below the twin's by more than that spread —
 then distance-as-a-feature bought nothing at this size and budget, and
 family 8 stops at the store (which stands on its own as a data product).
 Also registered: if NEITHER arm beats climatology on the interior

@@ -391,7 +391,7 @@ SMOKE_F8_CHAN = (["rg_t%d" % int(v) for v in SMOKE_F8_LEVELS]
                  + ["rg_s%d" % int(v) for v in SMOKE_F8_LEVELS])
 
 
-def smoke_family8(root, seed=0, T=150, b0=2045, ny=48, nx=64):
+def smoke_family8(root, seed=0, T=440, b0=2045, ny=48, nx=64):
     """A synthetic THREE-GROUP tensor plus a synthetic observation store.
 
     `--smoke` exercises the family-4 path on one dense array; this exercises
