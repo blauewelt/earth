@@ -19,6 +19,8 @@ end-to-end check is `build_family8_argo.run_smoke()`, the same path
 """
 import ast
 import datetime as dt
+import threading
+import time
 import json
 import os
 import shutil
@@ -517,7 +519,8 @@ def test_16_a_marker_is_absent_when_extraction_raises_mid_year(tmp_path):
     a = argparse.Namespace(work=str(work), source_dir=str(src),
                            start=str(d_lo), end=str(d_hi), force=False,
                            stage="all", smoke=False, jobs=1, attempts=1,
-                           index_anchors=10, index_pentads=1)
+                           index_anchors=10, index_pentads=1,
+                           dl_workers=2, inflight=4)
     ctx = b8.Ctx(a)
     b8.stage_index(ctx)
     with pytest.raises(Exception):
@@ -543,7 +546,8 @@ def test_16b_every_basin_streams_to_its_own_path(tmp_path):
     a = argparse.Namespace(work=str(tmp_path / "w"), source_dir="",
                            start="2015-01-03", end="2015-01-03", force=False,
                            stage="all", smoke=False, jobs=1, attempts=1,
-                           index_anchors=10, index_pentads=1)
+                           index_anchors=10, index_pentads=1,
+                           dl_workers=2, inflight=4)
     ctx = b8.Ctx(a)
     day = dt.date(2015, 1, 3)
     dests = set()
@@ -551,7 +555,11 @@ def test_16b_every_basin_streams_to_its_own_path(tmp_path):
         urls, rel = b8.day_urls(basin, day)
         assert rel.startswith(f"geo/{basin}/2015/01/") and rel.endswith(
             "20150103_prof.nc")
-        assert urls[0].startswith(b8.GDAC) and urls[1].startswith(b8.GDAC_MIRROR)
+        # S3 MIRROR FIRST — Ifremer throttles per connection, so the order is
+        # the difference between a 30-hour pull and a 5-hour one; Ifremer stays
+        # as the authoritative fallback.
+        assert urls[0].startswith(b8.GDAC_MIRROR)
+        assert urls[1].startswith(b8.GDAC)
         dests.add(os.path.join(ctx.scratch, rel))
     assert len(dests) == len(b8.BASINS), dests
     assert len({os.path.basename(d) for d in dests}) == 1, \
@@ -564,7 +572,8 @@ def test_17_stage_order_is_enforced(tmp_path):
     a = argparse.Namespace(work=str(tmp_path / "w"), source_dir="",
                            start="2015-01-01", end="2015-01-02", force=False,
                            stage="all", smoke=False, jobs=1, attempts=1,
-                           index_anchors=10, index_pentads=1)
+                           index_anchors=10, index_pentads=1,
+                           dl_workers=2, inflight=4)
     ctx = b8.Ctx(a)
     with pytest.raises(SystemExit) as e:
         b8.run_stages(ctx, ["profiles"])
@@ -630,3 +639,120 @@ def test_20_the_index_parser_reads_the_real_format(tmp_path):
     stats = b8.index_stats(idx, n_anchor=5, n_pentads=2)
     assert stats["n_profiles"] == 3
     assert stats["profiles_per_year"] == {1997: 2, 2015: 1}
+
+
+# ------------------------------------------------------------------ 21 -----
+# Module-level so the process pool can pickle them. `_FETCH_LIVE` is touched
+# only by the DOWNLOAD threads, which share this process.
+_FETCH_LIVE = {"now": 0, "peak": 0}
+_FETCH_LOCK = threading.Lock()
+
+
+def _slow_fetch(task):
+    d, i = task
+    with _FETCH_LOCK:
+        _FETCH_LIVE["now"] += 1
+        _FETCH_LIVE["peak"] = max(_FETCH_LIVE["peak"], _FETCH_LIVE["now"])
+    time.sleep(0.05)
+    p = os.path.join(d, f"f{i:03d}.bin")
+    with open(p, "wb") as fh:
+        fh.write(b"x" * 4096)
+    with _FETCH_LOCK:
+        _FETCH_LIVE["now"] -= 1
+    return (p, True, 4096)
+
+
+def _slow_parse(task, path):
+    time.sleep(0.05)
+    return {"i": task[1]}
+
+
+def test_21_downloads_run_concurrently_with_parsing(tmp_path):
+    """The property family8-build #2 did not have: overlap, and many sockets.
+
+    That run sat at ~2 MB/s with the CPU at 1 % — download-bound, on a link
+    that measures 6.5 MB/s per connection. Forty tasks at 50 ms of "download"
+    and 50 ms of "parse" each cost 4.0 s if the two phases take turns and
+    about 1.1 s if they overlap at eight connections and two parsers, so the
+    wall clock is the assertion. Task ORDER is asserted with it, because the
+    duplicate rule ("keep the first seen in (basin, date) order") makes the
+    yield order part of the store's definition and a faster pipeline that
+    reordered it would be a wrong one.
+    """
+    d = str(tmp_path / "dl")
+    os.makedirs(d)
+    tasks = [(d, i) for i in range(40)]
+    _FETCH_LIVE.update(now=0, peak=0)
+    seen, peak_disk = [], 0
+    t0 = time.time()
+    for task, res, nbytes in b8.stream_days(tasks, _slow_fetch, _slow_parse,
+                                            n_proc=2, max_inflight=8,
+                                            dl_workers=8):
+        seen.append(task[1])
+        assert res["i"] == task[1] and nbytes == 4096
+        peak_disk = max(peak_disk, len(os.listdir(d)))
+    el = time.time() - t0
+    assert seen == list(range(40)), "the pipeline reordered its tasks"
+    assert _FETCH_LIVE["peak"] >= 4, (
+        f"only {_FETCH_LIVE['peak']} concurrent download(s) — the pool is not "
+        f"being kept fed")
+    assert el < 2.5, f"took {el:.2f}s; serial would be 4.0s — no overlap"
+    assert peak_disk <= 8, f"{peak_disk} files on disk against max_inflight 8"
+    assert not os.listdir(d), "streamed files were not deleted after parsing"
+
+
+def test_22_the_throughput_meter_projects_and_warns(capsys):
+    """files/s, MB/s, projected hours — and a loud warning past the budget.
+
+    The projection is bytes-based (E-076 §3: 7,671 days x 3 basins x the mean
+    file size seen so far), so it is right even while most of the sampled days
+    are the empty ones the early archive is full of.
+    """
+    assert b8.FULL_DAYS == 7671 and b8.FULL_TASKS == 23013
+    tp = b8.Throughput(every=2)
+    tp.t0 = time.time() - 10.0                    # pretend 10 s have passed
+    assert tp.add(5_000_000, True) is False
+    assert tp.add(5_000_000, True) is True        # every 2nd task
+    rep = tp.report()
+    assert rep["files"] == 2 and rep["mean_file_mb"] == 5.0
+    assert abs(rep["mb_per_s"] - 1.0) < 0.05      # 10 MB in 10 s
+    # 23,013 x 5 MB = 115 GB at 1 MB/s = 115,065 s = 32.0 h
+    assert abs(rep["projected_full_pull_h"] - 32.0) < 0.2, rep
+    assert tp.check(rep) is not None
+    out = capsys.readouterr().out
+    assert "::warning::" in out and "DOWNLOAD-BOUND" in out
+    assert tp.check(rep) is None, "the warning must fire once, not every 50"
+    # a missing day costs a request and no bytes, and must not inflate the rate
+    fast = b8.Throughput(every=1)
+    fast.t0 = time.time() - 10.0
+    fast.add(0, False)
+    assert fast.report()["files"] == 0
+    assert fast.report()["projected_full_pull_h"] is None
+    quick = b8.Throughput(every=1)
+    quick.t0 = time.time() - 1.0
+    quick.add(5_000_000, True)                    # 5 MB/s -> 6.4 h, no warning
+    r = quick.report()
+    assert r["projected_full_pull_h"] < b8.PROJECTION_WARN_H
+    assert quick.check(r) is None
+
+
+def test_23_the_stream_knobs_are_flags(tmp_path):
+    """--dl-workers / --inflight reach the pipeline; the defaults are the new ones."""
+    import argparse
+    assert (b8.DL_WORKERS, b8.MAX_INFLIGHT, b8.MAX_PROCS) == (12, 24, 8)
+    assert b8.SOCKET_TIMEOUT == 60 and b8.CHUNK == (1 << 22)
+    a = argparse.Namespace(work=str(tmp_path / "w"), source_dir="",
+                           start="2015-01-01", end="2015-01-02", force=False,
+                           stage="all", smoke=False, jobs=1, attempts=1,
+                           index_anchors=10, index_pentads=1,
+                           dl_workers=0, inflight=0)
+    ctx = b8.Ctx(a)
+    assert ctx.dl_workers == 12 and ctx.max_inflight == 24
+    a.dl_workers, a.inflight = 3, 5
+    ctx = b8.Ctx(a)
+    assert ctx.dl_workers == 3 and ctx.max_inflight == 5
+    assert isinstance(ctx.throughput, b8.Throughput)
+    r = subprocess.run([sys.executable,
+                        os.path.join(ML, "build_family8_argo.py"), "--help"],
+                       capture_output=True, text=True, timeout=120)
+    assert "--dl-workers" in r.stdout and "--inflight" in r.stdout

@@ -73,11 +73,18 @@ on:
         description: "the build directory. RE-DISPATCH WITH THE SAME VALUE TO RESUME: finished stages and finished years are skipped by their .done markers. A different path is a different build"
         default: "ml/cache/family8"
       extra_args:
-        description: "extra flags for ml/build_family8_argo.py, e.g. --start 2004-01-01, --jobs 4, --source-dir <dir> or --smoke. Word-split deliberately; leave empty for a real build"
+        description: "extra flags for ml/build_family8_argo.py. The job is DOWNLOAD-BOUND: --dl-workers (default 12 connections) and --inflight (default 24 files on disk) are the throughput knobs, and the build prints files/s, MB/s and a projected total for the full pull every 50 files. Also --start 2004-01-01, --jobs, --source-dir <dir>, --smoke. Word-split deliberately; leave empty for a real build"
         default: ""
 
 permissions:
-  contents: read          # the store is published to Hugging Face, not here
+  # `write` EXISTS ONLY FOR THE LIVE BRANCH. The store itself goes to Hugging
+  # Face, verified by restore, and nothing in this workflow commits to main.
+  # The one thing that needs a repo write is the `ml-live-f8-<run>` orphan
+  # branch the build force-pushes its progress to every three minutes
+  # (ml/CLAUDE.md §5.25: progress is an artefact, not a log line). Blast radius
+  # if this job's token leaked is repo-scoped `contents: write` and nothing
+  # else — keep it at that and add no other scope (ml/CLAUDE.md §6).
+  contents: write
 
 concurrency:
   # ONE BUILD AT A TIME, and never cancelled in flight. Two concurrent builds
@@ -169,22 +176,72 @@ jobs:
       # HF_TOKEN in env, never on the command line: argv is readable by every
       # process on the box and the box's host has root (ml/CLAUDE.md 6).
       # $EXTRA is deliberately unquoted -- it carries whole flags and has to
-      # word-split. pipefail because the log is teed: without it `tee`'s exit
-      # code (always 0) would become the step's, and a failed build would
-      # report success (ml/CLAUDE.md 0.2, and the `| tail` incident in the root
-      # CLAUDE.md 1).
+      # word-split.
+      #
+      # THE BUILD RUNS IN THE BACKGROUND SO IT CAN REPORT ON ITSELF. A
+      # download-bound pull is hours long, and family8-build #2 spent twenty
+      # of its minutes being watched from the outside with no way to tell
+      # "slow" from "stuck" -- ml/CLAUDE.md 5.25: progress is an ARTEFACT, not
+      # a log line, and a progress line in a log the box takes with it is not
+      # progress anybody has. So the same loop ml-train.yml uses for its
+      # live-metrics side channel runs here: poll the build every 30 s and
+      # publish every 6th tick (3 min), shipping progress.json (which the
+      # builder rewrites atomically at every phase boundary and which now
+      # carries the measured MB/s and the projected hours for the full pull),
+      # index_stats.json once the index stage has written it, and the last 80
+      # lines of the build log.
+      #
+      # THE BRANCH IS `ml-live-f8-<run>`, NOT `ml-live-<run>`: that namespace
+      # is keyed by ml-train.yml's run numbers, this workflow has its own
+      # counter, and a collision would force-push over a live training branch
+      # the status page is reading.
+      #
+      # The build writes its log to a FILE and a backgrounded `tail -f` puts it
+      # on the console, rather than piping through `tee`: `$!` after a pipeline
+      # is the PID of its LAST process, so `wait` would return tee's status
+      # (always 0) and a failed build would report success (ml/CLAUDE.md 0.2,
+      # and the `| tail` incident in the root CLAUDE.md 1). `wait $BUILD_PID ||
+      # rc=$?` captures the builder's own code past `bash -e`, the last publish
+      # runs whatever happened, and the step then exits with it.
       - name: Build
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
+          GITHUB_TOKEN: ${{ github.token }}
           WORK: ${{ github.event.inputs.work || 'ml/cache/family8' }}
           STAGE: ${{ github.event.inputs.stage || 'all' }}
           EXTRA: ${{ github.event.inputs.extra_args }}
+          LIVE_BRANCH: ml-live-f8-${{ github.run_number }}
         run: |
           set -o pipefail
           mkdir -p "${WORK}"
+          : > "${WORK}/build.log"
+          ship() {
+            tail -n 80 "${WORK}/build.log" > "${RUNNER_TEMP}/log_tail.txt" 2>/dev/null || true
+            bash scripts/publish_live_files.sh "${LIVE_BRANCH}" \
+                 "${WORK}/progress.json" \
+                 "${WORK}/index_stats.json" \
+                 "${RUNNER_TEMP}/log_tail.txt" || true
+          }
           python3 -u ml/build_family8_argo.py \
               --work "${WORK}" --stage "${STAGE}" ${EXTRA} \
-              2>&1 | tee "${WORK}/build.log"
+              > "${WORK}/build.log" 2>&1 &
+          BUILD_PID=$!
+          tail -f -n +1 "${WORK}/build.log" &
+          TAIL_PID=$!
+          echo "build pid ${BUILD_PID}; live state -> ${LIVE_BRANCH} every 3 min"
+          TICK=0
+          while kill -0 $BUILD_PID 2>/dev/null; do
+            sleep 30
+            TICK=$((TICK + 1))
+            if [ $((TICK % 6)) -eq 0 ]; then ship; fi
+          done
+          rc=0
+          wait $BUILD_PID || rc=$?
+          sleep 2                      # let tail -f flush the last lines
+          kill $TAIL_PID 2>/dev/null || true
+          ship
+          echo "build exited ${rc}"
+          exit $rc
 
       # A dead job still tells its story. Everything here is small; the store's
       # .npy columns are not collected and never should be -- they go to the

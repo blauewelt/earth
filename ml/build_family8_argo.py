@@ -130,12 +130,34 @@ UA = {"User-Agent": "earth-science-pipeline/1.0 "
 # wants them only has to pass --start.
 ARGO_START = dt.date(2004, 1, 1)
 
-# At most this many daily files exist on disk at any moment (spec: the box has
-# ~30 GB free against 180-250 GB of sources). Downloads run in threads, the
-# netCDF parse in a process pool; a file is deleted as soon as it is parsed.
-MAX_INFLIGHT = 8
-DL_WORKERS = 4
+# THE JOB IS DOWNLOAD-BOUND, AND THE FIRST VERSION OF THESE THREE NUMBERS COST
+# A RUN. family8-build #2 (a fresh Vast box, 545 Mbps down, 6.4 cores) sat 20
+# minutes in the profiles stage at ~2 MB/s aggregate with cpu 1 % and the disk
+# flat — i.e. every second of it was spent waiting on sockets — which projects
+# to over 30 h against the 24 h timeout. It was cancelled.
+#
+# Ifremer THROTTLES PER CONNECTION (measured from this sandbox 2026-09-07:
+# ~6.5 MB/s on a single connection from data-argo.ifremer.fr, ~4 MB/s from the
+# S3 mirror), so throughput is bought with connections, not with a faster host
+# — and S3 is the one that scales with them, which is why `day_urls` asks it
+# FIRST and leaves Ifremer as the fallback.
+#
+# MAX_INFLIGHT bounds FILES ON DISK, not connections: at 4-13 MB per daily
+# file, 24 is <= ~300 MB, which is nothing against the box's headroom and is
+# the whole reason the streaming design exists. DL_WORKERS is the number of
+# concurrent connections. Both are flags (--inflight, --dl-workers) because
+# the right value is a property of the box's link, not of the archive.
+MAX_INFLIGHT = 24
+DL_WORKERS = 12
 MAX_PROCS = 8
+SOCKET_TIMEOUT = 60          # per socket operation, not per file
+CHUNK = 1 << 22             # 4 MiB reads: a 6 MB file is two syscalls, not 6
+
+# The size of the job these projections are about: 2004-01-01..2024-12-31 is
+# 7,671 days, three basins each, 23,013 (basin, day) tasks.
+FULL_DAYS = (dt.date(2024, 12, 31) - dt.date(2004, 1, 1)).days + 1
+FULL_TASKS = FULL_DAYS * 3
+PROJECTION_WARN_H = 18.0     # the 24 h workflow timeout, with room to resume
 
 # ---- the netCDF fills, as the real files declare them (measured) -----------
 FILL_F = 99999.0            # PRES/TEMP/PSAL and LATITUDE/LONGITUDE
@@ -443,13 +465,18 @@ class _NotFound(Exception):
     """A definite 404 — the day does not exist, which is a legitimate answer."""
 
 
-def _http_to_file(url, path, timeout=600):
+def _http_to_file(url, path, timeout=SOCKET_TIMEOUT):
     """GET url -> path, SIZE-VERIFIED against Content-Length.
 
     family 7's `download_verified` rule, inline here because a daily file must
     also tell a 404 apart from an error (a HEAD-then-GET cannot: `remote_size`
     returns None for both). Measured 2026-08-18 on a 477 MB year: a truncated
     transfer raises nothing and surfaces later as `NetCDF: HDF error`.
+
+    `timeout` is per SOCKET OPERATION, so it is a stall detector rather than a
+    deadline for the file: 60 s of silence on a 6 MB read is a dead connection,
+    while the old 600 s let one wedged socket hold a download slot for ten
+    minutes. Reads are 4 MiB so a daily file costs two or three syscalls.
     """
     os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
     part = f"{path}.part{os.getpid()}"
@@ -458,7 +485,7 @@ def _http_to_file(url, path, timeout=600):
         with urllib.request.urlopen(req, timeout=timeout) as r:
             want = r.headers.get("Content-Length")
             with open(part, "wb") as fh:
-                shutil.copyfileobj(r, fh, 1 << 20)
+                shutil.copyfileobj(r, fh, CHUNK)
     except urllib.error.HTTPError as e:
         if os.path.exists(part):
             os.remove(part)
@@ -503,8 +530,17 @@ def fetch_first(urls, path, attempts=3, sleep=5.0):
 
 
 def day_urls(basin, day):
+    """The urls for one (basin, day), S3 MIRROR FIRST, Ifremer as the fallback.
+
+    Not a preference between two equal hosts. Ifremer throttles per connection,
+    so twelve parallel fetches from it share roughly what one gets; the S3
+    mirror scales with connections, which is the only thing that makes a
+    23,013-file pull fit in a day. Ifremer stays in the list because it is the
+    AUTHORITATIVE copy and the mirror can lag or 404 — `fetch_first` walks the
+    list, so a day the mirror lacks is still fetched, just more slowly.
+    """
     rel = f"geo/{basin}/{day.year:04d}/{day.month:02d}/{day:%Y%m%d}_prof.nc"
-    return [f"{GDAC}/{rel}", f"{GDAC_MIRROR}/{rel}"], rel
+    return [f"{GDAC_MIRROR}/{rel}", f"{GDAC}/{rel}"], rel
 
 
 # ----------------------------------------------------- the bounded pipeline --
@@ -512,11 +548,27 @@ class _Inline:
     """A pool-shaped object that runs the work here. `--jobs 1`, and the tests."""
 
     class _F:
+        """A Future that is already finished — the work ran at submit time.
+
+        `done` and `cancel` are not decoration: `stream_days` asks the head of
+        its download queue whether it has finished before handing it to the
+        parser, and cancels whatever is outstanding on the way out. A stub
+        missing either one turns `--jobs 1` into an AttributeError inside a
+        `finally`, which is where a real failure would otherwise have been
+        reported from.
+        """
+
         def __init__(self, v):
             self._v = v
 
         def result(self):
             return self._v
+
+        def done(self):
+            return True
+
+        def cancel(self):
+            return False
 
     def submit(self, fn, *a, **kw):
         return self._F(fn(*a, **kw))
@@ -528,28 +580,50 @@ class _Inline:
         return False
 
 
-def _pools(n_proc):
+def _pools(n_proc, dl_workers=DL_WORKERS):
     if n_proc <= 1:
         return _Inline(), _Inline()
-    return (ThreadPoolExecutor(max_workers=DL_WORKERS),
+    return (ThreadPoolExecutor(max_workers=dl_workers),
             ProcessPoolExecutor(max_workers=n_proc,
                                 mp_context=multiprocessing.get_context("fork")))
 
 
-def stream_days(tasks, fetch, parse, n_proc=2, max_inflight=MAX_INFLIGHT):
-    """Yield `(task, result_or_None)` in TASK ORDER, <= max_inflight on disk.
+def stream_days(tasks, fetch, parse, n_proc=2, max_inflight=MAX_INFLIGHT,
+                dl_workers=DL_WORKERS):
+    """Yield `(task, result_or_None, nbytes)` in TASK ORDER, downloads AHEAD.
 
-    The download-ahead is bounded by counting files that exist or are being
-    fetched — outstanding download futures plus parses in flight — rather than
-    by a semaphore a worker thread could block on: a consumer that stops on an
-    exception must not leave producers parked on a lock that will never be
-    released. Deterministic order is not cosmetic either: the duplicate rule
-    keeps the FIRST profile seen, so the order tasks are consumed in is part
-    of the store's definition.
+    THE PROPERTY THAT MATTERS IS THAT DOWNLOADING AND PARSING OVERLAP, and the
+    first version of this loop only half had it. It refused to hand a finished
+    download to the parser while more than `n_proc` parses were outstanding,
+    and it blocked on the HEAD download before topping the queue back up — so
+    the number of live connections sagged toward `DL_WORKERS` at best and
+    toward one whenever the head of the queue was slow. On a download-bound
+    job that is the whole cost: family8-build #2 ran at ~2 MB/s with the CPU
+    at 1 %.
+
+    The shape now, in the order the loop tries them each pass:
+
+      1. TOP UP FIRST, always. `len(dl) + len(pending)` is the number of files
+         that exist on disk or are on their way there, and it is held at
+         `max_inflight` — so the thread pool always has more work queued than
+         it has workers, and no download slot idles while the main thread is
+         busy.
+      2. HAND OVER EVERY *FINISHED* HEAD DOWNLOAD, without blocking. Only the
+         head is eligible, because the yield order is task order and the
+         duplicate rule ("keep the first seen in (basin, date) order") makes
+         that order part of the store's definition. A finished download behind
+         a slow one simply waits on disk; it is already paid for.
+      3. Only then BLOCK — on the oldest parse if one is in flight, otherwise
+         on the head download. Every blocking point leaves the thread pool and
+         the process pool running, which is what makes the wait productive.
+
+    Parses are submitted to the process pool without a second bound: the pool
+    queues them, and `pending` is already inside the `max_inflight` budget, so
+    at most `max_inflight` results can be resident.
     """
     it = iter(list(tasks))
     dl, pending = deque(), deque()
-    tp, pp = _pools(n_proc)
+    tp, pp = _pools(n_proc, dl_workers)
     try:
         while True:
             while len(dl) + len(pending) < max_inflight:
@@ -559,32 +633,115 @@ def stream_days(tasks, fetch, parse, n_proc=2, max_inflight=MAX_INFLIGHT):
                 dl.append((t, tp.submit(fetch, t)))
             if not dl and not pending:
                 return
-            if dl and len(pending) < max(1, n_proc):
+            moved = False
+            while dl and dl[0][1].done():
                 task, fut = dl.popleft()
-                got = fut.result()          # blocks; other downloads continue
+                got = fut.result()
                 if got is None:
-                    yield task, None
-                    continue
-                path, owned = got
-                pending.append((task, path, owned, pp.submit(parse, task, path)))
+                    yield task, None, 0
+                else:
+                    path, owned, nbytes = got
+                    pending.append((task, path, owned, nbytes,
+                                    pp.submit(parse, task, path)))
+                moved = True
+            if moved:
+                continue                      # top up before doing anything else
+            if pending:
+                task, path, owned, nbytes, fut = pending.popleft()
+                try:
+                    res = fut.result()        # blocks; downloads keep running
+                finally:
+                    if owned and os.path.exists(path):
+                        os.remove(path)
+                yield task, res, nbytes
                 continue
-            task, path, owned, fut = pending.popleft()
-            try:
-                res = fut.result()
-            finally:
-                if owned and os.path.exists(path):
-                    os.remove(path)
-            yield task, res
+            # Nothing parsed and nothing finished downloading: the head of the
+            # download queue is the only thing left to wait for.
+            task, fut = dl.popleft()
+            got = fut.result()
+            if got is None:
+                yield task, None, 0
+                continue
+            path, owned, nbytes = got
+            pending.append((task, path, owned, nbytes,
+                            pp.submit(parse, task, path)))
     finally:
         for _, fut in dl:
             fut.cancel()
-        for _, path, owned, fut in pending:
+        for _, path, owned, _n, fut in pending:
             fut.cancel()
             if owned and os.path.exists(path):
                 os.remove(path)
         for pool in (tp, pp):
             if hasattr(pool, "shutdown"):
                 pool.shutdown(wait=False, cancel_futures=True)
+
+
+class Throughput:
+    """files/s, MB/s and the PROJECTED hours for the whole 2004-2024 pull.
+
+    ml/CLAUDE.md §0.2 and §4.7: a job that reports "downloading" is not
+    evidence it will finish. family8-build #2 spent twenty minutes proving
+    that a rate nobody computes is a rate nobody notices — the numbers were
+    all there, in the elapsed time and the file count, and the only thing
+    missing was the division. So the division happens every 50 files, lands in
+    progress.json as an ARTEFACT rather than a log line (§5.25), and raises a
+    `::warning::` the moment the projection passes `PROJECTION_WARN_H`, while
+    the run is still cheap to cancel and re-tune with --dl-workers/--inflight.
+    """
+
+    def __init__(self, every=50, full_tasks=FULL_TASKS,
+                 warn_hours=PROJECTION_WARN_H):
+        self.t0 = time.time()
+        self.every = every
+        self.full_tasks = full_tasks
+        self.warn_hours = warn_hours
+        self.files = 0
+        self.tasks = 0
+        self.bytes = 0
+        self.warned = False
+
+    def add(self, nbytes, downloaded):
+        self.tasks += 1
+        if downloaded:
+            self.files += 1
+            self.bytes += int(nbytes)
+        return self.tasks % self.every == 0
+
+    def report(self):
+        el = max(time.time() - self.t0, 1e-6)
+        mean = self.bytes / self.files if self.files else 0.0
+        mbps = self.bytes / el / 1e6
+        fps = self.files / el
+        # The projection is BYTES, not tasks: a missing day costs a request and
+        # no transfer, and the mix of empty days changes with the decade.
+        hours = ((self.full_tasks * mean) / (self.bytes / el) / 3600.0
+                 if self.bytes else float("inf"))
+        return {"files": self.files, "tasks": self.tasks,
+                "mb": round(self.bytes / 1e6, 1),
+                "elapsed_s": round(el, 1),
+                "files_per_s": round(fps, 2),
+                "mb_per_s": round(mbps, 2),
+                "mean_file_mb": round(mean / 1e6, 2),
+                "projected_full_pull_h": (round(hours, 1)
+                                          if np.isfinite(hours) else None),
+                "projection_basis": f"{self.full_tasks} tasks "
+                                    f"(= {FULL_DAYS} days x 3 basins)"}
+
+    def check(self, rep):
+        """One loud warning per stage when the projection blows the timeout."""
+        h = rep.get("projected_full_pull_h")
+        if self.warned or h is None or h <= self.warn_hours:
+            return None
+        self.warned = True
+        msg = (f"::warning::throughput {rep['mb_per_s']} MB/s "
+               f"({rep['files_per_s']} files/s) projects {h} h for the full "
+               f"2004-2024 pull — past the {self.warn_hours:g} h budget and "
+               f"the workflow's 24 h timeout. This job is DOWNLOAD-BOUND: "
+               f"raise --dl-workers / --inflight, or resume in year slices "
+               f"with --start/--end (finished years are skipped).")
+        print(msg, flush=True)
+        return msg
 
 
 # ================================================================== context ==
@@ -606,6 +763,12 @@ class Ctx:
         self.years = list(range(self.d_lo.year, self.d_hi.year + 1))
         self.n_proc = int(a.jobs) if a.jobs else min(MAX_PROCS,
                                                      os.cpu_count() or 1)
+        self.dl_workers = int(getattr(a, "dl_workers", 0) or DL_WORKERS)
+        self.max_inflight = int(getattr(a, "inflight", 0) or MAX_INFLIGHT)
+        # ONE meter for the whole stage, not one per year: a projection reset
+        # at every January would be recomputed from a cold start twenty-one
+        # times and would never see the archive's own year-to-year growth.
+        self.throughput = Throughput()
         self.prog = Progress(self.work)
 
     def days(self, year):
@@ -943,7 +1106,7 @@ def _year_npz(work, year):
 
 
 def _fetch_task(ctx, task):
-    """(basin, day) -> (path, owned) or None for a missing day.
+    """(basin, day) -> (path, owned, nbytes) or None for a missing day.
 
     The scratch path mirrors the ARCHIVE's full relative path, basin included.
     The three basins publish one file per day each and all three are named
@@ -954,11 +1117,11 @@ def _fetch_task(ctx, task):
     basin, day = task
     if ctx.source_dir:
         p = ctx.local_day(basin, day)
-        return (p, False) if os.path.exists(p) else None
+        return (p, False, os.path.getsize(p)) if os.path.exists(p) else None
     urls, rel = day_urls(basin, day)
     dest = os.path.join(ctx.scratch, rel)
     got = fetch_first(urls, dest, attempts=ctx.a.attempts)
-    return (got, True) if got else None
+    return (got, True, os.path.getsize(got)) if got else None
 
 
 def _parse_task(task, path):
@@ -984,9 +1147,13 @@ def extract_year(ctx, year):
     missing, n_files = [], 0
     t0 = time.time()
     done = 0
-    for task, res in stream_days(tasks,
-                                 lambda t: _fetch_task(ctx, t),
-                                 _parse_task, n_proc=ctx.n_proc):
+    tp = ctx.throughput
+    last = tp.report()
+    for task, res, nbytes in stream_days(tasks,
+                                         lambda t: _fetch_task(ctx, t),
+                                         _parse_task, n_proc=ctx.n_proc,
+                                         max_inflight=ctx.max_inflight,
+                                         dl_workers=ctx.dl_workers):
         done += 1
         basin, day = task
         if res is None:
@@ -999,12 +1166,22 @@ def extract_year(ctx, year):
                 counts[k] = counts.get(k, 0) + int(v)
             hist_t += res["hist_t"]
             hist_s += res["hist_s"]
-        if done % 25 == 0 or done == len(tasks):
+        # THE SELF-REPORT. Every 50 files the rate and the projection go into
+        # progress.json (§5.25 — progress is an artefact, not a log line) and
+        # into the log, so a download-bound job says so in its first minutes
+        # instead of in hour twenty.
+        due = tp.add(nbytes, res is not None)
+        if due:
+            last = tp.report()
+            print(f"  throughput: {last['files_per_s']} files/s · "
+                  f"{last['mb_per_s']} MB/s · mean file "
+                  f"{last['mean_file_mb']} MB · projected full pull "
+                  f"{last['projected_full_pull_h']} h", flush=True)
+            tp.check(last)
+        if due or done % 25 == 0 or done == len(tasks):
             ctx.prog.item(f"{year} {basin} {day.isoformat()}", done,
                           {"kept": counts["kept"], "files": n_files,
-                           "missing": len(missing),
-                           "rate_files_per_s": round(done / max(time.time() - t0,
-                                                                1e-6), 2)})
+                           "missing": len(missing), "throughput": last})
     joined = {k: (np.concatenate(v) if v else None) for k, v in cols.items()}
     if joined["bin"] is None:
         joined = {k: np.zeros(0, d) for k, d in
@@ -1128,6 +1305,7 @@ def assemble_store(ctx):
         "source_mirror": f"{GDAC_MIRROR}/geo/...",
         "index_source": f"{GDAC}/{INDEX_NAME}",
         "basins": list(BASINS),
+        "throughput": ctx.throughput.report(),
         "builder_git_sha": git_sha(),
         "built_at": utcnow(),
     }
@@ -1157,12 +1335,20 @@ def stage_profiles(ctx):
             continue
         ctx.prog.stage_start(f"profiles {y}", len(ctx.tasks(y)))
         extract_year(ctx, y)
+    rep = ctx.throughput.report()
+    if rep["files"]:
+        print(f"  streamed {rep['files']} file(s), {rep['mb']} MB in "
+              f"{rep['elapsed_s']}s — {rep['mb_per_s']} MB/s, "
+              f"{rep['files_per_s']} files/s, projected full pull "
+              f"{rep['projected_full_pull_h']} h")
+        ctx.throughput.check(rep)
     ctx.prog.stage_start("profiles store", 1)
     meta = assemble_store(ctx)
     mark(work, "profiles")                        # AFTER the store is on disk
     ctx.prog.item("store", 1, {"N": meta["N"],
                                "duplicates_dropped": meta["duplicates_dropped"],
-                               "days_missing": meta["days_missing"]})
+                               "days_missing": meta["days_missing"],
+                               "throughput": rep})
     return meta
 
 
@@ -1485,7 +1671,8 @@ def run_smoke(root=None, keep=False, start=SMOKE_START, end=SMOKE_END,
 
     ap = argparse.Namespace(work=work, source_dir=src, start=start, end=end,
                             force=False, stage="all", smoke=True, jobs=jobs,
-                            attempts=1, index_anchors=200, index_pentads=3)
+                            attempts=1, index_anchors=200, index_pentads=3,
+                            dl_workers=2, inflight=4)
     ctx = Ctx(ap)
     print(f"axis      {bin_start(ctx.b_lo, 5)} .. {bin_start(ctx.b_hi, 5)}  "
           f"bins {ctx.b_lo}..{ctx.b_hi} (recipe {RECIPE})")
@@ -1581,6 +1768,14 @@ def main():
     ap.add_argument("--jobs", type=int, default=0,
                     help="netCDF parser processes (default: cpu_count capped "
                          f"at {MAX_PROCS}; 1 runs inline)")
+    ap.add_argument("--dl-workers", type=int, default=0,
+                    help=f"concurrent download connections (default "
+                         f"{DL_WORKERS}). The job is DOWNLOAD-BOUND and "
+                         f"Ifremer throttles per connection, so this is the "
+                         f"knob that decides whether the pull fits in a day.")
+    ap.add_argument("--inflight", type=int, default=0,
+                    help=f"daily files allowed on disk at once (default "
+                         f"{MAX_INFLIGHT}; 4-13 MB each, so 24 is ~300 MB)")
     ap.add_argument("--attempts", type=int, default=3,
                     help="download attempts per daily file before the YEAR "
                          "fails. A 404 from every mirror is not an attempt "
@@ -1603,8 +1798,10 @@ def main():
     print(f"levels    {NLEV} RG pressures {LEVELS[0]:.0f}..{LEVELS[-1]:.0f} dbar")
     print(f"source    {GDAC}/geo/{{{','.join(BASINS)}}}/YYYY/MM/*_prof.nc"
           if not ctx.source_dir else f"source    {ctx.source_dir}")
-    print(f"stream    <= {MAX_INFLIGHT} file(s) on disk, {ctx.n_proc} parser "
-          f"process(es)")
+    print(f"stream    {ctx.dl_workers} download connection(s), "
+          f"<= {ctx.max_inflight} file(s) on disk, {ctx.n_proc} parser "
+          f"process(es); mirror first ({GDAC_MIRROR.split('/')[2]}), "
+          f"{GDAC.split('/')[2]} as fallback")
     stages = STAGES if a.stage == "all" else [a.stage]
     run_stages(ctx, stages)
     return 0
