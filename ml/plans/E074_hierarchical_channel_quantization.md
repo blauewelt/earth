@@ -1,5 +1,18 @@
 # E-074 · Hierarchical channel quantization — per-channel warped digits as the model's value representation
 
+**STATUS 2026-09-07 — E-074a has RUN and the coarse-digit placement is
+decided: α = 1 (quantiles) is refuted on likelihood, predictability and the
+current tail; α = 0 on a per-channel clipped range is taken (α = 1/3 where
+precision outranks predictability); zero-inflated channels get their spike as
+its own bin; the tail exception is dropped; the digit factorisation holds on
+every continuous channel. The verdict with its four falsifier readings is in
+[the log](https://blauewelt.github.io/earth/docs.html?f=ml/EXPERIMENTS.md#e-074),
+the tables in
+[E-074a results](https://blauewelt.github.io/earth/docs.html?f=ml/plans/E074a_results.md).
+§1–§4 below are the design as written BEFORE the run and are kept as written;
+§4's prediction ("nearer 1/3 than 1") was right in direction and short of the
+measured optimum. A glossary is at the end.**
+
 **Written 2026-09-05**, from Chris's question of the same morning: *"I have
 this fixed idea, that mapping levels by distribution lumps in the channels
 input data distribution … would be helpful"*, then *"a quantiled RVQ?"*,
@@ -249,6 +262,12 @@ Ordered by cost. Each states what would refute it, per `ml/CLAUDE.md` §1.
 as descriptions of held-out data, with no model anywhere. `stage` data-only ·
 `data` `family7_global025_pentad_l0` · `arch` none · `steps` none.
 
+**RUN 2026-09-07. Results:**
+[E-074a · the ladder bake-off — results](https://blauewelt.github.io/earth/docs.html?f=ml/plans/E074a_results.md)
+— all 54 channels, 60 fit pentad pairs against 40 held-out ones, 22 minutes of
+one CPU and no GPU. Script `ml/ladder_bakeoff.py`, machine-readable numbers
+`ml/plans/E074a_results.json`, pins `tests/test_ladder_bakeoff.py`.
+
 - **Fit** on training bins only (≤ 2020, with the development holdout years
   2009 / 2017 / 2023 excluded), from a stratified sample of ~200 pentads across
   the span, per channel, over finite values only.
@@ -410,3 +429,26 @@ This is a search, not a proof of novelty.
 - [Residual quantization with implicit neural codebooks (arXiv 2401.14732)](https://arxiv.org/pdf/2401.14732)
 - [Quantizing space and time: fusing time series and images for Earth observation (arXiv 2510.23118)](https://arxiv.org/html/2510.23118v4)
 - [CARP · coarse-to-fine autoregressive prediction (ICCV 2025)](https://openaccess.thecvf.com/content/ICCV2025/papers/Gong_CARP_Visuomotor_Policy_Learning_via_Coarse-to-Fine_Autoregressive_Prediction_ICCV_2025_paper.pdf)
+
+---
+
+## 10 · Glossary
+
+| term | plain English |
+|---|---|
+| **warp** | a monotone function fitted to one channel's training distribution; values are passed through it before being cut into bins |
+| **α (alpha)** | the exponent in point density ∝ p(x)^α that says where the bin edges go: 1 = equal-probability bins, 1/3 = the placement that minimises squared error, 0 = uniform across the fitted range |
+| **quantile / equal-probability bins** | bin edges placed so every bin holds the same share of the training data |
+| **coarse digit / fine digits** | the value written in a small base after the warp: the first digit says roughly where it is, the later ones refine it |
+| **whitening** | the residual inside a bin being close to uniform, so nothing about the distribution's shape is left for a later digit to exploit |
+| **companding** | the classical name for warp-then-quantize-uniformly (μ-law in telephony is one) |
+| **Panter–Dite / Gish–Pierce** | the two classical results: bin density ∝ p^{1/3} minimises squared error at a fixed bin count; uniform bins plus a good entropy model are within ~0.25 bit of the best possible |
+| **nats** | information in base-e units; the natural unit of a cross-entropy |
+| **held-out cross-entropy** | minus the mean log-probability a scheme assigns to values from years it never saw; lower is better |
+| **common fine partition** | one fixed set of thousands of narrow cells per channel on which every scheme's probability is evaluated, so a discrete ladder and a continuous density can be compared at all |
+| **conditional entropy H(d₁(t+1) \| d₁(t))** | how unpredictable the next pentad's coarse digit is given this pentad's; the instrument for "does the digit flap" |
+| **persistence** | the fraction of cells whose coarse digit is unchanged one pentad later |
+| **zero-inflated** | a channel with a large spike of exact zeros (no rain, no snow) beside a continuous part |
+| **hurdle** | modelling the spike as its own outcome ("zero or not") and the continuous part separately |
+| **quantization floor** | the smallest error a bin scheme can reach even with a perfect model: Δ/√12 for a bin of width Δ |
+| **tail exception** | sub-dividing the two unbounded end bins by their conditional distribution instead of uniformly — tested and dropped |

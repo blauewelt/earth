@@ -44,6 +44,101 @@ low-pass).
 
 ---
 
+<a id="e-074"></a>
+## E-074 · Hierarchical channel quantization — E-074a (the ladder bake-off, data only) RUN 2026-09-07: **the quantile ladder (α = 1) is REFUTED on three of four pre-registered read-outs; uniform-on-a-fitted-range (α = 0) wins on predictability and tails, and the digit factorisation holds except on zero-inflated channels**
+
+TL;DR — the question was where to place a channel's value bins: at its
+quantiles (every bin equally likely, Chris's "map levels by the channel's
+distribution"), at the mean-squared-error-optimal placement (α = 1/3), or
+uniformly across a fitted range (α = 0). With no model anywhere — warps fitted
+on 60 training pentad pairs, scored on 40 held-out pairs across all 54 family-7
+channels — the quantile ladder buys **+0.055 nats** of held-out likelihood
+against a channel-to-channel spread of 0.405 (wins 12 of 54), makes the coarse
+digit **less predictable across a pentad in 53 of 54 channels** (the
+flapping-at-the-mode effect §4 of the plan predicted, only further than
+predicted: the conditional-entropy optimum is α = 0, not 1/3), and **starves
+the strong-current tail five-fold** (cur_speed tail RMSE 0.848 m/s at α = 1
+against 0.171 at α = 1/3, K = 64). What survives is the mechanism, not the
+placement: 64 uniform bins on a per-channel fitted range beat a Gaussian by
+0.1–1.0 nats on every channel and match a three-component mixture, and the
+two-digit factorisation reproduces one deep ladder to a median 0.011 %
+(103 of 108 comparisons within 1 %) — failing only on `log_swe` and
+`log_prate`, the zero-inflated channels, where a spike at zero is exactly
+what a uniform sub-division cannot whiten. The "tail exception" is dead too:
+sub-dividing the open end bin by its conditional quantiles made the tail
+RMSE *worse* (0.010 → 0.080 m/s at α = 1). Plan:
+[E-074](https://blauewelt.github.io/earth/docs.html?f=ml/plans/E074_hierarchical_channel_quantization.md);
+results, every table:
+[E-074a results](https://blauewelt.github.io/earth/docs.html?f=ml/plans/E074a_results.md).
+
+**E-074a · fit per-channel warps at α ∈ {0, 1/3, 1/2, 1} × K₁ ∈ {16, 64, 256}
+× depth {1, 2 (K₂ = 64)} × tail exception {off, on} on family 7's training
+years and score them as descriptions of held-out data · params none ·
+stage data-only · data `family7_global025_pentad_l0` · arch none · steps
+none · resume none.** Sampling: fit = 60 consecutive-pentad pairs stratified
+over 1982–2020 minus {2009, 2017, 2023}, 25 % spatial subsample; eval = 40
+pairs inside the three held-out years, every finite cell; rg100 by months
+(24 fit / 12 eval pairs). All schemes scored on ONE common fine partition per
+channel (the fit sample's 4,096 quantiles, deduplicated for float16 ties to
+1,400–3,800 cells), values clipped to [q₀.₀₀₀₅, q₀.₉₉₉₅] with the clipped
+fraction reported (≤ 0.13 %). Script `ml/ladder_bakeoff.py`, 13 tests in
+`tests/test_ladder_bakeoff.py` (α = 1 reproduces plain quantiles to 3e-11;
+every scheme's partition probabilities sum to 1). 21.6 min on one CPU,
+4.35 GB transferred by range read, 1.06 GB peak on disk, $0.
+
+**The four pre-registered falsifiers, as evaluated by the script:**
+
+| falsifier | measured | fires? |
+|---|---|---|
+| F1 · α = 1 beats α = 0 on held-out nats by more than the channel spread | K₁ = 64: mean gain +0.055 nats, sd across channels 0.405, α = 1 wins 12/54 (K₁ = 16: +0.055 / 0.506 / 18; K₁ = 256: +0.023 / 0.250 / 4). Worst `shtfl` −0.06; best `log_swe` +2.94 | **YES** — the quantile idea does not survive its own data on continuous channels |
+| F2 · conditional entropy H(d₁(t+1) \| d₁(t)) flat in α at K₁ = 64 | median range across α 0.576 nats (min 0.069, max 1.417) against a 0.083 threshold; α = 0 minimises it in **53/54** channels and minimises the ratio H(next \| now)/H(now) in 52/54 (median range of the ratio 0.060) | **NOT flat** — the plan's §4 complication is real and the optimum sits at the uniform end, past the predicted 1/3 |
+| F3 · α = 1's tail RMSE on cur_speed worse than α = 1/3's by more than the α = 1/3 value | K₁ = 64: 0.848 vs 0.171 m/s (excess +0.677); K₁ = 16: 0.723 vs 0.325; K₁ = 256: 0.513 vs 0.137 | **YES** at every K₁ — tails decide |
+| F4 · depth 2 (64 × 64) within 1 % of depth 1 (4,096) on nats | 103/108 within 1 %, median relative difference 0.011 %; the five failures are all `log_swe` / `log_prate` (worst 14.2 %) | holds where p is continuous; **fails at a spike** |
+
+**Reading (main-session).** Three independent instruments agree, so this is
+a verdict and not a direction despite being a single fit: the likelihood
+column, the predictability column and the tail column each reject α = 1 on
+the continuous channels, and the one column where α = 1 wins by a mile
+(`log_swe` +2.94 nats, `log_prate` +0.20) is the zero-inflated pair, where a
+uniform ladder wastes most of its levels on an empty spike. The mechanism
+behind F2 is the one the plan wrote down before the run: at α = 1 the bin
+edges are densest at the mode, so the coarse digit flips fastest where the
+field spends most of its time — persistence at K₁ = 64 is 0.197 vs 0.067 for
+cur_speed and 0.606 vs 0.523 for SSH under α = 0 vs 1. The mechanism behind
+F3 is the unbounded top bin: at α = 1 the Gulf Stream core sits in one bin
+that reaches to the clip edge. Two things the run did NOT refute and in fact
+strengthened: a categorical over bins is a better likelihood for this data
+than a Gaussian on every one of 54 channels (0.1–1.0 nats), and a coarse
+digit plus uniform fine digits is the same object as one deep ladder wherever
+the density has no spike — so E-074's factorised head and E-075's discrete
+marginals lose nothing by using it.
+
+**What it licenses.** (1) For E-074b/c and E-075's categorical head, the
+coarse-digit placement is **α = 0 on a per-channel clipped range** — the
+range is still fitted to the channel's distribution, the levels are not — or
+α = 1/3 where reconstruction precision matters more than predictability;
+α = 1 is closed. (2) Zero-inflated channels (`log_prate`, `log_swe`, and by
+the same logic `sea_ice` below its 0.15 floor) get their spike as its own
+bin — a hurdle — and a uniform ladder on the rest; this is E-072 §4.2's
+hurdle model arriving by measurement rather than by taste. (3) The tail
+exception is dropped. (4) The E-048 exponential ladder, which was an
+approximation to companding, is now bracketed from both sides on this data:
+the companded end (α = 1) loses, so its "auto chooses exp" preference was the
+bias correction the module's own docstring suspected, not a tail argument.
+
+**What it does not license.** Nothing about a MODEL: this measures how well a
+ladder describes held-out marginals and how stable its coarse digit is across
+one step, not what a head trained on those digits forecasts. E-074c (the
+output-head contrast) is unchanged in design and now runs at α = 0. And the
+F2 column is a property of the digit, not of the field — a lower conditional
+entropy is partly bought by wider bins at the mode; the ratio column, which
+normalises for that, still prefers α = 0 in 52 of 54, which is why the
+verdict stands.
+
+Artefacts: `ml/plans/E074a_results.json` (every number, the bin lists,
+timings), `ml/plans/E074a_results.md` (the tables), `ml/ladder_bakeoff.py`
+(`--smoke` runs on the fixture in 6 s). Cost: $0, 22 CPU-minutes.
+
 <a id="e-070"></a>
 ## E-070 · The global tensor (family 7) — BUILT AND PUBLISHED 2026-09-04 17:00Z (recipe `f7l0`: to the poles, shared land/ocean channels); Phase A complete 2026-09-03 (Chris: "expand to the whole globe … proceed with global data preparation and training"; 09-04: "proceed with building the new global tensor with all the data (including Antarctica, common channels for land and water)")
 
