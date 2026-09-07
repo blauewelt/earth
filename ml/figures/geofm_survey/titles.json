@@ -1,0 +1,230 @@
+[
+ {
+  "title": "Geospatial representation models",
+  "sub": ""
+ },
+ {
+  "title": "How to read the stencil diagrams",
+  "sub": "Every model slide uses the same three-panel convention"
+ },
+ {
+  "title": "AlphaEarth Foundations (Google DeepMind)",
+  "sub": "An 'embedding field': every 10 m land pixel → 64-D unit vector per year, 2017–2024"
+ },
+ {
+  "title": "AlphaEarth — inside the STP encoder",
+  "sub": "L = side length of the square input frame, in pixels — L = 128 (1.28 km at 10 m) for training and inference (supplement S2.1, S8.2). Three operators at L/16, L/8 and L/2 exchange state through a learned Laplacian pyramid after every one of 15 blocks."
+ },
+ {
+  "title": "STP, step 1 of 4 — input projectors bring every source to ½ L",
+  "sub": "One frame of the same 1.28 km footprint from each sensor, at its own native resolution, becomes a 64 × 64 feature map at 20 m"
+ },
+ {
+  "title": "STP, step 2 of 4 — three operators, three resolutions",
+  "sub": "Same 1.28 km footprint, three grids: what one cell can 'see' in each operator"
+ },
+ {
+  "title": "STP, step 3 of 4 — the pyramid exchange between blocks",
+  "sub": "End of block k: each of the three maps is resampled to all three resolutions and summed into block k+1's inputs — repeat for N blocks"
+ },
+ {
+  "title": "STP, step 4 of 4 — back to 10 m, 64-D per pixel",
+  "sub": "After block N: the ½ L maps are resampled to the precision resolution and then to L; each output pixel is a unit vector on S⁶³"
+ },
+ {
+  "title": "TESSERA (University of Cambridge)",
+  "sub": "Pixel-wise 10 m annual embeddings from S-1 + S-2 time series — fully open (CC0), CVPR 2026"
+ },
+ {
+  "title": "OlmoEarth (Ai2)",
+  "sub": "Open multimodal space-time ViT family (Nano→Large); embeddings computed on demand, not precomputed"
+ },
+ {
+  "title": "TerraMind (IBM Research + ESA Φ-lab)",
+  "sub": "Any-to-any generative multimodal EO model; 'Thinking in Modalities' — ICCV 2025"
+ },
+ {
+  "title": "Prithvi-EO 2.0 (IBM + NASA)",
+  "sub": "Multi-temporal HLS masked autoencoder at 30 m; 300 M and 600 M, with temporal-location (TL) variants"
+ },
+ {
+  "title": "Granite-Geospatial-Ocean (IBM · STFC · PML · Exeter)",
+  "sub": "The Prithvi-EO recipe moved onto Sentinel-3 ocean colour + SST — github.com/ibm-granite/geospatial"
+ },
+ {
+  "title": "Stencils side by side",
+  "sub": "Spatial footprint that feeds one embedding (log scale) vs. how much time it summarises"
+ },
+ {
+  "title": "Summary I — what goes into each embedding",
+  "sub": "Inputs, spatial stencil, temporal stencil, output vector"
+ },
+ {
+  "title": "Summary II — what each project hands you",
+  "sub": "Weights, precomputed embeddings, licence, ocean coverage, and the intended way to use it"
+ },
+ {
+  "title": "Who embeds the ocean — and how deep?",
+  "sub": "Representation models whose pretraining contains sea pixels: the published ones stop at the surface; Earth 2 is the one with the interior (checked Aug 2026)"
+ },
+ {
+  "title": "Four interacting spheres — who embeds which",
+  "sub": "Atmospheric weather · ocean weather (incl. the interior) · ocean biosphere · land biosphere. Nobody represents two of them jointly today."
+ },
+ {
+  "title": "Head-to-head I — frozen embeddings, one protocol",
+  "sub": "OlmoEarth paper, Table 2: kNN (k = 20, cosine) for single-image classification, linear probe for segmentation and multi-temporal tasks. Five of our six appear."
+ },
+ {
+  "title": "Head-to-head II — fine-tuning and PANGAEA",
+  "sub": "Top: OlmoEarth Table 3 (full fine-tuning, encoder unfrozen after 20 % of epochs). Bottom: TerraMind Table 6 (PANGAEA, frozen encoder + UPerNet, mIoU)."
+ },
+ {
+  "title": "Head-to-head III — the two embedding products",
+  "sub": "TESSERA paper, Table 1 (frozen embeddings + light head, 100 % labels unless noted) · OlmoEarth paper, Table 7 · an independent Local-Climate-Zone study (Bern)"
+ },
+ {
+  "title": "Head-to-head IV — the ocean encoders",
+  "sub": "Granite-Geospatial-Ocean, Table 1 (5-fold CV RMSE, log₁₀ units) · OceanSAR-1, Tables 2–3 (Sentinel-1 wave-mode tasks)"
+ },
+ {
+  "title": "Who wins where — a digest of the tables",
+  "sub": "Rankings restricted to the models in this deck, per protocol; every source table was written by one of the contestants"
+ },
+ {
+  "title": "What this means for our ocean representation work",
+  "sub": "Six models, two design axes, one gap"
+ },
+ {
+  "title": "Proposed arm: a TESSERA-style pixel-year codec",
+  "sub": "Fold the year, not the neighbourhood — the one TESSERA ingredient the programme has not yet tested"
+ },
+ {
+  "title": "A velocity-specific dependency cone per channel",
+  "sub": "What can influence one pixel Δt ahead is bounded by how fast each process propagates (v) and how long it remembers (τ): Δx ≤ v·Δt, Δt ≤ τ"
+ },
+ {
+  "title": "What the cone predicts — and how to test it on our stencil",
+  "sub": "Per channel group: dominant processes, the useful reach per monthly step, the useful history, and the falsifiable consequence"
+ },
+ {
+  "title": "Worked example — the surface current at one pixel",
+  "sub": "Target: (u, v) at a ¼° pixel P, one month ahead. Which drivers, how each one moves the current, and what (v, τ) it carries. Live version: the Dependency-Cone Explorer artifact."
+ },
+ {
+  "title": "Step 1 — each driver becomes a wedge in (lag, distance)",
+  "sub": "x: how long before now the input was observed · y: how far from P it may sit and still matter (log). Bold outline = the union the stencil should follow."
+ },
+ {
+  "title": "Step 2 — the union becomes a per-channel, lag-dependent stencil",
+  "sub": "Slots needed at each lag = 89·(reach / 4,444 km)², floored at the 9-slot 3 × 3 patch and capped at 89. Same 89-slot sunflower, different footprint per channel and lag."
+ },
+ {
+  "title": "Step 3 — the physics behind each wedge",
+  "sub": "The stencil fixes the support; attention learns the weights. Four ablations on this target decide whether the support is right."
+ },
+ {
+  "title": "Related work I — the dependency cone vs. the literature",
+  "sub": "Who has used 'speed × time' to size what a model sees, and who has not (survey Aug 2026)"
+ },
+ {
+  "title": "Related work II — the four-sphere plan vs. the literature",
+  "sub": "Coupled emulators, observation-native models, 'Earth-system' foundation models, biosphere ML, coupled data assimilation (survey Aug 2026)"
+ },
+ {
+  "title": "What should a generic Earth embedding see?",
+  "sub": "The rule: every signal that is relevant to the four spheres at a point and cannot be derived from the other inputs. Thirteen rungs, finest first."
+ },
+ {
+  "title": "Input ladder I — fine and fast (rungs 0–4)",
+  "sub": "Land at 10–30 m, the first ocean-covering rung at 300 m–1 km, and the atmosphere's 10-minute movie"
+ },
+ {
+  "title": "Input ladder II — fields and ocean memory (rungs 5–8)",
+  "sub": "Sparse kilometre-scale sensors, the gap-filled daily maps, the reanalysis atmosphere, and the first rung below the surface"
+ },
+ {
+  "title": "Input ladder III — biospheres, truth, stage (rungs 9–13)",
+  "sub": "Ocean carbon, land carbon and water, the point observations the reanalyses are fitted to, and the static boundary conditions"
+ },
+ {
+  "title": "Observed, derived, or derivable — and the leakage trap",
+  "sub": "Why the source of each dot is a token the model sees, and why delayed-time products must be time-shifted"
+ },
+ {
+  "title": "Five cone families — one shape per rung",
+  "sub": "Apply Δx ≤ v·(Δt+ℓ), Δt+ℓ ≤ τ to every input: the shape of the context each channel needs differs by orders of magnitude"
+ },
+ {
+  "title": "Proposal — a cone-native codec: dots in, embedding out",
+  "sub": "The codec reads (Δx, Δy, depth, lag, channel, value) samples from each channel's cone and predicts the dots it does not see — including future ones"
+ },
+ {
+  "title": "Where velocity comes from — two dots of the same field at two lags",
+  "sub": "A photograph does not show speed; two photographs a known time apart do. Attention over dots with relative coordinates can implement feature tracking."
+ },
+ {
+  "title": "Is it zero-sum? Thin codec + thick stage 2 vs cone codec + thin stage 2",
+  "sub": "A: embed one pixel-month, let a stage-2 stencil connect embeddings (today's Earth 2 and every GeoFM in the survey). B: embed the cone, keep stage 2 thin."
+ },
+ {
+  "title": "Not zero-sum — the asymmetry, and the split that follows from it",
+  "sub": "The trade is about where the bottleneck sits relative to the dynamics, not about how much work there is in total"
+ },
+ {
+  "title": "Two stencils, one cone — built, run, and re-cut for v2",
+  "sub": "E-069 ran five seeds (3 + 2 objectives) on the 0.3 m/s geometry; H1 is refuted, history buys persistence, not velocity. Under cone v2 the split between the stencils moves from distance to time — E-071 §4.5."
+ },
+ {
+  "title": "What feeds the cone codec today — four products, 42 channels, one axis",
+  "sub": "family 4 recipe r3 — the tensor the codec eats: North Atlantic 100° W–20° E, 0–70° N · 0.25° · 5-day bins · 1982-01-01 → 2024-12-31 · 84,405 ocean cells · built once and sha-pinned (run #535)"
+ },
+ {
+  "title": "Boundaries — four edges, four rules, and two of them now change",
+  "sub": "Findings of 3 Sep; decisions of 4 Sep (Chris): the dataset is global, and the anomaly baseline is a day-of-year harmonic fit — E-071."
+ },
+ {
+  "title": "The speeds the cone did not have — and the speeds it will",
+  "sub": "Decision (Chris, 4 Sep): size every family from the MAXIMUM measured speed of its fastest mechanism, × 1.5 — not a typical speed, not an estimate (E-071 §4)."
+ },
+ {
+  "title": "Land, ice and air — nothing is dark by design",
+  "sub": "Chris, 4 Sep: “why not add some data on land, too? … sparse for now … land surface temperature, satellite imagery, radar reflection, air temperature across heights” and “some of our channels should be available for both the oceans and the land”. E-071 §6: a channel is a quantity and an instrument, never a sphere."
+ },
+ {
+  "title": "The Earth foundation model — the data decides the size",
+  "sub": "Chris, 4 Sep: a 1–10 B model, maybe MoE, a Chinchilla ladder, and a study of how to design the training data. E-072: at today’s data the size is small and measured; the ladder is a ladder of DATA."
+ },
+ {
+  "title": "The scaling ladder and the recipe",
+  "sub": "E-072 §3–4. Six rungs, each bought only on the previous rung’s read-out under the frozen protocol; and the training recipe this programme has already paid to learn, plus the two things the new data forces."
+ },
+ {
+  "title": "Read-outs: El Niño, AMOC, colour — and what each needs first",
+  "sub": "E-072 §5–6. Six read-outs, one frozen representation. Each row names the label it is scored against, the data that must land before the head is worth training, and the null it must beat."
+ },
+ {
+  "title": "Phase 0 first — the decisive experiment fits the data we already have",
+  "sub": "Then one sphere per phase, in the agreed order: ocean surface + atmosphere as forcing, interior, ocean biosphere, land, fast atmosphere"
+ },
+ {
+  "title": "Data continuity 2026–27 — build the archive sensor-agnostic",
+  "sub": "What the verification pass found switching off or changing (agency notices, 2 Sep 2026). Channel-drop training turns a missing sensor into a masked channel, not a failure."
+ },
+ {
+  "title": "El Niño 2026 — what the catalog predicts, and what to add",
+  "sub": "Our own OISST bake says Niño-3.4 (the central-Pacific sea-temperature anomaly that defines the event) went −0.6 °C in January to +2.1 °C in July 2026; NOAA's Climate Prediction Center, 13 Aug: El Niño Advisory, > 90 % chance of a very strong event, 69 % chance of exceeding +2.5 °C in Oct–Dec — stronger than any event since 1950"
+ },
+ {
+  "title": "Family 8: the measurement is never missing, only far away",
+  "sub": "A proposal, 7 Sep 2026. For a sparse channel, carry the k nearest observations in the cone — with their distance — instead of a grid cell that is usually empty. Dense channels keep the sunflower."
+ },
+ {
+  "title": "Family 7 vs family 8, side by side — and the one experiment that decides",
+  "sub": "Same grid, same pentads, same dense channels. What changes is how a SPARSE channel enters the cone."
+ },
+ {
+  "title": "Sources",
+  "sub": "Papers, model cards and repositories consulted (accessed 31 Aug – 2 Sep 2026)"
+ }
+]

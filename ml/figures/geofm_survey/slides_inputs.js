@@ -1257,4 +1257,155 @@ module.exports = function (ctx) {
     reading(s, "Reading. Onset is behind us — the event began in March 2026 — so “predict this year's El Niño” now means three different things, and each needs different data. Hindcast the ONSET from the November 2025 state (a −0.6 °C, mildly La-Niña-ish surface with a recharged subsurface): that is a test of whether the subsurface memory was readable. Forecast the PEAK amplitude and month (October–December) and the 2027 exit. And forecast the TELECONNECTIONS — the rainfall, drought and cyclone shifts that are what anyone outside the Pacific actually feels. All three need the subsurface first, the daily winds second, and an honest null beside them: persistence, a linear inverse model, and the operational forecast plume.", 6.48);
     footer(s);
   }
+
+  // ---------------------------------------------------------------- 46c. family 8 — the measurement is never missing, only far away
+  {
+    const s = pres.addSlide(); s.background = { color: WHITE };
+    title(s, "Family 8: the measurement is never missing, only far away",
+      "A proposal, 7 Sep 2026. For a sparse channel, carry the k nearest observations in the cone — with their distance — instead of a grid cell that is usually empty. Dense channels keep the sunflower.");
+    const RED = "F85149";
+
+    // ---------------- LEFT: two panels, family 7 above, family 8 below ----------------
+    const LX = 0.6, LW = 5.8;
+
+    // ----- panel A: a grid cell is present or absent -----
+    box(s, LX, 1.52, LW, 2.14, GRIDLINE, "FBFCFD");
+    txt(s, [
+      { text: "A · family 7 — a grid cell is present or absent", options: { bold: true, color: NAVY, fontSize: 9, breakLine: true } },
+      { text: "the sunflower — the dense-channel stencil: a 3×3 patch plus dots, dense near the anchor, sparse far from it", options: { fontSize: 6.5, italic: true, color: SPACE } },
+    ], LX + 0.14, 1.58, LW - 0.28, 0.34);
+    {
+      const cx = 1.95, cy = 2.58;
+      // the sunflower: ~20 dots in a rough golden-angle spiral around the anchor
+      for (let i = 0; i < 20; i++) {
+        const r = 0.11 + 0.60 * Math.sqrt((i + 1) / 20), th = i * 2.39996;
+        const dx = cx + r * Math.cos(th), dy = cy + 0.70 * r * Math.sin(th);
+        s.addShape(pres.shapes.OVAL, { x: dx - 0.035, y: dy - 0.035, w: 0.07, h: 0.07, fill: { color: SPACE, transparency: 20 }, line: { width: 0 } });
+      }
+      // the anchor: a red ring
+      s.addShape(pres.shapes.OVAL, { x: cx - 0.10, y: cy - 0.10, w: 0.20, h: 0.20, fill: { color: WHITE }, line: { color: RED, width: 1.75 } });
+      s.addText("anchor", { x: cx - 0.55, y: cy + 0.11, w: 1.1, h: 0.16, fontFace: FONT_B, fontSize: 6.5, bold: true, color: RED, align: "center", isTextBox: true, margin: 0 });
+      // the Argo group's 1° coarse cell, beside it
+      s.addShape(pres.shapes.RECTANGLE, { x: 4.20, y: 2.28, w: 0.78, h: 0.60, fill: { color: "DEE3EA" }, line: { color: MUTED, width: 0.75, dashType: "dash" } });
+      s.addText("NaN", { x: 4.20, y: 2.28, w: 0.78, h: 0.60, fontFace: FONT_B, fontSize: 10, bold: true, color: MUTED, align: "center", valign: "middle", isTextBox: true, margin: 0 });
+      s.addText("the Argo group's 1° cell", { x: 3.85, y: 2.08, w: 1.5, h: 0.16, fontFace: FONT_B, fontSize: 6.5, italic: true, color: MUTED, align: "center", isTextBox: true, margin: 0 });
+      s.addText("→ one miss token", { x: 3.90, y: 2.93, w: 1.4, h: 0.16, fontFace: FONT_B, fontSize: 6.5, bold: true, color: MUTED, align: "center", isTextBox: true, margin: 0 });
+      arrow(s, cx + 0.78, cy, 4.14, 2.58, MUTED, 0.75);
+    }
+    txt(s, [
+      { text: "the Argo group is written into 252 of 3,142 pentads (8 %); at every other bin the cone reads a ", options: { fontSize: 7.5, color: INK } },
+      { text: "miss", options: { bold: true, color: MUTED, fontSize: 7.5 } },
+      { text: " token.", options: { fontSize: 7.5, color: INK } },
+    ], LX + 0.14, 3.24, LW - 0.28, 0.36);
+
+    // ----- panel B: the k nearest observations, however far -----
+    box(s, LX, 3.76, LW, 2.50, TIME, "FFF8F2");
+    txt(s, [
+      { text: "B · family 8 — the k nearest observations, however far", options: { bold: true, color: TIME, fontSize: 9 } },
+    ], LX + 0.14, 3.82, LW - 0.28, 0.20);
+    {
+      const ax = 1.28, ay = 5.02;
+      const floats = [
+        [2.02, 4.44, "88 km · 0 d"],
+        [2.44, 5.62, "143 km · −6 d"],
+        [3.02, 4.24, "212 km · −3 d"],
+        [3.56, 5.40, "340 km · −11 d"],
+        [4.10, 4.80, "397 km · −24 d"],
+      ];
+      floats.forEach(([fx, fy, lab]) => {
+        arrow(s, ax, ay, fx - 0.03, fy, TIME, 0.75);
+        s.addShape(pres.shapes.ISOSCELES_TRIANGLE, { x: fx - 0.07, y: fy - 0.07, w: 0.14, h: 0.14, fill: { color: TIME }, line: { width: 0 } });
+        s.addText(lab, { x: fx + 0.10, y: fy - 0.09, w: 1.32, h: 0.18, fontFace: FONT_B, fontSize: 6.5, bold: true, color: TIME, valign: "middle", isTextBox: true, margin: 0 });
+      });
+      s.addShape(pres.shapes.OVAL, { x: ax - 0.10, y: ay - 0.10, w: 0.20, h: 0.20, fill: { color: WHITE }, line: { color: RED, width: 1.75 } });
+      s.addText("anchor", { x: ax - 0.55, y: ay + 0.12, w: 1.1, h: 0.16, fontFace: FONT_B, fontSize: 6.5, bold: true, color: RED, align: "center", isTextBox: true, margin: 0 });
+      s.addText("▲ = an Argo profile, k = 5", { x: LX + 0.14, y: 5.88, w: 2.4, h: 0.16, fontFace: FONT_B, fontSize: 6.5, italic: true, color: TIME, isTextBox: true, margin: 0 });
+    }
+    txt(s, [
+      { text: "always k tokens per sparse channel; each carries (value, Δx, Δy, Δt, local density).", options: { fontSize: 7.5, color: INK } },
+    ], LX + 0.14, 6.06, LW - 0.28, 0.20);
+
+    // ---------------- RIGHT: four boxes ----------------
+    const BX = 6.7, BW = 6.0, IX = BX + 0.13, IW = BW - 0.26;
+    box(s, BX, 1.52, BW, 0.76, SPACE, "F7FAFC");
+    txt(s, [{ text: "The token", options: { bold: true, color: SPACE, fontSize: 9 } }], IX, 1.57, IW, 0.18);
+    txt(s, [
+      { text: "(value, Δx, Δy, Δt, n_R)", options: { bold: true, color: NAVY, fontSize: 8 } },
+      { text: " — the observation, its offset east and north in km, how long ago in days, and how many observations lay within the search radius. ", options: { fontSize: 8, color: INK } },
+      { text: "Distance is a feature, never a mask.", options: { bold: true, color: SPACE, fontSize: 8 } },
+    ], IX, 1.77, IW, 0.48);
+
+    box(s, BX, 2.36, BW, 1.14, OBS, "F5FBF7");
+    txt(s, [{ text: "Three rules that make it safe", options: { bold: true, color: OBS, fontSize: 9 } }], IX, 2.41, IW, 0.18);
+    txt(s, [
+      { text: "One-sided in time: ", options: { bold: true, color: NAVY, fontSize: 8 } },
+      { text: "only observations at or before the anchor's pentad (no leakage into a forecast).", options: { fontSize: 8, color: INK, breakLine: true, paraSpaceAfter: 2 } },
+      { text: "Bounded: ", options: { bold: true, color: NAVY, fontSize: 8 } },
+      { text: "a search radius R_max and window T_max per channel; only past that bound does a “none within R” token appear — the same miss token as today, made rare.", options: { fontSize: 8, color: INK, breakLine: true, paraSpaceAfter: 2 } },
+      { text: "k from the data, not by hand: ", options: { bold: true, color: NAVY, fontSize: 8 } },
+      { text: "choose k so that the k-th neighbour typically sits at one correlation length (~300 km at the surface).", options: { fontSize: 8, color: INK } },
+    ], IX, 2.56, IW, 0.90);
+
+    box(s, BX, 3.58, BW, 1.28, TIME, "FFF8F2");
+    txt(s, [{ text: "The numbers for Argo", options: { bold: true, color: TIME, fontSize: 9 } }], IX, 3.63, IW, 0.18);
+    txt(s, [
+      { text: "≈4,000 active floats on a 10-day cycle ⇒ ≈2,000 profiles per pentad worldwide, one per ≈180,000 km² of ocean ⇒ nearest profile of order 200 km in a single pentad; with T_max = 30 days, six pentads of profiles ⇒ ≈90 km, and the fifth neighbour at ≈200 km. ", options: { fontSize: 8, color: INK } },
+      { text: "So k = 5 within 30 days is one correlation length.", options: { bold: true, color: TIME, fontSize: 8 } },
+      { text: " Before 2004 there is nothing to find — and “none within R” is then the honest, measured answer, not a gap.", options: { fontSize: 8, color: INK } },
+    ], IX, 3.78, IW, 1.04);
+
+    box(s, BX, 4.94, BW, 1.32, NAVY, "F4F6F9");
+    txt(s, [{ text: "What it is not", options: { bold: true, color: NAVY, fontSize: 9 } }], IX, 4.99, IW, 0.18);
+    txt(s, [
+      { text: "Not a replacement for the cone: dense gridded channels (currents, SST, the reanalysis) keep the sunflower, which encodes structure at several scales that k nearest neighbours would collapse to the 3×3. Family 8 is a ", options: { fontSize: 8, color: INK } },
+      { text: "HYBRID", options: { bold: true, color: NAVY, fontSize: 8 } },
+      { text: " — and it is no longer a tensor: a tensor for the dense groups plus an observation store (t, lat, lon, channel, value) and a precomputed neighbour index. That is the door to raw observations — profiles, moorings, altimeter tracks — without gridding them first.", options: { fontSize: 8, color: INK } },
+    ], IX, 5.14, IW, 1.08);
+
+    reading(s, "Reading. Family 7 spends 80 % of its bytes on an Argo group that is absent in 92 % of pentads and gridded before the model sees it; family 8 spends a few tokens per anchor to make the interior always present and always honest about how far away the nearest measurement is. It is E-071's profile tokens taken to their conclusion, and the same primitive Aardvark and GraphDOP use to forecast from raw observations.", 6.42);
+    footer(s);
+  }
+
+  // ---------------------------------------------------------------- 46d. family 7 vs family 8, and the experiment that decides
+  {
+    const s = pres.addSlide(); s.background = { color: WHITE };
+    title(s, "Family 7 vs family 8, side by side — and the one experiment that decides",
+      "Same grid, same pentads, same dense channels. What changes is how a SPARSE channel enters the cone.");
+    {
+      const th = t => ({ text: t, options: { bold: true, color: WHITE, fill: { color: NAVY }, fontSize: 8, valign: "middle" } });
+      const a = t => ({ text: t, options: { bold: true, color: NAVY, fontSize: 8, valign: "top" } });
+      const f7 = t => ({ text: t, options: { fontSize: 8, color: INK, valign: "top" } });
+      const f8 = t => ({ text: t, options: { fontSize: 8, color: INK, valign: "top", fill: { color: "FFF8F2" } } });
+      const rows = [
+        [th("aspect"), th("family 7 (as built)"), th("family 8 (proposed)")],
+        [a("Representation"), f7("one array per group, [T,H,W,C] float16"), f8("dense groups unchanged + an observation store + a neighbour index per anchor")],
+        [a("A sparse channel at an anchor"), f7("the nearest 1° cell, present in 8 % of pentads, else NaN → miss token"), f8("always its k nearest observations, each with (Δx, Δy, Δt, n_R)")],
+        [a("What “missing” means"), f7("absent at this cell and bin"), f8("no observation within (R_max, T_max) — rare, and true")],
+        [a("Time direction"), f7("the bin's own value"), f8("one-sided: at or before the anchor's pentad, never after")],
+        [a("Tokens per sparse channel"), f7("1 (mostly a miss token)"), f8("k, fixed (3 / 5 / 7), regardless of density")],
+        [a("Dense channels"), f7("sunflower + 3×3 patch"), f8("unchanged")],
+        [a("Anomaly"), f7("per-channel harmonic climatology at the cell"), f8("the same climatology evaluated at the observation's own (lat, lon, day)")],
+        [a("Argo source"), f7("Roemmich–Gilson gridded, monthly, 1°"), f8("raw profiles (the ~2,000 per pentad), no mapping step")],
+        [a("Storage"), f7("52.9 GB"), f8("52.9 GB + a point store of order 1–3 GB + the index")],
+        [a("Sampler cost"), f7("a strided gather"), f8("a k-NN lookup, precomputed once per anchor set; trivial with a per-bin KD-tree")],
+        [a("What the model can learn from it"), f7("value"), f8("value AND how much to trust it — distance and density are the uncertainty proxy, and the model can learn that a 3-day-old profile 80 km away beats a 3-week-old one 400 km away")],
+        [a("Risks"), f7("miss tokens dominate the Argo channels (83–97 % missing in the North Atlantic mapping)"), f8("unbounded search returns junk (hence R_max, T_max); density bias between basins (hence n_R); dense channels do not benefit (hence hybrid); it stops being a single tensor")],
+      ];
+      s.addTable(rows, { x: 0.6, y: 1.55, w: 12.1, colW: [2.30, 4.40, 5.40], fontFace: FONT_B,
+        border: { type: "solid", color: GRIDLINE, pt: 0.5 },
+        rowH: [0.16, 0.20, 0.20, 0.16, 0.16, 0.16, 0.14, 0.20, 0.16, 0.16, 0.20, 0.32, 0.32],
+        margin: 0.03, autoPage: false });
+    }
+    box(s, 0.6, 4.66, 12.1, 1.22, OBS, "F5FBF7");
+    txt(s, [{ text: "The experiment that decides it, before any tensor is built", options: { bold: true, color: OBS, fontSize: 10 } }], 0.74, 4.72, 11.82, 0.20);
+    txt(s, [
+      { text: "One arm inside the next cone-codec wave on family 7: replace the Argo group's 32 grid channels by k = 5 profile tokens from the raw Argo archive (T_max 30 d, R_max 1,000 km), everything else identical to the continuous twin. ", options: { fontSize: 8.5, color: INK } },
+      { text: "Read-out: ", options: { bold: true, color: NAVY, fontSize: 8.5 } },
+      { text: "held-out per-family loss against the predict-the-mean bar (the E-069b decomposition), the subsurface probe, and — the falsifier — whether the anchor family's loss on hidden interior channels drops below the twin's. If it does not, distance-as-a-feature bought nothing and family 8 is not built. Cost ≈ one seed, ~1.7 h on a 4090. ", options: { fontSize: 8.5, color: INK } },
+      { text: "What must not be forgotten: ", options: { bold: true, color: "A23B3B", fontSize: 8.5 } },
+      { text: "E-044c arm A3 measured that removing the Argo targets made the forecast WORSE (0.570 vs ~0.50) — the interior carries signal, and this is the cheapest way to carry more of it.", options: { fontSize: 8.5, color: INK } },
+    ], 0.74, 4.94, 11.82, 0.90);
+    reading(s, "Reading. Family 8 is not a bigger tensor; it is a different contract between the sampler and the observing system. The decision is one ablation away and costs about a dollar.", 6.42);
+    footer(s);
+  }
 };

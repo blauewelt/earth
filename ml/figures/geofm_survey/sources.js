@@ -1,4 +1,4 @@
-// Per-slide sources: one array of {t: label, u: full URL} per slide, in deck order (55 entries).
+// Per-slide sources: one array of {t: label, u: full URL} per slide, in deck order (57 entries).
 // Appended to every speaker note by build.js (plain text) and rendered as clickable links on the
 // notes pages (notes_deck.js) and on the Sources slide. Keep URLs full (https://) so they are
 // clickable after a PDF export and survive a Google Slides import.
@@ -283,6 +283,8 @@ module.exports = [
   /* 52 */ S("proposal", "paper", "mlclaude", "cmemsFc"),
   /* 53 */ S("proposal", "s1reconf", "s1d", "s2ext", "modisviirs", "snpp", "ssmis", "amsr3", "s6", "occci", "ccism", "en4", "grdc", "opera", "gleam", "ecmwfOpen"),
   /* 54 — El Niño 2026 */ S("cpcEnso", "iriPlume", "pmelWwv", "godas", "interpOlr", "oni", "pslIndices", "mei", "rmm", "ccmp", "oscarFinal", "catalogJson", "catalogDoc", "coneDataEnso"),
-  /* 55 */ S("surveyNotes", "proposal", "paper"),
+  /* 55 — family 8: the measurement is never missing, only far away */ S("e071", "e070", "argo", "rgArgo", "aardvark", "graphdop", "esfm", "coneDataEnso"),
+  /* 56 — family 7 vs family 8, and the experiment that decides */ S("e070", "e071", "e069log", "dataLadder", "argo", "rgArgo", "mlclaude", "paper"),
+  /* 57 */ S("surveyNotes", "proposal", "paper"),
 ];
 module.exports.P = P;
