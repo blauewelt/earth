@@ -10,8 +10,9 @@ the numbers, the rules, the storage design, and the one ablation that decides
 whether family 8 is built.
 
 Status 2026-09-08: **the observation store (§3) is built and on the Hub**
-(§3.1) and **the ablation (§5, E-076a) has run — not supported at 7 M / 20 k,
-see §5.0.** Every
+(§3.1); **the ablation (§5, E-076a) ran — not supported at 7 M / 20 k, §5.0 —
+and E-076b then showed the data carry a 21–31 % interior signal the codec
+failed to extract, §5.0a.** Every
 number is measured in this programme and cited, taken from a named source,
 or arithmetic shown in place.
 
@@ -329,6 +330,22 @@ What it needs first, in order: the Argo index and profile extraction
 (§3 — **done, §3.1**); the sparse gather path in `ml/cone_sampler.py` with a
 test that pins the dense path's digest unchanged; the k-nearest search
 (`ml/family8_store.py::knearest`, done) wired into that path.
+
+### 5.0a · Addendum, the same night — the ceiling is real: E-076b
+
+The E-076b question was answered before the plan's ink dried: optimal
+interpolation from the SAME five neighbours the family-8 arm carried as
+tokens beats climatology by 21 % on temperature and 14 % on salinity at
+the matched search, by 31 % / 34 % with twenty neighbours, and the gain
+is spread over the whole column including the deep water where the codec
+had nothing. So §5.0's "neither representation reaches the interior" is a
+statement about the 7 M cone codec under the masked-dot objective at 20 k
+steps, not about the data: the premise of this plan — that displaced
+profiles carry recoverable interior information — is confirmed, and what
+failed is the model's ability to combine them. The k = 5 choice of §2.3
+also reads differently now: the ceiling keeps rising to k = 20, so the
+number of neighbours the model may combine matters more than the radius.
+Numbers: [E-076b](https://blauewelt.github.io/earth/docs.html?f=ml/plans/E076b_results.md).
 
 ### 5.0 · Verdict (2026-09-08) — not supported at 7 M / 20 k; neither representation reaches the interior
 

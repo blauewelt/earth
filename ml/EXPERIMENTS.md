@@ -44,6 +44,85 @@ low-pass).
 
 ---
 
+<a id="e-076b"></a>
+## E-076b · The optimal-interpolation ceiling: can ANY method get interior skill from five Argo profiles within 150 km? — RUN 2026-09-08 (CPU, $0): **YES, by 21 % at the matched search and 31 % with twenty neighbours; E-076a's null was about the model, not the data**
+
+TL;DR — E-076a found that a 7 M cone codec, given the five nearest real
+Argo profiles as tokens, predicted the ocean interior no better than the
+seasonal climatology (2–3 % better on temperature, nothing on salinity),
+and neither did its gridded twin. That left two readings: the data cannot
+support interior skill at this search radius, or the model failed to use
+it. This experiment decides between them with the classical estimator —
+optimal interpolation (OI: a Gaussian-process estimate of the anomaly at
+the target from the neighbours' anomalies, covariance
+exp(−d²/2L² − Δt²/2T²) plus a noise term), hyper-parameters fitted on
+training-year targets only, evaluated on the two held-out splits — on the
+same store, the same search and the same kind of target.
+
+**Absolute description.** `ml/oi_ceiling.py` · 6,000 target profiles per
+split drawn from the family-8 store (terminal 2021–2024; interspersed
+2008–09 / 2016–17; training years for the fit), each with its k nearest
+OTHER profiles at or before its bin (`family8_store.knearest`, k ∈ {5, 10,
+20} within 30 d / 1,000 km, plus a widened k = 20 within 60 d / 1,500 km) ·
+anomalies against the family-7 `rg100` train-year monthly climatology at
+each profile's own 1° cell (the bar E-076a used) · four estimators per
+level — climatology (predict zero anomaly), nearest (copy the nearest
+neighbour's anomaly), inverse-distance, OI (+ a fitted shrink) · 644 s on
+two CPU cores · `params` none · `stage` analysis · `data` family8_argo_l0 +
+family-7 rg100 · `resume` none.
+
+**Result — skill = mean over 16 levels of RMSE / climatology-RMSE (1.0 =
+climatology; lower is better), terminal split:**
+
+| estimator | k = 5 · 30 d (E-076a's search) | k = 10 | k = 20 | k = 20 · 60 d · 1,500 km |
+|---|---|---|---|---|
+| copy the nearest profile's anomaly | 1.083 | 1.083 | 1.083 | 1.044 |
+| inverse-distance weights | 0.877 | 0.840 | 0.830 | 0.809 |
+| **optimal interpolation, temperature** | **0.786** | **0.711** | **0.686** | **0.681** |
+| **optimal interpolation, salinity** | **0.855** | **0.786** | **0.661** | **0.656** |
+| E-076a family-8 arm #553, temperature | 0.970 | — | — | — |
+| E-076a twin #552, temperature | 0.975 | — | — | — |
+
+Interspersed split: OI 0.825 / 0.769 / 0.739 / 0.729 (T), 0.843 / 0.782 /
+0.753 / 0.741 (S). By depth band at k = 20, terminal: 0.68 (10–100 dbar),
+0.66 (150–500), **0.71 (700–1,900)** on temperature, 0.66 / 0.68 / **0.65**
+on salinity — the gain is spread over the whole column and is largest in
+the deep water at k = 20, exactly where the codec had zero. Fitted
+hyper-parameters (24 fits, training targets only): L = 100 km in 17 of 24
+(150 km in 6, 50 in 1), T = 20 d in the seasonal thermocline, 30–60 d
+below, noise-to-signal 0.3 in 23 of 24, shrink 0.90–1.00 and worth nothing.
+Widening the search buys 0.005; raising k from 5 to 20 buys 0.10.
+
+**Reading, and what it changes.** The pre-registered branch of E-076a
+("if OI beats climatology by 10 %, the codec under-used its tokens") is
+taken with room to spare: **the five profiles E-076a's family-8 arm carried
+as tokens contain a 21 % improvement over climatology, and the arm
+extracted 3 %.** E-076a's null is therefore a statement about the 7 M cone
+codec at 20 k steps under the masked-dot objective, not about family 8's
+data. Three consequences: (1) the interior IS forecastable from displaced
+profiles, deep water included, so E-076's premise stands; (2) the size of
+the search matters less than the number of neighbours the estimator may
+combine — k = 5 was chosen from a correlation-length argument, and the
+ceiling keeps rising to k = 20; (3) the next question is why the codec
+does not learn what a 3-parameter Gaussian process does — objective (the
+withheld-profile query is one of ~1,000 tokens' worth of targets at p = 0.5),
+capacity, or steps.
+
+**Caveats, stated in the results doc.** The climatology bar reproduces
+E-076a's at the surface and at depth but not in the thermocline (1.02 vs
+0.83 °C at 300 dbar) because targets here are drawn from the store —
+Argo-density weighted — rather than from ocean grid cells; every skill is
+an internal ratio, so this shifts levels, not conclusions. E-076a's
+"persistence" copied the nearest profile's RAW values (1.51 °C at
+10 dbar); "nearest" here copies its ANOMALY (0.91 °C at 10 dbar) — the
+anomaly copy is the fairer bar and still loses to climatology over the
+column (1.083). 10.8 % of targets have a companion within 20 km (the same
+float's previous cycle); re-scored on targets whose nearest neighbour is
+≥ 50 km away, k = 20 terminal OI reads 0.722 (T) / 0.693 (S) — real,
+quantified, not the explanation.
+
+- [E-076b results, every table](https://blauewelt.github.io/earth/docs.html?f=ml/plans/E076b_results.md)
+
 <a id="e-076a"></a>
 ## E-076a · Does a sparse channel carried as "the k nearest measurements, with distance" beat the same channel as a grid cell that is mostly empty? — RESOLVED 2026-09-08 00:00Z: **NOT SUPPORTED at 7 M / 20 k. The family-8 arm is 0.5 % better than its twin on the same anchors — exactly the twin's own seed spread — and NEITHER arm learns the interior: both beat climatology by 2–3 % on temperature, all of it in the top 300 dbar where the surface channels reach, and by nothing on salinity** (two earlier dispatches died in workflow plumbing that family 7 had never exercised: #546/#547 in the provenance step, which read a `chan` key family 7 does not have, fixed `1c7bf20`; #549/#550/#551 thirty minutes later, after the anomaly transform, on a missing loss weight for the land family, fixed `fe2f294`; #548 was cancelled when its box never registered — ≈ 1 box-hour × 3 spent)
 
@@ -157,7 +236,7 @@ the codec under-trained or under-used its tokens and a longer/larger arm is
 justified; if OI cannot beat climatology either, the k = 5 / 30-day search
 is too sparse for the interior and family 8's value lies elsewhere
 (moorings, altimeter tracks, denser regions), not in the Argo interior
-at this radius. That baseline is registered as E-076b.
+at this radius. That baseline is registered as E-076b — **and answered the same night: OI gets 21 % at the matched search, 31 % at k = 20, so the null above is about the model, not the data ([E-076b](https://blauewelt.github.io/earth/docs.html?f=ml/EXPERIMENTS.md#e-076b)).**
 
 Secondary, no decision attached: E-069's velocity probe (can the codec's
 code predict the hidden current components?) reads r² ≈ −0.01 on all three
