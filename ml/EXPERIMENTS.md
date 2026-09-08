@@ -45,7 +45,7 @@ low-pass).
 ---
 
 <a id="e-076a"></a>
-## E-076a · Does a sparse channel carried as "the k nearest measurements, with distance" beat the same channel as a grid cell that is mostly empty? — DISPATCHED 2026-09-07 22:1xZ as #552 / #553 / #554 (two earlier dispatches died in workflow plumbing that family 7 had never exercised: #546/#547 in the provenance step, which read a `chan` key family 7 does not have, fixed `1c7bf20`; #549/#550/#551 thirty minutes later, after the anomaly transform, on a missing loss weight for the land family, fixed `fe2f294`; #548 was cancelled when its box never registered — ≈ 1 box-hour × 3 spent)
+## E-076a · Does a sparse channel carried as "the k nearest measurements, with distance" beat the same channel as a grid cell that is mostly empty? — RESOLVED 2026-09-08 00:00Z: **NOT SUPPORTED at 7 M / 20 k. The family-8 arm is 0.5 % better than its twin on the same anchors — exactly the twin's own seed spread — and NEITHER arm learns the interior: both beat climatology by 2–3 % on temperature, all of it in the top 300 dbar where the surface channels reach, and by nothing on salinity** (two earlier dispatches died in workflow plumbing that family 7 had never exercised: #546/#547 in the provenance step, which read a `chan` key family 7 does not have, fixed `1c7bf20`; #549/#550/#551 thirty minutes later, after the anomaly transform, on a missing loss weight for the land family, fixed `fe2f294`; #548 was cancelled when its box never registered — ≈ 1 box-hour × 3 spent)
 
 TL;DR — the ablation that decides whether family 8 is built. Two arms of
 the same 7 M-parameter cone codec (the encoder that reads a 30-day cone of
@@ -96,7 +96,85 @@ steps and the comparison is void, not a null. Secondary, no decision
 attached: the E-069 velocity probe and the held-out dot/anchor losses, for
 continuity with E-069's numbers.
 
-**Cost.** Three boxes at ≈ $0.33/h; per run a 53 GB pull (~10 min at the
+**RESULT (#552 / #553 / #554, all three complete, Train steps 21:59 → 23:53–00:00Z, ~1 h 55 m each).**
+The read-out landed exactly as registered: 2,048 anchors drawn per seed
+(1,776 with a target for seed 0 — the twin #552 and the family-8 arm #553
+share them — and 1,803 for seed 1), eleven `profile_target` records per run,
+every one archived in `run-55x.jsonl`. Final per-level RMSE of the nearest
+real profile's temperature, °C, on all held-out anchors:
+
+| dbar | twin s0 (#552) | **family 8 s0 (#553)** | twin s1 (#554) | climatology s0 | climatology s1 |
+|---|---|---|---|---|---|
+| 10 | 0.981 | **0.964** | 0.942 | 1.086 | 1.025 |
+| 30 | 1.152 | **1.134** | 1.178 | 1.232 | 1.240 |
+| 50 | 1.271 | **1.255** | 1.228 | 1.328 | 1.283 |
+| 100 | 1.248 | **1.234** | 1.299 | 1.306 | 1.354 |
+| 200 | 1.048 | 1.044 | 1.001 | 1.061 | 1.019 |
+| 300 | 0.825 | 0.819 | 0.834 | 0.831 | 0.841 |
+| 500 | 0.632 | 0.634 | 0.647 | 0.637 | 0.651 |
+| 900 | 0.327 | 0.329 | 0.379 | 0.330 | 0.381 |
+| 1500 | 0.150 | 0.150 | 0.129 | 0.151 | 0.129 |
+
+Skill (mean over levels of RMSE / climatology-RMSE; 1.0 = climatology),
+terminal years 2021–2024: **twin s0 0.9747 · family 8 s0 0.9700 · twin s1
+0.9793**; interspersed 2008–09 / 2016–17: 0.9828 · 0.9794 · 0.9818. Salinity
+skill: 0.9992 · 0.9986 · 0.9989 — nothing. The persistence bar (copy the
+nearest OTHER profile) is far worse than climatology at every level (1.51
+vs 1.09 °C at 10 dbar): a float 100–150 km away is a worse guess than the
+monthly climatology at the target's own cell.
+
+**Against the pre-registered falsifier.** Family 8 minus twin on the SAME
+anchors: −0.0047 (terminal years), −0.0034 (interspersed). The twin's seed
+spread: |0.9747 − 0.9793| = 0.0046 — on different anchor sets, so an upper
+bound on the training-seed term. The registered condition was "below the
+twin by MORE than the spread"; 0.0047 against 0.0046 is a coin toss, not a
+result. **The hypothesis is not supported at this size and budget.** The
+0.5 % gain is consistent in direction at every eval from step 2,000 on and
+sits entirely in the top 100 dbar, which is where a displaced profile could
+plausibly help — but it is indistinguishable from seed noise at n = 1.
+
+**The finding that matters more than the comparison.** Below 300 dbar
+every arm equals the climatology to three decimals, and at the surface the
+2–10 % gain is shared by both arms — it comes from the dense surface
+channels (SST above all), not from the interior representation. Neither the
+gridded column nor five raw profiles teach a 7 M cone codec anything about
+the interior in 20 k steps. So the ablation could not discriminate between
+two representations of information the model does not use. The void clause
+("if neither arm beats climatology") was not formally triggered — both do,
+by 2–3 % — but its spirit was: the interior channels contributed nothing
+measurable to either arm.
+
+**What it licenses, and what next.** Family 8 is NOT built as the default
+representation on this evidence; the store stands as a data product and the
+sparse gather path stays in the code behind `--argo-store`. Before any
+further model arm, one CPU-only question (≈ $0) has to be answered first:
+**can ANY method extract interior skill beyond climatology from five
+profiles within 150 km?** An optimal-interpolation baseline — a Gaussian
+covariance with the E-076 §3.1 correlation length, fitted on training
+years, applied to the same k − 1 neighbours on the same 2,048 anchors — is
+the ceiling the codec was asked to reach. If OI beats climatology by 10 %,
+the codec under-trained or under-used its tokens and a longer/larger arm is
+justified; if OI cannot beat climatology either, the k = 5 / 30-day search
+is too sparse for the interior and family 8's value lies elsewhere
+(moorings, altimeter tracks, denser regions), not in the Argo interior
+at this radius. That baseline is registered as E-076b.
+
+Secondary, no decision attached: E-069's velocity probe (can the codec's
+code predict the hidden current components?) reads r² ≈ −0.01 on all three
+runs — the family-7 cone codec does no better on that probe than E-069's
+family-4 one did.
+
+**Cost, measured.** Three boxes at $0.32–0.37/h for ~2 h of the successful
+dispatch plus ~1 h each of the two failed ones (a 53 GB Hub pull at 850–920
+Mbps, ≈ 7 min; the anomaly transform of the 53 GB tensor ≈ 30 min on NVMe;
+training 20 k × 256 ≈ 1 h 20 m at ~250 steps/min) ≈ **$3.5** in all,
+against the $3–4 registered. All three boxes destroyed after harvest.
+Two plumbing lessons, both now pinned by tests: the provenance step read a
+`chan` key family 7 does not have (`1c7bf20`), and the cone codec's loss
+weights had no entry for family 7's land family (`fe2f294`) — the first run
+on a new tensor family exercises paths no smoke did.
+
+**Cost, as registered at dispatch.** Three boxes at ≈ $0.33/h; per run a 53 GB pull (~10 min at the
 boxes' 850–920 Mbps), the anomaly transform's scratch copies, and ~1.7 h of
 training as measured on E-069's 4090s — ≈ $1 per run, ≈ $3–4 in all
 including the pulls. The boxes are destroyed after harvest; nothing on

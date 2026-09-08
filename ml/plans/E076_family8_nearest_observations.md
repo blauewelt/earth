@@ -9,8 +9,9 @@ version is slides 55–56 of the representation survey; this is the plan with
 the numbers, the rules, the storage design, and the one ablation that decides
 whether family 8 is built.
 
-Status 2026-09-07: **the observation store (§3) is built and on the Hub** —
-see §3.1 — and the model half (§5, E-076a) is not yet dispatched. Every
+Status 2026-09-08: **the observation store (§3) is built and on the Hub**
+(§3.1) and **the ablation (§5, E-076a) has run — not supported at 7 M / 20 k,
+see §5.0.** Every
 number is measured in this programme and cited, taken from a named source,
 or arithmetic shown in place.
 
@@ -328,6 +329,24 @@ What it needs first, in order: the Argo index and profile extraction
 (§3 — **done, §3.1**); the sparse gather path in `ml/cone_sampler.py` with a
 test that pins the dense path's digest unchanged; the k-nearest search
 (`ml/family8_store.py::knearest`, done) wired into that path.
+
+### 5.0 · Verdict (2026-09-08) — not supported at 7 M / 20 k; neither representation reaches the interior
+
+Run as #552 (twin, seed 0), #553 (family 8, seed 0), #554 (twin, seed 1) on
+the family-7 global tensor, ≈ $3.5. On the common target of §5.1 the
+family-8 arm scored 0.9700 against the twin's 0.9747 on the same anchors
+(skill = RMSE / climatology-RMSE, terminal years) — a 0.5 % gain, the size
+of the twin's own seed spread (0.0046), consistent in direction at every
+eval and confined to the top 100 dbar. Below 300 dbar every arm equals the
+climatology to three decimals; salinity skill is 1.000 for all three. So
+the 7 M cone codec does not use the interior in 20 k steps under either
+representation, and the ablation could not tell them apart. Family 8 is
+not built as the default; the store stands, the sparse gather path stays
+behind `--argo-store`. The next question is E-076b: an optimal-interpolation
+ceiling from the same k − 1 neighbours on the same anchors — if no method
+beats climatology from five profiles within 150 km, the interior at this
+search radius is not where family 8's value lies. Full numbers:
+[EXPERIMENTS.md#e-076a](https://blauewelt.github.io/earth/docs.html?f=ml/EXPERIMENTS.md#e-076a).
 
 ### 5.1 · The common target (amendment 2026-09-07) — what "hidden interior channels" means once `rg100` is gone
 
