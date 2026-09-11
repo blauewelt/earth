@@ -102,6 +102,13 @@ GROUP_FOOTPRINT = {
     "g025": (0.0, 0.0),
     "g100": (math.log2(1.9 / 0.25) / FP_SCALE, 0.0),
     "rg100": (math.log2(4.0) / FP_SCALE, math.log2(30.0 / 5.0) / FP_SCALE),
+    # E-077's ocean colour. Spatially it IS a 0.25 degree cell — the 4 km
+    # product is block-averaged onto this very grid, so its support is the
+    # cell, like g025's. Temporally it is the same pentad. The footprint is
+    # therefore (0, 0) and this entry exists to SAY so rather than to inherit
+    # DEFAULT_FOOTPRINT silently: a channel whose granularity was never
+    # thought about looks exactly like one whose granularity is zero.
+    "oc025": (0.0, 0.0),
 }
 PROFILE_FOOTPRINT = (-4.0 / FP_SCALE, -4.0 / FP_SCALE)
 # A single-array tensor (families 2-6) is one 0.25-degree grid sampled at its

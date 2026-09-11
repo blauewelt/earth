@@ -1823,16 +1823,57 @@ test.describe("family7 index + fixture (the global tensor's range-read contract)
 
   test("the index says what a browser needs to address one pentad", () => {
     expect(idx._source).toContain("publish_family7_index.py");
-    expect(idx.recipe).toBe("f7l0");
+    expect(idx.recipe).toBe("f7l1");
     expect(idx.epoch).toBe("1982-01-01");
     expect(idx.pentad_days).toBe(5);
     expect(idx.bin_last).toBeGreaterThanOrEqual(idx.bin_first);
     expect(idx.n_bins).toBe(idx.bin_last - idx.bin_first + 1);
     expect(idx.base).toMatch(
       /^https:\/\/huggingface\.co\/datasets\/chfrank\/earth-tensors\/resolve\/main\/tensors\//);
-    expect(idx.plan).toContain("E070_family7_build.md");
-    expect(Object.keys(idx.groups).sort()).toEqual(["g025", "g100", "rg100"]);
+    expect(idx.plan).toContain("E077_family7_ocean_colour.md");
+    expect(idx.plans.join(" ")).toContain("E070_family7_build.md");
+    expect(Object.keys(idx.groups).sort())
+      .toEqual(["g025", "g100", "oc025", "rg100"]);
     expect(Object.keys(idx.statics).sort()).toEqual(["elev", "sphere"]);
+  });
+
+  /* THE FOURTH GROUP IS OFFSET IN TIME, and that is the whole of E-077 §4
+   * layout 1. Ocean colour begins on 1997-09-04 — bin 1145 — fifteen years
+   * after the tensor's first bin, so `oc025` carries its own `bin_first` and
+   * a reader computes `row = bin − (group.bin_first ?? index.bin_first)`.
+   * The alternative, 1,145 rows of NaN, costs 4.7 GB to say "not launched
+   * yet". A consumer that ignored the field would read a colour value fifteen
+   * years from the date it thinks it asked for, which is exactly the class of
+   * mistake that looks entirely plausible on a map. */
+  test("oc025 declares its own first bin, and the row arithmetic closes", () => {
+    const oc = idx.groups.oc025;
+    expect(oc, "the fixture must carry the colour group").toBeTruthy();
+    expect(oc.chans).toEqual(["log_chl", "chl_cov"]);
+    expect(oc.labels.log_chl).toBe("log10 chlorophyll-a (mg/m³)");
+    expect(oc.labels.chl_cov).toBe("clear-sky coverage fraction");
+    expect(oc.units.log_chl).toBe("log\u2081\u2080 mg/m³");
+    expect(oc.units.chl_cov).toBe("0–1");
+    expect(Number.isInteger(oc.bin_first)).toBe(true);
+    // a NON-trivial offset, or the test proves nothing
+    expect(oc.bin_first).toBeGreaterThan(idx.bin_first);
+    expect(oc.bin_first + oc.shape[0] - 1).toBe(idx.bin_last);
+    // the colour group is at the FINE grid, like g025 — it is block-averaged
+    // onto that grid, not looked up at a coarse cell
+    expect(oc.grid.step).toBe(idx.groups.g025.grid.step);
+    expect(oc.shape.slice(1, 3)).toEqual(idx.groups.g025.shape.slice(1, 3));
+    // the three original groups do NOT carry one: they start where the
+    // tensor does, and inventing a field for them would be a second truth
+    for (const g of ["g025", "g100"]) {
+      expect(idx.groups[g].bin_first, g).toBe(undefined);
+    }
+    // rg100 answers the same question the other way — an explicit bin list
+    expect(Array.isArray(idx.groups.rg100.bin_index)).toBe(true);
+    // and the index states when colour starts, in days a reader can read
+    expect(idx.recorded.colour).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+    const day = (b) => new Date(Date.parse(idx.epoch + "T00:00:00Z")
+                                + b * idx.pentad_days * 864e5)
+      .toISOString().slice(0, 10);
+    expect(idx.recorded.colour).toBe(day(oc.bin_first));
   });
 
   test("every group's header, shape and slab size are the file's own", () => {

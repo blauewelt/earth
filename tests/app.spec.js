@@ -6520,12 +6520,18 @@ test("family 7: a channel switch costs no request, a coarse channel changes grid
   await enableFamily7(page);
   expect((page.__f7Reads || []).length).toBe(1);
 
-  // every g025 and g100 channel plus the two statics, each with a label and a unit
+  // every g025, g100 and oc025 channel plus the two statics, each with a label
+  // and a unit
   const opts = await page.locator('select[data-chan="family7"] option').allTextContents();
-  const nChan = index.groups.g025.chans.length + index.groups.g100.chans.length + 2;
+  const nChan = index.groups.g025.chans.length + index.groups.g100.chans.length
+              + index.groups.oc025.chans.length + 2;
   expect(opts.length).toBe(nChan);
   expect(opts.join(" | ")).toContain("Surface current speed — m/s");
   expect(opts.join(" | ")).toContain("Surface sphere");
+  // the fourth group's vocabulary comes from the INDEX, not from app.js — the
+  // producer's units travel with the producer's bytes (CLAUDE.md §2.3)
+  expect(opts.join(" | ")).toContain("log10 chlorophyll-a (mg/m³)");
+  expect(opts.join(" | ")).toContain("clear-sky coverage fraction");
   // rg100 (the depth column) is NOT offered: it is written only into the
   // pentad holding a month's 15th, so most dates would paint nothing
   expect(opts.join(" | ")).not.toContain("dbar");
@@ -6581,6 +6587,72 @@ test("family 7: a channel switch costs no request, a coarse channel changes grid
     await window.__earth.probeValueAt(Cesium.Cartographic.fromDegrees(20, 10)));
   expect(cls.label || cls.noData).toBeTruthy();
   if (cls.label) expect(["ocean", "land", "ice sheet or glacier", "inland water"]).toContain(cls.label);
+
+  expect(page.__errors, `page errors: ${page.__errors.join(" | ")}`).toHaveLength(0);
+});
+
+/* THE OFFSET GROUP (E-077 §4, layout 1). Ocean colour begins fifteen years
+ * after the tensor does, so `oc025`'s rows are counted from its OWN first bin
+ * and the index says which that is. Two things have to be true and neither is
+ * visible on screen: the byte offset the browser asks for must be measured
+ * from the group's first row (an off-by-1,145 read would return a plausible
+ * map of the wrong date), and a pentad BEFORE the record must paint nothing
+ * and say why rather than reading row −1. */
+test("family 7: the colour group's rows are counted from its own first bin",
+     async ({ page }) => {
+  test.setTimeout(120000);
+  const index = await serveFamily7(page);
+  const toasts = await recordToasts(page);
+  const oc = index.groups.oc025;
+  expect(oc.bin_first).toBeGreaterThan(index.bin_first);
+
+  const dayOfBin = (b) => new Date(Date.parse(index.epoch + "T00:00:00Z")
+                                   + b * index.pentad_days * 864e5)
+    .toISOString().slice(0, 10);
+
+  // a date inside the COLOUR record, on a bin the group has a row for
+  const wanted = oc.bin_first + 1;
+  await page.evaluate((d) => {
+    const el = document.getElementById("layer-date");
+    el.value = d;
+    el.dispatchEvent(new Event("change", { bubbles: true }));
+  }, dayOfBin(wanted));
+  await enableFamily7(page);
+  await page.evaluate(() => {
+    const s = document.querySelector('select[data-chan="family7"]');
+    s.value = "oc025:log_chl";
+    s.dispatchEvent(new Event("change", { bubbles: true }));
+  });
+  await expect.poll(() => page.evaluate(() => window.__earth.tensorLayerState().ready),
+                    { timeout: 20000 }).toBe(true);
+
+  const st = await page.evaluate(() => window.__earth.tensorLayerState());
+  expect(st.bin).toBe(wanted);
+  expect(st.grid.nx).toBe(oc.grid.nx);
+  expect(st.grid.units).toBe("log\u2081\u2080 mg/m³");
+  // THE BYTES ASKED FOR: offset = header_len + (bin − oc.bin_first)·slab
+  const read = (page.__f7Reads || []).filter((r) => r[0].includes("oc025")).pop();
+  expect(read, "no range read went to the colour group").toBeTruthy();
+  expect(read[1]).toBe(oc.header_len + (wanted - oc.bin_first) * oc.slab_bytes);
+  expect(read[2] - read[1] + 1).toBe(oc.slab_bytes);
+  // ...and it is NOT the offset a reader who ignored bin_first would compute
+  expect(read[1]).not.toBe(oc.header_len + (wanted - index.bin_first) * oc.slab_bytes);
+
+  // A PENTAD BEFORE THE RECORD: nothing painted, no request, and a sentence
+  // that names the date the record starts instead of "no data".
+  const nReads = (page.__f7Reads || []).length;
+  await page.evaluate((d) => {
+    const el = document.getElementById("layer-date");
+    el.value = d;
+    el.dispatchEvent(new Event("change", { bubbles: true }));
+  }, dayOfBin(index.bin_first));
+  await expect.poll(() => page.evaluate(() => window.__earth.tensorLayerState().ready),
+                    { timeout: 20000 }).toBe(false);
+  const before = await page.evaluate(() => window.__earth.tensorLayerState());
+  expect(before.bin).toBe(index.bin_first);
+  expect(before.error).toContain("before that record starts");
+  expect((page.__f7Reads || []).length).toBe(nReads);   // no bad range read
+  await expect.poll(toasts).toContain("could not be read");
 
   expect(page.__errors, `page errors: ${page.__errors.join(" | ")}`).toHaveLength(0);
 });

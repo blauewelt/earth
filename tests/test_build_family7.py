@@ -1,12 +1,23 @@
 #!/usr/bin/env python3
-"""The ten things asserted before the family-7 global tensor is trusted.
+"""The things asserted before the family-7 global tensor is trusted.
 
-`ml/plans/E070_family7_build.md` §5. Family 7 is the first input tensor
-covering the whole globe rather than the North Atlantic window: every
-0.25-degree grid point from pole to pole, one value per channel per five-day
-bin, 1982-2024, in three groups at their native resolution (`g025` 0.25 deg /
-7 channels, `g100` 1 deg / 15 NCEP channels, `rg100` 1 deg / 32 Argo depth
-channels on the live bins only).
+`ml/plans/E070_family7_build.md` §5 and `ml/plans/E077_family7_ocean_colour.md`
+§5/§7. Family 7 is the first input tensor covering the whole globe rather than
+the North Atlantic window: every 0.25-degree grid point from pole to pole, one
+value per channel per five-day bin, 1982-2024, in four groups at their native
+resolution (`g025` 0.25 deg / 7 channels, `g100` 1 deg / 15 NCEP channels,
+`rg100` 1 deg / 32 Argo depth channels on the live bins only, and — recipe
+`f7l1`, E-077 — `oc025` 0.25 deg / 2 ocean-colour channels on an OFFSET time
+axis that starts at the colour record's own first day).
+
+THE COLOUR SOURCE IS SYNTHETIC AND, WHERE IT IS DECIMATED, SAYS SO. The exact
+block-mean values of E-077 §5 are asserted on the REAL 4320 x 8640 OC-CCI grid
+(built in memory, ~550 MB, a few seconds); the end-to-end smoke uses a
+DECLARED decimated 1440 x 2880 grid at 1/8 degree, which is the coarsest
+global grid on which a 0.25-degree point still sits on a cell boundary with an
+even block, so the pole truncation stays symmetric. Neither host
+(`www.oceancolour.org`, `dap.ceda.ac.uk`) is reachable from a test runner and
+neither is contacted.
 
 E-071 §6.1's correction of 4 Sep is asserted here too: `sst` is the OBSERVED
 OISST field and missing where OISST does not observe, and the SHARED surface
@@ -49,7 +60,9 @@ def build():
     work = b7.run_smoke(root=root, keep=True)
     d = load_tensor(os.path.join(work, b7.STEM + ".npz"))
     yield dict(root=root, work=work, src=os.path.join(root, "src"), d=d,
-               start=b7.SMOKE_START, end=b7.SMOKE_END)
+               seed=os.path.join(root, "seed"),
+               start=b7.SMOKE_START, end=b7.SMOKE_END,
+               oc_start=b7.SMOKE_OC_START)
     d.close()
     shutil.rmtree(root, ignore_errors=True)
 
@@ -604,12 +617,13 @@ def test_10_smoke_produces_every_file_and_key(build):
         assert os.path.basename(p) == f"{b7.STEM}_X_{g}.npy"
     missing = [k for k in b7.REQUIRED_KEYS if k not in d]
     assert not missing, missing
-    assert str(d["recipe"]) == "f7l0"
+    assert str(d["recipe"]) == "f7l1"
     assert str(d["window"]) == "global025"
     assert str(d["cadence"]) == "pentad"
-    assert list(d["groups"]) == b7.GROUPS
+    assert list(d["groups"]) == b7.GROUPS == ["g025", "g100", "rg100", "oc025"]
     assert list(d["chan_g025"]) == b7.CHAN_G025
     assert list(d["chan_g100"]) == b7.CHAN_G100
+    assert list(d["chan_oc025"]) == b7.CHAN_OC025 == ["log_chl", "chl_cov"]
     assert np.asarray(d["sphere"]).shape == (721, 1440)
     assert np.asarray(d["sphere"]).dtype == np.int8
     assert np.asarray(d["elev"]).shape == (721, 1440)
@@ -875,3 +889,742 @@ def test_13_resume_over_the_pre_correction_box_state(tmp_path):
     assert open(b7.marker(work, "sst")).read() == sst_stamp
     assert b7.marked(work, "repair_sst")
     assert os.path.exists(os.path.join(work, "ncep.spec"))
+
+
+# ======================================================================== #
+# E-077 · the fourth group: ocean colour (recipe f7l1)                     #
+# ======================================================================== #
+OC_REAL_NLAT, OC_REAL_NLON = 4320, 8640        # the OC-CCI v6.0 4 km grid
+OC_REAL_STEP = 1.0 / 24.0
+OC_FILL = -999.0
+
+
+def oc_real_axes():
+    """The real product's axes: cell-registered, NORTH-first, from -180."""
+    lat = 90.0 - OC_REAL_STEP * (np.arange(OC_REAL_NLAT) + 0.5)
+    lon = -180.0 + OC_REAL_STEP * (np.arange(OC_REAL_NLON) + 0.5)
+    return lat, lon
+
+
+def oc_cells_by_geography(y, x, s_lat, s_lon):
+    """Which source cells belong to point (y, x), FROM THE DEFINITION.
+
+    E-077 §3 says "the 6 x 6 block of 4 km cells whose centres lie within
+    +-0.125 deg of the point", so this test computes exactly that — a distance
+    test on the axes, with longitude wrapped — rather than calling the
+    builder's index arithmetic. The two must agree; if they only ever agree
+    with each other, neither has been tested.
+    """
+    lats, lons = b7.grid025()
+    lat, lon = float(lats[y]), float(lons[x])
+    rows = np.flatnonzero(np.abs(s_lat - lat) < 0.125 - 1e-12)
+    dl = (s_lon - lon + 180.0) % 360.0 - 180.0
+    cols = np.flatnonzero(np.abs(dl) < 0.125 - 1e-12)
+    return rows.tolist(), cols.tolist()
+
+
+# ----------------------------------------------------------------- 14 -----
+def test_14_oc_block_geometry_is_the_plan_s_own_definition():
+    """6 x 6 cells within +-0.125 deg, the poles truncated, the dateline wrapped.
+
+    E-077 §3 and §5. The block is EXACT rather than approximate because a
+    0.25-degree point sits on a cell boundary of the 1/24-degree grid: three
+    source cells each side, never a cell split between two points. Everything
+    downstream — the coverage denominator, the pole truncation, the wrap —
+    follows from that, so it is asserted against the geographic definition
+    before any array is touched.
+    """
+    s_lat, s_lon = oc_real_axes()
+    assert b7.oc_block_factors(s_lat, s_lon) == (6, 6)
+
+    # the interior: exactly 36 cells, and they are the ones within 0.125 deg
+    for y, x in [(360, 720), (123, 4), (500, 1000), (1, 7), (719, 3)]:
+        rows, cols = b7.oc_block_slices(y, x, 6, 6, OC_REAL_NLAT, OC_REAL_NLON)
+        g_rows, g_cols = oc_cells_by_geography(y, x, s_lat, s_lon)
+        assert sorted(rows) == g_rows, (y, x)
+        assert sorted(cols) == sorted(g_cols), (y, x)
+        assert len(rows) * len(cols) == 36
+
+    # THE DATELINE. x = 0 is lon -180: half the block is at +179.9, which is
+    # the same meridian. A block that did not wrap would be three cells wide
+    # and the whole column would read half its neighbours.
+    rows, cols = b7.oc_block_slices(300, 0, 6, 6, OC_REAL_NLAT, OC_REAL_NLON)
+    assert sorted(cols) == [0, 1, 2, 8637, 8638, 8639]
+    assert len(set(cols)) == 6
+
+    # THE POLES. The point at -90 (and +90) sits ON the edge of the raster, so
+    # three of its six rows are off it; the block is 3 x 6 = 18 cells.
+    cells = b7.oc_block_cells(6, 6, OC_REAL_NLAT)
+    assert cells.shape == (721,)
+    assert int(cells[0]) == int(cells[-1]) == 18
+    assert int(cells[1]) == int(cells[360]) == int(cells[-2]) == 36
+    for y in (0, 720):
+        rows, _ = b7.oc_block_slices(y, 700, 6, 6, OC_REAL_NLAT, OC_REAL_NLON)
+        assert len(rows) == 3, y
+        assert all(0 <= r < OC_REAL_NLAT for r in rows)
+        assert sorted(rows) == oc_cells_by_geography(y, 700, s_lat, s_lon)[0]
+
+    # A source whose spacing does not divide 0.25 is REFUSED, not rounded.
+    bad_lat = 90.0 - (180.0 / 4000) * (np.arange(4000) + 0.5)
+    with pytest.raises(SystemExit) as e:
+        b7.oc_block_factors(bad_lat, s_lon)
+    assert "0.25" in str(e.value)
+
+
+# ----------------------------------------------------------------- 15 -----
+def test_15_oc_block_mean_exact_values_on_the_real_grid():
+    """E-077 §5's three exact cases, on the REAL 4320 x 8640 grid.
+
+    Not a decimated one: the numbers the plan states — `log_chl = 0.5`,
+    `chl_cov = 1.0`, and `1/180` for a single clear cell on a single day — are
+    numbers about 36 cells and 5 days, and asserting them anywhere else would
+    be asserting different numbers. One full-size float32 raster is ~150 MB and
+    the whole test runs in a few seconds.
+
+    The MEAN IS IN LOG SPACE, and the third block is the case that proves it:
+    a block holding 10**2 and 10**-2 mg/m3 reads 0.0, where an arithmetic mean
+    of the concentrations would read log10(50.005) = 1.699.
+    """
+    s_lat, s_lon = oc_real_axes()
+    blk = (6, 6)
+    cells = b7.oc_block_cells(*blk, OC_REAL_NLAT)
+    P_UNIF, P_ONE, P_NONE, P_MIX = (400, 900), (401, 901), (402, 902), (403, 903)
+
+    def day(k):
+        a = np.full((OC_REAL_NLAT, OC_REAL_NLON), np.float32(OC_FILL))
+        r, c = b7.oc_block_slices(*P_UNIF, *blk, OC_REAL_NLAT, OC_REAL_NLON)
+        a[np.ix_(r, c)] = np.float32(10.0 ** 0.5)
+        if k == 0:
+            r, c = b7.oc_block_slices(*P_ONE, *blk, OC_REAL_NLAT, OC_REAL_NLON)
+            a[r[0], c[0]] = np.float32(10.0 ** -0.7)
+            r, c = b7.oc_block_slices(*P_MIX, *blk, OC_REAL_NLAT, OC_REAL_NLON)
+            a[r[0], c[0]] = np.float32(100.0)
+            a[r[1], c[1]] = np.float32(0.01)
+        return a
+
+    # The pentad rule, stated here rather than borrowed: the mean of the DAILY
+    # block means over the days that had >= 1 finite cell, and the coverage is
+    # finite cell-days over (cells in the block x days in the bin).
+    acc = np.zeros((b7.NLAT, b7.NLON), np.float64)
+    nday = np.zeros((b7.NLAT, b7.NLON), np.int64)
+    ncell = np.zeros((b7.NLAT, b7.NLON), np.int64)
+    for k in range(b7.PENTAD_DAYS):
+        S, C = b7.oc_block_stats(day(k), *blk, fill=OC_FILL)
+        got = C > 0
+        with np.errstate(invalid="ignore"):
+            acc += np.where(got, S / np.maximum(C, 1), 0.0)
+        nday += got
+        ncell += C
+    with np.errstate(invalid="ignore"):
+        log_chl = np.where(nday > 0, acc / np.maximum(nday, 1), np.nan)
+        chl_cov = np.where(nday > 0,
+                           ncell / (cells[:, None] * b7.PENTAD_DAYS), np.nan)
+
+    # (a) 36 cells at 10**0.5 on all five days
+    assert log_chl[P_UNIF] == pytest.approx(0.5, abs=1e-6)
+    assert chl_cov[P_UNIF] == pytest.approx(1.0, abs=1e-12)
+    assert int(ncell[P_UNIF]) == 36 * b7.PENTAD_DAYS
+
+    # (b) ONE finite cell on ONE day -> that cell's log10, coverage 1/180
+    assert log_chl[P_ONE] == pytest.approx(-0.7, abs=1e-6)
+    assert chl_cov[P_ONE] == pytest.approx(1.0 / 180.0, rel=1e-12)
+    assert int(cells[P_ONE[0]]) * b7.PENTAD_DAYS == 180
+
+    # (c) an all-fill block is NaN in BOTH channels — never 0
+    assert not np.isfinite(log_chl[P_NONE])
+    assert not np.isfinite(chl_cov[P_NONE])
+
+    # (d) the mean really is taken in LOG space
+    assert log_chl[P_MIX] == pytest.approx(0.0, abs=1e-5), \
+        "the block mean was taken on the concentration, not on log10"
+    assert np.log10(np.mean([100.0, 0.01])) == pytest.approx(1.699, abs=1e-3)
+    assert chl_cov[P_MIX] == pytest.approx(2.0 / 180.0, rel=1e-12)
+
+
+# ----------------------------------------------------------------- 16 -----
+def test_16_oc_pole_truncation_and_longitude_wrap_are_averaged(build):
+    """A pole block averages what EXISTS; a dateline block averages both sides.
+
+    The pole case is the one that can be wrong in two directions at once: the
+    mean can be taken over six rows of which three are padding (dragging the
+    value toward zero) or the coverage denominator can stay at 36 (halving the
+    reported coverage of a fully observed block). Both are asserted, on the
+    real grid, with values chosen so either mistake changes the answer.
+    """
+    blk = (6, 6)
+    cells = b7.oc_block_cells(*blk, OC_REAL_NLAT)
+    a = np.full((OC_REAL_NLAT, OC_REAL_NLON), np.float32(OC_FILL))
+    for y in (0, 720):
+        r, c = b7.oc_block_slices(y, 700, *blk, OC_REAL_NLAT, OC_REAL_NLON)
+        a[np.ix_(r, c)] = np.float32(10.0 ** 1.25)
+    # the wrap block: its WEST half (beyond the dateline) and EAST half differ
+    rw, cw = b7.oc_block_slices(300, 0, *blk, OC_REAL_NLAT, OC_REAL_NLON)
+    for col in cw:
+        a[np.ix_(rw, [col])] = np.float32(10.0 ** (-1.0 if col > 4320 else 1.0))
+    S, C = b7.oc_block_stats(a, *blk, fill=OC_FILL)
+
+    for y in (0, 720):
+        assert int(C[y, 700]) == 18 == int(cells[y]), \
+            "a pole block did not truncate to the rows that exist"
+        assert S[y, 700] / C[y, 700] == pytest.approx(1.25, abs=1e-5), \
+            "a pole block's mean was dragged by rows that are not there"
+        assert C[y, 700] / (cells[y] * 1) == pytest.approx(1.0), \
+            "a fully observed pole block does not report full coverage"
+    assert int(C[300, 0]) == 36, "the dateline block lost half its cells"
+    assert S[300, 0] / C[300, 0] == pytest.approx(0.0, abs=1e-5), \
+        "the block at lon -180 is not the mean of both sides of the dateline"
+
+    # ...and the built tensor agrees: its pole rows carry colour.
+    d = build["d"]
+    chl = np.asarray(d["X_oc025"][..., b7.C_LOG_CHL], np.float32)
+    assert np.isfinite(chl[:, 0, :]).any(), "the South Pole row is empty"
+    assert np.isfinite(chl[:, -1, :]).any(), "the North Pole row is empty"
+    assert np.isfinite(chl[:, :, 0]).any(), "the dateline column is empty"
+
+
+# ----------------------------------------------------------------- 17 -----
+def test_17_oc_nan_and_coverage_invariants(build):
+    """E-077 §7.3, on the published bytes: the pair is readable or absent.
+
+    `chl_cov` is NaN EXACTLY where `log_chl` is. Storing 0 for "saw nothing"
+    would collide with the family-7 missing-token design (handover §5, the
+    `sea_ice` case): the consumer's whole distinction between 0 and NaN is
+    "measured as none" against "not measured".
+    """
+    d = build["d"]
+    chl = unz(d, "oc025", b7.C_LOG_CHL)
+    cov = unz(d, "oc025", b7.C_CHL_COV)
+    assert np.asarray(d["X_oc025"]).dtype == np.float16
+    assert np.asarray(d["X_oc025"]).shape[1:] == (721, 1440, 2)
+    assert list(d["chan_oc025"]) == ["log_chl", "chl_cov"]
+
+    fin_c, fin_v = np.isfinite(chl), np.isfinite(cov)
+    assert fin_c.any() and (~fin_c).any(), \
+        "the fixture must exercise both observed and unobserved colour"
+    assert np.array_equal(fin_c, fin_v), \
+        "log_chl and chl_cov do not go missing together"
+
+    v = cov[fin_v]
+    # the float16 round trip can move 1.0 by ~1 part in 2000; (0, 1] is the rule
+    tol = 3e-3 * float(np.asarray(d["norm_oc025"])[b7.C_CHL_COV][1]) + 1e-4
+    assert float(v.min()) > 0.0, "a finite chl_cov of 0 means 'observed nothing'"
+    assert float(v.max()) <= 1.0 + tol, f"chl_cov exceeds 1: {v.max()}"
+    assert not (np.isfinite(cov) & (cov == 0.0)).any()
+
+    # the coverage is a quantised fraction of (cells x 5 days), so its finest
+    # step on this fixture is 1/(cells*5) — a value below that is impossible
+    cells = b7.oc_block_cells(*b7._smoke_blk(), b7.SMOKE_OC_NLAT)
+    finest = 1.0 / (int(cells.max()) * b7.PENTAD_DAYS)
+    assert float(v.min()) >= finest - tol, \
+        f"a coverage of {v.min()} is finer than one cell-day ({finest})"
+
+    # `n_oc_inland` is a MEASUREMENT, not a mask: it exists and is a count.
+    assert int(np.asarray(d["n_oc_inland"])) >= 0
+    assert int(np.asarray(d["n_occci_days"])) > 0
+    assert int(np.asarray(d["n_occci_absent"])) >= 0
+
+
+# ----------------------------------------------------------------- 18 -----
+def test_18_the_offset_axis_and_its_consumers(build):
+    """E-077 §4 layout 1: row = bin - oc_bin_first, and who has to know.
+
+    Layout 1 was chosen over the full 3142-row axis because the consumers
+    ALREADY carried a per-group row lookup — `ml/cone_sampler.py` translates
+    any group whose row count differs from the master's through its own bin
+    index, and the app's `tensorRowOf` needed one line. This asserts both the
+    arithmetic and that the cone sampler really does read it, because "the
+    consumer supports it" is the claim the whole layout choice rests on.
+    """
+    d = build["d"]
+    first = int(np.asarray(d["oc_bin_first"]))
+    bins = [int(b) for b in np.asarray(d["bin_index"])]
+    T_oc = int(np.asarray(d["X_oc025"]).shape[0])
+
+    # COMPUTED from the date, never typed (§7.2)
+    y, m, dd = (int(v) for v in build["oc_start"].split("-"))
+    assert first == ac.bin_index(dt.date(y, m, dd), 5)
+    assert first > bins[0], "the fixture must exercise a NON-zero offset"
+    assert first + T_oc - 1 == bins[-1]
+    assert np.array_equal(np.asarray(d["oc025_bin_index"]),
+                          np.arange(first, first + T_oc))
+
+    # and on the real axis the plan's own number falls out of the same call
+    assert ac.bin_index(dt.date(1997, 9, 4), 5) == 1145
+    assert ac.bin_index(dt.date(2024, 12, 31), 5) + 1 - 1145 == 1997
+
+    # the cone sampler reads the group with no new mechanism
+    from cone_sampler import GroupSet
+    gs = GroupSet.from_tensor(d)
+    assert gs.names == ["g025", "g100", "rg100", "oc025"]
+    oc = gs.groups[-1]
+    assert oc.factor == 1, "oc025 is 0.25 deg — the master's own resolution"
+    assert oc.row_of_bin is not None, \
+        "the cone sampler treats oc025 as bin-aligned; it is offset"
+    for r, b in enumerate(range(first, first + T_oc)):
+        assert int(oc.row_of_bin[bins.index(b)]) == r
+    for b in bins:
+        if b < first:
+            assert int(oc.row_of_bin[bins.index(b)]) == -1, \
+                "a bin before the colour record maps to a row instead of a miss"
+    import cone_sampler as cs
+    assert cs.GROUP_FOOTPRINT["oc025"] == (0.0, 0.0)
+
+
+# ----------------------------------------------------------------- 19 -----
+def test_19_seed_from_is_byte_identical_and_leaves_the_seed_alone(build):
+    """E-077 §5: the three inherited groups are the SAME INODE and unchanged.
+
+    "It hard-linked" is an intention. `samefile` plus a sha256 comparison plus
+    the seed directory's own mtimes are the facts, and the last one is the
+    important one: a build that wrote through its own hard link would have
+    corrupted the published f7l0 tensor, whose hashes the Hub, the handover and
+    another agent's hand-off all cite.
+    """
+    work, seed = build["work"], build["seed"]
+    assert os.path.isdir(seed)
+    rec = json.load(open(os.path.join(work, "seed.json")))
+    assert rec["base_recipe"] == b7.BASE_RECIPE == "f7l0"
+    assert rec["base_stem"] == b7.BASE_STEM
+    assert {r["group"] for r in rec["linked"]} == set(b7.BASE_GROUPS)
+
+    for g in b7.BASE_GROUPS:
+        old = os.path.join(seed, f"{b7.BASE_STEM}_X_{g}.npy")
+        new = b7.group_file(work, g)
+        assert os.path.exists(old) and os.path.exists(new)
+        assert os.path.samefile(old, new), f"{g} is a copy, not a hard link"
+        assert b7.sha256(old) == b7.sha256(new)
+        assert os.stat(new).st_nlink >= 2
+        m = np.lib.format.open_memmap(new, mode="r")
+        assert m.dtype == np.float16
+        assert os.path.getsize(new) == 128 + int(np.prod(m.shape)) * 2
+        del m
+    # the colour group is NOT inherited — it is this build's own file
+    assert not os.path.exists(os.path.join(seed,
+                                           f"{b7.BASE_STEM}_X_oc025.npy"))
+    assert os.stat(b7.group_file(work, "oc025")).st_nlink == 1
+
+    # the seed still looks like a finished f7l0 build: markers, specs, norms
+    for name in b7.INHERITED_STAGES:
+        assert b7.marked(seed, name), name
+        assert b7.marked(work, name), f"{name} was not inherited"
+    assert os.path.exists(os.path.join(work, "norm.npz"))
+    assert os.path.exists(os.path.join(work, "rg", "live.npz"))
+
+
+def test_19b_seed_from_refuses_rather_than_rebuilding(tmp_path):
+    """A missing or unfinished seed is an ERROR, never a silent full rebuild.
+
+    ml/CLAUDE.md §0.2: a step that reports success is not evidence it did
+    anything. A `--seed-from` that shrugged at an absent directory would spend
+    five hours rebuilding 53 GB and look exactly like a successful inherit.
+    """
+    import argparse
+    ctx = b7.Ctx(argparse.Namespace(
+        work=str(tmp_path / "w"), source_dir="", start=b7.SMOKE_START,
+        end=b7.SMOKE_END, force=False, stage="all", smoke=True))
+    with pytest.raises(SystemExit) as e:
+        b7.seed_from(ctx, str(tmp_path / "nope"))
+    assert "no such directory" in str(e.value)
+
+    half = tmp_path / "half"
+    half.mkdir()
+    b7.mark(str(half), "glorys")
+    with pytest.raises(SystemExit) as e:
+        b7.seed_from(ctx, str(half))
+    assert b7.BASE_STEM in str(e.value) and "FINISHED" in str(e.value)
+
+    # a truncated group file is caught on the BYTES, not on the link call
+    trunc = tmp_path / "trunc"
+    trunc.mkdir()
+    for g in b7.BASE_GROUPS:
+        p = str(trunc / f"{b7.BASE_STEM}_X_{g}.npy")
+        np.lib.format.open_memmap(p, mode="w+", dtype=np.float16,
+                                  shape=(2, 3, 4, b7.NCHAN[g]))
+    with open(str(trunc / f"{b7.BASE_STEM}_X_g100.npy"), "r+b") as fh:
+        fh.truncate(os.path.getsize(fh.name) - 64)
+    ctx2 = b7.Ctx(argparse.Namespace(
+        work=str(tmp_path / "w2"), source_dir="", start=b7.SMOKE_START,
+        end=b7.SMOKE_END, force=False, stage="all", smoke=True))
+    with pytest.raises(SystemExit) as e:
+        b7.seed_from(ctx2, str(trunc))
+    assert "bytes" in str(e.value)
+
+
+# ----------------------------------------------------------------- 20 -----
+def test_20_norm_is_group_idempotent(build, tmp_path):
+    """E-077 §5: `norm` answers per GROUP, and never re-z-scores one.
+
+    The seeded directory arrives with a truthful `norm.done` covering three
+    groups and a fourth that has never been normalised. A stage marker cannot
+    express that, so `norm_pending` asks the question the marker cannot — and
+    the thing it must never do is return a group that is already z-scored,
+    because g025's pass is in place and redoing it would square the transform
+    with nothing downstream to say so.
+    """
+    import argparse
+    work = build["work"]
+    ctx = b7.Ctx(argparse.Namespace(
+        work=work, source_dir=build["src"], start=build["start"],
+        end=build["end"], force=False, stage="norm", smoke=True,
+        oc_start=build["oc_start"]))
+    assert b7.marked(work, "norm")
+    assert b7.norm_pending(ctx) == [], \
+        "a finished build still reports normalisation work"
+    for g in b7.GROUPS:
+        stats, final, mk = b7.norm_state(ctx, g)
+        assert stats and final and mk, g
+
+    # re-running the whole stage is a no-op on the BYTES, not just on the log
+    before = {g: b7.sha256(b7.group_file(work, g)) for g in b7.GROUPS}
+    b7.run_stages(ctx, ["norm"])
+    after = {g: b7.sha256(b7.group_file(work, g)) for g in b7.GROUPS}
+    assert before == after, "re-entering norm re-scaled an already-scaled group"
+
+    # ...and a work dir where only oc025 is missing asks for oc025 ALONE
+    half = str(tmp_path / "half")
+    os.makedirs(half)
+    shutil.copy(os.path.join(work, "norm.npz"), os.path.join(half, "norm.npz"))
+    os.makedirs(os.path.join(half, "rg"))
+    shutil.copy(os.path.join(work, "rg", "live.npz"),
+                os.path.join(half, "rg", "live.npz"))
+    d = np.load(os.path.join(half, "norm.npz"))
+    keep = {k: d[k] for k in d.files if not k.endswith("oc025")}
+    b7.atomic_npz(os.path.join(half, "norm.npz"), **keep)
+    for g in b7.BASE_GROUPS:
+        os.link(b7.group_file(work, g), b7.group_file(half, g))
+        b7.mark(half, f"norm/{g}")
+    b7.mark(half, "norm")
+    ctx2 = b7.Ctx(argparse.Namespace(
+        work=half, source_dir=build["src"], start=build["start"],
+        end=build["end"], force=False, stage="norm", smoke=True,
+        oc_start=build["oc_start"]))
+    assert b7.norm_pending(ctx2) == ["oc025"]
+
+    # a group whose f16 vanished and has no float32 source REFUSES rather than
+    # normalising unknown bytes
+    os.remove(b7.group_file(half, "g025"))
+    with pytest.raises(SystemExit) as e:
+        b7.norm_pending(ctx2)
+    assert "IN PLACE" in str(e.value)
+
+
+# ----------------------------------------------------------------- 21 -----
+def test_21_inherited_spec_digests_are_unchanged_by_the_f7l1_builder(build):
+    """E-077 §5: the six inherited stages still hash as they did under f7l0.
+
+    THE FAILURE THIS CATCHES. `stage_state_check` discards a stage's markers,
+    carries and fill file when its recorded `.spec` no longer matches — which
+    is exactly right when a recipe moves and exactly catastrophic when a work
+    dir has just inherited 53 GB of correct bytes. If `RECIPE` leaked into the
+    inherited digests, or if adding `oc025` to `ctx.shapes()` leaked into one
+    of their `shapes` blocks, every seeded build would rebuild from 1982 and
+    report it as a routine staleness warning.
+
+    The expected body is RESTATED here from the f7l0 builder's own formula
+    rather than read back from the implementation, so the two have to agree.
+    """
+    import argparse
+    ctx = b7.Ctx(argparse.Namespace(
+        work=build["work"], source_dir=build["src"], start=build["start"],
+        end=build["end"], force=False, stage="all", smoke=True,
+        oc_start=build["oc_start"]))
+    live = np.load(os.path.join(build["work"], "rg", "live.npz"))
+    n_live = len(live["bin_index"])
+
+    def f7l0_digest(stage):
+        owns = {"ncep": "g100", "rg": "rg100"}          # f7l0's STAGE_OWNS
+        shapes = {"g025": (ctx.T, 721, 1440, 7),
+                  "g100": (ctx.T, 181, 360, 15),
+                  "rg100": (n_live, 181, 360, 32)}      # f7l0's ctx.shapes()
+        body = {
+            "stage": stage, "version": b7.SPEC_VERSION[stage],
+            "recipe": "f7l0",
+            "channels": b7.STAGE_CHANNELS.get(stage, []),
+            "min_days": b7.MIN_DAYS, "pentad_days": b7.PENTAD_DAYS,
+            "epoch": str(ac.EPOCH), "bins": [ctx.b_lo, ctx.b_hi],
+            "shapes": {k: list(v) for k, v in shapes.items()
+                       if k in (owns.get(stage),
+                                "g025" if stage in ("glorys", "sst") else "")},
+        }
+        if stage == "ncep":
+            body["files"] = b7.NCEP_FILES
+            body["flip"] = list(b7.NCEP_FLIP)
+            body["sigma"] = list(b7.NCEP_SIGMA)
+        if stage == "rg":
+            body["levels"] = list(b7.LEVELS)
+            body["band"] = [b7.RG_LAT_LO, b7.RG_LAT_HI]
+        import hashlib
+        return hashlib.sha256(
+            json.dumps(body, sort_keys=True).encode()).hexdigest()
+
+    for stage in b7.INHERITED_STAGES:
+        got, body = b7.stage_spec(ctx, stage, n_live)
+        assert body["recipe"] == "f7l0", stage
+        assert "oc025" not in body["shapes"], \
+            f"{stage}'s digest now depends on the colour group's shape"
+        assert got == f7l0_digest(stage), \
+            f"{stage}'s spec digest moved — a seeded build would rebuild it"
+        # ...and the .spec file inherited from the seed says f7l0 too, and
+        # carries no colour shape. (`rg`'s recorded shapes block can be EMPTY:
+        # a fresh build writes rg's spec before `rg/live.npz` exists, so
+        # `n_live` is not yet knowable. `stage_state_check` upgrades that in
+        # place rather than calling it staleness — asserted below.)
+        rec = b7.read_json(os.path.join(build["work"], f"{stage}.spec"), {})
+        assert rec["spec"]["recipe"] == "f7l0", stage
+        assert "oc025" not in rec["spec"]["shapes"], stage
+        assert rec.get("sha256") in (got, None) or rec["spec"]["shapes"] == {}, \
+            stage
+
+    # the four stages that DID change answer f7l1, or nothing would ever rebuild
+    for stage in ("occci", "norm", "meta", "publish"):
+        _, body = b7.stage_spec(ctx, stage, n_live)
+        assert body["recipe"] == "f7l1", stage
+    assert b7.stage_recipe("sst") == "f7l0"
+    assert b7.stage_recipe("occci") == "f7l1"
+
+    # and a seeded work dir is NOT declared stale: no marker was discarded
+    for stage in b7.INHERITED_STAGES:
+        stamp = open(b7.marker(build["work"], stage)).read()
+        assert b7.stage_state_check(ctx, stage, n_live) is False, stage
+        assert open(b7.marker(build["work"], stage)).read() == stamp, stage
+
+
+# ----------------------------------------------------------------- 22 -----
+def test_22_occci_indexes_the_listing_and_never_invents_a_day(tmp_path):
+    """The stage LISTS, parses dates out of the names, and counts the holes.
+
+    Root CLAUDE.md: never guess what an archive serves, ask it. A day that is
+    genuinely absent from the listing is a COUNT (`n_occci_absent`); a day the
+    listing has and the stage cannot read is a build that stops, naming the
+    host and the file. The two must not be confused — a silent skip writes
+    "cloudy" where "we gave up" belongs.
+    """
+    import argparse
+    src = str(tmp_path / "src")
+    work = str(tmp_path / "work")
+    d_lo, d_hi = dt.date(2010, 1, 14), dt.date(2010, 1, 23)
+    days = [d_lo + dt.timedelta(days=k) for k in range((d_hi - d_lo).days + 1)]
+    keep = [d for d in days if d != dt.date(2010, 1, 16)]    # one real hole
+    b7.make_smoke_oc_sources(src, keep, d_lo)
+
+    ctx = b7.Ctx(argparse.Namespace(
+        work=work, source_dir=src, start=str(d_lo), end=str(d_hi),
+        force=False, stage="occci", smoke=True, oc_start=str(d_lo)))
+    b7.stage_occci(ctx)
+
+    idx = b7.read_json(os.path.join(work, "occci", "index.json"))
+    assert set(idx["2010"]["files"]) == {str(d) for d in keep}
+    assert b7.read_json(os.path.join(work, "counts.json"))["n_occci_days"] == \
+        len(keep)
+    assert b7.read_json(os.path.join(work, "occci", "absent.json"))["2010"] == 1
+    assert b7.marked(work, "occci") and b7.marked(work, "occci/2010")
+
+    # the file-name date parse is the archive's, not a template we assumed
+    assert b7.oc_date_of_name(
+        "ESACCI-OC-L3S-CHLOR_A-MERGED-1D_DAILY_4km_GEO_PML_OCx-"
+        "20150701-fv6.0.nc") == dt.date(2015, 7, 1)
+    assert b7.oc_date_of_name("no-date-here.nc") is None
+    # ...and a THREDDS catalogue is parsed for the server's own urlPath
+    cat = b'''<?xml version="1.0"?>
+    <catalog xmlns="http://www.unidata.ucar.edu/namespaces/thredds/InvCatalog/v1.0">
+      <dataset name="x-20150701-fv6.0.nc" urlPath="cci/a/x-20150701-fv6.0.nc"/>
+      <dataset name="notes.txt" urlPath="cci/a/notes.txt"/>
+    </catalog>'''
+    got = b7.parse_thredds_catalog(cat, "https://h/thredds/fileServer/")
+    assert got == {"x-20150701-fv6.0.nc":
+                   "https://h/thredds/fileServer/cci/a/x-20150701-fv6.0.nc"}
+    assert list(b7.parse_json_listing(
+        b'[{"name": "a-20150701-fv6.0.nc"}, {"name": "b.txt"}]')) == \
+        ["a-20150701-fv6.0.nc"]
+    assert list(b7.parse_html_listing(
+        b'<a href="a-20150701-fv6.0.nc">a</a><a href="b.txt">b</a>')) == \
+        ["a-20150701-fv6.0.nc"]
+
+    # a LISTED file that cannot be read stops the build, naming it
+    bad = os.path.join(src, "occci", sorted(
+        os.listdir(os.path.join(src, "occci")))[0])
+    with open(bad, "wb") as fh:
+        fh.write(b"not a netcdf")
+    work2 = str(tmp_path / "work2")
+    ctx2 = b7.Ctx(argparse.Namespace(
+        work=work2, source_dir=src, start=str(d_lo), end=str(d_hi),
+        force=False, stage="occci", smoke=True, oc_start=str(d_lo)))
+    with pytest.raises(SystemExit) as e:
+        b7.stage_occci(ctx2)
+    assert "refuses to record a listed day as cloud" in str(e.value)
+
+
+# ----------------------------------------------------------------- 23 -----
+def test_23_occci_resumes_across_a_year_boundary(tmp_path):
+    """A killed colour stage resumes with the PARTIAL pentad it had.
+
+    The statement test 11 makes for GLORYS, for the stage that streams ten
+    thousand files. A pentad straddles 31 December, so the accumulator for the
+    bin holding 2010-12-30 is only completed by 2011's first files; `Carry`
+    writes it BEFORE the year's marker (ml/CLAUDE.md §5.21, a marker may only
+    under-claim), and the only assertion that catches a lost carry is that the
+    resumed build is BIT-IDENTICAL to the one-pass build.
+
+    The crash is staged INSIDE 2011, after 2010 was committed and marked, which
+    is the case the keyed carry exists for: the resume must reload 2010's
+    partial accumulator and replay 2011 from its first file.
+    """
+    import argparse
+    src = str(tmp_path / "src")
+    d_lo, d_hi = dt.date(2010, 12, 27), dt.date(2011, 1, 6)
+    days = [d_lo + dt.timedelta(days=k) for k in range((d_hi - d_lo).days + 1)]
+    b7.make_smoke_oc_sources(src, days, d_lo)
+    assert len({d.year for d in days}) == 2, "the fixture must span a year end"
+
+    def ctx_for(work):
+        return b7.Ctx(argparse.Namespace(
+            work=work, source_dir=src, start=str(d_lo), end=str(d_hi),
+            force=False, stage="occci", smoke=True, oc_start=str(d_lo)))
+
+    one = str(tmp_path / "one")
+    b7.stage_occci(ctx_for(one))
+    whole = np.asarray(np.load(b7.raw_file(one, "oc025"), mmap_mode="r"))
+    assert np.isfinite(whole).any()
+
+    # ---- the same build, killed on 2011-01-03 -----------------------------
+    two = str(tmp_path / "two")
+    real_open = b7.oc_open
+
+    def killed(path):
+        if "20110103" in os.path.basename(path):
+            raise SystemExit("box destroyed part way through 2011")
+        return real_open(path)
+
+    b7.oc_open = killed
+    try:
+        with pytest.raises(SystemExit):
+            b7.stage_occci(ctx_for(two))
+    finally:
+        b7.oc_open = real_open
+
+    assert b7.marked(two, "occci/2010"), "2010 finished and was not marked"
+    assert not b7.marked(two, "occci/2011")
+    assert os.path.exists(os.path.join(two, "occci", "carry_2010.npz")), \
+        "the year-boundary accumulator was not carried"
+    carried = np.load(os.path.join(two, "occci", "carry_2010.npz"))
+    assert any(k.startswith("acc_") for k in carried.files), \
+        "the carry holds no open bin — the straddling pentad was lost"
+    part = np.asarray(np.load(b7.raw_file(two, "oc025"), mmap_mode="r"))
+    assert not np.array_equal(part, whole, equal_nan=True), \
+        "the killed build already equals the whole one — nothing was pending"
+
+    # ---- resume: 2010 is skipped, 2011 replays from its first file --------
+    b7.stage_occci(ctx_for(two))
+    resumed = np.asarray(np.load(b7.raw_file(two, "oc025"), mmap_mode="r"))
+    assert np.array_equal(whole, resumed, equal_nan=True), \
+        "the resumed colour build differs from the one-pass build"
+    assert b7.read_json(os.path.join(two, "counts.json"))["n_occci_days"] == \
+        b7.read_json(os.path.join(one, "counts.json"))["n_occci_days"]
+
+
+# ----------------------------------------------------------------- 24 -----
+def test_24_an_inherited_group_cannot_be_written_through_the_hard_link(
+        build, tmp_path):
+    """The seed's bytes survive everything this build does. E-077 §5.
+
+    A hard link is ONE INODE UNDER TWO NAMES. `--seed-from` buys 53 GB for
+    free that way, and it is also the single mechanism by which this build
+    could destroy the published f7l0 tensor: one write through the f7l1 name
+    lands in the f7l0 file, whose sha256 the Hub, the handover and another
+    agent's hand-off all quote, and nothing would say so until somebody
+    re-verified a hash. So it is made IMPOSSIBLE rather than merely
+    unintended, and this asserts all three layers of that.
+    """
+    import argparse
+    work, seed = build["work"], build["seed"]
+
+    # (a) the build KNOWS which groups are shared, and refuses by name
+    assert b7.seeded_groups(work) == set(b7.BASE_GROUPS)
+    assert b7.seeded_groups(str(tmp_path)) == set(), \
+        "a work dir with no seed must report no shared groups"
+    for g in b7.BASE_GROUPS:
+        with pytest.raises(SystemExit) as e:
+            b7.refuse_if_seeded(work, g, "fill")
+        assert "HARD LINK" in str(e.value) and seed in str(e.value)
+        # the two doors every writable open of a group goes through
+        with pytest.raises(SystemExit):
+            b7.open_fill(work, g, (1, 1, 1, 1), create=True)
+        with pytest.raises(SystemExit):
+            b7.open_final(work, g, (1, 1, 1, 1), create=True)
+    # ...and the colour group, which this build OWNS, is not refused
+    b7.refuse_if_seeded(work, "oc025", "fill")
+
+    # (b) the inode is read-only, under BOTH names
+    for g in b7.BASE_GROUPS:
+        new = b7.group_file(work, g)
+        old = os.path.join(seed, f"{b7.BASE_STEM}_X_{g}.npy")
+        assert os.path.samefile(old, new)
+        for p in (old, new):
+            assert os.stat(p).st_mode & 0o222 == 0, \
+                f"{p} is still writable — chmod did not reach the inode"
+    if os.geteuid() != 0:
+        # ROOT IGNORES THE MODE BITS (measured), and the builder runs as root
+        # on the Vast boxes — which is exactly why (a) exists and is the load
+        # bearing layer. Where the mode bits DO bind, assert that they bind.
+        with pytest.raises(PermissionError):
+            np.lib.format.open_memmap(b7.group_file(work, "g025"), mode="r+")
+
+    # (c) the stages that run on a seeded dir leave the SEED byte-identical
+    before = {g: b7.sha256(os.path.join(seed, f"{b7.BASE_STEM}_X_{g}.npy"))
+              for g in b7.BASE_GROUPS}
+    stat0 = {g: os.stat(os.path.join(seed, f"{b7.BASE_STEM}_X_{g}.npy")).st_mtime
+             for g in b7.BASE_GROUPS}
+    ctx = b7.Ctx(argparse.Namespace(
+        work=work, source_dir=build["src"], start=build["start"],
+        end=build["end"], force=False, stage="all", smoke=True,
+        oc_start=build["oc_start"]))
+    b7.run_stages(ctx, ["norm"])
+    b7.stage_meta(ctx)
+    # the publish's own local half: hash every file, and compare the three
+    # inherited ones against `f7l0`'s manifest exactly as `stage_publish`
+    # does once the Hub has answered. Nothing here may touch the bytes.
+    base_manifest = {"files": [
+        {"name": f"{b7.BASE_STEM}_X_{g}.npy", "sha256": before[g]}
+        for g in b7.BASE_GROUPS]}
+    base = {}
+    for rec in base_manifest["files"]:
+        for g in b7.BASE_GROUPS:
+            if rec["name"] == f"{b7.BASE_STEM}_X_{g}.npy":
+                base[g] = rec["sha256"]
+    for g in b7.BASE_GROUPS:
+        assert b7.sha256(b7.group_file(work, g)) == base[g], \
+            f"{g} no longer matches {b7.BASE_RECIPE}'s manifest — the " \
+            f"publish would (correctly) refuse"
+    after = {g: b7.sha256(os.path.join(seed, f"{b7.BASE_STEM}_X_{g}.npy"))
+             for g in b7.BASE_GROUPS}
+    assert after == before, "a stage wrote through the shared inode"
+    for g in b7.BASE_GROUPS:
+        assert os.stat(os.path.join(
+            seed, f"{b7.BASE_STEM}_X_{g}.npy")).st_mtime == stat0[g]
+
+    # (d) A STALE INHERITED SPEC REFUSES; it does not discard and replay.
+    # Discarding markers is harmless — what follows is not: the stage would
+    # re-run and write its group, and that group's bytes are f7l0's.
+    w2 = str(tmp_path / "seeded")
+    ctx2 = b7.Ctx(argparse.Namespace(
+        work=w2, source_dir=build["src"], start=build["start"],
+        end=build["end"], force=False, stage="all", smoke=True,
+        oc_start=build["oc_start"]))
+    b7.seed_from(ctx2, seed)
+    n_live = len(np.load(os.path.join(w2, "rg", "live.npz"))["bin_index"])
+    for stage in ("sst", "ncep"):                  # shares g025 · owns g100
+        b7.atomic_json(os.path.join(w2, f"{stage}.spec"),
+                       {"sha256": "0" * 64, "at": b7.utcnow(),
+                        "spec": {"stage": stage, "recipe": "something-else"}})
+        stamp = open(b7.marker(w2, stage)).read()
+        sha = b7.sha256(b7.group_file(w2, "g025" if stage == "sst" else "g100"))
+        with pytest.raises(SystemExit) as e:
+            b7.stage_state_check(ctx2, stage, n_live)
+        assert "INHERITED as a hard link" in str(e.value), stage
+        assert "Nothing has been deleted" in str(e.value), stage
+        assert b7.marked(w2, stage), f"{stage}.done was deleted anyway"
+        assert open(b7.marker(w2, stage)).read() == stamp, stage
+        assert b7.sha256(
+            b7.group_file(w2, "g025" if stage == "sst" else "g100")) == sha
+    assert {g: b7.sha256(os.path.join(seed, f"{b7.BASE_STEM}_X_{g}.npy"))
+            for g in b7.BASE_GROUPS} == before

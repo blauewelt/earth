@@ -7,8 +7,12 @@ WHAT FAMILY 7 IS, in one sentence: the first input tensor covering the whole
 globe rather than the North Atlantic window — every 0.25° grid point from the
 South Pole to the North Pole, one value per channel per five-day bin from 1982
 to 2024 — built by `ml/build_family7.py` and published to
-`chfrank/earth-tensors` under `tensors/family7_global025_pentad_l0/`
-(recipe `f7l0`; see `ml/plans/E070_family7_build.md`).
+`chfrank/earth-tensors` under `tensors/family7_global025_pentad_l1/`
+(recipe `f7l1`; see `ml/plans/E070_family7_build.md` for the first three
+channel groups and `ml/plans/E077_family7_ocean_colour.md` for the fourth —
+`oc025`, ocean colour, whose time axis is OFFSET: its first row is the pentad
+holding the colour record's first day, 1997-09-04, and the index says so per
+group as `bin_first`. `--recipe f7l0` still writes the three-group index.
 
 The globe's "Global tensor (family 7)" layer paints ONE channel of ONE pentad
 by a single HTTP range read of the group's `.npy`. To compute that read it
@@ -71,10 +75,39 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 
 REPO_ID = "chfrank/earth-tensors"
-PREFIX = "tensors/family7_global025_pentad_l0"
-STEM = "family7_global025_pentad_l0"
-GROUPS = ("g025", "g100", "rg100")
 ORIGIN = "https://blauewelt.github.io"
+
+# TWO RECIPES, ONE SCRIPT. `f7l1` (E-077) is family 7 plus a fourth group of
+# ocean colour; `f7l0` is what the Hub has carried since 2026-09-04 and what
+# `docs/FAMILY7_DATA_HANDOVER.md` describes. Both stay addressable, because the
+# index is written AFTER a build lands and the l1 build may not have landed
+# yet — a script that could only describe the newer one would be unable to
+# regenerate the index the app is currently serving.
+RECIPES = {
+    "f7l1": dict(stem="family7_global025_pentad_l1",
+                 groups=("g025", "g100", "rg100", "oc025"),
+                 plan="ml/plans/E077_family7_ocean_colour.md"),
+    "f7l0": dict(stem="family7_global025_pentad_l0",
+                 groups=("g025", "g100", "rg100"),
+                 plan="ml/plans/E070_family7_build.md"),
+}
+RECIPE = "f7l1"
+STEM = RECIPES[RECIPE]["stem"]
+PREFIX = f"tensors/{STEM}"
+GROUPS = RECIPES[RECIPE]["groups"]
+PLAN = RECIPES[RECIPE]["plan"]
+
+
+def use_recipe(name):
+    """Point the module's globals at one recipe. Called once, from main()."""
+    global RECIPE, STEM, PREFIX, GROUPS, PLAN
+    if name not in RECIPES:
+        raise SystemExit(f"unknown recipe {name!r} — have {sorted(RECIPES)}")
+    RECIPE = name
+    STEM = RECIPES[name]["stem"]
+    PREFIX = f"tensors/{STEM}"
+    GROUPS = RECIPES[name]["groups"]
+    PLAN = RECIPES[name]["plan"]
 
 INDEX = os.path.join(ROOT, "data", "family7_index.json")
 SPHERE = os.path.join(ROOT, "data", "family7_sphere.json")
@@ -85,7 +118,7 @@ FIXTURE_DIR = os.path.join(ROOT, "data", "family7", "fixture")
 # (−90 … 90); 1440 cols step 20 → 72 at 5° (−180 … 175); 181/360 step 10 → 19
 # and 36 at 10°. All four land on whole degrees, so the fixture's grid is a
 # real point-aligned global grid and not a ragged crop.
-FIX_STRIDE = {"g025": 20, "g100": 10, "rg100": 10}
+FIX_STRIDE = {"g025": 20, "g100": 10, "rg100": 10, "oc025": 20}
 
 # ---------------------------------------------------------------- vocabulary
 # Plain-English label + unit for every channel, from E-070 §2. This lives HERE
@@ -129,6 +162,16 @@ CHANNELS = {
     # match on both sides.
     "skt":       ("Skin temperature (NCEP reanalysis, every surface)", "°C",
                   "seq", "sst"),
+    # oc025 — 0.25°, two channels (E-077 §3). THE UNIT IS THE LOGARITHM, and
+    # saying so is the whole point of publishing the vocabulary beside the
+    # bytes: a reader who prints "0.5 mg/m³" for a stored 0.5 is out by a
+    # factor of three. Chlorophyll spans four orders of magnitude, so the
+    # block mean is taken on log10 and the tensor stores log10 (E-072 §3).
+    "log_chl":   ("log10 chlorophyll-a (mg/m³)", "log₁₀ mg/m³", "seq",
+                  "precip"),
+    # ...and the second channel is what that average rests on: one clear pixel
+    # on one day, or thirty-six on five. NaN exactly where `log_chl` is NaN.
+    "chl_cov":   ("clear-sky coverage fraction", "0–1", "seq", "precip"),
 }
 
 SPHERE_CLASSES = [
@@ -146,6 +189,22 @@ def rg_channel(name):
     depth = name.split("_")[1][1:]
     ramp = "sst" if name.startswith("rg_t") else "precip"
     return (f"{kind} at {depth} dbar", unit, "seq", ramp)
+
+
+def group_bin_first(meta, g):
+    """The first BIN of a group's rows, or None when it shares the tensor's.
+
+    Read out of the npz (`oc_bin_first`), never derived from the shape: a group
+    whose row count happens to match some offset would silently get a made-up
+    origin, and a colour value dated fifteen years wrong looks entirely
+    plausible on a map.
+    """
+    if g != "oc025":
+        return None
+    if "oc_bin_first" not in getattr(meta, "files", ()):
+        raise SystemExit("the npz declares an `oc025` group but carries no "
+                         "`oc_bin_first` — its rows cannot be dated")
+    return int(meta["oc_bin_first"])
 
 
 def describe(name):
@@ -231,7 +290,15 @@ def norm_rows(arr):
 
 
 def group_block(name, url, nbytes, sha, header_len, shape, dtype, fortran,
-                chans, norm, grid, extra=None):
+                chans, norm, grid, extra=None, bin_first=None):
+    """One group's block. `bin_first` is E-077 §4 layout 1: a group whose rows
+    do not start at the tensor's first bin says where they DO start, and the
+    consumer computes `row = bin - (group.bin_first ?? index.bin_first)`. The
+    alternative — 1,145 rows of NaN in front of `oc025` — costs 4.7 GB to say
+    the same thing, and every consumer already carried a per-group row lookup
+    (`ml/cone_sampler.py`'s live-bins translation; `tensorRowOf` in
+    `src/app.js`), so the generalisation was a few lines rather than a new
+    mechanism."""
     if fortran:
         raise SystemExit(f"{name}: Fortran order — the slab arithmetic assumes "
                          f"C order (bin-major), and this file is not")
@@ -260,6 +327,8 @@ def group_block(name, url, nbytes, sha, header_len, shape, dtype, fortran,
         labels=labels, units=units, sign=signs, ramp=ramps,
         grid=grid,
     )
+    if bin_first is not None:
+        blk["bin_first"] = int(bin_first)
     if extra:
         blk.update(extra)
     return blk
@@ -327,8 +396,9 @@ def now_utc():
 
 
 RECIPE_NOTE = (
-    "python3 ml/build_family7.py --work <dir> --stage all   # the tensor "
-    "(ml/plans/E070_family7_build.md); then "
+    "python3 ml/build_family7.py --work <dir> --seed-from <f7l0 dir> "
+    "--stage all   # the tensor (ml/plans/E070_family7_build.md + "
+    "ml/plans/E077_family7_ocean_colour.md); then "
     "python3 ml/publish_family7_index.py                    # this index"
 )
 
@@ -357,7 +427,8 @@ def build_fixture(work):
             head = fh.read(256)
         header_len, shape, dtype, fortran = parse_npy_header(head)
         nbytes = os.path.getsize(out)
-        lat_key, lon_key = ("lats", "lons") if g == "g025" else ("lat1", "lon1")
+        lat_key, lon_key = (("lats", "lons") if g in ("g025", "oc025")
+                            else ("lat1", "lon1"))
         lats = meta[lat_key][::stride]
         lons = meta[lon_key][::stride]
         step = float(lats[1] - lats[0])
@@ -374,7 +445,7 @@ def build_fixture(work):
             nbytes, sha256_file(out), header_len, shape, dtype, fortran,
             [str(c) for c in meta[f"chan_{g}"]], meta[f"norm_{g}"],
             grid_block(len(lats), len(lons), lats[0], lons[0], step),
-            extra=extra)
+            extra=extra, bin_first=group_bin_first(meta, g))
 
     st = FIX_STRIDE["g025"]
     lats, lons = meta["lats"][::st], meta["lons"][::st]
@@ -413,6 +484,14 @@ def static_block(sphere_file, elev_file):
     }
 
 
+def _bin_date(meta, b):
+    """The calendar day pentad bin `b` opens on — from the npz's own epoch."""
+    ep = str(meta["epoch"]) if "epoch" in meta.files else "1982-01-01"
+    y, m, d = (int(v) for v in ep.split("-"))
+    n = int(meta["pentad_days"]) if "pentad_days" in meta.files else 5
+    return (_dt.date(y, m, d) + _dt.timedelta(days=n * int(b))).isoformat()
+
+
 def index_block(groups, statics, meta, bins, fixture, cors, verified):
     return dict(
         _source="ml/publish_family7_index.py — do not hand-edit",
@@ -432,13 +511,18 @@ def index_block(groups, statics, meta, bins, fixture, cors, verified):
         # the hover card has to say "Recorded" honestly for a layer whose
         # channels do not all start on the same day.
         recorded=dict(all="1982-01-01", ocean="1993-01-01",
+                      colour=(str(_bin_date(meta, groups["oc025"]["bin_first"]))
+                              if "oc025" in groups else None),
                       last=str(meta["months"][-1]) if "months" in meta.files else None),
         groups=groups,
         statics=statics,
         restore_verified=bool(verified),
         cors_measured=cors,
         recipe_cmd=RECIPE_NOTE,
-        plan="https://blauewelt.github.io/earth/docs.html?f=ml/plans/E070_family7_build.md",
+        plan=f"https://blauewelt.github.io/earth/docs.html?f={PLAN}",
+        plans=[f"https://blauewelt.github.io/earth/docs.html?f={p}"
+               for p in dict.fromkeys(
+                   ["ml/plans/E070_family7_build.md", PLAN])],
         sources=str(meta["sources"]) if "sources" in meta.files else None,
     )
 
@@ -489,14 +573,15 @@ def build_from_hub(trust_manifest, out_index, out_sphere, out_elev):
         if g == "rg100" and "rg_bin_index" in meta.files:
             extra = dict(live_only=True,
                          bin_index=[int(b) for b in meta["rg_bin_index"]])
-        lat_key, lon_key = ("lats", "lons") if g == "g025" else ("lat1", "lon1")
+        lat_key, lon_key = (("lats", "lons") if g in ("g025", "oc025")
+                            else ("lat1", "lon1"))
         lats, lons = meta[lat_key], meta[lon_key]
         groups[g] = group_block(
             name, url, rec["bytes"], rec["sha256"], header_len, shape, dtype,
             fortran, [str(c) for c in meta[f"chan_{g}"]], meta[f"norm_{g}"],
             grid_block(len(lats), len(lons), lats[0], lons[0],
                        float(lats[1] - lats[0])),
-            extra=extra)
+            extra=extra, bin_first=group_bin_first(meta, g))
 
     write_json(out_sphere, packed_class_grid(
         np.asarray(meta["sphere"]), meta["lats"], meta["lons"], 0.25,
@@ -531,10 +616,15 @@ def main(argv=None):
     ap.add_argument("--trust-manifest", action="store_true",
                     help="skip the re-download restore check (record it in the "
                          "index); only when the build job verified in-session")
+    ap.add_argument("--recipe", default=RECIPE, choices=sorted(RECIPES),
+                    help="which published tensor to describe. f7l1 is family 7 "
+                         "plus the ocean-colour group (E-077); f7l0 is the "
+                         "three-group tensor the handover describes.")
     ap.add_argument("--index", default=INDEX)
     ap.add_argument("--sphere", default=SPHERE)
     ap.add_argument("--elev", default=ELEV)
     a = ap.parse_args(argv)
+    use_recipe(a.recipe)
     if a.fixture:
         build_fixture(a.fixture)
         return 0

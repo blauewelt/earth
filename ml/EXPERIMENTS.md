@@ -44,6 +44,75 @@ low-pass).
 
 ---
 
+<a id="e-077"></a>
+## E-077 · Family 7.1 — ocean colour joins the global tensor as a fourth group (recipe `f7l1`) — DISPATCH STUB, not yet run
+
+**E-077 · Add the observed surface chlorophyll-a field to the family-7 global
+tensor as a fourth channel group, `oc025`, WITHOUT rebuilding the three groups
+that are already published (absolute description; the code landed 2026-09-11,
+the build has not been dispatched) · `params` n/a (nothing trains — this is a
+DATA build) · `stage` data-build · `data`
+`family7_global025_pentad_l1` · `arch` n/a · `steps×batch` n/a (no training
+step of any kind) · `resume` seed-from `f7l0`
+(`family7_global025_pentad_l0`, hard-linked, not recomputed)**
+
+WHAT IT IS, in one sentence that needs no other document: family 7 is the
+first input tensor covering the whole globe rather than the North Atlantic
+window — every 0.25° grid point from pole to pole, one value per channel per
+five-day bin from 1982 to 2024 — and family 7.1 is that same tensor plus the
+colour of the ocean surface, which is the only one of the six read-outs
+E-072 (the Earth foundation-model plan) promised that the tensor could not
+yet be scored on.
+
+THE SOURCE. ESA's Ocean Colour Climate Change Initiative v6.0, the merged
+SeaWiFS / MERIS / MODIS / VIIRS / OLCI daily chlorophyll-a record at 4 km,
+4 September 1997 → 31 December 2024. Roughly 10,000 daily files of ~40 MB,
+streamed one at a time and deleted as read.
+
+THE TWO CHANNELS (E-077 §3):
+
+| idx | name | unit after un-z-scoring | rule |
+|---|---|---|---|
+| 0 | `log_chl` | log10(mg m⁻³) | the 6 × 6 block of 4 km cells within ±0.125° of each 0.25° point; per DAY the mean of `log10(chlor_a)` over the block's finite cells; per PENTAD the mean of those daily means over the days that had ≥ 1 finite cell. Log space because chlorophyll is log-normal over four orders of magnitude — the arithmetic mean of a bloom pixel and thirty-five clear ones describes neither |
+| 1 | `chl_cov` | fraction in (0, 1] | finite 4 km cell-days in the block during the pentad ÷ (cells in the block × 5). What the value RESTS on: one clear pixel on one day (1/180) or thirty-six on five (1.0). NaN exactly where `log_chl` is NaN — a block that saw nothing has no coverage to report, and storing 0 there would collide with the tensor's "0 vs NaN" missing-token design |
+
+WHY IT IS A NEW RECIPE AND NOT AN EDIT. `f7l0`'s files, hashes and handover
+are cited by other agents; rewriting its `.npz` to say four groups would
+change a published dataset under its own name. So 7.1 is `f7l1`, stem
+`family7_global025_pentad_l1`, its own Hub folder — and its three inherited
+group files are HARD-LINKED from the f7l0 build (one inode, zero new bytes),
+with the publish step fetching f7l0's own manifest and refusing unless all
+three hash identically to it.
+
+THE ONE LAYOUT DECISION. Colour begins fifteen years into the tensor, so
+`oc025`'s time axis is OFFSET rather than padded: `T_oc` = 1997 rows, row =
+bin − `oc_bin_first`, `oc_bin_first` = 1145 = the bin holding 1997-09-04,
+computed from the epoch rather than typed. That saves 4.7 GB of NaN
+(8.3 GB stored instead of 12.9 GB), and it was affordable because every
+consumer already carried a per-group row lookup — `ml/cone_sampler.py`
+translates any group whose row count differs from the master's through its own
+bin index, and `src/app.js`'s `tensorRowOf` needed one line.
+
+WHAT WILL BE FILLED IN WHEN IT RUNS (E-077 §7.4): on pentad bin 2411
+(2015-01-03, the family-7 comparison bin) the global mean of the 0.25°
+`log_chl` field and the fraction of ocean cells observed — the number a reader
+compares against the PACE/MODIS chlorophyll layer on the globe by eye — plus
+the count of finite colour values on land cells that do not touch the sea
+(`n_oc_inland`, measured rather than masked, because the 4 km product resolves
+estuaries the 0.25° land mask calls land).
+
+Cost estimate at dispatch: ~400 GB streamed at the box's ~44 MB/s ≈ 2.5–3 h,
+plus norm (minutes) and publish + restore-verify (~1 h) on box
+`gpu-box-31299601` (Vast 49102182, Ontario, 300 GB, $0.33/h) — **≈ 4–5 h,
+≈ $1.5–2**.
+
+Spec: [E-077](https://blauewelt.github.io/earth/docs.html?f=ml/plans/E077_family7_ocean_colour.md).
+Code: `ml/build_family7.py` (stage `occci`), `tests/test_build_family7.py`,
+`.github/workflows/family7-build.yml` (input `seed_from`).
+Reader contract: `docs/FAMILY7_DATA_HANDOVER.md` §10.
+
+---
+
 <a id="e-076b"></a>
 ## E-076b · The optimal-interpolation ceiling: can ANY method get interior skill from five Argo profiles within 150 km? — RUN 2026-09-08 (CPU, $0): **YES, by 21 % at the matched search and 31 % with twenty neighbours; E-076a's null was about the model, not the data**
 

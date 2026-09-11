@@ -3538,15 +3538,34 @@ function tensorF16(h) {
 /* Which row of the memmap a pentad bin is. The real tensor starts at bin 0, so
  * this is the identity there; the in-repo fixture is five bins out of the
  * middle of the record, and reading it at row `bin` would be a 2,000-bin
- * overrun. Never assume the first row is bin zero. */
+ * overrun. Never assume the first row is bin zero.
+ *
+ * A GROUP MAY START LATER THAN THE TENSOR (E-077 §4, layout 1). `oc025` is
+ * ocean colour, and the satellite record begins on 1997-09-04 — bin 1145 —
+ * fifteen years after the tensor's first bin. Storing 1,145 rows of NaN in
+ * front of it would cost 4.7 GB to say "not launched yet", so the group
+ * carries its own `bin_first` and the row is measured from THAT. Everything
+ * else is unchanged: a bin before the group's first row returns null, which is
+ * the same answer the reader already gets for a bin off the end, and
+ * `tensorSlab` turns it into an empty layer rather than a bad range read. */
 function tensorRowOf(idx, group, bin) {
   const grp = idx.groups[group];
   if (grp.bin_index) {                       // rg100: live bins only, listed
     const i = grp.bin_index.indexOf(bin);
     return i < 0 ? null : i;
   }
-  const row = bin - idx.bin_first;
+  const first = Number.isFinite(grp.bin_first) ? grp.bin_first : idx.bin_first;
+  const row = bin - first;
   return row >= 0 && row < grp.shape[0] ? row : null;
+}
+
+/* The first DATE a group has a row for — what the hover card's "Recorded" line
+ * and the empty-slab hint need, so "nothing is painted here" can say WHY. */
+function tensorGroupFirstBin(idx, group) {
+  const grp = idx && idx.groups && idx.groups[group];
+  if (!grp) return idx ? idx.bin_first : 0;
+  if (grp.bin_index && grp.bin_index.length) return grp.bin_index[0];
+  return Number.isFinite(grp.bin_first) ? grp.bin_first : idx.bin_first;
 }
 
 function tensorBinOfDate(idx, dateStr) {
@@ -3695,14 +3714,19 @@ function tensorStatic(idx, name) {
 }
 
 /* Every channel the selector offers, in one flat list: the g025 group, then
- * g100, then the two statics. rg100 (the 32 Roemmich–Gilson depth channels) is
- * deliberately NOT offered — it is written only into the pentad that holds a
- * month's 15th, so most dates have no row at all and a globe layer that is
- * blank on four dates in five is a layer that reads as broken. */
+ * g100, then oc025, then the two statics. rg100 (the 32 Roemmich–Gilson depth
+ * channels) is deliberately NOT offered — it is written only into the pentad
+ * that holds a month's 15th, so most dates have no row at all and a globe
+ * layer that is blank on four dates in five is a layer that reads as broken.
+ *
+ * `oc025` (ocean colour, E-077) IS offered even though its rows start in
+ * 1997: it is dense from there on, and a date before it paints nothing for a
+ * stateable reason the toast gives, rather than for the structural reason
+ * rg100 would. */
 function tensorChannelList(idx) {
   const out = [];
   if (!idx) return out;
-  for (const group of ["g025", "g100"]) {
+  for (const group of ["g025", "g100", "oc025"]) {
     const grp = idx.groups[group];
     if (!grp) continue;
     for (const c of grp.chans) {
@@ -3802,7 +3826,15 @@ async function ensureTensorGrid(cfg, { toast = false } = {}) {
     tensorState.loading = true;
     g = spec.static ? await tensorStatic(idx, spec.chan)
                     : await tensorPlane(idx, spec.group, bin, spec.chan);
-    tensorState.error = g ? null : "no data for this bin";
+    /* SAY WHY IT IS EMPTY. A group can start later than the tensor — ocean
+     * colour's first row is 1997-09-04, fifteen years in — and "no data for
+     * this bin" over a blank globe reads as a broken layer rather than as a
+     * satellite that had not launched. */
+    tensorState.error = g ? null
+      : (!spec.static && bin < tensorGroupFirstBin(idx, spec.group)
+         ? `${spec.label} begins ${tensorDateOfBin(idx, tensorGroupFirstBin(idx, spec.group))}`
+         + ` — this pentad is before that record starts`
+         : "no data for this bin");
   } catch (err) {
     tensorState.error = String((err && err.message) || err);
     g = null;
@@ -12222,9 +12254,10 @@ function coneGlobalGrid() {
 }
 
 function coneLiveChannels() {
-  // Every g025 and g100 channel; no statics (they colour nothing — they are
-  // properties of the anchor, and the read-out prints them there) and no
-  // rg100 (see the header).
+  // Every g025, g100 and oc025 channel; no statics (they colour nothing —
+  // they are properties of the anchor, and the read-out prints them there)
+  // and no rg100 (see the header). A colour dot at a lag whose date is before
+  // 1997 simply has no slab and reads as unobserved, which is what it is.
   return tensorChannelList(tensorState.index).filter((c) => !c.static);
 }
 function coneLiveChanSpec() {

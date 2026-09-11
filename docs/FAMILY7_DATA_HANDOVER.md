@@ -18,6 +18,8 @@ sea ice, NCEP/NCAR Reanalysis 1 for the atmosphere and land surface,
 Roemmich–Gilson Argo for the ocean interior, ETOPO 2022 for elevation, Natural
 Earth for the ice-sheet and lake outlines).
 
+**There is a newer version.** `f7l1` ("family 7.1") is this exact tensor plus a fourth group carrying the observed colour of the sea surface — satellite chlorophyll-a, 1997 onward. Its three original group files are BYTE-IDENTICAL to the ones described below, so everything in §§1–9 applies to it unchanged; **§10** describes only what is added. If you are choosing between them, take `f7l1`.
+
 ---
 
 ## 1 · The files
@@ -369,3 +371,157 @@ development holdout years**, and everything after **2020** is the terminal
 test period for the final read-out (`terminal_train_last_year = 2020`).
 Whatever model you fit, keep those years out of the fit if you want its
 numbers to be comparable with the ones in `ml/EXPERIMENTS.md`.
+
+---
+
+## 10 · Family 7.1 (`f7l1`) — the same tensor plus ocean colour
+
+*Added 2026-09-11. Everything in §§1–9 above describes `f7l0`, and all of it
+still holds. This section describes the one thing that is different.*
+
+**What it is.** Family 7.1 is family 7 with a **fourth group**, `oc025`,
+carrying the observed colour of the sea surface: chlorophyll-a concentration
+from the European Space Agency's Ocean Colour Climate Change Initiative
+(OC-CCI) version 6.0 — the merged SeaWiFS / MERIS / MODIS / VIIRS / OLCI
+satellite record at 4 km, 4 September 1997 to 31 December 2024 — box-averaged
+onto the same 0.25° point grid and binned into the same five-day pentads as
+everything else. Nothing else changes: the grid of §2, the time axis of §2,
+the z-scoring of §4, the NaN convention of §5, the statics and truth series of
+§6 and the holdout convention of §9 are identical.
+
+**Where it is.** A different folder, under the same public repository and on
+the same terms (no login, HTTP `Range:` answered with status 206):
+
+```
+https://huggingface.co/datasets/chfrank/earth-tensors/resolve/main/tensors/family7_global025_pentad_l1/
+```
+
+| file | what | size |
+|---|---|---|
+| `family7_global025_pentad_l1.npz` | the small file: axes, channel names, normalisation, statics, truth series, provenance | ~5.4 MB |
+| `family7_global025_pentad_l1_X_g025.npy` | group **g025**, byte-identical to `f7l0`'s | 45.67 GB |
+| `family7_global025_pentad_l1_X_g100.npy` | group **g100**, byte-identical to `f7l0`'s | 6.14 GB |
+| `family7_global025_pentad_l1_X_rg100.npy` | group **rg100**, byte-identical to `f7l0`'s | 1.05 GB |
+| `family7_global025_pentad_l1_X_oc025.npy` | group **oc025** — 2 ocean-colour channels at 0.25°, **1997 bins** | ~8.3 GB |
+
+**The inheritance guarantee, and how it is checked.** The three older files are
+not merely "the same data"; they are the SAME BYTES. They were not rebuilt:
+the build hard-linked them from the `f7l0` build directory (one inode, no
+copy) and the publish step then fetched `f7l0`'s own `manifest.json`, compared
+each file's sha256 against it, and **refused to publish if any of them
+differed**. So the sha256 values in §1 of this document are still correct for
+the three inherited files under their new names, and `manifest.json` in the
+`…_l1/` folder states this per file as `"same_as_f7l0": true`. If you have
+already downloaded `f7l0`'s three group files, you do not need to download
+them again — rename them (or point your loader at them) and fetch only the
+colour file and the npz.
+
+### oc025 — `[1997, 721, 1440, 2]`, 0.25°, float16, ocean only
+
+| idx | name | unit (after un-z-scoring) | rule |
+|---|---|---|---|
+| 0 | `log_chl` | log₁₀(mg m⁻³) | the 6 × 6 block of 4 km cells whose centres lie within ±0.125° of the grid point. Per DAY: the mean of `log10(chlorophyll)` over the block's valid cells. Per PENTAD: the mean of those daily means over the days that had at least one valid cell |
+| 1 | `chl_cov` | fraction in (0, 1] | valid 4 km cell-days in the block during the pentad ÷ (cells in the block × 5 days) |
+
+**Read `log_chl` as a logarithm.** The stored value is `log10` of a
+concentration in milligrams per cubic metre, so a value of −0.7 means
+10^−0.7 ≈ 0.2 mg m⁻³, not −0.7 of anything. The mean is taken in log space
+because chlorophyll spans four orders of magnitude and is close to log-normal:
+the arithmetic mean of a block holding one bloom pixel at 30 mg m⁻³ and
+thirty-five clear-water pixels at 0.05 describes neither number. (And, as
+everywhere in this tensor, the stored value is additionally z-scored — see §4
+— so the full inversion is `log10_value = stored × sd + mean`, then
+`mg_per_m3 = 10 ** log10_value`.)
+
+**`chl_cov` is what the average rests on, and it is why both channels exist.**
+Colour is measured by an optical sensor, so cloud, sun glint, sea ice and
+polar night remove most of the ocean on most days. A `log_chl` value averaged
+from one clear pixel on one day (`chl_cov` = 1/180 ≈ 0.0056) and one averaged
+from all thirty-six pixels on all five days (`chl_cov` = 1.0) are the same
+number in the array and mean very different things. Use `chl_cov` to weight,
+to threshold, or simply to know. At the two pole rows the 6 × 6 block runs off
+the edge of the source grid and only 18 cells exist; the denominator counts
+the cells that exist, so a fully observed pole block still reads 1.0.
+
+**`chl_cov` is NaN exactly where `log_chl` is NaN, never 0.** A block that saw
+nothing has no coverage to report, and a stored 0 would be indistinguishable
+from "measured, and the coverage was zero" — the same distinction §5 makes for
+`sea_ice`, where open water is NaN rather than 0.
+
+**The time axis of this group is OFFSET.** The satellite record starts fifteen
+years after the tensor does, so `oc025` does not carry 1,145 rows of NaN in
+front of it. Its first row is the pentad containing 1997-09-04, and the npz
+states which bin that is:
+
+```python
+first = int(m["oc_bin_first"])          # 1145
+row   = bin - first                     # the row of pentad `bin`, or absent if < 0
+```
+
+The npz also carries `oc025_bin_index` — an int64 array of length 1997 giving
+the absolute pentad bin of every row, in order — so a consumer that prefers a
+lookup table to arithmetic has one. **A bin before 1145 has no row at all**;
+that is not a gap in the data, it is the period before any of these satellites
+flew. For every other group, row = bin (on a full build), exactly as §7 says.
+
+**New keys in the npz** (everything listed in §6 is still there and still has
+the same value as `f7l0`'s, apart from `recipe`, `groups`, `sources`,
+`builder_git_sha` and `built_at`):
+
+| key | dtype / shape | meaning |
+|---|---|---|
+| `chan_oc025` | `["log_chl", "chl_cov"]` | the group's channel names, in order |
+| `norm_oc025` | float32 `[2, 2]` | column 0 the mean, column 1 the sd, as `norm_g025` |
+| `count_oc025` | int64 `[2]` | how many finite values each channel holds |
+| `oc_bin_first` | int64 scalar | the pentad bin of the group's first row (1145) |
+| `oc025_bin_index` | int64 `[1997]` | the absolute pentad bin of every row |
+| `n_occci_days` | int64 scalar | daily source files actually fetched and read |
+| `n_occci_absent` | int64 scalar | days the archive's own directory listing did not offer |
+| `n_oc_inland` | int64 scalar | finite `log_chl` values sitting on a land cell that does not touch the sea (measured, not masked — see below) |
+| `groups` | `["g025","g100","rg100","oc025"]` | |
+| `recipe` | `"f7l1"` | |
+
+**Colour over land.** The 4 km product resolves estuaries, lagoons and shelf
+water that the 0.25° `sphere` mask (§6) calls land, so a block centred on a
+land point can legitimately contain clear-water pixels. Those values were
+deliberately NOT masked away — they are real observations of some of the most
+interesting water on the planet — and the build instead COUNTS the ones that
+sit on land cells not even touching the sea, as `n_oc_inland`, so you can
+decide for yourself.
+
+**Reading one pentad of colour by range request**, the §7(c) recipe with the
+offset applied:
+
+```python
+import numpy as np, urllib.request
+H, W, C, header = 721, 1440, 2, 128
+slab  = H * W * C * 2                                  # 4,152,960 bytes per bin
+first = 1145                                           # = m["oc_bin_first"]
+b     = (np.datetime64("2015-01-03") - np.datetime64("1982-01-01")).astype(int) // 5   # 2411
+row   = b - first                                      # 1266  <- NOT b
+url = ("https://huggingface.co/datasets/chfrank/earth-tensors/resolve/main/"
+       "tensors/family7_global025_pentad_l1/family7_global025_pentad_l1_X_oc025.npy")
+req = urllib.request.Request(url, headers={
+    "Range": f"bytes={header + row*slab}-{header + (row+1)*slab - 1}"})
+with urllib.request.urlopen(req) as r:
+    assert r.status == 206, "the host ignored the Range header — do not read on"
+    buf = r.read()
+frame = np.frombuffer(buf, dtype="<f2").reshape(H, W, C).astype(np.float32)
+# un-z-score, then leave the logarithm as a logarithm
+log_chl = frame[..., 0] * sd0 + mu0        # norm_oc025[0] = (mu0, sd0)
+chl_cov = frame[..., 1] * sd1 + mu1        # norm_oc025[1]
+mg_per_m3 = 10.0 ** log_chl                # NaN stays NaN
+```
+
+**Holdout (§9) is unchanged.** Colour's record starts in September 1997, so a
+climatology fitted on training years has 1998–2008 + 2010–2016 + 2018–2020 =
+21 full years to fit from.
+
+**Not in this build, on purpose:** the reflectance bands (`Rrs_412…670`) — a
+separate group for when colour becomes an input rather than a target; PACE OCI
+(too short a record); any gap-filled Level-4 product. The Level-3 observed
+field is the only honest one, and its gaps are information.
+
+Specification with every decision and its reason:
+`ml/plans/E077_family7_ocean_colour.md` in the same repository
+([rendered](https://blauewelt.github.io/earth/docs.html?f=ml/plans/E077_family7_ocean_colour.md)).
