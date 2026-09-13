@@ -1,0 +1,275 @@
+\documentclass[10pt]{article}
+\usepackage[a4paper,margin=2.6cm]{geometry}
+\usepackage{array}
+\usepackage{booktabs}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage[hidelinks]{hyperref}
+\usepackage{xcolor}
+\setlength{\parskip}{2pt}
+\newcommand{\code}[1]{\texttt{#1}}
+
+\title{Family 10: one schema for every granularity\\
+\large a storage and sampling design in which no source is resampled to a common grid}
+\author{blauewelt/earth --- design note}
+\date{13 September 2026}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+The programme's input tensors so far share one contract: every source is
+brought onto a $0.25^\circ$, five-day grid before the model sees it. That
+contract copies coarse values into fine cells as if they were independent
+measurements, averages fine sources down to the grid and discards what they
+were bought for, and represents a sparse observing system as a grid that is
+mostly empty. Family 10 replaces it with three commitments. Every source is
+stored at its own resolution and cadence in one of three tiers by density:
+gridded dense fields at their native grid, points and profiles in a
+pentad-sorted observation store, and fine imagery as a catalogue plus the
+cached tokens of a small per-tile codec. A single token schema --- the value,
+its offset from the anchor in space and time, and its \emph{footprint} (the
+spatial and temporal support it averaged, in log units) --- is produced by
+each tier's reader, so the encoder never learns which file a value came from,
+only what it is, where it is, and how much it averaged. And the decoder is
+queried at a location and a footprint, so targets can be at any granularity
+too. Families 7.1 and 8 become the first tier-G and tier-P groups of family
+10 unchanged. We state the schema, the tiers, the registry that binds them,
+the local codec, the storage arithmetic, and four staged experiments each
+with a falsifier.
+\end{abstract}
+
+\section{Why a common grid is the wrong contract}
+
+Three properties of the existing tensors motivate the design; each is a
+measurement rather than a preference.
+
+\paragraph{A coarse value copied into fine cells is one measurement
+presented as many.} Family 7 serves a reanalysis value on a $1.9^\circ$
+Gaussian cell, stored at $1^\circ$, to the sixteen $0.25^\circ$ cells inside
+it and to the nine cells of a lag-0 patch, as sixteen or nine tokens that
+happen to agree. The model cannot distinguish nine readings of $0.31$ from
+one reading copied nine times, and those are different amounts of evidence.
+
+\paragraph{A fine value averaged into a coarse cell discards what the finer
+source adds.} Family 7.1 keeps one thirty-sixth of the pixels of a 4\,km
+colour product and adds a coverage channel to say how much was discarded.
+Kilometre-scale radiometry is of order $3.5 \times 10^{14}$ values; it
+cannot be a tensor, and ``therefore average it'' is the wrong conclusion.
+
+\paragraph{Distance is a feature that a grid hides.} With the same five
+nearest Argo profiles, optimal interpolation beats climatology by 21\,\% on
+temperature where the gridded monthly product, read at the nearest cell,
+gave a learned codec 3\,\% (E-076b). The information was in where and when
+the profiles were taken relative to the point being predicted; the grid had
+removed it.
+
+The contract cannot therefore be ``everything on one grid''. It has to be
+``everything at its own granularity, and the token says what that
+granularity is''.
+
+\section{The token}
+
+Every observation, from every tier, becomes one token:
+\begin{equation}
+\mathrm{token} = \big(\,\mathbf{v}[C],\ \mathbf{m}[C],\ \Delta x,\ \Delta y,\ \Delta t,\ \log_2 f_p,\ \log_2 f_t,\ n_R,\ s,\ c\,\big)
+\end{equation}
+where $\mathbf{v}$ is the measurement, standardised per channel, with mask
+$\mathbf{m}$ marking which of its $C$ components were measured;
+$(\Delta x, \Delta y)$ the offset from the anchor in kilometres east and
+north and $\Delta t$ the age in days, measured back from the end of the
+anchor's bin; $n_R$ the number of such observations within the search
+bounds; $s$ and $c$ learned embeddings of the source class and the channel.
+The two footprint fields are
+\begin{equation}
+\log_2 f_p = \log_2\!\frac{\text{footprint in km}}{27.83\,\text{km}}, \qquad
+\log_2 f_t = \log_2\!\frac{\text{support in days}}{5\,\text{days}},
+\end{equation}
+the spatial and temporal support in units of a $0.25^\circ$ cell and a
+pentad, clamped to $\pm 12$. Table~\ref{tab:fp} places the programme's
+sources on that scale. For a dense group both fields are constants and cost
+nothing; for a sparse store they are per row.
+
+\begin{table}[h]
+\centering\footnotesize
+\begin{tabular}{@{}lrr@{}}
+\toprule
+source & $\log_2 f_p$ & $\log_2 f_t$ \\
+\midrule
+Sentinel-2 pixel, 10\,m, instantaneous & $-11.4$ & $-4$ (clamped) \\
+Argo profile (point, minutes) & $-4$ (clamped) & $-4$ (clamped) \\
+OLCI pixel, 300\,m, daily & $-6.5$ & $-2.3$ \\
+OC-CCI cell, 4\,km, daily & $-2.8$ & $-2.3$ \\
+OISST cell, $0.25^\circ$, pentad mean & $0$ & $0$ \\
+a $1^\circ$ box average, pentad & $+2$ & $0$ \\
+NCEP/NCAR at its T62 support ($\approx 1.9^\circ$), pentad & $+2.9$ & $0$ \\
+Roemmich--Gilson Argo field, $1^\circ$, monthly & $+2$ & $+2.6$ \\
+\bottomrule
+\end{tabular}
+\caption{The footprint fields for the programme's sources. The reanalysis is entered at the resolution it resolved, not the grid it is stored on.}
+\label{tab:fp}
+\end{table}
+
+The offsets are the correction to the first property above: a $1^\circ$
+value is one token located at the cell's centre, seen from sixteen different
+offsets by the sixteen anchors inside it, and a fine anchor's lag-0 patch
+holds one such token rather than nine. The footprint fields are what the
+offsets cannot carry: a value 30\,km away from a $1.9^\circ$ average and one
+30\,km away from a point profile say different things about the anchor,
+because the coarse value is a smoother, lower-variance quantity. This is
+the choice AlphaEarth makes on the encoder side, conditioning each source's
+decoder on the sensor's own metadata rather than resampling to a common grid
+first \cite{alphaearth}.
+
+\section{Three tiers, one registry, one sampler contract}
+
+Sources are stored by density, because density decides what a read costs.
+
+\begin{table}[h]
+\centering\setlength{\tabcolsep}{4pt}\footnotesize
+\begin{tabular}{@{}>{\raggedright\arraybackslash}p{2.2cm}>{\raggedright\arraybackslash}p{4.2cm}>{\raggedright\arraybackslash}p{4.6cm}>{\raggedright\arraybackslash}p{4.0cm}@{}}
+\toprule
+tier & what & layout & reader \\
+\midrule
+G --- gridded dense ($\gtrsim 4$\,km, daily to monthly, near-complete) & GLORYS, OISST, NCEP/ERA5, OC-CCI, DUACS, GREP levels & one bin-major array per group at its native grid, own first bin or bin list, standardised, NaN = unobserved & a slab read plus a block or nearest lookup at the anchor; footprint a per-group constant. Exists: families 7 and 7.1 \\
+\addlinespace
+P --- points, profiles, tracks (sparse in space or time) & Argo core, Deep and BGC, drifters, moorings, tide gauges, altimeter tracks, SWOT swath samples, lidar footprints, SOCAT & columns sorted by pentad bin with CSR offsets; raw units; per row (lat, lon, $t$, footprint, $\mathbf{v}[C]$, $\mathbf{m}[C]$) & $k$ nearest in a space--time metric, one-sided in time, bounded by $(R_{\max}, T_{\max})$, miss tokens to a fixed $k$. Exists: family 8 \\
+\addlinespace
+T --- tiles (fine imagery, $\lesssim 1$\,km, swaths) & Sentinel-1/2, Landsat, NISAR, OLCI/SLSTR, VIIRS, MODIS 1\,km & not stored as values: a tile-date catalogue (footprint polygon, sensor, time, valid fraction, URL) plus a token cache --- the local codec's output per tile-date --- stored as a tier-P store whose values are the tokens & the tier-P reader; a cached token is an observation with the tile's footprint and $\log_2 f_t = -4$. Not yet built \\
+\bottomrule
+\end{tabular}
+\caption{The three storage tiers.}
+\end{table}
+
+Three properties make the tiers one family. \emph{One time axis:} every
+tier is indexed by the pentad bin from the 1982-01-01 epoch; tier-P rows keep
+their timestamp inside the bin so $\Delta t$ is fractional; a tier-G group
+carries its own first bin or, for a monthly product, its own list of live
+bins. \emph{One registry:} a \code{family.json} at the family's root lists
+every group with its tier, its grid or store schema, its cadence, its channel
+names and units, its footprint constants, its first bin, its file names with
+hashes, its sources and the builder commit; consumers dispatch on the tier,
+so a new group is a new entry rather than a new code path. \emph{One sampler
+contract:} $\mathrm{gather}(\text{anchor}, \text{family}) \to \text{tokens}$
+--- for each group, its reader returns tokens in the schema of \S2 under that
+group's cone family (the reach-versus-lag rule of E-071: atmosphere,
+currents and sea-surface height, temperature and mixed layer, land, the
+depth column) with a fixed slot count per group, so batches stay
+rectangular. The existing cone sampler is this contract for tier G, and the
+Argo store's nearest-neighbour search is it for tier P; tier T reuses tier
+P's.
+
+\section{The local codec}
+
+A $64 \times 64$-pixel tile at 10\,m is 4,096 pixels of 13 bands; a
+$0.25^\circ$ cell holds about 7,700 such tiles. They cannot be dots. The
+local codec is the programme's per-pixel masked-autoencoder codec
+generalised to a tile: input one tile-date --- all bands, with the sensor's
+own metadata (resolution, incidence angle for radar, sun angle for optical)
+as conditioning --- and output $k = 4$--$8$ tokens of 64 dimensions, trained
+by masked-pixel reconstruction plus a same-place-different-date term so that
+the token carries state rather than texture. Tokens are cached once per
+tile-date and reused by every anchor whose cone contains the tile. The codec
+has snapshot semantics; the cone codec supplies the time axis by reading the
+cached tokens of many dates. The hierarchy is: raw observations
+$\rightarrow$ local codec (per tile-date, cached) $\rightarrow$ cone codec
+(per anchor, over local tokens, coarse dots and point observations)
+$\rightarrow$ task heads. AlphaEarth's space--time pyramid does this within
+one image \cite{alphaearth}; here the pyramid runs across sources and time
+scales, and the set encoder is Perceiver-style cross-attention from a fixed
+number of latents to the token set \cite{perceiver}, so cost is linear in
+the number of tokens and a ragged input --- a profile here, a swath there, a
+tile in the corner --- needs no padding.
+
+\paragraph{Storage arithmetic.} Over land and coasts ($\approx 1.5 \times
+10^{8}$\,km$^2$) there are $\approx 3.7 \times 10^{8}$ tiles of 640\,m; at
+$\approx 70$ clear dates per year, 6 tokens of 64 float16 dimensions, that
+is $\approx 20$\,TB of tokens per year --- streamable as a tier-P store but
+not small. Tiles of 256 pixels (2.56\,km) cut it sixteenfold to
+$\approx 1.3$\,TB per year and remain a hundred times finer in area than a
+$0.25^\circ$ cell; the tile size is a parameter the first experiment
+measures. The catalogue is metadata only, of order 10\,GB per year. Raw
+imagery is streamed once to train the codec and once to encode, and is never
+kept.
+
+\paragraph{Radar.} NISAR's L-band backscatter at 15\,m on a 12-day repeat,
+through cloud and at night, is the right snapshot input for soil moisture,
+flooding, ice and vegetation structure, and complements Sentinel-1's C band;
+its record begins in late 2025, so it enters as a local-codec input and
+cannot contribute to a 43-year forecast axis. Sentinel-1 (2014--) and
+Sentinel-2 (2015--) carry the record. One codec conditioned on sensor
+metadata serves both radars with different source embeddings, which is the
+reason the codec is conditioned rather than trained per sensor.
+
+\section{Outputs at any granularity}
+
+The target side has the same problem as the input side. The recipe already
+has a decoder queried at a location (E-072); it gains the two footprint
+fields of the token. ``The mean chlorophyll of this $0.25^\circ$ cell over
+this pentad'' and ``this 300\,m pixel on this day'' are then two queries of
+one embedding, each scored against the observation that actually has that
+support. A masked-token objective over the schema of \S2 covers every tier
+at once: withhold a token --- a grid cell, a profile, a cached tile token ---
+and predict its value from the rest, at its own footprint. Family 8's two
+objectives, masked-profile reconstruction and next-pentad prediction, are
+the tier-P instances of it. Every read-out remains a head on the frozen
+representation plus the rolled forecast, and is scored against the null
+ladder --- climatology, damped persistence, a linear inverse model in pixel
+and in embedding space --- the programme's protocol requires.
+
+\section{What is built first}
+
+Four steps, each with its falsifier stated before it is run.
+
+\begin{enumerate}
+\item \textbf{The footprint fields on the tensor that exists.} Read family
+7's coarse groups as offset tokens --- one token at the coarse cell's
+centre, its $(\Delta x, \Delta y)$ to the anchor, $\log_2 f_p = +2.9$ for the
+reanalysis and $+2$ for the monthly Argo field --- instead of nearest-cell
+copies, and add the footprint fields to every sparse token. One cone-codec
+arm against its twin on the same anchors and seed. Falsifier: no change in
+held-out per-family loss, in which case the model does not use the fields at
+this scale and the tile tier must be argued on its own evidence. Cost: a
+sampler change and about one dollar of compute.
+\item \textbf{The registry and the tier dispatch.} Write \code{family.json}
+for families 7.1 and 8 as one family, make the samplers and the front end
+dispatch on the tier, retire the per-family metadata conventions. No model.
+Falsifier: a test that gathers one anchor through the registry and
+reproduces the existing sampler's token bytes exactly.
+\item \textbf{The first local codec, coastal.} Sentinel-2 level-2A 10\,m
+tiles over about three hundred coastal $0.25^\circ$ cells where colour,
+sea-surface temperature and Argo all have coverage; train the tile codec,
+cache its tokens as a tier-P store, add them to the cone; three seeds, since
+a new tier buys its own replication. Verdict: the masked-token loss on the
+colour and temperature targets at those anchors with and without the tile
+tokens. Falsifier: parity, in which case at pentad cadence the coarse fields
+already carry what 10\,m adds and the fine tier is for fine targets, not for
+the forecast. This is the one compute-bound step.
+\item \textbf{NISAR and Sentinel-1 through the same codec} with a radar
+source embedding, over sea-ice-edge and flood-prone cells where the
+day-and-night, through-cloud property matters. After step 3.
+\end{enumerate}
+
+\section{What does not change}
+
+The pentad bin as the unit of time; the holdout protocol (2009, 2017 and
+2023 as development years; train through 2020, test 2021--2024); the cone
+families and reaches; family 7.1's files, which become tier-G groups of
+family 10 unchanged; family 8's store, which becomes its first tier-P group
+unchanged. The design adds a registry and a tier and removes nothing.
+
+\begin{thebibliography}{9}\small
+\bibitem{alphaearth} Brown, C.\ F.\ et al.\ (2025). AlphaEarth Foundations:
+An embedding field model for accurate and efficient global mapping from
+sparse label data. arXiv:2507.22291.
+\bibitem{perceiver} Jaegle, A.\ et al.\ (2021). Perceiver IO: A General
+Architecture for Structured Inputs \& Outputs. arXiv:2107.14795.
+\bibitem{f7} blauewelt/earth (2026). Family 7: a global, three-resolution
+input tensor. Design note, 7~September~2026.
+\bibitem{f71} blauewelt/earth (2026). Family 7.1: ocean colour joins the
+global tensor. Design note, 13~September~2026.
+\bibitem{f8} blauewelt/earth (2026). E-076: family 8 --- the measurement is
+never missing, only far away. Plan and results, 7--8~September~2026.
+\end{thebibliography}
+
+\end{document}

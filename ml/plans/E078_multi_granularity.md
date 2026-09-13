@@ -1,4 +1,4 @@
-# E-078 · One schema for every granularity — how fine-grained data enters without a common grid
+# E-078 · Family 10: one schema for every granularity — how fine-grained data enters without a common grid
 
 *Design note, 2026-09-12. Written at Chris's request of 2026-09-11: "our move to
 more fine-grained data should actually use a design that can accommodate
@@ -171,7 +171,7 @@ In order, each cheap, each with a falsifier stated now:
    ⇒ the model does not use the fields at this scale, and tier T must be
    argued on its own evidence. Cost: a sampler change and ~$1.
 2. **E-078b — `family.json` and the tier dispatch.** Write the registry for
-   family 7.1 + family 8 as ONE family (call it family 9 = 7.1 ∪ 8), make
+   family 7.1 + family 8 as ONE family (call it family 10 = 7.1 ∪ 8), make
    `cone_sampler` and the app's index reader dispatch on `tier`, and retire
    the per-family npz-key conventions. No model. Falsifier: a test that
    gathers one anchor through the registry and reproduces E-076a's exact
@@ -195,7 +195,7 @@ In order, each cheap, each with a falsifier stated now:
 The pentad bin as the unit of time; the holdout protocol (2009/2017/2023
 development years, train ≤ 2020 / test 2021–2024 terminal); the cone
 families and reaches of E-071; family 7.1's files, which become tier-G
-groups of family 9 unchanged; family 8's store, which becomes its first
+groups of family 10 unchanged; family 8's store, which becomes its first
 tier-P group unchanged. The design adds a registry and a tier, and takes
 nothing away.
 

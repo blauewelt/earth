@@ -1,0 +1,193 @@
+\documentclass[10pt]{article}
+\usepackage[a4paper,margin=2.6cm]{geometry}
+\usepackage{array}
+\usepackage{booktabs}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage[hidelinks]{hyperref}
+\usepackage{xcolor}
+\setlength{\parskip}{2pt}
+\newcommand{\code}[1]{\texttt{#1}}
+
+\title{Family 7.1: ocean colour joins the global tensor\\
+\large a fourth channel group, inherited rather than rebuilt}
+\author{blauewelt/earth --- design note}
+\date{13 September 2026}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+Family 7.1 extends the global input tensor of family 7 --- the Earth's
+surface state on a $0.25^\circ$ grid from pole to pole in five-day bins,
+1982--2024, in 54 channels --- with a fourth channel group carrying the
+observed surface chlorophyll-a concentration from the ESA Ocean Colour
+Climate Change Initiative (4\,km, September 1997 to December 2024). The
+group holds two channels: the block mean of $\log_{10}$ chlorophyll over the
+36 source cells of each $0.25^\circ$ point, and the fraction of cell-days in
+the pentad that carried a retrieval. Its time axis starts where the record
+starts, so the group is 1,997 bins rather than 3,142. The three inherited
+groups are not recomputed: the build hard-links the published family-7
+files, refuses any write through the new names, and its manifest states that
+the inherited files hash identically to family 7's. We give the source, the
+averaging rule, the missing-value semantics, the layout, the assertions, and
+the reason the channel is a target before it is an input.
+\end{abstract}
+
+\section{Purpose}
+
+The programme's forward model reads a per-cell state, predicts it forward,
+and reads out quantities of interest from the predicted state. Surface colour
+--- the chlorophyll-a concentration retrieved from water-leaving radiance ---
+is the only global, routine observation of the ocean biosphere, and it is one
+of the read-outs the programme has committed to (E-072). A read-out needs a
+target on the tensor's own grid and time axis; family 7 had none. Family 7.1
+adds one.
+
+Two decisions frame the addition. First, colour enters as a \emph{target}
+and probe before it enters as an input: the question it is built to answer is
+whether the physical state the model already carries --- temperature, mixed
+layer, currents, wind, light through the calendar --- predicts the biosphere a
+season ahead. Second, the source is averaged onto the $0.25^\circ$ grid
+rather than kept at its native 4\,km. That is a deliberate and temporary
+simplification: it lets the channel drop into the three-group layout with no
+new machinery, at the price of discarding a factor of 36 in pixels. The
+companion note on family 10 describes the layout in which fine sources are
+kept at their own granularity; family 7.1 is a tier-G group of that design,
+unchanged.
+
+\section{Source}
+
+ESA Ocean Colour CCI version 6.0, geographic projection, daily, chlorophyll-a
+only \cite{occci}: the merged SeaWiFS, MERIS, MODIS-Aqua, VIIRS and OLCI
+record, bias-corrected across sensors, on a $1/24^\circ$ grid of
+$4320 \times 8640$ cells with centres at odd multiples of $1/48^\circ$,
+4~September~1997 to 31~December~2024. The variable is \code{chlor\_a} in
+mg\,m$^{-3}$, float32 with a fill value. The retrieval exists only where the
+sensor saw the water: not under cloud, sun glint or sea ice, not in polar
+night, not over land. The builder does not assume file names; it lists each
+year's directory on the archive's own catalogue and preflights one real file
+before spending anything. The daily uncertainty fields shipped with the
+product are not stored --- an uncertainty of a merged algorithm is not an
+observation --- and the gap-filled level-4 products are not used, because the
+target should be what was seen.
+
+\section{Channels}
+
+\begin{table}[h]
+\centering\setlength{\tabcolsep}{4pt}\footnotesize
+\begin{tabular}{@{}rl>{\raggedright\arraybackslash}p{2.2cm}>{\raggedright\arraybackslash}p{9.2cm}@{}}
+\toprule
+\# & channel & unit & rule \\
+\midrule
+0 & \code{log\_chl} & $\log_{10}$\,mg\,m$^{-3}$ & per day, the mean of $\log_{10}$ chlorophyll over the finite cells of the $6\times6$ block centred on the point; per pentad, the mean of those daily means over the days with at least one finite cell; absent if no day had one \\
+1 & \code{chl\_cov} & fraction in $(0, 1]$ & finite cell-days in the block during the pentad, divided by (cells in the block $\times$ days in the bin); absent exactly where \code{log\_chl} is \\
+\bottomrule
+\end{tabular}
+\caption{Group \code{oc025}: two ocean-colour channels at $0.25^\circ$, shape $[1997, 721, 1440, 2]$, z-scored per channel like every other group, the standardisation constants stored as \code{norm\_oc025}.}
+\end{table}
+
+\paragraph{The block.} A point of the $0.25^\circ$ grid sits at a multiple of
+$0.25^\circ = 6/24^\circ$, which is a cell boundary of the $1/24^\circ$ grid;
+the six cells whose centres lie within $\pm 0.125^\circ$ of the point on each
+axis are therefore exactly three on either side. The block wraps in
+longitude; at the two pole rows it is truncated to the cells that exist. The
+implementation is a roll by three cells and a reshape, so the pole and the
+dateline are the only special cases and both are exercised by tests.
+
+\paragraph{Log space.} Chlorophyll is log-normal over four orders of
+magnitude. The arithmetic mean of a block containing one bloom cell at
+30\,mg\,m$^{-3}$ and thirty-five at 0.05 describes neither; the mean of
+$\log_{10}$ does. The programme's read-out for colour is scored in log space
+(E-072), so the stored quantity and the scored quantity agree.
+
+\paragraph{Coverage.} A pentad mean resting on one clear pixel on one day and
+one resting on thirty-six pixels on five days are different amounts of
+evidence, and the model should be told which it is looking at.
+\code{chl\_cov} carries that. It is stored un-logged and z-scored like every
+other channel; its distribution is a property of the observing system (clear
+skies at low latitude, cloud and polar night at high) and is reported from
+the built file rather than assumed here.
+
+\section{Missing values}
+
+\code{NaN} keeps its family-7 meaning --- not observed here at this time ---
+and for colour it is the rule rather than the exception: at high latitudes in
+winter no day is observed for months. Before bin 1145, the bin that contains
+4~September~1997, there is no observation at all, and the group's time axis
+starts there. \code{chl\_cov} is absent exactly where \code{log\_chl} is; a
+block that saw nothing has no coverage to report, and storing zero there would
+collapse the distinction between ``unobserved'' and ``observed to be empty''
+that the missing-token design relies on. Nothing is filled: no climatological
+fill, no interpolation across days, no level-4 product.
+
+\section{Layout and inheritance}
+
+The group is one file, \code{family7\_global025\_pentad\_l1\_X\_oc025.npy}:
+float16, C order, a 128-byte NumPy header, bin-major so that one pentad is a
+contiguous 4.15\,MB range read. Its first axis is offset --- row $r$ holds
+bin $1145 + r$ --- and the offset is stored in the metadata file as
+\code{oc\_bin\_first} beside an explicit bin index. The offset saves 4.7\,GB
+of empty slabs (8.3\,GB instead of 12.9); it costs a per-group first bin in
+every consumer, which the samplers and the front end already supported for
+the monthly Argo group.
+
+Family 7.1 is a new recipe, \code{f7l1}, with its own stem and its own
+folder on the public dataset repository, because the family-7 files, their
+hashes and their documentation are cited elsewhere and a published dataset
+should not change under its own name. The three inherited groups are
+\emph{hard-linked} from the finished family-7 build directory --- one inode,
+no extra bytes --- and never recomputed. Since a hard link shares its inode,
+a write through the new name would corrupt the published bytes, and the
+process runs as root, which ignores file modes; so the refusal is structural
+rather than a permission bit: every writable open of a group file and the
+stage machinery's discard path check whether the group was seeded and exit
+if so. The publish step fetches family 7's manifest and asserts that each
+inherited file hashes identically before it writes \code{same\_as\_f7l0:
+true} beside that file's entry. The metadata file is regenerated and every
+key it shares with family 7's is required to be equal.
+
+\section{Assertions}
+
+Before the tensor is trusted: the inherited files are byte-identical to
+family 7's manifest; the group's shape, dtype and header length are as
+stated; the first bin is computed from the epoch, not typed; every finite
+coverage lies in $(0, 1]$ and \code{log\_chl} is finite exactly where
+coverage is; the block mean reproduces exact values on synthetic input (a
+block of $10^{0.5}$ on all five days reads $0.5$ with coverage $1$; one
+finite cell on one day reads its own $\log_{10}$ with coverage $1/180$); the
+pole rows and the dateline are exercised; the stage resumes across a
+simulated interruption; and on the bin opening 3~January~2015 --- the
+comparison bin of the family-7 validation --- the global mean of
+\code{log\_chl} and the fraction of observed ocean cells are written to the
+build record for comparison, by eye, against the chlorophyll layers already
+on the globe.
+
+\section{Holdout}
+
+Unchanged: 2009, 2017 and 2023 are development holdout years; the terminal
+split trains through 2020 and tests on 2021--2024. Colour's record begins in
+September 1997, so a training-years-only seasonal climatology for the channel
+has twenty-one years to fit from.
+
+\section{Limitations}
+
+The averaging discards 35 of every 36 source pixels; the coverage channel
+records the loss but does not undo it. The channel is clear-sky and daylight
+only, which halves its live bins at high latitude and removes the polar
+winter entirely. Reflectance bands, which the programme's rule names as the
+input from which colour is the target, are not carried; they belong to the
+first design that keeps fine sources at their own granularity. And the record
+is 27 years against the tensor's 43.
+
+\begin{thebibliography}{9}\small
+\bibitem{occci} Sathyendranath, S.\ et al.\ (2019). An Ocean-Colour Time
+Series for Use in Climate Studies: The Experience of the Ocean-Colour Climate
+Change Initiative (OC-CCI). \emph{Sensors} 19(19), 4285. Version 6.0 data:
+ESA Climate Office / Plymouth Marine Laboratory.
+\bibitem{f7} blauewelt/earth (2026). Family 7: a global, three-resolution
+input tensor for a forward model of the Earth's surface state. Design note,
+7~September~2026.
+\end{thebibliography}
+
+\end{document}
