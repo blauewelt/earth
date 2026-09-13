@@ -200,6 +200,27 @@ instead of waiting it out. This costs the colour stage nothing — CEDA is a
 different host — but it is why a rebuild of the three inherited groups is
 affordable again.
 
+**The colour stage does not fit on one box, measured (2026-09-13).**
+`dap.ceda.ac.uk` serves **1.2–1.4 MB/s PER CONNECTION** and parallel
+connections scale (4 parallel range reads → 4.6 MB/s aggregate), and the files
+are ~79 MB rather than the ~40 MB assumed above: **9,980 × 79 MB = 790 GB**.
+Sequentially that is 169 h, and 48 h even at the four-connection rate, against
+this workflow's 24 h timeout — so the arithmetic at the top of this section is
+superseded, and no rentable box fixes it because the limit is per-connection.
+Two changes follow. `stage_occci` now downloads days AHEAD of the consumer with
+`EARTH_OC_WORKERS` threads (default 8, ≤ 2× workers in flight and ≤ 3 GB on
+disk) while still reducing them in date order. And the reduction splits by
+CALENDAR YEAR onto free hosted runners — `--stage occci-partial --years Y`,
+`.github/workflows/occci-partials.yml`, 20 lanes at once, ~29 GB in and
+~780 MB out per lane inside the 6 h hosted limit — publishing
+`partials/f7l1/occci/<Y>.npz` (restore-verified) that the box then FOLDS: the
+accumulators are sums over days, so a bin straddling 31 December takes a
+contribution from each year's file. The year is the unit of the accumulation on
+both paths, so the fold is bit-identical rather than merely close
+(`tests/test_build_family7.py::test_30`); the partials are re-usable across
+rebuilds, and the box's cost drops from 790 GB of CEDA to ~22 GB of Hub.
+Details: `docs/FAMILY7_DATA_HANDOVER.md` §10, "OC-CCI on hosted runners".
+
 ## 7 · What is asserted before the tensor is trusted
 
 1. The three inherited group files are hash-identical to `f7l0`'s manifest.

@@ -559,6 +559,97 @@ mirror time for every file.
   `timeout` is a PER-READ timeout, so before this a host that trickled never
   timed out at all and the existing mirror cycling never engaged.
 
+### OC-CCI on hosted runners: per-year partials
+
+*Added 2026-09-13. This changes nothing about the tensor's contents either —
+it is about WHERE the ocean-colour reduction is computed, and it is here
+because the colour stage cannot finish on one machine.*
+
+**The arithmetic that forced it.** The colour stage walks ~9,980 daily OC-CCI
+files of ~79 MB — about **790 GB** — and reduces each to two 721 × 1440 arrays
+before deleting it. **Measured 2026-09-13: `dap.ceda.ac.uk` serves one
+connection at 1.2–1.4 MB/s**, and parallel connections scale (four parallel
+range reads aggregated 4.6 MB/s from the same host). 790 GB at 1.3 MB/s is
+169 hours; even at the four-connection rate it is 48 hours, against the build
+workflow's own 24 h job timeout. No box we can rent changes that, because the
+limit is the host's per-connection rate rather than ours.
+
+So the reduction is split by CALENDAR YEAR and run on free GitHub-hosted
+runners — twenty at a time, one year each, ~29 GB in and ~780 MB out per lane,
+inside the 6 h hosted limit — and each lane publishes its year to the same
+dataset repository under:
+
+```
+partials/f7l1/occci/<YYYY>.npz
+```
+
+**What one file holds** (`np.load`; every array is in bin order):
+
+| key | dtype / shape | meaning |
+|---|---|---|
+| `bins` | int32 `[B]` | every absolute pentad bin the year's days touch — **including the bin that straddles 31 December**, which is partial in this file by design |
+| `acc` | float32 `[B, 721, 1440]` | the sum over that year's days of the daily block mean of `log10(chlorophyll)` |
+| `days_n` | int16 `[B, 721, 1440]` | days with ≥ 1 finite cell in the block |
+| `cells_n` | int32 `[B, 721, 1440]` | finite 4 km cell-days in the block |
+| `days_seen` | `U10 [n]` | the ISO dates actually fetched and read |
+| `days_missing` | `U10 [m]` | dates the archive's own listing did not offer — the holes |
+| `geom` | JSON string | `blk_y`, `blk_x`, `nlat_src`, `nlon_src` and `cells`, the source cells per 0.25° block for each of the 721 latitude rows |
+| `year`, `recipe`, `pentad_days`, `epoch` | scalars | what this file is a partial OF |
+| `source_host`, `source_catalog` | strings | which archive answered, and the exact URL it was asked for |
+| `builder_git_sha`, `built_at` | strings | provenance |
+
+**Why folding is exact, and not merely close.** `acc`, `days_n` and `cells_n`
+are SUMS over days, so a pentad that straddles 31 December simply receives a
+contribution from each of the two years' files and the sum is the same sum —
+that is the additivity the whole scheme rests on. The one real hazard is that
+floating-point addition is **not associative**: a running sum split at the year
+boundary and re-joined differs in the last bits from the unsplit one, and those
+bits survive into the stored float32. So "the same arithmetic" is made to mean
+the same operations in the same order — the **year** is the unit of the
+accumulation on BOTH paths (one `float32` accumulator per bin, days added in
+date order; `build_family7.oc_year_reduce` is the single function the hosted
+lane and the box's own day-by-day fallback both run), and folding a year is
+then one exact widening to float64 plus one addition, identical whichever way
+the year's numbers arrived.
+
+**The bit-identity test.** `tests/test_build_family7.py::test_30` builds the
+`oc025` group twice over the same synthetic fixture — once by the sequential
+day-by-day stage, once by writing per-year partials with
+`--stage occci-partial --no-upload` and assembling them with
+`--oc-partials-dir` — and asserts `np.array_equal(..., equal_nan=True)` on the
+whole group. The fixture is chosen so the claim is not vacuous: eleven days
+across 31 December 2010, so that **bin 2118 takes two days from the 2010
+partial and three from the 2011 one** and is correct only after both are
+folded (the test checks that row is finite before comparing), plus **two
+archive holes**, one inside a 2010-only bin and one inside the straddling bin,
+so the `days_missing` bookkeeping crosses the boundary with the numbers.
+
+**Operator sequence.**
+
+1. Dispatch **“OC-CCI per-year partials”** with `years = 1997-2024` (28 lanes,
+   20 concurrent, `workers = 12`). Each lane measures CEDA's rate and prints
+   the implied hours before it spends them.
+2. Wait. A failed lane is re-dispatched alone (`years = 2004`); a year already
+   on the Hub is skipped in one line, so re-dispatching the whole range is
+   cheap and safe.
+3. Dispatch **“Family 7 build”** as usual. Its `occci` stage lists
+   `partials/f7l1/occci/` ONCE at stage start, downloads and sha-verifies each
+   year it finds, folds it, and streams day by day only the years it does not
+   find. `EARTH_OC_PARTIALS=0` forces the day-by-day path for everything.
+
+**The partials are re-usable across rebuilds.** They depend on the source files
+and on the block geometry, and on nothing about the tensor's time axis — a
+later build with a different `--start`/`--end` folds the same files, dropping
+whichever bins that axis has no row for. Run the partials once; every later
+family-7.1 build is a fold rather than a stream.
+
+**Both paths also download in parallel now.** `EARTH_OC_WORKERS` (default 8, 1
+for a `--source-dir` build) fetches days AHEAD of the consumer while the
+consumer still reduces them in strict date order — which is what the
+bin-closing logic rests on — with at most `2 × workers` files in flight and
+never more than 3 GB on the disk, so the same code runs on a 300 GB box and on
+a 14 GB runner.
+
 **Not in this build, on purpose:** the reflectance bands (`Rrs_412…670`) — a
 separate group for when colour becomes an input rather than a target; PACE OCI
 (too short a record); any gap-filled Level-4 product. The Level-3 observed

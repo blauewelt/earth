@@ -2127,3 +2127,329 @@ def test_29_mirror_psl_deletes_a_hub_file_whose_round_trip_fails(tmp_path):
          b7.psl_mirror_path(f"{b7.PSL_OISST}/sst.day.mean.1982.nc")),
         (f"{b7.PSL_OISST}/icec.day.mean.1982.nc",
          b7.psl_mirror_path(f"{b7.PSL_OISST}/icec.day.mean.1982.nc"))]
+
+
+# ----------------------------------------------------------------- 30 -----
+def _oc_ns(**kw):
+    """An argparse Namespace with every flag the colour stages read."""
+    import argparse
+    a = dict(work="", source_dir="", start="", end="", force=False,
+             stage="occci", smoke=True, oc_start="", oc_source="occci",
+             years="", oc_partials_dir="", no_upload=True, seed_from="",
+             oc_preflight=False)
+    a.update(kw)
+    return argparse.Namespace(**a)
+
+
+# The fixture every partials test stands on: eleven days across 31 December
+# 2010, with TWO archive holes. Bin 2118 (2010-12-30 .. 2011-01-03) is the one
+# that matters — it takes two days from 2010 and three from 2011, so it is
+# PARTIAL in both per-year files and is only whole once they are added.
+OCP_LO, OCP_HI = dt.date(2010, 12, 27), dt.date(2011, 1, 6)
+OCP_HOLES = (dt.date(2010, 12, 29),        # a hole inside a 2010-only bin
+             dt.date(2011, 1, 2))          # a hole inside the STRADDLING bin
+OCP_STRADDLE = 2118
+
+
+def _oc_fixture(tmp_path, name="src"):
+    """Write the synthetic OC-CCI dailies, minus the two holes."""
+    src = str(tmp_path / name)
+    days = [OCP_LO + dt.timedelta(days=k)
+            for k in range((OCP_HI - OCP_LO).days + 1)]
+    keep = [d for d in days if d not in OCP_HOLES]
+    b7.make_smoke_oc_sources(src, keep, OCP_LO)
+    assert len({d.year for d in keep}) == 2, "the fixture must span a year end"
+    return src, days, keep
+
+
+def test_30_the_year_partials_assemble_bit_identically(tmp_path):
+    """`occci-partial` + assemble == the sequential stage, BIT for BIT.
+
+    THE CLAIM THIS TEST EXISTS FOR. CEDA serves one connection at ~1.2 MB/s
+    (measured 2026-09-13), so the 790 GB the colour stage streams cannot pass
+    through one box inside any job timeout we have. Twenty free hosted runners
+    can do it in year-sized pieces — but only if a tensor assembled out of those
+    pieces is the SAME TENSOR, and "the same quantity" is not enough: floating
+    point addition is not associative, so a sum split at 31 December and
+    re-joined would differ in the last bits of every straddling bin, and those
+    bits survive into the stored float32. `oc_year_reduce` is therefore the
+    shared half — one float32 accumulator per bin, days in date order, the year
+    as the unit of the arithmetic on BOTH paths — and this asserts the
+    consequence rather than the intention (ml/CLAUDE.md §0.1).
+
+    Exercised here, deliberately, in one fixture:
+      * BIN 2118 STRADDLES THE YEAR BOUNDARY — 2010-12-30/31 come out of the
+        2010 partial and 2011-01-01..03 out of the 2011 one, so it is
+        incomplete in each file and correct only after both are folded. Its
+        row is checked to be finite, so the equality is not two NaNs agreeing.
+      * TWO ARCHIVE HOLES, one in a 2010-only bin and one INSIDE the straddling
+        bin, so the `days_missing` bookkeeping crosses the boundary too.
+    """
+    src, days, keep = _oc_fixture(tmp_path)
+
+    # ---- (a) the sequential build, day by day ----------------------------
+    seq = str(tmp_path / "seq")
+    b7.stage_occci(b7.Ctx(_oc_ns(work=seq, source_dir=src, start=str(OCP_LO),
+                                 end=str(OCP_HI), oc_start=str(OCP_LO))))
+    whole = np.asarray(np.load(b7.raw_file(seq, "oc025"), mmap_mode="r"))
+    assert np.isfinite(whole).any()
+
+    # ---- (b) two runners, one calendar year each, --no-upload ------------
+    parts = str(tmp_path / "runner")
+    for y in (2010, 2011):
+        b7.stage_occci_partial(b7.Ctx(_oc_ns(
+            work=parts, source_dir=src, start=str(OCP_LO), end=str(OCP_HI),
+            oc_start=str(OCP_LO), stage="occci-partial", years=str(y),
+            no_upload=True)))
+    pdir = os.path.join(parts, b7.OC_PARTIAL_DIR)
+    assert sorted(os.listdir(pdir)) == ["2010.npz", "2011.npz"]
+
+    # the schema, and the straddling bin present — and partial — in BOTH
+    for y, want_seen, want_missing in ((2010, 4, ["2010-12-29"]),
+                                       (2011, 5, ["2011-01-02"])):
+        d = np.load(os.path.join(pdir, f"{y}.npz"))
+        bins = [int(v) for v in d["bins"]]
+        assert OCP_STRADDLE in bins, f"{y} does not carry the straddling bin"
+        assert d["acc"].dtype == np.float32 and d["acc"].shape == \
+            (len(bins), b7.NLAT, b7.NLON)
+        assert d["days_n"].dtype == np.int16 and d["cells_n"].dtype == np.int32
+        assert list(d["days_missing"]) == want_missing
+        assert len(d["days_seen"]) == want_seen
+        assert int(d["year"]) == y and str(d["recipe"]) == b7.RECIPE
+        g = json.loads(str(d["geom"]))
+        assert (g["blk_y"], g["blk_x"]) == b7._smoke_blk()
+        assert g["nlat_src"] == b7.SMOKE_OC_NLAT
+        assert len(g["cells"]) == b7.NLAT
+        assert str(d["built_at"]) and "source_host" in d.files
+        k = bins.index(OCP_STRADDLE)
+        # the straddling bin sees 2 of its 5 days in 2010 and 3 (minus the
+        # hole) in 2011 — neither file alone holds the whole pentad
+        assert int(d["days_n"][k].max()) == (2 if y == 2010 else 2)
+        d.close()
+
+    # ---- (c) assemble from the local partials directory -------------------
+    asm = str(tmp_path / "asm")
+    b7.stage_occci(b7.Ctx(_oc_ns(work=asm, source_dir=src, start=str(OCP_LO),
+                                 end=str(OCP_HI), oc_start=str(OCP_LO),
+                                 oc_partials_dir=pdir)))
+    got = np.asarray(np.load(b7.raw_file(asm, "oc025"), mmap_mode="r"))
+
+    row = OCP_STRADDLE - b7.bin_index(OCP_LO, b7.PENTAD_DAYS)
+    assert np.isfinite(got[row, :, :, b7.C_LOG_CHL]).any(), \
+        "the straddling bin is empty — the equality below would be vacuous"
+    assert np.array_equal(whole, got, equal_nan=True), \
+        ("the assembled colour group differs from the sequentially built one; "
+         "a partials build is then a different tensor, not a faster one")
+
+    # the bookkeeping crossed the boundary with the numbers
+    for w in (seq, asm):
+        assert b7.read_json(os.path.join(w, "occci", "absent.json")) == \
+            {"2010": 1, "2011": 1}
+        assert b7.read_json(os.path.join(w, "counts.json"))["n_occci_days"] \
+            == len(keep)
+        assert b7.marked(w, "occci") and b7.marked(w, "occci/2011")
+    # ...and the assemble never opened a daily file: it has no index at all
+    assert not os.path.exists(os.path.join(asm, "occci", "index.json"))
+
+    # ---- (d) EARTH_OC_PARTIALS=0 falls back to the day-by-day path --------
+    off = str(tmp_path / "off")
+    keep_env = os.environ.get("EARTH_OC_PARTIALS")
+    os.environ["EARTH_OC_PARTIALS"] = "0"
+    try:
+        b7.stage_occci(b7.Ctx(_oc_ns(
+            work=off, source_dir=src, start=str(OCP_LO), end=str(OCP_HI),
+            oc_start=str(OCP_LO), oc_partials_dir=pdir)))
+    finally:
+        if keep_env is None:
+            os.environ.pop("EARTH_OC_PARTIALS", None)
+        else:
+            os.environ["EARTH_OC_PARTIALS"] = keep_env
+    assert os.path.exists(os.path.join(off, "occci", "index.json")), \
+        "EARTH_OC_PARTIALS=0 must reduce every year from the dailies"
+    assert np.array_equal(
+        whole, np.asarray(np.load(b7.raw_file(off, "oc025"), mmap_mode="r")),
+        equal_nan=True)
+
+
+# ----------------------------------------------------------------- 31 -----
+def test_31_a_partial_is_written_atomically_and_never_rebuilt(tmp_path):
+    """Temp sibling + os.replace, and two kinds of idempotent skip.
+
+    A reader must never catch a half-written npz (ml/CLAUDE.md §5.25), and a
+    year that is already published must cost nothing on a re-dispatch — twenty
+    runners re-run as a matrix, and recomputing a finished year is six hours of
+    CEDA nobody asked for.
+    """
+    src, days, keep = _oc_fixture(tmp_path)
+    work = str(tmp_path / "w")
+
+    def run(**kw):
+        return b7.stage_occci_partial(b7.Ctx(_oc_ns(
+            work=work, source_dir=src, start=str(OCP_LO), end=str(OCP_HI),
+            oc_start=str(OCP_LO), stage="occci-partial", no_upload=True,
+            **kw)))
+
+    # ---- atomic: the file arrives by ONE os.replace from a sibling temp ---
+    seen = []
+    real_replace = b7.os.replace
+
+    def watched(a, b_, *r, **k):
+        seen.append((a, b_))
+        return real_replace(a, b_, *r, **k)
+
+    b7.os.replace = watched
+    try:
+        run(years="2010")
+    finally:
+        b7.os.replace = real_replace
+    out = os.path.join(work, b7.OC_PARTIAL_DIR, "2010.npz")
+    moves = [(a, b_) for a, b_ in seen if b_ == out]
+    assert len(moves) == 1, f"{out} was not published by exactly one replace"
+    assert os.path.dirname(moves[0][0]) == os.path.dirname(out), \
+        "the temp file must be a SIBLING, or os.replace is not atomic"
+    assert not os.path.exists(moves[0][0])
+    assert [f for f in os.listdir(os.path.dirname(out)) if ".tmp" in f] == []
+
+    # ---- a year already built HERE is reused, not recomputed --------------
+    def arrays(p):
+        d = np.load(p)
+        try:
+            return {k: np.asarray(d[k]).copy() for k in
+                    ("bins", "acc", "days_n", "cells_n", "days_seen",
+                     "days_missing", "geom")}
+        finally:
+            d.close()
+
+    before = arrays(out)
+    opened = []
+    real_open = b7.oc_open
+    b7.oc_open = lambda p: (opened.append(p), real_open(p))[1]
+    try:
+        run(years="2010")
+        assert opened == [], "the year was rebuilt although its npz was there"
+        # ...and --force does rebuild it
+        run(years="2010", force=True)
+        assert opened, "--force must rebuild the year"
+    finally:
+        b7.oc_open = real_open
+    after = arrays(out)
+    assert all(np.array_equal(before[k], after[k],
+                              equal_nan=before[k].dtype.kind == "f")
+               for k in before), \
+        ("a rebuild of the same year from the same sources produced different "
+         "numbers — a partial is not reproducible and `--force` is unsafe")
+
+    # ---- a year already ON THE HUB is skipped before anything is fetched --
+    work2 = str(tmp_path / "w2")
+    real_hub = b7.oc_partials_on_hub
+    b7.oc_partials_on_hub = lambda: {
+        2010: {"path": f"{b7.oc_partial_prefix()}/2010.npz", "sha256": "ab" * 32}}
+    published = []
+    real_pub = b7.oc_partial_publish
+    b7.oc_partial_publish = lambda c, y, p: published.append(y)
+    try:
+        b7.stage_occci_partial(b7.Ctx(_oc_ns(
+            work=work2, source_dir=src, start=str(OCP_LO), end=str(OCP_HI),
+            oc_start=str(OCP_LO), stage="occci-partial", years="2010,2011",
+            no_upload=False)))
+    finally:
+        b7.oc_partials_on_hub = real_hub
+        b7.oc_partial_publish = real_pub
+    assert published == [2011], \
+        "the year already on the Hub must not be rebuilt or re-uploaded"
+    assert sorted(os.listdir(os.path.join(work2, b7.OC_PARTIAL_DIR))) == \
+        ["2011.npz"]
+
+    # ---- --years parses, and refuses rather than guessing -----------------
+    assert b7.parse_years("1997-2000") == [1997, 1998, 1999, 2000]
+    assert b7.parse_years("2003, 1999,2003") == [1999, 2003]
+    assert b7.parse_years("") == []
+    for bad in ("2000-1999", "nineteen", "1997-", "3000"):
+        with pytest.raises(SystemExit):
+            b7.parse_years(bad)
+    with pytest.raises(SystemExit) as e:
+        b7.stage_occci_partial(b7.Ctx(_oc_ns(
+            work=str(tmp_path / "w3"), source_dir=src, start=str(OCP_LO),
+            end=str(OCP_HI), oc_start=str(OCP_LO), stage="occci-partial")))
+    assert "--years" in str(e.value)
+
+
+# ----------------------------------------------------------------- 32 -----
+def test_32_the_prefetch_pool_keeps_date_order_and_the_same_bytes(tmp_path):
+    """Eight threads download ahead; the consumer still reduces in date order.
+
+    The parallelism is the whole point — CEDA gives 1.2-1.4 MB/s per connection
+    and scales with connections — and the thing it must not disturb is the
+    order the days reach `flush_ready`, because a bin may only be closed once a
+    day at or after its end has been SEEN. So this drives the real pool over
+    the local fixture with a jittered fake download, and asserts three effects:
+    the tensor is byte-identical to the one-worker build, the days were
+    CONSUMED in ascending date order however they arrived, and every fetched
+    file was deleted (the on-disk cap is what keeps a 14 GB runner alive).
+    """
+    import random
+    import threading
+    src, days, keep = _oc_fixture(tmp_path)
+
+    one = str(tmp_path / "one")
+    b7.stage_occci(b7.Ctx(_oc_ns(work=one, source_dir=src, start=str(OCP_LO),
+                                 end=str(OCP_HI), oc_start=str(OCP_LO))))
+    whole = np.asarray(np.load(b7.raw_file(one, "oc025"), mmap_mode="r"))
+
+    # A fake remote: copy the local file into the scratch dir (so `drop` is
+    # True and the delete path runs), on a worker thread, with jitter.
+    lock = threading.Lock()
+    live, peak, threads, consumed = {"n": 0}, {"n": 0}, set(), []
+    real_fetch = b7.oc_fetch_day
+    real_open = b7.oc_open
+
+    def fake_fetch(ctx, url, dest_dir):
+        threads.add(threading.current_thread().name)
+        time.sleep(random.uniform(0.001, 0.02))
+        os.makedirs(dest_dir, exist_ok=True)
+        p = os.path.join(dest_dir, os.path.basename(url))
+        shutil.copyfile(url, p)
+        with lock:
+            live["n"] += 1
+            peak["n"] = max(peak["n"], live["n"])
+        return p, True
+
+    def watched_open(p):
+        with lock:
+            live["n"] -= 1
+        consumed.append(b7.oc_date_of_name(os.path.basename(p)))
+        return real_open(p)
+
+    many = str(tmp_path / "many")
+    keep_env = os.environ.get("EARTH_OC_WORKERS")
+    os.environ["EARTH_OC_WORKERS"] = "4"
+    b7.oc_fetch_day, b7.oc_open = fake_fetch, watched_open
+    try:
+        assert b7.oc_workers() == 4
+        b7.stage_occci(b7.Ctx(_oc_ns(work=many, source_dir=src,
+                                     start=str(OCP_LO), end=str(OCP_HI),
+                                     oc_start=str(OCP_LO))))
+    finally:
+        b7.oc_fetch_day, b7.oc_open = real_fetch, real_open
+        if keep_env is None:
+            os.environ.pop("EARTH_OC_WORKERS", None)
+        else:
+            os.environ["EARTH_OC_WORKERS"] = keep_env
+
+    assert consumed == sorted(keep), \
+        "the pool handed the consumer days out of date order"
+    assert len(threads) > 1, "nothing was fetched off the consumer's thread"
+    assert peak["n"] > 1, "no day was ever downloaded ahead of the consumer"
+    assert np.array_equal(
+        whole, np.asarray(np.load(b7.raw_file(many, "oc025"), mmap_mode="r")),
+        equal_nan=True), "the prefetched build differs from the serial one"
+    scratch = os.path.join(many, "src", "occci")
+    assert not os.path.isdir(scratch) or os.listdir(scratch) == [], \
+        "the pool left daily files on the disk"
+
+    # The on-disk cap is 2 x workers, and never more than 3 GB of 80 MB files.
+    assert b7.OC_DISK_CAP // b7.OC_FILE_BYTES == 37
+    assert b7.oc_workers(b7.Ctx(_oc_ns(work=one, source_dir=src,
+                                       start=str(OCP_LO), end=str(OCP_HI),
+                                       oc_start=str(OCP_LO)))) == 1, \
+        "a --source-dir build has nothing to overlap and defaults to 1 worker"

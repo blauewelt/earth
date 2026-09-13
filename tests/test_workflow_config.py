@@ -106,7 +106,18 @@ def main():
     # is about DIFFERENT FILES: a recipe that stops matching ml-train.yml
     # must not be able to hide a widened trigger on a workflow that can
     # reach a rented box.
-    for rel in ("psl-mirror.yml", "family7-build.yml"):
+    # occci-partials.yml joins the list on 2026-09-13. It runs on
+    # `ubuntu-latest` and holds the HF_TOKEN secret, and the rule is written
+    # about the FILE rather than today's `runs-on`: a later edit that pointed
+    # a 20-lane matrix at a rented box must not find the trigger already
+    # widened. It is also the first workflow here with a matrix, so the
+    # `runs-on` assertion below exists to keep the two facts in one place.
+    # The second element says whether the file must stay on HOSTED runners.
+    # family7-build.yml deliberately runs on the rented box (that is the whole
+    # point of it); the other two must never acquire a self-hosted label.
+    for rel, hosted in (("psl-mirror.yml", True),
+                        ("family7-build.yml", False),
+                        ("occci-partials.yml", True)):
         path = os.path.join(ROOT, ".github", "workflows", rel)
         if not os.path.exists(path):
             raise SystemExit(f"case 6 FAILED: {rel} is missing")
@@ -123,9 +134,23 @@ def main():
                 f"case 6 FAILED: {rel} declares {len(inputs)} dispatch inputs; "
                 f"the ceiling is 25 and a 26th breaks the whole workflow's "
                 f"parse, not just that input (ml/CLAUDE.md §7).")
-        print(f"case 6: {rel} — workflow_dispatch only, {len(inputs)}/25 inputs")
-    print("case 6 ok — both family-7 workflows are dispatch-only and inside "
-          "the input ceiling")
+        # A HOSTED WORKFLOW MUST STAY HOSTED. `occci-partials.yml` runs twenty
+        # lanes at once; pointing any of them at `runs-on: gpu` would put
+        # twenty jobs on one rented box AND make the §6 trigger argument load
+        # bearing in a second place. The others are hosted too, so the check
+        # is uniform rather than special-cased.
+        for jname, job in (d.get("jobs") or {}).items() if hosted else ():
+            runs = job.get("runs-on")
+            if runs != "ubuntu-latest":
+                raise SystemExit(
+                    f"case 6 FAILED: {rel} job {jname!r} runs on {runs!r}. "
+                    f"These workflows are hosted-only; a self-hosted label "
+                    f"here puts a dispatch surface on a rented box "
+                    f"(ml/CLAUDE.md §6).")
+        print(f"case 6: {rel} — workflow_dispatch only, {len(inputs)}/25 "
+              f"inputs, {len(d.get('jobs') or {})} hosted job(s)")
+    print("case 6 ok — the three family-7 / mirror workflows are "
+          "dispatch-only, hosted, and inside the input ceiling")
     ok += 1
 
     # ---- case 3: recipes are real and wired ------------------------------

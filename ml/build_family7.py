@@ -86,6 +86,7 @@ Run:
   python3 ml/build_family7.py --work ... --source-dir DIR   # no network at all
 """
 import argparse
+import collections
 import datetime as dt
 import glob
 import hashlib
@@ -355,6 +356,13 @@ OC_SOURCES = {
 
 STAGES = ["glorys", "sst", "ncep", "rg", "occci", "static", "truth", "norm",
           "meta", "publish"]
+# `occci-partial` is a stage you can ASK for and never a stage `all` runs: it
+# does not write into the tensor at all. It runs one YEAR of the colour
+# reduction on a throwaway machine (a hosted GitHub runner) and publishes the
+# result as `partials/<RECIPE>/occci/<Y>.npz`, which a later `occci` stage on
+# the box folds in instead of streaming that year again. See
+# `stage_occci_partial` and docs/FAMILY7_DATA_HANDOVER.md §10.
+SIDE_STAGES = ["occci-partial"]
 DEPS = {
     # `ncep` no longer writes into g025 at all, but it still runs the `sst`
     # repair below, which needs `oisst_seen.npy` from the sst stage.
@@ -390,6 +398,37 @@ def read_json(path, default=None):
             return json.load(fh)
     except Exception:                                         # noqa: BLE001
         return {} if default is None else default
+
+
+def parse_years(spec):
+    """"1997-2024" / "2003,2007" / "1997-1999,2004" -> a sorted list of ints.
+
+    Refuses rather than guesses: a range whose end precedes its start, or a
+    token that is not a year, is a dispatch input somebody typed wrong, and a
+    build that silently reduced zero years would report success having done
+    nothing (ml/CLAUDE.md §0.2).
+    """
+    out = []
+    for part in str(spec).replace(" ", "").split(","):
+        if not part:
+            continue
+        bits = part.split("-")
+        try:
+            if len(bits) == 1:
+                out.append(int(bits[0]))
+                continue
+            if len(bits) != 2:
+                raise ValueError(part)
+            a, b = int(bits[0]), int(bits[1])
+        except ValueError:
+            sys.exit(f"--years: {part!r} is not a year or a YYYY-YYYY range")
+        if b < a:
+            sys.exit(f"--years: the range {part!r} ends before it starts")
+        out.extend(range(a, b + 1))
+    for y in out:
+        if not 1900 <= y <= 2100:
+            sys.exit(f"--years: {y} is not a plausible year")
+    return sorted(set(out))
 
 
 def marker(work, name):
@@ -863,6 +902,7 @@ class Ctx:
         self.b_oc = max(b_lo, bin_index(self.oc_day0, PENTAD_DAYS))
         self.T_oc = max(0, b_hi - self.b_oc + 1)
         self.oc_source = getattr(a, "oc_source", None) or "occci"
+        self.years = parse_years(getattr(a, "years", "") or "")
         self.lats, self.lons = grid025()
         self.lat1, self.lon1 = grid100()
         self.prog = Progress(self.work)
@@ -1048,7 +1088,8 @@ def repair_sst_channel(ctx):
 # so a stage whose recipe moved discards its own half-built state instead of
 # leaving a tensor half in one recipe and half in another.
 SPEC_VERSION = {"glorys": 1, "sst": 1, "ncep": 2, "rg": 1, "occci": 1,
-                "static": 1, "truth": 1, "norm": 1, "meta": 1, "publish": 1}
+                "static": 1, "truth": 1, "norm": 1, "meta": 1, "publish": 1,
+                "occci-partial": 1}
 
 # Which array a stage OWNS — the one it may delete when its spec moves. A
 # stage never touches another stage's files: glorys and sst share g025 and own
@@ -1064,6 +1105,7 @@ STAGE_CHANNELS = {
     "ncep": CHAN_G100,
     "rg": CHAN_RG100,
     "occci": CHAN_OC025,
+    "occci-partial": CHAN_OC025,
 }
 
 
@@ -1104,6 +1146,17 @@ def stage_spec(ctx, stage, n_live=None):
         # nothing in the shapes or the channel names would say so.
         body["oc_bin_first"] = int(ctx.b_oc)
         body["oc_start"] = str(ctx.oc_day0)
+        body["oc_source"] = str(ctx.oc_source)
+        body["var"] = OC_VAR
+    if stage == "occci-partial":
+        # A PARTIAL IS AXIS-FREE ON PURPOSE, so its digest is too. It records
+        # the reduction of one calendar year — every bin those days touch, in
+        # absolute bin numbers — and nothing about the tensor's start, end or
+        # colour origin. That is exactly what makes one partial re-usable
+        # across rebuilds whose `--start`/`--end` differ, so a digest that
+        # folded `bins: [b_lo, b_hi]` in would declare the same file stale for
+        # a reason that cannot affect its contents.
+        body.pop("bins", None)
         body["oc_source"] = str(ctx.oc_source)
         body["var"] = OC_VAR
     blob = json.dumps(body, sort_keys=True).encode()
@@ -2419,6 +2472,592 @@ def oc_preflight(ctx, year=2015):
     return True
 
 
+# ------------------------------------------------------- the prefetch pool --
+# ONE CONNECTION IS NOT THE ARCHIVE'S LIMIT — IT IS OURS. Measured 2026-09-13:
+# CEDA serves a single connection at 1.2–1.4 MB/s and four parallel range reads
+# aggregate 4.6 MB/s from the same host. The colour stage walks ~9,980 daily
+# files of ~79 MB — 790 GB — so ONE AT A TIME is 40–80 hours of transfer,
+# longer than the build workflow's own 24 h timeout on any box we can rent.
+# The fix is not a faster loop: it is overlapping the wait. Days are fetched
+# AHEAD of the consumer by a bounded pool while the consumer still takes them
+# in strict DATE ORDER, which is what `flush_ready`'s bin-closing rests on (a
+# bin may only be closed once a day at or after its end has been SEEN, and
+# "seen" has to mean seen in order or a straddling pentad closes early).
+OC_FILE_BYTES = 80_000_000        # one daily file, for the on-disk cap
+# A HOSTED RUNNER HAS ~14 GB OF DISK and this pool is the only thing on it that
+# grows. 3 GB / 80 MB = 37 files is the ceiling whatever `EARTH_OC_WORKERS`
+# says, so a box tuned for 24 workers cannot be re-dispatched onto a runner and
+# fill its disk (ml/CLAUDE.md §5.18: size a guard from the allocation it
+# guards).
+OC_DISK_CAP = 3_000_000_000
+OC_WORKERS = 8
+
+
+def oc_workers(ctx=None):
+    """How many download threads. `EARTH_OC_WORKERS`, default 8.
+
+    A `--source-dir` build reads files that are already on the disk, so there
+    is nothing to overlap and its default is ONE — the pool still runs, so the
+    same code path is exercised, but the work happens on the consumer's turn
+    and a failure carries no thread in its traceback. The env var overrides
+    that too, which is how the tests drive the parallel path over local files.
+    """
+    raw = os.environ.get("EARTH_OC_WORKERS", "")
+    if raw.strip():
+        try:
+            return max(1, int(raw))
+        except ValueError:
+            sys.exit(f"EARTH_OC_WORKERS={raw!r} is not an integer")
+    return 1 if (ctx is not None and ctx.source_dir) else OC_WORKERS
+
+
+def oc_prefetch(ctx, jobs, dest_dir, workers=None, stats=None):
+    """Yield `(day, url, get)` in DATE ORDER, downloading ahead of the consumer.
+
+    `get()` returns `(path, drop)` for that day, or RAISES whatever the fetch
+    raised — on the consumer's thread, at that day's turn. That is deliberate:
+    the stage's refusal to record a listed day as cloud must read exactly as it
+    did when the fetch was inline, and a failure that surfaced out of order
+    would name a day the build had not reached.
+
+    At most `min(2 * workers, OC_DISK_CAP // OC_FILE_BYTES)` files are in
+    flight or on the disk at once.
+    """
+    from concurrent.futures import ThreadPoolExecutor
+    jobs = list(jobs)
+    if not jobs:
+        return
+    w = max(1, int(workers or oc_workers(ctx)))
+    cap = max(1, min(2 * w, int(OC_DISK_CAP // OC_FILE_BYTES)))
+    if stats is not None:
+        stats["workers"], stats["cap"] = w, cap
+
+    def one(url):
+        t0 = time.time()
+        path, drop = oc_fetch_day(ctx, url, dest_dir)
+        if stats is not None and drop:
+            try:
+                stats["bytes"] += os.path.getsize(path)
+            except OSError:
+                pass
+            stats["fetch_s"] += time.time() - t0
+        return path, drop
+
+    ex = ThreadPoolExecutor(max_workers=w, thread_name_prefix="occci")
+    inflight = collections.deque()
+    nxt = 0
+    try:
+        while inflight or nxt < len(jobs):
+            while nxt < len(jobs) and len(inflight) < cap:
+                day, url = jobs[nxt]
+                inflight.append((day, url, ex.submit(one, url)))
+                nxt += 1
+            day, url, fut = inflight.popleft()
+            yield day, url, fut.result
+    finally:
+        # A CANCELLED PREFETCH MUST NOT LEAVE ITS BYTES BEHIND. The consumer
+        # exits through here on a refusal as well as on success, and on a
+        # hosted runner the difference is a full disk for the next step.
+        for _, _, fut in inflight:
+            fut.cancel()
+        ex.shutdown(wait=True)
+        for _, _, fut in inflight:
+            if fut.cancelled() or fut.exception() is not None:
+                continue
+            p, drop = fut.result()
+            if drop and p and os.path.exists(p):
+                try:
+                    os.remove(p)
+                except OSError:
+                    pass
+
+
+def oc_note_geom(geom, s_lat, s_lon, geom_path=None):
+    """Record the source geometry the FIRST time a file is opened; assert after.
+
+    Persisted, because a resume can carry an open bin into a year whose files
+    are all absent and would otherwise have to close that bin with no idea how
+    many source cells its blocks hold — `chl_cov`'s denominator is not
+    guessable. Every later file is CHECKED against it rather than trusted: a
+    reprocessing that changed the raster's size mid-record would otherwise
+    average the wrong cells into every point from that day on.
+    """
+    blk_y, blk_x = oc_block_factors(s_lat, s_lon)
+    nlat_s, nlon_s = int(len(s_lat)), int(len(s_lon))
+    if "blk" in geom:
+        got = (int(blk_y), int(blk_x), nlat_s, nlon_s)
+        want = (int(geom["blk"][0]), int(geom["blk"][1]),
+                int(geom.get("nlat_src", nlat_s)),
+                int(geom.get("nlon_src", nlon_s)))
+        if got != want:
+            sys.exit(f"OC-CCI: a daily file's geometry is "
+                     f"{got[2]}x{got[3]} cells / {got[0]}x{got[1]} per block, "
+                     f"but this build has already reduced days on "
+                     f"{want[2]}x{want[3]} / {want[0]}x{want[1]}. Two grids in "
+                     f"one channel is not a value anybody can read; rebuild in "
+                     f"a fresh work dir against one version of the archive.")
+        return geom
+    geom["blk"] = (int(blk_y), int(blk_x))
+    geom["nlat_src"], geom["nlon_src"] = nlat_s, nlon_s
+    geom["cells"] = oc_block_cells(blk_y, blk_x, nlat_s)
+    if geom_path:
+        atomic_json(geom_path, {"blk": [int(blk_y), int(blk_x)],
+                                "nlat_src": nlat_s, "nlon_src": nlon_s,
+                                "at": utcnow()})
+    print(f"  block  {nlat_s}x{nlon_s} cells -> {NLAT}x{NLON} points, "
+          f"{blk_y}x{blk_x} per block ({int(geom['cells'][NLAT // 2])} cells "
+          f"at the equator, {int(geom['cells'][0])} at the poles)", flush=True)
+    return geom
+
+
+def oc_year_reduce(ctx, year, files, days, dest_dir, geom, geom_path=None,
+                   host="", on_day=None):
+    """One YEAR of dailies -> per-bin float32 accumulators. THE SHARED HALF.
+
+    Both the day-by-day path of `stage_occci` and the `occci-partial` stage run
+    THIS function, and that is the whole reason a tensor assembled from per-year
+    partials is BIT-IDENTICAL to one built in a single sequential pass rather
+    than merely very close to it. Floating-point addition is not associative,
+    so "the same arithmetic" has to mean the same operations in the same order,
+    not the same quantity: a float64 running sum split at 31 December and
+    re-joined differs from the unsplit one in the last bits, and those bits are
+    visible after the float32 store. The YEAR is therefore the unit of the
+    arithmetic on both sides — a float32 accumulator per bin, days added in
+    date order — and a partial file holds exactly what this returns. Folding a
+    year into the build's own float64 accumulators is then one exact widening
+    plus one addition, identical whichever way the year's numbers arrived.
+
+    Returns `(acc, days_n, cells_n, seen, missing, stats)`; every bin the
+    year's days TOUCH is present, including the ones that straddle 31 December
+    and are therefore partial in this result by design.
+    """
+    acc, days_n, cells_n = {}, {}, {}
+    seen, missing, jobs = [], [], []
+    for day in days:
+        url = files.get(str(day))
+        if url is None:
+            missing.append(str(day))          # a real hole in the archive
+        else:
+            jobs.append((day, url))
+    stats = {"bytes": 0, "fetch_s": 0.0, "wall_s": 0.0, "n": len(jobs)}
+    t0 = time.time()
+    for k, (day, url, get) in enumerate(
+            oc_prefetch(ctx, jobs, dest_dir, stats=stats), 1):
+        path, drop = None, False
+        try:
+            path, drop = get()
+            chl, s_lat, s_lon, fill = oc_open(path)
+            oc_note_geom(geom, s_lat, s_lon, geom_path)
+            S, C = oc_block_stats(chl, *geom["blk"], fill=fill)
+        except SystemExit:
+            raise
+        except Exception as e:                                # noqa: BLE001
+            sys.exit(f"OC-CCI {day}: {url} was listed by "
+                     f"{host or 'the archive'} but could not be read "
+                     f"({type(e).__name__}: {str(e)[:200]}). The stage "
+                     f"refuses to record a listed day as cloud.")
+        finally:
+            if drop and path and os.path.exists(path):
+                os.remove(path)
+        b = bin_index(day, PENTAD_DAYS)
+        if b not in acc:
+            acc[b] = np.zeros((NLAT, NLON), np.float32)
+            days_n[b] = np.zeros((NLAT, NLON), np.int16)
+            cells_n[b] = np.zeros((NLAT, NLON), np.int32)
+        got = C > 0
+        with np.errstate(invalid="ignore", divide="ignore"):
+            # The DAILY block mean first, then the mean of those over the
+            # days — not the pooled mean over cell-days. A day with two clear
+            # pixels and a day with thirty-six weigh the same, because each is
+            # one observation of that block on that day.
+            acc[b] += np.where(got, S / np.maximum(C, 1), 0.0)
+        days_n[b] += got
+        cells_n[b] += C.astype(np.int32)
+        seen.append(str(day))
+        stats["wall_s"] = time.time() - t0
+        if on_day is not None:
+            on_day(k, len(jobs), day, stats)
+    stats["wall_s"] = time.time() - t0
+    return acc, days_n, cells_n, seen, missing, stats
+
+
+def oc_rate(stats):
+    """"12.3 MB/s over 41 file(s)" — what the transfer actually achieved."""
+    el = max(float(stats.get("wall_s", 0.0)), 1e-9)
+    mb = float(stats.get("bytes", 0)) / 1e6
+    return (f"{mb / el:.2f} MB/s ({mb:,.0f} MB in {el:.0f}s, "
+            f"{int(stats.get('n', 0))} file(s), "
+            f"{int(stats.get('workers', 1))} worker(s), at most "
+            f"{int(stats.get('cap', 1))} on disk)")
+
+
+# ------------------------------------------------- the per-year PARTIALS ----
+# WHY A PARTIAL EXISTS AT ALL. The colour reduction is 790 GB of transfer and
+# nothing else: every daily file is read once, reduced to two 721x1440 arrays,
+# and deleted. That is work a FREE hosted runner can do — twenty of them can do
+# it at once, one calendar year each, inside the 6 h job limit — and the only
+# thing a runner cannot do is hold the 16.6 GB memmap the year belongs in. So
+# the runner publishes the reduction and the box folds it: `acc`, `days_n` and
+# `cells_n` are SUMS over days, so a bin that straddles 31 December simply
+# receives a contribution from each of the two years' files and the sum is the
+# same sum. That additivity is the whole design, and it is why the partials are
+# re-usable across rebuilds — they depend on the source files and the block
+# geometry, and on nothing about the tensor's axis.
+OC_PARTIAL_DIR = "occci_partial"
+
+
+def oc_partial_prefix():
+    return f"partials/{RECIPE}/occci"
+
+
+def oc_partial_name(y):
+    return f"{int(y)}.npz"
+
+
+def hf_token():
+    """The Hub token, from the ENV or the session file — never from argv."""
+    return os.environ.get("HF_TOKEN") or (
+        open("/home/claude/.hf_token").read().strip()
+        if os.path.exists("/home/claude/.hf_token") else "")
+
+
+def oc_partial_write(path, year, acc, days_n, cells_n, seen, missing, geom,
+                     host, catalog):
+    """Stack one year's per-bin accumulators into `<Y>.npz`, atomically.
+
+    The dicts are EMPTIED as they are copied: a year is ~75 bins of
+    721x1440x(4+2+4) bytes = ~780 MB, and holding two copies of that on a 7 GB
+    runner while numpy also buffers the write is the one place this stage could
+    run out of memory.
+    """
+    bins = sorted(acc)
+    B = len(bins)
+    A = np.zeros((B, NLAT, NLON), np.float32)
+    D = np.zeros((B, NLAT, NLON), np.int16)
+    Cn = np.zeros((B, NLAT, NLON), np.int32)
+    for k, b in enumerate(bins):
+        A[k] = acc.pop(b)
+        D[k] = days_n.pop(b)
+        Cn[k] = cells_n.pop(b)
+    g = {"blk_y": int(geom["blk"][0]), "blk_x": int(geom["blk"][1]),
+         "nlat_src": int(geom["nlat_src"]), "nlon_src": int(geom["nlon_src"]),
+         "cells": [int(v) for v in geom["cells"]]}
+    atomic_npz(path,
+               bins=np.asarray(bins, np.int32), acc=A, days_n=D, cells_n=Cn,
+               days_seen=np.asarray(sorted(seen), dtype="U10"),
+               days_missing=np.asarray(sorted(missing), dtype="U10"),
+               geom=np.asarray(json.dumps(g, sort_keys=True)),
+               year=np.asarray(int(year), np.int32),
+               recipe=np.asarray(RECIPE),
+               pentad_days=np.asarray(PENTAD_DAYS, np.int32),
+               epoch=np.asarray(str(EPOCH)),
+               source_host=np.asarray(str(host)),
+               source_catalog=np.asarray(str(catalog)),
+               builder_git_sha=np.asarray(git_sha()),
+               built_at=np.asarray(utcnow()))
+    return path
+
+
+def oc_partial_publish(ctx, year, path):
+    """Upload one partial, DOWNLOAD IT BACK and compare sha256 before saying so.
+
+    `stage_publish`'s rule, one artefact smaller: an upload that returns 200 is
+    not evidence the bytes are retrievable (ml/CLAUDE.md §0.2), and this file
+    is the only surviving record of six hours of a runner's transfer.
+    """
+    from huggingface_hub import hf_hub_download
+    api, repo, tok = hub_repo()
+    rel = f"{oc_partial_prefix()}/{oc_partial_name(year)}"
+    api.create_repo(repo, repo_type="dataset", exist_ok=True, private=False)
+    src = sha256(path)
+    api.upload_file(path_or_fileobj=path, path_in_repo=rel, repo_id=repo,
+                    repo_type="dataset",
+                    commit_message=f"family 7 ({RECIPE}): occci partial {year}")
+    scratch = os.path.join(ctx.scratch, "verify")
+    shutil.rmtree(scratch, ignore_errors=True)
+    back = hf_hub_download(repo, rel, repo_type="dataset", token=tok,
+                           local_dir=scratch)
+    got = sha256(back)
+    shutil.rmtree(scratch, ignore_errors=True)
+    if got != src:
+        sys.exit(f"RESTORE MISMATCH {rel}: uploaded {src}, downloaded {got} — "
+                 f"the partial is not trustworthy and the box must not fold "
+                 f"it. Re-dispatch this year with --force.")
+    print(f"  {year}: {os.path.getsize(path) / 1e6:,.0f} MB -> "
+          f"hf://{repo}/{rel} · sha256 {src[:16]}… verified by restore",
+          flush=True)
+    return rel, src
+
+
+def oc_partials_on_hub():
+    """`{year: {"path": …, "sha256": … or None}}` — ONE listing of the folder."""
+    from huggingface_hub import HfApi
+    tok = hf_token()
+    if not tok:
+        return {}
+    api = HfApi(token=tok)
+    repo = f"{api.whoami()['name']}/{HF_DATASET}"
+    out = {}
+    try:
+        entries = list(api.list_repo_tree(repo, path_in_repo=oc_partial_prefix(),
+                                          repo_type="dataset"))
+    except Exception:                                         # noqa: BLE001
+        return {}                       # no folder yet: nothing is published
+    for e in entries:
+        p = getattr(e, "path", "")
+        if not p.endswith(".npz"):
+            continue
+        try:
+            y = int(os.path.basename(p)[:-4])
+        except ValueError:
+            continue
+        lfs = getattr(e, "lfs", None)
+        out[y] = {"path": p,
+                  "sha256": getattr(lfs, "sha256", None) if lfs else None}
+    return out
+
+
+def oc_partials_index(ctx, years):
+    """Which years have a partial, and where — ONE lookup, at stage start.
+
+    `--oc-partials-dir` is the LOCAL equivalent of the Hub folder: the tests
+    use it, and so does an operator who has the npz files on the box already. A
+    `--source-dir` build never consults the Hub (that is what makes the smoke
+    and the tests network-free); it will read a local partials directory if it
+    is pointed at one.
+    """
+    d = getattr(ctx.a, "oc_partials_dir", "") or ""
+    if os.environ.get("EARTH_OC_PARTIALS", "1") == "0":
+        print("  occci: EARTH_OC_PARTIALS=0 — every year is reduced day by day")
+        return {}
+    if d:
+        out = {}
+        for y in years:
+            p = os.path.join(os.path.abspath(d), oc_partial_name(y))
+            if os.path.exists(p):
+                out[y] = {"local": p}
+        print(f"  occci: {len(out)}/{len(years)} pending year(s) have a "
+              f"partial in {os.path.abspath(d)}")
+        return out
+    if ctx.source_dir:
+        return {}
+    if not hf_token():
+        print("  ::warning:: no HF_TOKEN — the per-year colour partials "
+              "cannot be listed, so every year is reduced day by day")
+        return {}
+    try:
+        hub = oc_partials_on_hub()
+    except Exception as e:                                    # noqa: BLE001
+        print(f"  ::warning:: could not list {oc_partial_prefix()} on the Hub "
+              f"({type(e).__name__}: {str(e)[:160]}) — every year is reduced "
+              f"day by day")
+        return {}
+    out = {y: hub[y] for y in years if y in hub}
+    print(f"  occci: {len(out)}/{len(years)} pending year(s) have a partial "
+          f"at hf://…/{oc_partial_prefix()}/")
+    return out
+
+
+def oc_partial_fetch(ctx, year, src, dest_dir):
+    """Bring one year's partial where it can be read. Returns `(path, drop)`."""
+    if "local" in src:
+        return src["local"], False
+    from huggingface_hub import hf_hub_download
+    api, repo, tok = hub_repo()
+    os.makedirs(dest_dir, exist_ok=True)
+    p = hf_hub_download(repo, src["path"], repo_type="dataset", token=tok,
+                        local_dir=dest_dir)
+    want = src.get("sha256")
+    if want:
+        got = sha256(p)
+        if got != want:
+            sys.exit(f"partial {src['path']}: the file downloaded as {got}, "
+                     f"the Hub's own metadata says {want}. Refusing to fold a "
+                     f"file that is not the one that was published.")
+        print(f"  {year}: partial checked against the Hub's sha256 "
+              f"{want[:16]}…", flush=True)
+    else:
+        print(f"  ::warning:: {src['path']}: the Hub listing carries no "
+              f"sha256 for it, so the download could not be checked against "
+              f"the published bytes", flush=True)
+    return p, True
+
+
+def oc_adopt_geom(geom, g, geom_path, where):
+    """Take the block geometry from a partial, or assert it against the build's."""
+    blk = (int(g["blk_y"]), int(g["blk_x"]))
+    nlat_s, nlon_s = int(g["nlat_src"]), int(g["nlon_src"])
+    if "blk" in geom:
+        want = (int(geom["blk"][0]), int(geom["blk"][1]),
+                int(geom.get("nlat_src", nlat_s)),
+                int(geom.get("nlon_src", nlon_s)))
+        if (blk[0], blk[1], nlat_s, nlon_s) != want:
+            sys.exit(f"{where}: the partial was reduced on {nlat_s}x{nlon_s} "
+                     f"cells / {blk[0]}x{blk[1]} per block, this build has "
+                     f"already used {want[2]}x{want[3]} / {want[0]}x{want[1]}. "
+                     f"`chl_cov`'s denominator is the number of source cells "
+                     f"per block; two of them in one channel is not a value "
+                     f"anybody can read.")
+        return geom
+    cells = oc_block_cells(blk[0], blk[1], nlat_s)
+    said = np.asarray(g.get("cells", cells), np.int64)
+    if said.shape != cells.shape or not np.array_equal(said, cells):
+        sys.exit(f"{where}: the partial's own cells-per-row table does not "
+                 f"match `oc_block_cells({blk[0]}, {blk[1]}, {nlat_s})` — it "
+                 f"was written by a builder whose block arithmetic differs "
+                 f"from this one's, and folding it would put `chl_cov` on two "
+                 f"denominators.")
+    geom["blk"] = blk
+    geom["nlat_src"], geom["nlon_src"] = nlat_s, nlon_s
+    geom["cells"] = cells
+    if geom_path:
+        atomic_json(geom_path, {"blk": [blk[0], blk[1]], "nlat_src": nlat_s,
+                                "nlon_src": nlon_s, "at": utcnow(),
+                                "from": os.path.basename(where)})
+    print(f"  block  {nlat_s}x{nlon_s} cells -> {NLAT}x{NLON} points, "
+          f"{blk[0]}x{blk[1]} per block (from the partial)", flush=True)
+    return geom
+
+
+def oc_fold_year(ctx, acc, days_n, cells_n, yacc, ydn, ycn):
+    """Add ONE YEAR's float32 accumulators into the build's float64 ones.
+
+    The bins with no row on this axis are dropped HERE rather than in the
+    reduction, because a partial is written for every bin its days touch and is
+    therefore independent of whatever `--start`/`--end` a later build uses.
+    """
+    for b in sorted(yacc):
+        a, dn, cn = yacc.pop(b), ydn.pop(b), ycn.pop(b)
+        if ctx.oc_row_of(b) is None:
+            continue
+        if b not in acc:
+            acc[b] = np.zeros((NLAT, NLON), np.float64)
+            days_n[b] = np.zeros((NLAT, NLON), np.int16)
+            cells_n[b] = np.zeros((NLAT, NLON), np.int32)
+        acc[b] += a
+        days_n[b] += dn
+        cells_n[b] += cn
+
+
+def oc_fold_partial(ctx, path, acc, days_n, cells_n, geom, geom_path):
+    """Fold one `<Y>.npz` into the running accumulators. -> a small record."""
+    d = np.load(path)
+    try:
+        oc_adopt_geom(geom, json.loads(str(d["geom"])), geom_path, path)
+        bins = [int(v) for v in np.asarray(d["bins"]).tolist()]
+        A, D, Cn = d["acc"], d["days_n"], d["cells_n"]
+        if not (A.shape[0] == D.shape[0] == Cn.shape[0] == len(bins)):
+            sys.exit(f"{path}: {len(bins)} bin(s) but arrays of "
+                     f"{A.shape[0]}/{D.shape[0]}/{Cn.shape[0]} — the partial "
+                     f"is not internally consistent")
+        yacc = {b: A[k] for k, b in enumerate(bins)}
+        ydn = {b: D[k] for k, b in enumerate(bins)}
+        ycn = {b: Cn[k] for k, b in enumerate(bins)}
+        oc_fold_year(ctx, acc, days_n, cells_n, yacc, ydn, ycn)
+        seen = [str(s) for s in np.asarray(d["days_seen"]).tolist()]
+        n_days = 0
+        for s in seen:
+            yy, mm, dd = (int(v) for v in s.split("-"))
+            b = bin_index(dt.date(yy, mm, dd), PENTAD_DAYS)
+            if ctx.oc_row_of(b) is not None:
+                n_days += 1
+        return {"n_days": n_days, "seen": len(seen),
+                "missing": int(np.asarray(d["days_missing"]).size),
+                "host": str(d["source_host"]),
+                "catalog": str(d["source_catalog"]),
+                "bins": len(bins),
+                "built_at": str(d["built_at"]) if "built_at" in d.files else "",
+                "git": str(d["builder_git_sha"])
+                if "builder_git_sha" in d.files else ""}
+    finally:
+        d.close()
+
+
+def stage_occci_partial(ctx):
+    """ONE YEAR of the colour reduction, on a machine too small to hold the tensor.
+
+    ml/CLAUDE.md §5.26: a long computation saves its expensive intermediate
+    somewhere that survives the box. Here the box is a free hosted runner with
+    a six-hour limit and 14 GB of disk, and the expensive intermediate is a
+    year of CEDA transfer — ~29 GB in, ~780 MB out. Twenty of them run at once,
+    each publishes `partials/<RECIPE>/occci/<Y>.npz` and verifies it by
+    downloading it back, and the box's own `occci` stage folds them instead of
+    streaming 790 GB through one connection.
+
+    Idempotent: a year already on the Hub is skipped with one line, and a year
+    already built HERE is uploaded rather than recomputed.
+    """
+    years = ctx.years
+    if not years:
+        sys.exit("`--stage occci-partial` needs `--years` — one year, a "
+                 "comma-separated list, or a range like 1997-2024. It builds "
+                 "per-year colour partials and writes no tensor, so there is "
+                 "no sensible default.")
+    work = ctx.work
+    out_dir = os.path.join(work, OC_PARTIAL_DIR)
+    os.makedirs(out_dir, exist_ok=True)
+    upload = not getattr(ctx.a, "no_upload", False)
+    on_hub = oc_partials_on_hub() if upload else {}
+    if upload:
+        print(f"  hub: {len(on_hub)} partial(s) already published under "
+              f"{oc_partial_prefix()}/")
+    ctx.prog.stage_start("occci-partial", len(years))
+    scratch = os.path.join(ctx.scratch, "occci")
+    done = []
+    for i, y in enumerate(years, 1):
+        path = os.path.join(out_dir, oc_partial_name(y))
+        if y in on_hub and not ctx.a.force:
+            print(f"  {y}: {on_hub[y]['path']} is already on the Hub — "
+                  f"skipping (--force to rebuild and overwrite)", flush=True)
+            ctx.prog.item(y, i, {"skipped": "already-on-hub"})
+            continue
+        if os.path.exists(path) and not ctx.a.force:
+            print(f"  {y}: {path} was already built on this runner — reusing "
+                  f"it (--force to rebuild)", flush=True)
+        else:
+            lo = max(ctx.d_lo, ctx.oc_day0, dt.date(y, 1, 1))
+            hi = min(ctx.d_hi, dt.date(y, 12, 31))
+            if hi < lo:
+                sys.exit(f"OC-CCI {y}: the colour record starts {ctx.oc_day0} "
+                         f"and this run covers {ctx.d_lo}..{ctx.d_hi}, so "
+                         f"{y} has no day in it. A partial of nothing would "
+                         f"look like a year that was reduced.")
+            days = [lo + dt.timedelta(days=k) for k in range((hi - lo).days + 1)]
+            idx = oc_index(ctx, [y])
+            rec = idx[str(y)]
+            files = rec["files"]
+            geom = {}
+            prog_total = len(days)
+
+            def on_day(k, n, day, stats, _i=i, _y=y, _t=prog_total):
+                ctx.prog.total = _t
+                ctx.prog.item(f"{_y} {day}", k, {"mb_s": round(
+                    (stats["bytes"] / 1e6) / max(stats["wall_s"], 1e-9), 3),
+                    "bytes": int(stats["bytes"])})
+
+            acc, dn, cn, seen, missing, stats = oc_year_reduce(
+                ctx, y, files, days, scratch, geom, None, rec["host"], on_day)
+            if not seen:
+                sys.exit(f"OC-CCI {y}: {rec['host']} listed "
+                         f"{len(files)} file(s) and none of them was read, so "
+                         f"there is nothing to publish. A partial with no day "
+                         f"in it would make the box record the whole year as "
+                         f"cloud.")
+            oc_partial_write(path, y, acc, dn, cn, seen, missing, geom,
+                             rec["host"], rec["catalog"])
+            print(f"  {y}: {len(seen)} day(s) read, {len(missing)} absent from "
+                  f"the listing, {os.path.getsize(path) / 1e6:,.0f} MB -> "
+                  f"{path} · {oc_rate(stats)}", flush=True)
+        if upload:
+            oc_partial_publish(ctx, y, path)
+        done.append(y)
+        ctx.prog.total = len(years)
+        ctx.prog.item(y, i, {"bytes": os.path.getsize(path)})
+    print(f"  occci-partial: {len(done)}/{len(years)} year(s) written to "
+          f"{out_dir}" + (" and published" if upload else " (no upload)"))
+    return done
+
+
 def stage_occci(ctx):
     """ESA OC-CCI daily chlorophyll-a -> the two `oc025` channels (E-077 §3).
 
@@ -2450,12 +3089,14 @@ def stage_occci(ctx):
               f"record does not reach it; oc025 is [0, ...]")
     X = open_fill(work, "oc025", ctx.shapes()["oc025"], create=True)
     years = list(range(max(ctx.d_lo.year, ctx.oc_day0.year), ctx.d_hi.year + 1))
-    idx = oc_index(ctx, years)
     carry = Carry(work, "occci", years)
 
     acc, days_n, cells_n = {}, {}, {}
     n_days = 0
     absent = read_json(os.path.join(work, "occci", "absent.json"), {})
+    os.makedirs(os.path.join(work, "occci"), exist_ok=True)
+    idx = read_json(os.path.join(work, "occci", "index.json"), {})
+    cats = set()
 
     # The source geometry is PERSISTED the first time a file is opened, because
     # a resume can carry an open bin into a year whose files are all absent and
@@ -2466,6 +3107,9 @@ def stage_occci(ctx):
     _g = read_json(geom_path, {})
     if _g.get("blk"):
         geom["blk"] = tuple(int(v) for v in _g["blk"])
+        geom["nlat_src"] = int(_g["nlat_src"])
+        if _g.get("nlon_src"):          # absent in a work dir older than this
+            geom["nlon_src"] = int(_g["nlon_src"])
         geom["cells"] = oc_block_cells(geom["blk"][0], geom["blk"][1],
                                        int(_g["nlat_src"]))
 
@@ -2514,67 +3158,62 @@ def stage_occci(ctx):
             if ctx.bin_closed(b, seen_date):
                 flush(b)
 
+    # WHICH YEARS CAN BE ASSEMBLED RATHER THAN STREAMED — one lookup, here,
+    # not one per year. A year with a published partial costs a ~780 MB
+    # download instead of ~29 GB of CEDA; a year without one falls back to the
+    # day-by-day path with the prefetch pool, and says so.
+    pending = [y for y in years if not marked(work, f"occci/{y}")]
+    parts = oc_partials_index(ctx, pending) if pending else {}
+
     ctx.prog.stage_start("occci", len(years))
     scratch = os.path.join(ctx.scratch, "occci")
     for i, y in enumerate(years, 1):
         if marked(work, f"occci/{y}"):
             continue
-        files = idx[str(y)]["files"]
-        lo = max(ctx.d_lo, ctx.oc_day0, dt.date(y, 1, 1))
-        hi = min(ctx.d_hi, dt.date(y, 12, 31))
-        want = [lo + dt.timedelta(days=k) for k in range((hi - lo).days + 1)] \
-            if hi >= lo else []
-        miss = 0
-        for day in want:
-            url = files.get(str(day))
-            if url is None:
-                miss += 1                     # a real hole in the archive
-                continue
-            path, drop = oc_fetch_day(ctx, url, scratch)
+        src = parts.get(y)
+        if src is not None:
+            # ---- ASSEMBLE: the year's reduction already exists -----------
+            path, drop = oc_partial_fetch(ctx, y, src, scratch)
             try:
-                chl, s_lat, s_lon, fill = oc_open(path)
-                if "blk" not in geom:
-                    blk_y, blk_x = oc_block_factors(s_lat, s_lon)
-                    geom["blk"] = (blk_y, blk_x)
-                    geom["cells"] = oc_block_cells(blk_y, blk_x, len(s_lat))
-                    atomic_json(geom_path, {"blk": [blk_y, blk_x],
-                                            "nlat_src": int(len(s_lat)),
-                                            "nlon_src": int(len(s_lon)),
-                                            "at": utcnow()})
-                    print(f"  block  {len(s_lat)}x{len(s_lon)} cells -> "
-                          f"{NLAT}x{NLON} points, {blk_y}x{blk_x} per block "
-                          f"({int(geom['cells'][NLAT // 2])} cells at the "
-                          f"equator, {int(geom['cells'][0])} at the poles)",
-                          flush=True)
-                S, C = oc_block_stats(chl, *geom["blk"], fill=fill)
-            except SystemExit:
-                raise
-            except Exception as e:                            # noqa: BLE001
-                sys.exit(f"OC-CCI {day}: {url} was listed by "
-                         f"{idx[str(y)]['host']} but could not be read "
-                         f"({type(e).__name__}: {str(e)[:200]}). The stage "
-                         f"refuses to record a listed day as cloud.")
+                rec = oc_fold_partial(ctx, path, acc, days_n, cells_n, geom,
+                                      geom_path)
             finally:
                 if drop and os.path.exists(path):
                     os.remove(path)
-            b = bin_index(day, PENTAD_DAYS)
-            flush_ready(day)
-            if ctx.oc_row_of(b) is None:
-                continue
-            if b not in acc:
-                acc[b] = np.zeros((NLAT, NLON), np.float64)
-                days_n[b] = np.zeros((NLAT, NLON), np.int16)
-                cells_n[b] = np.zeros((NLAT, NLON), np.int32)
-            got = C > 0
-            with np.errstate(invalid="ignore", divide="ignore"):
-                # The DAILY block mean first, then the mean of those over the
-                # days — not the pooled mean over cell-days. A day with two
-                # clear pixels and a day with thirty-six weigh the same,
-                # because each is one observation of that block on that day.
-                acc[b] += np.where(got, S / np.maximum(C, 1), 0.0)
-            days_n[b] += got
-            cells_n[b] += C.astype(np.int32)
-            n_days += 1
+                    shutil.rmtree(os.path.join(scratch, ".cache"),
+                                  ignore_errors=True)
+            n_days += rec["n_days"]
+            miss = rec["missing"]
+            if rec["catalog"]:
+                cats.add(rec["catalog"])
+            print(f"  {y}: folded a partial — {rec['seen']} day(s), "
+                  f"{rec['bins']} bin(s), {miss} absent from the listing "
+                  f"(built {rec['built_at'] or '?'} by "
+                  f"{(rec['git'] or '?')[:12]})", flush=True)
+        else:
+            # ---- STREAM: reduce the year here, day by day ----------------
+            if not ctx.source_dir:
+                print(f"  {y}: no partial — reducing this year day by day "
+                      f"({oc_workers(ctx)} download worker(s))", flush=True)
+            idx = oc_index(ctx, [y])
+            files = idx[str(y)]["files"]
+            cats.add(idx[str(y)]["catalog"])
+            lo = max(ctx.d_lo, ctx.oc_day0, dt.date(y, 1, 1))
+            hi = min(ctx.d_hi, dt.date(y, 12, 31))
+            want = [lo + dt.timedelta(days=k)
+                    for k in range((hi - lo).days + 1)] if hi >= lo else []
+            yacc, ydn, ycn, seen, missing, stats = oc_year_reduce(
+                ctx, y, files, want, scratch, geom, geom_path,
+                idx[str(y)]["host"])
+            miss = len(missing)
+            for s in seen:
+                yy, mm, dd = (int(v) for v in s.split("-"))
+                if ctx.oc_row_of(bin_index(dt.date(yy, mm, dd),
+                                           PENTAD_DAYS)) is not None:
+                    n_days += 1
+            oc_fold_year(ctx, acc, days_n, cells_n, yacc, ydn, ycn)
+            if stats["bytes"]:
+                print(f"  {y}: {oc_rate(stats)}", flush=True)
         # Only bins the NEXT year cannot touch are closed here; the rest carry.
         flush_ready(dt.date(y + 1, 1, 1))
         X.flush()                                # flush, THEN mark
@@ -2585,7 +3224,8 @@ def stage_occci(ctx):
                      **{f"dayn_{b}": v for b, v in days_n.items()},
                      **{f"celln_{b}": v for b, v in cells_n.items()})
         ctx.prog.item(y, i, {"days": n_days, "absent": int(miss),
-                             "open_bins": len(acc)})
+                             "open_bins": len(acc),
+                             "from": "partial" if src is not None else "daily"})
 
     for b in sorted(acc):
         flush(b)
@@ -2593,8 +3233,16 @@ def stage_occci(ctx):
     bump_counts(work, n_occci_days=n_days,
                 n_occci_absent=int(sum(absent.values())),
                 oc_bin_first=int(ctx.b_oc))
-    ctx.note_source("occci", (ctx.local("occci") + "/") if ctx.source_dir
-                    else "; ".join(sorted({v["catalog"] for v in idx.values()})))
+    # A TENSOR WHOSE `sources` NAME A HOST THE BYTES DID NOT COME FROM IS A
+    # PROVENANCE RECORD THAT IS QUIETLY WRONG. A year folded from a partial
+    # contributes the catalog THAT RUNNER asked, which is the archive either
+    # way; a resume where every remaining year was already marked contributes
+    # nothing, and then the value already on record is left alone rather than
+    # overwritten with an empty string.
+    if ctx.source_dir:
+        ctx.note_source("occci", ctx.local("occci") + "/")
+    elif cats:
+        ctx.note_source("occci", "; ".join(sorted(cats)))
     mark(work, "occci")
     oc_report(ctx, X)
     print(f"  occci: {n_days} daily field(s) folded into {ctx.T_oc} bins from "
@@ -3455,7 +4103,9 @@ def stage_publish(ctx):
 STAGE_FN = {"glorys": stage_glorys, "sst": stage_sst, "ncep": stage_ncep,
             "rg": stage_rg, "occci": stage_occci, "static": stage_static,
             "truth": stage_truth, "norm": stage_norm, "meta": stage_meta,
-            "publish": stage_publish}
+            "publish": stage_publish,
+            # Asked for by name, never run by `all`: it writes no tensor.
+            "occci-partial": stage_occci_partial}
 
 
 def run_stages(ctx, stages):
@@ -4088,10 +4738,28 @@ def main():
                          "`occci` is built. Must be on the same filesystem; a "
                          "missing directory is an error, not a full rebuild.")
     ap.add_argument("--stage", default="all",
-                    choices=["all"] + STAGES,
+                    choices=["all"] + STAGES + SIDE_STAGES,
                     help="one stage, or `all`. Order is fixed: ncep needs sst "
                          "for the sst repair, norm needs everything including "
-                         "occci.")
+                         "occci. `occci-partial` is never part of `all`: it "
+                         "reduces ONE YEAR of ocean colour on a machine too "
+                         "small to hold the tensor and publishes the result "
+                         "for a later `occci` stage to fold.")
+    ap.add_argument("--years", default="",
+                    help="which calendar years `--stage occci-partial` "
+                         "reduces: one year, a comma-separated list, or a "
+                         "range like 1997-2024.")
+    ap.add_argument("--oc-partials-dir", default="",
+                    help="read per-year colour partials from this LOCAL "
+                         "directory instead of the Hub folder "
+                         f"{oc_partial_prefix()}/. The tests use it; so can an "
+                         "operator who already has the npz files on the box. "
+                         "EARTH_OC_PARTIALS=0 disables partials entirely and "
+                         "reduces every year day by day.")
+    ap.add_argument("--no-upload", action="store_true",
+                    help="with `--stage occci-partial`: write the npz and do "
+                         "NOT publish it. For a dry run and for the tests — a "
+                         "partial nobody can fetch buys the box nothing.")
     ap.add_argument("--oc-source", default="occci",
                     choices=sorted(OC_SOURCES),
                     help="which colour archive. `occci` is the ESA CCI merged "
@@ -4158,7 +4826,16 @@ def main():
         return 0
 
     stages = STAGES if a.stage == "all" else [a.stage]
-    if any(s in ("glorys", "sst", "ncep", "rg", "occci") for s in stages):
+    if stages == ["occci-partial"]:
+        # A PARTIAL RUNNER HOLDS NO TENSOR, so `byte_peak`'s 46 GB is the wrong
+        # allocation to guard (ml/CLAUDE.md §5.18: size a guard from the
+        # allocation it guards). What one of these jobs actually writes is the
+        # prefetch pool's on-disk cap plus one year's npz, and it does that on
+        # a hosted runner with ~14 GB.
+        disk_guard(ctx.work, {"occci sources in flight": OC_DISK_CAP,
+                              "one year's partial npz": int(1.1e9)},
+                   headroom=1e9)
+    elif any(s in ("glorys", "sst", "ncep", "rg", "occci") for s in stages):
         disk_guard(ctx.work, sizes)
     # ONE REAL FILE BEFORE FOUR HUNDRED GIGABYTES (ml/CLAUDE.md §0.3). The
     # preflight runs at the head of any run that will do colour work and is
