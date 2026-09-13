@@ -124,12 +124,20 @@ jobs:
       # computes fine and reports nothing, because every metrics write, every
       # log append and every checkpoint mirror fails behind its own
       # best-effort guard.
+      # SEED has NO `|| default` fallback, deliberately. The input's own
+      # `default:` already fills an omitted field with ml/cache/family7; the
+      # `||` form additionally turned an EXPLICIT empty string -- the documented
+      # "build all four groups from scratch" -- back into the seeded default,
+      # so run #4 (2026-09-13, a fresh 200 GB box with no f7l0 on it) failed
+      # its preflight on "seed_from=ml/cache/family7 does not exist" while the
+      # dispatch had asked for exactly the unseeded build. Same for the Build
+      # step's SEED below.
       - name: Preflight
         id: preflight
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
           WORK: ${{ github.event.inputs.work || 'ml/cache/family7_l1' }}
-          SEED: ${{ github.event.inputs.seed_from || 'ml/cache/family7' }}
+          SEED: ${{ github.event.inputs.seed_from }}
         run: |
           if [ -z "${HF_TOKEN}" ]; then
             echo "::error::HF_TOKEN secret is not set. The build publishes to"
@@ -319,7 +327,7 @@ jobs:
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
           WORK: ${{ github.event.inputs.work || 'ml/cache/family7_l1' }}
-          SEED: ${{ github.event.inputs.seed_from || 'ml/cache/family7' }}
+          SEED: ${{ github.event.inputs.seed_from }}
           STAGE: ${{ github.event.inputs.stage || 'all' }}
           EXTRA: ${{ github.event.inputs.extra_args }}
         run: |
