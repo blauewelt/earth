@@ -3204,10 +3204,22 @@ def stage_publish(ctx):
     written per file from the comparison rather than from the intention, and a
     mismatch FAILS the publish — at that point the file is not the one anyone
     was promised, whatever the rest of the build did.
+
+    THAT PROMISE IS ONLY MADE BY A SEEDED BUILD. A build run WITHOUT
+    `--seed-from` (2026-09-13: the Ontario box holding the f7l0 seed would not
+    start, so all four groups were rebuilt from the sources on a fresh box)
+    never claimed its g025/g100/rg100 were f7l0's bytes — they are the same
+    recipe re-derived, identical only if every upstream source is still
+    byte-for-byte what it was on 2026-09-04. For such a build the comparison
+    is still made and still written per file, but a mismatch is RECORDED
+    (`same_as_f7l0: false`, with f7l0's hash beside ours) rather than fatal:
+    the manifest then says exactly which of the three drifted, and the
+    handover's hashes remain a statement about f7l0's folder, not this one.
     """
     from huggingface_hub import hf_hub_download
     work = ctx.work
     api, repo, tok = hub_repo()
+    seeded = bool(getattr(ctx.a, "seed_from", ""))
     files = [os.path.join(work, STEM + ".npz")] + \
             [group_file(work, g) for g in GROUPS]
     try:
@@ -3250,15 +3262,25 @@ def stage_publish(ctx):
                          f"{BASE_STEM}_X_{g}.npy — this build claims its {g} "
                          f"is {BASE_RECIPE}'s and there is nothing to compare "
                          f"it with")
-            if want != src:
+            rec["base_name"] = f"{BASE_STEM}_X_{g}.npy"
+            if want == src:
+                rec["same_as_f7l0"] = True
+            elif seeded:
                 sys.exit(f"INHERITANCE BROKEN on {g}: this build's file "
                          f"hashes {src}, {BASE_RECIPE}'s manifest says "
                          f"{want}. The seed was not the published tensor (or "
                          f"something wrote through the hard link). Publishing "
                          f"it would put a file on the Hub that the family-7 "
                          f"handover describes and does not match.")
-            rec["same_as_f7l0"] = True
-            rec["base_name"] = f"{BASE_STEM}_X_{g}.npy"
+            else:
+                # Unseeded rebuild: no inheritance was claimed, so a drift is a
+                # finding to record, not a broken promise. Both hashes go in
+                # the manifest so the reader can see WHICH group moved.
+                rec["same_as_f7l0"] = False
+                rec["f7l0_sha256"] = want
+                print(f"  publish: {g} differs from {BASE_RECIPE}'s published "
+                      f"file (ours {src[:16]}…, {BASE_RECIPE} {want[:16]}…) — "
+                      f"unseeded rebuild, recorded as same_as_f7l0=false")
         entries.append(rec)
         ctx.prog.item(name, i, {"sha256": src[:16],
                                 "same_as_f7l0": rec.get("same_as_f7l0", False)})
@@ -3266,6 +3288,7 @@ def stage_publish(ctx):
     man = {"recipe": RECIPE, "base_recipe": BASE_RECIPE, "stem": STEM,
            "base_stem": BASE_STEM, "base_prefix": BASE_PREFIX,
            "groups": GROUPS, "oc_bin_first": int(ctx.b_oc),
+           "seeded_from_base": seeded,
            "builder_git_sha": git_sha(), "built_at": utcnow(),
            "repo": repo, "prefix": HF_PREFIX,
            "sources": ctx.sources, "files": entries}

@@ -1628,3 +1628,89 @@ def test_24_an_inherited_group_cannot_be_written_through_the_hard_link(
             b7.group_file(w2, "g025" if stage == "sst" else "g100")) == sha
     assert {g: b7.sha256(os.path.join(seed, f"{b7.BASE_STEM}_X_{g}.npy"))
             for g in b7.BASE_GROUPS} == before
+
+
+def _publish_harness(tmp_path, monkeypatch, seeded, drift):
+    """Drive `stage_publish` against a FAKE Hub: no network, tiny files.
+
+    The fake answers f7l0's manifest with the hash of our own g025 file when
+    `drift` is False and with a different hash when it is True; upload is a
+    no-op and "download back" copies the local file, so the restore check
+    passes and only the inheritance decision is exercised.
+    """
+    import types
+    work = str(tmp_path / ("seeded" if seeded else "unseeded"))
+    os.makedirs(os.path.join(work, "src"), exist_ok=True)
+    files = [os.path.join(work, b7.STEM + ".npz")] + \
+            [b7.group_file(work, g) for g in b7.GROUPS]
+    for i, p in enumerate(files):
+        with open(p, "wb") as fh:
+            fh.write(bytes([i]) * 64)
+    ours = {g: b7.sha256(b7.group_file(work, g)) for g in b7.BASE_GROUPS}
+    base = dict(ours)
+    if drift:
+        base["g025"] = "f" * 64
+
+    class FakeApi:
+        def create_repo(self, *a, **k): pass
+        def upload_file(self, *a, **k): pass
+
+    def fake_download(repo, path, repo_type=None, token=None, local_dir=None):
+        src = os.path.join(work, os.path.basename(path))
+        os.makedirs(local_dir, exist_ok=True)
+        dst = os.path.join(local_dir, os.path.basename(path))
+        shutil.copy2(src, dst)
+        return dst
+
+    fake_hf = types.ModuleType("huggingface_hub")
+    fake_hf.hf_hub_download = fake_download
+    fake_hf.HfApi = lambda *a, **k: FakeApi()
+    monkeypatch.setitem(sys.modules, "huggingface_hub", fake_hf)
+    monkeypatch.setattr(b7, "hub_repo", lambda token=None:
+                        (FakeApi(), "chfrank/earth-tensors", "x"))
+    monkeypatch.setattr(b7, "base_manifest_hashes", lambda api, repo, tok: base)
+    ctx = types.SimpleNamespace(
+        work=work, scratch=os.path.join(work, "src"), prog=b7.Progress(work),
+        sources={}, b_oc=1145,
+        a=types.SimpleNamespace(seed_from="/some/f7l0" if seeded else ""))
+    return ctx, work, base
+
+
+def test_25_publish_records_drift_for_unseeded_and_refuses_for_seeded(
+        tmp_path, monkeypatch):
+    """The `same_as_f7l0` promise is only made by a SEEDED build.
+
+    2026-09-13: the box holding the f7l0 seed would not start, so 7.1 was
+    rebuilt unseeded on a fresh box. Such a build never claimed its three base
+    groups were f7l0's bytes; a hash drift against f7l0's manifest is a
+    finding the manifest records (both hashes, per file), not a broken
+    inheritance that kills the publish eight hours in. A seeded build keeps
+    the fatal check — there the bytes ARE f7l0's or something is very wrong.
+    """
+    # (a) unseeded + drift: publishes, records same_as_f7l0=false for g025
+    ctx, work, base = _publish_harness(tmp_path, monkeypatch, False, True)
+    b7.stage_publish(ctx)
+    man = json.load(open(os.path.join(work, "manifest.json")))
+    assert man["seeded_from_base"] is False
+    recs = {r["name"]: r for r in man["files"]}
+    g025 = recs[f"{b7.STEM}_X_g025.npy"]
+    assert g025["same_as_f7l0"] is False
+    assert g025["f7l0_sha256"] == base["g025"]
+    assert g025["base_name"] == f"{b7.BASE_STEM}_X_g025.npy"
+    for g in ("g100", "rg100"):
+        assert recs[f"{b7.STEM}_X_{g}.npy"]["same_as_f7l0"] is True
+    assert "same_as_f7l0" not in recs[f"{b7.STEM}_X_oc025.npy"]
+    assert b7.marked(work, "publish")
+    # (b) unseeded, no drift: identical bytes are still reported as such
+    ctx, work, _ = _publish_harness(tmp_path / "b", monkeypatch, False, False)
+    b7.stage_publish(ctx)
+    man = json.load(open(os.path.join(work, "manifest.json")))
+    assert all(r["same_as_f7l0"] for r in man["files"]
+               if r["name"] != f"{b7.STEM}_X_oc025.npy"
+               and not r["name"].endswith(".npz"))
+    # (c) seeded + drift: the fatal check is unchanged
+    ctx, work, _ = _publish_harness(tmp_path / "c", monkeypatch, True, True)
+    with pytest.raises(SystemExit) as e:
+        b7.stage_publish(ctx)
+    assert "INHERITANCE BROKEN on g025" in str(e.value)
+    assert not os.path.exists(os.path.join(work, "manifest.json"))
