@@ -80,7 +80,7 @@ on:
         description: "the build directory for THIS (f7l1) build. RE-DISPATCH WITH THE SAME VALUE TO RESUME: finished stages are skipped by their .done markers. A different path is a different build"
         default: "ml/cache/family7_l1"
       seed_from:
-        description: "the FINISHED f7l0 build to inherit from: its three group files are hard-linked under the f7l1 stem and its markers/specs/norm.npz copied, so only the colour stage runs. Must be on the same filesystem as work. Empty means build all four groups from scratch (~5 h more)"
+        description: "the FINISHED f7l0 build to inherit from: its three group files are hard-linked under the f7l1 stem and its markers/specs/norm.npz copied, so only the colour stage runs. Must be on the same filesystem as work. The word `none` means build all four groups from scratch (~5 h more) -- an EMPTY value is silently replaced by this default by GitHub itself, so empty cannot mean that"
         default: "ml/cache/family7"
       extra_args:
         description: "extra flags for ml/build_family7.py, e.g. --source-dir <dir>, --oc-source globcolour, or --smoke. Word-split deliberately; leave empty for a real build"
@@ -124,14 +124,16 @@ jobs:
       # computes fine and reports nothing, because every metrics write, every
       # log append and every checkpoint mirror fails behind its own
       # best-effort guard.
-      # SEED has NO `|| default` fallback, deliberately. The input's own
-      # `default:` already fills an omitted field with ml/cache/family7; the
-      # `||` form additionally turned an EXPLICIT empty string -- the documented
-      # "build all four groups from scratch" -- back into the seeded default,
-      # so run #4 (2026-09-13, a fresh 200 GB box with no f7l0 on it) failed
-      # its preflight on "seed_from=ml/cache/family7 does not exist" while the
-      # dispatch had asked for exactly the unseeded build. Same for the Build
-      # step's SEED below.
+      # "UNSEEDED" IS SPELLED `none`, NOT "". Measured 2026-09-13 on runs #4
+      # and #5 (a fresh 200 GB box with no f7l0 on it, dispatched with
+      # seed_from=""): #4 failed because the old `|| 'ml/cache/family7'`
+      # fallback replaced the empty string; #5, with that fallback removed,
+      # STILL printed SEED=ml/cache/family7 -- GitHub applies the input's
+      # `default:` to an explicitly empty workflow_dispatch value before the
+      # workflow ever sees it. So the documented "leave it empty" could never
+      # have worked, and the sentinel below is the only way to ask for the
+      # unseeded build without dropping the default (which the everyday seeded
+      # dispatch relies on). Both steps that read SEED normalise it.
       - name: Preflight
         id: preflight
         env:
@@ -139,6 +141,7 @@ jobs:
           WORK: ${{ github.event.inputs.work || 'ml/cache/family7_l1' }}
           SEED: ${{ github.event.inputs.seed_from }}
         run: |
+          if [ "${SEED}" = "none" ]; then SEED=""; fi
           if [ -z "${HF_TOKEN}" ]; then
             echo "::error::HF_TOKEN secret is not set. The build publishes to"
             echo "the Hub and verifies the restore; without it the job would"
@@ -166,7 +169,7 @@ jobs:
           # 3 = 31 GB to build and 45.7 GB transiently to verify; 80 GB covers
           # the worse of the two with room to spare, and a guard sized exactly
           # at the allocation it guards cannot fire in time (ml/CLAUDE.md
-          # 5.18). An UNSEEDED build (seed_from empty) needs ~93 GB instead --
+          # 5.18). An UNSEEDED build (seed_from `none`) needs ~93 GB instead --
           # the builder's own disk_guard prices that itself and refuses.
           if [ "${use}" -ge 90 ]; then
             echo "::error::cache mount is ${use}% full (>= 90 %). Over 90 % is"
@@ -196,7 +199,7 @@ jobs:
             if [ ! -d "${SEED}" ]; then
               echo "::error::seed_from=${SEED} does not exist. It must be a"
               echo "FINISHED f7l0 build (its three *_X_*.npy group files, its"
-              echo ".done markers and its norm.npz). Leave seed_from EMPTY to"
+              echo ".done markers and its norm.npz). Set seed_from to `none` to"
               echo "build all four groups from scratch instead -- that is"
               echo "about five more hours and it republishes bytes that"
               echo "already exist on the Hub."
@@ -220,7 +223,7 @@ jobs:
             fi
             echo "seed ok: ${SEED} on ${sd}, three group files present"
           else
-            echo "::warning::seed_from is empty -- building all four groups"
+            echo "::warning::seed_from is none -- building all four groups"
             echo "from scratch (~5 h more, and it recomputes 53 GB that f7l0"
             echo "already published)."
           fi
@@ -333,9 +336,10 @@ jobs:
         run: |
           set -o pipefail
           mkdir -p "${WORK}"
+          if [ "${SEED}" = "none" ]; then SEED=""; fi
           # `--seed-from` is idempotent: on a resume the three group files are
           # already the same inode as the seed's and it says so and moves on.
-          # An EMPTY seed_from omits the flag entirely and builds all four
+          # seed_from=`none` omits the flag entirely and builds all four
           # groups, which is a different and much longer experiment.
           seed_args=""
           if [ -n "${SEED}" ]; then seed_args="--seed-from ${SEED}"; fi
