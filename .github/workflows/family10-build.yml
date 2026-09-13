@@ -1,0 +1,371 @@
+# E-079: build a FAMILY 10 TIER-P STORE -- drifters, the tropical moored
+# arrays, ship CO2, or altimeter tracks -- as columns sorted by five-day bin
+# that a model reads with "what are the k nearest measurements, and how far
+# away are they" instead of "is there a value in this cell".
+#
+# WHAT IT BUILDS. `ml/build_family10_stores.py --store <one of four>` writes
+# one store into `tensors/family10/<store>/` on the Hugging Face dataset repo
+# `chfrank/earth-tensors`, in the layout `ml/family10_store.py` defines:
+# bin / time_days / lat / lon / values[N, C] / platform / qc / fp[N, 2] plus a
+# CSR bin index and a `store.json` carrying the schema, the footprint
+# constants, the QC policy, the provenance, the per-year counts and the sha256
+# of every file. The whole specification is
+# ml/plans/E079_family10_point_stores.md, rendered for a phone at
+# https://blauewelt.github.io/earth/docs.html?f=ml/plans/E079_family10_point_stores.md
+# and the consumer contract is docs/FAMILY10_DATA_HANDOVER.md.
+#
+# THE FOUR STORES, AND WHERE EACH SHOULD RUN.
+#   gdp       the Global Drifter Program 6-hourly QC interpolated product,
+#             1979-02 -> , from the AOML ERDDAP one month per request. ~17 MB
+#             and a minute per month measured 2026-09-13, so ~200 MB a year and
+#             well inside a hosted runner. C = 4 (u, v, sst, drogue).
+#   gtmba     TAO/TRITON, PIRATA and RAMA daily, 1977-11 -> , from the OSMC
+#             ERDDAP (which 302s to coastwatch.pfeg.noaa.gov). ~96 sites, one
+#             row per site per day -- about 10^6 rows for the whole record.
+#             Tiny; a hosted runner is generous. C = 18.
+#   socat     the SOCAT v2026 synthesis, one 1.4 GB zip streamed ONCE. The
+#             file is sorted by expocode, not by time, so there is no per-year
+#             request and the fetch stage is a single pass -- see "RESUME"
+#             below, because this is the one store whose resume granularity is
+#             not the year. C = 4.
+#   slatrack  Copernicus Marine SEALEVEL_GLO_PHY_L3_MY_008_062, 29 altimeter
+#             missions at 1 Hz, 1993 -> . TENS OF GIGABYTES and the only store
+#             that needs CREDENTIALS. Send it to a Vast box with the `runner`
+#             input, one year at a time, and publish per year. C = 3.
+#
+# RESUME IS THE CONTRACT, AND IT IS WHAT `work` IS FOR. Every year flushes its
+# column parts to `<work>/<store>/parts/<year>/` and THEN writes
+# `<work>/<store>/parts/<year>.done` (ml/CLAUDE.md 5.21: a marker may only
+# under-claim), and each stage writes its own marker after the data it
+# describes. Re-dispatch WITH THE SAME `work` VALUE and finished stages and
+# finished years are skipped. THE ONE EXCEPTION IS `socat`: its source is a
+# single time-unsorted file, so an interrupted fetch re-reads the file from the
+# start rather than resuming at a year, and the builder deletes the half-filled
+# year markers before it starts rather than leaving them to over-claim.
+#
+# A MISSING MONTH, YEAR OR MISSION IS NOT A FAILURE. A 404, or ERDDAP's
+# "your query produced no matching results", is a legitimate gap: it is counted
+# into progress.json and store.json and the build continues. Any OTHER HTTP
+# error retries and then fails the year, loudly (ml/CLAUDE.md 4.6 -- a step
+# that can fail silently will).
+#
+# WHY THE LAST TWO STEPS EXIST. A dead job must still tell its story
+# (ml/CLAUDE.md 5.25/5.26): they run `if: always()` and upload progress.json,
+# plan.json, store.json, every .done marker and the last 200 lines of the
+# build log as an Actions artifact, so a timeout at hour 23 is diagnosable
+# without the box.
+#
+# SECURITY. `workflow_dispatch` ONLY. ml/CLAUDE.md 6: self-hosted runners on a
+# public repo are safe here for exactly one reason -- dispatch requires repo
+# write access. NEVER add `pull_request`, `issue_comment`, `workflow_run` or
+# `schedule` to this file; any of them would hand code execution on a rented
+# box, plus the job token, to anyone who opens a PR. Every credential reaches
+# the builder as an ENVIRONMENT VARIABLE and never as a command-line argument
+# (argv is world readable on the box, and the box's host has root).
+#
+# INPUT COUNT: 7. `workflow_dispatch` allows at most 25 and a 26th breaks the
+# WHOLE file -- GitHub refuses to parse it, every dispatch 422s, and the
+# Actions list shows a failed run named after the file path with no jobs
+# (ml/CLAUDE.md 7). Count them before pushing an edit to this file.
+name: Family 10 build (tier-P observation stores)
+run-name: family10 ${{ github.event.inputs.store }} ${{ github.event.inputs.stage || 'all' }} -> ${{ github.event.inputs.work || 'ml/cache/family10' }}
+
+on:
+  workflow_dispatch:
+    inputs:
+      store:
+        description: "WHICH STORE: gdp (surface drifters, 6-hourly, 1979->) | gtmba (TAO/TRITON, PIRATA, RAMA moorings, daily, 1977->) | socat (ship and mooring surface CO2, 1957->) | slatrack (along-track sea level, 29 altimeter missions, 1993->, needs Copernicus credentials AND a box)"
+        required: true
+        type: choice
+        options: [gdp, gtmba, socat, slatrack]
+      stage:
+        description: "all | index | fetch | publish. Order is fixed (fetch needs the index's preflight; publish needs the store) -- a single stage is for resuming or re-running one, never for building out of order"
+        default: "all"
+      start:
+        description: "first day, YYYY-MM-DD. Empty = the source's own first year (gdp 1979, gtmba 1977, socat 1957, slatrack 1993). Pre-1982 rows are KEPT, with negative bins"
+        default: ""
+      end:
+        description: "last day, YYYY-MM-DD"
+        default: "2024-12-31"
+      runner:
+        description: "runner label. `ubuntu-latest` fits gdp, gtmba and socat (each streams; the RESULT is <= ~1 GB). slatrack is tens of GB and must be sent to a box -- a Vast box's runner NAME is an implicit label, e.g. gpu-box-31299601, whose /opt/earth-cache persists across jobs and makes the per-year resume real"
+        default: "ubuntu-latest"
+      work:
+        description: "the build directory. RE-DISPATCH WITH THE SAME VALUE TO RESUME: finished stages and finished years are skipped by their .done markers. A different path is a different build"
+        default: "ml/cache/family10"
+      extra_args:
+        description: "extra flags for ml/build_family10_stores.py: --qc-keep N (worst QC grade kept, default 2), --socat-url URL, --attempts N, --force, --source-dir DIR, --smoke. Word-split deliberately; leave empty for a real build"
+        default: ""
+
+permissions:
+  # `write` EXISTS ONLY FOR THE LIVE BRANCH. The stores themselves go to
+  # Hugging Face, verified by restore, and nothing in this workflow commits to
+  # main. The one thing that needs a repo write is the
+  # `ml-live-f10-<run>` orphan branch the build force-pushes its progress to
+  # every three minutes (ml/CLAUDE.md 5.25: progress is an artefact, not a log
+  # line). Blast radius if this job's token leaked is repo-scoped
+  # `contents: write` and nothing else -- keep it at that and add no other
+  # scope (ml/CLAUDE.md 6).
+  contents: write
+
+concurrency:
+  # ONE BUILD PER STORE AT A TIME, and never cancelled in flight. Two
+  # concurrent builds of the same store would write the same per-year parts,
+  # the same store and the same .done markers from two machines and produce a
+  # store neither of them describes. Different stores do not collide -- they
+  # have separate directories, separate markers and separate Hub prefixes --
+  # so the group is keyed by the store.
+  group: family10-build-${{ github.event.inputs.store }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ${{ github.event.inputs.runner || 'ubuntu-latest' }}
+    timeout-minutes: 1440         # 24 h; slatrack is the only one that needs it
+    steps:
+      - uses: actions/checkout@v4
+
+      # The persistent cache, in family7-build.yml's and family8-build.yml's
+      # exact form -- but ONLY on a self-hosted box. A hosted runner has no
+      # /opt/earth-cache and its workspace dies with the job, which is fine for
+      # gdp / gtmba / socat (each finishes inside one job) and is exactly why
+      # slatrack needs the box.
+      - name: Persistent data cache (self-hosted box only)
+        if: ${{ github.event.inputs.runner != 'ubuntu-latest' && github.event.inputs.runner != '' }}
+        run: |
+          mkdir -p /opt/earth-cache
+          rm -rf ml/cache
+          ln -s /opt/earth-cache ml/cache
+
+      # Check the preconditions while the inputs are all they have cost
+      # (ml/CLAUDE.md 0.3). A build without a token cannot publish what it
+      # spends hours computing, and slatrack without credentials cannot fetch
+      # anything at all -- both are DEFINITE answers and may therefore be fatal
+      # (5.17). THE SECRETS MAY NOT EXIST YET, and this step says so in plain
+      # words rather than letting the job discover it in hour three.
+      - name: Preflight
+        id: preflight
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+          CMEMS_USER: ${{ secrets.COPERNICUSMARINE_SERVICE_USERNAME }}
+          CMEMS_PASS: ${{ secrets.COPERNICUSMARINE_SERVICE_PASSWORD }}
+          STORE: ${{ github.event.inputs.store }}
+          STAGE: ${{ github.event.inputs.stage || 'all' }}
+          WORK: ${{ github.event.inputs.work || 'ml/cache/family10' }}
+        run: |
+          echo "store=${STORE} stage=${STAGE} work=${WORK} runner=${RUNNER_NAME:-?}"
+          fail=0
+          if [ -z "${HF_TOKEN}" ]; then
+            if [ "${STAGE}" = "publish" ] || [ "${STAGE}" = "all" ]; then
+              echo "::error::The repository secret HF_TOKEN is NOT SET."
+              echo "This build publishes the store to the Hugging Face dataset"
+              echo "repo chfrank/earth-tensors and verifies the restore;"
+              echo "without the token the job would spend its whole runtime and"
+              echo "have nowhere to put the result. Add it at Settings ->"
+              echo "Secrets and variables -> Actions -> New repository secret,"
+              echo "name HF_TOKEN; the value is in the claude.ai project doc"
+              echo "claude/huggingface-access.md. To build WITHOUT publishing,"
+              echo "re-dispatch with stage=index or stage=fetch."
+              fail=1
+            else
+              echo "::warning::HF_TOKEN is not set. That is fine for"
+              echo "stage=${STAGE}, which never touches the Hub, but a later"
+              echo "stage=publish will refuse until the secret exists."
+            fi
+          else
+            echo "HF_TOKEN: present"
+          fi
+          if [ "${STORE}" = "slatrack" ]; then
+            miss=""
+            [ -z "${CMEMS_USER}" ] && miss="${miss} COPERNICUSMARINE_SERVICE_USERNAME"
+            [ -z "${CMEMS_PASS}" ] && miss="${miss} COPERNICUSMARINE_SERVICE_PASSWORD"
+            if [ -n "${miss}" ]; then
+              echo "::error::slatrack needs Copernicus Marine credentials and"
+              echo "these repository secrets are NOT SET:${miss}"
+              echo "They may never have been created -- as of 2026-09-13 this"
+              echo "repository has no CMEMS secret of any name. Add them at"
+              echo "Settings -> Secrets and variables -> Actions, with exactly"
+              echo "these names; the credentials are in the claude.ai project"
+              echo "doc claude/copernicus-marine-access.md. The builder reads"
+              echo "them from the ENVIRONMENT only -- never argv, never a file,"
+              echo "never committed (ml/CLAUDE.md 6). The other three stores"
+              echo "(gdp, gtmba, socat) are keyless and need none of this."
+              fail=1
+            else
+              echo "CMEMS credentials: present"
+            fi
+            case "${RUNNER_NAME}" in
+              *ubuntu*|"") echo "::warning::slatrack on a hosted runner will run"
+                           echo "out of disk: the store is TENS OF GIGABYTES"
+                           echo "(29 missions x 1 Hz x 32 years) against a"
+                           echo "hosted runner's ~14 GB. Use the runner input to"
+                           echo "send it to a box, and build one year at a time"
+                           echo "with start/end." ;;
+            esac
+          fi
+          [ "${fail}" = "1" ] && exit 1
+          mkdir -p "${WORK}"
+          echo "disk, as the build will see it:"
+          df -h "${WORK}" || df -h .
+          line=$(df -P "${WORK}" | tail -1)
+          use=$(printf '%s\n' "${line}" | awk '{print $5}' | tr -d '%')
+          free_gb=$(printf '%s\n' "${line}" | awk '{print int($4 / 1048576)}')
+          echo "usage ${use}% - ${free_gb} GB free"
+          # Over 90 % used is unusable, not a warning (ml/CLAUDE.md 7): a full
+          # box computes fine and reports nothing, because every metrics write,
+          # every log append and every progress.json rewrite fails behind its
+          # own best-effort guard.
+          if [ "${use}" -ge 90 ]; then
+            echo "::error::the build directory's filesystem is ${use}% full."
+            echo "Free space (scripts/disk_hygiene.sh, or drop an old build"
+            echo "directory) and re-dispatch with the same work value -- the"
+            echo "finished years will be skipped."
+            exit 1
+          fi
+          echo "preflight ok"
+
+      # The builder is stdlib + these three. numpy is the store, netCDF4 reads
+      # slatrack's along-track files, huggingface_hub publishes and verifies
+      # the restore, and copernicusmarine is installed ONLY for slatrack --
+      # it is a large dependency and the other three stores are keyless HTTP.
+      # If the builder grows a dependency it is added HERE in the same commit:
+      # a box has no requirements file, and an ImportError three hours into a
+      # streaming job is the expensive way to learn about one.
+      - name: Install
+        env:
+          STORE: ${{ github.event.inputs.store }}
+        run: |
+          pip install --quiet numpy netCDF4 huggingface_hub
+          if [ "${STORE}" = "slatrack" ]; then
+            pip install --quiet copernicusmarine
+          fi
+          python3 -c "import numpy, netCDF4, huggingface_hub; print('deps ok')"
+
+      # Every credential in env, never on the command line: argv is readable by
+      # every process on the box and the box's host has root (ml/CLAUDE.md 6).
+      # $EXTRA is deliberately unquoted -- it carries whole flags and has to
+      # word-split.
+      #
+      # THE BUILD RUNS IN THE BACKGROUND SO IT CAN REPORT ON ITSELF
+      # (ml/CLAUDE.md 5.25: progress is an ARTEFACT, not a log line, and a
+      # progress line in a log the machine takes with it is not progress
+      # anybody has). The same loop family8-build.yml uses: poll every 30 s and
+      # publish every 6th tick (3 min), shipping progress.json, plan.json and
+      # the last 80 lines of the build log to an orphan branch.
+      #
+      # THE BRANCH IS `ml-live-f10-<store>-<run>`: `ml-live-<n>` is keyed by
+      # ml-train.yml's run numbers and `ml-live-f8-<n>` by family8-build's, this
+      # workflow has its own counter, and two stores can be built at once (the
+      # concurrency group is per store), so the store is in the name too.
+      #
+      # The build writes its log to a FILE and a backgrounded `tail -f` puts it
+      # on the console, rather than piping through `tee`: `$!` after a pipeline
+      # is the PID of its LAST process, so `wait` would return tee's status
+      # (always 0) and a failed build would report success (ml/CLAUDE.md 0.2).
+      - name: Build
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+          COPERNICUSMARINE_SERVICE_USERNAME: ${{ secrets.COPERNICUSMARINE_SERVICE_USERNAME }}
+          COPERNICUSMARINE_SERVICE_PASSWORD: ${{ secrets.COPERNICUSMARINE_SERVICE_PASSWORD }}
+          GITHUB_TOKEN: ${{ github.token }}
+          STORE: ${{ github.event.inputs.store }}
+          STAGE: ${{ github.event.inputs.stage || 'all' }}
+          WORK: ${{ github.event.inputs.work || 'ml/cache/family10' }}
+          START: ${{ github.event.inputs.start }}
+          END: ${{ github.event.inputs.end || '2024-12-31' }}
+          EXTRA: ${{ github.event.inputs.extra_args }}
+          LIVE_BRANCH: ml-live-f10-${{ github.event.inputs.store }}-${{ github.run_number }}
+        run: |
+          set -o pipefail
+          mkdir -p "${WORK}/${STORE}"
+          : > "${WORK}/${STORE}/build.log"
+          ship() {
+            tail -n 80 "${WORK}/${STORE}/build.log" > "${RUNNER_TEMP}/log_tail.txt" 2>/dev/null || true
+            bash scripts/publish_live_files.sh "${LIVE_BRANCH}" \
+                 "${WORK}/${STORE}/progress.json" \
+                 "${WORK}/${STORE}/plan.json" \
+                 "${RUNNER_TEMP}/log_tail.txt" || true
+          }
+          START_ARG=""
+          [ -n "${START}" ] && START_ARG="--start ${START}"
+          python3 -u ml/build_family10_stores.py \
+              --store "${STORE}" --work "${WORK}" --stage "${STAGE}" \
+              ${START_ARG} --end "${END}" ${EXTRA} \
+              > "${WORK}/${STORE}/build.log" 2>&1 &
+          BUILD_PID=$!
+          tail -f -n +1 "${WORK}/${STORE}/build.log" &
+          TAIL_PID=$!
+          echo "build pid ${BUILD_PID}; live state -> ${LIVE_BRANCH} every 3 min"
+          TICK=0
+          while kill -0 $BUILD_PID 2>/dev/null; do
+            sleep 30
+            TICK=$((TICK + 1))
+            if [ $((TICK % 6)) -eq 0 ]; then ship; fi
+          done
+          rc=0
+          wait $BUILD_PID || rc=$?
+          sleep 2                      # let tail -f flush the last lines
+          kill $TAIL_PID 2>/dev/null || true
+          ship
+          echo "build exited ${rc}"
+          exit $rc
+
+      # The registry is cheap (it reads store.json files and one manifest) and
+      # is only rewritten after a successful PUBLISH -- a registry pointing at
+      # a store that is not on the Hub would be a promise nobody can keep.
+      - name: Rewrite the family-10 registry
+        if: ${{ success() && (github.event.inputs.stage == 'publish' || github.event.inputs.stage == 'all' || github.event.inputs.stage == '') }}
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+          WORK: ${{ github.event.inputs.work || 'ml/cache/family10' }}
+        run: |
+          python3 -u ml/build_family10_registry.py \
+              --work "${WORK}" --out "${WORK}/family10.json" --publish
+
+      # A dead job still tells its story. Everything here is small; the stores'
+      # .npy columns are NOT collected and never should be -- they go to the
+      # Hub, verified by restore, and an Actions artifact expires.
+      - name: Collect progress and the log tail
+        if: always() && steps.preflight.outcome == 'success'
+        env:
+          STORE: ${{ github.event.inputs.store }}
+          WORK: ${{ github.event.inputs.work || 'ml/cache/family10' }}
+        run: |
+          out="${RUNNER_TEMP}/family10-story"
+          rm -rf "${out}"; mkdir -p "${out}"
+          root="${WORK}/${STORE}"
+          for f in progress.json plan.json manifest.json; do
+            [ -f "${root}/${f}" ] && cp "${root}/${f}" "${out}/" \
+              || echo "::warning::no ${root}/${f}"
+          done
+          [ -f "${root}/${STORE}/store.json" ] && cp "${root}/${STORE}/store.json" "${out}/" \
+            || echo "::warning::no store.json -- the fetch stage did not assemble the store"
+          [ -f "${WORK}/family10.json" ] && cp "${WORK}/family10.json" "${out}/" \
+            || echo "no family10.json (the registry step has not run)"
+          n=0
+          for f in "${root}"/*.done "${root}"/parts/*.done; do
+            [ -e "${f}" ] || continue
+            cp "${f}" "${out}/marker_$(basename "${f}")"
+            n=$((n + 1))
+          done
+          echo "${n} marker(s) collected"
+          if [ -f "${root}/build.log" ]; then
+            tail -n 200 "${root}/build.log" > "${out}/build.log.tail"
+            echo "--- last 200 lines of the build log ---"
+            cat "${out}/build.log.tail"
+          else
+            echo "::warning::no ${root}/build.log"
+          fi
+          ls -la "${root}" || true
+          ls -la "${root}/${STORE}" || true
+          echo "--- disk after the build ---"
+          df -h "${WORK}" || df -h .
+
+      - name: Upload the story
+        if: always() && steps.preflight.outcome == 'success'
+        uses: actions/upload-artifact@v4
+        with:
+          name: family10-${{ github.event.inputs.store }}-${{ github.run_number }}
+          path: ${{ runner.temp }}/family10-story
+          if-no-files-found: warn
+          retention-days: 30

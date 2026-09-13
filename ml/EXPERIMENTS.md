@@ -44,6 +44,86 @@ low-pass).
 
 ---
 
+<a id="e-079"></a>
+## E-079 · Family 10 — four observation stores and the registry — DISPATCH STUB, not yet run
+
+**E-079 · Build the first four tier-P observation stores of family 10 — surface
+drifters, the tropical moored arrays, ship CO₂ and altimeter tracks — as
+measurement tables a model reads with "what are the k nearest observations, and
+how far away are they", and write the registry that makes family 7.1, family 8
+and these four ONE family (absolute description; the code landed 2026-09-13,
+no build has been dispatched) · `params` n/a (nothing trains — these are DATA
+builds) · `stage` data-build · `data` `family10/{gdp,gtmba,socat,slatrack}` ·
+`arch` n/a · `steps×batch` n/a (no training step of any kind) · `resume` none
+— each store is built from its own archive; family 8's Argo store joins the
+family UNCHANGED and is not rebuilt**
+
+WHAT IT IS, in sentences that need no other document. **Family 10** is the
+programme's storage contract for data of mixed granularity: nothing is
+resampled onto a common grid when it is stored, every source keeps its own
+resolution and cadence, and the *token* a model reads carries the
+measurement's **footprint** — how much area and how much time it averaged —
+beside its distance from the anchor (E-078). It has three **tiers**: **G**,
+gridded dense (family 7 and 7.1's channel groups, one bin-major array per
+group at its native grid); **P**, points, profiles and tracks (family 8's Argo
+store, and these four); **T**, tiles, which is not built. A **tier-P store** is
+a table of measurements sorted by five-day bin with an index that says where
+each bin starts, so a search for the k nearest observations is a slice and a
+distance sort rather than a scan.
+
+THE FOUR STORES, and what each is FOR against the programme's four prediction
+goals (El Niño, the ocean carbon sink, the Atlantic overturning, sea-surface
+temperature):
+
+| store | what it is | C | footprint (log2_fp, log2_dt) | the goal it serves |
+|---|---|---|---|---|
+| `gdp` | the Global Drifter Program's 6-hourly quality-controlled interpolated product: surface buoys reporting 15 m velocity and sea-surface temperature every six hours, 1979-02 → | 4 — `u`, `v`, `sst`, `drogue` | (−4, −4.3) — a point, a quarter-day sample | **AMOC**: observed velocity, the quantity E-069 found the cone codec could not learn from grids. Also an independent SST instrument |
+| `gtmba` | TAO/TRITON (Pacific), PIRATA (Atlantic) and RAMA (Indian): one row per mooring per day of surface and air temperature, salinity, winds, currents and subsurface temperature at eleven standard depths, 1977-11 → | 18 | (−4, −2.3) — a point, a daily mean | **El Niño**: the warm-water volume and thermocline depth, the six-month lead |
+| `socat` | the Surface Ocean CO₂ Atlas synthesis: underway ship and mooring measurements of surface-water CO₂ fugacity with SST, salinity and pressure, 1957 → , tens of millions of rows | 4 — `fco2`, `sst`, `sss`, `patm` | (−4, −4) — an underway measurement taken in minutes | **carbon**: the only OBSERVATION of the sink; everything else the programme could use is a reconstruction |
+| `slatrack` | Copernicus Marine's reprocessed level-3 along-track sea-level anomaly, 29 altimeter missions at 1 Hz (≈ 7 km), 1993 → | 3 — `sla`, `sla_unfiltered`, `mdt` | (−2.0, −4) — a 7 km along-track cell | **AMOC** as geostrophic transport measured rather than modelled; **El Niño** as Kelvin waves in sea level |
+
+THE ONE LAYOUT DECISION THAT IS NOT FAMILY 8's. Drifters begin in 1979 and
+SOCAT in 1957, thirteen and twenty-five years before the tensor's 1982-01-01
+epoch. Those rows are **kept, with negative bin indices**, so the store is the
+whole record and the *loader* clips to whatever axis a tensor has — rather
+than the archive being truncated at build time, which cannot be undone. The
+bin index therefore runs over each store's **own** range with `bin_first` in
+`store.json`, where family 8's runs from 0 over 3,143 bins.
+
+WHAT IS VERIFIED AGAINST THE LIVE ARCHIVE (2026-09-13, from the writing
+sandbox) and what is not. `gdp`: the AOML ERDDAP dataset id `drifter_6hour_qc`,
+every variable's name and unit, and a real one-month fetch — 149,658 rows over
+1,275 drifters for January 2015. `gtmba`: the nine `pmelTaoDy*` datasets on the
+OSMC ERDDAP, every variable name read from each dataset's own metadata, and a
+real month — 2,905 mooring-days over 96 sites, with the ADCP's centimetres per
+second converted from the unit the service declares rather than an assumed
+factor. `socat`: the v2026 release (2026-06-16, DOI 10.25921/8dba-fr90), the
+1,411,801,422-byte synthesis zip, and its 32-column data header read out of the
+first 50 MB by a Range request. `slatrack`: the 29 per-mission dataset ids and
+the variable names `sla_filtered` / `sla_unfiltered` / `mdt`, from Copernicus's
+**public** STAC metadata with no credentials — **the download path itself is
+unverified**, because the writing sandbox deliberately holds no CMEMS
+credentials and cannot install the toolbox.
+
+WHAT WILL BE FILLED IN WHEN IT RUNS. Per store: N, the live-bin count, the
+per-year counts, the per-channel measured fraction and value range, and the
+drop counts by reason — and against the source's own published totals where it
+publishes them (E-079 §4). The one anchor assertion: a nearest-neighbour search
+at 36° N, 70° W, bin 2411 returns a plausible drifter set.
+
+Cost estimate at dispatch (E-079 §5): `gdp`, `gtmba`, `socat` on hosted
+runners, **$0**, under an hour each once the parsers are right. `slatrack`:
+one box-day, **≈ $8** at $0.33/h, tens of GB on the Hub. Registry: minutes.
+
+Spec: [E-079](https://blauewelt.github.io/earth/docs.html?f=ml/plans/E079_family10_point_stores.md).
+Design it implements: [E-078](https://blauewelt.github.io/earth/docs.html?f=ml/plans/E078_multi_granularity.md).
+Code: `ml/build_family10_stores.py`, `ml/family10_store.py`,
+`ml/build_family10_registry.py`, `tests/test_build_family10_stores.py`,
+`.github/workflows/family10-build.yml`.
+Reader contract: `docs/FAMILY10_DATA_HANDOVER.md`.
+
+---
+
 <a id="e-077"></a>
 ## E-077 · Family 7.1 — ocean colour joins the global tensor as a fourth group (recipe `f7l1`) — DISPATCH STUB, not yet run
 
