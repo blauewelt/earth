@@ -229,6 +229,58 @@ jobs:
           fi
           echo "preflight ok: token present, ${free_gb} GB free, ${use}% used"
 
+      # MEASURE THE TWO HOSTS THIS BOX HAS TO STREAM FROM, before five hours
+      # are spent finding out. Neither reading is fatal — the PSL half is now
+      # covered by the Hub mirror (ml/mirror_psl.py) and the CEDA half has no
+      # fallback at all, so the right answer to a slow host is a number in the
+      # log rather than a refused job.
+      #
+      # PSL: 0.17 MB/s from the UK box on 2026-09-13 (one 477 MB OISST year in
+      # 47 minutes; 33 s from another box) is what the mirror exists for. A
+      # warning under 2 MB/s says the build DEPENDS on the mirror being
+      # complete — a file the mirror lacks falls back to this rate.
+      #
+      # CEDA: the `occci` stage streams ~10,000 daily files, ~400 GB, and
+      # NOBODY HAS MEASURED dap.ceda.ac.uk's rate from a box. So measure it and
+      # print the arithmetic: at the measured rate, 400 GB takes N hours, and
+      # the job's timeout is 24. `|| true` on the step's last line is not
+      # needed — every command here is guarded — but the step must never fail
+      # the build, so it ends with `exit 0`.
+      - name: Source throughput (PSL, CEDA)
+        continue-on-error: true
+        run: |
+          probe () {                     # $1 label  $2 bytes  $3 url
+            t0=$(date +%s.%N)
+            got=$(curl -sS --max-time 60 -r 0-$(( $2 - 1 )) -o /dev/null \
+                    -w '%{size_download}' "$3" || echo 0)
+            t1=$(date +%s.%N)
+            awk -v b="${got}" -v a="${t0}" -v z="${t1}" \
+                'BEGIN{d=z-a; if(d<=0)d=0.001; printf "%.2f", b/1000000/d}'
+          }
+          psl=$(probe psl 104857600 \
+            "https://downloads.psl.noaa.gov/Datasets/noaa.oisst.v2.highres/sst.day.mean.1983.nc")
+          echo "::notice::PSL ${psl} MB/s (first 100 MB of sst.day.mean.1983.nc, 60 s cap)"
+          if awk -v m="${psl}" 'BEGIN{exit !(m < 2)}'; then
+            echo "::warning::PSL serves this box at ${psl} MB/s. The sst and"
+            echo "ncep stages need ~45 GB from that host, so this build DEPENDS"
+            echo "on the Hub mirror (mirrors/psl/) being complete — every file"
+            echo "the mirror lacks is fetched at this rate. Run the 'PSL mirror"
+            echo "to the Hub' workflow before relying on a full rebuild."
+          fi
+          ceda=$(probe ceda 52428800 \
+            "https://dap.ceda.ac.uk/neodc/esacci/ocean_colour/data/v6.0-release/geographic/netcdf/chlor_a/daily/v6.0/2015/ESACCI-OC-L3S-CHLOR_A-MERGED-1D_DAILY_4km_GEO_PML_OCx-20150702-fv6.0.nc")
+          echo "::notice::CEDA ${ceda} MB/s (first 50 MB of one 2015 OC-CCI day, 60 s cap)"
+          if awk -v m="${ceda}" 'BEGIN{exit !(m < 5)}'; then
+            hrs=$(awk -v m="${ceda}" 'BEGIN{if(m<=0){print "infinity"}else{printf "%.1f", 400000/m/3600}}')
+            echo "::warning::CEDA serves this box at ${ceda} MB/s. The occci"
+            echo "stage streams ~400 GB of daily files; at this rate that is"
+            echo "${hrs} h of transfer alone, against a 24 h job timeout. There"
+            echo "is no mirror for CEDA — if this number is real, the colour"
+            echo "stage has to be resumed across several dispatches (same work"
+            echo "value) or mirrored the way the PSL inputs now are."
+          fi
+          exit 0
+
       # The builder is stdlib + these. numpy/netCDF4 read every source; xarray
       # for the GLORYS chunks; huggingface_hub pulls the chunks and publishes
       # the result; shapely rasterises the Natural Earth glaciated-areas and

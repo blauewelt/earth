@@ -90,6 +90,44 @@ def main():
     print("case 2 ok — shell variables appear only inside run: blocks")
     ok += 1
 
+    # ---- case 6: the dispatch surface of the two family-7 workflows -----
+    # `workflow_dispatch` ONLY, and at most 25 inputs. Both halves are cheap
+    # here and expensive anywhere else. ml/CLAUDE.md §6: self-hosted runners
+    # on a public repo are safe for exactly one reason — dispatch requires
+    # repo write access — so a `pull_request` / `schedule` / `workflow_run` /
+    # `issue_comment` trigger on any of these files would hand code execution
+    # on a rented box, plus the job token, to anyone who opens a PR. And §7:
+    # `workflow_dispatch` allows at most 25 inputs; a 26th does not break that
+    # input, it breaks the WHOLE workflow's parse, i.e. every dispatch of it.
+    # psl-mirror.yml runs on ubuntu-latest, but the rule is written about the
+    # FILE, not about today's `runs-on` — a later edit that points it at a box
+    # must not find the trigger already widened.
+    # It is checked HERE, before the ml-train.yml recipe cases, because it
+    # is about DIFFERENT FILES: a recipe that stops matching ml-train.yml
+    # must not be able to hide a widened trigger on a workflow that can
+    # reach a rented box.
+    for rel in ("psl-mirror.yml", "family7-build.yml"):
+        path = os.path.join(ROOT, ".github", "workflows", rel)
+        if not os.path.exists(path):
+            raise SystemExit(f"case 6 FAILED: {rel} is missing")
+        d = yaml.safe_load(open(path))
+        # PyYAML reads a bare `on:` key as the boolean True.
+        trig = d.get("on", d.get(True))
+        if not isinstance(trig, dict) or list(trig) != ["workflow_dispatch"]:
+            raise SystemExit(
+                f"case 6 FAILED: {rel} triggers on {sorted(trig) if isinstance(trig, dict) else trig!r}. "
+                f"It must be workflow_dispatch ONLY (ml/CLAUDE.md §6).")
+        inputs = (trig["workflow_dispatch"] or {}).get("inputs") or {}
+        if len(inputs) > 25:
+            raise SystemExit(
+                f"case 6 FAILED: {rel} declares {len(inputs)} dispatch inputs; "
+                f"the ceiling is 25 and a 26th breaks the whole workflow's "
+                f"parse, not just that input (ml/CLAUDE.md §7).")
+        print(f"case 6: {rel} — workflow_dispatch only, {len(inputs)}/25 inputs")
+    print("case 6 ok — both family-7 workflows are dispatch-only and inside "
+          "the input ceiling")
+    ok += 1
+
     # ---- case 3: recipes are real and wired ------------------------------
     blk = raw[raw.index("  workflow_dispatch:"):raw.index("\npermissions:")]
     valid = set(re.findall(r"^      (\w+):\s*$", blk, re.M))
@@ -297,7 +335,7 @@ def main():
     print(f"case 5 ok — all {checked} $TENSOR readers derive and export it")
     ok += 1
 
-    print(f"\nall {ok}/5 workflow guards hold")
+    print(f"\nall {ok}/6 workflow guards hold")
 
 
 if __name__ == "__main__":

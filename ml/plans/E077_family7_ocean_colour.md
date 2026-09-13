@@ -189,6 +189,17 @@ before; + 16.6 GB f32 + 8.2 GB f16 + ≤ 3 GB sources in flight + the verify
 downloads one file at a time (≤ 46 GB transiently) — fits with ~130 GB to
 spare.
 
+**The PSL inputs are Hub-mirrored (2026-09-13).** Measured that day, the UK
+box reads `downloads.psl.noaa.gov` at **0.17 MB/s** — one 477 MB OISST year in
+47 minutes, against 33 s from another box — so the ~45 GB the `sst` and `ncep`
+stages need could not arrive inside the 24 h timeout, while the same box pulls
+the Hub at full speed. Those files now live under `mirrors/psl/Datasets/…`
+(written by `ml/mirror_psl.py`, round-trip verified), PSL stays the fallback,
+and `build_family3.fetch` aborts any transfer averaging under 1 MB/s after 90 s
+instead of waiting it out. This costs the colour stage nothing — CEDA is a
+different host — but it is why a rebuild of the three inherited groups is
+affordable again.
+
 ## 7 · What is asserted before the tensor is trusted
 
 1. The three inherited group files are hash-identical to `f7l0`'s manifest.

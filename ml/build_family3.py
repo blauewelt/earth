@@ -47,6 +47,7 @@ import json
 import os
 import shutil
 import sys
+import time
 import urllib.request
 
 import numpy as np
@@ -121,14 +122,101 @@ def interp2_nan(f, wy, wx):
     return out.astype(np.float32)
 
 
-def fetch(url, path, attempts=4, mirrors=()):
+# ---- the THROUGHPUT guard ------------------------------------------------
+# `urlopen(..., timeout=N)` is a PER-READ timeout, so a host that trickles
+# never times out at all: every individual read returns bytes, and the
+# transfer simply takes as long as it takes. MEASURED 2026-09-13 from the
+# rented UK box that runs the family-7.1 build: downloads.psl.noaa.gov served
+# 0.17 MB/s, so one 477 MB OISST year took 47 minutes (the control run from
+# another box took 33 s) and 43 years of `sst` + `icec` could not finish
+# inside the workflow's 24 h timeout. The `mirrors=` cycling below was written
+# for exactly that case and never engaged, because nothing ever raised.
+#
+# So a transfer now measures itself. After `min_probe_s` of a transfer — long
+# enough that a slow start, a TLS handshake or one stalled chunk is not
+# mistaken for a slow HOST — an average below `min_rate_mbps` aborts the
+# transfer, and the abort is an ordinary failure: the loop moves to the next
+# URL in [url, *mirrors] on its next attempt. The backoff after a SlowTransfer
+# is SHORT (5 s), because waiting does not make a slow host fast; the
+# exponential ladder below is for a host that is refusing, not for one that is
+# crawling.
+FETCH_MIN_RATE_MBPS = 1.0        # MB/s, decimal megabytes, averaged
+FETCH_PROBE_S = 90.0             # how long a transfer runs before it is judged
+FETCH_SLOW_BACKOFF_S = 5         # waiting does not help a slow host
+
+
+class SlowTransfer(Exception):
+    """A transfer aborted by the throughput guard — url, bytes, seconds."""
+
+    def __init__(self, url, nbytes, seconds, floor_mbps):
+        self.url = url
+        self.bytes = int(nbytes)
+        self.seconds = float(seconds)
+        self.floor_mbps = float(floor_mbps)
+        self.mbps = self.bytes / 1e6 / max(self.seconds, 1e-9)
+        super().__init__(
+            f"{url}: {self.bytes:,} bytes in {self.seconds:.0f}s = "
+            f"{self.mbps:.3f} MB/s, under the {self.floor_mbps:.2f} MB/s floor")
+
+
+def _guard_thresholds(min_rate_mbps, min_probe_s):
+    """The two thresholds, with the environment overriding the defaults.
+
+    `EARTH_FETCH_MIN_RATE_MBPS` / `EARTH_FETCH_PROBE_S` exist so a job can
+    relax or tighten the guard without a code change — a box on a genuinely
+    slow link that has no mirror to fall back on is better off waiting than
+    failing. A rate of 0 disables the guard.
+    """
+    env_rate = os.environ.get("EARTH_FETCH_MIN_RATE_MBPS")
+    env_probe = os.environ.get("EARTH_FETCH_PROBE_S")
+    try:
+        if env_rate not in (None, ""):
+            min_rate_mbps = float(env_rate)
+    except ValueError:
+        print(f"  ::warning:: EARTH_FETCH_MIN_RATE_MBPS={env_rate!r} is not a "
+              f"number — using {min_rate_mbps}", flush=True)
+    try:
+        if env_probe not in (None, ""):
+            min_probe_s = float(env_probe)
+    except ValueError:
+        print(f"  ::warning:: EARTH_FETCH_PROBE_S={env_probe!r} is not a "
+              f"number — using {min_probe_s}", flush=True)
+    return float(min_rate_mbps), float(min_probe_s)
+
+
+def _stream_guarded(r, fh, url, min_rate_mbps, min_probe_s, chunk=1 << 20):
+    """`shutil.copyfileobj` with a clock on it. Raises SlowTransfer."""
+    t0 = time.monotonic()
+    n = 0
+    while True:
+        buf = r.read(chunk)
+        if not buf:
+            break
+        fh.write(buf)
+        n += len(buf)
+        el = time.monotonic() - t0
+        if min_rate_mbps > 0 and el >= min_probe_s and \
+                n / 1e6 / el < min_rate_mbps:
+            raise SlowTransfer(url, n, el, min_rate_mbps)
+    return n
+
+
+def fetch(url, path, attempts=4, mirrors=(),
+          min_rate_mbps=FETCH_MIN_RATE_MBPS, min_probe_s=FETCH_PROBE_S):
     """Download url -> path. `mirrors` are alternate URLs for the same file;
     attempts cycle through [url, *mirrors] so a dead host is skipped rather
     than hammered — downloads.psl.noaa.gov 504'd every retry of run #47 on
-    2026-08-08 while the thredds mirror on psl.noaa.gov served fine."""
+    2026-08-08 while the thredds mirror on psl.noaa.gov served fine.
+
+    A transfer that averages under `min_rate_mbps` (MB/s) after `min_probe_s`
+    seconds is ABORTED — the partial `.part` is deleted and `SlowTransfer` is
+    raised, which the attempt loop treats like any other failure and answers
+    by trying the next URL. See the block above for the measurement that
+    produced it."""
     if os.path.exists(path):
         return path
     os.makedirs(os.path.dirname(path), exist_ok=True)
+    min_rate_mbps, min_probe_s = _guard_thresholds(min_rate_mbps, min_probe_s)
     ua = {"User-Agent": "earth-science-pipeline/1.0 (research; github blauewelt/earth)"}
     urls = [url, *mirrors]
     for i in range(attempts):
@@ -138,16 +226,29 @@ def fetch(url, path, attempts=4, mirrors=()):
             req = urllib.request.Request(u, headers=ua)
             with urllib.request.urlopen(req, timeout=600) as r, \
                     open(path + ".part", "wb") as f:
-                shutil.copyfileobj(r, f, 1 << 20)
+                _stream_guarded(r, f, u, min_rate_mbps, min_probe_s)
             os.rename(path + ".part", path)
             return path
         except Exception as e:
+            slow = isinstance(e, SlowTransfer)
+            if slow:
+                try:
+                    os.remove(path + ".part")
+                except OSError:
+                    pass
             if i == attempts - 1:
                 raise
-            wait = 30 * (2 ** i)
-            print(f"  fetch failed ({e}); retrying in {wait}s", flush=True)
-            import time as _t
-            _t.sleep(wait)
+            nxt = urls[(i + 1) % len(urls)]
+            if slow:
+                wait = FETCH_SLOW_BACKOFF_S
+                print(f"  ::warning:: slow transfer aborted: {e.mbps:.3f} MB/s "
+                      f"over {e.seconds:.0f}s ({e.bytes:,} bytes) from {u}, "
+                      f"floor {e.floor_mbps:.2f} MB/s — next: {nxt} "
+                      f"(in {wait}s)", flush=True)
+            else:
+                wait = 30 * (2 ** i)
+                print(f"  fetch failed ({e}); retrying in {wait}s", flush=True)
+            time.sleep(wait)
 
 
 # ------------------------------------------------------------------ base --

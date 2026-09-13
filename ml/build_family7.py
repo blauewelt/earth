@@ -117,6 +117,25 @@ BASE_STEM = "family7_global025_pentad_l0"
 HF_DATASET = "earth-tensors"
 HF_PREFIX = f"tensors/{STEM}"
 BASE_PREFIX = f"tensors/{BASE_STEM}"
+# THE PSL MIRROR (2026-09-13). NOAA PSL serves this box at 0.17 MB/s — one
+# 477 MB OISST year took 47 minutes against 33 s from a US runner — while the
+# same box pulls the Hub at full speed (384 GLORYS chunks at 6 s each). So the
+# PSL inputs are COPIED to the Hub by `ml/mirror_psl.py` from a hosted runner
+# and read from there first; PSL stays the fallback, unchanged. The layout
+# mirrors PSL's own URL path so the mapping is mechanical and reversible:
+#   https://downloads.psl.noaa.gov/Datasets/<rest>  ->  mirrors/psl/Datasets/<rest>
+HUB_MIRROR_PREFIX = "mirrors/psl"
+PSL_URL_ROOT = "https://downloads.psl.noaa.gov/Datasets/"
+# The Hub namespace that owns the dataset repo. `hub_repo()` resolves it from
+# whoami, which needs a token; a PUBLIC mirror read needs none, so the mirror
+# path falls back to this (overridable with EARTH_HF_NAMESPACE).
+HF_NAMESPACE = "chfrank"
+# Which PSL files this run actually took off the Hub mirror, by path in the
+# repo. The fetch helpers have no `ctx`, so the sst/ncep stages read this set
+# when they write their `note_source` line — a tensor whose sources say "PSL"
+# when the bytes came from the Hub is a provenance record that is quietly
+# wrong (ml/CLAUDE.md §0.1: verify the artefact, not the intention).
+HUB_MIRRORED = set()
 # The stages whose bytes come from the f7l0 build unchanged. Their spec digest
 # is folded with BASE_RECIPE (stage_spec below), which is the whole reason a
 # copied `.spec` file still matches and `stage_state_check` does not throw away
@@ -463,6 +482,124 @@ def remote_size(url):
         return None
 
 
+def psl_mirror_path(url):
+    """`https://downloads.psl.noaa.gov/Datasets/<rest>` -> `mirrors/psl/Datasets/<rest>`.
+
+    None for anything else — the thredds host, the SIO Argo cubes, ETOPO,
+    Natural Earth. The mapping is the URL path and nothing else, so a file's
+    place on the Hub can be derived from its source and back again without a
+    table anybody has to keep in step.
+    """
+    if not isinstance(url, str) or not url.startswith(PSL_URL_ROOT):
+        return None
+    rest = url[len(PSL_URL_ROOT):].strip("/")
+    if not rest or ".." in rest.split("/"):
+        return None
+    return f"{HUB_MIRROR_PREFIX}/Datasets/{rest}"
+
+
+_MIRROR_REPO = None
+
+
+def hub_mirror_repo():
+    """(repo_id, token_or_None) for the mirror — WITHOUT requiring a token.
+
+    `hub_repo()` exits when there is no token, which is right for a publish
+    and wrong here: the dataset repo is public and a build that cannot
+    authenticate should still be able to read the mirror. A token, when there
+    is one, is used (it raises the rate limit and it is what a private repo
+    would need).
+    """
+    global _MIRROR_REPO
+    if _MIRROR_REPO is not None:
+        return _MIRROR_REPO
+    tok = os.environ.get("HF_TOKEN") or (
+        open("/home/claude/.hf_token").read().strip()
+        if os.path.exists("/home/claude/.hf_token") else "")
+    ns = os.environ.get("EARTH_HF_NAMESPACE") or ""
+    if tok and not ns:
+        try:
+            from huggingface_hub import HfApi
+            ns = HfApi(token=tok).whoami()["name"]
+        except Exception as e:                                # noqa: BLE001
+            print(f"  hub mirror: whoami failed ({str(e)[:80]}) — assuming "
+                  f"namespace {HF_NAMESPACE}")
+    _MIRROR_REPO = (f"{ns or HF_NAMESPACE}/{HF_DATASET}", tok or None)
+    return _MIRROR_REPO
+
+
+def hub_mirror_size(repo, path_in_repo, token):
+    """The Hub's OWN size for a mirrored file, or None when it is not there.
+
+    `get_paths_info` is the metadata call, so this costs one small request and
+    answers both questions the caller has: does the mirror hold this file, and
+    how many bytes should come back.
+    """
+    from huggingface_hub import HfApi
+    infos = HfApi(token=token).get_paths_info(
+        repo, [path_in_repo], repo_type="dataset")
+    for it in infos or ():
+        if getattr(it, "path", None) == path_in_repo:
+            n = getattr(it, "size", None)
+            return int(n) if n is not None else None
+    return None
+
+
+def hub_mirror_fetch(path_in_repo, path):
+    """Pull ONE mirrored PSL file into `path`. True on success, False if the
+    mirror does not have it or cannot be reached.
+
+    It NEVER raises. A mirror miss must fall through to PSL unharmed, and a
+    mirror hit must not be able to mask a PSL failure — so the two paths share
+    nothing but this boolean, and the file only appears at `path` when its
+    size matched the Hub's own metadata.
+    """
+    from huggingface_hub import hf_hub_download                # lazy: boxes only
+    repo, tok = hub_mirror_repo()
+    tmp = path + ".hub"
+    try:
+        want = hub_mirror_size(repo, path_in_repo, tok)
+        if want is None:
+            print(f"  hub mirror: {path_in_repo} is not on the Hub — "
+                  f"falling back to PSL", flush=True)
+            return False
+        shutil.rmtree(tmp, ignore_errors=True)
+        os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
+        kw = {"repo_type": "dataset", "local_dir": tmp}
+        if tok:
+            kw["token"] = tok
+        p = hf_hub_download(repo, path_in_repo, **kw)
+        got = os.path.getsize(p)
+        if got != want:
+            raise IOError(f"{got:,} of {want:,} bytes")
+        os.replace(p, path)
+        HUB_MIRRORED.add(path_in_repo)
+        print(f"  hub mirror: {path_in_repo}", flush=True)
+        return True
+    except Exception as e:                                    # noqa: BLE001
+        print(f"  hub mirror: {path_in_repo} unavailable ({str(e)[:120]}) — "
+              f"falling back to PSL", flush=True)
+        return False
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+
+
+def hub_mirror_note(ctx, key, subdir):
+    """Record `hf://…/mirrors/psl/…` in sources.json when the mirror served.
+
+    Called by the stage, not by the fetch helper, because `note_source` is the
+    context's and the provenance belongs to the stage that used the bytes.
+    """
+    pre = f"{HUB_MIRROR_PREFIX}/Datasets/{subdir}"
+    used = [p for p in HUB_MIRRORED if p.startswith(pre)]
+    if not used:
+        return False
+    repo, _ = hub_mirror_repo()
+    ctx.note_source(key, f"hf://{repo}/{pre}/ ({len(used)} file(s) read from "
+                         f"the Hub mirror of NOAA PSL)")
+    return True
+
+
 def download_verified(url, path, mirrors=(), attempts=3):
     """Fetch `url` -> `path`, SIZE-VERIFIED — `fetch_sst_na.download_year`'s rule.
 
@@ -470,9 +607,18 @@ def download_verified(url, path, mirrors=(), attempts=3):
     the only symptom was `NetCDF: HDF error` at open time, i.e. one silently
     truncated transfer costs a whole year of the axis. Comparing against
     Content-Length turns that into a retry.
+
+    HUB FIRST FOR PSL (2026-09-13). A PSL URL is tried on the Hub mirror
+    before the origin, because the box that runs this build reads PSL at
+    0.17 MB/s and the Hub at full speed. `EARTH_NO_HUB_MIRROR=1` skips the
+    mirror entirely — that is how the origin path is exercised on purpose.
     """
     if os.path.exists(path):
         return path
+    rel = psl_mirror_path(url)
+    if rel and os.environ.get("EARTH_NO_HUB_MIRROR") != "1":
+        if hub_mirror_fetch(rel, path):
+            return path
     want = remote_size(url)
     for i in range(attempts):
         f3.fetch(url, path, mirrors=tuple(mirrors))
@@ -1442,6 +1588,7 @@ def stage_sst(ctx):
     bump_counts(work, n_sst_days=n_days)
     ctx.note_source("oisst", f"{PSL_OISST}/{{sst,icec}}.day.mean.YYYY.nc "
                              f"(OISST v2.1, NOAA PSL)")
+    hub_mirror_note(ctx, "oisst_mirror", "noaa.oisst.v2.highres")
     mark(work, "sst")
     print(f"  sst: {n_days} daily fields folded; OISST observes "
           f"{int(seen.sum()):,}/{NLAT * NLON} cells in at least one bin")
@@ -1700,6 +1847,7 @@ def stage_ncep(ctx):
     ctx.note_source("ncep", f"{PSL_NCEP}/<var>.gauss.YYYY.nc "
                             f"(NCEP/NCAR Reanalysis 1, NOAA PSL) + "
                             f"{NCEP_LAND}.nc")
+    hub_mirror_note(ctx, "ncep_mirror", "ncep.reanalysis")
     mark(work, "ncep")
     print(f"  ncep: {n_days} daily skt fields; "
           f"{NCHAN['g100']} g100 channels written")

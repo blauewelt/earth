@@ -517,6 +517,48 @@ mg_per_m3 = 10.0 ** log_chl                # NaN stays NaN
 climatology fitted on training years has 1998–2008 + 2010–2016 + 2018–2020 =
 21 full years to fit from.
 
+### The NOAA PSL inputs are mirrored on the Hub, and a slow transfer now aborts
+
+*Added 2026-09-13. This changes nothing about the tensor's contents — it is
+about where the builder READS ITS SOURCES FROM, and it is here because a
+rebuild from scratch cannot finish without it.*
+
+Two of the build's stages, `sst` (OISST sea-surface temperature and sea ice)
+and `ncep` (the fifteen NCEP/NCAR Reanalysis-1 surface channels), stream about
+**45 GB** from `downloads.psl.noaa.gov` — 43 years × (477 MB + 70 MB) of daily
+OISST, and 43 years × 13 variables × ~37 MB of gaussian dailies. **Measured
+2026-09-13 from the rented UK box that runs this build: PSL served it at
+0.17 MB/s** — one 477 MB year took 47 minutes, against 33 s for the same file
+from another box, and 40–90 MB/s from a US location. At that rate the build
+cannot finish inside its 24 h timeout. The `psl.noaa.gov/thredds` mirror is
+**not** a safe fallback: it returns TRUNCATED files under load (measured
+2026-09-04), whose only symptom is `NetCDF: HDF error` at open time, i.e. one
+silent truncation costs a whole year of the axis.
+
+So those files are copied once, by `ml/mirror_psl.py` from a GitHub-hosted
+runner, into the same dataset repository under **`mirrors/psl/Datasets/…`** —
+PSL's own URL path, so the mapping is mechanical
+(`build_family7.psl_mirror_path`) and reversible. Every mirrored file was
+size-verified against PSL's `Content-Length`, uploaded, **downloaded back and
+sha256-compared** before the local copy was deleted; one that does not round
+trip is deleted from the Hub rather than left there, because the builder would
+trust it. `mirrors/psl/manifest.json` lists path, bytes, sha256, source URL and
+mirror time for every file.
+
+- The builder reads the mirror **first** for any `downloads.psl.noaa.gov` URL
+  and falls back to PSL unchanged when the mirror does not have the file, so a
+  file the mirror has not reached yet costs the build only the old slow path.
+  `EARTH_NO_HUB_MIRROR=1` skips the mirror entirely.
+- When the mirror served, the tensor's `sources` record says so —
+  `hf://…/mirrors/psl/Datasets/…` beside the PSL URL, rather than claiming an
+  origin the bytes did not come from.
+- Independently, `build_family3.fetch` now puts a **clock on every transfer**:
+  after 90 s, an average below 1.0 MB/s aborts the transfer and moves to the
+  next URL in the mirror list (`EARTH_FETCH_MIN_RATE_MBPS` /
+  `EARTH_FETCH_PROBE_S` override; a rate of `0` disables it). `urlopen`'s
+  `timeout` is a PER-READ timeout, so before this a host that trickled never
+  timed out at all and the existing mirror cycling never engaged.
+
 **Not in this build, on purpose:** the reflectance bands (`Rrs_412…670`) — a
 separate group for when colour becomes an input rather than a target; PACE OCI
 (too short a record); any gap-filled Level-4 product. The Level-3 observed

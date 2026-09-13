@@ -1,0 +1,127 @@
+# Mirror the NOAA PSL inputs of family 7 onto the Hugging Face Hub.
+#
+# WHY. The family-7.1 build runs on a rented box in the UK, and from that box
+# downloads.psl.noaa.gov trickles at 0.17 MB/s -- measured 2026-09-13, one
+# 477 MB `sst.day.mean.YYYY.nc` in 47 minutes against 33 s for the same file
+# from another box. The `sst` and `ncep` stages need ~45 GB from that host, so
+# the build cannot finish inside its 24 h timeout. This workflow copies those
+# files ONCE, from a GitHub-hosted runner (US, 40-90 MB/s to PSL), into
+# `mirrors/psl/Datasets/...` on the dataset repo; `build_family7`'s
+# `download_verified` then reads the mirror first and falls back to PSL
+# unchanged, so a file this job has not reached yet costs the build nothing
+# but the old slow path.
+#
+# THE THREDDS MIRROR IS NOT AN OPTION: psl.noaa.gov/thredds/fileServer returns
+# TRUNCATED files under load (measured 2026-09-04), which surfaces hours later
+# as `NetCDF: HDF error` and costs a whole year of the axis.
+#
+# WHAT THE JOB GUARANTEES. Every file is size-verified against PSL's own
+# Content-Length, uploaded, then DOWNLOADED BACK and sha256-compared before
+# either copy is deleted; a file whose round trip does not verify is DELETED
+# from the Hub and counted as failed (ml/hf_mirror.py's rule -- a backup is
+# only real if the restore works). The job continues through the list and
+# exits non-zero at the end if anything failed, so one bad file never costs
+# the other six hundred.
+#
+# WHY IT REFUSES A SLOW RUNNER. The whole point of this job is that the runner
+# is fast to PSL. A hosted runner that is not would spend six hours moving a
+# few gigabytes and report success for the handful it managed -- so the first
+# step MEASURES the rate (the first 100 MB of one real OISST year, 60 s cap)
+# and refuses under 2 MB/s. That is a precondition that depends only on the
+# environment, checked while the environment is all it has cost (ml/CLAUDE.md
+# §0.3), and it is a DEFINITE answer and therefore may be fatal (§5.17):
+# re-dispatch gets a different runner.
+#
+# DISK. ~14 GB free on a hosted runner and one OISST year is 477 MB, so
+# exactly one file is on disk at a time.
+#
+# SECURITY. `workflow_dispatch` ONLY -- ml/CLAUDE.md §6. NEVER add
+# `pull_request`, `issue_comment`, `workflow_run` or `schedule` to this file.
+# `runs-on: ubuntu-latest`, deliberately: nothing here needs a GPU and §6
+# forbids giving a non-dispatch trigger to anything on `runs-on: gpu`.
+# HF_TOKEN reaches the script as an ENV VAR on the run step and never as a
+# command-line argument.
+name: PSL mirror to the Hub
+run-name: psl mirror ${{ github.event.inputs.what || 'all' }} ${{ github.event.inputs.start || '1982' }}-${{ github.event.inputs.end || '2024' }}
+
+on:
+  workflow_dispatch:
+    inputs:
+      what:
+        description: "oisst | ncep | all. oisst is sst+icec day-mean years (the big half, ~547 MB a year); ncep is the 13 surface_gauss stems plus the land mask (~480 MB a year)"
+        default: "all"
+      start:
+        description: "first year, inclusive (the family-7 axis starts 1982)"
+        default: "1982"
+      end:
+        description: "last year, inclusive (the family-7 axis ends 2024)"
+        default: "2024"
+      extra_args:
+        description: "extra flags for ml/mirror_psl.py, e.g. --dry-run or --force. Word-split deliberately; leave empty for an ordinary run"
+        default: ""
+
+permissions:
+  contents: read          # the mirror goes to Hugging Face, not to this repo
+
+concurrency:
+  # ONE MIRROR AT A TIME. Two jobs would upload the same paths from two
+  # runners and race the manifest merge; never cancelled in flight, because a
+  # running job holds a file whose round trip has not been checked yet.
+  group: psl-mirror
+  cancel-in-progress: false
+
+jobs:
+  mirror:
+    runs-on: ubuntu-latest
+    timeout-minutes: 350          # GitHub-hosted jobs are capped at 6 h
+    steps:
+      - uses: actions/checkout@v4
+
+      # MEASURE, DO NOT ASSUME. The first 100 MB of one real file, 60 s cap.
+      # `-r` asks for a range; a host that ignores it still gets cut off by
+      # --max-time, and the rate is computed from the bytes that actually
+      # arrived either way.
+      - name: PSL throughput from this runner
+        run: |
+          url=https://downloads.psl.noaa.gov/Datasets/noaa.oisst.v2.highres/sst.day.mean.1983.nc
+          t0=$(date +%s.%N)
+          bytes=$(curl -sS --max-time 60 -r 0-104857599 -o /dev/null \
+                    -w '%{size_download}' "${url}" || echo 0)
+          t1=$(date +%s.%N)
+          mbps=$(awk -v b="${bytes}" -v a="${t0}" -v z="${t1}" \
+                 'BEGIN{d=z-a; if(d<=0)d=0.001; printf "%.2f", b/1000000/d}')
+          echo "::notice::PSL ${mbps} MB/s from this runner (${bytes} bytes in $(awk -v a=${t0} -v z=${t1} 'BEGIN{printf "%.1f", z-a}')s)"
+          if awk -v m="${mbps}" 'BEGIN{exit !(m < 2)}'; then
+            echo "::error::PSL serves this runner at ${mbps} MB/s, under the"
+            echo "2 MB/s floor. This job exists BECAUSE the build box gets"
+            echo "0.17 MB/s; a slow runner would spend six hours moving a few"
+            echo "gigabytes and report success for the handful it managed."
+            echo "Re-dispatch — a re-run lands on a different runner."
+            exit 1
+          fi
+
+      # numpy because build_family7 imports it at module scope;
+      # huggingface_hub for the upload and the restore. netCDF4/xarray are NOT
+      # needed: this script moves bytes and never opens a file.
+      - name: Install
+        run: pip install --quiet numpy huggingface_hub
+
+      # HF_TOKEN in env, never on the command line: argv is world readable
+      # (ml/CLAUDE.md §6). $EXTRA is deliberately unquoted — it carries whole
+      # flags and has to word-split.
+      - name: Mirror
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+          WHAT: ${{ github.event.inputs.what || 'all' }}
+          START: ${{ github.event.inputs.start || '1982' }}
+          END: ${{ github.event.inputs.end || '2024' }}
+          EXTRA: ${{ github.event.inputs.extra_args }}
+        run: |
+          if [ -z "${HF_TOKEN}" ]; then
+            echo "::error::HF_TOKEN secret is not set — there is nowhere to"
+            echo "put the mirror. Settings -> Secrets and variables -> Actions;"
+            echo "the value is in claude/huggingface-access.md."
+            exit 1
+          fi
+          python3 -u ml/mirror_psl.py \
+              --what "${WHAT}" --start "${START}" --end "${END}" ${EXTRA}

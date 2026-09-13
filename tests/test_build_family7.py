@@ -1714,3 +1714,416 @@ def test_25_publish_records_drift_for_unseeded_and_refuses_for_seeded(
         b7.stage_publish(ctx)
     assert "INHERITANCE BROKEN on g025" in str(e.value)
     assert not os.path.exists(os.path.join(work, "manifest.json"))
+
+
+# ======================================================================
+# The PSL transfer guard and the Hub mirror (2026-09-13).
+#
+# MEASURED that day: the family-7.1 build box in the UK reads
+# downloads.psl.noaa.gov at 0.17 MB/s — one 477 MB OISST year in 47 minutes
+# against 33 s from another box — so the sst and ncep stages could not finish
+# inside the workflow's 24 h timeout. `urlopen(timeout=)` is a PER-READ
+# timeout, so nothing ever raised and the `mirrors=` cycling never engaged.
+# Two changes answer it, and these are their tests: a THROUGHPUT guard in
+# `build_family3.fetch`, and a HUB-FIRST path for PSL URLs in
+# `build_family7.download_verified` fed by `ml/mirror_psl.py`.
+#
+# NO NETWORK. The guard is tested against a local http.server that trickles;
+# the Hub is a fake module in sys.modules, because huggingface_hub is imported
+# lazily inside the functions for exactly this reason.
+# ======================================================================
+import hashlib                                                 # noqa: E402
+import http.server                                             # noqa: E402
+import threading                                               # noqa: E402
+import time                                                    # noqa: E402
+import types                                                   # noqa: E402
+
+
+class _RateHandler(http.server.BaseHTTPRequestHandler):
+    """`/fast` answers at once; `/slow` writes 128 KiB every 50 ms."""
+
+    BODY = b"x" * (2 << 20)
+
+    def log_message(self, *a):                                 # keep stdout clean
+        pass
+
+    def do_GET(self):
+        self.send_response(200)
+        self.send_header("Content-Length", str(len(self.BODY)))
+        self.end_headers()
+        try:
+            if self.path.startswith("/fast"):
+                self.wfile.write(self.BODY)
+                return
+            step = 128 << 10
+            for i in range(0, len(self.BODY), step):
+                self.wfile.write(self.BODY[i:i + step])
+                self.wfile.flush()
+                time.sleep(0.05)
+        except (BrokenPipeError, ConnectionResetError):
+            pass                     # the client aborted: that is the point
+
+
+def _serve():
+    """(base_url, shutdown) for a threaded local server on an ephemeral port."""
+    srv = http.server.ThreadingHTTPServer(("127.0.0.1", 0), _RateHandler)
+    srv.daemon_threads = True
+    t = threading.Thread(target=srv.serve_forever, daemon=True)
+    t.start()
+
+    def stop():
+        srv.shutdown()
+        srv.server_close()
+    return f"http://127.0.0.1:{srv.server_address[1]}", stop
+
+
+def test_25_the_throughput_guard_aborts_a_trickle_and_moves_to_the_mirror(tmp_path):
+    """A slow HOST is abandoned, not waited out — and the next URL is tried.
+
+    The old `shutil.copyfileobj` had no clock: a 0.17 MB/s host simply took as
+    long as it took. The guard measures the transfer and raises SlowTransfer,
+    which the attempt loop treats like any other failure — so attempt 2 goes
+    to the mirror and the file still lands, whole.
+    """
+    assert f3.FETCH_SLOW_BACKOFF_S == 5, (
+        "the backoff after a SlowTransfer must stay SHORT — waiting does not "
+        "make a slow host fast; the exponential ladder is for a host that is "
+        "refusing, not for one that is crawling")
+    base, stop = _serve()
+    back = f3.FETCH_SLOW_BACKOFF_S
+    f3.FETCH_SLOW_BACKOFF_S = 0                # the test does not need the wait
+    try:
+        # (a) the guard fires, and it says so with the numbers.
+        p = str(tmp_path / "one" / "trickle.bin")
+        t0 = time.time()
+        with pytest.raises(f3.SlowTransfer) as e:
+            f3.fetch(f"{base}/slow", p, attempts=1,
+                     min_probe_s=0.2, min_rate_mbps=50.0)
+        el = time.time() - t0
+        assert e.value.url == f"{base}/slow"
+        assert 0 < e.value.bytes < len(_RateHandler.BODY), (
+            "the transfer must be ABORTED part-way; a guard that only fires "
+            "after the whole file has arrived has saved nothing")
+        assert e.value.seconds >= 0.2 and e.value.mbps < 50.0
+        assert el < 20, "the guard did not abort: it waited for the whole body"
+        assert not os.path.exists(p) and not os.path.exists(p + ".part"), (
+            "the partial .part must be deleted — `fetch` returns early when "
+            "`path` exists, so a leftover would be read as a finished file")
+
+        # (b) with a mirror, the SECOND attempt takes it and the file lands.
+        p2 = str(tmp_path / "two" / "trickle.bin")
+        f3.fetch(f"{base}/slow", p2, attempts=2, mirrors=(f"{base}/fast",),
+                 min_probe_s=0.2, min_rate_mbps=50.0)
+        assert open(p2, "rb").read() == _RateHandler.BODY
+    finally:
+        f3.FETCH_SLOW_BACKOFF_S = back
+        stop()
+
+
+def test_26_a_normal_transfer_is_unchanged_and_the_env_can_move_the_floor(tmp_path):
+    """The guard must be invisible to every fetch that is not pathological."""
+    base, stop = _serve()
+    try:
+        p = str(tmp_path / "fast.bin")
+        f3.fetch(f"{base}/fast", p)             # stock thresholds, no kwargs
+        assert open(p, "rb").read() == _RateHandler.BODY
+        assert not os.path.exists(p + ".part")
+
+        # A second fetch to the same path is the pre-existing short circuit.
+        f3.fetch(f"{base}/nonexistent-would-404", p)
+
+        # The environment overrides the defaults, so a box on a genuinely slow
+        # link with no mirror can wait rather than fail.
+        keep = {k: os.environ.get(k) for k in
+                ("EARTH_FETCH_MIN_RATE_MBPS", "EARTH_FETCH_PROBE_S")}
+        try:
+            os.environ["EARTH_FETCH_MIN_RATE_MBPS"] = "0"
+            os.environ["EARTH_FETCH_PROBE_S"] = "0.2"
+            assert f3._guard_thresholds(1.0, 90.0) == (0.0, 0.2)
+            p3 = str(tmp_path / "slow-but-allowed.bin")
+            f3.fetch(f"{base}/slow", p3, attempts=1,
+                     min_probe_s=0.2, min_rate_mbps=50.0)   # env wins: rate 0
+            assert open(p3, "rb").read() == _RateHandler.BODY
+        finally:
+            for k, v in keep.items():
+                if v is None:
+                    os.environ.pop(k, None)
+                else:
+                    os.environ[k] = v
+        assert f3._guard_thresholds(1.0, 90.0) == (1.0, 90.0)
+    finally:
+        stop()
+
+
+def test_27_psl_mirror_path_maps_the_url_and_nothing_else():
+    """The mirror layout IS PSL's own URL path — no table to keep in step."""
+    assert b7.HUB_MIRROR_PREFIX == "mirrors/psl"
+    assert b7.psl_mirror_path(
+        f"{b7.PSL_OISST}/sst.day.mean.1983.nc") == \
+        "mirrors/psl/Datasets/noaa.oisst.v2.highres/sst.day.mean.1983.nc"
+    assert b7.psl_mirror_path(
+        f"{b7.PSL_NCEP}/{b7.NCEP_LAND}.nc") == \
+        "mirrors/psl/Datasets/ncep.reanalysis/surface_gauss/land.sfc.gauss.nc"
+    for k, stem in b7.NCEP_FILES.items():
+        rel = b7.psl_mirror_path(f"{b7.PSL_NCEP}/{stem}.2024.nc")
+        assert rel.startswith("mirrors/psl/Datasets/ncep.reanalysis/")
+        assert rel.endswith(f"/{stem}.2024.nc"), k
+    # Everything else is None — the thredds mirror above all, which serves
+    # TRUNCATED files under load (measured 2026-09-04) and must never be
+    # confused with the Hub copy.
+    for u in (f"{b7.THREDDS_OISST}/sst.day.mean.1983.nc",
+              f"{b7.THREDDS_NCEP}/skt.sfc.gauss.2020.nc",
+              f"{b7.RG_BASE}/RG_ArgoClim_Temperature_2019.nc.gz",
+              b7.ETOPO_URL, "https://downloads.psl.noaa.gov/Datasets/",
+              "", None, 42):
+        assert b7.psl_mirror_path(u) is None, u
+
+
+def _fake_hub(paths_info, download):
+    """A stand-in `huggingface_hub` module.
+
+    huggingface_hub is NOT installed in the sandbox, which is why the builder
+    imports it lazily inside the functions that use it; that same laziness is
+    what lets this test replace it wholesale.
+    """
+    m = types.ModuleType("huggingface_hub")
+    calls = {"paths_info": [], "download": []}
+
+    class _Info:
+        def __init__(self, path, size):
+            self.path, self.size = path, size
+
+    class HfApi:
+        def __init__(self, token=None):
+            self.token = token
+
+        def whoami(self):
+            raise AssertionError("whoami must not be needed to READ a public "
+                                 "mirror — a build without a token still has "
+                                 "to be able to use it")
+
+        def get_paths_info(self, repo, paths, repo_type=None):
+            calls["paths_info"].append((repo, tuple(paths)))
+            return [_Info(p, n) for p, n in paths_info(paths)]
+
+    def hf_hub_download(repo, path_in_repo, **kw):
+        calls["download"].append((repo, path_in_repo, kw))
+        return download(repo, path_in_repo, kw)
+
+    class EntryNotFoundError(Exception):
+        pass
+
+    m.HfApi = HfApi
+    m.hf_hub_download = hf_hub_download
+    m.EntryNotFoundError = EntryNotFoundError
+    m.utils = types.SimpleNamespace(EntryNotFoundError=EntryNotFoundError)
+    return m, calls
+
+
+class _Ctx:
+    """Just enough of Ctx for note_source."""
+
+    def __init__(self):
+        self.sources = {}
+
+    def note_source(self, key, value):
+        self.sources[key] = value
+
+
+def test_28_download_verified_reads_the_hub_mirror_first(tmp_path):
+    """Hub first for PSL; PSL untouched when the mirror has it.
+
+    And the three ways back to PSL, each asserted by EFFECT (was the origin
+    fetcher called?) rather than by a log line: the mirror does not hold the
+    file, the pull raises, and EARTH_NO_HUB_MIRROR=1.
+    """
+    url = f"{b7.PSL_OISST}/sst.day.mean.1983.nc"
+    rel = b7.psl_mirror_path(url)
+    hub_bytes, psl_bytes = b"HUB COPY", b"PSL COPY"
+
+    def run(paths_info, download, env=None, ctx=None):
+        """One download_verified with the Hub faked out. -> (path, psl_calls)."""
+        n = {"psl": 0}
+
+        def fake_fetch(u, p, **kw):
+            n["psl"] += 1
+            os.makedirs(os.path.dirname(p), exist_ok=True)
+            with open(p, "wb") as fh:
+                fh.write(psl_bytes)
+            return p
+
+        mod, calls = _fake_hub(paths_info, download)
+        keep_fetch, keep_size = f3.fetch, b7.remote_size
+        keep_mod = sys.modules.get("huggingface_hub")
+        keep_env = os.environ.get("EARTH_NO_HUB_MIRROR")
+        keep_ns = os.environ.get("EARTH_HF_NAMESPACE")
+        keep_repo = b7._MIRROR_REPO
+        b7.HUB_MIRRORED.clear()
+        try:
+            sys.modules["huggingface_hub"] = mod
+            f3.fetch = fake_fetch
+            b7.remote_size = lambda u: None       # no HEAD to the real host
+            os.environ["EARTH_HF_NAMESPACE"] = "someone"
+            b7._MIRROR_REPO = None
+            if env is None:
+                os.environ.pop("EARTH_NO_HUB_MIRROR", None)
+            else:
+                os.environ["EARTH_NO_HUB_MIRROR"] = env
+            d = tempfile.mkdtemp(prefix="dlv_", dir=str(tmp_path))
+            p = b7.download_verified(url, os.path.join(d, "sst.nc"))
+            if ctx is not None:
+                b7.hub_mirror_note(ctx, "oisst_mirror", "noaa.oisst.v2.highres")
+            return open(p, "rb").read(), n["psl"], calls
+        finally:
+            f3.fetch, b7.remote_size = keep_fetch, keep_size
+            b7._MIRROR_REPO = keep_repo
+            if keep_mod is None:
+                sys.modules.pop("huggingface_hub", None)
+            else:
+                sys.modules["huggingface_hub"] = keep_mod
+            for k, v in (("EARTH_NO_HUB_MIRROR", keep_env),
+                         ("EARTH_HF_NAMESPACE", keep_ns)):
+                if v is None:
+                    os.environ.pop(k, None)
+                else:
+                    os.environ[k] = v
+
+    def write_hub(repo, path_in_repo, kw):
+        d = os.path.join(kw["local_dir"], os.path.dirname(path_in_repo))
+        os.makedirs(d, exist_ok=True)
+        p = os.path.join(d, os.path.basename(path_in_repo))
+        with open(p, "wb") as fh:
+            fh.write(hub_bytes)
+        return p
+
+    # (a) MIRROR PRESENT -> the Hub answers and PSL is never called.
+    ctx = _Ctx()
+    got, psl, calls = run(lambda ps: [(p, len(hub_bytes)) for p in ps],
+                          write_hub, ctx=ctx)
+    assert got == hub_bytes and psl == 0
+    assert calls["download"] and calls["download"][0][1] == rel
+    assert calls["download"][0][0] == f"someone/{b7.HF_DATASET}"
+    assert rel in b7.HUB_MIRRORED
+    assert ctx.sources["oisst_mirror"].startswith(
+        f"hf://someone/{b7.HF_DATASET}/mirrors/psl/Datasets/noaa.oisst.v2.highres/")
+
+    # (b) The Hub's OWN metadata is what the bytes are checked against — a
+    # short file from the mirror falls through rather than being trusted.
+    got, psl, calls = run(lambda ps: [(p, 999999) for p in ps], write_hub)
+    assert got == psl_bytes and psl == 1
+
+    # (c) MIRROR ABSENT (nothing under that path) -> PSL, no download attempt.
+    got, psl, calls = run(lambda ps: [], write_hub)
+    assert got == psl_bytes and psl == 1 and calls["download"] == []
+
+    # (d) MIRROR PULL RAISES (EntryNotFoundError, the 404 the Hub throws)
+    #     -> PSL. A mirror failure must never mask a PSL success.
+    def boom(repo, path_in_repo, kw):
+        raise sys.modules["huggingface_hub"].EntryNotFoundError(path_in_repo)
+
+    got, psl, calls = run(lambda ps: [(p, len(hub_bytes)) for p in ps], boom)
+    assert got == psl_bytes and psl == 1 and len(calls["download"]) == 1
+
+    # (e) EARTH_NO_HUB_MIRROR=1 -> the Hub is not consulted at all.
+    ctx = _Ctx()
+    got, psl, calls = run(lambda ps: [(p, len(hub_bytes)) for p in ps],
+                          write_hub, env="1", ctx=ctx)
+    assert got == psl_bytes and psl == 1
+    assert calls["download"] == [] and calls["paths_info"] == []
+    assert ctx.sources == {}, ("nothing came off the mirror, so nothing may "
+                              "claim it did")
+    b7.HUB_MIRRORED.clear()
+
+
+def test_29_mirror_psl_deletes_a_hub_file_whose_round_trip_fails(tmp_path):
+    """A mirrored file that does not restore is worse than an absent one.
+
+    `ml/hf_mirror.py`'s rule: a backup is only real if the restore works. The
+    builder would READ a truncated mirror copy, and the symptom would be
+    `NetCDF: HDF error` hours later, one whole year of the axis gone — so the
+    round trip is checked and a mismatch is DELETED from the Hub, not left
+    there with a warning.
+    """
+    sys.path.insert(0, ML)
+    import mirror_psl as mp                                    # noqa: E402
+
+    url = f"{b7.PSL_OISST}/sst.day.mean.1983.nc"
+    rel = b7.psl_mirror_path(url)
+    good = b"the real bytes"
+
+    class FakeApi:
+        def __init__(self):
+            self.uploaded, self.deleted = [], []
+
+        def upload_file(self, path_or_fileobj=None, path_in_repo=None,
+                        repo_id=None, repo_type=None, commit_message=None):
+            assert repo_type == "dataset" and repo_id == "ns/earth-tensors"
+            assert os.path.basename(rel) in commit_message, (
+                "the commit message must NAME the file — a wall of "
+                '"PSL mirror" commits says nothing about what landed')
+            self.uploaded.append((path_in_repo, open(path_or_fileobj, "rb").read()))
+
+        def delete_file(self, path_in_repo=None, repo_id=None, repo_type=None,
+                        commit_message=None):
+            self.deleted.append(path_in_repo)
+
+    def run(restored):
+        api = FakeApi()
+        keep = (mp.fetch, mp.remote_size, mp.hf_download)
+        work = tempfile.mkdtemp(prefix="mp_", dir=str(tmp_path))
+        try:
+            def fake_fetch(u, p, **kw):
+                with open(p, "wb") as fh:
+                    fh.write(good)
+                return p
+
+            def fake_back(repo, path_in_repo, dest, token=None):
+                os.makedirs(dest, exist_ok=True)
+                p = os.path.join(dest, os.path.basename(path_in_repo))
+                with open(p, "wb") as fh:
+                    fh.write(restored)
+                return p
+
+            mp.fetch, mp.remote_size = fake_fetch, lambda u: len(good)
+            mp.hf_download = fake_back
+            err = None
+            rec = None
+            try:
+                rec = mp.mirror_one(api, "ns/earth-tensors", url, rel, work)
+            except mp.MirrorError as e:
+                err = str(e)
+            left = sorted(os.listdir(work))
+            return api, rec, err, left
+        finally:
+            mp.fetch, mp.remote_size, mp.hf_download = keep
+            shutil.rmtree(work, ignore_errors=True)
+
+    # The round trip does not verify -> the Hub copy is DELETED and it fails.
+    api, rec, err, left = run(b"truncat")
+    assert rec is None and api.uploaded and api.deleted == [rel]
+    assert "RESTORE MISMATCH" in err and "deleted from the Hub" in err
+    assert left == [], ("one file at a time: a hosted runner has ~14 GB and "
+                        "nothing may be left behind, least of all on a failure")
+
+    # The round trip verifies -> a manifest record, nothing deleted, no disk.
+    api, rec, err, left = run(good)
+    assert err is None and api.deleted == []
+    assert api.uploaded == [(rel, good)]
+    assert rec["path"] == rel and rec["bytes"] == len(good)
+    assert rec["sha256"] == hashlib.sha256(good).hexdigest()
+    assert rec["source_url"] == url
+    assert dt.datetime.fromisoformat(rec["mirrored_at"]).tzinfo is not None
+    assert left == []
+
+    # The file list is the family-7 source list, and it is derived from the
+    # same constants the builder fetches from — not a second copy of them.
+    files = mp.wanted("all", 1982, 2024)
+    assert len(files) == 43 * 2 + 1 + 43 * len(b7.NCEP_FILES)
+    assert all(b7.psl_mirror_path(u) == rel_ for u, rel_ in files)
+    assert (f"{b7.PSL_NCEP}/{b7.NCEP_LAND}.nc",
+            b7.psl_mirror_path(f"{b7.PSL_NCEP}/{b7.NCEP_LAND}.nc")) in files
+    assert mp.wanted("oisst", 1982, 1982) == [
+        (f"{b7.PSL_OISST}/sst.day.mean.1982.nc",
+         b7.psl_mirror_path(f"{b7.PSL_OISST}/sst.day.mean.1982.nc")),
+        (f"{b7.PSL_OISST}/icec.day.mean.1982.nc",
+         b7.psl_mirror_path(f"{b7.PSL_OISST}/icec.day.mean.1982.nc"))]
