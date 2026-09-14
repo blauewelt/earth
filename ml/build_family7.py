@@ -2538,8 +2538,34 @@ def oc_local_name(url):
     return os.path.basename(url.split("?")[0])
 
 
+HDF5_SIGNATURE = b"\x89HDF\r\n\x1a\n"
+OC_MIN_GENERATED_BYTES = 1 << 20          # an NCSS day measured 19.7-20.1 MB
+
+
+def oc_check_day_bytes(path):
+    """The THREAD-SAFE half of verifying a generated file: HDF5 signature at
+    offset 0 and a size no error page could reach. Raises otherwise.
+
+    HDF5 IS NOT THREAD-SAFE, and this is why the check is split in two.
+    occci-partials #3 (2026-09-14, the first NCSS lane) segfaulted at day 12
+    of 2023: the download workers were opening their files with netCDF4
+    while the main thread had another one open, and the netCDF-C build on
+    the runner has no thread-safe HDF5 underneath. Nothing that touches HDF5
+    runs off the main thread; the workers check only bytes."""
+    n = os.path.getsize(path)
+    with open(path, "rb") as fh:
+        head = fh.read(len(HDF5_SIGNATURE))
+    if head != HDF5_SIGNATURE:
+        raise IOError(f"not an HDF5/netCDF4 file (starts {head!r}; {n:,} B) "
+                      f"— an error page, not a day")
+    if n < OC_MIN_GENERATED_BYTES:
+        raise IOError(f"only {n:,} bytes — a truncated or empty subset")
+
+
 def oc_check_day_file(path):
-    """Raise unless `path` opens as a `chlor_a` field. The size check's stand-in."""
+    """Raise unless `path` opens as a `chlor_a` field. The size check's stand-in.
+
+    MAIN THREAD ONLY (see `oc_check_day_bytes`)."""
     import netCDF4 as ncdf
     d = ncdf.Dataset(path)
     try:
@@ -2715,7 +2741,7 @@ def oc_open(path):
         d.close()
 
 
-def oc_fetch_day(ctx, url, dest_dir, attempts=3):
+def oc_fetch_day(ctx, url, dest_dir, attempts=3, full_check=False):
     """One daily file onto the disk, VERIFIED. The caller DELETES it.
 
     ~10,000 files of ~40 MB is 400 GB: the Argo builder's discipline is the
@@ -2726,10 +2752,11 @@ def oc_fetch_day(ctx, url, dest_dir, attempts=3):
     property of the server rather than a preference. An archived file declares
     a Content-Length and `download_verified` compares against it. PML's NCSS
     subset GENERATES the bytes, so there is no length to compare against
-    (measured 2026-09-14) — such a file is verified by being OPENED and read
-    for a `chlor_a` field of two real dimensions, which is the failure a
-    truncated transfer would otherwise show hours later as `NetCDF: HDF
-    error`.
+    (measured 2026-09-14) — such a file is verified by its BYTES here (HDF5
+    signature, a real size: `oc_check_day_bytes`, safe in a worker thread)
+    and by being OPENED on the main thread, where a failure refetches it
+    synchronously (`full_check=True`) rather than surfacing hours later as
+    `NetCDF: HDF error`.
     """
     os.makedirs(dest_dir, exist_ok=True)
     if ctx.source_dir or os.path.isabs(url) and os.path.exists(url):
@@ -2739,22 +2766,23 @@ def oc_fetch_day(ctx, url, dest_dir, attempts=3):
         download_verified(url, path)
         return path, True
     last = None
+    check = oc_check_day_file if full_check else oc_check_day_bytes
     for i in range(attempts):
         if os.path.exists(path):
             os.remove(path)
         download_verified(url, path)
         try:
-            oc_check_day_file(path)
+            check(path)
             return path, True
         except Exception as e:                                # noqa: BLE001
             last = e
             print(f"  ::warning:: {os.path.basename(path)}: {str(e)[:140]} — "
                   f"the server generates this file and declares no length, so "
-                  f"it is verified by opening it; refetching "
+                  f"it is verified by its bytes; refetching "
                   f"({i + 1}/{attempts})", flush=True)
     if os.path.exists(path):
         os.remove(path)
-    raise IOError(f"{url}: {attempts} transfers did not open as a {OC_VAR} "
+    raise IOError(f"{url}: {attempts} transfers did not verify as a {OC_VAR} "
                   f"field ({last})")
 
 
@@ -2968,7 +2996,21 @@ def oc_year_reduce(ctx, year, files, days, dest_dir, geom, geom_path=None,
         path, drop = None, False
         try:
             path, drop = get()
-            chl, s_lat, s_lon, fill = oc_open(path)
+            try:
+                chl, s_lat, s_lon, fill = oc_open(path)
+            except Exception as e:                            # noqa: BLE001
+                if not (drop and oc_generated_url(url)):
+                    raise
+                # A generated file passed the byte check in its worker but
+                # does not OPEN: refetch it HERE, on the main thread, with the
+                # full netCDF check — the only thread that may touch HDF5.
+                print(f"  ::warning:: {os.path.basename(path)}: "
+                      f"{type(e).__name__}: {str(e)[:120]} — refetching on "
+                      f"the main thread with the full check", flush=True)
+                if os.path.exists(path):
+                    os.remove(path)
+                path, drop = oc_fetch_day(ctx, url, dest_dir, full_check=True)
+                chl, s_lat, s_lon, fill = oc_open(path)
             oc_note_geom(geom, s_lat, s_lon, geom_path)
             S, C = oc_block_stats(chl, *geom["blk"], fill=fill)
         except SystemExit:

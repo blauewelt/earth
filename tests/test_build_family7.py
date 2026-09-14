@@ -2789,7 +2789,7 @@ def test_35_the_ncss_host_lists_a_year_from_the_aggregate_s_time_axis():
 
 
 # ----------------------------------------------------------------- 36 -----
-def test_36_a_leading_time_dimension_of_one_parses_identically(tmp_path):
+def test_36_a_leading_time_dimension_of_one_parses_identically(tmp_path, monkeypatch):
     """`chlor_a(time=1, lat, lon)` and `chlor_a(lat, lon)` are ONE field.
 
     CEDA's archived daily is the second shape; PML's NCSS subset is the first
@@ -2839,7 +2839,19 @@ def test_36_a_leading_time_dimension_of_one_parses_identically(tmp_path):
     # The open-it check accepts both shapes and REFUSES a truncated transfer.
     b7.oc_check_day_file(flat)
     b7.oc_check_day_file(timed)
+    # The worker-thread half never touches HDF5 (occci-partials #3 segfaulted
+    # when it did): signature at offset 0 plus a size floor. A netCDF4 file
+    # carries the signature; an HTML error page and a 200-byte stub do not.
+    monkeypatch.setattr(b7, "OC_MIN_GENERATED_BYTES", 400)
+    b7.oc_check_day_bytes(flat)
+    page = str(tmp_path / "page.nc")
+    with open(page, "wb") as fh:
+        fh.write(b"<html>TDS - Error report</html>" * 40)
+    with pytest.raises(IOError, match="error page"):
+        b7.oc_check_day_bytes(page)
     with open(timed, "r+b") as fh:
         fh.truncate(200)
+    with pytest.raises(IOError, match="truncated"):
+        b7.oc_check_day_bytes(timed)
     with pytest.raises(Exception):
         b7.oc_check_day_file(timed)
