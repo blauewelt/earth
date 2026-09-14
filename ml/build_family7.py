@@ -2795,7 +2795,39 @@ def oc_preflight(ctx, year=2015):
     it answers every question that can kill the run — can this box reach the
     host at all, is the listing the shape we parse, is the variable spelled
     `chlor_a`, is the grid 4320 x 8640 north-first, does 0.25 divide it.
+
+    AND THE PRECONDITION HAS TO BE ONE THE BUILD ACTUALLY DEPENDS ON. When
+    every year the occci stage still owes has a published partial, the stage
+    FOLDS those from the Hub and never opens a connection to CEDA — so "can
+    this box read CEDA" guards nothing, and refusing on it costs a build.
+    family7-build #8 (2026-09-14) was refused exactly so: the box read CEDA
+    at 0.2 MB/s that morning (79 MB in 29 s the day before), the guard
+    aborted the one preflight file four times, and the 28 partials that
+    made CEDA irrelevant were already on the Hub. The preflight now asks
+    the same question the stage will ask, first.
     """
+    work = ctx.work
+    years = list(range(max(ctx.d_lo.year, ctx.oc_day0.year), ctx.d_hi.year + 1))
+    pending = [y for y in years if not marked(work, f"occci/{y}")]
+    if pending:
+        parts = oc_partials_index(ctx, pending)
+        lacking = [y for y in pending if y not in parts]
+        if not lacking:
+            print(f"  preflight: every pending colour year ({pending[0]}–"
+                  f"{pending[-1]}, {len(pending)} of them) has a published "
+                  f"partial — the occci stage folds those from the Hub and "
+                  f"reads nothing from CEDA, so the CEDA fetch is not a "
+                  f"precondition of this build and is skipped", flush=True)
+            ctx.note_source("occci", f"hf://…/{oc_partial_prefix()}/ "
+                                     f"({len(pending)} per-year partial(s))")
+            return True
+        print(f"  preflight: {len(lacking)} colour year(s) without a partial "
+              f"({lacking[0]}…{lacking[-1]}) will be reduced from CEDA — "
+              f"checking that host with one real file", flush=True)
+    else:
+        print("  preflight: every colour year is already marked — nothing "
+              "left for the occci stage to read; one CEDA file is still "
+              "fetched as the archive check", flush=True)
     idx = oc_index(ctx, [year])
     files = idx[str(year)]["files"]
     if not files:

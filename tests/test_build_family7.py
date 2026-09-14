@@ -2931,3 +2931,41 @@ def test_37_the_thredds_fallback_retries_a_truncated_transfer(tmp_path,
     assert calls["n"] == -7, "three attempts on downloads, not six"
     assert os.listdir(work2) == [], ("a hosted runner has ~14 GB — a failed "
                                      "file leaves nothing behind")
+
+
+def test_38_the_oc_preflight_stands_down_when_every_year_has_a_partial(
+        tmp_path, monkeypatch):
+    """A precondition must be one the build depends on (ml/CLAUDE.md §0.3).
+
+    family7-build #8 (2026-09-14) was refused by the OC-CCI preflight — the
+    box read CEDA at 0.2 MB/s and the throughput guard aborted the one
+    preflight file four times — while all 28 per-year partials were on the
+    Hub and the occci stage would never have opened a CEDA connection. With a
+    partial for every pending year the preflight fetches nothing; with one
+    year lacking, it still asks the archive.
+    """
+    import argparse
+    work = str(tmp_path / "w")
+    parts = tmp_path / "parts"
+    parts.mkdir()
+    ctx = b7.Ctx(argparse.Namespace(
+        work=work, source_dir="", start="2021-01-01", end="2022-12-31",
+        force=False, stage="occci", smoke=False,
+        oc_partials_dir=str(parts)))
+    years = list(range(max(ctx.d_lo.year, ctx.oc_day0.year),
+                       ctx.d_hi.year + 1))
+    assert years == [2021, 2022]
+    asked = []
+    monkeypatch.setattr(b7, "oc_index",
+                        lambda c, ys: asked.append(list(ys)) or
+                        {str(ys[0]): {"files": {}, "host": "x", "catalog": "y"}})
+    for y in years:
+        (parts / b7.oc_partial_name(y)).write_bytes(b"")
+    assert b7.oc_preflight(ctx) is True
+    assert asked == [], "every year had a partial — CEDA must not be asked"
+    # One year without a partial: the archive IS asked (and, with an empty
+    # listing from the fake, refused — which is the pre-existing behaviour).
+    (parts / b7.oc_partial_name(2022)).unlink()
+    with pytest.raises(SystemExit):
+        b7.oc_preflight(ctx)
+    assert asked == [[2015]]
