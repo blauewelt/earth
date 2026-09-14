@@ -1,0 +1,80 @@
+New Data Upload               : |          |  0.00B /  0.00B            [A
+
+  ...mily10/gtmba/gtmba/qc.npy: 100%|██████████| 1.00MB / 1.00MB            [A[A
+
+  ...mily10/gtmba/gtmba/qc.npy: 100%|██████████| 1.00MB / 1.00MB            [A[AProcessing Files (1 / 1)      : 100%|██████████| 1.00MB / 1.00MB, 99.2kB/s  
+New Data Upload               : 100%|██████████| 1.00MB / 1.00MB, 99.2kB/s  [A
+
+  ...mily10/gtmba/gtmba/qc.npy: 100%|██████████| 1.00MB / 1.00MB            [A[A
+
+  ...mily10/gtmba/gtmba/qc.npy: 100%|██████████| 1.00MB / 1.00MB            [A[A
+
+  ...mily10/gtmba/gtmba/qc.npy: 100%|██████████| 1.00MB / 1.00MB            [A[A
+
+  ...mily10/gtmba/gtmba/qc.npy: 100%|██████████| 1.00MB / 1.00MB            [A[AProcessing Files (1 / 1)      : 100%|██████████| 1.00MB / 1.00MB, 95.6kB/s  
+New Data Upload               : 100%|██████████| 1.00MB / 1.00MB, 95.6kB/s  
+  ...mily10/gtmba/gtmba/qc.npy: 100%|██████████| 1.00MB / 1.00MB            
+  [publish gtmba] qc.npy  7/10  21.3s
+Processing Files (0 / 0)      : |          |  0.00B /  0.00B            
+New Data Upload               : |          |  0.00B /  0.00B            [A
+
+  ...gtmba/gtmba/time_days.npy: 100%|██████████| 4.01MB / 4.01MB            [A[A
+
+  ...gtmba/gtmba/time_days.npy: 100%|██████████| 4.01MB / 4.01MB            [A[AProcessing Files (1 / 1)      : 100%|██████████| 4.01MB / 4.01MB,   ???B/s  
+New Data Upload               : 100%|██████████| 4.01MB / 4.01MB,   ???B/s  [A
+
+  ...gtmba/gtmba/time_days.npy: 100%|██████████| 4.01MB / 4.01MB            [A[A
+
+  ...gtmba/gtmba/time_days.npy: 100%|██████████| 4.01MB / 4.01MB            [A[A
+
+  ...gtmba/gtmba/time_days.npy: 100%|██████████| 4.01MB / 4.01MB            [A[A
+
+  ...gtmba/gtmba/time_days.npy: 100%|██████████| 4.01MB / 4.01MB            [A[AProcessing Files (1 / 1)      : 100%|██████████| 4.01MB / 4.01MB,  383kB/s  
+New Data Upload               : 100%|██████████| 4.01MB / 4.01MB,  383kB/s  
+  ...gtmba/gtmba/time_days.npy: 100%|██████████| 4.01MB / 4.01MB            
+  [publish gtmba] time_days.npy  8/10  23.9s
+Processing Files (0 / 0)      : |          |  0.00B /  0.00B            
+New Data Upload               : |          |  0.00B /  0.00B            [A
+
+  ...10/gtmba/gtmba/values.npy:   2%|▏         |  803kB / 36.0MB            [A[A
+
+  ...10/gtmba/gtmba/values.npy:   2%|▏         |  803kB / 36.0MB            [A[AProcessing Files (0 / 1)      :   2%|▏         |  803kB / 36.0MB, 78.8kB/s  
+New Data Upload               :   2%|▏         |  803kB / 36.0MB, 78.8kB/s  [A
+
+  ...10/gtmba/gtmba/values.npy:   4%|▍         | 1.61MB / 36.0MB            [A[AProcessing Files (0 / 1)      :   4%|▍         | 1.61MB / 36.0MB,  157kB/s  
+New Data Upload               :   4%|▍         | 1.61MB / 36.0MB,  157kB/s  [A
+
+  ...10/gtmba/gtmba/values.npy:   9%|▉         | 3.21MB / 36.0MB            [A[AProcessing Files (0 / 1)      :   9%|▉         | 3.21MB / 36.0MB,  312kB/s  
+New Data Upload               :   9%|▉         | 3.21MB / 36.0MB,  312kB/s  [A
+
+  ...10/gtmba/gtmba/values.npy:  20%|██        | 7.22MB / 36.0MB            [A[AProcessing Files (0 / 1)      :  20%|██        | 7.22MB / 36.0MB,  699kB/s  
+New Data Upload               :  20%|██        | 7.22MB / 36.0MB,  699kB/s  [A
+
+  ...10/gtmba/gtmba/values.npy:  29%|██▉       | 10.4MB / 36.0MB            [A[AProcessing Files (0 / 1)      :  29%|██▉       | 10.4MB / 36.0MB, 1.00MB/s  
+New Data Upload               :  29%|██▉       | 10.4MB / 36.0MB, 1.00MB/s  [A
+
+  ...10/gtmba/gtmba/values.npy:  58%|█████▊    | 20.9MB / 36.0MB            [A[AProcessing Files (0 / 1)      :  58%|█████▊    | 20.9MB / 36.0MB, 2.00MB/s  
+New Data Upload               :  58%|█████▊    | 20.9MB / 36.0MB, 2.00MB/s  [A
+
+  ...10/gtmba/gtmba/values.npy:  73%|███████▎  | 26.5MB / 36.0MB            [A[AProcessing Files (0 / 1)      :  73%|███████▎  | 26.5MB / 36.0MB, 2.53MB/s  
+New Data Upload               :  73%|███████▎  | 26.5MB / 36.0MB, 2.53MB/s  [A
+
+  ...10/gtmba/gtmba/values.npy: 100%|█████████▉| 36.0MB / 36.0MB            [A[AProcessing Files (0 / 1)      : 100%|█████████▉| 36.0MB / 36.0MB, 3.42MB/s  
+New Data Upload               : 100%|█████████▉| 36.0MB / 36.0MB, 3.42MB/s  [A
+
+  ...10/gtmba/gtmba/values.npy: 100%|█████████▉| 36.0MB / 36.0MB            [A[A
+
+  ...10/gtmba/gtmba/values.npy: 100%|█████████▉| 36.0MB / 36.0MB            [A[A
+
+  ...10/gtmba/gtmba/values.npy: 100%|█████████▉| 36.0MB / 36.0MB            [A[A
+
+  ...10/gtmba/gtmba/values.npy: 100%|██████████| 36.0MB / 36.0MB            [A[AProcessing Files (1 / 1)      : 100%|██████████| 36.0MB / 36.0MB, 3.29MB/s  
+New Data Upload               : 100%|██████████| 36.0MB / 36.0MB, 3.29MB/s  [A
+
+  ...10/gtmba/gtmba/values.npy: 100%|██████████| 36.0MB / 36.0MB            [A[AProcessing Files (1 / 1)      : 100%|██████████| 36.0MB / 36.0MB, 3.27MB/s  
+New Data Upload               : 100%|██████████| 36.0MB / 36.0MB, 3.27MB/s  
+  ...10/gtmba/gtmba/values.npy: 100%|██████████| 36.0MB / 36.0MB            
+  [publish gtmba] values.npy  9/10  28.4s
+  [publish gtmba] store.json  10/10  30.0s
+  publish: 10 file(s) verified by restore -> https://huggingface.co/datasets/chfrank/earth-tensors/tree/main/tensors/family10/gtmba
+=== stage publish done in 32.0s ===
