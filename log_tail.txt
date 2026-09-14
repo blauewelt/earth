@@ -1,0 +1,80 @@
+INFO - 2026-09-14T13:49:52Z - Selected dataset part: "default"
+INFO - 2026-09-14T13:49:53Z - Listing files on remote server...
+INFO - 2026-09-14T13:49:54Z - Total size of the download: 149.96 MB.
+  cmems_obs-sl_glo_phy-ssh_my_h2a-l3-duacs_PT1S_202411 2015: 354 original file(s) listed; first ['s3://mdl-native-07/native/SEALEVEL_GLO_PHY_L3_MY_008_062/cmems_obs-sl_glo_phy-ssh_my_h2a-l3-duacs_PT1S_202411/2015/01/dt_global_h2a_phy_l3_1hz_20150101_20240205.nc', 's3://mdl-native-07/native/SEALEVEL_GLO_PHY_L3_MY_008_062/cmems_obs-sl_glo_phy-ssh_my_h2a-l3-duacs_PT1S_202411/2015/01/dt_global_h2a_phy_l3_1hz_20150102_20240205.nc', 's3://mdl-native-07/native/SEALEVEL_GLO_PHY_L3_MY_008_062/cmems_obs-sl_glo_phy-ssh_my_h2a-l3-duacs_PT1S_202411/2015/01/dt_global_h2a_phy_l3_1hz_20150103_20240205.nc'] last ['s3://mdl-native-07/native/SEALEVEL_GLO_PHY_L3_MY_008_062/cmems_obs-sl_glo_phy-ssh_my_h2a-l3-duacs_PT1S_202411/2015/12/dt_global_h2a_phy_l3_1hz_20151229_20240205.nc', 's3://mdl-native-07/native/SEALEVEL_GLO_PHY_L3_MY_008_062/cmems_obs-sl_glo_phy-ssh_my_h2a-l3-duacs_PT1S_202411/2015/12/dt_global_h2a_phy_l3_1hz_20151230_20240205.nc', 's3://mdl-native-07/native/SEALEVEL_GLO_PHY_L3_MY_008_062/cmems_obs-sl_glo_phy-ssh_my_h2a-l3-duacs_PT1S_202411/2015/12/dt_global_h2a_phy_l3_1hz_20151231_20240205.nc']
+INFO - 2026-09-14T13:49:56Z - Selected dataset version: "202411"
+INFO - 2026-09-14T13:49:56Z - Selected dataset part: "default"
+INFO - 2026-09-14T13:49:56Z - Listing files on remote server...
+INFO - 2026-09-14T13:49:57Z - Total size of the download: 3.06 MB.
+  2015-01 cmems_obs-sl_glo_phy-ssh_my_h2a-l3-duacs_PT1S_202411: 7 file(s) asked, 7 downloaded
+  cmems_obs-sl_glo_phy-ssh_my_h2a-l3-duacs_PT1S_202411 netCDF variables: ['cycle', 'dac', 'internal_tide', 'latitude', 'longitude', 'lwe', 'mdt', 'ocean_tide', 'sla_filtered', 'sla_unfiltered', 'time', 'tpa_correction', 'track']; time units 'days since 1950-01-01 00:00:00'
+  cmems_obs-sl_glo_phy-ssh_my_h2a-l3-duacs_PT1S_202411 frame columns: ['latitude', 'longitude', 'sla_filtered', 'sla_unfiltered', 'mdt', 'time_days']
+  [fetch slatrack] slatrack 2015-01 cmems_obs-sl_glo_phy-ssh_my_h2a-l3-duacs_PT1S_202411  1/1  10.6s
+  [fetch slatrack] slatrack 2015-01 cmems_obs-sl_glo_phy-ssh_my_h2a-l3-duacs_PT1S_202411  1/1  10.6s
+  [fetch slatrack] slatrack 2015-01 cmems_obs-sl_glo_phy-ssh_my_h2a-l3-duacs_PT1S_202411  1/1  10.6s
+  [fetch slatrack] slatrack 2015-01 cmems_obs-sl_glo_phy-ssh_my_h2a-l3-duacs_PT1S_202411  1/1  10.6s
+  [fetch slatrack] slatrack 2015-01 cmems_obs-sl_glo_phy-ssh_my_h2a-l3-duacs_PT1S_202411  1/1  10.6s
+  [fetch slatrack] slatrack 2015-01 cmems_obs-sl_glo_phy-ssh_my_h2a-l3-duacs_PT1S_202411  1/1  10.7s
+  [fetch slatrack] slatrack 2015-01 cmems_obs-sl_glo_phy-ssh_my_h2a-l3-duacs_PT1S_202411  1/1  10.7s
+INFO - 2026-09-14T13:50:03Z - Selected dataset version: "202411"
+INFO - 2026-09-14T13:50:03Z - Selected dataset part: "default"
+INFO - 2026-09-14T13:50:03Z - Listing files on remote server...
+INFO - 2026-09-14T13:50:04Z - Total size of the download: 39.50 MB.
+  cmems_obs-sl_glo_phy-ssh_my_al-l3-duacs_PT1S_202411 2015: 90 original file(s) listed; first ['s3://mdl-native-07/native/SEALEVEL_GLO_PHY_L3_MY_008_062/cmems_obs-sl_glo_phy-ssh_my_al-l3-duacs_PT1S_202411/2015/01/dt_global_al_phy_l3_1hz_20150101_20240205.nc', 's3://mdl-native-07/native/SEALEVEL_GLO_PHY_L3_MY_008_062/cmems_obs-sl_glo_phy-ssh_my_al-l3-duacs_PT1S_202411/2015/01/dt_global_al_phy_l3_1hz_20150102_20240205.nc', 's3://mdl-native-07/native/SEALEVEL_GLO_PHY_L3_MY_008_062/cmems_obs-sl_glo_phy-ssh_my_al-l3-duacs_PT1S_202411/2015/01/dt_global_al_phy_l3_1hz_20150103_20240205.nc'] last ['s3://mdl-native-07/native/SEALEVEL_GLO_PHY_L3_MY_008_062/cmems_obs-sl_glo_phy-ssh_my_al-l3-duacs_PT1S_202411/2015/03/dt_global_al_phy_l3_1hz_20150329_20240205.nc', 's3://mdl-native-07/native/SEALEVEL_GLO_PHY_L3_MY_008_062/cmems_obs-sl_glo_phy-ssh_my_al-l3-duacs_PT1S_202411/2015/03/dt_global_al_phy_l3_1hz_20150330_20240205.nc', 's3://mdl-native-07/native/SEALEVEL_GLO_PHY_L3_MY_008_062/cmems_obs-sl_glo_phy-ssh_my_al-l3-duacs_PT1S_202411/2015/03/dt_global_al_phy_l3_1hz_20150331_20240205.nc']
+INFO - 2026-09-14T13:50:06Z - Selected dataset version: "202411"
+INFO - 2026-09-14T13:50:06Z - Selected dataset part: "default"
+INFO - 2026-09-14T13:50:06Z - Listing files on remote server...
+INFO - 2026-09-14T13:50:08Z - Total size of the download: 3.07 MB.
+  2015-01 cmems_obs-sl_glo_phy-ssh_my_al-l3-duacs_PT1S_202411: 7 file(s) asked, 7 downloaded
+  cmems_obs-sl_glo_phy-ssh_my_al-l3-duacs_PT1S_202411 netCDF variables: ['cycle', 'dac', 'internal_tide', 'latitude', 'longitude', 'lwe', 'mdt', 'ocean_tide', 'sla_filtered', 'sla_unfiltered', 'time', 'tpa_correction', 'track']; time units 'days since 1950-01-01 00:00:00'
+  cmems_obs-sl_glo_phy-ssh_my_al-l3-duacs_PT1S_202411 frame columns: ['latitude', 'longitude', 'sla_filtered', 'sla_unfiltered', 'mdt', 'time_days']
+  [fetch slatrack] slatrack 2015-01 cmems_obs-sl_glo_phy-ssh_my_al-l3-duacs_PT1S_202411  1/1  20.0s
+  [fetch slatrack] slatrack 2015-01 cmems_obs-sl_glo_phy-ssh_my_al-l3-duacs_PT1S_202411  1/1  20.0s
+  [fetch slatrack] slatrack 2015-01 cmems_obs-sl_glo_phy-ssh_my_al-l3-duacs_PT1S_202411  1/1  20.0s
+  [fetch slatrack] slatrack 2015-01 cmems_obs-sl_glo_phy-ssh_my_al-l3-duacs_PT1S_202411  1/1  20.0s
+  [fetch slatrack] slatrack 2015-01 cmems_obs-sl_glo_phy-ssh_my_al-l3-duacs_PT1S_202411  1/1  20.0s
+  [fetch slatrack] slatrack 2015-01 cmems_obs-sl_glo_phy-ssh_my_al-l3-duacs_PT1S_202411  1/1  20.1s
+  [fetch slatrack] slatrack 2015-01 cmems_obs-sl_glo_phy-ssh_my_al-l3-duacs_PT1S_202411  1/1  20.1s
+INFO - 2026-09-14T13:50:12Z - Selected dataset version: "202411"
+INFO - 2026-09-14T13:50:12Z - Selected dataset part: "default"
+INFO - 2026-09-14T13:50:13Z - Listing files on remote server...
+INFO - 2026-09-14T13:50:15Z - Total size of the download: 151.29 MB.
+  cmems_obs-sl_glo_phy-ssh_my_c2-l3-duacs_PT1S_202411 2015: 365 original file(s) listed; first ['s3://mdl-native-07/native/SEALEVEL_GLO_PHY_L3_MY_008_062/cmems_obs-sl_glo_phy-ssh_my_c2-l3-duacs_PT1S_202411/2015/01/dt_global_c2_phy_l3_1hz_20150101_20240205.nc', 's3://mdl-native-07/native/SEALEVEL_GLO_PHY_L3_MY_008_062/cmems_obs-sl_glo_phy-ssh_my_c2-l3-duacs_PT1S_202411/2015/01/dt_global_c2_phy_l3_1hz_20150102_20240205.nc', 's3://mdl-native-07/native/SEALEVEL_GLO_PHY_L3_MY_008_062/cmems_obs-sl_glo_phy-ssh_my_c2-l3-duacs_PT1S_202411/2015/01/dt_global_c2_phy_l3_1hz_20150103_20240205.nc'] last ['s3://mdl-native-07/native/SEALEVEL_GLO_PHY_L3_MY_008_062/cmems_obs-sl_glo_phy-ssh_my_c2-l3-duacs_PT1S_202411/2015/12/dt_global_c2_phy_l3_1hz_20151229_20240205.nc', 's3://mdl-native-07/native/SEALEVEL_GLO_PHY_L3_MY_008_062/cmems_obs-sl_glo_phy-ssh_my_c2-l3-duacs_PT1S_202411/2015/12/dt_global_c2_phy_l3_1hz_20151230_20240205.nc', 's3://mdl-native-07/native/SEALEVEL_GLO_PHY_L3_MY_008_062/cmems_obs-sl_glo_phy-ssh_my_c2-l3-duacs_PT1S_202411/2015/12/dt_global_c2_phy_l3_1hz_20151231_20240205.nc']
+INFO - 2026-09-14T13:50:17Z - Selected dataset version: "202411"
+INFO - 2026-09-14T13:50:17Z - Selected dataset part: "default"
+INFO - 2026-09-14T13:50:18Z - Listing files on remote server...
+INFO - 2026-09-14T13:50:20Z - Total size of the download: 2.91 MB.
+  2015-01 cmems_obs-sl_glo_phy-ssh_my_c2-l3-duacs_PT1S_202411: 7 file(s) asked, 7 downloaded
+  cmems_obs-sl_glo_phy-ssh_my_c2-l3-duacs_PT1S_202411 netCDF variables: ['cycle', 'dac', 'internal_tide', 'latitude', 'longitude', 'lwe', 'mdt', 'ocean_tide', 'sla_filtered', 'sla_unfiltered', 'time', 'tpa_correction', 'track']; time units 'days since 1950-01-01 00:00:00'
+  cmems_obs-sl_glo_phy-ssh_my_c2-l3-duacs_PT1S_202411 frame columns: ['latitude', 'longitude', 'sla_filtered', 'sla_unfiltered', 'mdt', 'time_days']
+  [fetch slatrack] slatrack 2015-01 cmems_obs-sl_glo_phy-ssh_my_c2-l3-duacs_PT1S_202411  1/1  32.0s
+  [fetch slatrack] slatrack 2015-01 cmems_obs-sl_glo_phy-ssh_my_c2-l3-duacs_PT1S_202411  1/1  32.0s
+  [fetch slatrack] slatrack 2015-01 cmems_obs-sl_glo_phy-ssh_my_c2-l3-duacs_PT1S_202411  1/1  32.0s
+  [fetch slatrack] slatrack 2015-01 cmems_obs-sl_glo_phy-ssh_my_c2-l3-duacs_PT1S_202411  1/1  32.1s
+  [fetch slatrack] slatrack 2015-01 cmems_obs-sl_glo_phy-ssh_my_c2-l3-duacs_PT1S_202411  1/1  32.1s
+  [fetch slatrack] slatrack 2015-01 cmems_obs-sl_glo_phy-ssh_my_c2-l3-duacs_PT1S_202411  1/1  32.1s
+  [fetch slatrack] slatrack 2015-01 cmems_obs-sl_glo_phy-ssh_my_c2-l3-duacs_PT1S_202411  1/1  32.1s
+INFO - 2026-09-14T13:50:24Z - Selected dataset version: "202411"
+INFO - 2026-09-14T13:50:24Z - Selected dataset part: "default"
+INFO - 2026-09-14T13:50:25Z - Listing files on remote server...
+INFO - 2026-09-14T13:50:26Z - Total size of the download: 173.02 MB.
+  cmems_obs-sl_glo_phy-ssh_my_j2-l3-duacs_PT1S_202411 2015: 365 original file(s) listed; first ['s3://mdl-native-07/native/SEALEVEL_GLO_PHY_L3_MY_008_062/cmems_obs-sl_glo_phy-ssh_my_j2-l3-duacs_PT1S_202411/2015/01/dt_global_j2_phy_l3_1hz_20150101_20240205.nc', 's3://mdl-native-07/native/SEALEVEL_GLO_PHY_L3_MY_008_062/cmems_obs-sl_glo_phy-ssh_my_j2-l3-duacs_PT1S_202411/2015/01/dt_global_j2_phy_l3_1hz_20150102_20240205.nc', 's3://mdl-native-07/native/SEALEVEL_GLO_PHY_L3_MY_008_062/cmems_obs-sl_glo_phy-ssh_my_j2-l3-duacs_PT1S_202411/2015/01/dt_global_j2_phy_l3_1hz_20150103_20240205.nc'] last ['s3://mdl-native-07/native/SEALEVEL_GLO_PHY_L3_MY_008_062/cmems_obs-sl_glo_phy-ssh_my_j2-l3-duacs_PT1S_202411/2015/12/dt_global_j2_phy_l3_1hz_20151229_20240205.nc', 's3://mdl-native-07/native/SEALEVEL_GLO_PHY_L3_MY_008_062/cmems_obs-sl_glo_phy-ssh_my_j2-l3-duacs_PT1S_202411/2015/12/dt_global_j2_phy_l3_1hz_20151230_20240205.nc', 's3://mdl-native-07/native/SEALEVEL_GLO_PHY_L3_MY_008_062/cmems_obs-sl_glo_phy-ssh_my_j2-l3-duacs_PT1S_202411/2015/12/dt_global_j2_phy_l3_1hz_20151231_20240205.nc']
+INFO - 2026-09-14T13:50:29Z - Selected dataset version: "202411"
+INFO - 2026-09-14T13:50:29Z - Selected dataset part: "default"
+INFO - 2026-09-14T13:50:29Z - Listing files on remote server...
+INFO - 2026-09-14T13:50:31Z - Total size of the download: 3.39 MB.
+  2015-01 cmems_obs-sl_glo_phy-ssh_my_j2-l3-duacs_PT1S_202411: 7 file(s) asked, 7 downloaded
+  cmems_obs-sl_glo_phy-ssh_my_j2-l3-duacs_PT1S_202411 netCDF variables: ['cycle', 'dac', 'internal_tide', 'latitude', 'longitude', 'lwe', 'mdt', 'ocean_tide', 'sla_filtered', 'sla_unfiltered', 'time', 'tpa_correction', 'track']; time units 'days since 1950-01-01 00:00:00'
+  cmems_obs-sl_glo_phy-ssh_my_j2-l3-duacs_PT1S_202411 frame columns: ['latitude', 'longitude', 'sla_filtered', 'sla_unfiltered', 'mdt', 'time_days']
+  [fetch slatrack] slatrack 2015-01 cmems_obs-sl_glo_phy-ssh_my_j2-l3-duacs_PT1S_202411  1/1  43.1s
+  [fetch slatrack] slatrack 2015-01 cmems_obs-sl_glo_phy-ssh_my_j2-l3-duacs_PT1S_202411  1/1  43.1s
+  [fetch slatrack] slatrack 2015-01 cmems_obs-sl_glo_phy-ssh_my_j2-l3-duacs_PT1S_202411  1/1  43.1s
+  [fetch slatrack] slatrack 2015-01 cmems_obs-sl_glo_phy-ssh_my_j2-l3-duacs_PT1S_202411  1/1  43.1s
+  [fetch slatrack] slatrack 2015-01 cmems_obs-sl_glo_phy-ssh_my_j2-l3-duacs_PT1S_202411  1/1  43.1s
+  [fetch slatrack] slatrack 2015-01 cmems_obs-sl_glo_phy-ssh_my_j2-l3-duacs_PT1S_202411  1/1  43.1s
+  [fetch slatrack] slatrack 2015-01 cmems_obs-sl_glo_phy-ssh_my_j2-l3-duacs_PT1S_202411  1/1  43.1s
+  2015: 1,314,846 row(s) in 2 part(s) (43.2s)
+  [slatrack store] start (1 items)  0/1  0.0s
+  store: 1,314,846 row(s), C=3, bins 2410..2411 (2 live) -> /home/runner/work/earth/earth/ml/cache/family10/slatrack/slatrack
+  [slatrack store] store  1/1  0.2s
+=== stage fetch done in 43.4s ===
