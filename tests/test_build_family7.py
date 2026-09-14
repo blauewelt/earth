@@ -2653,7 +2653,7 @@ def test_34_mirror_psl_batches_files_into_one_commit_each(tmp_path):
     api = Api()
     restored = []
     keep = (mp.fetch, mp.remote_size, mp.hf_download, mp.hub_api,
-            mp.read_manifest, mp.write_manifest, mp.wanted)
+            mp.read_manifest, mp.write_manifest, mp.wanted, mp.probe_hosts)
     keep_mod = sys.modules.get("huggingface_hub")
     sys.modules["huggingface_hub"] = _install_commit_ops(
         types.ModuleType("huggingface_hub"))
@@ -2680,11 +2680,16 @@ def test_34_mirror_psl_batches_files_into_one_commit_each(tmp_path):
         mp.read_manifest = lambda repo, tok: {}
         mp.write_manifest = lambda a_, r_, man: written.update(man)
         mp.wanted = lambda what, lo, hi: list(files)
+        # The host probe is the one thing in `main` that would touch the
+        # network; it is patchable for exactly that reason.
+        mp.probe_hosts = lambda u, *a_, **k_: (
+            "downloads", {"downloads": (40.0, mp.PROBE_BYTES, 0.5)})
         rc = mp.main(["--what", "oisst", "--start", "1982", "--end", "1984",
                       "--batch-files", "2"])
     finally:
         (mp.fetch, mp.remote_size, mp.hf_download, mp.hub_api,
-         mp.read_manifest, mp.write_manifest, mp.wanted) = keep
+         mp.read_manifest, mp.write_manifest, mp.wanted,
+         mp.probe_hosts) = keep
         if keep_mod is None:
             sys.modules.pop("huggingface_hub", None)
         else:
@@ -2855,3 +2860,74 @@ def test_36_a_leading_time_dimension_of_one_parses_identically(tmp_path, monkeyp
         b7.oc_check_day_bytes(timed)
     with pytest.raises(Exception):
         b7.oc_check_day_file(timed)
+
+
+# ----------------------------------------------------------------- 37 -----
+def test_37_the_thredds_fallback_retries_a_truncated_transfer(tmp_path,
+                                                              monkeypatch):
+    """downloads is the primary; thredds is usable only with size + retries.
+
+    MEASURED 2026-09-14. `downloads.psl.noaa.gov` stopped serving at ~10:15Z
+    (0 bytes in 60 s from three hosted runners and from the sandbox). PSL's
+    THREDDS front serves the IDENTICAL file on the same path after the host --
+    the 1998 NCEP air.2m file HEADs at 37,119,095 bytes and its sha256 equals
+    the Hub mirror copy taken from downloads -- but it TRUNCATES roughly half
+    of its transfers with a 200 and a correct Content-Length. That is a silent
+    failure (`NetCDF: HDF error`, a whole year of the axis), so the fallback is
+    only sound under the size check: six attempts on thredds, three on
+    downloads, as `download_verified` does.
+    """
+    sys.path.insert(0, ML)
+    import mirror_psl as mp                                    # noqa: E402
+
+    url = (f"{b7.PSL_NCEP}/air.2m.gauss.1998.nc")
+    rel = b7.psl_mirror_path(url)
+
+    # The rewrite is the HOST and nothing else, and the Hub path is derived
+    # from the downloads URL either way — the build's mapping must not move.
+    assert mp.psl_host_url(url, "thredds") == (
+        "https://psl.noaa.gov/thredds/fileServer/Datasets/ncep.reanalysis/"
+        "surface_gauss/air.2m.gauss.1998.nc")
+    assert mp.psl_host_url(url, "downloads") == url
+    assert rel == ("mirrors/psl/Datasets/ncep.reanalysis/surface_gauss/"
+                   "air.2m.gauss.1998.nc")
+    assert b7.psl_mirror_path(mp.psl_host_url(url, "thredds")) is None
+
+    whole = b"the whole file, all of it" * 4
+    calls = {"n": 0}
+
+    def truncating_fetch(u, p, **kw):
+        """The measured thredds behaviour: short, then short, then whole."""
+        calls["n"] += 1
+        body = whole if calls["n"] >= 3 else whole[:7]
+        with open(p, "wb") as fh:
+            fh.write(body)
+        return p
+
+    monkeypatch.setattr(mp, "fetch", truncating_fetch)
+    monkeypatch.setattr(mp, "remote_size", lambda u: len(whole))
+    # Nothing here may probe: the sandbox has no route to either host.
+    monkeypatch.setattr(mp, "probe_hosts",
+                        lambda *a, **k: pytest.fail("probe_hosts was called"))
+
+    work = str(tmp_path / "thredds")
+    os.makedirs(work)
+    rec = mp.stage_one(url, rel, work, "thredds")
+    assert calls["n"] == 3, "two truncations, then the file"
+    assert rec["bytes"] == len(whole)
+    assert rec["sha256"] == hashlib.sha256(whole).hexdigest()
+    assert rec["source_host"] == "thredds"
+    assert rec["source_url"].startswith(mp.PSL_HOSTS["thredds"])
+    assert rec["rel"] == rel, "the Hub path never follows the host"
+    os.remove(rec["path"])
+
+    # Three truncations on downloads (three attempts, as download_verified
+    # does) is a FAILED file, not a short one uploaded with a warning.
+    calls["n"] = -10                        # never reaches the whole-file case
+    work2 = str(tmp_path / "downloads")
+    os.makedirs(work2)
+    with pytest.raises(mp.MirrorError, match="3 attempts"):
+        mp.stage_one(url, rel, work2, "downloads")
+    assert calls["n"] == -7, "three attempts on downloads, not six"
+    assert os.listdir(work2) == [], ("a hosted runner has ~14 GB — a failed "
+                                     "file leaves nothing behind")

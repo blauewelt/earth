@@ -11,9 +11,15 @@
 # unchanged, so a file this job has not reached yet costs the build nothing
 # but the old slow path.
 #
-# THE THREDDS MIRROR IS NOT AN OPTION: psl.noaa.gov/thredds/fileServer returns
-# TRUNCATED files under load (measured 2026-09-04), which surfaces hours later
-# as `NetCDF: HDF error` and costs a whole year of the axis.
+# THE THREDDS FRONT IS THE FALLBACK, NOT THE PRIMARY (measured 2026-09-14).
+# psl.noaa.gov/thredds/fileServer serves the IDENTICAL bytes on the same path
+# after the host -- one 37,119,095-byte NCEP file hashed equal to the Hub copy
+# taken from downloads -- but it TRUNCATES roughly half its transfers with a
+# 200 and a correct Content-Length, which surfaces hours later as
+# `NetCDF: HDF error` and costs a whole year of the axis. So it is used only
+# under the size check with up to six attempts per file, and only when
+# downloads is not serving -- which on 2026-09-14 at ~10:15Z it stopped doing
+# entirely: 0 bytes in 60 s from three runners and from the sandbox.
 #
 # WHAT THE JOB GUARANTEES. Every file is size-verified against PSL's own
 # Content-Length, uploaded, then DOWNLOADED BACK and sha256-compared before
@@ -26,11 +32,13 @@
 # WHY IT REFUSES A SLOW RUNNER. The whole point of this job is that the runner
 # is fast to PSL. A hosted runner that is not would spend six hours moving a
 # few gigabytes and report success for the handful it managed -- so the first
-# step MEASURES the rate (the first 100 MB of one real OISST year, 60 s cap)
-# and refuses under 2 MB/s. That is a precondition that depends only on the
-# environment, checked while the environment is all it has cost (ml/CLAUDE.md
-# §0.3), and it is a DEFINITE answer and therefore may be fatal (§5.17):
-# re-dispatch gets a different runner.
+# step MEASURES BOTH hosts (the first 100 MB of one real OISST year, 60 s cap
+# each) and refuses only if NEITHER reaches 2 MB/s. That is a precondition that
+# depends only on the environment, checked while the environment is all it has
+# cost (ml/CLAUDE.md §0.3), and it is a DEFINITE answer and therefore may be
+# fatal (§5.17): re-dispatch gets a different runner. The step decides
+# NOTHING -- it is a cheap early refusal; the script's own `--source auto`
+# probe picks the host the run actually pulls from.
 #
 # DISK. ~14 GB free on a hosted runner and one OISST year is 477 MB, so
 # exactly one file is on disk at a time.
@@ -57,7 +65,7 @@ on:
         description: "last year, inclusive (the family-7 axis ends 2024)"
         default: "2024"
       extra_args:
-        description: "extra flags for ml/mirror_psl.py, e.g. --dry-run or --force. Word-split deliberately; leave empty for an ordinary run"
+        description: "extra flags for ml/mirror_psl.py, e.g. --dry-run, --force, or --source thredds (the script probes both hosts and chooses by itself unless told). Word-split deliberately; leave empty for an ordinary run"
         default: ""
 
 permissions:
@@ -77,27 +85,46 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # MEASURE, DO NOT ASSUME. The first 100 MB of one real file, 60 s cap.
-      # `-r` asks for a range; a host that ignores it still gets cut off by
-      # --max-time, and the rate is computed from the bytes that actually
-      # arrived either way.
+      # MEASURE, DO NOT ASSUME. The first 100 MB of one real file, 60 s cap,
+      # from EACH host in turn (downloads first, then the thredds front on the
+      # same path). `-r` asks for a range; a host that ignores it still gets
+      # cut off by --max-time, and the rate is computed from the bytes that
+      # actually arrived either way.
       - name: PSL throughput from this runner
         run: |
-          url=https://downloads.psl.noaa.gov/Datasets/noaa.oisst.v2.highres/sst.day.mean.1983.nc
-          t0=$(date +%s.%N)
-          bytes=$(curl -sS --max-time 60 -r 0-104857599 -o /dev/null \
-                    -w '%{size_download}' "${url}" || echo 0)
-          t1=$(date +%s.%N)
-          mbps=$(awk -v b="${bytes}" -v a="${t0}" -v z="${t1}" \
-                 'BEGIN{d=z-a; if(d<=0)d=0.001; printf "%.2f", b/1000000/d}')
-          echo "::notice::PSL ${mbps} MB/s from this runner (${bytes} bytes in $(awk -v a=${t0} -v z=${t1} 'BEGIN{printf "%.1f", z-a}')s)"
-          if awk -v m="${mbps}" 'BEGIN{exit !(m < 2)}'; then
-            echo "::error::PSL serves this runner at ${mbps} MB/s, under the"
-            echo "2 MB/s floor. This job exists BECAUSE the build box gets"
-            echo "0.17 MB/s; a slow runner would spend six hours moving a few"
-            echo "gigabytes and report success for the handful it managed."
-            echo "Re-dispatch — a re-run lands on a different runner."
+          path=Datasets/noaa.oisst.v2.highres/sst.day.mean.1983.nc
+          rate () {
+            t0=$(date +%s.%N)
+            bytes=$(curl -sS --max-time 60 -r 0-104857599 -o /dev/null \
+                      -w '%{size_download}' "$1" || echo 0)
+            t1=$(date +%s.%N)
+            awk -v b="${bytes}" -v a="${t0}" -v z="${t1}" \
+                'BEGIN{d=z-a; if(d<=0)d=0.001; printf "%.2f %d %.1f", b/1000000/d, b, d}'
+          }
+          set -- $(rate "https://downloads.psl.noaa.gov/${path}")
+          dl_mbps=$1; dl_bytes=$2; dl_s=$3
+          echo "::notice::downloads.psl.noaa.gov ${dl_mbps} MB/s from this runner (${dl_bytes} bytes in ${dl_s}s)"
+          set -- $(rate "https://psl.noaa.gov/thredds/fileServer/${path}")
+          th_mbps=$1; th_bytes=$2; th_s=$3
+          echo "::notice::psl.noaa.gov/thredds ${th_mbps} MB/s from this runner (${th_bytes} bytes in ${th_s}s)"
+          if awk -v d="${dl_mbps}" -v t="${th_mbps}" 'BEGIN{exit !(d < 2 && t < 2)}'; then
+            echo "::error::NEITHER PSL host serves this runner at 2 MB/s"
+            echo "(downloads ${dl_mbps}, thredds ${th_mbps}). This job exists"
+            echo "BECAUSE the build box gets 0.17 MB/s; a slow runner would"
+            echo "spend six hours moving a few gigabytes and report success"
+            echo "for the handful it managed."
+            echo "Re-dispatch — a re-run lands on a different runner; if both"
+            echo "hosts are down, PSL itself is out and there is nothing to"
+            echo "mirror from."
             exit 1
+          fi
+          if awk -v d="${dl_mbps}" 'BEGIN{exit !(d >= 2)}'; then
+            echo "downloads.psl.noaa.gov is expected to serve this run"
+          else
+            echo "downloads is down (${dl_mbps} MB/s); the thredds fallback"
+            echo "is expected to serve this run, size-verified with up to six"
+            echo "attempts per file. The script's own --source auto probe"
+            echo "makes the actual choice."
           fi
 
       # numpy because build_family7 imports it at module scope;

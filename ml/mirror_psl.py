@@ -17,10 +17,35 @@ table. `build_family7.download_verified` then reads the mirror FIRST and falls
 back to PSL unchanged, so a file this script has not reached yet costs the
 build nothing but the old slow path.
 
-THE THREDDS MIRROR IS NOT THE ANSWER, and that is why this script exists at
-all: `psl.noaa.gov/thredds/fileServer/...` returns TRUNCATED files under load
-(measured 2026-09-04), which is the one failure mode a silent one -- the
-symptom is `NetCDF: HDF error` at open time, a whole year of the axis gone.
+TWO HOSTS NOW, AND THE ORDER IS MEASURED (2026-09-14). `downloads.psl.noaa.gov`
+is still the PRIMARY, but at ~10:15Z that day it STOPPED SERVING: 0 bytes in
+60 s from three GitHub-hosted runners and from the sandbox, on paths that were
+correct (`.../Datasets/ncep.reanalysis/surface_gauss/air.2m.gauss.1998.nc`).
+PSL's THREDDS front, `https://psl.noaa.gov/thredds/fileServer/` + the SAME path
+after the host, was up the whole time and serves the IDENTICAL bytes: HEAD
+declares `Content-Length: 37119095` for that file and a full download hashes
+`6ed13870bfc6dff6075fb05731425a5e0958bbaa2c23132d3f6f46c8a18f7a80`, equal to
+the Hub mirror copy uploaded earlier from downloads.
+
+THREDDS IS THEREFORE THE FALLBACK, NOT THE PRIMARY, because it TRUNCATES about
+half of its transfers: consecutive full GETs of one file returned 12587948
+(complete), 11412001, 12587948; of another 12605590, 12605590, 11984793,
+10822825 — always HTTP 200, always with the correct `Content-Length`, sometimes
+ending in `curl: (92) HTTP/2 stream ... INTERNAL_ERROR` (`--http1.1` truncates
+the same way, without the stream error). A truncated file is the one failure
+mode that is SILENT: the symptom is `NetCDF: HDF error` at open time, a whole
+year of the axis gone. So thredds is usable ONLY under the size check this
+script already performs, with up to six attempts per file — the code base
+already knows the shape (`build_family7.download_verified` compares against
+`remote_size`; `build_family3.fetch` cycles mirrors).
+
+`--source auto` (the default) MEASURES both hosts once per run, with a 20 MiB
+range read and a 30 s budget, and takes the first of [downloads, thredds] that
+serves at least 2 MB/s; `--source downloads|thredds` skips the probe. The Hub
+path (`rel`) is derived from the DOWNLOADS URL either way, so the build's
+mapping (`build_family7.psl_mirror_path`) is unchanged whichever host the bytes
+came from — the manifest records `source_url` and `source_host` so a file can
+be traced back to the one that served it.
 
 THE RULE THIS SCRIPT ENFORCES, from `ml/hf_mirror.py`: **a backup is only real
 if the restore works.** Every file is size-verified against PSL's own
@@ -51,6 +76,7 @@ Run:
   python3 ml/mirror_psl.py --what all --dry-run
   python3 ml/mirror_psl.py --what oisst --start 1982 --end 2024
   python3 ml/mirror_psl.py --what ncep --start 2020 --end 2024 --force
+  python3 ml/mirror_psl.py --what ncep --start 2020 --end 2024 --source thredds
 """
 import argparse
 import json
@@ -59,6 +85,7 @@ import shutil
 import sys
 import tempfile
 import time
+import urllib.request
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
@@ -77,9 +104,92 @@ MIRROR_PREFIX = b7.HUB_MIRROR_PREFIX
 MANIFEST_PATH = f"{MIRROR_PREFIX}/manifest.json"
 DEFAULT_START, DEFAULT_END = 1982, 2024
 
+# The two fronts PSL serves the same files from. The path after the host is
+# IDENTICAL on both (measured 2026-09-14, see the module docstring), which is
+# the whole reason `psl_host_url` is a rewrite and not a table.
+PSL_HOSTS = {"downloads": "https://downloads.psl.noaa.gov/",
+             "thredds": "https://psl.noaa.gov/thredds/fileServer/"}
+HOST_ORDER = ("downloads", "thredds")
+DOWNLOADS_HOST = PSL_HOSTS["downloads"]
+
+PROBE_BYTES = 20 * 1024 * 1024          # 20 MiB is plenty to time a host
+PROBE_BUDGET_S = 30.0                   # WALL CLOCK, not urlopen's per-read
+MIN_MBPS = 2.0                          # the same floor the workflow refuses at
+
+# Attempts per file. Three is `download_verified`'s number; thredds truncates
+# roughly half its transfers, so six gives a file ~1.5% chance of losing all
+# of them rather than ~12%.
+ATTEMPTS = {"downloads": 3, "thredds": 6}
+
+UA = {"User-Agent": "earth-science-pipeline/1.0 "
+                    "(research; github blauewelt/earth)"}
+
 
 class MirrorError(Exception):
     """One file failed. The list continues; the job exits non-zero."""
+
+
+# ------------------------------------------------------------- the hosts --
+def psl_host_url(url, host):
+    """The same file on `host`: only the part BEFORE the path changes.
+
+    `https://downloads.psl.noaa.gov/Datasets/x.nc`, "thredds" ->
+    `https://psl.noaa.gov/thredds/fileServer/Datasets/x.nc`. The Hub path is
+    derived from the downloads URL and never from this one.
+    """
+    if host not in PSL_HOSTS:
+        raise ValueError(f"unknown PSL host {host!r}; know {sorted(PSL_HOSTS)}")
+    if not isinstance(url, str) or not url.startswith(DOWNLOADS_HOST):
+        raise ValueError(f"{url} is not a {DOWNLOADS_HOST} URL — the host "
+                         f"rewrite is defined on that path only")
+    return PSL_HOSTS[host] + url[len(DOWNLOADS_HOST):].lstrip("/")
+
+
+def probe_host(url, budget_s=PROBE_BUDGET_S, want_bytes=PROBE_BYTES):
+    """(MB/s, bytes, seconds) for one 20 MiB range read of a REAL file.
+
+    `urlopen(timeout=)` is per-READ, not for the whole transfer — a host that
+    trickles one byte per second would never time out — so the budget is
+    enforced here, on the wall clock, by reading in chunks.
+    """
+    req = urllib.request.Request(
+        url, headers=dict(UA, Range=f"bytes=0-{want_bytes - 1}"))
+    t0 = time.time()
+    got = 0
+    try:
+        with urllib.request.urlopen(req, timeout=budget_s) as r:
+            while got < want_bytes and time.time() - t0 < budget_s:
+                chunk = r.read(1 << 20)
+                if not chunk:
+                    break
+                got += len(chunk)
+    except Exception:                                          # noqa: BLE001
+        pass                       # a host that errors is a host at 0 MB/s
+    secs = max(time.time() - t0, 1e-6)
+    return got / 1e6 / secs, got, secs
+
+
+def probe_hosts(url, order=HOST_ORDER, min_mbps=MIN_MBPS):
+    """Measure each host ONCE and return (host_or_None, {host: (mbps, b, s)}).
+
+    ml/CLAUDE.md §0.3 — a precondition checked where the inputs are all it has
+    cost. One 20 MiB read per host decides the whole run.
+    """
+    meas, pick = {}, None
+    for host in order:
+        mbps, got, secs = probe_host(psl_host_url(url, host))
+        meas[host] = (mbps, got, secs)
+        print(f"  probe {host}: {mbps:.2f} MB/s ({got:,} B in {secs:.1f} s)",
+              flush=True)
+        if pick is None and mbps >= min_mbps:
+            pick = host
+    return pick, meas
+
+
+def probe_summary(meas):
+    """The measurements as one line, for the message that refuses the run."""
+    return " · ".join(f"{h}: {m[0]:.2f} MB/s ({m[1]:,} B in {m[2]:.1f} s)"
+                      for h, m in meas.items())
 
 
 # ------------------------------------------------------------- the file list --
@@ -174,27 +284,45 @@ def read_manifest(repo, token):
 
 
 # ------------------------------------------------------------------ one file --
-def stage_one(url, rel, workdir):
-    """Download from PSL onto the disk, size-verified, and hash it.
+def stage_one(url, rel, workdir, host="downloads"):
+    """Download from `host` onto the disk, size-verified, and hash it.
 
-    Returns `{url, rel, name, path, bytes, sha256, down_s}`; raises
-    MirrorError when PSL sent a short file. Nothing has touched the Hub yet —
-    the caller batches several of these into one commit.
+    Returns `{url, source_url, source_host, rel, name, path, bytes, sha256,
+    down_s}`; raises MirrorError when the host could not send the file whole in
+    `ATTEMPTS[host]` tries. Nothing has touched the Hub yet — the caller
+    batches several of these into one commit.
+
+    THE RETRY IS THE POINT ON THREDDS (2026-09-14): that host truncates about
+    half of its transfers with a 200 and a correct `Content-Length`, so the
+    size check plus six attempts is what makes it usable at all. `rel` is
+    unchanged — it comes from the DOWNLOADS URL, so the build's mapping does
+    not care which host served the bytes.
     """
     name = os.path.basename(rel)
     local = os.path.join(workdir, name)
-    want = remote_size(url)
-    t0 = time.time()
+    src = psl_host_url(url, host)
+    want = remote_size(src)
+    attempts = ATTEMPTS.get(host, 3)
     try:
-        fetch(url, local)
-        down_s = max(time.time() - t0, 1e-6)
-        got = os.path.getsize(local)
-        if want is not None and got != want:
-            raise MirrorError(f"{name}: PSL sent {got:,} of {want:,} bytes")
+        for i in range(attempts):
+            t0 = time.time()
+            fetch(src, local)
+            down_s = max(time.time() - t0, 1e-6)
+            got = os.path.getsize(local)
+            if want is None or got == want:
+                break
+            print(f"  ::warning:: {name}: {host} sent {got:,} of {want:,} "
+                  f"bytes — truncated transfer, refetching "
+                  f"({i + 1}/{attempts})", flush=True)
+            drop_staged({"path": local})   # fetch() returns early if it exists
+        else:
+            raise MirrorError(f"{name}: {host} sent {got:,} of {want:,} bytes "
+                              f"in {attempts} attempts")
     except Exception:
         drop_staged({"path": local})
         raise
-    return {"url": url, "rel": rel, "name": name, "path": local,
+    return {"url": url, "source_url": src, "source_host": host,
+            "rel": rel, "name": name, "path": local,
             "bytes": got, "sha256": sha256(local), "down_s": down_s}
 
 
@@ -254,7 +382,9 @@ def publish_batch(api, repo, staged, workdir, token=None):
             bad.append(s["rel"])
             continue
         records.append({"path": s["rel"], "bytes": s["bytes"],
-                        "sha256": s["sha256"], "source_url": s["url"],
+                        "sha256": s["sha256"],
+                        "source_url": s.get("source_url", s["url"]),
+                        "source_host": s.get("source_host", "downloads"),
                         "mirrored_at": b7.utcnow(),
                         "_mb": s["bytes"] / 1e6,
                         "_down_mbps": s["bytes"] / 1e6 / s["down_s"],
@@ -267,13 +397,13 @@ def publish_batch(api, repo, staged, workdir, token=None):
     return records, failures
 
 
-def mirror_one(api, repo, url, rel, workdir, token=None):
+def mirror_one(api, repo, url, rel, workdir, token=None, host="downloads"):
     """One file, staged and published on its own. Raises MirrorError.
 
     The batch path is what `main` runs; this is the one-file form the tests
     and an operator use, and it goes through exactly the same commit helper.
     """
-    s = stage_one(url, rel, workdir)
+    s = stage_one(url, rel, workdir, host)
     try:
         records, failures = publish_batch(api, repo, [s], workdir, token)
     finally:
@@ -297,6 +427,12 @@ def main(argv=None):
     ap.add_argument("--batch-files", type=int, default=8,
                     help="how many files go into ONE Hub commit (the Hub "
                          "allows 256 commits per repo per hour)")
+    ap.add_argument("--source", choices=("auto", "downloads", "thredds"),
+                    default="auto",
+                    help="which PSL front to pull from. auto MEASURES both "
+                         "once (20 MiB, 30 s each) and takes the first of "
+                         "[downloads, thredds] at >= 2 MB/s; naming one skips "
+                         "the probe")
     ap.add_argument("--batch-gb", type=float, default=3.0,
                     help="and how many gigabytes — a hosted runner has ~14 GB "
                          "free and one OISST year is 477 MB")
@@ -320,11 +456,30 @@ def main(argv=None):
     print(f"  {repo}: {len(listing)} file(s) already under {MIRROR_PREFIX}/")
     manifest = read_manifest(repo, tok)
 
+    # WHICH HOST, MEASURED ONCE, BEFORE ANY FILE MOVES. downloads is the
+    # primary and thredds the fallback (module docstring, 2026-09-14); a run
+    # where NEITHER serves is refused here rather than after six hours of
+    # nothing.
+    if a.source == "auto":
+        host, meas = probe_hosts(files[0][0])
+        if host is None:
+            sys.exit(f"no PSL host reaches {MIN_MBPS:.0f} MB/s — "
+                     f"{probe_summary(meas)}. downloads.psl.noaa.gov stopped "
+                     f"serving at ~10:15Z on 2026-09-14 and the thredds front "
+                     f"is the fallback; if both are down there is nothing to "
+                     f"mirror from, so re-dispatch later.")
+        print(f"  source: {host} ({meas[host][0]:.2f} MB/s), "
+              f"{ATTEMPTS.get(host, 3)} attempt(s) per file")
+    else:
+        host = a.source
+        print(f"  source: {host} (--source given, no probe), "
+              f"{ATTEMPTS.get(host, 3)} attempt(s) per file")
+
     todo = []
     skipped = 0
     for u, rel in files:
         if not a.force and rel in listing:
-            want = remote_size(u)
+            want = remote_size(psl_host_url(u, host))
             if want is None or listing[rel] == want:
                 skipped += 1
                 continue
@@ -381,7 +536,7 @@ def main(argv=None):
 
         for i, (u, rel) in enumerate(todo, 1):
             try:
-                s = stage_one(u, rel, work)
+                s = stage_one(u, rel, work, host)
             except Exception as e:                             # noqa: BLE001
                 failed.append((rel, str(e)[:200]))
                 print(f"  [{i}/{len(todo)}] {os.path.basename(rel)}  FAILED: "
