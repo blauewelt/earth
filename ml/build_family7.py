@@ -2091,9 +2091,38 @@ def stage_rg(ctx):
     sf = rg_cube(ctx, "RG_S", f"{RG_BASE}/RG_ArgoClim_Salinity_2019.nc.gz")
     live_path = os.path.join(work, "rg", "live.npz")
     if not tf or not sf:
+        # A BUILD NEVER PUBLISHES AN EMPTY GROUP (measured 2026-09-14,
+        # family7-build #10). That run's box read sio-argo.ucsd.edu at
+        # 0.29 MB/s, `build_family3.fetch`'s throughput guard aborted the
+        # transfer four times — correctly — and this branch then wrote
+        # `rg100` with shape (0, 181, 360, 32), 128 bytes. `norm` computed
+        # statistics over zero values, `publish` uploaded it, and the job was
+        # GREEN: a step that reported success while doing nothing
+        # (ml/CLAUDE.md §0.2), with the only evidence a `::warning::` in a log
+        # nobody reads after a green tick. So the degrade is now something a
+        # dispatch has to ASK for, by name.
+        if not getattr(ctx.a, "allow_empty_rg", False) \
+                and not getattr(ctx.a, "smoke", False):
+            sys.exit(
+                f"stage rg: the Roemmich-Gilson cubes are not available — "
+                f"neither {RG_BASE}/RG_ArgoClim_Temperature_2019.nc.gz nor "
+                f"{RG_BASE}/RG_ArgoClim_Salinity_2019.nc.gz could be read, "
+                f"and {os.path.join(CACHE, 'rg')} does not hold them. On "
+                f"2026-09-14 (family7-build #10) the cause was the box: it "
+                f"read SIO at 0.29 MB/s and the fetcher's throughput guard "
+                f"aborted every attempt. REFUSING to continue, because the "
+                f"only thing this stage could do next is write rg100 with "
+                f"zero rows and let `norm` and `publish` ship it as a "
+                f"tensor. Two ways on: (1) seed {os.path.join(CACHE, 'rg')} "
+                f"from the GitHub release `data-cache-v1` (assets "
+                f"rg.tar.aa .. rg.tar.ae, which extract to RG_T.nc.gz, "
+                f"RG_S.nc.gz and the RG_YYYYMM extension months) — "
+                f".github/workflows/family7-build.yml does this before the "
+                f"build; or (2) pass --allow-empty-rg if a tensor with NO "
+                f"subsurface group is genuinely what you want.")
         print("  ::warning:: RG cubes not available — rg100 will be EMPTY "
-              "(n_live = 0). Seed ml/cache/rg from data-cache-v1 for a real "
-              "build.")
+              "(n_live = 0), and --allow-empty-rg says that is deliberate. "
+              "Seed ml/cache/rg from data-cache-v1 for a real build.")
         atomic_npz(live_path, bin_index=np.zeros(0, np.int64),
                    months=np.array([], dtype="<U7"))
         open_group(work, "rg100", (0, NLAT1, NLON1, NCHAN["rg100"]), create=True)
@@ -4510,6 +4539,123 @@ STAGE_FN = {"glorys": stage_glorys, "sst": stage_sst, "ncep": stage_ncep,
             "occci-partial": stage_occci_partial}
 
 
+# ------------------------------------------------- rebuild ONE group in place
+# `--redo-group <g>` exists because of family7-build #10: a finished 61 GB work
+# dir in which exactly one group — rg100 — was wrong (empty), and the only
+# lever the builder had was `--force`, which cannot be pointed at a group and
+# is refused outright once g025 is z-scored. Rebuilding the whole directory to
+# fix 1 GB of it is five hours of box time for four groups, three of which are
+# correct.
+#
+# So this deletes EXACTLY the outputs of one group and nothing else, and then
+# the ordinary marker logic does the rest: the fill stage that owns the group
+# re-runs because its marker is gone, `norm` re-enters for that group alone
+# because `norm_pending` asks per group, and `meta`/`publish` redo because
+# their markers went with it. Every other stage is skipped by its own marker,
+# untouched.
+#
+# WHICH STAGE OWNS WHICH GROUP, and what that stage writes of its own — read
+# off the stages themselves (`stage_rg`, `stage_ncep`, `stage_occci`), because
+# a guess here deletes somebody else's bytes:
+REDO_STAGE = {"g100": "ncep", "rg100": "rg", "oc025": "occci"}
+# ...the counts `bump_counts` writes into counts.json for that group...
+REDO_COUNTS = {"g100": ("n_ncep_days",),
+               "rg100": ("n_rg_live",),
+               "oc025": ("n_occci_days", "n_occci_absent", "oc_bin_first")}
+# ...and the stage's own side files beyond `<stage>/*.done` and its carries.
+# `occci/index.json` and `occci/geom.json` are deliberately NOT here: they are
+# a cache of the archive's listing and of the source geometry, not a product of
+# the reduction, and re-listing ten thousand days costs an hour for nothing.
+REDO_SIDE = {"g100": (),
+             "rg100": ("rg/live.npz",),
+             "oc025": ("occci/absent.json",)}
+
+
+def redo_group(ctx, group):
+    """Delete one group's outputs so the next run rebuilds exactly that group.
+
+    Refuses `g025` for the same reason `run_stages` refuses `--force` on
+    `norm`: g025's z-score is IN PLACE, there is no float32 intermediate to
+    redo it from, and its fill is shared by two stages. It is not a group that
+    can be rebuilt inside a directory — only a fresh work dir rebuilds it.
+    """
+    work = ctx.work
+    if group == "g025":
+        sys.exit("--redo-group: refusing 'g025'. Its z-score was applied IN "
+                 "PLACE (no float32 intermediate survives), so deleting its "
+                 "markers would leave `norm` to z-score already-z-scored "
+                 "values and square the transform, with nothing downstream to "
+                 "say so (ml/CLAUDE.md §5.21) — the same reason --force is "
+                 "refused on `norm`. g025 is also filled by two stages "
+                 "(glorys and sst), so no single stage marker rebuilds it. "
+                 "Rebuild it in a fresh --work.")
+    if group not in RAW_F32:
+        sys.exit(f"--redo-group: {group!r} is not a rebuildable group — "
+                 f"choose one of {', '.join(RAW_F32)}")
+    refuse_if_seeded(work, group, "redo (delete and rebuild)")
+    stage = REDO_STAGE[group]
+    gone = []
+
+    def rm(p):
+        if os.path.isfile(p):
+            os.remove(p)
+            gone.append(os.path.relpath(p, work))
+
+    rm(raw_file(work, group))                      # the float32 fill
+    rm(group_file(work, group))                    # the published float16
+    rm(marker(work, f"norm/{group}"))
+    rm(os.path.join(work, "norm", f"{group}.progress.json"))
+    rm(marker(work, stage))                        # the fill stage's marker
+    # ...and its spec: without this `stage_state_check` compares the recorded
+    # digest against one computed with no `n_live` and declares the stage
+    # stale, which is noise about state that is already gone.
+    rm(os.path.join(work, f"{stage}.spec"))
+    for q in sorted(glob.glob(os.path.join(work, stage, "*.done"))) + \
+            sorted(glob.glob(os.path.join(work, stage, "carry_*.npz"))):
+        rm(q)
+    for rel in REDO_SIDE[group]:
+        rm(os.path.join(work, *rel.split("/")))
+    for s in ("norm", "meta", "publish"):
+        # `norm.done` is the whole-stage marker; `norm` re-enters per group
+        # anyway (norm_pending), and the other groups' `norm/<g>.done` are
+        # left exactly where they are.
+        rm(marker(work, s))
+
+    norm_path = os.path.join(work, "norm.npz")
+    if os.path.exists(norm_path):
+        d = np.load(norm_path)
+        keys = list(d.files)
+        drop = [k for k in keys if k.endswith(f"_{group}")]
+        keep = {k: d[k] for k in keys if k not in drop}
+        d.close()
+        if drop:
+            if keep:
+                atomic_npz(norm_path, **keep)
+            else:
+                rm(norm_path)
+            print(f"  redo {group}: norm.npz — dropped {drop}, kept "
+                  f"{sorted(keep)}")
+
+    counts_path = os.path.join(work, "counts.json")
+    counts = read_json(counts_path, {})
+    dropped = [k for k in REDO_COUNTS[group] if k in counts]
+    if dropped:
+        for k in dropped:
+            counts.pop(k)
+        atomic_json(counts_path, counts)
+        print(f"  redo {group}: counts.json — dropped {dropped}")
+
+    for p in gone:
+        print(f"  redo {group}: removed {p}")
+    if not gone:
+        print(f"  redo {group}: nothing to remove — no output of {group!r} "
+              f"was in {work}")
+    print(f"  redo {group}: stage {stage!r}, `norm` for {group} alone, `meta` "
+          f"and `publish` will re-run; every other stage is skipped by its "
+          f"own marker")
+    return gone
+
+
 def run_stages(ctx, stages):
     work = ctx.work
     for s in stages:
@@ -5187,6 +5333,21 @@ def main():
     ap.add_argument("--end", default=str(END))
     ap.add_argument("--force", action="store_true",
                     help="redo a stage whose .done marker exists")
+    ap.add_argument("--redo-group", action="append", default=[],
+                    metavar="GROUP", dest="redo_group",
+                    help="delete ONE group's outputs (fill, float16, its "
+                         "norm statistics and markers, its fill stage's "
+                         "markers and carries, meta/publish) before any stage "
+                         "runs, so this build rebuilds exactly that group and "
+                         "skips the rest. Repeatable. One of "
+                         f"{', '.join(RAW_F32)}; g025 is refused (its z-score "
+                         "was in place).")
+    ap.add_argument("--allow-empty-rg", action="store_true",
+                    help="let `rg` write a ZERO-ROW rg100 when the "
+                         "Roemmich-Gilson cubes cannot be read, instead of "
+                         "refusing. For a deliberate no-subsurface build only "
+                         "— family7-build #10 published 128 bytes of rg100 "
+                         "this way and went green (2026-09-14).")
     ap.add_argument("--dry-run", action="store_true",
                     help="print the axis and the byte arithmetic, spend nothing")
     a = ap.parse_args()
@@ -5211,6 +5372,15 @@ def main():
           f"rg100 {NLAT1}x{NLON1} · oc025 {NLAT}x{NLON}")
     print(f"channels  g025 {NCHAN['g025']} · g100 {NCHAN['g100']} · "
           f"rg100 {NCHAN['rg100']} · oc025 {NCHAN['oc025']}")
+    # BEFORE ANY STAGE RUNS, and before the disk guard prices the build: a
+    # group whose files have just been deleted is one the guard must find room
+    # for again.
+    if a.redo_group:
+        if a.dry_run:
+            sys.exit("--redo-group deletes files and --dry-run spends "
+                     "nothing — do not ask for both in one dispatch.")
+        for g in a.redo_group:
+            redo_group(ctx, g)
     live_path = os.path.join(ctx.work, "rg", "live.npz")
     n_live = len(np.load(live_path)["bin_index"]) if os.path.exists(live_path) \
         else 252                      # 2004-01..2024-12, the upper bound

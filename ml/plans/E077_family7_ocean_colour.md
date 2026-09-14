@@ -173,6 +173,15 @@ and must be **equal** to `f7l0`'s (a test compares every shared key).
   without ever re-z-scoring an already converted group (which would square the
   transform, as the docstring warns). The stale-spec rule for `norm`
   ("cannot be discarded") stays; add the group-awareness beside it.
+- **A build never publishes an empty group** (2026-09-14, family7-build #10:
+  a box that could not read the Argo cubes wrote `rg100` with zero rows,
+  normalised it over zero values and published 128 bytes, green) — `rg`
+  refuses unless `--allow-empty-rg` says a no-subsurface tensor is what was
+  asked for. **`--redo-group <g>` is how ONE group is rebuilt in place**: it
+  deletes exactly that group's fill, float16, norm statistics and markers,
+  its fill stage's markers, carries and spec, and `meta`/`publish`, so the
+  next run rebuilds that group alone and every other stage is skipped by its
+  own marker (`g025` is refused — its z-score was in place).
 - `meta` regenerates the npz (all inherited keys equal to `f7l0`'s, plus §4's
   new keys). `publish` uploads all five files to
   `tensors/family7_global025_pentad_l1/`, restore-verifies each, and writes

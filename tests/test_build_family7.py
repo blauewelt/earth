@@ -2969,3 +2969,157 @@ def test_38_the_oc_preflight_stands_down_when_every_year_has_a_partial(
     with pytest.raises(SystemExit):
         b7.oc_preflight(ctx)
     assert asked == [[2015]]
+
+
+# ======================================================================== #
+# 2026-09-14 · a build never publishes an empty group, and one group can    #
+# be rebuilt in place (family7-build #10)                                   #
+# ======================================================================== #
+def _redo_ns(**kw):
+    """A Namespace carrying every flag the whole builder reads."""
+    import argparse
+    a = dict(work="", source_dir="", start=b7.SMOKE_START, end=b7.SMOKE_END,
+             force=False, stage="all", smoke=False, seed_from="",
+             oc_source="occci", oc_start=b7.SMOKE_OC_START, oc_preflight=False,
+             years="", oc_partials_dir="", no_upload=True,
+             redo_group=[], allow_empty_rg=False, dry_run=False)
+    a.update(kw)
+    return argparse.Namespace(**a)
+
+
+def _rg_less_sources(root):
+    """The smoke sources with the RG cubes REMOVED — a box that cannot read
+    sio-argo.ucsd.edu, which is what #10 actually had."""
+    d_lo = dt.date(*(int(x) for x in b7.SMOKE_START.split("-")))
+    d_hi = dt.date(*(int(x) for x in b7.SMOKE_END.split("-")))
+    b7.make_smoke_sources(root, d_lo, d_hi)
+    n = 0
+    for p in sorted(os.listdir(os.path.join(root, "rg"))):
+        os.remove(os.path.join(root, "rg", p))
+        n += 1
+    assert n >= 2, "the fixture must have had RG cubes to remove"
+    return root
+
+
+def test_39_stage_rg_refuses_to_publish_an_empty_group(tmp_path):
+    """#10: no cubes -> shape (0, 181, 360, 32), 128 bytes, published, GREEN.
+
+    Now it EXITS, naming the release that holds the cubes; the old degrade
+    survives only behind `--allow-empty-rg`, which still warns.
+    """
+    src = _rg_less_sources(str(tmp_path / "src"))
+    work = str(tmp_path / "w")
+    ctx = b7.Ctx(_redo_ns(work=work, source_dir=src))
+    with pytest.raises(SystemExit) as e:
+        b7.stage_rg(ctx)
+    msg = str(e.value)
+    assert "data-cache-v1" in msg, msg
+    assert "--allow-empty-rg" in msg, msg
+    assert "RG_ArgoClim_Temperature_2019.nc.gz" in msg and \
+        "RG_ArgoClim_Salinity_2019.nc.gz" in msg, msg
+    assert not b7.marked(work, "rg"), "a refusal must not mark the stage done"
+    assert not os.path.exists(b7.raw_file(work, "rg100"))
+
+    # ...and the deliberate no-subsurface build still works, exactly as before
+    work2 = str(tmp_path / "w2")
+    ctx2 = b7.Ctx(_redo_ns(work=work2, source_dir=src, allow_empty_rg=True))
+    b7.stage_rg(ctx2)
+    assert b7.marked(work2, "rg")
+    live = np.load(os.path.join(work2, "rg", "live.npz"))
+    assert len(live["bin_index"]) == 0
+    X = np.load(b7.raw_file(work2, "rg100"), mmap_mode="r")
+    assert X.shape == (0, 181, 360, 32)
+    assert json.load(open(os.path.join(work2, "counts.json")))["n_rg_live"] == 0
+
+
+@pytest.fixture(scope="module")
+def unseeded():
+    """One UNSEEDED synthetic build: all four groups, every stage but publish.
+
+    The `build` fixture's work dir is SEEDED — its three old groups are hard
+    links into the seed and `--redo-group` refuses them by design — so the
+    rebuild-in-place test needs a directory that owns its own bytes, which is
+    also the shape of the box directory #10 left behind.
+    """
+    root = tempfile.mkdtemp(prefix="f7redo_")
+    src, work = os.path.join(root, "src"), os.path.join(root, "work")
+    d_lo = dt.date(*(int(x) for x in b7.SMOKE_START.split("-")))
+    d_hi = dt.date(*(int(x) for x in b7.SMOKE_END.split("-")))
+    b7.make_smoke_sources(src, d_lo, d_hi)
+    b7.make_smoke_oc_sources(
+        src, [d_lo + dt.timedelta(days=k) for k in range((d_hi - d_lo).days + 1)],
+        dt.date(*(int(x) for x in b7.SMOKE_OC_START.split("-"))))
+    ctx = b7.Ctx(_redo_ns(work=work, source_dir=src, smoke=True))
+    b7.run_stages(ctx, [s for s in b7.STAGES if s != "publish"])
+    yield dict(root=root, src=src, work=work, ctx=ctx)
+    shutil.rmtree(root, ignore_errors=True)
+
+
+def test_40_redo_group_rebuilds_rg100_and_touches_nothing_else(unseeded):
+    """Delete exactly rg100's outputs; rebuild them bit-identically."""
+    work, ctx = unseeded["work"], unseeded["ctx"]
+    others = ["g025", "g100", "oc025"]
+    before = {g: b7.sha256(b7.group_file(work, g)) for g in others}
+    before_rg = b7.sha256(b7.group_file(work, "rg100"))
+    before_markers = {m: open(b7.marker(work, m)).read()
+                      for m in ("glorys", "sst", "ncep", "occci", "static",
+                                "truth", "norm/g025", "norm/g100",
+                                "norm/oc025")}
+    before_norm = dict(np.load(os.path.join(work, "norm.npz")))
+    rg_months = sorted(os.path.basename(p) for p in
+                       b7.glob.glob(os.path.join(work, "rg", "*.done")))
+    assert rg_months, "the fixture must have per-month rg markers"
+    assert before_rg and np.load(b7.group_file(work, "rg100")).shape[0] >= 1
+
+    gone = b7.redo_group(ctx, "rg100")
+
+    # ---- exactly rg100's outputs are gone ---------------------------------
+    # (the float32 fill is not here: `norm` deletes it the moment the
+    # float16 is written, so a FINISHED build has only the final file)
+    want = {os.path.basename(b7.group_file(work, "rg100")),
+            "rg.done", "rg.spec", "rg/live.npz", "norm.done", "meta.done",
+            os.path.join("norm", "rg100.done")}
+    want |= {os.path.join("rg", m) for m in rg_months}
+    assert set(gone) >= want, sorted(want - set(gone))
+    for extra in sorted(set(gone) - want):
+        assert extra.startswith("rg") or extra.startswith("norm"), extra
+    assert not os.path.exists(b7.raw_file(work, "rg100"))
+    assert not os.path.exists(b7.group_file(work, "rg100"))
+    for g in others:
+        assert b7.sha256(b7.group_file(work, g)) == before[g], \
+            f"{g}'s bytes changed"
+    for m, stamp in before_markers.items():
+        assert b7.marked(work, m) and open(b7.marker(work, m)).read() == stamp, \
+            f"{m}.done was touched"
+    now_norm = dict(np.load(os.path.join(work, "norm.npz")))
+    assert "norm_rg100" not in now_norm and "count_rg100" not in now_norm
+    for k in now_norm:
+        assert np.array_equal(now_norm[k], before_norm[k]), k
+    assert set(before_norm) - set(now_norm) == {"norm_rg100", "count_rg100"}
+    assert "n_rg_live" not in json.load(open(os.path.join(work, "counts.json")))
+    assert b7.norm_pending(ctx) == ["rg100"]
+
+    # ---- and the rebuild is the same tensor -------------------------------
+    b7.run_stages(ctx, ["rg", "norm", "meta"])
+    assert b7.sha256(b7.group_file(work, "rg100")) == before_rg, \
+        "the rebuilt rg100 differs from the one it replaced"
+    for g in others:
+        assert b7.sha256(b7.group_file(work, g)) == before[g]
+    d = load_tensor(os.path.join(work, b7.STEM + ".npz"))
+    assert int(d["n_rg_live"]) == np.load(b7.group_file(work, "rg100")).shape[0]
+    assert np.array_equal(np.asarray(d["norm_rg100"]),
+                          np.asarray(before_norm["norm_rg100"]))
+    d.close()
+    assert b7.marked(work, "meta") and not b7.marked(work, "publish")
+
+
+def test_41_redo_group_refuses_g025_and_an_unknown_group(unseeded):
+    """g025's z-score was in place; there is nothing to redo it FROM."""
+    ctx = unseeded["ctx"]
+    with pytest.raises(SystemExit) as e:
+        b7.redo_group(ctx, "g025")
+    assert "g025" in str(e.value) and "in place" in str(e.value).lower()
+    assert os.path.exists(b7.group_file(unseeded["work"], "g025"))
+    assert b7.marked(unseeded["work"], "norm/g025")
+    with pytest.raises(SystemExit):
+        b7.redo_group(ctx, "rg025")

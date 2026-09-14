@@ -111,10 +111,48 @@ jobs:
       # ml/cache/ a resumable location rather than scratch that dies with the
       # runner's workspace cleanup.
       - name: Persistent data cache (self-hosted box)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           mkdir -p /opt/earth-cache
           rm -rf ml/cache
           ln -s /opt/earth-cache ml/cache
+          # COLD-START SEED OF THE ARGO CUBES, ml-train.yml's `seed()` verbatim
+          # in shape (lines ~715-760 there). Added 2026-09-14 after run #10:
+          # the box read sio-argo.ucsd.edu at 0.29 MB/s, build_family3's
+          # throughput guard aborted all four attempts -- correctly -- and the
+          # build published `rg100` with shape (0, 181, 360, 32), 128 bytes,
+          # GREEN. The builder now refuses that (--allow-empty-rg is the only
+          # way to ask for it), so a box without the cubes would FAIL the job
+          # five hours in; seeding them here is the reason it will not.
+          # The release download URLs need no auth (public repo); the assets
+          # API call does, hence GH_TOKEN. The check is COMPLETENESS, not
+          # existence -- a half-extracted rg/ from a stalled origin fetch must
+          # not suppress the seed. Hard --max-time on every curl and NO
+          # --retry inside the stream: a mid-body retry restarts the chunk at
+          # byte 0 and corrupts the tar.
+          seed_rg() {
+            echo "seeding rg from release data-cache-v1 …"
+            rm -rf /opt/earth-cache/rg
+            assets=$(curl -s --max-time 120 -H "Authorization: Bearer $GH_TOKEN" \
+              "https://api.github.com/repos/${GITHUB_REPOSITORY}/releases/tags/data-cache-v1" \
+              | python3 -c "import json,sys;[print(a['browser_download_url']) for a in json.load(sys.stdin).get('assets',[]) if a['name'].startswith('rg.tar.')]")
+            if [ -n "$assets" ]; then
+              if echo "$assets" | sort | while read u; do
+                   echo "  chunk $(basename "$u") …" >&2
+                   curl -sL --max-time 1800 "$u" || exit 1
+                 done | tar x -C /opt/earth-cache; then
+                echo "  seeded: $(du -sh /opt/earth-cache/rg | cut -f1)"
+              else
+                echo "::warning::seed rg failed (stall/timeout) — partial dir stays, the completeness check re-seeds next run"
+              fi
+            else
+              echo "::warning::no rg.tar.* assets on data-cache-v1 — stage rg will try SIO and REFUSE if it cannot read the cubes"
+            fi
+          }
+          { [ -f /opt/earth-cache/rg/RG_S.nc.gz ] && \
+            [ -f /opt/earth-cache/rg/RG_T.nc.gz ]; } || seed_rg
+          echo "rg cache: $(ls /opt/earth-cache/rg 2>/dev/null | wc -l) file(s)"
 
       # Check the preconditions while the inputs are all they have cost
       # (ml/CLAUDE.md 0.3). Both of these are DEFINITE answers and therefore
