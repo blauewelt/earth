@@ -180,6 +180,18 @@ jobs:
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
           EARTH_OC_WORKERS: ${{ github.event.inputs.workers || '12' }}
+          # The fetch throughput guard (ml/build_family3.py) defaults to a
+          # 1 MB/s floor PER CONNECTION, sized for the 0.17 MB/s PSL crawl it
+          # was written against. This lane deliberately opens 12 connections
+          # per job and 28 jobs at once, and CEDA shares itself out: on the
+          # first run (2026-09-14, run 34814440764) the preflight measured
+          # 7.66 MB/s on a lone connection, then 10 of the first 14 lanes died
+          # with every file "slow transfer aborted: 0.737 MB/s ... floor 1.00"
+          # after four attempts, while 1997 (a third of a year, 400 s) sailed
+          # through. 0.7 MB/s x 12 workers is ~8 MB/s per lane, an hour a
+          # year, well inside the limit -- that is a shared host, not a
+          # crawling one. 0.25 still catches the crawl the guard exists for.
+          EARTH_FETCH_MIN_RATE_MBPS: "0.25"
           EXTRA: ${{ github.event.inputs.extra_args }}
           WORK: ml/cache/family7_l1
         run: |
