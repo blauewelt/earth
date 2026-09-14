@@ -1065,3 +1065,308 @@ def test_slatrack_response_paths_reads_the_toolbox_response_shape():
     assert A._response_paths({"files": [{"s3_url": "s3://b/z.nc"}]}) == \
         ["s3://b/z.nc"]
     assert A._response_paths({}) == []
+
+
+# ========================================= the streaming assembler (E-079) ==
+#
+# slatrack is 1.5-2.5e9 rows at ~33 B each — 50-80 GB, which no box holds in
+# RAM — so `assemble_store_streaming` writes the store through memmaps in
+# three passes. Its ONLY claim is byte identity with `assemble_store`, and a
+# claim like that is worth exactly as much as the test that checks it.
+STORE_ARRAYS = ("bin.npy", "time_days.npy", "lat.npy", "lon.npy", "values.npy",
+                "platform.npy", "qc.npy", "fp.npy", "bin_offsets.npy")
+
+
+def _hash_store(dest):
+    return {n: f10.sha256(os.path.join(dest, n)) for n in STORE_ARRAYS}
+
+
+def _duplicate_rows_across_parts(ctx, year=None):
+    """Add a SECOND part to one year holding rows that tie the first part's.
+
+    Same `bin` AND same `time_days`, different lat/platform. That is the only
+    case where the two assemblers could disagree: `np.lexsort` breaks such a
+    tie by INPUT ORDER, and the streaming assembler has to reproduce that
+    input order from a scatter plus a per-bin stable sort. Without this part
+    the test would pass on a streaming assembler that used an unstable sort.
+    """
+    y = year or ctx.years[0]
+    d = ctx.year_dir(y)
+    p0 = os.path.join(d, "00000.npz")
+    with np.load(p0) as z:
+        rows = {k: z[k] for k in b10.ROW_KEYS}
+    take = np.arange(0, len(rows["bin"]), 2)[:8]
+    assert take.size >= 4, "the synthetic year is too small to tie anything"
+    dup = {k: np.array(rows[k][take]) for k in b10.ROW_KEYS}
+    dup["lat"] = np.clip(dup["lat"] + np.float32(0.25), -90.0,
+                         90.0).astype(np.float32)
+    dup["platform"] = dup["platform"] + 7777
+    np.savez(os.path.join(d, "00001.npz"), **dup)
+    c = json.load(open(os.path.join(d, "counts.json")))
+    c["rows"] = int(c["rows"]) + int(take.size)
+    c["parts"] = 2
+    json.dump(c, open(os.path.join(d, "counts.json"), "w"))
+    return int(take.size)
+
+
+def test_the_streaming_assembler_writes_the_same_bytes(tmp_path):
+    """Build one synthetic archive, assemble it twice, compare every file.
+
+    The archive is doctored first so that one year holds duplicate
+    (bin, time_days) rows SPREAD ACROSS TWO PARTS — the tie-break case.
+    """
+    import shutil
+    tmp = str(tmp_path)
+    ctx, _ = build(tmp, "gdp")
+    n_dup = _duplicate_rows_across_parts(ctx)
+
+    shutil.rmtree(ctx.store, ignore_errors=True)
+    ctx.a.assemble = "memory"
+    mem = b10.assemble(ctx)
+    mem_hashes = _hash_store(ctx.store)
+    mem_meta = json.load(open(os.path.join(ctx.store, "store.json")))
+    keep = ctx.store + "_memory"
+    shutil.rmtree(keep, ignore_errors=True)
+    shutil.move(ctx.store, keep)
+
+    ctx.a.assemble = "streaming"
+    stream = b10.assemble(ctx)
+    stream_hashes = _hash_store(ctx.store)
+    stream_meta = json.load(open(os.path.join(ctx.store, "store.json")))
+
+    assert mem["N"] == stream["N"] == mem_meta["N"]
+    assert mem_hashes == stream_hashes, {
+        n: (mem_hashes[n], stream_hashes[n]) for n in STORE_ARRAYS
+        if mem_hashes[n] != stream_hashes[n]}
+    for k in set(mem_meta) | set(stream_meta):
+        if k in ("built_at",):
+            continue
+        assert mem_meta[k] == stream_meta[k], k
+
+    # …and the ties really are there, or the test proves nothing.
+    st = f10.Store(keep)
+    b = np.asarray(st["bin"], np.int64)
+    t = np.asarray(st["time_days"], np.float64)
+    ties = int(((b[1:] == b[:-1]) & (t[1:] == t[:-1])).sum())
+    assert ties >= n_dup, (ties, n_dup)
+
+
+def test_auto_picks_streaming_for_slatrack_and_memory_for_a_small_store(
+        tmp_path, capsys):
+    """`--assemble auto` is a size decision with one named exception."""
+    import shutil
+    tmp = str(tmp_path)
+    ctx, _ = build(tmp, "gdp")
+    shutil.rmtree(ctx.store, ignore_errors=True)
+    ctx.a.assemble = "auto"
+    b10.assemble(ctx)
+    assert "auto -> memory" in capsys.readouterr().out
+
+    ctx2, _ = build(tmp, "slatrack")
+    shutil.rmtree(ctx2.store, ignore_errors=True)
+    ctx2.a.assemble = "auto"
+    b10.assemble(ctx2)
+    assert "auto -> streaming" in capsys.readouterr().out
+
+
+def test_the_disk_preflight_refuses_before_it_writes(tmp_path, monkeypatch):
+    """§5.18: size the guard from the allocation it guards, and fire BEFORE
+    the write — the parts are safe on the Hub, a half-written 80 GB store is
+    not diagnosable from anywhere."""
+    import collections
+    import shutil
+    tmp = str(tmp_path)
+    ctx, _ = build(tmp, "gdp")
+    shutil.rmtree(ctx.store, ignore_errors=True)
+    du = collections.namedtuple("du", "total used free")
+    monkeypatch.setattr(b10.shutil, "disk_usage", lambda p: du(1, 1, 8))
+    ctx.a.assemble = "streaming"
+    with pytest.raises(SystemExit, match="REFUSING to assemble"):
+        b10.assemble(ctx)
+
+
+# ================================== family10_parts_hub, against a FAKE hub ==
+#
+# NO NETWORK. `family10_parts_hub` talks to the Hub through exactly four
+# seams (`_hub`, `_list_files`, `_upload`, `_download`); the fixture points
+# them at a directory, so what is exercised is the marker discipline, the
+# restore verification and the sha256 bookkeeping rather than huggingface_hub.
+import family10_parts_hub as ph                                 # noqa: E402
+
+
+class FakeHub:
+    """A directory that answers like the dataset repo."""
+
+    def __init__(self, root):
+        self.root = root
+        self.repo = "fake/earth-tensors"
+        self.uploads = 0
+        self.fail_on = None          # a path_in_repo whose upload must raise
+
+    # the four seams ------------------------------------------------------
+    def hub(self):
+        return self, self.repo, "fake-token"
+
+    def create_repo(self, *a, **k):
+        pass
+
+    def list_files(self, api, repo, prefix):
+        pre = prefix.rstrip("/") + "/"
+        out = set()
+        for dirpath, _, names in os.walk(self.root):
+            for n in names:
+                rel = os.path.relpath(os.path.join(dirpath, n), self.root)
+                rel = rel.replace(os.sep, "/")
+                if rel.startswith(pre):
+                    out.add(rel)
+        return out
+
+    def upload(self, api, repo, pairs, message):
+        import shutil
+        for rel, local in pairs:
+            if self.fail_on and rel.endswith(self.fail_on):
+                raise RuntimeError(f"simulated upload failure on {rel}")
+            dst = os.path.join(self.root, rel)
+            os.makedirs(os.path.dirname(dst), exist_ok=True)
+            shutil.copyfile(local, dst)
+            self.uploads += 1
+
+    def download(self, repo, rel, token, dest_dir):
+        import shutil
+        src = os.path.join(self.root, rel)
+        if not os.path.exists(src):
+            raise FileNotFoundError(rel)
+        os.makedirs(dest_dir, exist_ok=True)
+        dst = os.path.join(dest_dir, os.path.basename(rel))
+        shutil.copyfile(src, dst)
+        return dst
+
+    def install(self, monkeypatch):
+        monkeypatch.setattr(ph, "_hub", self.hub)
+        monkeypatch.setattr(ph, "_list_files", self.list_files)
+        monkeypatch.setattr(ph, "_upload", self.upload)
+        monkeypatch.setattr(ph, "_download", self.download)
+        return self
+
+
+@pytest.fixture
+def fakehub(tmp_path, monkeypatch):
+    return FakeHub(str(tmp_path / "hub")).install(monkeypatch)
+
+
+def test_push_then_pull_round_trips_every_part(tmp_path, fakehub):
+    """Push every fetched year, pull it into a fresh work dir, byte for byte."""
+    tmp = str(tmp_path)
+    ctx, _ = build(tmp, "gdp")
+    for y in ctx.years:
+        assert ph.push("gdp", y, ctx.work) == 0
+    assert sorted(ph.status("gdp")) == sorted(ctx.years)
+
+    # A second push is a no-op: done.json is already there with these hashes.
+    before = fakehub.uploads
+    ph.push("gdp", ctx.years[0], ctx.work)
+    assert fakehub.uploads == before
+
+    fresh = os.path.join(tmp, "pulled")
+    present, missing = ph.pull("gdp", ctx.years, fresh)
+    assert present == list(ctx.years) and missing == []
+    for y in ctx.years:
+        src, dst = ctx.year_dir(y), ph.year_dir(fresh, "gdp", y)
+        assert sorted(os.listdir(src)) == sorted(os.listdir(dst))
+        for n in os.listdir(src):
+            assert f10.sha256(os.path.join(src, n)) == \
+                f10.sha256(os.path.join(dst, n)), (y, n)
+        assert b10.marked(ph.store_root(fresh, "gdp"), f"parts/{y}")
+
+    # A pull whose local copy already matches downloads nothing.
+    calls = []
+    orig = fakehub.download
+    fakehub.download = lambda *a, **k: (calls.append(a[1]), orig(*a, **k))[1]
+    ph.pull("gdp", ctx.years, fresh)
+    assert all(c.endswith("done.json") for c in calls), calls
+
+
+def test_the_done_marker_is_written_last_and_a_half_push_reads_as_missing(
+        tmp_path, fakehub):
+    """§5.21. Kill the push between the parts and done.json: the year's bytes
+    are on the Hub, but no marker claims them, so `pull` reports it MISSING
+    and the fetch lane simply refetches it. The opposite order would hand the
+    assembler a short year with nothing to say so."""
+    tmp = str(tmp_path)
+    ctx, _ = build(tmp, "gdp")
+    y = ctx.years[0]
+    fakehub.fail_on = "/done.json"
+    with pytest.raises(RuntimeError, match="simulated upload failure"):
+        ph.push("gdp", y, ctx.work)
+    fakehub.fail_on = None
+
+    files = fakehub.list_files(None, None, ph.hub_prefix("gdp", y))
+    assert any(p.endswith(".npz") for p in files), "the parts never uploaded"
+    assert not any(p.endswith("done.json") for p in files)
+    assert ph.status("gdp", years=[y]) == []
+
+    fresh = os.path.join(tmp, "pulled")
+    with pytest.raises(SystemExit, match="no done.json"):
+        ph.pull("gdp", [y], fresh)
+    present, missing = ph.pull("gdp", [y], fresh, allow_missing=True)
+    assert present == [] and missing == [y]
+
+    # Re-push finishes the job and the year becomes usable.
+    assert ph.push("gdp", y, ctx.work) == 0
+    assert ph.pull("gdp", [y], fresh)[0] == [y]
+
+
+def test_push_refuses_a_year_whose_fetch_did_not_finish(tmp_path, fakehub):
+    """An unmarked year is a year that was never finished locally."""
+    tmp = str(tmp_path)
+    ctx, _ = build(tmp, "gdp")
+    y = ctx.years[0]
+    os.remove(b10.marker(ctx.root, f"parts/{y}"))
+    with pytest.raises(SystemExit, match="did not finish"):
+        ph.push("gdp", y, ctx.work)
+
+
+def test_parts_from_hub_builds_the_same_store_without_the_source(
+        tmp_path, fakehub):
+    """The keyless half of slatrack's build, end to end on the synthetic gdp
+    archive: fetch here, push, then assemble THERE with no source at all."""
+    import argparse
+    import shutil
+    tmp = str(tmp_path)
+    ctx, _ = build(tmp, "gdp")
+    want = _hash_store(ctx.store)
+    for y in ctx.years:
+        ph.push("gdp", y, ctx.work)
+
+    work2 = os.path.join(tmp, "box")
+    ns = dict(store="gdp", work=work2, source_dir=ctx.source_dir,
+              start=SMOKE_START, end=SMOKE_END, stage="all", force=False,
+              attempts=1, qc_keep=2, socat_url="", smoke=True,
+              assemble="auto", parts_from_hub=True,
+              allow_missing_years=False)
+    ctx2 = b10.Ctx(argparse.Namespace(**ns))
+    b10.run_stages(ctx2, ["index"])
+    # The source is GONE: nothing in the fetch stage may reach for it.
+    shutil.rmtree(ctx.source_dir)
+    b10.run_stages(ctx2, ["fetch"])
+    assert _hash_store(ctx2.store) == want
+
+
+def test_parts_from_hub_refuses_when_a_year_is_not_on_the_hub(tmp_path,
+                                                              fakehub):
+    """Listing the missing years is the whole point: a store that quietly
+    dropped 1993-1995 would look entirely ordinary."""
+    import argparse
+    tmp = str(tmp_path)
+    ctx, _ = build(tmp, "gdp")
+    ph.push("gdp", ctx.years[0], ctx.work)          # the OTHER year is absent
+    work2 = os.path.join(tmp, "box")
+    ns = dict(store="gdp", work=work2, source_dir=ctx.source_dir,
+              start=SMOKE_START, end=SMOKE_END, stage="all", force=False,
+              attempts=1, qc_keep=2, socat_url="", smoke=True,
+              assemble="auto", parts_from_hub=True,
+              allow_missing_years=False)
+    ctx2 = b10.Ctx(argparse.Namespace(**ns))
+    b10.run_stages(ctx2, ["index"])
+    with pytest.raises(SystemExit, match=str(ctx.years[-1])):
+        b10.run_stages(ctx2, ["fetch"])

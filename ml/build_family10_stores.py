@@ -46,6 +46,25 @@ THREE STAGES, IN FIXED ORDER — `index | fetch | publish` (or `all`):
 RESUMABILITY IS THE CONTRACT, the same one families 7 and 8 have: re-run with
 the same `--work` and finished stages and finished years are skipped.
 
+SLATRACK IS BUILT ON TWO MACHINES, and neither could do both halves. Its fetch
+needs Copernicus credentials, which ml/CLAUDE.md §6 forbids on a rented box, so
+it may only run on a GitHub-hosted runner; its store is 50-80 GB (measured
+2026-09-14: ~70 M samples in 2015 alone, ~1.5-2.5 e9 rows over 1993-2024 at ~33
+bytes a row), which a hosted runner's ~14 GB of disk cannot hold. So
+`.github/workflows/family10-slatrack-fetch.yml` fetches ONE YEAR at a time on
+hosted lanes and parks its column parts at `partials/family10/slatrack/<year>/`
+on the Hub (`ml/family10_parts_hub.py`, done.json written LAST), and a box with
+HF_TOKEN and no credentials assembles them:
+
+  python3 ml/build_family10_stores.py --store slatrack --work W \
+      --stage index,fetch,publish --parts-from-hub --start 1993-01-01
+
+`--parts-from-hub` replaces the fetch's source with that pull; `--assemble`
+chooses between the in-RAM assembler and `assemble_store_streaming`, which
+writes the same store BYTE FOR BYTE in three memmap passes and never holds more
+than one part (default `auto`: streaming above 50 M rows, and always for
+slatrack).
+
 ONE EXCEPTION, AND IT IS A PROPERTY OF THE SOURCE, NOT A SHORTCUT. The SOCAT
 synthesis is a single 1.4 GB file sorted by EXPOCODE, not by time — measured
 2026-09-13, its first data rows are a 2018 sailing yacht and its second cruise
@@ -2170,7 +2189,20 @@ def stage_index(ctx):
 
 def stage_fetch(ctx):
     ad = ctx.adapter
-    if ad.per_year:
+    if getattr(ctx.a, "parts_from_hub", False):
+        # THE KEYLESS HALF of slatrack's build. The credentialed fetch happens
+        # on GitHub-HOSTED lanes (ml/CLAUDE.md §6 forbids CMEMS credentials on
+        # a rented box) and parks each finished year under
+        # `partials/family10/<store>/<year>/` on the Hub; this branch brings
+        # those parts back and hands them straight to the assembler. Nothing
+        # here touches the source archive, so HF_TOKEN is the only secret the
+        # machine running it ever sees.
+        import family10_parts_hub as ph
+        ctx.prog.stage_start(f"pull {ad.store} parts", len(ctx.years))
+        ph.pull(ad.store, ctx.years, ctx.work,
+                allow_missing=bool(getattr(ctx.a, "allow_missing_years",
+                                           False)))
+    elif ad.per_year:
         ctx.prog.stage_start(f"fetch {ad.store}", len(ctx.years))
         for i, y in enumerate(ctx.years, 1):
             if marked(ctx.root, f"parts/{y}") and not ctx.a.force:
@@ -2243,9 +2275,291 @@ def stage_fetch(ctx):
                   f"{len(writers)} year(s) in one pass "
                   f"({time.time() - t0:.1f}s)")
     ctx.prog.stage_start(f"{ad.store} store", 1)
-    meta = assemble_store(ctx)
+    meta = assemble(ctx)
     mark(ctx.root, "fetch")
     ctx.prog.item("store", 1, {"N": meta["N"], "bin_first": meta["bin_first"]})
+    return meta
+
+
+# ---------------------------------------------------- assembly, two ways ----
+# `assemble_store` holds every row in RAM at once; that is fine for gdp, gtmba
+# and socat (10^6..10^8 rows) and impossible for slatrack, measured 2026-09-14
+# at ~70 M samples in 2015 alone — call it 1.5-2.5 e9 rows over 1993-2024, i.e.
+# 50-80 GB in the store and rather more than that while sorting. So there is a
+# second assembler, and its ONLY claim is that it writes THE SAME BYTES.
+#
+# WHY THE TWO ORDERS ARE THE SAME PERMUTATION, exactly:
+#   `np.lexsort((time_days, bin))` sorts by bin, then by time_days, and it is
+#   STABLE — rows equal in both keys keep their INPUT order, which is the order
+#   `read_parts` yields (years ascending, parts in sorted name order).
+#   The streaming assembler reproduces that in three passes: it counts rows per
+#   bin (pass 1) to get the CSR offsets, scatters every part's rows into its
+#   bin's slice IN THAT SAME INPUT ORDER (pass 2), and then sorts each bin's
+#   slice by time_days with a STABLE argsort (pass 3). Sorting by bin is what
+#   the scatter does; the stable per-bin sort by time breaks ties in the order
+#   the scatter laid rows down, i.e. input order. Same permutation, therefore
+#   the same bytes — and `tests/test_build_family10_stores.py` proves it by
+#   building one synthetic archive and hashing both assemblers' output, with a
+#   year that carries duplicate (bin, time_days) rows ACROSS two parts so the
+#   tie-break is actually exercised.
+STAT_CHUNK = 1 << 22          # rows per statistics block; both assemblers use it
+STREAM_ROWS = 50_000_000      # `--assemble auto` switches above this
+# bytes per stored row, excluding the tiny bin_offsets vector: bin 2 +
+# time_days 4 + lat 4 + lon 4 + platform 8 + qc 1 + fp 4 + values 2*C.
+ROW_BYTES_FIXED = 2 + 4 + 4 + 4 + 8 + 1 + 4
+DISK_HEADROOM = 1.2
+
+
+def _channel_stats(values, channels, N):
+    """Per-channel measured counts, ranges and means, read in fixed chunks.
+
+    Chunked deliberately: `values` is a memmap in the streaming assembler and
+    materialising a 2e9-row float32 column would defeat the whole exercise.
+    The memory assembler calls the SAME function with the SAME chunk size, so
+    the two cannot disagree about a number in store.json.
+    """
+    C = len(channels)
+    measured = [0] * C
+    vmin = [None] * C
+    vmax = [None] * C
+    vsum = [0.0] * C
+    finite_total = 0
+    for lo in range(0, int(N), STAT_CHUNK):
+        blk = np.asarray(values[lo:lo + STAT_CHUNK], np.float32)
+        if blk.size == 0:
+            continue
+        fin = np.isfinite(blk)
+        finite_total += int(fin.sum())
+        for i in range(C):
+            col = blk[:, i]
+            f = fin[:, i]
+            k = int(f.sum())
+            if not k:
+                continue
+            measured[i] += k
+            lo_v = float(np.nanmin(col))
+            hi_v = float(np.nanmax(col))
+            vmin[i] = lo_v if vmin[i] is None else min(vmin[i], lo_v)
+            vmax[i] = hi_v if vmax[i] is None else max(vmax[i], hi_v)
+            vsum[i] += float(np.nansum(col.astype(np.float64)))
+    per_channel = {}
+    for i, (nm, unit, lo_b, hi_b) in enumerate(channels):
+        k = measured[i]
+        per_channel[nm] = {
+            "unit": unit, "measured": k,
+            "fraction": round(k / N, 6) if N else 0.0,
+            "min": vmin[i], "max": vmax[i],
+            "mean": (vsum[i] / k) if k else None,
+            "bounds": [lo_b, hi_b]}
+    frac = round(finite_total / (int(N) * C), 6) if (N and C) else 0.0
+    return per_channel, frac
+
+
+def _part_paths(ctx):
+    """Every part file, in `read_parts` order: years ascending, names sorted.
+
+    THE ORDER IS THE CONTRACT — it is the tie-break of the store's defining
+    sort, so both assemblers must walk the parts through this one function.
+    """
+    out = []
+    for y in ctx.years:
+        d = ctx.year_dir(y)
+        if not os.path.isdir(d):
+            continue
+        for n in sorted(os.listdir(d)):
+            if n.endswith(".npz"):
+                out.append((y, os.path.join(d, n)))
+    return out
+
+
+def _part_ledgers(ctx):
+    """per_year row counts from counts.json (cheap), and the merged counters."""
+    per_year, counts_all = {}, {}
+    for y in ctx.years:
+        c = read_json(os.path.join(ctx.year_dir(y), "counts.json"), {})
+        per_year[y] = int(c.get("rows", 0))
+        _merge_counts(counts_all, c.get("counts") or {})
+    return per_year, counts_all
+
+
+def _scan_bins(ctx):
+    """PASS 1 — read ONLY the `bin` member of every part.
+
+    `np.load` on an npz is lazy per member, so this touches ~2 bytes a row
+    instead of ~33. Returns (N, per_year, {bin: rows}).
+    """
+    counts, per_year, N = {}, {}, 0
+    for y, p in _part_paths(ctx):
+        with np.load(p) as z:
+            b = np.asarray(z["bin"], np.int64)
+        u, c = np.unique(b, return_counts=True)
+        for k, v in zip(u.tolist(), c.tolist()):
+            counts[k] = counts.get(k, 0) + v
+        per_year[y] = per_year.get(y, 0) + int(b.size)
+        N += int(b.size)
+    return N, per_year, counts
+
+
+def _disk_preflight(dest, N, C, n_bins):
+    """Refuse BEFORE pass 2 rather than at 90% of a six-hour write (§5.18).
+
+    The size is computable from the dtypes, so it is computed; a check that
+    can only guess belongs nowhere near an 80 GB allocation.
+    """
+    need = int(N) * (ROW_BYTES_FIXED + 2 * int(C)) + 8 * (int(n_bins) + 1)
+    free = shutil.disk_usage(dest).free
+    want = need * DISK_HEADROOM
+    print(f"  disk: the store is {need / 1e9:.2f} GB ({N:,} rows x "
+          f"{ROW_BYTES_FIXED + 2 * C} B); {free / 1e9:.2f} GB free under "
+          f"{dest}; {DISK_HEADROOM:g}x margin wants {want / 1e9:.2f} GB")
+    if free < want:
+        sys.exit(f"REFUSING to assemble: {dest} has {free / 1e9:.2f} GB free "
+                 f"and this store needs {need / 1e9:.2f} GB "
+                 f"({DISK_HEADROOM:g}x = {want / 1e9:.2f} GB with margin). "
+                 f"Free space or build on a bigger disk; the parts are safe on "
+                 f"the Hub and nothing has been overwritten.")
+    return need
+
+
+def assemble_store_streaming(ctx):
+    """The same store as `assemble_store`, byte for byte, without the RAM.
+
+    Three passes over the parts (see the block comment above for why the
+    permutation is identical):
+      1. count rows per bin -> the CSR offsets;
+      2. scatter each part's rows into `offsets[bin] + cursor[bin]`, walking
+         the parts in `read_parts` order, straight into `open_memmap`ed
+         output arrays;
+      3. sort each bin's slice by `time_days` with a STABLE argsort.
+    Peak RAM is one part (FLUSH_ROWS rows) plus one bin's slice.
+    """
+    ad = ctx.adapter
+    dest = ctx.store
+    os.makedirs(dest, exist_ok=True)
+    C = ad.C
+
+    t0 = time.time()
+    N, per_year_scan, bin_counts = _scan_bins(ctx)
+    per_year, counts_all = _part_ledgers(ctx)
+    for y, n in per_year_scan.items():
+        per_year[y] = n                       # the parts, not the ledger
+    for y in ctx.years:
+        per_year.setdefault(y, 0)
+    print(f"  pass 1: {N:,} row(s) over {len(bin_counts)} bin(s) "
+          f"({time.time() - t0:.1f}s)", flush=True)
+
+    if bin_counts:
+        bin_first, bin_last = min(bin_counts), max(bin_counts)
+    else:
+        bin_first = bin_last = ctx.b_lo
+    n_bins = bin_last - bin_first + 1
+    off = np.zeros(n_bins + 1, np.int64)
+    for k, v in bin_counts.items():
+        off[k - bin_first + 1] = v
+    np.cumsum(off, out=off)
+    assert off[0] == 0 and off[-1] == N, (off[0], off[-1], N)
+
+    _disk_preflight(dest, N, C, n_bins)
+
+    from numpy.lib.format import open_memmap
+    shapes = {"bin": (np.int16, (N,)), "time_days": (np.float32, (N,)),
+              "lat": (np.float32, (N,)), "lon": (np.float32, (N,)),
+              "values": (np.float16, (N, C)),
+              "platform": (np.int64, (N,)), "qc": (np.uint8, (N,)),
+              "fp": (np.float16, (N, 2))}
+    files = {}
+    mm = {}
+    for k, (dtype, shape) in shapes.items():
+        p = os.path.join(dest, k + ".npy")
+        mm[k] = open_memmap(p, mode="w+", dtype=dtype, shape=shape)
+        files[k + ".npy"] = p
+    mm["fp"][:, 0] = np.float16(ad.log2_fp)
+    mm["fp"][:, 1] = np.float16(ad.log2_dt)
+
+    # PASS 2 — scatter, in part order.
+    t0 = time.time()
+    cursor = np.zeros(n_bins, np.int64)
+    for _, p in _part_paths(ctx):
+        with np.load(p) as z:
+            d = {k: z[k] for k in ROW_KEYS}
+        b = np.asarray(d["bin"], np.int64) - bin_first
+        if b.size == 0:
+            continue
+        # Rows of one part that share a bin must land in the order they appear
+        # in the part; `argsort(kind="stable")` groups them without disturbing
+        # that, and `pos` is each row's rank inside its own group.
+        grp = np.argsort(b, kind="stable")
+        bs = b[grp]
+        uniq, first, cnt = np.unique(bs, return_index=True, return_counts=True)
+        pos = np.arange(bs.size, dtype=np.int64) - np.repeat(first, cnt)
+        dest_sorted = off[bs] + cursor[bs] + pos
+        idx = np.empty(b.size, np.int64)
+        idx[grp] = dest_sorted
+        for k in ROW_KEYS:
+            mm[k][idx] = d[k]
+        cursor[uniq] += cnt
+    assert np.array_equal(cursor, np.diff(off)), "the scatter did not fill"
+    print(f"  pass 2: scattered {N:,} row(s) ({time.time() - t0:.1f}s)",
+          flush=True)
+
+    # PASS 3 — stable sort by time inside each bin.
+    t0 = time.time()
+    moved = 0
+    for j in range(n_bins):
+        s, e = int(off[j]), int(off[j + 1])
+        if e - s < 2:
+            continue
+        order = np.argsort(np.asarray(mm["time_days"][s:e], np.float32),
+                           kind="stable")
+        if np.array_equal(order, np.arange(e - s)):
+            continue
+        moved += 1
+        for k in ROW_KEYS:
+            mm[k][s:e] = np.asarray(mm[k][s:e])[order]
+    for k in list(mm):
+        mm[k].flush()
+        del mm[k]
+    print(f"  pass 3: {moved:,} bin(s) needed a time sort "
+          f"({time.time() - t0:.1f}s)", flush=True)
+
+    p = os.path.join(dest, "bin_offsets.npy")
+    np.save(p, off)
+    files["bin_offsets.npy"] = p
+
+    values = np.load(os.path.join(dest, "values.npy"), mmap_mode="r")
+    try:
+        return _finish_store(ctx, dest, files, N, off, bin_first, bin_last,
+                             n_bins, per_year, counts_all, values)
+    finally:
+        del values
+
+
+def _peak_rss_gb():
+    try:
+        import resource
+        kb = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
+        return kb / 1e6 if sys.platform != "darwin" else kb / 1e9
+    except Exception:                                         # noqa: BLE001
+        return None
+
+
+def assemble(ctx):
+    """Pick an assembler and say which one ran (`--assemble`)."""
+    how = str(getattr(ctx.a, "assemble", "auto") or "auto")
+    if how == "auto":
+        rows = sum(_part_ledgers(ctx)[0].values())
+        big = rows > STREAM_ROWS or ctx.a.store == "slatrack"
+        how = "streaming" if big else "memory"
+        print(f"  assemble: auto -> {how} ({rows:,} part row(s) by the "
+              f"per-year ledgers, threshold {STREAM_ROWS:,}"
+              f"{'; slatrack is always streamed' if ctx.a.store == 'slatrack' else ''})")
+    else:
+        print(f"  assemble: {how} (forced by --assemble)")
+    meta = (assemble_store_streaming(ctx) if how == "streaming"
+            else assemble_store(ctx))
+    rss = _peak_rss_gb()
+    if rss is not None:
+        print(f"  assemble: {how} done, peak RSS {rss:.2f} GB")
     return meta
 
 
@@ -2297,20 +2611,29 @@ def assemble_store(ctx):
         np.save(p, arr)
         files[k + ".npy"] = p
 
-    live = int((np.diff(off) > 0).sum())
-    finite = np.isfinite(cat["values"].astype(np.float32))
-    per_channel = {}
-    for i, (nm, unit, lo_b, hi_b) in enumerate(ad.channels):
-        col = cat["values"][:, i].astype(np.float32)
-        f = np.isfinite(col)
-        per_channel[nm] = {
-            "unit": unit, "measured": int(f.sum()),
-            "fraction": round(float(f.mean()), 6) if N else 0.0,
-            "min": float(np.nanmin(col)) if f.any() else None,
-            "max": float(np.nanmax(col)) if f.any() else None,
-            "mean": float(np.nanmean(col)) if f.any() else None,
-            "bounds": [lo_b, hi_b]}
+    return _finish_store(ctx, dest, files, N, off, bin_first, bin_last,
+                         n_bins, per_year, counts_all,
+                         cat["values"])
 
+
+
+def _finish_store(ctx, dest, files, N, off, bin_first, bin_last, n_bins,
+                  per_year, counts_all, values):
+    """The bookkeeping tail BOTH assemblers share: statistics, store.json, the
+    sha256 of every file, and the E-079 §4 assertion pass.
+
+    It lives here and not twice so that `assemble_store` and
+    `assemble_store_streaming` cannot drift: the streaming assembler's whole
+    claim is that it produces the SAME BYTES, and a second copy of this
+    function is the cheapest way to make that claim false.
+
+    `values` is the (N, C) value matrix, in RAM for the memory assembler and a
+    read-only memmap for the streaming one — `_channel_stats` reads it in
+    fixed-size chunks either way, so the numbers are identical.
+    """
+    ad = ctx.adapter
+    per_channel, measured_fraction = _channel_stats(values, ad.channels, N)
+    live = int((np.diff(off) > 0).sum())
     plan = read_json(os.path.join(ctx.root, "plan.json"), {})
     meta = {
         "family": FAMILY, "tier": "P", "store": ad.store, "title": ad.title,
@@ -2361,8 +2684,7 @@ def assemble_store(ctx):
         "per_year": {str(k): int(v) for k, v in sorted(per_year.items())},
         "counts": counts_all,
         "per_channel": per_channel,
-        "values_measured_fraction": (round(float(finite.mean()), 6)
-                                     if N else 0.0),
+        "values_measured_fraction": measured_fraction,
         "resume_granularity": "year" if ad.per_year else
                               "the whole stream (the source file is sorted by "
                               "expocode, not by time — see the module docstring)",
@@ -2386,7 +2708,6 @@ def assemble_store(ctx):
     print(f"  store: {N:,} row(s), C={ad.C}, bins {bin_first}..{bin_last} "
           f"({live:,} live) -> {dest}")
     return meta
-
 
 # ============================================================== assertions ===
 def check_store(path, adapter=None, anchor=None):
@@ -2875,6 +3196,28 @@ def main():
                          "for a subset month by month — measured at ~3.3k "
                          "samples/s, ~220 runner-hours for the archive, so it "
                          "is the fallback, not the default.")
+    ap.add_argument("--assemble", default="auto",
+                    choices=("auto", "streaming", "memory"),
+                    help="how the store is assembled from the parts. `memory` "
+                         "concatenates every row and lexsorts it; `streaming` "
+                         "writes the same bytes through memmaps in three "
+                         "passes and never holds more than one part; `auto` "
+                         "(default) streams when the parts hold more than "
+                         f"{STREAM_ROWS:,} rows or the store is slatrack "
+                         "(50-80 GB — no box has that in RAM).")
+    ap.add_argument("--parts-from-hub", action="store_true",
+                    help="stage `fetch` does NOT touch the source archive: it "
+                         "pulls the requested years' column parts from "
+                         "partials/family10/<store>/<year>/ on the Hub (put "
+                         "there by ml/family10_parts_hub.py push) and "
+                         "assembles them. This is how slatrack is built on a "
+                         "box: HF_TOKEN only, no Copernicus credentials "
+                         "(ml/CLAUDE.md §6). Refuses if any requested year has "
+                         "no done.json on the Hub.")
+    ap.add_argument("--allow-missing-years", action="store_true",
+                    help="with --parts-from-hub: assemble even though some "
+                         "years are not on the Hub. The store will be short "
+                         "and its per_year block says which years are empty.")
     ap.add_argument("--attempts", type=int, default=3,
                     help="download attempts per file before the year fails. A "
                          "404 or an empty ERDDAP result is not an attempt "

@@ -580,9 +580,14 @@ they come from two different PMEL datasets joined on `(station, day)`.
 - **The GDP product is interpolated**, not raw fixes: positions and velocities
   are kriged onto 00/06/12/18 UTC. The footprint says "a point, a quarter-day
   sample"; it does not say "an instantaneous measurement".
-- **`slatrack` is tens of gigabytes** and is the only store that needs
-  credentials and a large machine. The other three are keyless and fit a hosted
-  runner.
+- **`slatrack` is 50–80 GB** and is the only store that needs credentials AND a
+  large machine — and, as of 2026-09-14, the only one whose build runs on two
+  machines, because no single machine may have both. `ml/CLAUDE.md` §6 forbids
+  the Copernicus credentials on a rented box, so the fetch may only happen on a
+  GitHub-hosted runner; a hosted runner has ~14 GB of disk and a six-hour job
+  cap, so the assembly may not happen there. The two halves are joined by the
+  Hub (see §11). The other three stores are keyless and fit a hosted runner
+  whole.
 - **`time_days` is float32, so derive calendar dates from `bin`, not from it.**
   At the end of the record (t ≈ 15,700 days) float32 spacing is 0.00098 d =
   **84 seconds**. Measured on the published `socat` store, three rows late on
@@ -624,6 +629,48 @@ stages `index | fetch | publish`), read by `ml/family10_store.py`, registered by
 `.github/workflows/family10-build.yml` (`workflow_dispatch` only), tested by
 `tests/test_build_family10_stores.py`. Every `store.json` carries the builder's
 git commit, the build time, the source URLs and the verification sentence above.
+
+**`slatrack`'s build path is different, and this is it (2026-09-14).** It is the
+one store built on two machines, for the reason in §9: the credentials may only
+live on a GitHub-hosted runner and the 50–80 GB assembly may only happen on a
+box. The seam is a Hub prefix.
+
+1. `.github/workflows/family10-slatrack-fetch.yml` — hosted lanes
+   (`runs-on: ubuntu-latest`, hard-coded), six of them over weighted year
+   ranges, `schedule:` every six hours as the resume mechanism. Each lane
+   fetches ONE YEAR (`--stage index,fetch --start Y-01-01 --end Y-12-31`),
+   pushes that year's column parts to
+   `partials/family10/slatrack/<year>/` on the dataset repo with
+   `ml/family10_parts_hub.py push`, deletes the local copy and moves on. The
+   push writes `done.json` LAST and only after every file has been downloaded
+   back with a matching sha256 (`ml/CLAUDE.md` §5.21 — a marker may only
+   under-claim; §0.2 — a 200 is not evidence the bytes are retrievable), so a
+   year killed halfway is simply refetched.
+2. `.github/workflows/family10-build.yml` on a box, with
+   `stage=fetch,publish` and `extra_args=--parts-from-hub`. The builder pulls
+   every requested year back, verifies each file against `done.json`, refuses
+   (naming them) if any year is missing, and assembles. The box carries
+   `HF_TOKEN` and nothing else — the workflow does not pass the Copernicus
+   secrets to a self-hosted runner at all, and its Preflight step refuses a
+   self-hosted `slatrack` build that did not ask for `--parts-from-hub`.
+
+`python3 ml/family10_parts_hub.py status --store slatrack` lists which years are
+on the Hub, with their rows and bytes.
+
+**The assembler that runs there is `assemble_store_streaming`**, selected by
+`--assemble auto` (streaming above 50 M part rows, and always for `slatrack`).
+It writes the same store as the in-RAM `assemble_store` **byte for byte**, in
+three passes over the parts: count rows per bin to get the CSR offsets; scatter
+each part's rows into `offsets[bin] + cursor[bin]` through `open_memmap`, in the
+order `read_parts` yields them; then sort each bin's slice by `time_days` with a
+stable argsort. That is the same permutation `np.lexsort((time_days, bin))`
+produces, because lexsort is stable and its final tie-break is input order —
+which is what the scatter reproduces.
+`tests/test_build_family10_stores.py::test_the_streaming_assembler_writes_the_same_bytes`
+proves it by hashing both assemblers' output over one synthetic archive doctored
+to hold duplicate `(bin, time_days)` rows across two parts. Peak RAM is one part
+plus one bin's slice; a disk preflight computes the store's size from the dtypes
+and refuses before pass 2 if free space is under 1.2× it.
 
 Specification: `ml/plans/E079_family10_point_stores.md`. The design it
 implements: `ml/plans/E078_multi_granularity.md`. The footprint token it

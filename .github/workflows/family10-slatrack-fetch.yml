@@ -1,0 +1,296 @@
+# E-079: FETCH family 10's `slatrack` store -- Copernicus Marine's reprocessed
+# level-3 along-track sea-level anomaly, 29 altimeter missions at 1 Hz, 1993 ->
+# -- ONE YEAR AT A TIME on GitHub-HOSTED runners, and park each finished year's
+# column parts on the Hugging Face Hub. This workflow NEVER assembles a store.
+#
+# WHY THE BUILD IS SPLIT IN TWO, AND WHY THIS HALF CANNOT RUN ON A BOX.
+# `ml/CLAUDE.md` §6: the Vast boxes are strangers' machines whose host has root,
+# so the CMEMS credentials may never be on one. They exist only as repository
+# secrets, and a repository secret is only safe on a GitHub-hosted runner, which
+# masks it and is destroyed with the job. That settles WHERE the fetch runs.
+# It does not settle where the ASSEMBLY runs, because a hosted runner has about
+# 14 GB of disk and slatrack does not fit in it: measured 2026-09-14, 2015 alone
+# holds ~70 M samples, so 1993-2024 is ~1.5-2.5 e9 rows at ~33 bytes a row in
+# the store -- 50 to 80 GB. So:
+#
+#     hosted lanes (HERE)         a box (family10-build.yml)
+#     fetch one year -----------> partials/family10/slatrack/<year>/ on the Hub
+#     push, verify, delete                     |
+#     next year                                v
+#                                 --stage fetch,publish --parts-from-hub
+#                                 (HF_TOKEN only; NO Copernicus credentials)
+#
+# `ml/family10_parts_hub.py` is that seam, and its `done.json` is the year's
+# marker: uploaded ONLY after every part has been uploaded AND downloaded back
+# with a matching sha256 (ml/CLAUDE.md §5.21 -- a marker may only under-claim,
+# §0.2 -- an upload that returns 200 is not evidence the bytes are retrievable).
+# A year killed halfway therefore has bytes on the Hub that nothing claims, and
+# the next firing simply refetches it. That is the intended, cheap outcome.
+#
+# THE SCHEDULE IS THE RESUME MECHANISM -- the same argument as
+# `.github/workflows/glorys-pull-global.yml`, one archive over. A hosted job is
+# capped at six hours; the lane lists what is already done by asking the Hub
+# (`family10_parts_hub.py status`) and skips those years, so a firing that hits
+# the wall loses only the year it was in the middle of. Once a lane is complete
+# its firings are one-minute no-ops that say so. `runs-on: ubuntu-latest` is
+# HARD-CODED and there is deliberately no `runner` input: §6 forbids pointing a
+# `schedule:`-triggered workflow at `runs-on: gpu`, and this one both has a
+# schedule and carries credentials.
+#
+# SIX LANES, WEIGHTED BY MISSION COUNT. The archive's later years carry far more
+# missions in orbit at once than its early ones (one or two in 1993-1994, a
+# dozen-plus after 2016), and the cost of a year is roughly the number of
+# mission-days in it. So the lanes are not equal spans: 1993-1999 · 2000-2005 ·
+# 2006-2010 · 2011-2014 · 2015-2018 · 2019-2024. Each carries its own
+# `concurrency` group -- a workflow-level group would serialise six lanes back
+# into one -- and `fail-fast: false`, so one lane's bad year cannot cancel five
+# lanes' progress.
+#
+# HOW LONG A YEAR TAKES IS NOT YET MEASURED, AND THIS COMMENT WILL NOT PRETEND
+# IT IS. What IS measured, 2026-09-14 on run 34849670866 (one week of January
+# 2015, four missions): the `read_dataframe` subset route delivered ~3.3k
+# samples/s, i.e. ~100 s per mission-week, which extrapolates to ~220
+# runner-hours for the whole archive and is why it is the FALLBACK. The default
+# route (`--slatrack-fetch files`) takes the ORIGINAL per-day DUACS netCDFs
+# through `copernicusmarine.get` in month batches; it is expected to be very
+# much faster because it is a bulk file transfer rather than a server-side
+# subset, but ITS RATE HAS NOT BEEN MEASURED. The first firing of this workflow
+# is that measurement. The time budget below is therefore written to fail safe
+# rather than to fit an estimate: the loop stops STARTING a new year when less
+# than `RESERVE_MIN` (90) minutes remain of the 355, because a year that does
+# not finish is refetched whole.
+#
+# SECURITY. Credentials reach the builder as ENVIRONMENT VARIABLES and never as
+# command-line arguments. Nothing here writes a credential to disk, echoes one,
+# or passes one to `family10_parts_hub.py` (which touches HF_TOKEN only).
+# `permissions: contents: read` -- the parts go to Hugging Face, nothing is
+# committed to this repo.
+name: Family 10 slatrack fetch (hosted lanes -> parts on the Hub)
+run-name: slatrack fetch ${{ github.event.inputs.years || '1993-2024' }}
+
+on:
+  workflow_dispatch:
+    inputs:
+      years:
+        description: "which years to consider, intersected with each lane's own range: 1993-2024 | 2015 | 1997-1999,2004"
+        default: "1993-2024"
+      probe_only:
+        description: "run ONLY the index stage for the lane's first outstanding year and stop -- a credentials/catalogue check that fetches nothing"
+        type: boolean
+        default: false
+  schedule:
+    # every 6 hours; each firing continues where the last one stopped, because
+    # the lane asks the Hub which years already carry a done.json
+    - cron: '40 */6 * * *'
+
+permissions:
+  contents: read          # the parts go to Hugging Face, not to this repo
+
+jobs:
+  fetch:
+    runs-on: ubuntu-latest        # HARD-CODED -- ml/CLAUDE.md §6, see the header
+    timeout-minutes: 355          # GitHub-hosted jobs are capped at 6 h
+    strategy:
+      fail-fast: false            # one lane's bad year must not cancel five
+      matrix:
+        include:
+          - lane: '1993-1999'
+          - lane: '2000-2005'
+          - lane: '2006-2010'
+          - lane: '2011-2014'
+          - lane: '2015-2018'
+          - lane: '2019-2024'
+    concurrency:
+      # PER LANE. Never cancel one in flight: it is fetching, and its progress
+      # is durable only per year that has been pushed and marked.
+      group: family10-slatrack-${{ matrix.lane }}
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      # Check the preconditions while the inputs are all they have cost
+      # (ml/CLAUDE.md §0.3). A missing secret must fail HERE, in seconds, not as
+      # an auth error after the install and the first catalogue query -- which
+      # reads like a bad credential rather than an absent one.
+      - name: Preconditions
+        id: preflight
+        env:
+          CM_USER: ${{ secrets.COPERNICUSMARINE_SERVICE_USERNAME }}
+          CM_PASS: ${{ secrets.COPERNICUSMARINE_SERVICE_PASSWORD }}
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+        run: |
+          missing=""
+          [ -n "$CM_USER" ] || missing="$missing COPERNICUSMARINE_SERVICE_USERNAME"
+          [ -n "$CM_PASS" ] || missing="$missing COPERNICUSMARINE_SERVICE_PASSWORD"
+          [ -n "$HF_TOKEN" ] || missing="$missing HF_TOKEN"
+          if [ -n "$missing" ]; then
+            echo "::error::missing repo Actions secret(s):$missing"
+            echo "Set them at Settings -> Secrets and variables -> Actions."
+            echo "Values live in the claude.ai project docs"
+            echo "claude/copernicus-marine-access.md and claude/huggingface-access.md."
+            echo "This workflow cannot fetch anything without the Copernicus"
+            echo "pair and cannot park anything without HF_TOKEN, so it refuses"
+            echo "now rather than after the install."
+            exit 1
+          fi
+          echo "secrets: present"
+          echo "lane ${{ matrix.lane }}; disk as the fetch will see it:"
+          df -h "${RUNNER_TEMP}"
+
+      # numpy is the column format, netCDF4 reads the original DUACS files,
+      # huggingface_hub parks them, copernicusmarine is the archive client. If
+      # the builder grows a dependency it is added HERE in the same commit.
+      - name: Install
+        run: |
+          pip install --quiet numpy netCDF4 huggingface_hub copernicusmarine
+          python3 -c "import numpy, netCDF4, huggingface_hub, copernicusmarine; print('deps ok')"
+
+      # ONE Hub listing for the whole lane, parsed once. `status` prints a
+      # machine-readable `done_years:` line for exactly this.
+      - name: Which years are already on the Hub
+        id: done
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+          LANE: ${{ matrix.lane }}
+          YEARS: ${{ github.event.inputs.years || '1993-2024' }}
+        run: |
+          set -o pipefail
+          python3 -u ml/family10_parts_hub.py status --store slatrack \
+              --years "${LANE}" | tee "${RUNNER_TEMP}/status.txt"
+          done_years=$(sed -n 's/^done_years: *//p' "${RUNNER_TEMP}/status.txt" | head -1)
+          echo "done_years=${done_years}" >> "$GITHUB_OUTPUT"
+          # The lane's years intersected with the dispatch input, minus the
+          # years the Hub already carries. Computed in python so the range
+          # syntax is the builder's own (`parse_years`), not a second dialect.
+          # Every value reaches python through the ENVIRONMENT, never spliced
+          # into the source text: `years` is a dispatch input, and a quoted
+          # string built by the shell is an injection waiting for someone to
+          # type a quote into it.
+          todo=$(DONE="${done_years}" python3 -c "import os, sys; sys.path.insert(0, 'ml'); from build_family7 import parse_years; lane = set(parse_years(os.environ['LANE'])); want = set(parse_years(os.environ['YEARS'])); have = set(int(x) for x in os.environ['DONE'].split()); print(' '.join(str(y) for y in sorted(lane & want - have)))")
+          echo "todo=${todo}" >> "$GITHUB_OUTPUT"
+          echo "lane ${LANE}: already done [${done_years}]; to fetch [${todo}]"
+
+      - name: Fetch and push, year by year
+        id: fetch
+        env:
+          COPERNICUSMARINE_SERVICE_USERNAME: ${{ secrets.COPERNICUSMARINE_SERVICE_USERNAME }}
+          COPERNICUSMARINE_SERVICE_PASSWORD: ${{ secrets.COPERNICUSMARINE_SERVICE_PASSWORD }}
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+          TODO: ${{ steps.done.outputs.todo }}
+          PROBE_ONLY: ${{ github.event.inputs.probe_only }}
+          WORK: ${{ runner.temp }}/f10
+          LOGS: ${{ runner.temp }}/f10-logs
+          # 355 minutes of job, minus the margin below, is what the loop may
+          # spend STARTING years. A year that does not finish is refetched
+          # whole next firing -- the marker is written only after the push --
+          # so stopping early costs nothing and running over costs a year.
+          BUDGET_MIN: '355'
+          RESERVE_MIN: '90'
+        run: |
+          set -o pipefail
+          mkdir -p "${WORK}" "${LOGS}"
+          T0=$(date +%s)
+          if [ -z "${TODO}" ]; then
+            echo "lane ${{ matrix.lane }}: every year is already on the Hub — nothing to do"
+            exit 0
+          fi
+
+          if [ "${PROBE_ONLY}" = "true" ]; then
+            y=$(echo ${TODO} | awk '{print $1}')
+            echo "=== probe_only: index ${y} and stop (nothing is fetched) ==="
+            python3 -u ml/build_family10_stores.py --store slatrack \
+                --stage index --start "${y}-01-01" --end "${y}-12-31" \
+                --work "${WORK}" --slatrack-fetch files \
+                2>&1 | tee "${LOGS}/slatrack-${y}-index.log"
+            exit $?
+          fi
+
+          fetched=0
+          for y in ${TODO}; do
+            now=$(date +%s)
+            spent=$(( (now - T0) / 60 ))
+            left=$(( BUDGET_MIN - spent ))
+            if [ "${left}" -lt "${RESERVE_MIN}" ]; then
+              echo "::notice::stopping before ${y}: only ${left} min of the"
+              echo "${BUDGET_MIN}-minute budget remain and a year needs more"
+              echo "than the ${RESERVE_MIN}-minute reserve. The next scheduled"
+              echo "firing continues here — no year is half-marked, because"
+              echo "done.json is written only after the push verifies."
+              break
+            fi
+            echo "=== ${y} (lane ${{ matrix.lane }}, ${left} min left) ==="
+            log="${LOGS}/slatrack-${y}.log"
+            rc=0
+            # ONE WORK DIRECTORY PER YEAR. The builder marks a finished stage
+            # in <work>/<store>/ (`index`, `fetch`), so a second year run in
+            # the same directory would read the first year's `fetch` marker,
+            # print "already done — skipping" and push nothing.
+            YWORK="${WORK}/${y}"
+            rm -rf "${YWORK}"
+            python3 -u ml/build_family10_stores.py --store slatrack \
+                --stage index,fetch --start "${y}-01-01" --end "${y}-12-31" \
+                --work "${YWORK}" --slatrack-fetch files \
+                > "${log}" 2>&1 || rc=$?
+            tail -n 40 "${log}"
+            if [ "${rc}" != "0" ]; then
+              echo "::error::${y}: the fetch exited ${rc} — see the artifact."
+              echo "Nothing was pushed, so this year stays outstanding and the"
+              echo "next firing retries it."
+              rm -rf "${YWORK}"
+              continue
+            fi
+            python3 -u ml/family10_parts_hub.py push --store slatrack \
+                --year "${y}" --work "${YWORK}" \
+                >> "${log}" 2>&1 || rc=$?
+            tail -n 20 "${log}"
+            if [ "${rc}" != "0" ]; then
+              echo "::error::${y}: the push exited ${rc} — no done.json was"
+              echo "written, so the year reads as MISSING and is refetched."
+              rm -rf "${YWORK}"
+              continue
+            fi
+            fetched=$((fetched + 1))
+            # A hosted runner has ~14 GB. The year is durable on the Hub now,
+            # so its local copy is dead weight against the next year.
+            rm -rf "${YWORK}"
+            df -h "${RUNNER_TEMP}" | tail -1
+          done
+          echo "lane ${{ matrix.lane }}: ${fetched} year(s) pushed this firing"
+
+      # A dead job must still tell its story (ml/CLAUDE.md §5.25/§5.26). The
+      # parts themselves are NEVER collected — they are on the Hub, verified by
+      # restore, and an Actions artifact expires.
+      - name: Collect the log tails
+        if: always() && steps.preflight.outcome == 'success'
+        env:
+          LOGS: ${{ runner.temp }}/f10-logs
+          WORK: ${{ runner.temp }}/f10
+        run: |
+          out="${RUNNER_TEMP}/slatrack-story"
+          rm -rf "${out}"; mkdir -p "${out}"
+          for f in "${LOGS}"/*.log; do
+            [ -e "${f}" ] || continue
+            tail -n 200 "${f}" > "${out}/$(basename "${f}").tail"
+          done
+          # `&&` alone would abort this step under bash -e the moment a file is
+          # absent, which is the normal case for a lane that had nothing to do.
+          cp "${RUNNER_TEMP}/status.txt" "${out}/" 2>/dev/null || true
+          for f in progress.json plan.json; do
+            cp "${WORK}/slatrack/${f}" "${out}/" 2>/dev/null || true
+          done
+          ls -la "${out}" || true
+          echo "--- disk at the end ---"
+          df -h "${RUNNER_TEMP}" || true
+
+      - name: Upload the story
+        if: always() && steps.preflight.outcome == 'success'
+        uses: actions/upload-artifact@v4
+        with:
+          name: slatrack-${{ matrix.lane }}-${{ github.run_number }}
+          path: ${{ runner.temp }}/slatrack-story
+          if-no-files-found: warn
+          retention-days: 30
