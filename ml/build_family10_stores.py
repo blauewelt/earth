@@ -1158,22 +1158,44 @@ class SLATrackAdapter(SourceAdapter):
     them. This is the one store E-079 §3.4 sends to a box rather than a hosted
     runner.
 
-    THE LIVE FETCH GOES THROUGH `read_dataframe`, NOT THROUGH A FILE. The two
-    probes of 2026-09-14 (runs 34847980911 and 34848513007) showed that the
-    toolbox DOES serve these sparse datasets, and that asking it for
-    `file_format` netcdf (its default) crashes inside its OWN writer:
+    TWO LIVE ROUTES, `files` BY DEFAULT (`--slatrack-fetch`). The subset route
+    works but is slow: the probe of 2026-09-14 (run 34849670866, ONE WEEK of
+    January 2015 for four missions) measured ~100 s per mission-week at
+    ~3.3k samples/s — data-rate bound, ~220 runner-hours for 1993-2024. The
+    default route therefore takes the ORIGINAL per-day DUACS netCDF files
+    through `copernicusmarine.get`, in month-sized batches, parsing and
+    deleting each batch before the next is asked for. `dataframe` keeps the
+    `read_dataframe` route as a fallback; both end in the same
+    `_rows_from_frame`, so the store cannot differ between them.
+
+    WHY NOT THE TOOLBOX'S OWN SUBSET-TO-NETCDF. The two probes of 2026-09-14
+    (runs 34847980911 and 34848513007) showed that the toolbox DOES serve
+    these sparse datasets, and that asking it for `file_format` netcdf (its
+    default) crashes inside its OWN writer:
     `_dataframe_to_netcdf_per_platform` -> `_add_attributes_to_dataset` raises
     `ValueError: index must be monotonic increasing or decreasing`
-    (copernicusmarine/download_functions/download_sparse.py). The data arrived;
-    only the toolbox's netCDF serialisation failed. So the adapter asks for the
-    DataFrame the toolbox already has in hand — `copernicusmarine.read_dataframe`
-    — and never lets it write a file. Nothing about the store changes: the
-    frame goes through the SAME `_rows_from_frame` the fixture netCDFs do.
+    (copernicusmarine/download_functions/download_sparse.py). The data
+    arrived; only the toolbox's netCDF serialisation failed. So the subset
+    route asks for the DataFrame the toolbox already has in hand —
+    `copernicusmarine.read_dataframe` — and never lets it write a file.
 
-    MONTH BY MONTH. A mission-year at 1 Hz is ~30 M rows; at three float64
-    channels plus time and position that is several GB in one DataFrame. A
-    month is ~2.6 M rows and keeps the peak inside a 16 GB runner, so the live
-    path asks for one month at a time and yields one part per month.
+    THE SUBSET FRAME IS LONG, NOT WIDE (measured, run 34849670866). Its
+    columns are ['variable', 'platform_id', 'platform_type', 'time',
+    'longitude', 'latitude', 'depth', 'pressure', 'is_depth_from_producer',
+    'value', 'value_qc', 'institution', 'doi', 'product_doi'] — ONE ROW PER
+    (variable, sample), with `variable` taking the values sla_filtered /
+    sla_unfiltered / mdt. A week of one mission is ~950k-1.06M long rows,
+    ~320-355k samples. `_rows_from_frame` therefore PIVOTS such a frame to one
+    row per (time, latitude, longitude[, platform_id]) with the three channels
+    as columns before the shared filter runs; a channel a sample does not
+    carry becomes NaN. `value_qc` is counted into a histogram and recorded,
+    but NOT filtered on: the product is pre-edited (see `qc_policy`), and the
+    next probe should teach us what the flag actually carries first.
+
+    MONTH BY MONTH. A mission-year at 1 Hz is ~30 M samples; at three float64
+    channels plus time and position that is several GB in one DataFrame (and
+    three times that long). A month keeps the peak inside a 16 GB runner, so
+    both routes work one month at a time and yield one part per month.
     """
 
     store = "slatrack"
@@ -1207,13 +1229,28 @@ class SLATrackAdapter(SourceAdapter):
                 "decreasing` in _dataframe_to_netcdf_per_platform / "
                 "_add_attributes_to_dataset (a bug in the toolbox's "
                 "download_sparse.py, not in the data). The adapter therefore "
-                "uses copernicusmarine.read_dataframe, month by month, and "
-                "never asks the toolbox to write a file. That path cannot be "
-                "run from this sandbox — no credentials here by design, and "
-                "the toolbox cannot be installed (pypi 403 through the egress "
-                "proxy); the frame-to-rows step it depends on is exercised by "
-                "the tests and is the same code the fixture netCDFs go "
-                "through.")
+                "never asks the toolbox to write a subset file. 2026-09-14 "
+                "(run 34849670866, one week of January 2015, four missions — "
+                "h2a, al, c2, j2): read_dataframe RETURNS DATA, in LONG "
+                "format — columns ['variable', 'platform_id', "
+                "'platform_type', 'time', 'longitude', 'latitude', 'depth', "
+                "'pressure', 'is_depth_from_producer', 'value', 'value_qc', "
+                "'institution', 'doi', 'product_doi'], one row per (variable, "
+                "sample), `variable` in {sla_filtered, sla_unfiltered, mdt}, "
+                "at ~950k-1.06M long rows (~320-355k samples) and ~100 s per "
+                "mission-week, i.e. ~3.3k samples/s, which is ~220 runner-"
+                "hours for 1993-2024. That measurement is why the DEFAULT "
+                "route is now copernicusmarine.get on the original per-day "
+                "files, month by month, with read_dataframe kept as "
+                "--slatrack-fetch dataframe. Neither route can be run from "
+                "this sandbox — no credentials here by design, and the "
+                "toolbox cannot be installed (pypi 403 through the egress "
+                "proxy); the pivot, the file batching and the frame-to-rows "
+                "step they depend on are exercised by the tests and are the "
+                "same code the fixture netCDFs go through. NOT YET MEASURED: "
+                "the remote path layout of the original files (the first "
+                "probe of the `files` route prints it) and what values "
+                "`value_qc` takes (the pivot now records its histogram).")
     notes = ("the only store of the four that needs credentials and a box "
              "rather than a hosted runner")
 
@@ -1279,14 +1316,78 @@ class SLATrackAdapter(SourceAdapter):
         # start_datetime / end_datetime), so the index records WHEN every
         # mission flew as well as its id — that is what `_mission_window`
         # clips against, and a reader of the index can see the same thing.
-        return {"product": CMEMS_PRODUCT, "stac": CMEMS_STAC,
-                "missions": ms, "n_missions": len(ms),
-                "variables": list(CMEMS_VARS),
-                "fetch": "copernicusmarine.read_dataframe, month by month",
-                "credentials_present": creds,
-                "toolbox_importable": toolbox,
-                "years": list(range(max(ctx.d_lo.year, self.first_year),
-                                    ctx.d_hi.year + 1))}
+        out = {"product": CMEMS_PRODUCT, "stac": CMEMS_STAC,
+               "missions": ms, "n_missions": len(ms),
+               "variables": list(CMEMS_VARS),
+               "fetch": ("copernicusmarine.get (original files), month "
+                         "batches; fallback read_dataframe"),
+               "fetch_route": self._route(ctx),
+               "credentials_present": creds,
+               "toolbox_importable": toolbox,
+               "years": list(range(max(ctx.d_lo.year, self.first_year),
+                                   ctx.d_hi.year + 1))}
+        # A MEASUREMENT, not a download: the remote path layout of the
+        # original files is unknown, so when the toolbox is here and the
+        # credentials are set the index lists one mission's files for the
+        # first year of the window and writes what it saw into plan.json. It
+        # is wrapped whole — an index must never fail because a probe did.
+        if toolbox and all(creds.values()) and not ctx.source_dir:
+            try:
+                out["slatrack_files_probe"] = self._probe_files(ctx, ms)
+            except Exception as e:                              # noqa: BLE001
+                print(f"  slatrack files probe failed: {e!r}", flush=True)
+        return out
+
+    @staticmethod
+    def _route(ctx):
+        """`files` (the default) or `dataframe` — see `--slatrack-fetch`."""
+        return str(getattr(ctx.a, "slatrack_fetch", "") or "files")
+
+    def _probe_files(self, ctx, ms):
+        """One `get(dry_run=True)` for the first mission overlapping the
+        window: how many original files there are for its first year, and a
+        handful of their remote paths, so the next probe knows the layout."""
+        import copernicusmarine
+        lo = max(ctx.d_lo, dt.date(self.first_year, 1, 1))
+        hi = ctx.d_hi
+        for m in ms:
+            win = self._mission_window(m, lo, hi)
+            if win is None:
+                continue
+            mid = m["id"] if isinstance(m, dict) else str(m)
+            did, ver = self._split_id(mid)
+            resp = copernicusmarine.get(
+                dataset_id=did, dataset_version=ver,
+                filter=f"*{win[0].year}*", dry_run=True,
+                disable_progress_bar=True)
+            paths = self._response_paths(resp)
+            return {"mission": mid, "year": win[0].year,
+                    "files_listed": len(paths), "sample_paths": paths[:6]}
+        return {"files_listed": 0, "sample_paths": [],
+                "note": "no mission overlaps the requested window"}
+
+    @staticmethod
+    def _response_paths(resp):
+        """A `ResponseGet` -> the remote paths it listed, in order.
+
+        The documented shape is `resp.files`, a list of `FileGet` carrying
+        `s3_url` / `https_url` / `filename`; a dict is accepted too so a
+        toolbox version that hands back plain JSON does not break the probe.
+        """
+        files = getattr(resp, "files", None)
+        if files is None and isinstance(resp, dict):
+            files = resp.get("files")
+        out = []
+        for f in files or []:
+            p = None
+            for k in ("s3_url", "https_url", "filename"):
+                p = getattr(f, k, None) or (f.get(k) if isinstance(f, dict)
+                                            else None)
+                if p:
+                    break
+            if p:
+                out.append(str(p))
+        return out
 
     def _require_credentials(self):
         missing = [k for k in CMEMS_ENV if not os.environ.get(k)]
@@ -1316,7 +1417,11 @@ class SLATrackAdapter(SourceAdapter):
                     rows, counts = self._read_nc(ctx, p, mid)
                     yield f"{year} {mid}", rows, counts
                 continue
-            for part in self._fetch_months(ctx, mid, win[0], win[1]):
+            route = self._route(ctx)
+            gen = (self._fetch_months(ctx, mid, win[0], win[1])
+                   if route == "dataframe"
+                   else self._fetch_files(ctx, mid, win[0], win[1]))
+            for part in gen:
                 yield part
 
     def _files(self, ctx, mid, year):
@@ -1373,6 +1478,101 @@ class SLATrackAdapter(SourceAdapter):
             del frame                 # before the next month is asked for
             yield f"{m_lo:%Y-%m} {mid}", rows, counts
 
+    def _fetch_files(self, ctx, mid, lo, hi):
+        """The DEFAULT live path: the ORIGINAL per-day files, month batches.
+
+        The subset route is data-rate bound at ~3.3k samples/s (run
+        34849670866) — ~220 runner-hours for the whole archive. The original
+        DUACS files carry the same samples in their native netCDF and come
+        down at storage speed, so this is the route the builder takes unless
+        `--slatrack-fetch dataframe` says otherwise.
+
+        THE REMOTE LAYOUT IS NOT MEASURED YET, so the method does not guess
+        it. It LISTS a year first (`get(dry_run=True)`, `filter=*<year>*` —
+        the toolbox matches the pattern against the absolute remote path) and
+        prints how many files matched and the first and last three paths; the
+        next probe's log therefore contains the layout. Batching is then done
+        on what the listing SHOWED rather than on a guessed pattern: a file
+        whose basename carries an 8-digit date token is put in that month's
+        batch, and the batch is downloaded with a `regex` built from exactly
+        those basenames. If no listed basename carries such a token the whole
+        year is one batch — correct, only coarser — and the log says so.
+
+        Each batch is downloaded flat (`no_directories=True`) into the
+        build's own scratch, parsed with `_read_nc`, yielded, and deleted
+        before the next batch is asked for, so a mission-year never occupies
+        more than a month of files on disk.
+        """
+        import copernicusmarine
+        did, ver = self._split_id(mid)
+        base = dict(dataset_id=did, dataset_version=ver,
+                    disable_progress_bar=True)
+        out = os.path.join(ctx.scratch, "slatrack", mid)
+        for year in range(lo.year, hi.year + 1):
+            resp = copernicusmarine.get(filter=f"*{year}*", dry_run=True,
+                                        **base)
+            paths = self._response_paths(resp)
+            print(f"  {mid} {year}: {len(paths)} original file(s) listed"
+                  + (f"; first {paths[:3]} last {paths[-3:]}" if paths else ""),
+                  flush=True)
+            if not paths:
+                continue
+            y_lo = max(lo, dt.date(year, 1, 1))
+            y_hi = min(hi, dt.date(year, 12, 31))
+            for label, names in self._file_batches(paths, y_lo, y_hi,
+                                                   str(year)):
+                shutil.rmtree(out, ignore_errors=True)
+                os.makedirs(out, exist_ok=True)
+                try:
+                    copernicusmarine.get(
+                        regex="(" + "|".join(re.escape(n) for n in names)
+                              + ")$",
+                        output_directory=out, no_directories=True,
+                        overwrite=True, **base)
+                    got = sorted(n for n in os.listdir(out)
+                                 if n.endswith(".nc"))
+                    print(f"  {label} {mid}: {len(names)} file(s) asked, "
+                          f"{len(got)} downloaded", flush=True)
+                    for n in got:
+                        rows, counts = self._read_nc(ctx,
+                                                     os.path.join(out, n), mid)
+                        yield f"{label} {mid}", rows, counts
+                finally:
+                    shutil.rmtree(out, ignore_errors=True)
+
+    @staticmethod
+    def _file_batches(paths, lo, hi, fallback):
+        """Listed remote paths -> [(label, [basename, ...]), ...], per month.
+
+        The date token is read from the BASENAME (`(\\d{8})`, the shape every
+        DUACS along-track file carries) rather than from the directory part,
+        which differs between products. A basename with no token cannot be
+        placed in a month, so the moment one shows up the whole listing is
+        returned as a single batch: a coarser batch is still correct, a
+        silently dropped file is not.
+        """
+        months, order = {}, []
+        for p in paths:
+            n = str(p).rsplit("/", 1)[-1]
+            m = re.search(r"(\d{8})", n)
+            if not m:
+                return [(fallback, [str(x).rsplit("/", 1)[-1]
+                                    for x in paths])]
+            try:
+                d = dt.date(int(m.group(1)[:4]), int(m.group(1)[4:6]),
+                            int(m.group(1)[6:8]))
+            except ValueError:
+                return [(fallback, [str(x).rsplit("/", 1)[-1]
+                                    for x in paths])]
+            if not (lo <= d <= hi):
+                continue                       # outside the mission window
+            k = f"{d:%Y-%m}"
+            if k not in months:
+                months[k] = []
+                order.append(k)
+            months[k].append(n)
+        return [(k, months[k]) for k in sorted(order)]
+
     def _rows_from_frame(self, ctx, frame, mid):
         """A DataFrame (live) or a mapping of arrays (fixture) -> store rows.
 
@@ -1381,14 +1581,24 @@ class SLATrackAdapter(SourceAdapter):
         so everything below the column lookup — the fill, the bounds, the keep
         rule, the counts — is written once here.
 
-        The column naming of the sparse product is NOT yet measured (the probes
-        died in the toolbox's writer before a frame was ever printed), so the
-        lookup is deliberately loud: it prints the columns it was given once
-        per mission, and `sys.exit`s naming them if time/latitude/longitude
-        cannot be identified. A next probe that silently kept zero rows would
-        teach us nothing; one that stops and prints the real schema does.
+        LONG OR WIDE. The subset route's frame is LONG — one row per
+        (variable, sample), measured on run 34849670866 — so a frame carrying
+        `variable` and `value` and none of `CMEMS_VARS` as columns is PIVOTED
+        first (`_pivot_long`); a fixture's mapping of arrays is already wide
+        and goes straight through. Everything after the pivot is shared.
+
+        The lookup is deliberately loud: it prints the columns it was given
+        once per mission, and `sys.exit`s naming them if time/latitude/
+        longitude cannot be identified. A probe that silently kept zero rows
+        would teach us nothing; one that stops and prints the schema does.
         """
         cols = self._frame_columns(frame)
+        low0 = {str(c).lower(): c for c in cols}
+        qc_hist = None
+        if ("variable" in low0 and "value" in low0
+                and not any(v.lower() in low0 for v in CMEMS_VARS)):
+            frame, qc_hist = self._pivot_long(frame, mid, low0)
+            cols = self._frame_columns(frame)
         if mid not in getattr(self, "_logged_cols", ()):
             if not hasattr(self, "_logged_cols"):
                 self._logged_cols = set()
@@ -1457,10 +1667,77 @@ class SLATrackAdapter(SourceAdapter):
         counts = {"rows_read": int(len(td)), "kept": n,
                   "out_of_bounds": {nm: int(x) for nm, x
                                     in zip(self.channel_names, oob) if x}}
+        if qc_hist:
+            counts["value_qc"] = qc_hist
         rows = _pack(td[keep], la[keep], lo_[keep], v[keep],
                      np.full(n, platform_hash(mid), np.int64),
                      np.ones(n, np.uint8), self.C)
         return rows, counts
+
+    def _pivot_long(self, frame, mid, low):
+        """A LONG frame -> a wide mapping of arrays, plus the qc histogram.
+
+        MEASURED SHAPE (run 34849670866): one row per (variable, sample), the
+        value in `value`, its flag in `value_qc`, `variable` in {sla_filtered,
+        sla_unfiltered, mdt}. The key of a sample is (time, latitude,
+        longitude) — and `platform_id` as well IF the frame carries more than
+        one, which is checked here rather than assumed: the subset is asked
+        per mission dataset, so one platform is expected, and a second one
+        would silently collapse two samples into one if the key ignored it.
+
+        No `pivot_table` and no groupby: the key is factorised once and the
+        three channels are SCATTERED into place by that code, which is one
+        pass over each column and holds nothing but the output. A duplicate
+        (variable, key) row — not expected — keeps the last of them.
+        """
+        import pandas as pd
+        keys = [low[k] for k in ("time", "latitude", "longitude")
+                if k in low]
+        if len(keys) != 3:
+            return frame, None                 # let the loud lookup refuse
+        note = ""
+        pid = low.get("platform_id")
+        if pid is not None:
+            try:
+                nuniq = int(frame[pid].nunique(dropna=False))
+            except Exception:                                   # noqa: BLE001
+                nuniq = -1
+            if nuniq != 1:
+                keys.append(pid)               # or we would merge platforms
+                note = f", platform_id {nuniq} distinct -> in the key"
+            else:
+                note = ", platform_id constant"
+        var = np.asarray(frame[low["variable"]].astype(str))
+        val = np.asarray(frame[low["value"]], np.float64)
+        qc_hist = {}
+        qcol = low.get("value_qc")
+        if qcol is not None:
+            # The histogram is of the CHANNEL THE KEEP RULE USES, sla_filtered
+            # — recorded so the next probe tells us what flags this product
+            # carries. Nothing filters on it yet: the product is pre-edited
+            # (see `qc_policy`) and inventing a threshold before seeing the
+            # distribution would drop rows for no measured reason.
+            sel = frame[qcol][var == CMEMS_VARS[0]]
+            for k, c in sel.value_counts(dropna=False).items():
+                try:
+                    kk = int(k)
+                except (TypeError, ValueError):
+                    kk = str(k)
+                qc_hist[kk] = qc_hist.get(kk, 0) + int(c)
+        codes, uniq = pd.MultiIndex.from_frame(frame[keys]).factorize()
+        codes = np.asarray(codes, np.int64)
+        n = len(uniq)
+        wide = {str(k): uniq.get_level_values(i).to_numpy()
+                for i, k in enumerate(keys)}
+        for v in CMEMS_VARS:
+            col = np.full(n, np.nan)
+            m = (var == v) & (codes >= 0)
+            if m.any():
+                col[codes[m]] = val[m]
+            wide[v] = col
+        print(f"  {mid} long frame: {len(var)} row(s) -> {n} sample(s)"
+              f"{note}, value_qc {qc_hist or 'absent'}", flush=True)
+        return wide, qc_hist
 
     @staticmethod
     def _frame_columns(frame):
@@ -1512,22 +1789,59 @@ class SLATrackAdapter(SourceAdapter):
         they are the one thing a DataFrame does not carry, and the axis goes in
         as `time_days` — days since START, the store's own convention, which
         `_rows_from_frame` takes as-is rather than converting a second time.
+
+        HARDENED FOR THE REAL DUACS FILES, which the `files` route now hands
+        it: the fill is taken from the MASK (`np.ma.filled(..., nan)`) rather
+        than left as the raw fill value — these variables are scaled int16, so
+        a raw fill would arrive as something like -2e5 and be counted as an
+        out-of-bounds sample instead of a missing one; variable names are
+        matched case-insensitively; the axis epoch may be any CF `<unit> since
+        <date>` (DUACS writes "days since 1950-01-01 00:00:00", which
+        `_cf_time_to_days` already handles); and a longitude axis published in
+        [0, 360) is folded to [-180, 180). The variable names and the time
+        units are printed once per mission — a measurement for the next probe,
+        since no real file has been opened here yet.
         """
         import netCDF4 as ncdf
         ds = ncdf.Dataset(path)
         try:
-            if "time" not in ds.variables:
-                raise ValueError(f"{path} has no `time` variable")
-            t = np.asarray(ds.variables["time"][:], np.float64)
-            units = str(getattr(ds.variables["time"], "units", ""))
-            frame = {
-                "latitude": np.asarray(ds.variables["latitude"][:], np.float64),
-                "longitude": np.asarray(ds.variables["longitude"][:],
-                                        np.float64),
-            }
+            names = {str(k).lower(): k for k in ds.variables}
+
+            def rd(*want):
+                for w in want:
+                    k = names.get(w)
+                    if k is not None:
+                        # the MASK is the fill; a scaled int fill must not
+                        # survive as a number.
+                        return np.ma.filled(
+                            np.ma.asarray(ds.variables[k][:]).astype(
+                                np.float64), np.nan).ravel()
+                return None
+
+            t = rd("time", "juld", "time_counter")
+            if t is None:
+                raise ValueError(f"{path} has no `time` variable "
+                                 f"(has {sorted(ds.variables)})")
+            tkey = next(names[w] for w in ("time", "juld", "time_counter")
+                        if w in names)
+            units = str(getattr(ds.variables[tkey], "units", ""))
+            if mid not in getattr(self, "_logged_nc", ()):
+                if not hasattr(self, "_logged_nc"):
+                    self._logged_nc = set()
+                self._logged_nc.add(mid)
+                print(f"  {mid} netCDF variables: {sorted(ds.variables)}; "
+                      f"time units {units!r}", flush=True)
+            la = rd("latitude", "lat")
+            lo_ = rd("longitude", "lon", "long")
+            if la is None or lo_ is None:
+                raise ValueError(f"{path} has no latitude/longitude "
+                                 f"(has {sorted(ds.variables)})")
+            if np.isfinite(lo_).any() and np.nanmax(lo_) > 180.0:
+                lo_ = np.where(lo_ > 180.0, lo_ - 360.0, lo_)
+            frame = {"latitude": la, "longitude": lo_}
             for v in CMEMS_VARS:
-                frame[v] = (np.asarray(ds.variables[v][:], np.float64)
-                            if v in ds.variables else np.full(len(t), np.nan))
+                got = rd(v.lower())
+                frame[v] = np.full(len(t), np.nan) if got is None else got
         finally:
             ds.close()
         frame["time_days"] = _cf_time_to_days(t, units)
@@ -2552,6 +2866,15 @@ def main():
     ap.add_argument("--socat-url", default="",
                     help="override the SOCAT synthesis url (the index stage "
                          "otherwise reads the release page for it)")
+    ap.add_argument("--slatrack-fetch", default="files",
+                    choices=("files", "dataframe"),
+                    help="how the slatrack live path gets its data: `files` "
+                         "(default) downloads the ORIGINAL per-day netCDFs "
+                         "through copernicusmarine.get in month batches; "
+                         "`dataframe` asks copernicusmarine.read_dataframe "
+                         "for a subset month by month — measured at ~3.3k "
+                         "samples/s, ~220 runner-hours for the archive, so it "
+                         "is the fallback, not the default.")
     ap.add_argument("--attempts", type=int, default=3,
                     help="download attempts per file before the year fails. A "
                          "404 or an empty ERDDAP result is not an attempt "

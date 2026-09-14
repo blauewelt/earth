@@ -94,7 +94,7 @@ on:
         description: "the build directory. RE-DISPATCH WITH THE SAME VALUE TO RESUME: finished stages and finished years are skipped by their .done markers. A different path is a different build"
         default: "ml/cache/family10"
       extra_args:
-        description: "extra flags for ml/build_family10_stores.py: --qc-keep N (worst QC grade kept, default 2), --socat-url URL, --attempts N, --force, --source-dir DIR, --smoke. Word-split deliberately; leave empty for a real build"
+        description: "extra flags for ml/build_family10_stores.py: --qc-keep N (worst QC grade kept, default 2), --socat-url URL, --attempts N, --slatrack-fetch files|dataframe (files = the original per-day netCDFs through copernicusmarine.get, the default; dataframe = the ~3.3k samples/s subset route, the fallback), --force, --source-dir DIR, --smoke. Word-split deliberately; leave empty for a real build"
         default: ""
 
 permissions:

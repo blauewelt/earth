@@ -959,5 +959,109 @@ def test_slatrack_index_says_how_it_fetches(built):
     log knows WHICH toolbox call produced the rows."""
     ctx, _ = built["slatrack"]
     ix = b10.SLATrackAdapter().index(ctx)
-    assert ix["fetch"] == "copernicusmarine.read_dataframe, month by month"
+    assert ix["fetch"] == ("copernicusmarine.get (original files), month "
+                           "batches; fallback read_dataframe")
+    assert ix["fetch_route"] == "files"          # the default of the flag
     assert ix["variables"] == list(b10.CMEMS_VARS)
+    # a fixture build never probes the remote layout
+    assert "slatrack_files_probe" not in ix
+
+
+def _slatrack_long_frame(pd):
+    """The LONG shape `read_dataframe` really returns (run 34849670866):
+    one row per (variable, sample). Sample 2 carries only two of the three
+    variables — that channel must come out NaN, not shift the others."""
+    rows = [
+        # time, lat, lon, variable, value, value_qc
+        ("1982-01-05T12:00:00", -20.0, -170.0, "sla_filtered", -0.20, 1),
+        ("1982-01-05T12:00:00", -20.0, -170.0, "sla_unfiltered", -0.22, 1),
+        ("1982-01-05T12:00:00", -20.0, -170.0, "mdt", 0.60, 1),
+        ("1982-01-06T00:00:00", 10.0, 100.0, "sla_filtered", 0.10, 2),
+        ("1982-01-06T00:00:00", 10.0, 100.0, "mdt", 0.50, 2),
+    ]
+    return pd.DataFrame({
+        "variable": [r[3] for r in rows],
+        "platform_id": ["j2"] * len(rows),
+        "time": pd.to_datetime([r[0] for r in rows]),
+        "longitude": [r[2] for r in rows],
+        "latitude": [r[1] for r in rows],
+        "value": [r[4] for r in rows],
+        "value_qc": [r[5] for r in rows],
+        "institution": ["CLS"] * len(rows)})
+
+
+def test_slatrack_pivots_the_long_frame_read_dataframe_returns(built):
+    """The measured frame is LONG; without the pivot the adapter finds no
+    channel column and keeps zero rows. One row per sample, a missing
+    variable NaN, and the `value_qc` distribution recorded but not filtered."""
+    pd = pytest.importorskip("pandas")
+    ctx, _ = built["slatrack"]
+    ad = b10.SLATrackAdapter()
+    rows, counts = ad._rows_from_frame(ctx, _slatrack_long_frame(pd), "mX")
+    assert counts["rows_read"] == 2               # samples, not long rows
+    assert counts["kept"] == 2
+    # sla_filtered qc only: one 1 (the three-variable sample) and one 2
+    assert counts["value_qc"] == {1: 1, 2: 1}
+    order = np.argsort(np.asarray(rows["time_days"], np.float64))
+    lat = np.asarray(rows["lat"], np.float64)[order]
+    v = np.asarray(rows["values"], np.float64)[order]
+    assert np.allclose(lat, [-20.0, 10.0], atol=1e-3)
+    assert np.allclose(v[:, 0], [-0.20, 0.10], atol=1e-3)       # sla
+    assert abs(v[0, 1] + 0.22) < 1e-3 and np.isnan(v[1, 1])     # unfiltered
+    assert np.allclose(v[:, 2], [0.60, 0.50], atol=1e-3)        # mdt
+    assert (rows["platform"] == b10.platform_hash("mX")).all()
+
+
+def test_slatrack_pivot_keys_on_platform_id_when_it_is_not_constant(built):
+    """One dataset is one mission, so `platform_id` is expected constant —
+    but if it is not, two platforms at the same instant must stay two
+    samples rather than collapse into one."""
+    pd = pytest.importorskip("pandas")
+    ctx, _ = built["slatrack"]
+    ad = b10.SLATrackAdapter()
+    df = _slatrack_long_frame(pd)
+    two = df.copy()
+    two["platform_id"] = ["j2", "j2", "j2", "j3", "j3"]
+    two["latitude"] = [-20.0, -20.0, -20.0, -20.0, -20.0]
+    two["longitude"] = [-170.0] * 5
+    two["time"] = pd.to_datetime(["1982-01-05T12:00:00"] * 5)
+    _, counts = ad._rows_from_frame(ctx, two, "mX")
+    assert counts["rows_read"] == 2               # NOT merged into one
+
+
+def test_slatrack_file_batches_group_by_the_date_in_the_basename():
+    """The remote layout is unmeasured, so batching reads the 8-digit date
+    token off the listed basenames and drops what the window excludes."""
+    A = b10.SLATrackAdapter
+    paths = ["s3://bucket/native/SEALEVEL/j2/2015/01/x_20150104_v1.nc",
+             "s3://bucket/native/SEALEVEL/j2/2015/01/x_20150131_v1.nc",
+             "s3://bucket/native/SEALEVEL/j2/2015/02/x_20150202_v1.nc",
+             "s3://bucket/native/SEALEVEL/j2/2015/12/x_20151203_v1.nc"]
+    got = A._file_batches(paths, dt.date(2015, 1, 10), dt.date(2015, 2, 28),
+                          "2015")
+    assert got == [("2015-01", ["x_20150131_v1.nc"]),
+                   ("2015-02", ["x_20150202_v1.nc"])]
+    # a basename with no date token -> one batch for the whole year, never a
+    # silently dropped file
+    odd = A._file_batches(paths[:1] + ["s3://b/native/j2/latest.nc"],
+                          dt.date(2015, 1, 1), dt.date(2015, 12, 31), "2015")
+    assert odd == [("2015", ["x_20150104_v1.nc", "latest.nc"])]
+
+
+def test_slatrack_response_paths_reads_the_toolbox_response_shape():
+    """`ResponseGet.files` is a list of `FileGet`; a plain dict is accepted
+    too so a toolbox version that hands back JSON still teaches us layout."""
+    class F:
+        def __init__(self, u):
+            self.s3_url, self.https_url, self.filename = u, "", u.rsplit(
+                "/", 1)[-1]
+
+    class R:
+        files = [F("s3://b/a/x_20150104.nc"), F("s3://b/a/x_20150105.nc")]
+
+    A = b10.SLATrackAdapter
+    assert A._response_paths(R()) == ["s3://b/a/x_20150104.nc",
+                                      "s3://b/a/x_20150105.nc"]
+    assert A._response_paths({"files": [{"s3_url": "s3://b/z.nc"}]}) == \
+        ["s3://b/z.nc"]
+    assert A._response_paths({}) == []
