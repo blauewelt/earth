@@ -1,17 +1,20 @@
-# Family 10 — independent verification of the three published tier-P observation stores, 2026-09-14
+# Family 10 — independent verification of the four published tier-P observation stores, 2026-09-14
 
 **What this is.** Family 10 is the programme's storage contract for
 observations of mixed granularity — nothing is resampled onto a common grid,
 every source keeps its own resolution and cadence, and each measurement carries
 its own footprint (how much area and how much time it averaged). Its tier-P
 stores are tables of point measurements sorted by five-day bin, searched with
-"what are the k nearest observations to this place and pentad". Three of them
-were built and published on 2026-09-14: `gdp` (the Global Drifter Program's
+"what are the k nearest observations to this place and pentad". All four
+were built and published on 2026-09-14 — the first three in the morning, the
+fourth that night: `gdp` (the Global Drifter Program's
 6-hourly quality-controlled surface drifters), `gtmba` (the tropical moored
 arrays TAO/TRITON, PIRATA and RAMA, one row per mooring per day) and `socat`
 (the Surface Ocean CO₂ Atlas, underway ship measurements of surface-water CO₂).
 The fourth, `slatrack` (along-track sea-level anomaly from 29 altimeter
-missions), has not been built.
+missions), was built later the same day and published at 21:42Z; **§9 is its
+verification**, run the same way from the same sandbox, and everything §1-§8
+says about it being unbuilt is the state of the world before that hour.
 
 **Who ran it, and how.** A Claude session, on 2026-09-14, from a clean sandbox
 that did not build the stores and did not read the builder's own report of what
@@ -40,22 +43,40 @@ all from builder commit `c5bc2ce`:
 - [the `socat` build](https://github.com/blauewelt/earth/actions/runs/34814445849) — streamed and parsed the 1.4 GB SOCAT v2026 synthesis file and published the ship-CO₂ store, ~20 min.
 - [the `gdp` build](https://github.com/blauewelt/earth/actions/runs/34814442453) — fetched 46 years of 6-hourly drifter data from the AOML ERDDAP server one month per request (~550 requests, which is why the build step took 85 minutes rather than 20) and published the drifter store, then rewrote the family-10 registry.
 
+`slatrack` (§9) came from two machines and a later commit, `6d67855`: [six
+GitHub-hosted fetch lanes](https://github.com/blauewelt/earth/actions/runs/34853130853)
+that hold the Copernicus credentials and park one year of column parts each
+under `partials/family10/slatrack/<year>/` on the Hub, and then [the assembly
+run, #11](https://github.com/blauewelt/earth/actions/runs/34894902246) — a
+keyless 250 GB box that pulled all 32 year-parts back, streamed them into the
+sorted store and published it, 1 h 18 m end to end.
+
 Everything below is as recorded on the day, numbers unchanged.
 
 ---
 
 Sections 1 to 7 cover `gtmba` (the tropical moored arrays) and `socat` (ship
 CO₂), which published first; section 8 covers `gdp` (the surface drifters),
-checked identically after its own publish at 08:05Z the same day.
+checked identically after its own publish at 08:05Z the same day; and
+**section 9 covers `slatrack` (along-track sea level, 2.03 billion rows)**,
+checked after its publish at 21:42Z — by streaming rather than by download,
+because 67 GB does not fit on the checking sandbox's disk.
 
-**Headline: all three stores PASS every structural and integrity check.** The
-discrepancies found are (a) a float32 timestamp-resolution artefact at year
+**Headline: all FOUR stores PASS every structural and integrity check** —
+the three of §1-§8, and `slatrack` in §9, whose 2,030,800,150 rows are
+twenty-two times the other three put together and settle E-079's own falsifier
+in the affirmative. The discrepancies found in the first three are (a) a
+float32 timestamp-resolution artefact at year
 boundaries in `socat`, ≤3 rows/year, which is a property of the format and not
 a build error, (b) a 568-row gap in `gdp` between a counter in `store.json` and
 the array it describes, which reconciles exactly and leaves every array
 self-consistent (§8.4), and (c) the handover's §6 suggested radii are, as §6
 itself warned, not the measured ones — §5 and §8.6 give the measured
-replacements.
+replacements. `slatrack`'s three, all of them properties of the format or of
+the archive rather than of the build, are in §9's own headline: a float32
+`time_days` that resolves 84 s against a 1 Hz sampling rate (§9.7), two GFO
+months inside the mission's own window with no rows (§9.6), and two provenance
+strings in `store.json` that still describe the world before the build (§9.9).
 
 ---
 
@@ -746,6 +767,11 @@ recent pentads.
 
 ## 8.9 · The registry, `tensors/family10/family10.json`
 
+*(Superseded 2026-09-14 22:04Z by the nine-group registry of §9.8 — four
+tier-G groups at recipe `f7l2` with no fallback note, five tier-P stores,
+`groups_missing: []`. What follows is the seven-group registry as it stood at
+09:47Z, and both of its load-bearing properties survive the change.)*
+
 Downloaded (38,128 B). `family: family10`, `repo: chfrank/earth-tensors`,
 `handover: docs/FAMILY10_DATA_HANDOVER.md`, builder
 `ml/build_family10_registry.py` @ `c5bc2ced06a2d1473f1fc47e2126d190c26ea0f4`
@@ -785,7 +811,8 @@ that listed a group it could not describe would be worse than one that is
 short. Build or publish them and re-run this builder."*
 
 So three of the four §2 tier-P stores are published and registered; **`slatrack`
-is not built.** The registry honours the load-bearing property of §2.2.
+is not built** *(at 09:47Z; it published at 21:42Z and entered the registry at
+22:04Z - §9.8)*. The registry honours the load-bearing property of §2.2.
 
 ### `tier_g`
 
@@ -809,3 +836,481 @@ and it will pick up l1 and the fourth group `oc025` with no change here."*
 The fallback is stated rather than silently taken, and the three tier-G groups
 listed (`g025`, `g100`, `rg100`) are exactly l0's — the fourth group `oc025`
 (ocean colour) is absent, consistent with the note. **PASS.**
+
+---
+
+## 9 · `slatrack` — the fourth store, verified 2026-09-14 after the 21:42Z publish
+
+`slatrack` is Copernicus Marine's reprocessed level-3 along-track sea-level
+anomaly: every altimeter that has flown since 1993, sampled once a second
+(≈ 7 km along the ground track), 29 per-mission datasets read as one table.
+When §1–§8 were written it did not exist. It was built the same day — the
+credentialed fetch on six GitHub-hosted lanes, the assembly on a keyless
+250 GB box — and published at **2026-09-14T21:42:24Z** with
+**2,030,800,150 rows**: twenty-two times the other three stores put together.
+
+**Result: every integrity and structural check PASSES, and E-079's own
+falsifier is settled in the affirmative** — the per-year counts recomputed from
+`time_days.npy` equal the lanes' `done.json` sums exactly, 32 years of 32, to
+the row. Three things are worth a consumer's attention and none of them is a
+build error: `time_days` is float32 and therefore resolves **21 s in 1993
+falling to 84 s from 2015 on, against a 1 Hz sampling rate** (§9.7 — this is
+`socat`'s float32 finding one order of magnitude more consequential); GFO has
+two calendar months inside its own mission window with **zero** rows (§9.6); and
+`store.json`'s `verified` and `sources` fields still describe the state before
+the build (§9.9).
+
+### 9.0 · How it was checked, given that it does not fit
+
+The store is **67.02 GB** and this sandbox has 14 GB of free disk, so
+`Store.open` and `verify_store()` — the route §2 and §8.2 took — are not
+available and nothing was written to disk beyond the 18,848-byte
+`bin_offsets.npy`. Instead all **nine arrays were streamed over HTTPS in
+row-aligned lockstep**: one thread per file, each hashing its own bytes as they
+arrived and handing 4-million-row chunks to a single consumer that recomputed
+every check on the chunk in flight, with the queues providing the backpressure
+that keeps the eight streams at the same row. One pass, 67.0 GB, **837 s at
+80 MB/s**, peak RSS 1.6 GB. **Eight connections were dropped mid-stream** by
+the CDN — seven of them in a twenty-second burst — and each was resumed by
+`Range` from the byte it had reached, which changes nothing: the hash is over
+the byte sequence, and every one of the nine matched.
+
+Because it is a single pass over every row rather than a sample, the checks
+below are **exhaustive** where §3 and §8.3 sampled: "rows sorted by
+(bin, time_days)" is 2,030,800,149 adjacent comparisons, not a spot check of
+every fiftieth bin.
+
+### 9.1 · `store.json`, as published
+
+| field | value |
+|---|---|
+| title | Copernicus Marine along-track sea level anomaly (L3, all missions) |
+| store / tier / family | `slatrack` / P / family10 |
+| N (rows) | **2,030,800,150** |
+| C | 3 — `sla` (the DUACS *filtered* anomaly), `sla_unfiltered`, `mdt` (mean dynamic topography, so `adt = sla + mdt` is one addition), all in metres |
+| `bin_first` / `bin_last` | 803 / 3141 (`bins_requested` [803, 3141]) |
+| `n_bins` / `n_live_bins` | **2,339 / 2,339 — every bin in range is live** |
+| date_range | 1993-01-01 → 2024-12-31 |
+| footprint (log2_fp, log2_dt) | (−2.0, −4.0) — a 7 km along-track cell, a 1 Hz sample |
+| `values_measured_fraction` | 0.999052 |
+| `qc_keep_max` | 2 |
+| builder / commit | `ml/build_family10_stores.py` @ `6d67855` |
+| built_at | **2026-09-14T21:42:24Z** |
+| sources | the 29 per-mission DUACS L3 datasets of `SEALEVEL_GLO_PHY_L3_MY_008_062`, via the public STAC product metadata |
+| resume_granularity | year |
+| size on the Hub | **67.02 GB** (`platform.npy` 16,246,401,328 B is the largest single file) |
+
+**Drops and counters:** `rows_read` 2,030,924,463 → N 2,030,800,150, i.e.
+**124,313 rows dropped (0.0061 %)**, and `counts.out_of_bounds` is `{}` — no
+value in any channel was outside the ±3 m bound. The store does not name a rule
+for those 124,313; read against the builder, the only rule that can have
+produced them is the keep mask's `isfinite(sla_filtered)`, i.e. samples whose
+filtered anomaly is the netCDF fill. **Flagged, not a failure** — the ledger
+closes, and every array-side identity below closes with it.
+
+`mdt` is NaN on **5,774,351 rows (0.28 %)**, which is the whole of the store's
+missingness: `sla` and `sla_unfiltered` are measured on every one of the
+2.03 billion rows.
+
+### 9.2 · Integrity — sha256 of all 9 files, streamed
+
+| file | bytes | result | file | bytes | result |
+|---|---|---|---|---|---|
+| `bin.npy` | 4,061,600,428 | **MATCH** | `platform.npy` | 16,246,401,328 | **MATCH** |
+| `time_days.npy` | 8,123,200,728 | **MATCH** | `qc.npy` | 2,030,800,278 | **MATCH** |
+| `lat.npy` | 8,123,200,728 | **MATCH** | `fp.npy` | 8,123,200,728 | **MATCH** |
+| `lon.npy` | 8,123,200,728 | **MATCH** | `bin_offsets.npy` | 18,848 | **MATCH** |
+| `values.npy` | 12,184,801,028 | **MATCH** | | | |
+
+**PASS (9/9).** Each file's `.npy` header was also parsed and its declared
+dtype and shape checked against `store.json`'s `schema` block: `<i2 (N,)`,
+`<f4 (N,)` ×3, `<f2 (N,3)`, `<i8 (N,)`, `|u1 (N,)`, `<f2 (N,2)`,
+`<i8 (2340,)` — all agree, and the byte counts are exactly
+`128 + N × itemsize × cols`, so no file is truncated or padded. This matches the
+build log's `publish: 10 file(s) verified by restore` (9 arrays +
+`store.json`).
+
+### 9.3 · Structural checks recomputed from the arrays — every row, not a sample
+
+| check | measured | verdict |
+|---|---|---|
+| `N` from the streamed rows vs store.json | 2,030,800,150 = 2,030,800,150 | PASS |
+| `bin_first` / `bin_last` / `n_bins` | min 803, max 3141, 2,339 — all equal to store.json | PASS |
+| rows with `bin` outside [`bin_first`, `bin_last`] | **0** | PASS |
+| live bins vs `n_live_bins` | **2,339 of 2,339 (100 %)** = 2,339 | PASS |
+| build-log claim "bins 803..3141 (2,339 live)" | reproduced exactly | PASS |
+| `bin` non-decreasing over all 2,030,800,149 adjacent pairs | **0 descents** | PASS |
+| within a bin, `time_days` non-decreasing (every bin, every pair) | **0 descents** | PASS |
+| `bin_offsets` reproduced by `cumsum(bincount(bin))` | **exact, all 2,340 entries** | PASS |
+| `bin == floor(time_days / 5)` for all 2.03 G rows | **0 rows differ** | PASS |
+| `lat` ∈ [−90, 90], no NaN | [−78.513, 87.984], **0 bad, 0 NaN** | PASS |
+| `lon` ∈ [−180, 180), no NaN | [−180.0, 179.99998474], **0 bad, 0 NaN** | PASS |
+| `time_days` finite | **0 NaN**; range 4018.0 → 15705.9932 = 1993-01-01T00:00Z → 2024-12-31T23:50Z | PASS |
+| `fp.npy` unique rows | **exactly one: (−2.0, −4.0)** — the declared footprint, bit for bit | PASS |
+| `qc` histogram vs `qc_keep_max = 2` | **1: 2,030,800,150** — every row, nothing else | PASS |
+| distinct `platform` ids | **28**, every one of them a `sha1` hash of one of the 29 mission dataset ids in `plan.missions`; **0 rows carry an id that is not on that list** | PASS (§9.6 on the 29th) |
+
+The longitude row is the one to read twice. `lon`'s maximum is
+**179.99998474**, which is `nextafter(180, 0)` in float32, and its minimum is
+exactly **−180.0**: the two fixes of that day — `61ab4fa` (fold a sample at
+exactly +180.0 E) and `fb5d5ab` (wrap *after* the float32 cast, because
+179.99999 rounds up to 180.0 when it is cast) — both bit, and **not one row of
+2.03 billion sits at +180.0**.
+
+### 9.4 · Per-channel recomputation vs `store.json`'s claims
+
+Overall measured fraction recomputed: **0.9990522** vs claimed 0.999052.
+**PASS.**
+
+| channel | measured (mine / json) | fraction | min (mine / json) | max (mine / json) | mean (mine / json) | rows outside ±3 m |
+|---|---|---|---|---|---|---|
+| `sla` | 2,030,800,150 / 2,030,800,150 | 1.000000 | −1.6904296875 / same | 1.5009765625 / same | 0.058311785586097314 / same | 0 |
+| `sla_unfiltered` | 2,030,800,150 / 2,030,800,150 | 1.000000 | −1.748046875 / same | 1.5263671875 / same | 0.05831047353836903 / same | 0 |
+| `mdt` | 2,025,025,799 / 2,025,025,799 | 0.997157 | −1.5234375 / same | 1.7724609375 / same | 0.32287406855684153 / same | 0 |
+
+All three **match exactly** — the counts to the row, the extrema bit for bit,
+and the means to all seventeen digits `store.json` prints. **PASS (3/3).**
+
+Physical sanity, checked rather than assumed:
+
+- **`|sla| < 1.7 m` over the whole record.** Sea-level anomaly is a departure
+  from a multi-year mean; metres of it would be an instrument fault, and tens
+  of metres a unit error. 1.69 m is a strong Gulf Stream or Kuroshio meander.
+- **`sla` and `sla_unfiltered` have the same mean to seven digits**
+  (0.0583118 vs 0.0583105) and the unfiltered channel has the wider range
+  (−1.748 … 1.526 vs −1.690 … 1.501). That is exactly what a low-pass filter
+  does — it removes variance, not bias — and it is a free cross-check that the
+  two channels are not the same array twice.
+- **`mdt` mean +0.323 m, range −1.52 … +1.77 m.** Mean dynamic topography is
+  the ocean's permanent hill-and-valley field relative to the geoid, and its
+  global range really is a couple of metres, not a couple of centimetres. It is
+  also the only channel with missingness (0.28 %), which is what a product that
+  carries `mdt` only where a mean field is defined should look like.
+- **The along-track spacing is 6.2–6.5 km**, measured on the ground between
+  consecutive rows of one mission in three bins read back by `Range`
+  (§9.5) — against the declared `log2_fp = −2.0`, which *is* log2(7 km /
+  27.83 km). The footprint column is not a number someone typed.
+
+### 9.5 · The CSR index, exercised over HTTP
+
+Three bins were read back through the index alone — take `bin_offsets[b −
+803]`, range-read that row span out of each array — to check that the
+contract a consumer actually uses addresses real data:
+
+| bin | rows | every row's `bin` == b? | dates | lat / lon span | `sla` span |
+|---|---|---|---|---|---|
+| 803 (the first) | 196,177 | yes | 1993-01-01 | −43.2 … −32.9 N, 55.3 … 151.8 E | −0.234 … 0.224 m |
+| 2411 (2015-01-03, §4's anchor) | 942,148 | yes | 2015-01-03 | −64.6 … −29.7 N, 56.4 … 109.3 E | −0.501 … 0.485 m |
+| 3141 (the last) | 320,854 | yes | 2024-12-31 | −64.8 … 76.9 N, −83.8 … 41.2 E | −0.219 … 0.201 m |
+
+(the lat/lon and `sla` spans are over the first 240 rows of each bin, which is
+a few minutes of one satellite's track, not the bin's global extent). The first
+and last bins are short for a structural reason, not a missing one: bin 803
+covers 1992-12-29 → 1993-01-02 and the store starts on 1993-01-01, and bin 3141
+covers 2024-12-31 → 2025-01-04 and the store ends on 2024-12-31. Rows per live
+bin run **152,741 (minimum — the 1994 gap of §9.6) / 745,348 (median) /
+1,929,913 (maximum)**.
+
+### 9.6 · Per-year and per-platform — E-079's falsifier, and the 1994 question
+
+**The falsifier, stated at dispatch:** *"the assembled store fails
+`check_store` … or its per-year counts disagree with the lanes' `done.json`
+sums."* Both halves are answered here; the second is the table. The lanes'
+`done.json` rows were fetched from `partials/family10/slatrack/<year>/` on the
+Hub — the markers the assembler consumed — and the third column is the year of
+each row recomputed from `time_days.npy` alone.
+
+| year | lanes' `done.json` | `store.json` `per_year` | recomputed from `time_days.npy` | equal? |
+|---|---|---|---|---|
+| 1993 | 32,981,063 | 32,981,063 | 32,981,063 | **yes** |
+| 1994 | 29,146,039 | 29,146,039 | 29,146,039 | **yes** |
+| 1995 | 33,022,967 | 33,022,967 | 33,022,967 | **yes** |
+| 1996 | 33,076,183 | 33,076,183 | 33,076,183 | **yes** |
+| 1997 | 33,480,684 | 33,480,684 | 33,480,684 | **yes** |
+| 1998 | 33,331,255 | 33,331,255 | 33,331,255 | **yes** |
+| 1999 | 33,808,556 | 33,808,556 | 33,808,556 | **yes** |
+| 2000 | 47,290,137 | 47,290,137 | 47,290,137 | **yes** |
+| 2001 | 49,302,291 | 49,302,291 | 49,302,291 | **yes** |
+| 2002 | 53,948,772 | 53,948,772 | 53,948,772 | **yes** |
+| 2003 | 63,363,988 | 63,363,988 | 63,363,988 | **yes** |
+| 2004 | 64,021,442 | 64,021,442 | 64,021,442 | **yes** |
+| 2005 | 63,230,267 | 63,230,267 | 63,230,267 | **yes** |
+| 2006 | 47,799,785 | 47,799,785 | 47,799,785 | **yes** |
+| 2007 | 43,621,759 | 43,621,759 | 43,621,759 | **yes** |
+| 2008 | 40,023,801 | 40,023,801 | 40,023,801 | **yes** |
+| 2009 | 50,004,091 | 50,004,091 | 50,004,091 | **yes** |
+| 2010 | 55,953,988 | 55,953,988 | 55,953,988 | **yes** |
+| 2011 | 66,143,557 | 66,143,557 | 66,143,557 | **yes** |
+| 2012 | 53,357,875 | 53,357,875 | 53,357,875 | **yes** |
+| 2013 | 53,610,807 | 53,610,807 | 53,610,807 | **yes** |
+| 2014 | 61,629,260 | 61,629,260 | 61,629,260 | **yes** |
+| 2015 | 66,315,187 | 66,315,187 | 66,315,187 | **yes** |
+| 2016 | 76,997,452 | 76,997,452 | 76,997,452 | **yes** |
+| 2017 | 91,797,697 | 91,797,697 | 91,797,697 | **yes** |
+| 2018 | 84,500,883 | 84,500,883 | 84,500,883 | **yes** |
+| 2019 | 97,051,687 | 97,051,687 | 97,051,687 | **yes** |
+| 2020 | 101,028,511 | 101,028,511 | 101,028,511 | **yes** |
+| 2021 | 98,184,202 | 98,184,202 | 98,184,202 | **yes** |
+| 2022 | 111,626,817 | 111,626,817 | 111,626,817 | **yes** |
+| 2023 | 130,879,712 | 130,879,712 | 130,879,712 | **yes** |
+| 2024 | 130,269,435 | 130,269,435 | 130,269,435 | **yes** |
+| **sum** | **2,030,800,150** | **2,030,800,150** | **2,030,800,150** | **yes — and each equals N** |
+
+**32 of 32 years agree to the row, and no row falls outside 1993–2024.
+THE FALSIFIER IS NOT MET.** `slatrack` is also the first tier-P store where the
+recomputation is *exact*: `socat` drifted by ≤ 3 rows a year on the float32
+column (§3) and `gdp` reproduced exactly over 46 years (§8.1); here 2.03 billion
+rows reproduce with zero drift, because the last timestamp in the store is
+15705.9932 and the next float32 step up, 15706.0, would be 2025-01-01 — the
+record stops one representable step short of the boundary that caught `socat`.
+
+**Do not map bin → year and expect this table.** A five-day bin can straddle a
+New Year, so assigning each row the year of its bin's *opening day* moves
+**196,177 rows** — the whole of bin 803, i.e. 1993-01-01 and 01-02 — into
+"1992", and shuffles tens of thousands of rows at every other year boundary.
+The calendar year of a row is a property of `time_days` (or of the source
+date), not of `bin`; the bin-opening-day mapping is the approximate one, and
+this is what the approximation costs.
+
+#### Per-platform — 29 missions, 28 with rows
+
+`platform` is `int(sha1(<mission dataset id>)[:15], 16)`, so the 29 ids in
+`store.json`'s `plan.missions` were hashed and the store's ids matched against
+them: **every row's platform is one of the 29, and 28 of the 29 carry rows.**
+
+| mission (dataset id suffix) | title | STAC window | rows | years present |
+|---|---|---|---|---|
+| `tp` | TOPEX/Poseidon | 1992-10-13 → 2002-04-24 | 163,504,544 | 1993–2002 |
+| `c2` | CryoSat-2 | 2010-07-16 → 2020-07-31 | 161,609,793 | 2010–2020 |
+| `alg` | Saral/AltiKa geodetic orbit | 2015-03-31 → 2026-01-16 | 150,903,772 | 2015–2024 |
+| `s3a` | Sentinel-3A | 2016-06-28 → 2026-01-16 | 141,546,156 | 2016–2024 |
+| `j2` | Jason-2 | 2008-10-19 → 2016-05-26 | 136,145,157 | 2008–2016 |
+| `en` | Envisat | 2002-05-17 → 2010-10-18 | 134,436,432 | 2002–2010 |
+| `g2` | GFO | 2000-01-07 → 2008-09-07 | 128,066,623 | 2000–2008 |
+| `j1` | Jason-1 | 2002-04-24 → 2008-10-19 | 113,811,966 | 2002–2008 |
+| `e2` | ERS-2 | 1995-05-15 → 2002-05-14 | 109,297,139 | 1995–2002 |
+| `s3b` | Sentinel-3B | 2018-11-27 → 2026-01-16 | 101,296,799 | 2018–2024 |
+| `j3` | Jason-3 | 2016-05-26 → 2021-12-29 | 99,342,274 | 2016–2021 |
+| `c2n` | CryoSat-2 new orbit | 2020-08-01 → 2026-01-16 | 74,855,976 | 2020–2024 |
+| `h2b` | HaiYang-2B | 2019-12-20 → 2026-01-16 | 70,829,087 | 2019–2024 |
+| `h2ag` | HaiYang-2A geodetic orbit | 2016-03-31 → 2020-06-09 | 61,856,695 | 2016–2020 |
+| `s6a-lr` | Sentinel-6A LRM | 2021-12-29 → 2026-01-16 | 54,716,036 | 2021–2024 |
+| `j1n` | Jason-1 new orbit | 2009-02-10 → 2012-03-03 | 53,323,537 | 2009–2012 |
+| `j3n` | Jason-3 interleaved orbit | 2022-04-25 → 2025-01-07 | 48,608,308 | 2022–2024 |
+| `tpn` | TOPEX/Poseidon new orbit | 2002-09-10 → 2005-10-03 | 46,627,866 | 2002–2005 |
+| `al` | Saral/AltiKa | 2013-03-14 → 2015-03-31 | 34,309,111 | 2013–2015 |
+| `h2a` | HaiYang-2A | 2014-04-12 → 2016-03-15 | 28,441,563 | 2014–2016 |
+| `swon` | SWOT nadir | 2023-07-21 → 2026-01-16 | 22,545,701 | 2023–2024 |
+| `enn` | Envisat new orbit | 2010-10-26 → 2012-04-08 | 21,472,828 | 2010–2012 |
+| `j1g` | Jason-1 geodetic orbit | 2012-05-07 → 2013-06-01 | 19,699,076 | 2012–2013 |
+| `e1` | ERS-1 | 1992-10-23 → 1995-05-15 | 17,776,350 | 1993–1995 |
+| `e1g` | ERS-1 geodetic phase | 1994-04-10 → 1995-03-21 | 14,825,066 | 1994–1995 |
+| `j2n` | Jason-2 interleaved orbit | 2016-10-17 → 2017-05-17 | 10,093,265 | 2016–2017 |
+| `swonc` | SWOT nadir CalVal | 2023-01-16 → 2023-07-09 | 7,475,129 | 2023–2023 |
+| `j2g` | Jason-2 long-repeat orbit | 2017-07-11 → 2017-09-14 | 3,383,901 | 2017–2017 |
+| `j3g` | Jason-3 long-repeat orbit | 2025-06-18 → 2026-01-16 | **0** | — |
+
+**Not one row of 2.03 billion falls outside its own mission's STAC window**,
+at month granularity, in either direction. `j3g`'s zero is correct and not a
+gap: Jason-3's long-repeat orbit begins **2025-06-18**, six months after the
+store's last day, so a row from it would be the error.
+
+The number of missions contributing per year rises from **2** (1993–1999) to
+**9** (2023), and the rows per day with it: 90 k/day in 1993, 359 k/day in
+2023. That is the altimeter constellation's own history, and it is the reason
+the per-year counts quadruple across the record.
+
+#### The 1994 question, settled from per-mission monthly counts
+
+1994 holds **29,146,039** rows against ~33 M for 1993 and 1995 — a deficit of
+**3,835,024**, the only year that falls rather than rises. The expected
+explanation was ERS-1's ice phase. The monthly counts confirm it and locate it
+more precisely than the expectation did:
+
+| month | `e1` (ERS-1) | `e1g` (ERS-1 geodetic) | `tp` (TOPEX/Poseidon) | all missions |
+|---|---|---|---|---|
+| 1993-11 | 1,305,590 | 0 | 1,418,933 | 2,724,523 |
+| 1993-12 | **699,535** | 0 | 1,537,973 | 2,237,508 |
+| 1994-01 | **0** | 0 | 1,593,537 | **1,593,537** |
+| 1994-02 | **0** | 0 | 1,466,466 | **1,466,466** |
+| 1994-03 | **0** | 0 | 1,499,410 | **1,499,410** |
+| 1994-04 | 0 | **866,050** | 1,534,810 | 2,400,860 |
+| 1994-05 | 0 | 1,361,379 | 1,546,441 | 2,907,820 |
+| 1995-02 | 0 | 1,221,240 | 1,455,621 | 2,676,861 |
+| 1995-03 | **363,218** | 884,404 | 1,592,138 | 2,839,760 |
+| 1995-04 | 1,329,165 | 0 | 1,541,595 | 2,870,760 |
+
+**Verdict: confirmed, with the window wider than stated.** ERS-1's 35-day
+repeat (`e1`) stops **mid-December 1993** — 1993-12 is itself half a month,
+699,535 against a 1.31 M median — and does not resume until **mid-March 1995**.
+The geodetic phase (`e1g`, 168-day repeat) starts **1994-04-10**, exactly its
+STAC window's first day. So the true single-satellite interval is
+**1993-12-15 → 1994-04-09**, and **January, February and March 1994 carry
+TOPEX/Poseidon alone** — three months of one altimeter in a record that has
+never otherwise had fewer than two. Those three months are −1.34 M, −1.24 M and
+−1.46 M against their 1993 counterparts, and with April's partial start
+(−0.43 M) they are the whole of the year's deficit. The DUACS L3 product
+publishes nothing for the 3-day ice-phase orbit, which is why the gap is a
+hole in `e1` rather than a thinner `e1`, and 1994's minimum bin — 152,741 rows,
+the smallest of all 2,339 — sits inside it.
+
+This is a property of the archive, **not of the build**: the fetch lane lists
+files per mission-year and refuses to mark a year in which a listing came back
+empty or a batch came back short (`7e6b14f`), and all 32 years are marked.
+
+#### One finding: GFO has two empty months inside its own window
+
+Scanning every mission for a calendar month that lies wholly inside its STAC
+window and carries **zero** rows turns up two, both GFO:
+
+| mission | empty full months inside the window | neighbouring months |
+|---|---|---|
+| `g2` (GFO) | **2004-03**, **2006-09** | 2004-02 1,081,494 · 2004-04 1,065,276 · 2006-08 **62,438** · 2006-10 1,259,134, against a 1,435,239-row median month |
+
+Two more GFO months are far below that median without being empty — 2003-09
+(257,212) and 2007-02 (161,740) — and from 2007-02 onward the mission never
+again reaches 1.1 M in a month, running 750 k–900 k until it ends in 2008-09.
+The shape is a satellite degrading, not a build dropping batches: GFO's
+known instrument troubles run through exactly these years. **It is flagged
+rather than passed silently** because this verification cannot distinguish "the
+archive holds no file" from "the file was not asked for" from the outside — what
+it *can* say is that the builder refuses to mark any year in which a listing
+returned nothing or a download returned fewer files than the listing named, and
+2000–2008 are all marked. `h2b` has one comparable month (2021-08, 272,078
+against a 1,291,653 median). No other mission-month inside a window falls below
+a quarter of that mission's median.
+
+### 9.7 · The one thing every consumer must be told: `time_days` is float32 and the sampling is 1 Hz
+
+`time_days` is days since 1982-01-01 in float32. By 2015 the integer part needs
+14 bits, leaving 10 for the fraction, so the column's resolution is
+**2⁻¹⁰ d = 84.4 s** — and the instrument samples **once a second**. Measured on
+three bins:
+
+| bin | rows read | distinct `time_days` values | rows per distinct timestamp | float32 ulp at that t |
+|---|---|---|---|---|
+| 803 (1993-01-01) | 196,177 | 6,939 | 28.3 | **21.09 s** |
+| 2411 (2015-01-03) | 400,000 | 2,169 | 184.4 | **84.38 s** |
+| 3141 (2024-12-31) | 320,854 | 1,016 | 315.8 | **84.38 s** |
+
+So **21 to 84 consecutive 1 Hz samples of one mission carry the identical
+timestamp** — at 6.5 km between samples, that is 130 km of track in 1993 and
+**550 km in 2024**. Three consequences, all of them properties of the format
+rather than errors, and all of them load-bearing for a consumer:
+
+- `knearest`'s `dt_days` **cannot order two samples less than 84 s apart**.
+  Every one of the k tokens a search returns from a single overflight arrives
+  with the same age, and the tie-break falls entirely to distance.
+- The store is nonetheless correctly sorted: `time_days` is non-decreasing
+  within every bin (§9.3), and the assembler's stable sort preserved the
+  parts' own order inside each run of equal timestamps.
+- **`bin` is unaffected** — `bin == floor(time_days / 5)` on every row — so
+  anything that needs a calendar date should take it from `bin`, exactly as
+  §3's `socat` finding already said. This is that finding one order of
+  magnitude larger: `socat` lost 84 s against measurements minutes apart;
+  `slatrack` loses 84 s against measurements *one second* apart.
+
+Nothing about this is hidden — `store.json`'s `schema` declares `float32`, and
+the family-10 contract fixes the column's dtype for every store — but it is the
+first store where the column's resolution is coarser than its own sampling
+interval, by a factor of 84.
+
+### 9.8 · The registry, `tensors/family10/family10.json`
+
+Downloaded (45,610 B), `generated_utc` **2026-09-14T22:04:04Z** — 100 s after
+`slatrack`'s `built_at`, written by the build's own last step from builder
+commit `6d67855`. **`n_groups: 9` and `groups_missing: []`** — the first time
+the family has been complete.
+
+| group | tier | cadence | C | bin_first | N | files |
+|---|---|---|---|---|---|---|
+| `g025` | G | pentad | 7 | 0 | — (gridded) | 1 |
+| `g100` | G | pentad | 15 | 0 | — | 1 |
+| `oc025` | G | pentad | 2 | **1145** | — | 1 |
+| `rg100` | G | monthly | 32 | 0 | — | 1 |
+| `argo` | P | irregular | 32 | 0 | 2,678,439 | 12 |
+| `gdp` | P | 6-hourly | 4 | −211 | 48,480,798 | 9 |
+| `gtmba` | P | daily | 18 | −304 | 1,001,282 | 9 |
+| `socat` | P | irregular | 4 | −1768 | 41,830,675 | 9 |
+| `slatrack` | P | irregular | 3 | **803** | **2,030,800,150** | 9 |
+
+Checked, not read:
+
+- **`tier_g` is `f7l2` with four groups and no fallback note.** `stem`
+  `family7_global025_pentad_l2`, `recipe` `f7l2`, `manifest_present` true,
+  `builder_git_sha` `f25f1a6`, `built_at` 2026-09-14T19:58:44Z,
+  `fallback_note` **null** — the `f7l0` fallback of §8.9 is gone because the
+  tensor it was standing in for now exists. The four tier-G files' **sha256 and
+  byte counts were compared against `family7_global025_pentad_l2/manifest.json`
+  on the Hub, digest by digest: 4 of 4 MATCH**, including `oc025`
+  (8,293,461,248 B), the ocean-colour group E-079 §2 named and the earlier
+  registry could not describe.
+- **The `slatrack` entry's nine sha256 values are identical to `store.json`'s,
+  file by file**, its nine byte counts equal the `content-length` the Hub
+  returns for each file, and its `N` (2,030,800,150), `bin_first` (803),
+  `bin_last` (3141), `n_live_bins` (2,339), `C` (3), channel names, footprint
+  (−2, −4), `date_range` and `built_at` all equal the store's own. The registry
+  describes the build that actually landed.
+- The other four tier-P entries are unchanged from §8.9 and still agree with
+  their stores.
+
+**PASS.** *(This supersedes §8.9, which recorded the seven-group registry with
+the `f7l0` fallback as it stood at 09:47Z. Both of §8.9's load-bearing
+properties survive the change: the group that could not be described was in
+`groups_missing` until it could be, and `tier_g` still names which family-7
+manifest it describes — it is simply naming a better one.)*
+
+### 9.9 · Two provenance strings that describe the world before the build
+
+Neither is a data error and neither changes a byte, but both would mislead a
+reader of `store.json` alone:
+
+- **`verified`** still ends *"Neither route can be run from this sandbox … NOT
+  YET MEASURED: the remote path layout of the original files"*. It is a class
+  constant written when no `slatrack` fetch had ever succeeded, and the build
+  that produced this store ran the `files` route end to end over 32 years. The
+  sentence is now false about the build it is attached to.
+- **`sources`** lists `copernicusmarine subset --dataset-id …` and the STAC
+  URL. The default route since `ce1336c` is `copernicusmarine.get` on the
+  original per-day DUACS netCDF files, month by month — which is what ran. The
+  product and the dataset ids are right; the *call* named is the one that was
+  measured and rejected.
+
+Both are one-line fixes in `SLATRACK_ADAPTER`'s class attributes and cost a
+republish of `store.json` alone. **Flagged, not failures.**
+
+### 9.10 · Verdict table for `slatrack`
+
+| check | result |
+|---|---|
+| all 9 files downloadable from the Hub | PASS |
+| sha256 of all 9 files vs store.json, streamed | **PASS (9/9)** |
+| `.npy` header dtype/shape vs `store.json` `schema`; byte count = 128 + N·itemsize·cols | **PASS (9/9)** |
+| `Store.open` / `verify_store()` on a local directory | **NOT RUN — 67.02 GB against 14 GB of sandbox disk.** Every property they assert was recomputed from the stream instead (§9.0) |
+| N from the streamed rows vs store.json | PASS (2,030,800,150) |
+| N / bin_first / bin_last / n_bins vs store.json | PASS (803 … 3141, 2,339) |
+| live bins = 2,339 of 2,339, matches store.json and the build log | PASS |
+| rows sorted by (bin, time_days) — **every adjacent pair, not a sample** | **PASS (0 descents in 2,030,800,149 pairs)** |
+| `bin_offsets` CSR reproducible from `bin.npy` | PASS (exact, 2,340 entries) |
+| `bin == floor(time_days / 5)` | **PASS (0 of 2.03 G rows differ)** |
+| lon ∈ [−180, 180), lat ∈ [−90, 90], no NaN in either | **PASS (0 bad rows; max lon = nextafter(180,0))** |
+| overall measured fraction (0.999052) | PASS |
+| per-channel measured / fraction / min / max / mean | **PASS (3/3, means to all 17 digits)** |
+| `fp` constant and equal to store.json's footprint | PASS (one pair, (−2, −4)) |
+| qc ⊆ {1, 2} | PASS (qc = 1 on every row) |
+| every `platform` is one of the 29 mission hashes | **PASS (0 unknown ids)** |
+| per_year sums to N, and reproduces from `time_days` | **PASS (exact, 32/32)** |
+| **per-year counts equal the lanes' `done.json` — E-079's falsifier** | **PASS (exact, 32/32) — THE FALSIFIER IS NOT MET** |
+| no rows outside a mission's own STAC window | **PASS (0 rows, month granularity)** |
+| every mission in orbit has rows in every year of its window | **PASS at year granularity; at MONTH granularity two exceptions, both GFO (2004-03, 2006-09) — §9.6, flagged as an archive property the build would have refused to mark if the listing had failed** |
+| 1994's low count explained | **CONFIRMED — 1994-01…03 is TOPEX/Poseidon alone; ERS-1 stops mid-December 1993 and its geodetic phase starts 1994-04-10** |
+| values physically plausible | PASS (\|sla\| ≤ 1.69 m; unfiltered wider than filtered at the same mean; mdt +0.32 m mean; 6.2–6.5 km along-track spacing against a declared 7 km footprint) |
+| the two longitude fixes (`61ab4fa`, `fb5d5ab`) bit | **PASS — 0 rows at +180.0, min exactly −180.0** |
+| `time_days` resolves the 1 Hz sampling | **NO — 21 s in 1993, 84 s from 2015, i.e. 21–316 rows per distinct timestamp (§9.7). A property of the float32 column, not a build error; `bin` is exact** |
+| `store.json`'s `verified` / `sources` describe the build that ran | **NO — both still describe the pre-build state (§9.9). Flagged; no byte of any array is affected** |
+| registry: 9 groups, no `groups_missing`, tier G = `f7l2` with the manifest's four hashes, `slatrack` entry = the store | **PASS** |
+
+**No check failed.** What a consumer must be told, in one line each:
+`time_days` is quantised far coarser than the sampling (derive dates from
+`bin`); GFO is thin in 2003–2008 and empty in two months; January to March 1994
+is one satellite; and `store.json`'s two provenance strings are stale.

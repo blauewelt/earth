@@ -45,15 +45,16 @@ low-pass).
 ---
 
 <a id="e-079"></a>
-## E-079 · Family 10 — four observation stores and the registry — THREE OF FOUR STORES BUILT AND VERIFIED 2026-09-14 (drifters, tropical moorings, ship CO₂ — 91.3 M observations, $0); `slatrack` pending
+## E-079 · Family 10 — four observation stores and the registry — ALL FOUR BUILT, PUBLISHED AND INDEPENDENTLY VERIFIED 2026-09-14 (drifters, tropical moorings, ship CO₂ and 29 altimeter missions — 2.12 BILLION observations for $0.55), and the registry is complete at nine groups
 
 **E-079 · Build the first four tier-P observation stores of family 10 — surface
 drifters, the tropical moored arrays, ship CO₂ and altimeter tracks — as
 measurement tables a model reads with "what are the k nearest observations, and
 how far away are they", and write the registry that makes family 7.1, family 8
 and these four ONE family (absolute description; the code landed 2026-09-13,
-three of the four stores were built, published and independently verified on
-2026-09-14, the fourth has not been dispatched) · `params` n/a (nothing trains
+and all four stores were built, published and independently verified on
+2026-09-14 — the three keyless ones in the morning, `slatrack` that night) ·
+`params` n/a (nothing trains
 — these are DATA
 builds) · `stage` data-build · `data` `family10/{gdp,gtmba,socat,slatrack}` ·
 `arch` n/a · `steps×batch` n/a (no training step of any kind) · `resume` none
@@ -103,14 +104,21 @@ factor. `socat`: the v2026 release (2026-06-16, DOI 10.25921/8dba-fr90), the
 1,411,801,422-byte synthesis zip, and its 32-column data header read out of the
 first 50 MB by a Range request. `slatrack`: the 29 per-mission dataset ids and
 the variable names `sla_filtered` / `sla_unfiltered` / `mdt`, from Copernicus's
-**public** STAC metadata with no credentials — **the download path itself is
-unverified**, because the writing sandbox deliberately holds no CMEMS
-credentials and cannot install the toolbox.
+**public** STAC metadata with no credentials — **the download path itself was
+unverified when this was written**, because the writing sandbox deliberately
+holds no CMEMS credentials and cannot install the toolbox. It was verified
+later the same day by four one-week probes and then by the build itself, on
+runners that do hold the credentials; `store.json`'s `verified` and `sources`
+strings still carry the earlier sentence, which is a stale class constant and
+is flagged as such in §9.9 of the verification.
 
-RESULT — three of the four stores built, published and verified, 2026-09-14.
-**91,312,755 observations** across `gdp`, `gtmba` and `socat`, every one of them
-a real measurement with its own position, time, footprint and provenance.
-`slatrack` was not attempted (see below).
+RESULT — all four stores built, published and verified, 2026-09-14.
+**2,122,112,905 observations** across `gdp`, `gtmba`, `socat` and `slatrack`,
+every one of them a real measurement with its own position, time, footprint and
+provenance. The first three — 91,312,755 rows on keyless GitHub-hosted runners —
+are the table below; `slatrack`, 2,030,800,150 rows and 95.7 % of the family on
+its own, has its own RESULT further down because its build path, its cost and
+its findings are all different.
 
 | | `gdp` — surface drifters | `gtmba` — tropical moorings | `socat` — ship CO₂ |
 |---|---|---|---|
@@ -255,9 +263,10 @@ float32 and is unaffected, which is the property the builder was written to
 preserve; **a consumer that needs a calendar date should derive it from `bin`,
 not from `time_days`.**
 
-`slatrack` — IN FLIGHT SINCE 2026-09-14 14:00Z (Chris: "let's do slatrack as
-well"). The along-track sea-level store — 29 altimeter missions at 1 Hz,
-1993 → 2024 — was "never fetched" that morning; the sentence above about
+`slatrack` — BUILT, PUBLISHED AND INDEPENDENTLY VERIFIED, 2026-09-14
+(Chris: "let's do slatrack as well"). The along-track sea-level store — 29
+altimeter missions at 1 Hz, 1993 → 2024 — was "never fetched" that morning; the
+sentence above about
 missing repository secrets was wrong when it was written: both Copernicus
 Marine secrets have existed in the repository since 2026-08-16 (the GLORYS pull
 workflows use them) and nobody had checked. Four one-week probes on a hosted
@@ -268,6 +277,19 @@ measurements, and each one changed the design:
 2. [probe 2](https://github.com/blauewelt/earth/actions/runs/34848513007) — the rows came back and the toolbox's OWN netCDF writer crashed (`index must be monotonic`, its `download_sparse.py`); switched to `read_dataframe` (`c7ebe16`).
 3. [probe 3](https://github.com/blauewelt/earth/actions/runs/34849670866) — that frame is LONG format (one row per variable per sample: `variable, platform_id, time, longitude, latitude, value, value_qc`) and slow: 942,612–1,062,987 long rows per mission-week at ~100 s each for h2a, al, c2, j2 — **3.3 k samples/s, ~220 runner-hours for the record**. Pivot added; the original files tried instead (`ce1336c`).
 4. [probe 4](https://github.com/blauewelt/earth/actions/runs/34851552800) — the original per-day netCDF files via `copernicusmarine.get`: **the whole week, four missions, 1,314,846 rows in 43 s**, ~3 MB per mission-week, all three channels in the files (`sla_filtered`, `sla_unfiltered`, `mdt`; time in days since 1950-01-01). That is the route.
+
+Two more measurements landed inside the fetch itself, both of them the same
+lesson — **a cast is not a no-op, and an invariant has to hold in the COLUMN's
+dtype, not in the float64 it was computed in.** `61ab4fa` folds a sample at
+exactly +180.0 E into [−180, 180); `fb5d5ab` then moves the wrap to *after* the
+float32 cast, because a source longitude of 179.99999 wraps to itself in
+float64 and **rounds up to 180.0** when it is stored — which `check_store`
+(rightly) refuses. Both were found on the 1994 altimeter year, and the verified
+store shows both bit: `lon`'s maximum over 2.03 billion rows is
+179.99998474 = `nextafter(180, 0)` in float32, its minimum is exactly −180.0,
+and **not one row sits at +180.0**. It is the same failure shape as E-077's
+`np.log1p` on float32: arithmetic that is correct in the wide type and wrong in
+the narrow one.
 
 The volume that follows — ~68 M rows in 2015, roughly 1.5–2.5 billion over
 32 years, 33 B/row → 50–80 GB — and `ml/CLAUDE.md` §6 (Copernicus credentials
@@ -280,38 +302,137 @@ and runs a new **streaming assembler** (bin counts → CSR offsets → scatter i
 memmaps → stable per-bin sort by time; proven byte-identical to the in-RAM
 assembler on a synthetic archive with cross-part ties) and a chunked check, and
 publishes. The lanes were dispatched at 14:00Z
-([the six lanes](https://github.com/blauewelt/earth/actions/runs/34853130853)):
-1993 (32,981,063 rows, 33 parts, 957 MB), 2000 (47,290,137) and 2006
-(47,799,785) were on the Hub, verified and marked by 14:19Z — **10–16 minutes
-per year**, so the record is expected up by ~16:30Z and the assembly follows on
-a 250 GB box. Falsifier at dispatch: the assembled store fails `check_store`
-(sortedness, CSR, bounds) or its per-year counts disagree with the lanes'
-`done.json` sums; either voids the store, not the parts. Family 7.1 — the global
-gridded tensor with the ocean-colour group `oc025` added (recipe `f7l1`,
-E-077) — had still not published when the registry was written, its manifest
-answering 404 as of 08:05Z on 2026-09-14, so **the registry now on the Hub**
-describes `f7l0` (the same tensor without ocean colour) in its tier-G half and
-says so in a stated fallback note rather than silently describing a different
-tensor. *Superseded 2026-09-14 20:20Z:* family 7.1 has since published twice
-(`f7l1` 15:19Z, the corrected `f7l2` 19:58Z), the builder's preference list now
-reads `f7l2` → `f7l1` → `f7l0`, and a local run produces the registry E-079 §2
-asks for — **8 groups, 4 tier-G at recipe `f7l2` with the manifest's four file
-hashes and no fallback note**, plus the same four tier-P stores. It is NOT on
-the Hub: `--publish` needs a Hugging Face WRITE token, which this sandbox does
-not hold. Re-run with the token to replace the `f7l0` copy; `slatrack` is still
-the one group missing from either.
+([the six lanes](https://github.com/blauewelt/earth/actions/runs/34853130853)) —
+**10–16 minutes per year**, 1993 (32,981,063 rows, 33 parts, 957 MB), 2000 and
+2006 on the Hub, verified and marked by 14:19Z — and all 32 years were up,
+`done.json` written last, by early evening. Falsifier at dispatch: the
+assembled store fails `check_store` (sortedness, CSR, bounds) or its per-year
+counts disagree with the lanes' `done.json` sums; either voids the store, not
+the parts.
 
-Cost: **$0 for the three stores that ran** (GitHub-hosted runners, ~20 + ~20 +
-85 minutes) plus minutes for the registry — against the estimate at dispatch
-(E-079 §5) of $0 and under an hour each. `slatrack` remains estimated at one
-box-day, **≈ $8** at $0.33/h and tens of GB on the Hub.
+**RESULT — the store landed, and the falsifier is not met.**
+[**#11** (E-079 `slatrack` — assembly of 32 Hub year-parts, streaming sort,
+publish, registry)](https://github.com/blauewelt/earth/actions/runs/34894902246)
+ran 20:46:15 → 22:04:08Z on a keyless 250 GB box, **1 h 18 m**, and published
+**2,030,800,150 rows** — C = 3 (`sla`, `sla_unfiltered`, `mdt`), bins 803..3141
+with **all 2,339 live**, 1993-01-01 → 2024-12-31, **67.02 GB**, `built_at`
+2026-09-14T21:42:24Z, builder commit `6d67855`, the log ending
+`publish: 10 file(s) verified by restore`. That is **twenty-two times the other
+three stores put together**, and it takes family 10 from 91.3 M observations to
+**2.12 billion**. Timings, from the log:
+
+| stage | wall | what it did |
+|---|---|---|
+| index | 36.6 s | the 29 mission windows, clipped to 1993–2024 |
+| fetch → parts pull | **2,855 s** (47.6 min) | 32 year-parts back off the Hub, each file re-hashed against its `done.json`; 2,030,800,150 rows, 0 missing |
+| fetch → assemble pass 1 | 12.9 s | count rows per bin → the CSR offsets |
+| fetch → assemble pass 2 | 240.9 s | scatter every row into `offsets[bin] + cursor[bin]` through `open_memmap` |
+| fetch → assemble pass 3 | 112.1 s | **2,315 of 2,339 bins needed a stable sort by `time_days`** |
+| fetch → check + store.json | ~350 s | the chunked `check_store` of `dae845c`, which is why it fits |
+| **fetch total** | **3,579.4 s** | peak RSS **66.06 GB** — a 250 GB box, not a hosted runner |
+| publish | **1,003.2 s** | 10 files, `platform.npy` 16.25 GB the largest; each restore-verified |
+| registry | ~4 s | `family10.json` rewritten and restore-verified |
+
+Cost: **≈ $0.55** — about 1.5 h of box time at $0.36/h — plus **$0 for the six
+hosted fetch lanes**, which is where all 47 hours of credentialed downloading
+actually happened. Against the estimate at dispatch of one box-day and ≈ $8,
+that is fifteen times cheaper, and the reason is the split itself: the lanes are
+free and parallel, and the box is rented only for the 12 minutes of assembly and
+the 17 of upload that need 67 GB in one place.
+
+**Independently verified the same night**, from a sandbox that did not build it
+and cannot hold it — 67 GB against 14 GB of free disk, so `Store.open` and
+`verify_store()` were unavailable and **all nine arrays were streamed over
+HTTPS in row-aligned lockstep instead**, each hashed as its bytes arrived while
+one consumer recomputed every check on the chunk in flight: one pass, 67.0 GB,
+837 s at 80 MB/s, peak RSS 1.6 GB. Because it is a pass over every row rather
+than a sample, the sortedness and bounds checks are **exhaustive**. All nine
+sha256 values match; `bin` never descends in 2,030,800,149 adjacent pairs and
+`time_days` never descends inside a bin; `cumsum(bincount(bin))` reproduces
+`bin_offsets` exactly; `bin == floor(time_days/5)` on every row; `lon` ∈
+[−180, 180) and `lat` ∈ [−90, 90] with no NaN; `fp` is one pair, (−2, −4);
+`qc` is 1 on every row; every `platform` is one of the 29 mission-id hashes;
+and all three channels' measured counts, extrema and means reproduce
+`store.json` exactly — the means to all seventeen digits. Evidence, number by
+number: [§9 of the verification](https://blauewelt.github.io/earth/docs.html?f=docs/FAMILY10_VERIFICATION_2026-09-14.md).
+
+**The falsifier, answered.** The lanes' 32 `done.json` row counts, `store.json`'s
+`per_year`, and the year of each row **recomputed from `time_days.npy`** agree
+**to the row in 32 of 32 years**, and each column sums to N. No row falls
+outside 1993–2024. `slatrack` is also the first tier-P store where that
+recomputation is exact — `socat` drifts by ≤ 3 rows a year on the same float32
+column — because the store's last timestamp, 15705.9932, stops one
+representable float32 step short of 2025-01-01.
+
+**Per platform, 29 missions and 28 with rows.** Not one row of 2.03 billion
+falls outside its own mission's STAC window. `j3g` (Jason-3's long-repeat orbit)
+has **zero** rows, correctly: it begins 2025-06-18, six months after the store
+ends. Missions contributing per year rise from 2 (1993–99) to 9 (2023), and
+rows per day with them, 90 k → 359 k. One finding: **GFO has two calendar
+months inside its own mission window with no rows at all** (2004-03, 2006-09),
+two more far below its 1.44 M median (2003-09 at 257 k, 2007-02 at 162 k), and
+a permanent drop to 750–900 k a month from 2007-02 until it ends — the shape of
+a satellite degrading, and a hole the build would have refused to mark had the
+listing failed (`7e6b14f`), but a hole this verification cannot attribute from
+outside.
+
+**The 1994 question, settled from per-mission MONTHLY counts rather than
+assumed.** 1994 holds 29,146,039 rows against ~33 M either side, the only year
+that falls. ERS-1's 35-day repeat (`e1`) stops **mid-December 1993**
+(1993-12 is itself half a month, 699,535 against a 1.31 M median) and does not
+resume until **mid-March 1995**; the geodetic phase (`e1g`) starts
+**1994-04-10**, its STAC window's first day. So **January, February and March
+1994 carry TOPEX/Poseidon alone** — 1.59 M, 1.47 M and 1.50 M against 2.94 M,
+2.70 M and 2.96 M in 1993 — and with April's partial start those four months
+are the whole of the year's 3,835,024-row deficit. DUACS publishes no level-3
+product for the 3-day ice-phase orbit, which is why the gap is a hole in `e1`
+rather than a thinner `e1`. The record's smallest bin, 152,741 rows of 2,339
+bins, sits inside it. **Confirmed, and the window is wider than the
+expectation** — 1993-12-15 → 1994-04-09, not Jan–Mar.
+
+**One thing every consumer must be told, and it is bigger here than in
+`socat`.** `time_days` is float32, so by 2015 its resolution is 2⁻¹⁰ d =
+**84.4 s** (21 s in 1993) — and the instrument samples **once a second**.
+Measured: 28 rows per distinct timestamp in bin 803, 184 in bin 2411, 316 in
+bin 3141. Twenty-one to eighty-four consecutive samples of one mission carry
+the identical time, which at 6.5 km between samples is **550 km of track** by
+2024. `knearest`'s `dt_days` cannot order them, `bin` is exact, and a calendar
+date must come from `bin`. Two smaller flags: `store.json`'s `verified` and
+`sources` strings are class constants still describing the world before the
+build ("Neither route can be run from this sandbox"; the `subset` call rather
+than the `get`-on-original-files route that ran), and the 124,313 rows dropped
+(0.0061 %) are recorded only as `rows_read − kept`, with no rule named.
+
+**The registry is complete.** Family 7.1 — the global gridded tensor with the
+ocean-colour group `oc025` added — had still not published when the registry
+was first written, its manifest answering 404 as of 08:05Z, so that copy
+described `f7l0` in its tier-G half and **said so in a stated fallback note**
+rather than silently describing a different tensor. Family 7.1 published twice
+that day (`f7l1` 15:19Z, the corrected `f7l2` 19:58Z), and #11's last step
+rewrote `tensors/family10/family10.json` on the Hub at **22:04:04Z**:
+**9 groups, `groups_missing: []`, `fallback_note: null`** — four tier-G groups
+at recipe **`f7l2`** whose four file sha256 and byte counts match
+`family7_global025_pentad_l2/manifest.json` digest by digest (`oc025` included),
+and five tier-P stores, `slatrack`'s nine sha256 identical to its `store.json`'s
+and its N, `bin_first`, `bin_last`, `n_live_bins` and `date_range` equal to the
+store's own. *(The "8 groups" of the 20:20Z note was a local run made before
+`slatrack` existed; with it the family has nine.)*
+
+Cost: **$0 for the three keyless stores** (GitHub-hosted runners, ~20 + ~20 +
+85 minutes) plus minutes for the registry, and **≈ $0.55 for `slatrack`** — the
+six credentialed fetch lanes free on hosted runners, one 250 GB box for 1 h 18 m
+at $0.36/h. **Total for the family: ≈ $0.55 and 2.12 billion observations.**
+Against the estimate at dispatch (E-079 §5) of $0 and under an hour each for the
+first three and one box-day (≈ $8) for `slatrack`.
 
 Spec: [E-079](https://blauewelt.github.io/earth/docs.html?f=ml/plans/E079_family10_point_stores.md).
 Design it implements: [E-078](https://blauewelt.github.io/earth/docs.html?f=ml/plans/E078_multi_granularity.md).
 Code: `ml/build_family10_stores.py`, `ml/family10_store.py`,
-`ml/build_family10_registry.py`, `tests/test_build_family10_stores.py`,
-`.github/workflows/family10-build.yml`, and the two measurement scripts behind
-finding (a) and finding (b), `ml/tools/family10_verify/`.
+`ml/build_family10_registry.py`, `ml/family10_parts_hub.py`,
+`tests/test_build_family10_stores.py`,
+`.github/workflows/family10-build.yml`,
+`.github/workflows/family10-slatrack-fetch.yml`, and the two measurement
+scripts behind finding (a) and finding (b), `ml/tools/family10_verify/`.
 Reader contract: [the family-10 data handover](https://blauewelt.github.io/earth/docs.html?f=docs/FAMILY10_DATA_HANDOVER.md).
 Evidence for this RESULT: [the family-10 verification of 2026-09-14](https://blauewelt.github.io/earth/docs.html?f=docs/FAMILY10_VERIFICATION_2026-09-14.md).
 
