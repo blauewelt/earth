@@ -854,3 +854,110 @@ def test_slatrack_mission_window_skips_and_clips():
     assert A._split_id("cmems_obs-sl_glo_phy-ssh_my_j3g-l3-duacs_PT1S-i_202506") == (
         "cmems_obs-sl_glo_phy-ssh_my_j3g-l3-duacs_PT1S-i", "202506")
     assert A._split_id("plain") == ("plain", None)
+
+
+def _slatrack_frame_columns():
+    """One synthetic mission-month's worth of rows, as columns of arrays.
+
+    Four rows, each testing one branch of the filter: a plain good row, a row
+    whose `sla_unfiltered` is outside +/- 3 m (kept, that ONE channel NaN,
+    counted), a row whose `sla_filtered` is NaN (dropped — `sla` is the channel
+    the keep rule is written on), and a row years outside the ctx window
+    (dropped). The time column is datetime64, the shape the toolbox's
+    `read_dataframe` returns.
+    """
+    return {
+        "time": np.array(["1981-12-25T06:00:00", "1982-01-05T12:00:00",
+                          "1982-01-06T00:00:00", "1990-01-01T00:00:00"],
+                         "datetime64[ns]"),
+        "latitude": np.array([10.0, -20.0, 30.0, 40.0]),
+        "longitude": np.array([100.0, -170.0, 20.0, 0.0]),
+        "sla_filtered": np.array([0.10, -0.20, np.nan, 0.30]),
+        "sla_unfiltered": np.array([0.11, 9.00, 0.05, 0.31]),
+        "mdt": np.array([0.50, 0.60, 0.70, 0.80]),
+    }
+
+
+def test_slatrack_rows_from_frame_filters_counts_and_packs(built):
+    """The shared frame->rows step: the live path's only new arithmetic.
+
+    The download path cannot be run from the sandbox, so the thing that CAN be
+    checked here is the step both paths share — and it is the step that decides
+    what ends up in the store.
+    """
+    ctx, _ = built["slatrack"]
+    ad = b10.SLATrackAdapter()
+    rows, counts = ad._rows_from_frame(ctx, _slatrack_frame_columns(), "mX")
+    assert counts["rows_read"] == 4
+    assert counts["kept"] == 2
+    assert counts["out_of_bounds"] == {"sla_unfiltered": 1}
+    assert len(rows["time_days"]) == 2
+    want_t = [b10.days_since_epoch(dt.date(1981, 12, 25)) + 0.25,
+              b10.days_since_epoch(dt.date(1982, 1, 5)) + 0.5]
+    assert np.allclose(rows["time_days"], np.float32(want_t), atol=1e-3)
+    assert np.allclose(rows["lat"], [10.0, -20.0], atol=1e-3)
+    assert np.allclose(rows["lon"], [100.0, -170.0], atol=1e-3)
+    v = np.asarray(rows["values"], np.float64)
+    assert np.allclose(v[:, 0], [0.10, -0.20], atol=1e-3)
+    assert abs(v[0, 1] - 0.11) < 1e-3 and np.isnan(v[1, 1])   # 9 m -> NaN
+    assert np.allclose(v[:, 2], [0.50, 0.60], atol=1e-3)
+    assert (rows["platform"] == b10.platform_hash("mX")).all()
+    assert (rows["qc"] == 1).all()
+
+
+def test_slatrack_rows_from_frame_takes_a_dataframe_and_a_datetime_index(built):
+    """A pandas frame — including one carrying the time as its INDEX — reads
+    identically to the mapping of arrays above. `read_dataframe` returns one of
+    these shapes; which one is not yet measured, so both are accepted."""
+    pd = pytest.importorskip("pandas")
+    ctx, _ = built["slatrack"]
+    ad = b10.SLATrackAdapter()
+    base, _ = ad._rows_from_frame(ctx, _slatrack_frame_columns(), "mX")
+    df = pd.DataFrame(_slatrack_frame_columns())
+    got, counts = ad._rows_from_frame(ctx, df, "mX")
+    indexed = df.set_index("time")
+    got_i, counts_i = ad._rows_from_frame(ctx, indexed, "mX")
+    for k in base:
+        assert np.allclose(np.asarray(got[k], np.float64),
+                           np.asarray(base[k], np.float64), equal_nan=True), k
+        assert np.allclose(np.asarray(got_i[k], np.float64),
+                           np.asarray(base[k], np.float64), equal_nan=True), k
+    assert counts == counts_i
+
+
+def test_slatrack_refuses_a_frame_whose_columns_it_cannot_name(built):
+    """A frame with no recognisable time/lat/lon STOPS and prints the columns.
+
+    Keeping zero rows quietly would look like a mission that did not fly.
+    """
+    ctx, _ = built["slatrack"]
+    ad = b10.SLATrackAdapter()
+    bad = {"t": np.zeros(2), "y": np.zeros(2), "x": np.zeros(2)}
+    with pytest.raises(SystemExit) as e:
+        ad._rows_from_frame(ctx, bad, "mX")
+    for c in ("t", "y", "x"):
+        assert repr(c) in str(e.value)
+
+
+def test_slatrack_months_clips_the_mission_window_it_is_given():
+    """The live fetch asks month by month — ~2.6 M rows instead of ~30 M."""
+    A = b10.SLATrackAdapter
+    got = A._months(dt.date(2015, 3, 31), dt.date(2015, 6, 2))
+    assert got == [(dt.date(2015, 3, 31), dt.date(2015, 3, 31)),
+                   (dt.date(2015, 4, 1), dt.date(2015, 4, 30)),
+                   (dt.date(2015, 5, 1), dt.date(2015, 5, 31)),
+                   (dt.date(2015, 6, 1), dt.date(2015, 6, 2))]
+    one = A._months(dt.date(2015, 1, 5), dt.date(2015, 1, 9))
+    assert one == [(dt.date(2015, 1, 5), dt.date(2015, 1, 9))]
+    dec = A._months(dt.date(2015, 12, 1), dt.date(2016, 1, 2))
+    assert dec == [(dt.date(2015, 12, 1), dt.date(2015, 12, 31)),
+                   (dt.date(2016, 1, 1), dt.date(2016, 1, 2))]
+
+
+def test_slatrack_index_says_how_it_fetches(built):
+    """store.json's index block names the path, so a later reader of a build
+    log knows WHICH toolbox call produced the rows."""
+    ctx, _ = built["slatrack"]
+    ix = b10.SLATrackAdapter().index(ctx)
+    assert ix["fetch"] == "copernicusmarine.read_dataframe, month by month"
+    assert ix["variables"] == list(b10.CMEMS_VARS)

@@ -1157,6 +1157,23 @@ class SLATrackAdapter(SourceAdapter):
     is a part and the assemble step is the only thing that ever sees all of
     them. This is the one store E-079 §3.4 sends to a box rather than a hosted
     runner.
+
+    THE LIVE FETCH GOES THROUGH `read_dataframe`, NOT THROUGH A FILE. The two
+    probes of 2026-09-14 (runs 34847980911 and 34848513007) showed that the
+    toolbox DOES serve these sparse datasets, and that asking it for
+    `file_format` netcdf (its default) crashes inside its OWN writer:
+    `_dataframe_to_netcdf_per_platform` -> `_add_attributes_to_dataset` raises
+    `ValueError: index must be monotonic increasing or decreasing`
+    (copernicusmarine/download_functions/download_sparse.py). The data arrived;
+    only the toolbox's netCDF serialisation failed. So the adapter asks for the
+    DataFrame the toolbox already has in hand — `copernicusmarine.read_dataframe`
+    — and never lets it write a file. Nothing about the store changes: the
+    frame goes through the SAME `_rows_from_frame` the fixture netCDFs do.
+
+    MONTH BY MONTH. A mission-year at 1 Hz is ~30 M rows; at three float64
+    channels plus time and position that is several GB in one DataFrame. A
+    month is ~2.6 M rows and keeps the peak inside a 16 GB runner, so the live
+    path asks for one month at a time and yields one part per month.
     """
 
     store = "slatrack"
@@ -1181,10 +1198,22 @@ class SLATrackAdapter(SourceAdapter):
                CMEMS_STAC + " (public metadata, no login)")
     verified = ("2026-09-13: the product's 29 per-mission dataset ids and the "
                 "variable names sla_filtered / sla_unfiltered / mdt read from "
-                "the PUBLIC STAC metadata with no credentials. The download "
-                "path itself is UNVERIFIED from this sandbox — no credentials "
-                "here by design, and the copernicusmarine toolbox cannot be "
-                "installed (pypi 403 through the egress proxy).")
+                "the PUBLIC STAC metadata with no credentials. 2026-09-14 "
+                "(runs 34847980911 and 34848513007, a hosted runner with real "
+                "credentials): the toolbox logs in, resolves these sparse "
+                "datasets and SERVES the subset — the run got as far as the "
+                "toolbox's own netCDF writer, which then crashed with "
+                "`ValueError: index must be monotonic increasing or "
+                "decreasing` in _dataframe_to_netcdf_per_platform / "
+                "_add_attributes_to_dataset (a bug in the toolbox's "
+                "download_sparse.py, not in the data). The adapter therefore "
+                "uses copernicusmarine.read_dataframe, month by month, and "
+                "never asks the toolbox to write a file. That path cannot be "
+                "run from this sandbox — no credentials here by design, and "
+                "the toolbox cannot be installed (pypi 403 through the egress "
+                "proxy); the frame-to-rows step it depends on is exercised by "
+                "the tests and is the same code the fixture netCDFs go "
+                "through.")
     notes = ("the only store of the four that needs credentials and a box "
              "rather than a hosted runner")
 
@@ -1246,9 +1275,14 @@ class SLATrackAdapter(SourceAdapter):
             import copernicusmarine                             # noqa: F401
         except ImportError:
             toolbox = False
+        # `missions()` already carries each mission's coverage window (its STAC
+        # start_datetime / end_datetime), so the index records WHEN every
+        # mission flew as well as its id — that is what `_mission_window`
+        # clips against, and a reader of the index can see the same thing.
         return {"product": CMEMS_PRODUCT, "stac": CMEMS_STAC,
                 "missions": ms, "n_missions": len(ms),
                 "variables": list(CMEMS_VARS),
+                "fetch": "copernicusmarine.read_dataframe, month by month",
                 "credentials_present": creds,
                 "toolbox_importable": toolbox,
                 "years": list(range(max(ctx.d_lo.year, self.first_year),
@@ -1277,63 +1311,140 @@ class SLATrackAdapter(SourceAdapter):
             win = self._mission_window(m, lo, hi)
             if win is None:
                 continue                       # not in orbit this year
-            paths, owned = self._files(ctx, mid, win[0], win[1], year)
-            for p in paths:
-                try:
+            if ctx.source_dir:
+                for p in self._files(ctx, mid, year):
                     rows, counts = self._read_nc(ctx, p, mid)
-                finally:
-                    if owned and os.path.exists(p):
-                        os.remove(p)
-                yield f"{year} {mid}", rows, counts
+                    yield f"{year} {mid}", rows, counts
+                continue
+            for part in self._fetch_months(ctx, mid, win[0], win[1]):
+                yield part
 
-    def _files(self, ctx, mid, lo, hi, year):
-        if ctx.source_dir:
-            # `<source-dir>/slatrack/<mission>/<year>/*.nc` — the same shape
-            # the toolbox writes below, so a fixture and a real pull differ in
-            # nothing the parser can see. A mission with no directory for this
-            # year simply did not fly then.
-            d = os.path.join(ctx.source_dir, "slatrack", mid, str(year))
-            if not os.path.isdir(d):
-                return [], False
-            return [os.path.join(d, n) for n in sorted(os.listdir(d))
-                    if n.endswith(".nc")], False
+    def _files(self, ctx, mid, year):
+        """The FIXTURE path only: `<source-dir>/slatrack/<mission>/<year>/*.nc`.
+
+        A mission with no directory for this year simply did not fly then. The
+        live path writes no file at all any more (see `_fetch_months`), so this
+        is the one place that still deals in paths.
+        """
+        d = os.path.join(ctx.source_dir, "slatrack", mid, str(year))
+        if not os.path.isdir(d):
+            return []
+        return [os.path.join(d, n) for n in sorted(os.listdir(d))
+                if n.endswith(".nc")]
+
+    @staticmethod
+    def _months(lo, hi):
+        """[lo, hi] -> the calendar months it touches, each clipped to it."""
+        out = []
+        a = dt.date(lo.year, lo.month, 1)
+        while a <= hi:
+            nxt = dt.date(a.year + (a.month == 12),
+                          1 if a.month == 12 else a.month + 1, 1)
+            out.append((max(a, lo), min(nxt - dt.timedelta(days=1), hi)))
+            a = nxt
+        return out
+
+    def _fetch_months(self, ctx, mid, lo, hi):
+        """The LIVE path: one `read_dataframe` call per month, no file written.
+
+        The toolbox reads the credentials from the environment; nothing here
+        passes them, prints them, or writes them anywhere. `read_dataframe`
+        returns the same rows `subset` would have serialised — and skips the
+        netCDF writer that crashed on both probes of 2026-09-14 (see the class
+        docstring). One month at a time because a mission-year at 1 Hz is
+        ~30 M rows and the runner has 16 GB.
+        """
         import copernicusmarine
-        out = os.path.join(ctx.scratch, "slatrack", mid, str(year))
-        os.makedirs(out, exist_ok=True)
-        # The toolbox reads the credentials from the environment; nothing here
-        # passes them, prints them, or writes them anywhere.
         did, ver = self._split_id(mid)
-        copernicusmarine.subset(
-            dataset_id=did, dataset_version=ver, variables=list(CMEMS_VARS),
-            start_datetime=f"{lo:%Y-%m-%d}T00:00:00",
-            end_datetime=f"{hi:%Y-%m-%d}T23:59:59",
-            output_directory=out, output_filename=f"{mid}_{year}.nc",
-            overwrite=True, disable_progress_bar=True)
-        return [os.path.join(out, n) for n in sorted(os.listdir(out))
-                if n.endswith(".nc")], True
+        for m_lo, m_hi in self._months(lo, hi):
+            frame = copernicusmarine.read_dataframe(
+                dataset_id=did, dataset_version=ver,
+                variables=list(CMEMS_VARS),
+                start_datetime=f"{m_lo:%Y-%m-%d}T00:00:00",
+                end_datetime=f"{m_hi:%Y-%m-%d}T23:59:59",
+                disable_progress_bar=True)
+            try:
+                mb = float(frame.memory_usage(deep=True).sum()) / 1e6
+            except Exception:                                   # noqa: BLE001
+                mb = float("nan")
+            print(f"  {m_lo:%Y-%m} {mid}: {len(frame)} row(s), {mb:.1f} MB",
+                  flush=True)
+            rows, counts = self._rows_from_frame(ctx, frame, mid)
+            del frame                 # before the next month is asked for
+            yield f"{m_lo:%Y-%m} {mid}", rows, counts
 
-    def _read_nc(self, ctx, path, mid):
-        import netCDF4 as ncdf
-        ds = ncdf.Dataset(path)
-        try:
-            names = {k: k for k in ds.variables}
-            tvar = "time" if "time" in names else None
-            if tvar is None:
-                raise ValueError(f"{path} has no `time` variable")
-            t = np.asarray(ds.variables[tvar][:], np.float64)
-            units = str(getattr(ds.variables[tvar], "units", ""))
-            la = np.asarray(ds.variables["latitude"][:], np.float64)
-            lo_ = np.asarray(ds.variables["longitude"][:], np.float64)
-            cols = []
-            for v in CMEMS_VARS:
-                if v in ds.variables:
-                    cols.append(np.asarray(ds.variables[v][:], np.float64))
-                else:
-                    cols.append(np.full(len(t), np.nan))
-        finally:
-            ds.close()
-        td = _cf_time_to_days(t, units)
-        v = np.stack(cols, axis=1)
+    def _rows_from_frame(self, ctx, frame, mid):
+        """A DataFrame (live) or a mapping of arrays (fixture) -> store rows.
+
+        ONE filter implementation for both paths. The fixture netCDFs and the
+        toolbox's frame differ in how the columns arrive and in nothing else,
+        so everything below the column lookup — the fill, the bounds, the keep
+        rule, the counts — is written once here.
+
+        The column naming of the sparse product is NOT yet measured (the probes
+        died in the toolbox's writer before a frame was ever printed), so the
+        lookup is deliberately loud: it prints the columns it was given once
+        per mission, and `sys.exit`s naming them if time/latitude/longitude
+        cannot be identified. A next probe that silently kept zero rows would
+        teach us nothing; one that stops and prints the real schema does.
+        """
+        cols = self._frame_columns(frame)
+        if mid not in getattr(self, "_logged_cols", ()):
+            if not hasattr(self, "_logged_cols"):
+                self._logged_cols = set()
+            self._logged_cols.add(mid)
+            print(f"  {mid} frame columns: {cols}", flush=True)
+        low = {str(c).lower(): c for c in cols}
+
+        def pick(*names):
+            for n in names:
+                if n in low:
+                    return low[n]
+            return None
+
+        tcol = pick("time_days", "time", "datetime", "date", "juld",
+                    "time_counter")
+        lacol = pick("latitude", "lat")
+        locol = pick("longitude", "lon", "long")
+        # If the index carries the time (the toolbox may hand back a
+        # DatetimeIndex rather than a column) reset it and look again.
+        if tcol is None and hasattr(frame, "reset_index"):
+            try:
+                frame = frame.reset_index()
+            except Exception:                                   # noqa: BLE001
+                pass
+            else:
+                cols = self._frame_columns(frame)
+                low = {str(c).lower(): c for c in cols}
+                tcol = pick("time", "datetime", "date", "index",
+                            "juld", "time_counter")
+                lacol = lacol if lacol is not None else pick("latitude", "lat")
+                locol = locol if locol is not None else pick("longitude",
+                                                             "lon", "long")
+        if tcol is None or lacol is None or locol is None:
+            sys.exit(
+                f"slatrack: cannot find time/latitude/longitude in the frame "
+                f"{mid} returned. Columns present: {list(cols)}. Refusing to "
+                f"keep zero rows quietly — name the real columns in "
+                f"`_rows_from_frame` (ml/CLAUDE.md §0.3).")
+
+        t = self._column(frame, tcol)
+        # `time_days` is the one column already in the store's own units: the
+        # netCDF path resolves the axis's CF epoch itself (that epoch is the
+        # one thing a frame does not carry) and hands the days straight over,
+        # so no value is converted twice.
+        td = (np.asarray(t, np.float64) if str(tcol).lower() == "time_days"
+              else self._time_days(t))
+        la = np.asarray(self._column(frame, lacol), np.float64)
+        lo_ = np.asarray(self._column(frame, locol), np.float64)
+        cols_v = []
+        for v in CMEMS_VARS:
+            c = low.get(v.lower())
+            if c is None:
+                cols_v.append(np.full(len(td), np.nan))
+            else:
+                cols_v.append(np.asarray(self._column(frame, c), np.float64))
+        v = np.stack(cols_v, axis=1)
         v[np.abs(v) > 1e17] = np.nan               # the netCDF fill, whatever it is
         lo_b, hi_b = self.bounds()
         bad = np.isfinite(v) & ((v < lo_b[None, :]) | (v > hi_b[None, :]))
@@ -1350,6 +1461,77 @@ class SLATrackAdapter(SourceAdapter):
                      np.full(n, platform_hash(mid), np.int64),
                      np.ones(n, np.uint8), self.C)
         return rows, counts
+
+    @staticmethod
+    def _frame_columns(frame):
+        """The column names of a DataFrame or of a plain mapping of arrays."""
+        c = getattr(frame, "columns", None)
+        return list(c) if c is not None else list(frame.keys())
+
+    @staticmethod
+    def _column(frame, name):
+        """One column, as something numpy can take, from either shape."""
+        col = frame[name]
+        return getattr(col, "to_numpy", lambda: col)()
+
+    @staticmethod
+    def _time_days(t):
+        """A time column -> days since START (1982-01-01), fractional float64.
+
+        Two shapes, because the toolbox's frame is datetime64 and a netCDF axis
+        is a CF number. A datetime64 column is converted through the SAME
+        `_cf_time_to_days` the netCDF path uses, with the epoch it already
+        carries, so the two paths cannot drift apart: nanoseconds -> seconds
+        since 1970 -> days since START. Timezone-aware input is moved to UTC
+        and made naive first — the store's axis is naive UTC throughout.
+        """
+        arr = np.asarray(t)
+        if arr.dtype.kind == "M":
+            ns = arr.astype("datetime64[ns]").astype(np.int64)
+            ns = ns.astype(np.float64)
+            ns[np.asarray(np.isnat(arr.astype("datetime64[ns]")))] = np.nan
+            return _cf_time_to_days(ns / 1e9,
+                                    "seconds since 1970-01-01 00:00:00")
+        if arr.dtype.kind == "O":
+            # a tz-aware pandas column arrives as object under .to_numpy();
+            # ask pandas to normalise it rather than guessing here.
+            import pandas as pd
+            s = pd.to_datetime(pd.Series(arr), utc=True)
+            arr = s.dt.tz_convert("UTC").dt.tz_localize(None).to_numpy()
+            return SLATrackAdapter._time_days(arr)
+        return _cf_time_to_days(np.asarray(arr, np.float64),
+                                "seconds since 1970-01-01 00:00:00")
+
+    def _read_nc(self, ctx, path, mid):
+        """The FIXTURE path: a netCDF -> the same frame shape, same filter.
+
+        The variables are read into a mapping of arrays and handed to
+        `_rows_from_frame`, so the fixture and the live pull share one filter
+        implementation and a change to the keep rule cannot reach one path
+        without the other. The CF `units` of the axis are honoured HERE, since
+        they are the one thing a DataFrame does not carry, and the axis goes in
+        as `time_days` — days since START, the store's own convention, which
+        `_rows_from_frame` takes as-is rather than converting a second time.
+        """
+        import netCDF4 as ncdf
+        ds = ncdf.Dataset(path)
+        try:
+            if "time" not in ds.variables:
+                raise ValueError(f"{path} has no `time` variable")
+            t = np.asarray(ds.variables["time"][:], np.float64)
+            units = str(getattr(ds.variables["time"], "units", ""))
+            frame = {
+                "latitude": np.asarray(ds.variables["latitude"][:], np.float64),
+                "longitude": np.asarray(ds.variables["longitude"][:],
+                                        np.float64),
+            }
+            for v in CMEMS_VARS:
+                frame[v] = (np.asarray(ds.variables[v][:], np.float64)
+                            if v in ds.variables else np.full(len(t), np.nan))
+        finally:
+            ds.close()
+        frame["time_days"] = _cf_time_to_days(t, units)
+        return self._rows_from_frame(ctx, frame, mid)
 
 
 ADAPTERS = {a.store: a for a in
