@@ -111,10 +111,10 @@ CACHE = os.path.join(HERE, "cache")
 # THE RECIPE SPLIT (E-077 §5). `RECIPE` is what this build IS; `BASE_RECIPE` is
 # what the stages it INHERITS were, and the two must both be written down or a
 # seeded work dir cannot be told apart from a stale one.
-RECIPE = "f7l1"
-BASE_RECIPE = "f7l0"
-STEM = "family7_global025_pentad_l1"
-BASE_STEM = "family7_global025_pentad_l0"
+RECIPE = "f7l2"
+BASE_RECIPE = "f7l1"
+STEM = "family7_global025_pentad_l2"
+BASE_STEM = "family7_global025_pentad_l1"
 HF_DATASET = "earth-tensors"
 HF_PREFIX = f"tensors/{STEM}"
 BASE_PREFIX = f"tensors/{BASE_STEM}"
@@ -137,11 +137,40 @@ HF_NAMESPACE = "chfrank"
 # when the bytes came from the Hub is a provenance record that is quietly
 # wrong (ml/CLAUDE.md §0.1: verify the artefact, not the intention).
 HUB_MIRRORED = set()
-# The stages whose bytes come from the f7l0 build unchanged. Their spec digest
-# is folded with BASE_RECIPE (stage_spec below), which is the whole reason a
-# copied `.spec` file still matches and `stage_state_check` does not throw away
-# 53 GB it could have kept.
-INHERITED_STAGES = ("glorys", "sst", "ncep", "rg", "static", "truth")
+# The stages whose bytes come from the BASE build unchanged: their markers,
+# their per-item state and their `.spec` files are copied by `--seed-from`, so
+# they are skipped and their outputs are hard links.
+#
+# f7l2 DROPS `static` AND `ncep` from this list, and that is the whole shape of
+# the corrected build. `static` is dropped because f7l1's `elev` is 1,038,240
+# NaN (the ETOPO download was aborted by the 1.0 MB/s throughput guard and the
+# stage marked itself done anyway); `ncep` is dropped because g100's
+# `log_prate`/`log_swe` were evaluated by a float32 `log1p` and therefore did
+# not reproduce across boxes (see `log1p_channel`). Both stages must RE-RUN,
+# which means three things together and none of them alone: they are not in
+# this tuple (so no marker and no `.spec` is copied), `g100` is not in
+# `INHERITED_GROUPS` (so nothing hard-links it and `stage_state_check` has no
+# shared inode to protect), and `seed_from` prunes `norm`'s record of g100 so
+# the z-score re-runs for that group and only that group.
+INHERITED_STAGES = ("glorys", "sst", "rg", "occci", "truth")
+
+# WHICH RECIPE GENERATION EACH STAGE'S DEFINITION WAS LAST CHANGED IN — not
+# "the base recipe", which is what this used to be and which breaks the moment
+# the chain is two generations long. `stage_spec` folds this into the digest so
+# that a `.spec` file copied out of the seed still matches: f7l1's own build
+# wrote `glorys.spec` with `recipe: "f7l0"` (glorys was inherited THERE too),
+# so an f7l2 builder that mechanically answered `BASE_RECIPE` would compute
+# `"f7l1"`, declare glorys stale, and then refuse the whole build because
+# glorys writes g025 and g025 is a hard link into the published f7l1 tensor.
+# The honest value is the generation in which the STAGE changed, and it is
+# stable forever once written down.
+STAGE_SPEC_RECIPE = {
+    "glorys": "f7l0", "sst": "f7l0", "rg": "f7l0", "truth": "f7l0",
+    "occci": "f7l1", "occci-partial": "f7l1",
+    "ncep": "f7l2",            # float64 log1p — g100's bytes change
+    "static": "f7l2",          # refuses an empty static, records its sources
+    "norm": RECIPE, "meta": RECIPE, "publish": RECIPE,
+}
 
 PENTAD_DAYS = 5
 MIN_DAYS = 3                      # family 4's rule, at every cadence
@@ -209,14 +238,30 @@ CHAN_RG100 = ([f"rg_t{int(p)}" for p in LEVELS]
 # Without it a reader cannot tell a confident open-ocean value from a single
 # glimpse through a hole in a storm, and both look identical in the array.
 CHAN_OC025 = ["log_chl", "chl_cov"]
-BASE_GROUPS = ["g025", "g100", "rg100"]
-GROUPS = BASE_GROUPS + ["oc025"]
+GROUPS = ["g025", "g100", "rg100", "oc025"]
+# What the BASE published — the groups whose sha256 its manifest carries and
+# which this build's manifest can therefore compare itself against. f7l1
+# published all four.
+BASE_GROUPS = list(GROUPS)
+# ...and which of those this build takes UNCHANGED. Separate from BASE_GROUPS
+# because from f7l2 on the two differ: `g100` is published by the base AND
+# rebuilt here, so its hash is worth RECORDING against f7l1's and must not be
+# hard-linked, inherited or treated as a broken promise when it differs.
+INHERITED_GROUPS = ("g025", "rg100", "oc025")
+REBUILT_GROUPS = tuple(g for g in GROUPS if g not in INHERITED_GROUPS)
 NCHAN = {"g025": len(CHAN_G025), "g100": len(CHAN_G100),
          "rg100": len(CHAN_RG100), "oc025": len(CHAN_OC025)}
 
 C_CUR_SPEED, C_LOG_MLD, C_SSH, C_CUR_U, C_CUR_V, C_SST, C_SEA_ICE = range(7)
 C_SKT = 14                            # g100's shared surface temperature
 C_LOG_CHL, C_CHL_COV = 0, 1           # oc025
+
+# The two STATICS — untimed fields that describe the grid rather than a date —
+# named once, so the stage that writes them, the check that refuses an empty
+# one and the manifest that reports their fill are all talking about the same
+# list rather than three hand-kept copies of it.
+STATIC_KEYS = ("sphere", "elev")
+SPHERE_CODES = (0, 1, 2, 3)           # ocean · land · ice sheet · inland water
 
 # ---- the sources ----------------------------------------------------------
 PSL_NCEP = ("https://downloads.psl.noaa.gov/Datasets/ncep.reanalysis/"
@@ -477,7 +522,11 @@ def mark(work, name):
 def bump_counts(work, **kw):
     p = os.path.join(work, "counts.json")
     c = read_json(p, {})
-    c.update({k: int(v) for k, v in kw.items()})
+    # Counts are ints; a LIST (which years a stage could not read) is recorded
+    # as it is — `int()` on one raises, and a guard that cannot write down what
+    # it found is a guard that fails while reporting a failure.
+    c.update({k: (list(v) if isinstance(v, (list, tuple)) else int(v))
+              for k, v in kw.items()})
     atomic_json(p, c)
     return c
 
@@ -1080,6 +1129,21 @@ def repair_sst_channel(ctx):
     work = ctx.work
     if marked(work, "repair_sst"):
         return 0
+    # NEVER THROUGH A HARD LINK. This is the one place `ncep` can still write
+    # into g025, and from f7l2 on `ncep` RE-RUNS in a work dir whose g025 is an
+    # inode shared with the published base tensor — so a repair that found
+    # anything would rewrite bytes the Hub and the handover both quote by
+    # sha256. It can find nothing (the base's own build ran this pass and
+    # marked it), and `seed_from` copies the marker, so this branch is the
+    # second line of defence rather than the first — which is exactly why it
+    # has to exist (ml/CLAUDE.md §0.2: the marker is what we BELIEVE, the
+    # inode is what is true).
+    if "g025" in seeded_groups(work):
+        mark(work, "repair_sst")
+        print("  repair: g025 is inherited (a hard link into the base build), "
+              "so it was repaired by the build that published it — this pass "
+              "is skipped rather than writing through the shared inode")
+        return 0
     seen_path = os.path.join(work, "oisst_seen.npy")
     if not os.path.exists(seen_path):
         sys.exit(f"{seen_path} absent — the `sst` stage must run before "
@@ -1114,8 +1178,11 @@ def repair_sst_channel(ctx):
 # digest below folds it together with the channel names and the array shapes,
 # so a stage whose recipe moved discards its own half-built state instead of
 # leaving a tensor half in one recipe and half in another.
-SPEC_VERSION = {"glorys": 1, "sst": 1, "ncep": 2, "rg": 1, "occci": 1,
-                "static": 1, "truth": 1, "norm": 1, "meta": 1, "publish": 1,
+# `ncep` 2 -> 3 and `static` 1 -> 2 in f7l2: both stages' definitions changed
+# (float64 log1p; refuse-an-empty-static plus honest source recording), so a
+# work directory that still holds their old state must be told, not trusted.
+SPEC_VERSION = {"glorys": 1, "sst": 1, "ncep": 3, "rg": 1, "occci": 1,
+                "static": 2, "truth": 1, "norm": 1, "meta": 1, "publish": 1,
                 "occci-partial": 1}
 
 # Which array a stage OWNS — the one it may delete when its spec moves. A
@@ -1137,16 +1204,21 @@ STAGE_CHANNELS = {
 
 
 def stage_recipe(stage):
-    """Which recipe a stage's digest is folded with (E-077 §5).
+    """Which recipe generation a stage's digest is folded with (E-077 §5).
 
-    The inherited six answer `f7l0` FOREVER, because their bytes are f7l0's
-    bytes: a `.spec` file copied out of the f7l0 work directory has to keep
-    matching, or `stage_state_check` throws away 53 GB that is not stale, it is
-    just older than this build. Everything the colour build actually changes —
-    `occci`, `norm`, `meta`, `publish` — answers `f7l1`, so a work dir seeded
-    from f7l0 correctly regards THOSE as new work.
+    A stage answers the generation in which ITS OWN DEFINITION last changed,
+    and it answers it forever: a `.spec` file copied out of the seed has to
+    keep matching, or `stage_state_check` throws away 53 GB that is not stale,
+    it is just older than this build — and for a group that arrived as a hard
+    link it does not even get that far, it refuses the build outright.
+
+    This used to be `BASE_RECIPE if stage in INHERITED_STAGES else RECIPE`,
+    which is the same answer for a ONE-generation chain and the wrong answer
+    for a two-generation one: f7l1's build wrote `glorys.spec` with
+    `recipe: "f7l0"`, so f7l2 reading `BASE_RECIPE` would compute `"f7l1"` and
+    declare an untouched stage stale. `STAGE_SPEC_RECIPE` is the table.
     """
-    return BASE_RECIPE if stage in INHERITED_STAGES else RECIPE
+    return STAGE_SPEC_RECIPE.get(stage, RECIPE)
 
 
 def stage_spec(ctx, stage, n_live=None):
@@ -1703,13 +1775,22 @@ def stage_sst(ctx):
 
     ctx.prog.stage_start("sst", len(years))
     wcache = {}
+    absent = []
     for i, y in enumerate(years, 1):
         if marked(work, f"sst/{y}"):
             continue
         (p_sst, p_ice), drop = oisst_paths(ctx, y)
         try:
             if p_sst is None:
-                mark(work, f"sst/{y}")
+                # DO NOT MARK A YEAR DONE THAT WAS NEVER READ. This branch is
+                # how f7l0 came to hold 73 all-NaN pentads: `sst.day.mean.
+                # 1989.nc` could not be fetched, `oisst_paths` printed one
+                # `::warning::` and returned None, and the year was marked
+                # COMPLETE — so a resume skipped it too and the hole became
+                # permanent, invisible, and green (ml/CLAUDE.md §5.21: a
+                # marker may only UNDER-claim). It is recorded instead, and
+                # the stage refuses at the end rather than marking itself.
+                absent.append(y)
                 continue
             dS = ncdf.Dataset(p_sst)
             dI = ncdf.Dataset(p_ice) if p_ice else None
@@ -1780,6 +1861,27 @@ def stage_sst(ctx):
     ctx.note_source("oisst", f"{PSL_OISST}/{{sst,icec}}.day.mean.YYYY.nc "
                              f"(OISST v2.1, NOAA PSL)")
     hub_mirror_note(ctx, "oisst_mirror", "noaa.oisst.v2.highres")
+    if absent and not getattr(ctx.a, "allow_missing_years", False):
+        sys.exit(
+            f"stage sst: OISST could not be read for "
+            f"{', '.join(str(y) for y in absent)} — {len(absent) * 73} pentad "
+            f"bin(s) of `sst` and `sea_ice` would be entirely NaN, and the "
+            f"norm computed over what is left would be the statistics of a "
+            f"tensor with a hole in it. This is exactly what happened to f7l0 "
+            f"in 1989 (bins 511-583, all-NaN; f7l1 filled them and every sst "
+            f"value moved by one float16 ULP because `norm_g025` legitimately "
+            f"changed). REFUSING rather than marking the stage done. Two ways "
+            f"on: (1) re-dispatch with the same `work` value — the years that "
+            f"DID land are marked and skipped, only the missing ones are "
+            f"retried, and `ml/mirror_psl.py` puts them on the Hub mirror "
+            f"where this box can read them; or (2) pass --allow-missing-years "
+            f"if a tensor with those years missing is genuinely what you "
+            f"want.")
+    if absent:
+        print(f"  ::warning:: sst: {len(absent)} year(s) missing "
+              f"({', '.join(str(y) for y in absent)}) — "
+              f"--allow-missing-years says that is deliberate")
+        bump_counts(work, sst_missing_years=absent)
     mark(work, "sst")
     print(f"  sst: {n_days} daily fields folded; OISST observes "
           f"{int(seen.sum()):,}/{NLAT * NLON} cells in at least one bin")
@@ -1941,12 +2043,16 @@ def stage_ncep(ctx):
             put(6, to1(vw) if vw is not None else None)
             pr = m("pres")
             put(7, to1(pr) / 100.0 if pr is not None else None)   # Pa -> hPa
+            # THE ONLY TWO TRANSCENDENTALS IN g100, and therefore the only two
+            # channels that were not already reproducible across boxes — see
+            # `log1p_channel`, which is where the float64 evaluation and the
+            # measurement that produced it live.
             pp = m("prate")
             if pp is not None:
-                put(8, np.log1p(np.maximum(to1(pp) * 86400.0, 0.0)))
+                put(8, log1p_channel(to1(pp), 86400.0))       # kg/m2/s -> mm/d
             sw = m("weasd")
             if sw is not None:
-                put(9, np.log1p(np.maximum(to1(sw), 0.0)))
+                put(9, log1p_channel(to1(sw)))
             # soilw / tsoil are NaN over sea, masked ON THE GAUSSIAN GRID
             # before regridding so `interp2_nan` renormalises at the coast.
             so = m("soilw")
@@ -1976,10 +2082,19 @@ def stage_ncep(ctx):
                 flush(b)
 
     ctx.prog.stage_start("ncep", len(years))
+    absent = []
     for i, y in enumerate(years, 1):
         if marked(work, f"ncep/{y}"):
             continue
         paths, drop = ncep_year_paths(ctx, y, keys)
+        # `ncep_year_paths` DROPS a variable it could not fetch and warns; the
+        # loop below then simply never writes that channel for that year, the
+        # carry marks the year complete, and the tensor carries a
+        # channel-shaped hole nothing downstream reports. Same shape as the
+        # OISST-1989 hole in `stage_sst` — collected here, answered at the end.
+        gone = sorted(set(keys) - set(paths))
+        if gone:
+            absent.append((y, gone))
         try:
             for v, p in sorted(paths.items()):
                 d = ncdf.Dataset(p)
@@ -2039,6 +2154,19 @@ def stage_ncep(ctx):
                             f"(NCEP/NCAR Reanalysis 1, NOAA PSL) + "
                             f"{NCEP_LAND}.nc")
     hub_mirror_note(ctx, "ncep_mirror", "ncep.reanalysis")
+    if absent and not getattr(ctx.a, "allow_missing_years", False):
+        sys.exit(
+            "stage ncep: these variable-years could not be read — "
+            + "; ".join(f"{y}: {', '.join(v)}" for y, v in absent)
+            + ". Each one is a channel-shaped hole in `g100` for that year, "
+              "and marking the year done would make it permanent across every "
+              "resume (ml/CLAUDE.md §5.21). REFUSING. Re-dispatch with the "
+              "same `work` value once the host serves this box (the years "
+              "that landed are skipped), or pass --allow-missing-years.")
+    if absent:
+        print(f"  ::warning:: ncep: {len(absent)} year(s) with a missing "
+              f"variable — --allow-missing-years says that is deliberate")
+        bump_counts(work, ncep_missing=[[y, v] for y, v in absent])
     mark(work, "ncep")
     print(f"  ncep: {n_days} daily skt fields; "
           f"{NCHAN['g100']} g100 channels written")
@@ -3766,6 +3894,21 @@ def polygon_hits(path, lats, lons, mask=None):
     return hit
 
 
+# THE FLOOR IS SIZED FROM THE FILE, NOT COPIED FROM THE STREAMING STAGES.
+# `build_family3.fetch`'s 1.00 MB/s default exists for `sst`/`ncep`, which pull
+# ~45 GB: at 0.17 MB/s those cannot finish inside the job's 24 h and the right
+# answer is to abort and use the Hub mirror. ETOPO is ONE 933 MB file with no
+# mirror anywhere, fetched once per build. Measured on family7-build #10
+# (2026-09-14): www.ngdc.noaa.gov served the box at 0.145-0.220 MB/s, the
+# 1.00 MB/s floor aborted all four attempts, and `elev` was published as
+# 1,038,240 NaN. At 0.10 MB/s the whole file takes 2.6 h — affordable once,
+# inside a five-hour build with a 24 h timeout — so the floor is set where it
+# separates "this host is dead" from "this host is slow", which for a one-off
+# download is a different place than for a 45 GB stream.
+ETOPO_MIN_RATE_MBPS = 0.10
+ETOPO_PROBE_S = 180.0
+
+
 def etopo_path(ctx):
     if ctx.source_dir:
         for p in sorted(glob.glob(os.path.join(ctx.source_dir, "etopo", "*.nc"))):
@@ -3774,7 +3917,8 @@ def etopo_path(ctx):
     p = os.path.join(ctx.scratch, "etopo",
                      "ETOPO_2022_v1_60s_N90W180_surface.nc")
     try:
-        f3.fetch(ETOPO_URL, p)
+        f3.fetch(ETOPO_URL, p, min_rate_mbps=ETOPO_MIN_RATE_MBPS,
+                 min_probe_s=ETOPO_PROBE_S)
     except Exception as e:                                    # noqa: BLE001
         print(f"  ::warning:: ETOPO unavailable ({str(e)[:120]})")
         return None
@@ -3851,6 +3995,32 @@ def block_mean_elev(path, lats, lons):
         d.close()
 
 
+def log1p_channel(x, scale=1.0):
+    """`log1p(max(x*scale, 0))`, evaluated in float64 — g100 channels 8 and 9.
+
+    A FUNCTION, not two inline expressions, because the float64 cast is the
+    whole content and an inline cast is the kind of thing a later edit drops.
+
+    WHY float64. `f3.interp2_nan` returns FLOAT32, so `np.log1p` used to be
+    evaluated on a float32 array — and float32 log1p is not correctly rounded:
+    numpy's answer depends on the build and on the SIMD loop the CPU
+    dispatches to, differing by 1-2 float32 ULP. Measured 2026-09-14 on a
+    realistic prate sample: 7.9 % of values differ between the float32 loop and
+    float64-then-cast, and ~1 in 22,000 of those flips the float16 that `norm`
+    finally writes — about 3 cells per 65,160-cell g100 bin. That is exactly
+    the f7l0-vs-f7l1 signature: 13 of the 15 g100 channels came out
+    byte-identical from byte-identical NCEP files, and `log_prate` and
+    `log_swe` — the only two channels with a transcendental in their transform
+    — differed in 1-2 cells per bin at one float16 ULP. Every other g100
+    transform (-273.15, /100, identity) is IEEE-exact and was therefore already
+    reproducible. In float64 the result is the correctly rounded double
+    (glibc's log1p is sub-ULP) and the single rounding to float32 that follows
+    is IEEE-exact, so the whole group reproduces bit-for-bit across boxes. The
+    cost is one 65 kB float64 temporary per bin per channel.
+    """
+    return np.log1p(np.maximum(np.asarray(x, np.float64) * scale, 0.0))
+
+
 def sphere_codes(ice, ocean, lake):
     """0 ocean · 1 land · 2 ice sheet · 3 inland water, in THAT priority.
 
@@ -3889,24 +4059,75 @@ def stage_static(ctx):
                   f"ocean code is built from the other source only")
     ctx.prog.stage_start("static", 3)
 
-    ice = polygon_hits(ne_geojson(ctx, "ne_10m_glaciated_areas"), lats, lons)
+    # EVERY SOURCE THIS STAGE READS IS OPTIONAL TO THE CODE AND MANDATORY TO
+    # THE TENSOR, so each absence is COLLECTED and answered once, below —
+    # `polygon_hits(None, …)` returns an all-False mask and `etopo_path`
+    # returns None, and both of those look exactly like a legitimately empty
+    # answer to the arithmetic that follows (ml/CLAUDE.md §0.2).
+    missing = []
+    gp_ice = ne_geojson(ctx, "ne_10m_glaciated_areas")
+    if gp_ice is None:
+        missing.append("ne_10m_glaciated_areas (the ice-sheet code of `sphere`)")
+    ice = polygon_hits(gp_ice, lats, lons)
     ctx.prog.item("glaciated areas", 1, {"cells": int(ice.sum())})
     todo = (~ice) & (~ocean)
-    lake = polygon_hits(ne_geojson(ctx, "ne_10m_lakes"), lats, lons, mask=todo)
+    gp_lake = ne_geojson(ctx, "ne_10m_lakes")
+    if gp_lake is None:
+        missing.append("ne_10m_lakes (the inland-water code of `sphere`)")
+    lake = polygon_hits(gp_lake, lats, lons, mask=todo)
     ctx.prog.item("lakes", 2, {"cells": int(lake.sum())})
 
     sphere = sphere_codes(ice, ocean, lake)
 
     ep = etopo_path(ctx)
+    if ep is None:
+        missing.append(f"ETOPO 2022 60s ({ETOPO_URL})")
     elev = (block_mean_elev(ep, lats, lons) if ep
             else np.full((NLAT, NLON), np.nan, np.float32))
-    if ep:
-        ctx.note_source("etopo", ETOPO_URL if not ctx.source_dir else ep)
-    ctx.prog.item("elev", 3, {"finite": int(np.isfinite(elev).sum())})
+    n_elev = int(np.isfinite(elev).sum())
+    ctx.prog.item("elev", 3, {"finite": n_elev})
+    if ep is not None and n_elev == 0:
+        missing.append(f"ETOPO block means (read {ep}, 0 finite cells)")
+
+    # REFUSE, RATHER THAN PUBLISH AN EMPTY STATIC. family7-build #10
+    # (2026-09-14): the box read www.ngdc.noaa.gov at 0.145 MB/s, the fetch
+    # guard aborted all four attempts, this stage printed one `::warning::`,
+    # filled `elev` with NaN, did NOT record an `etopo` source, wrote
+    # `static.done` anyway — and #11 then skipped the stage on that marker and
+    # published an npz whose `elev` is 1,038,240 NaN, green. `stage_rg` already
+    # answers the identical failure (the same guard, the same slow box, the
+    # same day) by refusing unless a dispatch asks for the degraded build BY
+    # NAME; this is that rule applied to the stage next door.
+    if missing and not getattr(ctx.a, "allow_empty_statics", False):
+        sys.exit(
+            "stage static: " + "; ".join(missing) + " could not be read.\n"
+            "REFUSING to continue: the only thing this stage could do next is "
+            "write a static that says the world has no elevation (or no ice "
+            "sheets, or no lakes) and let `meta` and `publish` ship it as a "
+            "tensor — a step that reports success while doing nothing "
+            "(ml/CLAUDE.md §0.2). Two ways on: (1) re-dispatch with the same "
+            "`work` value once the host serves this box (nothing else is "
+            "redone — every other stage is skipped by its own marker, and "
+            "this one has no marker to skip); or (2) pass "
+            "--allow-empty-statics if a tensor with NO elevation is genuinely "
+            "what you want.")
+    if missing:
+        print("  ::warning:: static: " + "; ".join(missing) + " — "
+              "--allow-empty-statics says that is deliberate")
 
     atomic_npz(os.path.join(work, "statics.npz"), sphere=sphere, elev=elev)
-    ctx.note_source("naturalearth", NE_BASE +
-                    "{ne_10m_glaciated_areas,ne_10m_lakes}.geojson")
+    # A SOURCE IS RECORDED WHEN IT WAS READ, NEVER BECAUSE THE STAGE RAN. The
+    # f7l1 manifest's `sources` has no `etopo` key precisely because the line
+    # below used to be unconditional for Natural Earth and conditional for
+    # ETOPO — so the manifest was right about the one that failed and would
+    # have been wrong about the other two.
+    if ep is not None:
+        ctx.note_source("etopo", ETOPO_URL if not ctx.source_dir else ep)
+    read_ne = [n for n, p in (("ne_10m_glaciated_areas", gp_ice),
+                              ("ne_10m_lakes", gp_lake)) if p is not None]
+    if read_ne:
+        ctx.note_source("naturalearth",
+                        NE_BASE + "{" + ",".join(read_ne) + "}.geojson")
     mark(work, "static")
     u, c = np.unique(sphere, return_counts=True)
     print("  sphere: " + " · ".join(
@@ -3985,10 +4206,27 @@ def stage_truth(ctx):
 # deleted. `os.link` reads the old directory's inode and adds a name in the
 # new one; every other file is copied with `shutil.copy2`. A build that
 # corrupted its own seed would have destroyed the published tensor.
-SEED_FILES = ("norm.npz", "norm_g025.npz", "statics.npz", "truth.npz",
-              "counts.json", "sources.json", "oisst_seen.npy",
-              "glorys_seen.npy")
-SEED_DIRS = ("glorys", "sst", "ncep", "rg", "norm")
+#
+# EVERY ONE OF THESE LISTS IS DERIVED FROM `INHERITED_STAGES`, not written out
+# beside it. On 2026-09-14 the f7l2 change moved `static` and `ncep` out of
+# that tuple; three hand-kept lists would each have had to be edited too, and
+# the one that mattered most is the least obvious — `SEED_DIRS` copies
+# `<seed>/ncep/1982.done` … `2024.done`, so a seed whose per-YEAR markers came
+# across would have skipped every year of a stage whose whole purpose was to
+# re-run, and published a g100 of pure NaN. Green.
+_PER_ITEM_STAGES = ("glorys", "sst", "ncep", "rg", "occci")
+# The small state beside the memmaps. `statics.npz` travels only when `static`
+# is inherited — f7l2 rebuilds it, and copying the base's would mean an
+# all-NaN `elev` sitting in the new work dir waiting for a `--stage publish`
+# that never re-enters the stage.
+_SEED_FILES_ALWAYS = ("norm.npz", "norm_g025.npz", "counts.json",
+                      "sources.json", "oisst_seen.npy", "glorys_seen.npy")
+_SEED_FILES_OF_STAGE = {"static": ("statics.npz",), "truth": ("truth.npz",)}
+SEED_FILES = _SEED_FILES_ALWAYS + tuple(
+    n for s, names in _SEED_FILES_OF_STAGE.items() if s in INHERITED_STAGES
+    for n in names)
+SEED_DIRS = tuple(s for s in _PER_ITEM_STAGES if s in INHERITED_STAGES) \
+    + ("norm",)
 SEED_MARKERS = INHERITED_STAGES + ("repair_sst", "norm")
 
 
@@ -4009,13 +4247,14 @@ def seed_from(ctx, old_work):
     if os.path.abspath(old) == os.path.abspath(new):
         sys.exit(f"--seed-from {old} is the work directory itself")
     linked = []
-    for g in BASE_GROUPS:
+    for g in INHERITED_GROUPS:
         src = os.path.join(old, f"{BASE_STEM}_X_{g}.npy")
         dst = group_file(new, g)
         if not os.path.exists(src):
             sys.exit(f"--seed-from: {src} is missing. The seed must be a "
-                     f"FINISHED f7l0 build — all three published group files, "
-                     f"already z-scored by its own `norm` stage.")
+                     f"FINISHED {BASE_RECIPE} build — every published group "
+                     f"file this build inherits ({', '.join(INHERITED_GROUPS)}"
+                     f"), already z-scored by its own `norm` stage.")
         if os.path.exists(dst):
             if not os.path.samefile(src, dst):
                 sys.exit(f"{dst} already exists and is not the same file as "
@@ -4106,6 +4345,19 @@ def seed_from(ctx, old_work):
               f"(one inode, zero new bytes)")
     print(f"  seed   markers {', '.join(SEED_MARKERS)} and "
           f"{len(INHERITED_STAGES)} spec file(s) copied from {old}")
+
+    # A GROUP THIS BUILD REBUILDS MUST ARRIVE WITH NO STATE AT ALL. `norm.npz`
+    # and `norm/` were copied wholesale above — they carry the base's
+    # `norm_g100`, its `count_g100` and its `norm/g100.done` — and with those
+    # present `norm_pending` would answer "nothing to do" for a group whose
+    # float16 file does not even exist yet. `redo_group` is exactly the
+    # deletion this needs and it is already tested (tests 40/41), so it is
+    # CALLED rather than re-implemented; it refuses a seeded group, which is
+    # the assertion that we did not link this one by mistake.
+    for g in REBUILT_GROUPS:
+        print(f"  seed   {g}: REBUILT by this recipe — clearing the base's "
+              f"normalisation and stage state for it")
+        redo_group(ctx, g)
     return linked
 
 
@@ -4332,11 +4584,55 @@ def oc_inland_count(ctx, sphere):
     return n
 
 
+def static_finite(statics):
+    """{name: n_finite} for every static, by the static's OWN definition of a
+    value. `elev` is float metres and its missing token is NaN; `sphere` is an
+    int8 code with no NaN, so "finite" there means "carries a code we defined"
+    — an int array is `isfinite` everywhere, including where it is a zero that
+    nothing ever wrote."""
+    out = {}
+    for name in STATIC_KEYS:
+        a = np.asarray(statics[name])
+        if a.dtype.kind == "f":
+            out[name] = int(np.isfinite(a).sum())
+        else:
+            out[name] = int(np.isin(a, SPHERE_CODES).sum())
+    return out
+
+
+def check_statics(statics):
+    """A static with nothing in it is not a tensor. Returns the counts.
+
+    THE LAST GATE BEFORE THE NPZ. f7l1 was published with `elev` = 1,038,240
+    NaN and a manifest whose `sources` had no `etopo` key, and nothing between
+    `stage_static` and the Hub asked. Both halves of that are closed: the stage
+    refuses (see `stage_static`), and so does this — because a stage's refusal
+    can be skipped by its own `.done` marker on a resume, which is precisely
+    how run #11 republished run #10's empty `elev` without re-entering the
+    stage that would have caught it. A check at the point of PUBLICATION
+    cannot be skipped by a marker written a day earlier.
+    """
+    n = static_finite(statics)
+    empty = [k for k, v in n.items() if v == 0]
+    if empty:
+        sys.exit(
+            f"stage meta: static(s) {', '.join(empty)} have ZERO values "
+            f"({n}). REFUSING to write the npz. A `.done` marker from an "
+            f"earlier dispatch does not mean the stage SUCCEEDED — "
+            f"family7-build #10 wrote `static.done` after ETOPO had been "
+            f"aborted by the fetch guard, and #11 then skipped the stage on "
+            f"that marker and published the NaN (ml/CLAUDE.md §0.2). Delete "
+            f"{{work}}/static.done and {{work}}/statics.npz and re-dispatch "
+            f"`--stage static`; nothing else is rebuilt.")
+    return n
+
+
 def stage_meta(ctx):
     """The small npz beside the three memmaps: axes, statics, norms, truth."""
     work = ctx.work
     live = np.load(os.path.join(work, "rg", "live.npz"))
     statics = np.load(os.path.join(work, "statics.npz"))
+    n_static = check_statics(statics)
     truths = np.load(os.path.join(work, "truth.npz"))
     norms = np.load(os.path.join(work, "norm.npz"))
     counts = read_json(os.path.join(work, "counts.json"), {})
@@ -4365,6 +4661,12 @@ def stage_meta(ctx):
         oc025_bin_index=np.arange(ctx.b_oc, ctx.b_oc + ctx.T_oc,
                                   dtype=np.int64),
         sphere=statics["sphere"], elev=statics["elev"],
+        # HOW MUCH OF EACH STATIC IS REAL, in the file itself. A consumer that
+        # wants to know whether `elev` is a map or a hole should not have to
+        # load 1,038,240 values to find out, and `publish` copies this into the
+        # manifest so the question is answerable from the Hub without a
+        # download at all.
+        static_n_finite=np.array(json.dumps(n_static, sort_keys=True)),
         n_glorys_bins=np.array(counts.get("n_glorys_bins", 0)),
         n_sst_days=np.array(counts.get("n_sst_days", 0)),
         n_ncep_days=np.array(counts.get("n_ncep_days", 0)),
@@ -4394,11 +4696,11 @@ def stage_meta(ctx):
 
 # =========================================================== stage: publish ==
 def base_manifest_hashes(api, repo, tok):
-    """{group: sha256} from the PUBLISHED f7l0 manifest (E-077 §5).
+    """{group: sha256} from the PUBLISHED base manifest (E-077 §5).
 
-    `same_as_f7l0: true` in our own manifest would be a claim about someone
+    `same_as_base: true` in our own manifest would be a claim about someone
     else's bytes, so it is not written from what the seed directory happened to
-    contain — it is written after fetching f7l0's manifest and comparing.
+    contain — it is written after fetching the base's manifest and comparing.
     """
     from huggingface_hub import hf_hub_download
     p = hf_hub_download(repo, f"{BASE_PREFIX}/manifest.json",
@@ -4420,24 +4722,31 @@ def stage_publish(ctx):
     (ml/CLAUDE.md §0.2). `ml/hf_mirror.py`'s rule: a backup is only real if the
     restore works, so a publish that cannot verify FAILS the job.
 
-    7.1 adds one more check, and it is the one the whole recipe rests on: the
-    three inherited group files must be BYTE-IDENTICAL to f7l0's, because the
+    7.1 added one more check, and it is the one the whole recipe rests on: the
+    INHERITED group files must be BYTE-IDENTICAL to the base's, because the
     handover, the Hub and another agent's hand-off all describe them by those
-    hashes. So the f7l0 manifest is fetched and compared, `same_as_f7l0` is
+    hashes. So the base manifest is fetched and compared, `same_as_base` is
     written per file from the comparison rather than from the intention, and a
     mismatch FAILS the publish — at that point the file is not the one anyone
     was promised, whatever the rest of the build did.
 
-    THAT PROMISE IS ONLY MADE BY A SEEDED BUILD. A build run WITHOUT
-    `--seed-from` (2026-09-13: the Ontario box holding the f7l0 seed would not
-    start, so all four groups were rebuilt from the sources on a fresh box)
-    never claimed its g025/g100/rg100 were f7l0's bytes — they are the same
-    recipe re-derived, identical only if every upstream source is still
-    byte-for-byte what it was on 2026-09-04. For such a build the comparison
-    is still made and still written per file, but a mismatch is RECORDED
-    (`same_as_f7l0: false`, with f7l0's hash beside ours) rather than fatal:
-    the manifest then says exactly which of the three drifted, and the
-    handover's hashes remain a statement about f7l0's folder, not this one.
+    THAT PROMISE IS ONLY MADE BY A SEEDED BUILD, AND ONLY ABOUT THE GROUPS IT
+    INHERITS. Two kinds of file are compared and recorded but never fatal:
+
+      * a group this recipe REBUILDS on purpose — `g100` in f7l2, whose two
+        log channels are re-derived with a float64 `log1p` so the tensor
+        reproduces. It is in `BASE_GROUPS` (f7l1 published it) and not in
+        `INHERITED_GROUPS`, so the manifest records `same_as_base: false` with
+        the base's hash beside ours, which is the FINDING, not a broken
+        promise;
+      * any group in a build run WITHOUT `--seed-from` (2026-09-13: the box
+        holding the f7l0 seed would not start, so all four groups were rebuilt
+        on a fresh box). Such a build never claimed anything was the base's
+        bytes — they are the same recipe re-derived, identical only if every
+        upstream source is still byte-for-byte what it was.
+
+    Either way the manifest says exactly which group moved, and the handover's
+    hashes remain a statement about the BASE's folder, not this one.
     """
     from huggingface_hub import hf_hub_download
     work = ctx.work
@@ -4445,6 +4754,20 @@ def stage_publish(ctx):
     seeded = bool(getattr(ctx.a, "seed_from", ""))
     files = [os.path.join(work, STEM + ".npz")] + \
             [group_file(work, g) for g in GROUPS]
+    # THE STATICS ARE RE-CHECKED HERE, from the npz that is about to be
+    # uploaded rather than from the work dir that produced it. `stage_meta`
+    # already refused an empty one, but `meta` has a `.done` marker too and a
+    # publish-only dispatch (`--stage publish`) never re-enters it — and a
+    # publish-only dispatch republishing a stale npz is exactly the shape of
+    # family7-build #11. This reads a 5 MB file; it cannot be the expensive
+    # check, and it is the last place anything can look.
+    # `allow_pickle` because the npz is OURS and a hand-built one (the publish
+    # tests') may carry an object array; the two keys read here are a plain
+    # int8 grid and a plain float32 grid either way.
+    n_static = check_statics(np.load(os.path.join(work, STEM + ".npz"),
+                                     allow_pickle=True))
+    print("  publish: statics " + " · ".join(
+        f"{k}={v:,}/{NLAT * NLON:,} finite" for k, v in n_static.items()))
     try:
         base = base_manifest_hashes(api, repo, tok)
         print(f"  publish: {BASE_RECIPE} manifest lists "
@@ -4492,9 +4815,10 @@ def stage_publish(ctx):
                          f"is {BASE_RECIPE}'s and there is nothing to compare "
                          f"it with")
             rec["base_name"] = f"{BASE_STEM}_X_{g}.npy"
+            rec["inherited"] = g in INHERITED_GROUPS
             if want == src:
-                rec["same_as_f7l0"] = True
-            elif seeded:
+                rec["same_as_base"] = True
+            elif seeded and g in INHERITED_GROUPS:
                 sys.exit(f"INHERITANCE BROKEN on {g}: this build's file "
                          f"hashes {src}, {BASE_RECIPE}'s manifest says "
                          f"{want}. The seed was not the published tensor (or "
@@ -4502,22 +4826,39 @@ def stage_publish(ctx):
                          f"it would put a file on the Hub that the family-7 "
                          f"handover describes and does not match.")
             else:
-                # Unseeded rebuild: no inheritance was claimed, so a drift is a
-                # finding to record, not a broken promise. Both hashes go in
-                # the manifest so the reader can see WHICH group moved.
-                rec["same_as_f7l0"] = False
-                rec["f7l0_sha256"] = want
+                # A group this recipe REBUILDS, or any group of an unseeded
+                # build: no inheritance was claimed, so a drift is a finding to
+                # record, not a broken promise. Both hashes go in the manifest
+                # so the reader can see WHICH group moved and why it was
+                # allowed to.
+                rec["same_as_base"] = False
+                rec["base_sha256"] = want
+                why = ("rebuilt by this recipe" if g in REBUILT_GROUPS
+                       else "unseeded rebuild")
                 print(f"  publish: {g} differs from {BASE_RECIPE}'s published "
                       f"file (ours {src[:16]}…, {BASE_RECIPE} {want[:16]}…) — "
-                      f"unseeded rebuild, recorded as same_as_f7l0=false")
+                      f"{why}, recorded as same_as_base=false")
         entries.append(rec)
         ctx.prog.item(name, i, {"sha256": src[:16],
-                                "same_as_f7l0": rec.get("same_as_f7l0", False)})
+                                "same_as_base": rec.get("same_as_base", False)})
 
     man = {"recipe": RECIPE, "base_recipe": BASE_RECIPE, "stem": STEM,
            "base_stem": BASE_STEM, "base_prefix": BASE_PREFIX,
            "groups": GROUPS, "oc_bin_first": int(ctx.b_oc),
            "seeded_from_base": seeded,
+           # WHICH GROUPS THIS RECIPE TAKES UNCHANGED AND WHICH IT REBUILDS,
+           # stated in the manifest rather than left to be inferred from the
+           # per-file `same_as_base` flags. A reader comparing f7l2 with f7l1
+           # needs to know that g100 differing is the POINT of the build and
+           # g025 differing would be a fault.
+           "inherited_groups": list(INHERITED_GROUPS),
+           "rebuilt_groups": list(REBUILT_GROUPS),
+           # ml/CLAUDE.md §0.2, on the manifest: the f7l1 manifest said
+           # nothing whatever about `elev` — not that it was empty, not that
+           # ETOPO had failed, not even that the statics existed — so the only
+           # way to learn the tensor had no elevation was to download it.
+           "static_n_finite": n_static,
+           "static_cells": NLAT * NLON,
            "builder_git_sha": git_sha(), "built_at": utcnow(),
            "repo": repo, "prefix": HF_PREFIX,
            "sources": ctx.sources, "files": entries}
@@ -5037,11 +5378,11 @@ def make_smoke_oc_sources(root, days, oc_start,
 def seed_layout(work):
     """Rename a finished work dir's group files to the BASE stem.
 
-    The first leg of the smoke builds the three inherited groups with THIS
-    builder, which naturally names them `f7l1`. A real seed directory is an
-    f7l0 build and its files carry the f7l0 stem, so the smoke renames them:
-    otherwise `--seed-from` would be tested against a directory no f7l0 build
-    ever produces, which is the kind of green test that proves nothing.
+    The first leg of the smoke builds the base's groups with THIS builder,
+    which naturally names them with THIS recipe's stem. A real seed directory
+    is a BASE build and its files carry the base stem, so the smoke renames
+    them: otherwise `--seed-from` would be tested against a directory no base
+    build ever produces, which is the kind of green test that proves nothing.
     """
     for g in BASE_GROUPS:
         src = os.path.join(work, f"{STEM}_X_{g}.npy")
@@ -5089,27 +5430,39 @@ def run_smoke(root=None, keep=False, start=SMOKE_START, end=SMOKE_END,
         a.update(kw)
         return argparse.Namespace(**a)
 
-    # ---- leg 1: the f7l0-shaped seed ------------------------------------
-    print("\n########## smoke leg 1: the f7l0 seed ##########")
+    # ---- leg 1: the BASE-shaped seed -------------------------------------
+    # EVERY FILL STAGE, not `INHERITED_STAGES` — the seed has to be a FINISHED
+    # base build, and from f7l2 the stages this recipe re-runs (`static`,
+    # `ncep`) are precisely the ones missing from that tuple. Building the seed
+    # out of the inherited list was correct exactly while the two coincided,
+    # and would otherwise hand leg 2 a seed with no g100 and no statics — so
+    # the rebuild would "work" against a seed that no real build produces.
+    print(f"\n########## smoke leg 1: the {BASE_RECIPE} seed ##########")
     c1 = Ctx(ns(seed))
     print(f"axis      {bin_start(c1.bins[0], 5)} .. "
           f"{bin_start(c1.bins[-1], 5)}  T={c1.T} pentad bins "
           f"(bins {c1.b_lo}..{c1.b_hi}, recipe {BASE_RECIPE} shape)")
     disk_guard(seed, c1.byte_peak(64), headroom=2e8)
-    run_stages(c1, [s for s in INHERITED_STAGES])
+    run_stages(c1, [s for s in STAGES if s not in ("norm", "meta", "publish")])
     stage_norm(c1, groups=BASE_GROUPS)
     seed_layout(seed)
     before = {g: sha256(os.path.join(seed, f"{BASE_STEM}_X_{g}.npy"))
               for g in BASE_GROUPS}
 
-    # ---- leg 2: inherit, then colour ------------------------------------
-    print("\n########## smoke leg 2: f7l1 = f7l0 + oc025 ##########")
+    # ---- leg 2: inherit, then rebuild what this recipe changes -----------
+    print(f"\n########## smoke leg 2: {RECIPE} = {BASE_RECIPE} + "
+          f"{', '.join(REBUILT_GROUPS) or 'nothing'} rebuilt ##########")
     ctx = Ctx(ns(work, seed_from=seed))
     seed_from(ctx, seed)
     print(f"axis      T={ctx.T} · colour T_oc={ctx.T_oc} from "
           f"{bin_start(ctx.b_oc, 5)} (oc_bin_first={ctx.b_oc}, recipe {RECIPE})")
     disk_guard(work, ctx.byte_peak(64), headroom=2e8)
-    run_stages(ctx, ["occci", "norm", "meta"])
+    # WHATEVER `all` WOULD RUN, MINUS PUBLISH — derived, never listed, so the
+    # smoke exercises exactly the stages a real dispatch does. `run_stages`
+    # skips the inherited ones on their copied markers and re-enters the rest;
+    # that skipping IS the thing under test, so naming the survivors by hand
+    # would test the list instead of the mechanism.
+    run_stages(ctx, [s for s in STAGES if s != "publish"])
 
     out = check_smoke(work, ctx, seed=seed, seed_sha=before)
     print(f"\nsmoke     OK in {time.time() - t0:.1f}s — {out}")
@@ -5126,6 +5479,7 @@ REQUIRED_KEYS = ["bin_index", "months", "epoch", "pentad_days", "lats", "lons",
                  "count_oc025", "oc_bin_first", "oc025_bin_index",
                  "rg_bin_index", "n_glorys_bins", "n_sst_days", "n_ncep_days",
                  "n_rg_live", "n_occci_days", "n_occci_absent", "n_oc_inland",
+                 "static_n_finite",
                  "sources", "builder_git_sha", "rapid", "truth_rapid"]
 
 
@@ -5257,13 +5611,24 @@ def check_smoke(work, ctx, seed=None, seed_sha=None):
     # THE INHERITANCE, ASSERTED ON THE BYTES (E-077 §5). "It hard-linked" is an
     # intention; "the sha256 is the same and it is the same inode" is the fact.
     if seed and seed_sha:
-        for g in BASE_GROUPS:
+        for g in INHERITED_GROUPS:
             old = os.path.join(seed, f"{BASE_STEM}_X_{g}.npy")
             new = group_file(work, g)
             assert os.path.samefile(old, new), \
                 f"{g} is not the same file as the seed's"
             assert sha256(new) == seed_sha[g], \
                 f"{g} changed between the seed and this build"
+        # ...AND A REBUILT GROUP IS NOT THE SEED'S FILE. The other half of the
+        # same claim: `g100` must be its own inode, and the seed's copy must
+        # still hash to what it hashed before this build touched anything.
+        for g in REBUILT_GROUPS:
+            old = os.path.join(seed, f"{BASE_STEM}_X_{g}.npy")
+            new = group_file(work, g)
+            assert os.path.exists(new), f"{g} was not rebuilt"
+            assert not os.path.samefile(old, new), \
+                f"{g} is a hard link to the seed's — this recipe REBUILDS it"
+            assert sha256(old) == seed_sha[g], \
+                f"the seed's {g} was modified by a build that only reads it"
         assert os.path.exists(os.path.join(work, "seed.json"))
     return (f"T={want['g025'][0]} · T_oc={want['oc025'][0]} · n_live={n_live} · "
             f"{n_oc:,} observed colour values · {len(d.files)} keys · "
@@ -5342,6 +5707,21 @@ def main():
                          "skips the rest. Repeatable. One of "
                          f"{', '.join(RAW_F32)}; g025 is refused (its z-score "
                          "was in place).")
+    ap.add_argument("--allow-empty-statics", action="store_true",
+                    help="let `static` write an all-NaN `elev` (or a `sphere` "
+                         "with no ice/lake codes) when ETOPO or Natural Earth "
+                         "cannot be read, instead of refusing. For a "
+                         "deliberate no-elevation build only — family7-build "
+                         "#10/#11 published 1,038,240 NaN this way and went "
+                         "green (2026-09-14). `meta` and `publish` still "
+                         "refuse an empty static: this flag lets the STAGE "
+                         "finish, it does not let the tensor ship.")
+    ap.add_argument("--allow-missing-years", action="store_true",
+                    help="let `sst` and `ncep` mark themselves done with "
+                         "source years they could not read, instead of "
+                         "refusing. For a deliberate partial build only — "
+                         "f7l0 carries 73 all-NaN pentads in 1989 because "
+                         "this was the silent default (2026-09-04).")
     ap.add_argument("--allow-empty-rg", action="store_true",
                     help="let `rg` write a ZERO-ROW rg100 when the "
                          "Roemmich-Gilson cubes cannot be read, instead of "

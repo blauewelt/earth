@@ -283,3 +283,170 @@ Reflectance bands (`Rrs_412…670`) as inputs — a second group when colour
 becomes an input rather than a target; PACE OCI (too short for a tensor;
 stays a globe layer); any gap-filled L4; the finer-than-0.25° representation
 (E-078).
+
+<a id="f7l2"></a>
+
+## 10 · `f7l2` — the corrected build (2026-09-14)
+
+**In one sentence.** Family 7.1 (recipe `f7l1`, stem
+`family7_global025_pentad_l1`) was built and published on 2026-09-14 and is
+wrong in one visible way and one invisible way; `f7l2` (stem
+`family7_global025_pentad_l2`) fixes both, inherits three of the four groups
+byte-for-byte, and rebuilds one.
+
+### 10.1 · What f7l1 got wrong
+
+**(a) `elev` is entirely empty — 0 of 1,038,240 cells carry a number.** The
+elevation static is read from one 933 MB ETOPO 2022 file on
+`www.ngdc.noaa.gov`, which has no mirror anywhere. On 2026-09-14 the box read
+that host at **0.145 – 0.220 MB/s**, and `build_family3.fetch`'s throughput
+guard — added the day before, with a 1.00 MB/s floor, for the 45 GB OISST and
+NCEP streams that genuinely cannot finish inside a 24 h job at a trickle —
+aborted all four attempts. Three separate things then let that become a
+published tensor:
+
+1. `etopo_path` caught the failure, printed one `::warning::` and returned
+   `None`; `stage_static` filled `elev` with NaN and did not record an `etopo`
+   source, so the manifest said nothing whatever about elevation — not that it
+   was empty, not that the download had failed;
+2. the stage wrote `static.done` **unconditionally**, so the marker claimed a
+   success the stage had not had (ml/CLAUDE.md §5.21: a marker may only
+   under-claim);
+3. the second dispatch that day (`--redo-group rg100`, rebuilding only the
+   Argo group) skipped the stage on that marker and republished the NaN, and
+   nothing between `stage_static` and the Hub asked whether the static had a
+   value in it. The run was green.
+
+The damage reached the browser: `ml/publish_family7_index.py` turned the
+all-NaN array into `data/family7_elev.json`, 1,038,240 `null`s, and the
+globe's "Surface elevation" static layer and the pixel card's elevation row
+have been empty for every point on Earth since. `sphere` was unaffected —
+702,642 ocean · 226,495 land · 107,074 ice sheet · 2,029 inland water, a
+complete map — but only because Natural Earth answered; the same code path
+would have produced a `sphere` with no ice and no lakes just as silently, and
+would have claimed the source in the manifest while doing it.
+
+**(b) `g100`'s two log channels do not reproduce.** f7l0 and f7l1 were built
+from byte-identical NCEP files and thirteen of the fifteen `g100` channels
+came out byte-identical. `log_prate` and `log_swe` differed in **1–2 cells per
+pentad bin, by one float16 step** — about 4 × 10⁻⁵ mm/day and 1.7 × 10⁻³ of a
+snow-water-equivalent unit. They are the only two channels with a
+transcendental in their transform, and `f3.interp2_nan` returns **float32**,
+so `np.log1p` was being evaluated on a float32 array. Float32 `log1p` is not
+correctly rounded: the answer depends on the numpy build and on the SIMD loop
+the CPU dispatches to. Measured on a realistic precipitation sample,
+**8.1 % of values differ by 1–2 float32 ULP** between the float32 loop and
+float64-then-cast, and about 1 in 22,000 of those flips the float16 the `norm`
+stage finally writes — **≈ 2 cells per 65,160-cell g100 bin**, which is
+exactly what the two published tensors show. Every other `g100` transform
+(−273.15, ÷100, negate, identity, a square root of a float64 variance) is
+IEEE-exact and was therefore already reproducible.
+
+The magnitude is scientifically nil. The property is not: a tensor that does
+not reproduce cannot be re-derived and checked, and the same class of drift is
+what a future "the bytes moved, is something broken?" question will have to be
+answered against.
+
+**(c) A third defect, found while diagnosing (a) and (b), and already
+repaired: f7l0's 1989 hole.** `g025`'s `sst` and `sea_ice` are entirely NaN in
+f7l0 for bins 511–583 — all of 1989 — because `sst.day.mean.1989.nc` could not
+be fetched, `oisst_paths` warned and returned `None`, and `stage_sst` then
+**marked the year done**, making the hole permanent across every resume.
+f7l1 filled those bins, and that is the whole reason its `sst`/`sea_ice`
+differ from f7l0 almost everywhere: `norm_g025` is computed from the data, so
+adding a year legitimately moved the mean and sd of exactly those two channels
+(13.615001 → 13.609584 and 11.622964 → 11.620165 for `sst`; 0.82712519 →
+0.82670176 and 0.23922408 → 0.23977689 for `sea_ice`), and every stored value
+shifted by at most one float16 step. The five GLORYS channels' statistics are
+bit-identical, and so are their bytes. f7l1 avoided the hole not because
+anything guarded against it but because the Hub mirror of NOAA PSL served the
+file; the guard exists now.
+
+### 10.2 · What `f7l2` changes
+
+| | |
+|---|---|
+| `RECIPE` / `STEM` | `f7l2` · `family7_global025_pentad_l2` |
+| `BASE_RECIPE` / `BASE_STEM` | `f7l1` · `family7_global025_pentad_l1` |
+| inherited groups | `g025`, `rg100`, `oc025` — hard links, zero new bytes |
+| rebuilt groups | `g100` — its own inode, re-normalised on its own |
+| inherited stages | `glorys`, `sst`, `rg`, `occci`, `truth` |
+| re-run stages | `static`, `ncep`, then `norm` (for `g100` alone), `meta`, `publish` |
+
+Code changes behind that, all in `ml/build_family7.py` unless stated:
+
+- **`stage_static` refuses.** ETOPO or either Natural Earth layer unreadable is
+  now fatal, in the shape `stage_rg` already used for the Argo cubes — a
+  degraded build has to be asked for by name (`--allow-empty-statics`), and
+  refusing leaves NO marker, so a resume re-enters the stage instead of
+  skipping it. Sources are recorded for what was actually read, never because
+  the stage ran.
+- **The ETOPO fetch floor is sized from the file**, 0.10 MB/s over a 180 s
+  probe rather than the streams' 1.00 MB/s. At 0.10 MB/s the whole file takes
+  2.6 h, which is affordable once inside a five-hour build with a 24 h
+  timeout; below that the host is dead rather than slow. The workflow also
+  probes `www.ngdc.noaa.gov` before the build and prints the arithmetic.
+- **`meta` and `publish` refuse an empty static, independently of any marker**,
+  and the npz and the manifest both carry `static_n_finite` — how many cells of
+  each static are real — so the question is answerable from the Hub without a
+  download.
+- **`log1p_channel`** evaluates both log channels in float64. One function, not
+  two inline casts, with the measurement in its docstring.
+- **`stage_sst` and `stage_ncep` no longer mark a year they could not read**,
+  and refuse at the end naming the years (`--allow-missing-years` to opt out).
+- **`stage_recipe` became a table** (`STAGE_SPEC_RECIPE`). It used to answer
+  `BASE_RECIPE` for every inherited stage, which is the same answer for a
+  one-generation chain and the wrong answer for a two-generation one: f7l1's
+  own build wrote `glorys.spec` with `recipe: "f7l0"`, so an f7l2 builder
+  reading `BASE_RECIPE` would compute `"f7l1"`, declare an untouched stage
+  stale, and — because `glorys` writes `g025` and `g025` is a hard link into
+  the published f7l1 tensor — refuse the whole build. A stage now answers the
+  generation in which its own definition last changed, forever.
+- **`INHERITED_GROUPS` is separate from `BASE_GROUPS`.** The seed links only
+  the inherited ones; `redo_group` is called on each rebuilt one immediately
+  after seeding, so the base's `norm_g100`, `count_g100` and `norm/g100.done`
+  cannot make `norm` skip a group whose float16 file does not exist yet. The
+  three seed lists (`SEED_FILES`, `SEED_DIRS`, `SEED_MARKERS`) are DERIVED from
+  `INHERITED_STAGES` rather than written out beside it — `SEED_DIRS` naming
+  `ncep` literally would have copied `<seed>/ncep/1982.done … 2024.done` and
+  skipped every year of a stage whose whole purpose is to re-run.
+- **`repair_sst_channel` declines on the inode**, not merely on its marker. It
+  is the one place `ncep` can still write `g025`, and from f7l2 `ncep` re-runs
+  inside a directory whose `g025` is shared with the published base.
+- **The manifest's field names are generic**: `same_as_base` / `base_sha256` /
+  `inherited` per file, plus `inherited_groups` and `rebuilt_groups` at the
+  top. A mismatch on an inherited group is still fatal for a seeded build; a
+  mismatch on `g100` is the finding this build exists to produce.
+- **`ml/publish_family7_index.py` refuses** to write `data/family7_elev.json`
+  or `data/family7_sphere.json` from an empty static.
+
+### 10.3 · What is deliberately NOT fixed
+
+**`oc025`'s `log_chl` has the same non-reproducibility as the two `g100` log
+channels, and stays.** `oc_block_stats` takes `np.log10` on a float32 raster —
+deliberately, because a float64 working copy of a 4320 × 8640 grid is 300 MB
+per temporary and the function runs about ten thousand times. Its per-year
+partials are already computed on the hosted lanes and its bytes are inherited
+unchanged by f7l2, so fixing it would mean recomputing the colour group for a
+change far below the float16 storage. **Recorded as a known limitation, not
+repaired**: the colour group is not expected to reproduce bit-for-bit across
+boxes. A chunked float64 `log10` would close it at roughly zero extra peak
+memory whenever `oc025` is next rebuilt for another reason.
+
+### 10.4 · What to verify after it lands
+
+1. `static_n_finite` in the manifest reads
+   `{"sphere": 1038240, "elev": 1038240}`, and `sources` carries both `etopo`
+   and a `naturalearth` entry naming both layers.
+2. `sphere`'s code histogram matches f7l1's exactly — 702,642 · 226,495 ·
+   107,074 · 2,029.
+3. `same_as_base` is `true` for `g025`, `rg100` and `oc025`, and `false` for
+   `g100` with f7l1's hash beside ours. A `false` on any of the first three is
+   a fault, and the publish will already have refused.
+4. `norm_g100` differs from f7l1's — it is recomputed from the rebuilt group —
+   while `norm_g025`, `norm_rg100` and `norm_oc025` are bit-identical.
+5. `data/family7_index.json` and the two static grids are regenerated, and
+   `data/family7_elev.json` has 1,038,240 non-null values. Add the assertion
+   `tests/data.spec.js` is missing — that the committed elevation grid has a
+   non-zero count of values — in the same commit; it would fail today, which
+   is why it is not there yet.

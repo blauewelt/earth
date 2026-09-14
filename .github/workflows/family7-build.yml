@@ -1,34 +1,56 @@
-# E-070 / E-071 / E-077: build FAMILY 7.1 -- the first input tensor that covers
+# E-070 / E-071 / E-077: build FAMILY 7.2 -- the first input tensor that covers
 # the whole globe rather than the North Atlantic window, at 0.25 degrees,
-# five-day bins, 1982-2024, with the shared land/ocean channels, PLUS the ocean
-# colour group E-077 adds.
+# five-day bins, 1982-2024, with the shared land/ocean channels and the ocean
+# colour group -- CORRECTED. See ml/plans/E077_family7_ocean_colour.md, the
+# section "f7l2 -- the corrected build (2026-09-14)", for what f7l1 got wrong.
 #
 # WHAT IT BUILDS. `ml/build_family7.py` streams five sources into four
-# co-registered memmaps and one small npz, recipe `f7l1`, stem
-# `family7_global025_pentad_l1`: `g025` [3142, 721, 1440, 7] float16 (45.7 GB --
+# co-registered memmaps and one small npz, recipe `f7l2`, stem
+# `family7_global025_pentad_l2`: `g025` [3142, 721, 1440, 7] float16 (45.7 GB --
 # currents, mixed-layer depth, SSH, observed sea-surface temperature, sea ice),
 # `g100` [3142, 181, 360, 15] (6.1 GB -- NCEP/NCAR wind stress, 2 m air, 10 m
 # wind, pressure, precipitation, snow, soil, heat fluxes, skin temperature),
 # `rg100` [n_live, 181, 360, 32] (~1 GB -- the Roemmich-Gilson Argo depth
-# column, live bins only) and -- new -- `oc025` [1997, 721, 1440, 2] (8.3 GB --
-# ESA OC-CCI surface chlorophyll-a, box-averaged from 4 km to 0.25 degrees in
-# LOG space, plus the clear-sky coverage that average rests on), on an OFFSET
-# time axis that starts at the colour record's own first day (1997-09-04,
-# bin 1145) instead of carrying 4.7 GB of NaN before it. Plus the statics, the
-# norms and the truth series.
+# column, live bins only) and `oc025` [1997, 721, 1440, 2] (8.3 GB -- ESA OC-CCI
+# surface chlorophyll-a, box-averaged from 4 km to 0.25 degrees in LOG space,
+# plus the clear-sky coverage that average rests on), on an OFFSET time axis
+# that starts at the colour record's own first day (1997-09-04, bin 1145)
+# instead of carrying 4.7 GB of NaN before it. Plus the statics, the norms and
+# the truth series.
 #
-# THE THREE OLD GROUPS ARE NOT REBUILT. `seed_from` points at a FINISHED f7l0
-# build and the three finished group files are HARD-LINKED under the new stem
-# (`os.link`, one inode, zero new bytes, same filesystem), together with its
-# markers, spec files, `norm.npz` and per-stage state -- so this job builds
-# `occci`, normalises `oc025` alone, and republishes. The publish step then
-# fetches f7l0's OWN manifest and refuses unless the three inherited files hash
-# identically to it: the Hub, docs/FAMILY7_DATA_HANDOVER.md and another agent's
-# hand-off all cite those hashes, so "inherited" is a claim that gets CHECKED
-# rather than asserted. The whole specification -- every channel, every
-# transform, every assertion -- is ml/plans/E070_family7_build.md and
-# ml/plans/E077_family7_ocean_colour.md, rendered for a phone at
-# https://blauewelt.github.io/earth/docs.html?f=ml/plans/E077_family7_ocean_colour.md
+# WHAT f7l2 REBUILDS, AND WHAT IT INHERITS. `seed_from` points at a FINISHED
+# f7l1 build. THREE of its four group files are HARD-LINKED under the new stem
+# (`os.link`, one inode, zero new bytes, same filesystem) -- `g025`, `rg100`,
+# `oc025` -- together with the inherited stages' markers, spec files, norm.npz
+# and per-stage state. TWO stages re-run, and they are the whole point of the
+# recipe:
+#
+#   * `static` -- f7l1 published `elev` as 1,038,240 NaN. Its 933 MB ETOPO
+#     download was aborted four times by build_family3's 1.00 MB/s throughput
+#     guard (the box read www.ngdc.noaa.gov at 0.145-0.220 MB/s), the stage
+#     warned once and wrote `static.done` anyway, and the next dispatch skipped
+#     it on that marker and republished the NaN. The stage now REFUSES, `meta`
+#     and `publish` refuse an empty static independently of any marker, and the
+#     ETOPO fetch has a floor sized from the file rather than from the 45 GB
+#     streams the guard was written for.
+#   * `ncep` -- g100's `log_prate` and `log_swe` were computed by `np.log1p` on
+#     a FLOAT32 array (`interp2_nan` returns float32), and float32 log1p is not
+#     correctly rounded: 8.1 % of values differ by 1-2 ULP between numpy builds
+#     and SIMD targets, which moved ~2 cells per bin by one float16 step
+#     between f7l0 and f7l1. Evaluated in float64 the whole group reproduces
+#     bit-for-bit across boxes.
+#
+# So `g100` is NOT hard-linked, its normalisation is pruned from the inherited
+# `norm.npz`, and `norm` re-z-scores that group alone. The publish step fetches
+# f7l1's OWN manifest and writes `same_as_base` per file from the comparison:
+# a mismatch on an INHERITED group is fatal (the Hub, the handover and another
+# agent's hand-off all cite those hashes), a mismatch on `g100` is the
+# FINDING this build exists to produce and is recorded with both hashes.
+#
+# DELIBERATELY NOT FIXED: `oc025`'s `log_chl` takes `np.log10` on a float32
+# raster for the same memory reason, so the colour group has the same
+# non-reproducibility. Its per-year partials are already computed and its bytes
+# are inherited unchanged; the plan records it as a known limitation.
 #
 # WHY A BOX AND NOT A HOSTED RUNNER. A GitHub-hosted job dies at six hours and
 # has ~14 GB of free disk. A full build is ~61 GB of memmaps plus up to ~3 GB of
@@ -37,7 +59,9 @@
 # and takes 2.5-3 h at the box's ~44 MB/s. Splitting that into hosted
 # year-lanes -- E-070 Phase C's shape -- would mean four runners each holding a
 # partial memmap that no other lane can see, i.e. four experiments instead of
-# one. The default box `gpu-box-31299601` is the 300 GB Ontario machine; its
+# one. A SEEDED f7l2 is far cheaper than that -- it rebuilds one 6.1 GB group
+# and two statics -- but it still has to run where the f7l1 work dir IS, because
+# a hard link cannot cross a filesystem. The `runner` default names a box; its
 # `/opt/earth-cache` is persistent across jobs, which is also what makes the
 # resume below real AND what makes the hard links possible (a link cannot cross
 # a filesystem, so `seed_from` and `work` must both live under it).
@@ -65,7 +89,7 @@
 # builder as an ENV VAR and never as a command-line argument (argv is world
 # readable on the box, and the box's host has root).
 name: Family 7 build
-run-name: family7.1 ${{ github.event.inputs.stage || 'all' }} -> ${{ github.event.inputs.work || 'ml/cache/family7_l1' }}
+run-name: family7.2 ${{ github.event.inputs.stage || 'all' }} -> ${{ github.event.inputs.work || 'ml/cache/family7_l2' }}
 
 on:
   workflow_dispatch:
@@ -77,13 +101,13 @@ on:
         description: "all | glorys | sst | ncep | rg | occci | static | truth | norm | meta | publish. Order is fixed (ncep needs sst for the sst repair; norm needs everything including occci; publish last) -- a single stage is for resuming or re-running one, never for building out of order"
         default: "all"
       work:
-        description: "the build directory for THIS (f7l1) build. RE-DISPATCH WITH THE SAME VALUE TO RESUME: finished stages are skipped by their .done markers. A different path is a different build"
-        default: "ml/cache/family7_l1"
+        description: "the build directory for THIS (f7l2) build. RE-DISPATCH WITH THE SAME VALUE TO RESUME: finished stages are skipped by their .done markers. A different path is a different build"
+        default: "ml/cache/family7_l2"
       seed_from:
-        description: "the FINISHED f7l0 build to inherit from: its three group files are hard-linked under the f7l1 stem and its markers/specs/norm.npz copied, so only the colour stage runs. Must be on the same filesystem as work. The word `none` means build all four groups from scratch (~5 h more) -- an EMPTY value is silently replaced by this default by GitHub itself, so empty cannot mean that"
-        default: "ml/cache/family7"
+        description: "the FINISHED f7l1 build to inherit from: its g025, rg100 and oc025 files are hard-linked under the f7l2 stem and the inherited stages' markers/specs/norm.npz copied, so only `ncep` (g100, rebuilt with the float64 log1p) and `static` (elev, which f7l1 published as all-NaN) run. g100 is NOT linked. Must be on the same filesystem as work -- a hard link cannot cross one, and both live under /opt/earth-cache. The word `none` means build all four groups from scratch (~5 h more) -- an EMPTY value is silently replaced by this default by GitHub itself, so empty cannot mean that"
+        default: "ml/cache/family7_l1"
       extra_args:
-        description: "extra flags for ml/build_family7.py, e.g. --source-dir <dir>, --oc-source globcolour, or --smoke. Word-split deliberately; leave empty for a real build"
+        description: "extra flags for ml/build_family7.py, e.g. --source-dir <dir>, --oc-source globcolour, --redo-group <g>, or --smoke. The three DEGRADE flags (--allow-empty-rg, --allow-empty-statics, --allow-missing-years) each let one stage finish with a source it could not read; none of them is a default and none is needed for a healthy build. Word-split deliberately; leave empty for a real build"
         default: ""
 
 permissions:
@@ -176,7 +200,7 @@ jobs:
         id: preflight
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
-          WORK: ${{ github.event.inputs.work || 'ml/cache/family7_l1' }}
+          WORK: ${{ github.event.inputs.work || 'ml/cache/family7_l2' }}
           SEED: ${{ github.event.inputs.seed_from }}
         run: |
           if [ "${SEED}" = "none" ]; then SEED=""; fi
@@ -243,11 +267,24 @@ jobs:
               echo "already exist on the Hub."
               exit 1
             fi
-            for g in g025 g100 rg100; do
-              f="${SEED}/family7_global025_pentad_l0_X_${g}.npy"
-              if [ ! -f "${f}" ]; then
-                echo "::error::${f} is missing -- ${SEED} is not a finished"
-                echo "f7l0 build."
+            # THE STEM AND THE GROUP LIST COME FROM THE BUILDER, not from
+            # three literals here. They were `family7_global025_pentad_l0` and
+            # `g025 g100 rg100` when f7l1 was the build; f7l2 inherits from
+            # f7l1 and inherits only THREE of its FOUR groups (g100 is rebuilt
+            # with the float64 log1p). A hand-copied stem in a preflight is a
+            # check that passes on the wrong directory, or fails on the right
+            # one, the first time the recipe moves -- and this preflight is
+            # supposed to be the thing that catches a wrong `seed_from` while
+            # the inputs are all it has cost (ml/CLAUDE.md 0.3).
+            # Read the two constants off the SOURCE TEXT, not by importing the
+            # module: this step runs before `Install`, and the builder imports
+            # netCDF4/xarray at module scope.
+            need=$(python3 -c "import re; src=open('ml/build_family7.py').read(); stem=re.search(r'^BASE_STEM = .([^\"]+).', src, re.M).group(1); gs=re.findall(r'[a-z0-9]+', re.search(r'^INHERITED_GROUPS = \(([^)]*)\)', src, re.M).group(1)); print(' '.join(f'{stem}_X_{g}.npy' for g in gs))")
+            echo "seed must hold: ${need}"
+            for f in ${need}; do
+              if [ ! -f "${SEED}/${f}" ]; then
+                echo "::error::${SEED}/${f} is missing -- ${SEED} is not a"
+                echo "finished build of the recipe this one inherits from."
                 exit 1
               fi
             done
@@ -284,7 +321,15 @@ jobs:
       # the job's timeout is 24. `|| true` on the step's last line is not
       # needed — every command here is guarded — but the step must never fail
       # the build, so it ends with `exit 0`.
-      - name: Source throughput (PSL, CEDA)
+      #
+      # NGDC: added 2026-09-14 after run #10. The `static` stage's ETOPO file
+      # is 933 MB from www.ngdc.noaa.gov with NO mirror anywhere, and that box
+      # read it at 0.145-0.220 MB/s — the fetch guard aborted all four
+      # attempts and `elev` was published as 1,038,240 NaN, green. The builder
+      # refuses that now, so the cost of a slow NGDC is a FAILED job five
+      # hours in unless somebody read this number first. It is measured and
+      # printed with its arithmetic, exactly like CEDA's.
+      - name: Source throughput (PSL, CEDA, NGDC)
         continue-on-error: true
         run: |
           probe () {                     # $1 label  $2 bytes  $3 url
@@ -316,6 +361,19 @@ jobs:
             echo "is no mirror for CEDA — if this number is real, the colour"
             echo "stage has to be resumed across several dispatches (same work"
             echo "value) or mirrored the way the PSL inputs now are."
+          fi
+          ngdc=$(probe ngdc 52428800 \
+            "https://www.ngdc.noaa.gov/thredds/fileServer/global/ETOPO2022/60s/60s_surface_elev_netcdf/ETOPO_2022_v1_60s_N90W180_surface.nc")
+          echo "::notice::NGDC ${ngdc} MB/s (first 50 MB of ETOPO_2022_v1_60s, 60 s cap)"
+          if awk -v m="${ngdc}" 'BEGIN{exit !(m < 0.5)}'; then
+            mins=$(awk -v m="${ngdc}" 'BEGIN{if(m<=0){print "infinity"}else{printf "%.0f", 933/m/60}}')
+            echo "::warning::NGDC serves this box at ${ngdc} MB/s. ETOPO is one"
+            echo "933 MB file with NO mirror; at this rate that is ${mins} min."
+            echo "Below 0.10 MB/s the builder's own guard aborts it and the"
+            echo "static stage REFUSES (it used to publish an all-NaN \`elev\`"
+            echo "instead — family7-build #10/#11, 2026-09-14). If this number"
+            echo "is under 0.10, run the static stage from a different box, or"
+            echo "put the file on the box under ml/cache and use --source-dir."
           fi
           exit 0
 
@@ -354,7 +412,7 @@ jobs:
       - name: OC-CCI preflight (one real file)
         if: ${{ (github.event.inputs.stage == '' || github.event.inputs.stage == 'all' || github.event.inputs.stage == 'occci') && !contains(github.event.inputs.extra_args, '--smoke') && !contains(github.event.inputs.extra_args, '--source-dir') }}
         env:
-          WORK: ${{ github.event.inputs.work || 'ml/cache/family7_l1' }}
+          WORK: ${{ github.event.inputs.work || 'ml/cache/family7_l2' }}
           EXTRA: ${{ github.event.inputs.extra_args }}
           # The preflight first asks whether every pending colour year has a
           # published partial (then CEDA is never read and the check stands
@@ -425,7 +483,7 @@ jobs:
       - name: Build
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
-          WORK: ${{ github.event.inputs.work || 'ml/cache/family7_l1' }}
+          WORK: ${{ github.event.inputs.work || 'ml/cache/family7_l2' }}
           SEED: ${{ github.event.inputs.seed_from }}
           STAGE: ${{ github.event.inputs.stage || 'all' }}
           EXTRA: ${{ github.event.inputs.extra_args }}
@@ -448,7 +506,7 @@ jobs:
       - name: Collect progress and the log tail
         if: always() && steps.preflight.outcome == 'success'
         env:
-          WORK: ${{ github.event.inputs.work || 'ml/cache/family7_l1' }}
+          WORK: ${{ github.event.inputs.work || 'ml/cache/family7_l2' }}
         run: |
           out="${RUNNER_TEMP}/family7-story"
           rm -rf "${out}"; mkdir -p "${out}"

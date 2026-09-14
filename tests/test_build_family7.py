@@ -617,7 +617,7 @@ def test_10_smoke_produces_every_file_and_key(build):
         assert os.path.basename(p) == f"{b7.STEM}_X_{g}.npy"
     missing = [k for k in b7.REQUIRED_KEYS if k not in d]
     assert not missing, missing
-    assert str(d["recipe"]) == "f7l1"
+    assert str(d["recipe"]) == b7.RECIPE == "f7l2"
     assert str(d["window"]) == "global025"
     assert str(d["cadence"]) == "pentad"
     assert list(d["groups"]) == b7.GROUPS == ["g025", "g100", "rg100", "oc025"]
@@ -1183,11 +1183,11 @@ def test_19_seed_from_is_byte_identical_and_leaves_the_seed_alone(build):
     work, seed = build["work"], build["seed"]
     assert os.path.isdir(seed)
     rec = json.load(open(os.path.join(work, "seed.json")))
-    assert rec["base_recipe"] == b7.BASE_RECIPE == "f7l0"
+    assert rec["base_recipe"] == b7.BASE_RECIPE == "f7l1"
     assert rec["base_stem"] == b7.BASE_STEM
-    assert {r["group"] for r in rec["linked"]} == set(b7.BASE_GROUPS)
+    assert {r["group"] for r in rec["linked"]} == set(b7.INHERITED_GROUPS)
 
-    for g in b7.BASE_GROUPS:
+    for g in b7.INHERITED_GROUPS:
         old = os.path.join(seed, f"{b7.BASE_STEM}_X_{g}.npy")
         new = b7.group_file(work, g)
         assert os.path.exists(old) and os.path.exists(new)
@@ -1198,15 +1198,33 @@ def test_19_seed_from_is_byte_identical_and_leaves_the_seed_alone(build):
         assert m.dtype == np.float16
         assert os.path.getsize(new) == 128 + int(np.prod(m.shape)) * 2
         del m
-    # the colour group is NOT inherited — it is this build's own file
-    assert not os.path.exists(os.path.join(seed,
-                                           f"{b7.BASE_STEM}_X_oc025.npy"))
-    assert os.stat(b7.group_file(work, "oc025")).st_nlink == 1
+    # ...and a REBUILT group is this build's own file, with the seed's copy
+    # untouched beside it. f7l2 rebuilds g100 (the float64 log1p), so "every
+    # base group is a hard link" is no longer the claim — "every INHERITED one
+    # is, and no other one is" has to be, or a rebuilt group written through a
+    # shared inode would rewrite the published base tensor.
+    assert b7.REBUILT_GROUPS, "this recipe rebuilds nothing — check the test"
+    for g in b7.REBUILT_GROUPS:
+        old = os.path.join(seed, f"{b7.BASE_STEM}_X_{g}.npy")
+        new = b7.group_file(work, g)
+        assert os.path.exists(old), "the seed must still have its own copy"
+        assert os.path.exists(new)
+        assert not os.path.samefile(old, new), f"{g} must NOT be a hard link"
+        assert os.stat(new).st_nlink == 1
+        assert b7.sha256(old) != b7.sha256(new) or True   # may coincide
 
-    # the seed still looks like a finished f7l0 build: markers, specs, norms
+    # the seed still looks like a finished base build: markers, specs, norms
     for name in b7.INHERITED_STAGES:
         assert b7.marked(seed, name), name
         assert b7.marked(work, name), f"{name} was not inherited"
+    # ...and the stages this recipe RE-RUNS arrived with no marker, no spec
+    # and no per-item state at all — the three things together are what makes
+    # `run_stages` re-enter them instead of skipping them (E-077 §f7l2).
+    for name in ("static", "ncep"):
+        assert b7.marked(seed, name), f"the seed must have run {name}"
+        assert not os.path.exists(os.path.join(work, f"{name}.spec")) or \
+            b7.marked(work, name), \
+            f"{name}.spec was copied from the seed without its marker"
     assert os.path.exists(os.path.join(work, "norm.npz"))
     assert os.path.exists(os.path.join(work, "rg", "live.npz"))
 
@@ -1236,11 +1254,12 @@ def test_19b_seed_from_refuses_rather_than_rebuilding(tmp_path):
     # a truncated group file is caught on the BYTES, not on the link call
     trunc = tmp_path / "trunc"
     trunc.mkdir()
-    for g in b7.BASE_GROUPS:
+    for g in b7.INHERITED_GROUPS:
         p = str(trunc / f"{b7.BASE_STEM}_X_{g}.npy")
         np.lib.format.open_memmap(p, mode="w+", dtype=np.float16,
                                   shape=(2, 3, 4, b7.NCHAN[g]))
-    with open(str(trunc / f"{b7.BASE_STEM}_X_g100.npy"), "r+b") as fh:
+    with open(str(trunc / f"{b7.BASE_STEM}_X_{b7.INHERITED_GROUPS[0]}.npy"),
+              "r+b") as fh:
         fh.truncate(os.path.getsize(fh.name) - 64)
     ctx2 = b7.Ctx(argparse.Namespace(
         work=str(tmp_path / "w2"), source_dir="", start=b7.SMOKE_START,
@@ -1309,19 +1328,32 @@ def test_20_norm_is_group_idempotent(build, tmp_path):
 
 
 # ----------------------------------------------------------------- 21 -----
-def test_21_inherited_spec_digests_are_unchanged_by_the_f7l1_builder(build):
-    """E-077 §5: the six inherited stages still hash as they did under f7l0.
+# The generation in which each stage's DEFINITION was last changed, restated
+# here as literals rather than imported from the builder, so the two have to
+# agree. A stage that appears in `INHERITED_STAGES` must answer the generation
+# its `.spec` file was WRITTEN in, forever — not "the base recipe", which is
+# the same thing for a one-generation chain and wrong for a two-generation one.
+SPEC_GENERATION = {"glorys": "f7l0", "sst": "f7l0", "rg": "f7l0",
+                   "truth": "f7l0", "static": "f7l2", "ncep": "f7l2",
+                   "occci": "f7l1", "occci-partial": "f7l1",
+                   "norm": "f7l2", "meta": "f7l2", "publish": "f7l2"}
+
+
+def test_21_inherited_spec_digests_are_unchanged_by_this_builder(build):
+    """E-077 §5: an inherited stage still hashes as it did under its own
+    generation, two recipes later.
 
     THE FAILURE THIS CATCHES. `stage_state_check` discards a stage's markers,
     carries and fill file when its recorded `.spec` no longer matches — which
     is exactly right when a recipe moves and exactly catastrophic when a work
-    dir has just inherited 53 GB of correct bytes. If `RECIPE` leaked into the
-    inherited digests, or if adding `oc025` to `ctx.shapes()` leaked into one
-    of their `shapes` blocks, every seeded build would rebuild from 1982 and
-    report it as a routine staleness warning.
+    dir has just inherited 53 GB of correct bytes. Worse at f7l2 than at f7l1:
+    an inherited group is now a HARD LINK into the published base tensor, so a
+    stale inherited stage does not warn and rebuild, it refuses the whole
+    build (`stage_state_check`'s seeded branch) — and if it did not refuse it
+    would rewrite bytes the Hub quotes by sha256.
 
-    The expected body is RESTATED here from the f7l0 builder's own formula
-    rather than read back from the implementation, so the two have to agree.
+    The expected body is RESTATED here from the builder's own formula rather
+    than read back from the implementation, so the two have to agree.
     """
     import argparse
     ctx = b7.Ctx(argparse.Namespace(
@@ -1331,14 +1363,15 @@ def test_21_inherited_spec_digests_are_unchanged_by_the_f7l1_builder(build):
     live = np.load(os.path.join(build["work"], "rg", "live.npz"))
     n_live = len(live["bin_index"])
 
-    def f7l0_digest(stage):
-        owns = {"ncep": "g100", "rg": "rg100"}          # f7l0's STAGE_OWNS
+    def expected_digest(stage):
+        owns = {"ncep": "g100", "rg": "rg100", "occci": "oc025"}
         shapes = {"g025": (ctx.T, 721, 1440, 7),
                   "g100": (ctx.T, 181, 360, 15),
-                  "rg100": (n_live, 181, 360, 32)}      # f7l0's ctx.shapes()
+                  "rg100": (n_live, 181, 360, 32),
+                  "oc025": (ctx.T_oc, 721, 1440, 2)}
         body = {
             "stage": stage, "version": b7.SPEC_VERSION[stage],
-            "recipe": "f7l0",
+            "recipe": SPEC_GENERATION[stage],
             "channels": b7.STAGE_CHANNELS.get(stage, []),
             "min_days": b7.MIN_DAYS, "pentad_days": b7.PENTAD_DAYS,
             "epoch": str(ac.EPOCH), "bins": [ctx.b_lo, ctx.b_hi],
@@ -1353,34 +1386,42 @@ def test_21_inherited_spec_digests_are_unchanged_by_the_f7l1_builder(build):
         if stage == "rg":
             body["levels"] = list(b7.LEVELS)
             body["band"] = [b7.RG_LAT_LO, b7.RG_LAT_HI]
+        if stage == "occci":
+            body["oc_bin_first"] = int(ctx.b_oc)
+            body["oc_start"] = str(ctx.oc_day0)
+            body["oc_source"] = str(ctx.oc_source)
+            body["var"] = b7.OC_VAR
         import hashlib
         return hashlib.sha256(
             json.dumps(body, sort_keys=True).encode()).hexdigest()
 
     for stage in b7.INHERITED_STAGES:
         got, body = b7.stage_spec(ctx, stage, n_live)
-        assert body["recipe"] == "f7l0", stage
-        assert "oc025" not in body["shapes"], \
-            f"{stage}'s digest now depends on the colour group's shape"
-        assert got == f7l0_digest(stage), \
+        assert body["recipe"] == SPEC_GENERATION[stage], stage
+        assert body["recipe"] != b7.RECIPE, \
+            f"{stage} answers this build's own recipe — a seeded build would " \
+            f"call it stale and refuse (its group is a hard link)"
+        assert got == expected_digest(stage), \
             f"{stage}'s spec digest moved — a seeded build would rebuild it"
-        # ...and the .spec file inherited from the seed says f7l0 too, and
-        # carries no colour shape. (`rg`'s recorded shapes block can be EMPTY:
-        # a fresh build writes rg's spec before `rg/live.npz` exists, so
-        # `n_live` is not yet knowable. `stage_state_check` upgrades that in
-        # place rather than calling it staleness — asserted below.)
+        # ...and the .spec file inherited from the seed agrees. (`rg`'s
+        # recorded shapes block can be EMPTY: a fresh build writes rg's spec
+        # before `rg/live.npz` exists, so `n_live` is not yet knowable.
+        # `stage_state_check` upgrades that in place rather than calling it
+        # staleness — asserted below.)
         rec = b7.read_json(os.path.join(build["work"], f"{stage}.spec"), {})
-        assert rec["spec"]["recipe"] == "f7l0", stage
-        assert "oc025" not in rec["spec"]["shapes"], stage
+        assert rec["spec"]["recipe"] == SPEC_GENERATION[stage], stage
         assert rec.get("sha256") in (got, None) or rec["spec"]["shapes"] == {}, \
             stage
 
-    # the four stages that DID change answer f7l1, or nothing would ever rebuild
-    for stage in ("occci", "norm", "meta", "publish"):
+    # the stages this recipe CHANGED answer f7l2, or nothing would ever rebuild
+    for stage in ("static", "ncep", "norm", "meta", "publish"):
         _, body = b7.stage_spec(ctx, stage, n_live)
-        assert body["recipe"] == "f7l1", stage
+        assert body["recipe"] == b7.RECIPE == "f7l2", stage
     assert b7.stage_recipe("sst") == "f7l0"
     assert b7.stage_recipe("occci") == "f7l1"
+    assert b7.stage_recipe("ncep") == "f7l2"
+    assert set(b7.STAGE_SPEC_RECIPE) == set(b7.STAGES + b7.SIDE_STAGES), \
+        "every stage needs a generation, or it silently defaults to RECIPE"
 
     # and a seeded work dir is NOT declared stale: no marker was discarded
     for stage in b7.INHERITED_STAGES:
@@ -1529,20 +1570,25 @@ def test_24_an_inherited_group_cannot_be_written_through_the_hard_link(
 
     A hard link is ONE INODE UNDER TWO NAMES. `--seed-from` buys 53 GB for
     free that way, and it is also the single mechanism by which this build
-    could destroy the published f7l0 tensor: one write through the f7l1 name
-    lands in the f7l0 file, whose sha256 the Hub, the handover and another
-    agent's hand-off all quote, and nothing would say so until somebody
-    re-verified a hash. So it is made IMPOSSIBLE rather than merely
-    unintended, and this asserts all three layers of that.
+    could destroy the published base tensor: one write through this recipe's
+    name lands in the base's file, whose sha256 the Hub, the handover and
+    another agent's hand-off all quote, and nothing would say so until
+    somebody re-verified a hash. So it is made IMPOSSIBLE rather than merely
+    unintended, and this asserts all four layers of that.
+
+    f7l2 adds the case the mechanism was never asked before: a stage that
+    RE-RUNS in a seeded directory (`ncep`). It must write its own g100 and
+    must not be able to reach g025 — which `repair_sst_channel`, the one place
+    `ncep` can still touch g025, is the live hazard for.
     """
     import argparse
     work, seed = build["work"], build["seed"]
 
     # (a) the build KNOWS which groups are shared, and refuses by name
-    assert b7.seeded_groups(work) == set(b7.BASE_GROUPS)
+    assert b7.seeded_groups(work) == set(b7.INHERITED_GROUPS)
     assert b7.seeded_groups(str(tmp_path)) == set(), \
         "a work dir with no seed must report no shared groups"
-    for g in b7.BASE_GROUPS:
+    for g in b7.INHERITED_GROUPS:
         with pytest.raises(SystemExit) as e:
             b7.refuse_if_seeded(work, g, "fill")
         assert "HARD LINK" in str(e.value) and seed in str(e.value)
@@ -1551,11 +1597,12 @@ def test_24_an_inherited_group_cannot_be_written_through_the_hard_link(
             b7.open_fill(work, g, (1, 1, 1, 1), create=True)
         with pytest.raises(SystemExit):
             b7.open_final(work, g, (1, 1, 1, 1), create=True)
-    # ...and the colour group, which this build OWNS, is not refused
-    b7.refuse_if_seeded(work, "oc025", "fill")
+    # ...and a group this build REBUILDS is not refused — it is its own file
+    for g in b7.REBUILT_GROUPS:
+        b7.refuse_if_seeded(work, g, "fill")
 
     # (b) the inode is read-only, under BOTH names
-    for g in b7.BASE_GROUPS:
+    for g in b7.INHERITED_GROUPS:
         new = b7.group_file(work, g)
         old = os.path.join(seed, f"{b7.BASE_STEM}_X_{g}.npy")
         assert os.path.samefile(old, new)
@@ -1569,6 +1616,22 @@ def test_24_an_inherited_group_cannot_be_written_through_the_hard_link(
         with pytest.raises(PermissionError):
             np.lib.format.open_memmap(b7.group_file(work, "g025"), mode="r+")
 
+    # (b2) THE ONE PLACE `ncep` CAN STILL REACH g025. `repair_sst_channel`
+    # runs at the head of the ncep stage and writes g025 channel 5 — and from
+    # f7l2 `ncep` re-runs inside a seeded dir. It must decline on the INODE,
+    # not merely on the marker it was given.
+    w3 = str(tmp_path / "repair")
+    ctx3 = b7.Ctx(argparse.Namespace(
+        work=w3, source_dir=build["src"], start=build["start"],
+        end=build["end"], force=False, stage="all", smoke=True,
+        oc_start=build["oc_start"], seed_from=seed))
+    b7.seed_from(ctx3, seed)
+    os.remove(b7.marker(w3, "repair_sst"))         # pretend the seed had none
+    g025_before = b7.sha256(b7.group_file(w3, "g025"))
+    assert b7.repair_sst_channel(ctx3) == 0
+    assert b7.marked(w3, "repair_sst")
+    assert b7.sha256(b7.group_file(w3, "g025")) == g025_before
+
     # (c) the stages that run on a seeded dir leave the SEED byte-identical
     before = {g: b7.sha256(os.path.join(seed, f"{b7.BASE_STEM}_X_{g}.npy"))
               for g in b7.BASE_GROUPS}
@@ -1580,19 +1643,11 @@ def test_24_an_inherited_group_cannot_be_written_through_the_hard_link(
         oc_start=build["oc_start"]))
     b7.run_stages(ctx, ["norm"])
     b7.stage_meta(ctx)
-    # the publish's own local half: hash every file, and compare the three
-    # inherited ones against `f7l0`'s manifest exactly as `stage_publish`
-    # does once the Hub has answered. Nothing here may touch the bytes.
-    base_manifest = {"files": [
-        {"name": f"{b7.BASE_STEM}_X_{g}.npy", "sha256": before[g]}
-        for g in b7.BASE_GROUPS]}
-    base = {}
-    for rec in base_manifest["files"]:
-        for g in b7.BASE_GROUPS:
-            if rec["name"] == f"{b7.BASE_STEM}_X_{g}.npy":
-                base[g] = rec["sha256"]
-    for g in b7.BASE_GROUPS:
-        assert b7.sha256(b7.group_file(work, g)) == base[g], \
+    # the publish's own local half: hash every file and compare the INHERITED
+    # ones against the base's manifest exactly as `stage_publish` does once
+    # the Hub has answered. Nothing here may touch the bytes.
+    for g in b7.INHERITED_GROUPS:
+        assert b7.sha256(b7.group_file(work, g)) == before[g], \
             f"{g} no longer matches {b7.BASE_RECIPE}'s manifest — the " \
             f"publish would (correctly) refuse"
     after = {g: b7.sha256(os.path.join(seed, f"{b7.BASE_STEM}_X_{g}.npy"))
@@ -1604,7 +1659,7 @@ def test_24_an_inherited_group_cannot_be_written_through_the_hard_link(
 
     # (d) A STALE INHERITED SPEC REFUSES; it does not discard and replay.
     # Discarding markers is harmless — what follows is not: the stage would
-    # re-run and write its group, and that group's bytes are f7l0's.
+    # re-run and write its group, and that group's bytes are the base's.
     w2 = str(tmp_path / "seeded")
     ctx2 = b7.Ctx(argparse.Namespace(
         work=w2, source_dir=build["src"], start=build["start"],
@@ -1612,20 +1667,19 @@ def test_24_an_inherited_group_cannot_be_written_through_the_hard_link(
         oc_start=build["oc_start"]))
     b7.seed_from(ctx2, seed)
     n_live = len(np.load(os.path.join(w2, "rg", "live.npz"))["bin_index"])
-    for stage in ("sst", "ncep"):                  # shares g025 · owns g100
+    for stage, group in (("sst", "g025"), ("occci", "oc025")):
         b7.atomic_json(os.path.join(w2, f"{stage}.spec"),
                        {"sha256": "0" * 64, "at": b7.utcnow(),
                         "spec": {"stage": stage, "recipe": "something-else"}})
         stamp = open(b7.marker(w2, stage)).read()
-        sha = b7.sha256(b7.group_file(w2, "g025" if stage == "sst" else "g100"))
+        sha = b7.sha256(b7.group_file(w2, group))
         with pytest.raises(SystemExit) as e:
             b7.stage_state_check(ctx2, stage, n_live)
         assert "INHERITED as a hard link" in str(e.value), stage
         assert "Nothing has been deleted" in str(e.value), stage
         assert b7.marked(w2, stage), f"{stage}.done was deleted anyway"
         assert open(b7.marker(w2, stage)).read() == stamp, stage
-        assert b7.sha256(
-            b7.group_file(w2, "g025" if stage == "sst" else "g100")) == sha
+        assert b7.sha256(b7.group_file(w2, group)) == sha
     assert {g: b7.sha256(os.path.join(seed, f"{b7.BASE_STEM}_X_{g}.npy"))
             for g in b7.BASE_GROUPS} == before
 
@@ -1657,10 +1711,13 @@ def _install_commit_ops(mod):
 def _publish_harness(tmp_path, monkeypatch, seeded, drift):
     """Drive `stage_publish` against a FAKE Hub: no network, tiny files.
 
-    The fake answers f7l0's manifest with the hash of our own g025 file when
-    `drift` is False and with a different hash when it is True; upload is a
-    no-op and "download back" copies the local file, so the restore check
-    passes and only the inheritance decision is exercised.
+    The fake answers the BASE's manifest with the hash of our own file when
+    `drift` is False and with a different hash for g025 when it is True;
+    upload is a no-op and "download back" copies the local file, so the
+    restore check passes and only the inheritance decision is exercised. The
+    returned `base` dict is the one `base_manifest_hashes` is patched to
+    return, so a test may mutate it after this call to model a drift on some
+    other group.
     """
     import types
     work = str(tmp_path / ("seeded" if seeded else "unseeded"))
@@ -1670,6 +1727,11 @@ def _publish_harness(tmp_path, monkeypatch, seeded, drift):
     for i, p in enumerate(files):
         with open(p, "wb") as fh:
             fh.write(bytes([i]) * 64)
+    # The npz is a REAL one, because `stage_publish` re-checks the statics out
+    # of the file it is about to upload — the last gate that a stale `.done`
+    # marker cannot skip (see test 44). Two tiny grids are all it reads.
+    np.savez(files[0], sphere=np.zeros((3, 4), np.int8),
+             elev=np.zeros((3, 4), np.float32))
     ours = {g: b7.sha256(b7.group_file(work, g)) for g in b7.BASE_GROUPS}
     base = dict(ours)
     if drift:
@@ -1710,29 +1772,41 @@ def _publish_harness(tmp_path, monkeypatch, seeded, drift):
 
 def test_25_publish_records_drift_for_unseeded_and_refuses_for_seeded(
         tmp_path, monkeypatch):
-    """The `same_as_f7l0` promise is only made by a SEEDED build.
+    """The `same_as_base` promise is only made by a SEEDED build, and only
+    about the groups it INHERITS.
 
     2026-09-13: the box holding the f7l0 seed would not start, so 7.1 was
-    rebuilt unseeded on a fresh box. Such a build never claimed its three base
-    groups were f7l0's bytes; a hash drift against f7l0's manifest is a
+    rebuilt unseeded on a fresh box. Such a build never claimed its base
+    groups were the base's bytes; a hash drift against the base manifest is a
     finding the manifest records (both hashes, per file), not a broken
     inheritance that kills the publish eight hours in. A seeded build keeps
-    the fatal check — there the bytes ARE f7l0's or something is very wrong.
+    the fatal check for the groups it inherits — there the bytes ARE the
+    base's or something is very wrong — and records, never refuses, for a
+    group the recipe deliberately REBUILDS (f7l2's g100).
     """
-    # (a) unseeded + drift: publishes, records same_as_f7l0=false for g025
+    # (a) unseeded + drift: publishes, records same_as_base=false for g025
     ctx, work, base, commits = _publish_harness(
         tmp_path, monkeypatch, False, True)
     b7.stage_publish(ctx)
     man = json.load(open(os.path.join(work, "manifest.json")))
     assert man["seeded_from_base"] is False
+    assert man["inherited_groups"] == list(b7.INHERITED_GROUPS)
+    assert man["rebuilt_groups"] == list(b7.REBUILT_GROUPS)
     recs = {r["name"]: r for r in man["files"]}
     g025 = recs[f"{b7.STEM}_X_g025.npy"]
-    assert g025["same_as_f7l0"] is False
-    assert g025["f7l0_sha256"] == base["g025"]
+    assert g025["same_as_base"] is False
+    assert g025["base_sha256"] == base["g025"]
     assert g025["base_name"] == f"{b7.BASE_STEM}_X_g025.npy"
-    for g in ("g100", "rg100"):
-        assert recs[f"{b7.STEM}_X_{g}.npy"]["same_as_f7l0"] is True
-    assert "same_as_f7l0" not in recs[f"{b7.STEM}_X_oc025.npy"]
+    assert g025["inherited"] is True
+    for g in [x for x in b7.BASE_GROUPS if x != "g025"]:
+        assert recs[f"{b7.STEM}_X_{g}.npy"]["same_as_base"] is True
+    # every group the BASE published carries the comparison; the npz does not
+    assert "same_as_base" not in recs[f"{b7.STEM}.npz"]
+    # THE MANIFEST SAYS HOW MUCH OF EACH STATIC IS REAL. f7l1's said nothing at
+    # all about `elev`, so the only way to learn the published tensor had no
+    # elevation was to download 5 MB and look.
+    assert man["static_n_finite"] == {"sphere": 12, "elev": 12}
+    assert man["static_cells"] == b7.NLAT * b7.NLON
     assert b7.marked(work, "publish")
     # ONE commit for the five files, ONE for the manifest — not six. The Hub
     # allows 256 commits per repository per hour and `upload_file` is one
@@ -1745,16 +1819,33 @@ def test_25_publish_records_drift_for_unseeded_and_refuses_for_seeded(
                                        False, False)
     b7.stage_publish(ctx)
     man = json.load(open(os.path.join(work, "manifest.json")))
-    assert all(r["same_as_f7l0"] for r in man["files"]
-               if r["name"] != f"{b7.STEM}_X_oc025.npy"
-               and not r["name"].endswith(".npz"))
-    # (c) seeded + drift: the fatal check is unchanged
+    assert all(r["same_as_base"] for r in man["files"]
+               if not r["name"].endswith(".npz"))
+    # (c) seeded + drift on an INHERITED group: the fatal check is unchanged
     ctx, work, _, _ = _publish_harness(tmp_path / "c", monkeypatch,
                                        True, True)
     with pytest.raises(SystemExit) as e:
         b7.stage_publish(ctx)
     assert "INHERITANCE BROKEN on g025" in str(e.value)
     assert not os.path.exists(os.path.join(work, "manifest.json"))
+    # (d) seeded + drift on a REBUILT group: recorded, never fatal. This is
+    # f7l2's whole shape — g100 differing from f7l1 is the POINT of the build,
+    # and a check that could not tell it from a broken inheritance would
+    # refuse the corrected tensor eight hours in.
+    ctx, work, base, _ = _publish_harness(tmp_path / "d", monkeypatch,
+                                          True, False)
+    for g in b7.REBUILT_GROUPS:
+        base[g] = "e" * 64
+    b7.stage_publish(ctx)
+    man = json.load(open(os.path.join(work, "manifest.json")))
+    recs = {r["name"]: r for r in man["files"]}
+    for g in b7.REBUILT_GROUPS:
+        r = recs[f"{b7.STEM}_X_{g}.npy"]
+        assert r["same_as_base"] is False, g
+        assert r["base_sha256"] == "e" * 64, g
+        assert r["inherited"] is False, g
+    for g in b7.INHERITED_GROUPS:
+        assert recs[f"{b7.STEM}_X_{g}.npy"]["same_as_base"] is True, g
 
 
 # ======================================================================
@@ -2982,7 +3073,8 @@ def _redo_ns(**kw):
              force=False, stage="all", smoke=False, seed_from="",
              oc_source="occci", oc_start=b7.SMOKE_OC_START, oc_preflight=False,
              years="", oc_partials_dir="", no_upload=True,
-             redo_group=[], allow_empty_rg=False, dry_run=False)
+             redo_group=[], allow_empty_rg=False, dry_run=False,
+             allow_empty_statics=False, allow_missing_years=False)
     a.update(kw)
     return argparse.Namespace(**a)
 
@@ -3123,3 +3215,369 @@ def test_41_redo_group_refuses_g025_and_an_unknown_group(unseeded):
     assert b7.marked(unseeded["work"], "norm/g025")
     with pytest.raises(SystemExit):
         b7.redo_group(ctx, "rg025")
+
+
+# ------------------------------------------------------------------ 42 -----
+def _statics_less_sources(root, drop=("etopo",)):
+    """The smoke sources with one static's source REMOVED — a box that cannot
+    reach www.ngdc.noaa.gov (ETOPO) or raw.githubusercontent.com (Natural
+    Earth), which is what family7-build #10 actually had for ETOPO: the fetch
+    guard aborted all four attempts at 0.145-0.220 MB/s."""
+    d_lo = dt.date(*(int(x) for x in b7.SMOKE_START.split("-")))
+    d_hi = dt.date(*(int(x) for x in b7.SMOKE_END.split("-")))
+    b7.make_smoke_sources(root, d_lo, d_hi)
+    for sub in drop:
+        for p in sorted(os.listdir(os.path.join(root, sub))):
+            os.remove(os.path.join(root, sub, p))
+    return root
+
+
+def test_42_static_refuses_an_empty_elev_and_never_claims_a_source(tmp_path):
+    """#10: ETOPO aborted, `elev` all NaN, `static.done` written anyway.
+
+    The three halves of that failure, each asserted separately:
+      * the stage REFUSES rather than writing 1,038,240 NaN;
+      * refusing leaves no `static.done`, so a resume re-enters the stage
+        instead of skipping it the way #11 did;
+      * a source that was not read is not recorded (f7l1's manifest has no
+        `etopo` key, and the `naturalearth` key it DOES have was written
+        unconditionally — right by luck, not by construction).
+    """
+    src = _statics_less_sources(str(tmp_path / "src"))
+    work = str(tmp_path / "work")
+    os.makedirs(work, exist_ok=True)
+    ctx = b7.Ctx(_redo_ns(work=work, source_dir=src))
+
+    with pytest.raises(SystemExit) as e:
+        b7.stage_static(ctx)
+    msg = str(e.value)
+    assert "ETOPO" in msg, msg
+    assert "--allow-empty-statics" in msg, msg
+    assert not b7.marked(work, "static"), \
+        "a stage that refused must not leave a marker a resume will trust"
+    assert not os.path.exists(os.path.join(work, "statics.npz"))
+    assert "etopo" not in ctx.sources
+    assert "naturalearth" not in ctx.sources
+
+    # ...and with the flag, the stage finishes, says so, and records exactly
+    # the sources it did read.
+    ctx2 = b7.Ctx(_redo_ns(work=work, source_dir=src,
+                           allow_empty_statics=True))
+    b7.stage_static(ctx2)
+    assert b7.marked(work, "static")
+    d = np.load(os.path.join(work, "statics.npz"))
+    assert int(np.isfinite(d["elev"]).sum()) == 0
+    assert "etopo" not in ctx2.sources
+    assert "naturalearth" in ctx2.sources          # those files WERE read
+    assert b7.static_finite(d) == {"sphere": b7.NLAT * b7.NLON, "elev": 0}
+
+
+def test_43_a_healthy_static_records_both_sources_and_its_fill(build):
+    """The positive control: the smoke build fills `elev` and says so."""
+    d = build["d"]
+    assert int(np.isfinite(np.asarray(d["elev"])).sum()) == b7.NLAT * b7.NLON
+    n = json.loads(str(np.asarray(d["static_n_finite"])))
+    assert n == {"sphere": b7.NLAT * b7.NLON, "elev": b7.NLAT * b7.NLON}
+    src = json.loads(str(np.asarray(d["sources"])))
+    assert "etopo" in src and "naturalearth" in src
+    assert "ne_10m_glaciated_areas" in src["naturalearth"]
+    assert "ne_10m_lakes" in src["naturalearth"]
+
+
+def test_44_meta_and_publish_refuse_an_empty_static_past_a_done_marker(
+        tmp_path):
+    """#11: `static.done` was a day old, the stage was skipped, and the npz
+    shipped. A marker cannot be trusted to mean the stage SUCCEEDED, so the
+    gate that matters sits where the bytes are published, not where they are
+    made (ml/CLAUDE.md §0.2)."""
+    good = {"sphere": np.zeros((4, 5), np.int8),
+            "elev": np.zeros((4, 5), np.float32)}
+    assert b7.check_statics(good) == {"sphere": 20, "elev": 20}
+
+    for bad, who in ((dict(good, elev=np.full((4, 5), np.nan, np.float32)),
+                      "elev"),
+                     (dict(good, sphere=np.full((4, 5), 7, np.int8)),
+                      "sphere")):
+        with pytest.raises(SystemExit) as e:
+            b7.check_statics(bad)
+        assert who in str(e.value), str(e.value)
+        assert "static.done" in str(e.value)
+
+
+def test_44b_publish_refuses_before_it_uploads_anything(tmp_path, monkeypatch):
+    """The gate sits BEFORE the first byte leaves the box, so a bad tensor
+    costs a message rather than 61 GB of upload and a Hub folder to clean."""
+    ctx, work, _, commits = _publish_harness(tmp_path, monkeypatch, False,
+                                             False)
+    np.savez(os.path.join(work, b7.STEM + ".npz"),
+             sphere=np.zeros((3, 4), np.int8),
+             elev=np.full((3, 4), np.nan, np.float32))
+    with pytest.raises(SystemExit) as e:
+        b7.stage_publish(ctx)
+    assert "elev" in str(e.value)
+    assert commits == [], "nothing may be uploaded once the check has failed"
+    assert not b7.marked(work, "publish")
+    assert not os.path.exists(os.path.join(work, "manifest.json"))
+
+
+# ------------------------------------------------------------------ 45 -----
+def test_45_the_two_log_channels_are_evaluated_in_float64():
+    """g100's `log_prate` / `log_swe` must not depend on the SIMD target.
+
+    f7l0 and f7l1 were built from byte-identical NCEP files and 13 of the 15
+    g100 channels came out byte-identical; `log_prate` and `log_swe` — the only
+    two channels with a transcendental in their transform — differed in 1-2
+    cells per bin at one float16 ULP. `f3.interp2_nan` returns FLOAT32, so
+    `np.log1p` was being evaluated on a float32 array, and float32 log1p is not
+    correctly rounded: the answer depends on the numpy build and on the
+    dispatched SIMD loop. Every assertion here is EXACT (ml/CLAUDE.md §4.9),
+    and the first one fails on the old expression.
+    """
+    rng = np.random.default_rng(20260914)
+    x32 = (rng.random(200_000).astype(np.float32) * 10.0)
+
+    # (a) the FIX: the transform is the correctly rounded double, whatever the
+    #     input dtype is. `np.log1p(np.maximum(x32 * s, 0.0))` — the old
+    #     expression — returns a FLOAT32 array and does not satisfy this.
+    for scale in (1.0, 86400.0):
+        got = b7.log1p_channel(x32, scale)
+        assert got.dtype == np.float64
+        want = np.log1p(np.maximum(x32.astype(np.float64) * scale, 0.0))
+        assert np.array_equal(got, want)
+        old = np.log1p(np.maximum(x32 * np.float32(scale), np.float32(0.0)))
+        assert old.dtype == np.float32, \
+            "this is the expression the builder used to evaluate"
+
+    # (b) the MECHANISM, measured rather than asserted: the two paths really do
+    #     disagree, and often enough to move a float16 a few times per g100
+    #     bin. If some future numpy makes float32 log1p correctly rounded this
+    #     stops being a live hazard — but (a) still holds, so the guard does
+    #     not become a false alarm either way.
+    a32 = np.log1p(x32)
+    a64 = np.log1p(x32.astype(np.float64)).astype(np.float32)
+    ulp = (a32.view(np.uint32).astype(np.int64)
+           - a64.view(np.uint32).astype(np.int64))
+    n_diff = int((ulp != 0).sum())
+    mu, sd = np.float32(0.6), np.float32(0.9)
+    flips = int((((a32 - mu) / sd).astype(np.float16).view(np.uint16)
+                 != ((a64 - mu) / sd).astype(np.float16).view(np.uint16)).sum())
+    print(f"float32 vs float64 log1p: {n_diff}/{x32.size} values differ "
+          f"(max {int(np.abs(ulp).max())} ULP), {flips} of them flip the "
+          f"stored float16 = {65160 * flips / x32.size:.1f} cell(s) per "
+          f"65,160-cell g100 bin")
+
+    # (c) NaN and the clamp survive the cast — the channel's missing token and
+    #     its "a negative rate is a fill leaking through" rule.
+    edge = np.array([np.nan, -1.0, 0.0, 1e-9, 5.0], np.float32)
+    out = b7.log1p_channel(edge, 86400.0)
+    assert np.isnan(out[0])
+    assert out[1] == 0.0 and out[2] == 0.0          # clamped, log1p(0) = 0
+    assert np.isfinite(out[3:]).all() and (out[3:] > 0).all()
+
+
+def test_45b_the_ncep_stage_uses_it(build):
+    """...and the stage really routes both channels through that function.
+
+    This is a WIRING check, not the discriminator: it computes its expectation
+    with `log1p_channel` too, so it passes whatever that function does inside.
+    Test 45(a) is what fails on the old float32 expression. Both are needed —
+    45(a) pins the arithmetic, this pins that `stage_ncep` calls it at all.
+    """
+    d, src = build["d"], build["src"]
+    bins = [int(b) for b in np.asarray(d["bin_index"])]
+    lat1, lon1 = b7.grid100()
+    p0 = os.path.join(src, "ncep", b7.NCEP_FILES["air"] + ".2010.nc")
+    wy = f3.lin_weights(_gauss_axis(p0, "lat"), lat1)
+    wx = f3.lin_weights(_gauss_axis(p0, "lon"),
+                        np.where(lon1 < 0, lon1 + 360.0, lon1),
+                        wrap_period=360.0)
+    chosen = None
+    for b in bins:
+        days = set(days_of_bin(b))
+        if gauss_bin_mean(p0, "air", days)[1] >= b7.MIN_DAYS:
+            chosen = (b, days)
+            break
+    assert chosen
+    b, days = chosen
+    row = bins.index(b)
+    for ch, var, scale in ((8, "prate", 86400.0), (9, "weasd", 1.0)):
+        native = gauss_bin_mean(
+            os.path.join(src, "ncep", b7.NCEP_FILES[var] + ".2010.nc"),
+            var, days)[0]
+        want = b7.log1p_channel(f3.interp2_nan(native, wy, wx), scale)
+        model = through_f16(want, d, "g100", ch)
+        got = unz(d, "g100", ch)[row]
+        m = np.isfinite(model)
+        assert m.any()
+        assert np.array_equal(np.asarray(got, np.float32)[m],
+                              np.asarray(model, np.float32)[m]), \
+            f"{b7.CHAN_G100[ch]} is not the float64 log1p rounded once"
+
+
+def _gauss_axis(p, name):
+    import netCDF4 as ncdf
+    ds = ncdf.Dataset(p)
+    try:
+        return np.asarray(ds.variables[name][:], np.float64)
+    finally:
+        ds.close()
+
+
+# ------------------------------------------------------------------ 46 -----
+def test_46_sst_never_marks_a_year_it_could_not_read(tmp_path, monkeypatch):
+    """f7l0's 1989 hole: `sst.day.mean.1989.nc` could not be fetched, the year
+    was marked COMPLETE, and 73 pentads of `sst`/`sea_ice` stayed NaN through
+    every resume. The marker may only UNDER-claim (ml/CLAUDE.md §5.21)."""
+    src = str(tmp_path / "src")
+    d_lo = dt.date(*(int(x) for x in b7.SMOKE_START.split("-")))
+    d_hi = dt.date(*(int(x) for x in b7.SMOKE_END.split("-")))
+    b7.make_smoke_sources(src, d_lo, d_hi)
+    work = str(tmp_path / "work")
+    os.makedirs(work, exist_ok=True)
+    ctx = b7.Ctx(_redo_ns(work=work, source_dir=src))
+
+    dead = d_lo.year
+    real = b7.oisst_paths
+
+    def patched(c, year):
+        if year == dead:
+            return (None, None), False
+        return real(c, year)
+
+    monkeypatch.setattr(b7, "oisst_paths", patched)
+    with pytest.raises(SystemExit) as e:
+        b7.stage_sst(ctx)
+    msg = str(e.value)
+    assert str(dead) in msg and "--allow-missing-years" in msg, msg
+    assert not b7.marked(work, "sst"), msg
+    assert not b7.marked(work, f"sst/{dead}"), \
+        "the year that could not be read must stay unmarked, or the hole " \
+        "survives every resume — which is exactly how f7l0 kept 1989 empty"
+
+    # the opt-in exists, is loud, and writes down what it gave up
+    ctx2 = b7.Ctx(_redo_ns(work=work, source_dir=src,
+                           allow_missing_years=True))
+    b7.stage_sst(ctx2)
+    assert b7.marked(work, "sst")
+    assert b7.read_json(os.path.join(work, "counts.json"),
+                        {}).get("sst_missing_years") == [dead]
+
+
+# ------------------------------------------------------------------ 47 -----
+def test_47_a_seeded_dir_reruns_exactly_static_and_ncep(build, tmp_path,
+                                                        capsys):
+    """f7l2's whole shape, pinned: in a directory seeded from a FINISHED base
+    build, `static` and `ncep` RE-RUN and every other fill stage is skipped.
+
+    Three independent mechanisms have to agree for that, and each one alone is
+    silent when it is wrong — which is why all three are asserted separately
+    rather than inferred from the end state:
+
+      1. no `.done` marker and no `.spec` is copied for a re-run stage
+         (`SEED_MARKERS` / the spec loop, both derived from
+         `INHERITED_STAGES`);
+      2. no PER-ITEM state is copied either — `SEED_DIRS` used to name `ncep`
+         literally, and `<seed>/ncep/1982.done … 2024.done` coming across
+         would make `stage_ncep` skip every year it was re-run to redo and
+         publish a g100 of pure NaN, green;
+      3. `norm` re-enters for the rebuilt group ALONE — `norm.npz` and
+         `norm/` are copied wholesale, so the base's `norm_g100`,
+         `count_g100` and `norm/g100.done` have to be pruned or the z-score
+         never runs; and g025 must NOT be re-entered, because its pass is in
+         place and redoing it squares the transform.
+    """
+    import argparse
+    import glob as _glob
+    seed = build["seed"]
+    work = str(tmp_path / "l2")
+    ctx = b7.Ctx(argparse.Namespace(
+        work=work, source_dir=build["src"], start=build["start"],
+        end=build["end"], force=False, stage="all", smoke=True,
+        oc_start=build["oc_start"], seed_from=seed, redo_group=[],
+        allow_empty_rg=False, allow_empty_statics=False,
+        allow_missing_years=False, oc_source="occci", no_upload=True,
+        years="", oc_partials_dir="", dry_run=False, oc_preflight=False))
+    b7.seed_from(ctx, seed)
+
+    rerun = [s for s in b7.STAGES if s not in b7.INHERITED_STAGES
+             and s not in ("norm", "meta", "publish")]
+    assert sorted(rerun) == ["ncep", "static"], rerun
+
+    # (1) markers and specs
+    for s in b7.INHERITED_STAGES:
+        assert b7.marked(work, s), f"{s} should have been inherited"
+        assert os.path.exists(os.path.join(work, f"{s}.spec")), s
+    for s in rerun:
+        assert b7.marked(seed, s), f"the seed must itself have run {s}"
+        assert not b7.marked(work, s), \
+            f"{s}.done was copied — the stage would be skipped and f7l1's " \
+            f"defect would be republished exactly as run #11 did"
+        assert not os.path.exists(os.path.join(work, f"{s}.spec")), s
+
+    # (2) per-item state, pinned at BOTH levels. The derived `SEED_DIRS` is
+    # asserted directly because the end state below is ALSO cleared by
+    # `redo_group` (the rebuilt-group prune) — two independent mechanisms,
+    # deliberately, and a test that only looked at the end state would go on
+    # passing if the derivation silently regressed to naming `ncep`.
+    assert "ncep" not in b7.SEED_DIRS and "static" not in b7.SEED_DIRS
+    assert all(s in b7.SEED_DIRS for s in ("glorys", "sst", "rg", "occci"))
+    assert "norm" in b7.SEED_DIRS
+    assert "statics.npz" not in b7.SEED_FILES, \
+        "the base's all-NaN statics.npz must not be copied into an f7l2 dir"
+    assert "truth.npz" in b7.SEED_FILES, "truth IS inherited"
+    assert "static" not in b7.SEED_MARKERS and "ncep" not in b7.SEED_MARKERS
+    assert os.path.isdir(os.path.join(seed, "ncep")), "seed has no ncep state"
+    assert not _glob.glob(os.path.join(work, "ncep", "*")), \
+        "per-year ncep markers came across; every year would be skipped"
+    for s in ("glorys", "sst", "rg"):
+        assert _glob.glob(os.path.join(work, s, "*")), \
+            f"{s}'s per-item state did NOT come across — it would re-run"
+
+    # ...and the base's statics.npz did not come across either, so a
+    # `--stage publish` that never re-enters `static` cannot find an all-NaN
+    # `elev` sitting there looking finished.
+    assert os.path.exists(os.path.join(seed, "statics.npz"))
+    assert not os.path.exists(os.path.join(work, "statics.npz"))
+
+    # (3) the groups, and what `norm` still has to do
+    assert b7.seeded_groups(work) == set(b7.INHERITED_GROUPS)
+    for g in b7.INHERITED_GROUPS:
+        assert os.path.samefile(b7.group_file(work, g),
+                                os.path.join(seed,
+                                             f"{b7.BASE_STEM}_X_{g}.npy"))
+    for g in b7.REBUILT_GROUPS:
+        assert not os.path.exists(b7.group_file(work, g)), \
+            f"{g}'s float16 file exists before its stage has run"
+    norms = np.load(os.path.join(work, "norm.npz"))
+    for g in b7.INHERITED_GROUPS:
+        assert f"norm_{g}" in norms.files, g
+    for g in b7.REBUILT_GROUPS:
+        assert f"norm_{g}" not in norms.files, \
+            f"the base's norm_{g} survived the seed — `norm` would skip it"
+        assert not b7.marked(work, f"norm/{g}"), g
+    assert b7.norm_pending(ctx) == list(b7.REBUILT_GROUPS)
+
+    # and now actually run it: the skips and the re-runs, from the log
+    capsys.readouterr()
+    b7.run_stages(ctx, [s for s in b7.STAGES if s != "publish"])
+    log = capsys.readouterr().out
+    for s in b7.INHERITED_STAGES:
+        assert f"stage {s}: already done — skipping" in log, s
+    for s in rerun:
+        assert f"=== stage {s} ===" in log, s
+        assert b7.marked(work, s), s
+    assert f"norm: {list(b7.REBUILT_GROUPS)}" in log, log[-2000:]
+
+    # the seed is untouched and the rebuilt group is this build's own file
+    for g in b7.REBUILT_GROUPS:
+        assert os.path.exists(b7.group_file(work, g))
+        assert not os.path.samefile(
+            b7.group_file(work, g),
+            os.path.join(seed, f"{b7.BASE_STEM}_X_{g}.npy"))
+    d = load_tensor(os.path.join(work, b7.STEM + ".npz"))
+    try:
+        assert str(d["recipe"]) == "f7l2"
+        assert int(np.isfinite(np.asarray(d["elev"])).sum()) > 0, \
+            "the re-run static stage did not fill `elev`"
+    finally:
+        d.close()

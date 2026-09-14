@@ -84,6 +84,15 @@ ORIGIN = "https://blauewelt.github.io"
 # yet — a script that could only describe the newer one would be unable to
 # regenerate the index the app is currently serving.
 RECIPES = {
+    # f7l2 is the CORRECTED build (E-077 §10): f7l1's `elev` was published as
+    # 1,038,240 NaN and its g100 log channels did not reproduce. Its entry is
+    # here so `--recipe f7l2` works the moment the folder exists; the DEFAULT
+    # below stays f7l1 until it does, because this script's job is to describe
+    # what the app is actually being served, and a default pointing at an
+    # unpublished folder would regenerate an index of nothing.
+    "f7l2": dict(stem="family7_global025_pentad_l2",
+                 groups=("g025", "g100", "rg100", "oc025"),
+                 plan="ml/plans/E077_family7_ocean_colour.md"),
     "f7l1": dict(stem="family7_global025_pentad_l1",
                  groups=("g025", "g100", "rg100", "oc025"),
                  plan="ml/plans/E077_family7_ocean_colour.md"),
@@ -582,6 +591,28 @@ def build_from_hub(trust_manifest, out_index, out_sphere, out_elev):
             grid_block(len(lats), len(lons), lats[0], lons[0],
                        float(lats[1] - lats[0])),
             extra=extra, bin_first=group_bin_first(meta, g))
+
+    # THE APP'S TWO STATIC GRIDS ARE CHECKED BEFORE THEY ARE WRITTEN. On
+    # 2026-09-14 this function turned f7l1's all-NaN `elev` into
+    # `data/family7_elev.json` — 1,038,240 `null`s, committed to main, so the
+    # globe's "Surface elevation" layer paints nothing and the pixel card's
+    # elevation row is empty for every point on Earth. Nothing between the
+    # builder and the browser asked whether the grid had a value in it
+    # (ml/CLAUDE.md §0.2). A writer that cannot tell an empty map from a map
+    # is the last place that silence becomes a user-visible bug.
+    for key, dest in (("sphere", out_sphere), ("elev", out_elev)):
+        a = np.asarray(meta[key])
+        n = (int(np.isfinite(a).sum()) if a.dtype.kind == "f"
+             else int(np.isin(a, (0, 1, 2, 3)).sum()))
+        print(f"  static {key}: {n:,}/{a.size:,} value(s)")
+        if n == 0:
+            raise SystemExit(
+                f"{key} in the published npz has ZERO values — refusing to "
+                f"write {dest}. The app would show an empty layer and a blank "
+                f"pixel-card row with nothing anywhere saying why. Fix the "
+                f"TENSOR (ml/build_family7.py --stage static, then meta and "
+                f"publish) and re-run this; the index is a view of the npz "
+                f"and cannot repair it.")
 
     write_json(out_sphere, packed_class_grid(
         np.asarray(meta["sphere"]), meta["lats"], meta["lons"], 0.25,
