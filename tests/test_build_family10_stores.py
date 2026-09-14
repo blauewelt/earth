@@ -1565,3 +1565,30 @@ def test_slatrack_read_nc_folds_a_sample_at_exactly_180_east(tmp_path, built):
     assert counts["kept"] == 3
     assert lon.min() >= -180.0 and lon.max() < 180.0
     assert lon[0] == -180.0
+
+
+def test_rows_pack_keeps_lon_below_180_after_the_float32_cast(tmp_path, built):
+    """A float64 longitude of 179.99999 wraps to itself and then ROUNDS to
+    180.0 in the float32 column — which is what the 1994 altimeter year did
+    on 2026-09-14, one hour after the float64-only fold had landed. The
+    invariant is on the column's dtype, so the pack re-wraps after the cast."""
+    import netCDF4 as ncdf
+    ctx, _ = built["slatrack"]
+    p = tmp_path / "edge32.nc"
+    ds = ncdf.Dataset(p, "w")
+    ds.createDimension("time", 3)
+    t = ds.createVariable("time", "f8", ("time",)); t.units = "days since 1950-01-01 00:00:00"
+    t[:] = [11690.5, 11690.6, 11690.7]
+    ds.createVariable("latitude", "f8", ("time",))[:] = [0.0, 10.0, -10.0]
+    # 179.999999 is < 180 in float64 and == 180.0 once cast to float32;
+    # -180.0000001 is < -180 in float64 and == -180.0 in float32 after the wrap.
+    ds.createVariable("longitude", "f8", ("time",))[:] = [179.999999, 539.999999, -180.0000001]
+    for v in ("sla_filtered", "sla_unfiltered", "mdt"):
+        ds.createVariable(v, "f8", ("time",))[:] = [0.1, 0.2, 0.3]
+    ds.close()
+    rows, counts = b10.SLATrackAdapter()._read_nc(ctx, str(p), "cmems_test")
+    assert counts["kept"] == 3
+    lon = rows["lon"]
+    assert lon.dtype == np.float32
+    assert np.all((lon >= np.float32(-180.0)) & (lon < np.float32(180.0))), lon
+    assert lon[0] == np.float32(-180.0) and lon[1] == np.float32(-180.0)

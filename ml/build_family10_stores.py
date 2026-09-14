@@ -1960,11 +1960,20 @@ def _pack(t, lat, lon, values, platform, qc, C):
         raise ValueError(f"bin {b.min()}..{b.max()} does not fit int16 — the "
                          f"axis has outgrown the column's dtype")
     v = np.asarray(values, np.float64).reshape(n, C)
+    # The [-180, 180) invariant has to hold in the COLUMN's dtype, not in the
+    # float64 it was wrapped in: a source longitude of 179.99999 wraps to
+    # itself in float64 and then ROUNDS to 180.0 when cast to float32, and
+    # check_store (rightly) refuses the store. Measured on the 1994 altimeter
+    # year, 2026-09-14, after the float64-only fold had already been added —
+    # so the wrap is applied once more after the cast, in float32, where
+    # 180.0f - 360 is exactly -180.0f.
+    lo32 = f10.wrap_lon(lon).astype(np.float32)
+    lo32 = np.where(lo32 >= np.float32(180.0), lo32 - np.float32(360.0), lo32)
     return {
         "bin": b.astype(np.int16),
         "time_days": td.astype(np.float32),
         "lat": np.asarray(lat, np.float64).astype(np.float32),
-        "lon": f10.wrap_lon(lon).astype(np.float32),
+        "lon": lo32.astype(np.float32),
         "values": v.astype(np.float16),
         "platform": np.asarray(platform, np.int64),
         "qc": np.asarray(qc, np.uint8),
