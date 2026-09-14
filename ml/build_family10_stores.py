@@ -70,6 +70,7 @@ import hashlib
 import io
 import json
 import os
+import re
 import shutil
 import sys
 import tempfile
@@ -1198,13 +1199,44 @@ class SLATrackAdapter(SourceAdapter):
         else:
             raw = http_bytes(CMEMS_STAC)
             js = json.loads(raw)
+            base = CMEMS_STAC.rsplit("/", 1)[0]
             for ln in js.get("links", []):
                 if ln.get("rel") == "item" and ln.get("href", "").endswith(
                         "/dataset.stac.json"):
-                    out.append({"id": ln["href"].split("/")[0],
-                                "title": ln.get("title", "")})
+                    mid = ln["href"].split("/")[0]
+                    # Each mission's item states WHEN it flew. Read it once
+                    # here (public, no login) so the fetch can skip a mission
+                    # that was not in orbit for the year asked and clip the
+                    # ones that were: asking the toolbox for a window outside
+                    # a dataset's coordinates raises CoordinatesOutOfDataset-
+                    # Bounds and would fail the whole year (measured on the
+                    # first probe, 2026-09-14: Saral/AltiKa geodetic covers
+                    # 2015-03-31 -> 2026-01-16, and January 2015 refused).
+                    item = json.loads(http_bytes(f"{base}/{ln['href']}"))
+                    pr = item.get("properties") or {}
+                    out.append({"id": mid, "title": ln.get("title", ""),
+                                "start": pr.get("start_datetime"),
+                                "end": pr.get("end_datetime")})
         ctx._cmems_missions = out
         return out
+
+    @staticmethod
+    def _split_id(mid):
+        """`..._PT1S_202411` -> (`..._PT1S`, `202411`). The STAC ids carry
+        the version as a suffix; the toolbox wants it as its own argument
+        and warns when it is left inside the id."""
+        m = re.match(r"^(.*)_(\d{6})$", mid)
+        return (m.group(1), m.group(2)) if m else (mid, None)
+
+    @staticmethod
+    def _mission_window(m, lo, hi):
+        """The part of [lo, hi] this mission actually flew, or None."""
+        if not isinstance(m, dict) or not m.get("start"):
+            return lo, hi                      # a fixture, or no metadata
+        ms = dt.date.fromisoformat(m["start"][:10])
+        me = dt.date.fromisoformat(m["end"][:10]) if m.get("end") else hi
+        a, b = max(lo, ms), min(hi, me)
+        return (a, b) if a <= b else None
 
     def index(self, ctx):
         ms = self.missions(ctx)
@@ -1242,7 +1274,10 @@ class SLATrackAdapter(SourceAdapter):
             self._require_credentials()
         for m in self.missions(ctx):
             mid = m["id"] if isinstance(m, dict) else str(m)
-            paths, owned = self._files(ctx, mid, lo, hi, year)
+            win = self._mission_window(m, lo, hi)
+            if win is None:
+                continue                       # not in orbit this year
+            paths, owned = self._files(ctx, mid, win[0], win[1], year)
             for p in paths:
                 try:
                     rows, counts = self._read_nc(ctx, p, mid)
@@ -1267,8 +1302,9 @@ class SLATrackAdapter(SourceAdapter):
         os.makedirs(out, exist_ok=True)
         # The toolbox reads the credentials from the environment; nothing here
         # passes them, prints them, or writes them anywhere.
+        did, ver = self._split_id(mid)
         copernicusmarine.subset(
-            dataset_id=mid, variables=list(CMEMS_VARS),
+            dataset_id=did, dataset_version=ver, variables=list(CMEMS_VARS),
             start_datetime=f"{lo:%Y-%m-%d}T00:00:00",
             end_datetime=f"{hi:%Y-%m-%d}T23:59:59",
             output_directory=out, output_filename=f"{mid}_{year}.nc",

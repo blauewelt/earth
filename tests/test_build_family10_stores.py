@@ -838,3 +838,19 @@ def test_parse_stages_accepts_a_comma_list_in_fixed_order():
         b10.parse_stages("index,assemble")
     with pytest.raises(SystemExit):
         b10.parse_stages("")
+
+
+def test_slatrack_mission_window_skips_and_clips():
+    A = b10.SLATrackAdapter
+    lo, hi = dt.date(2015, 1, 1), dt.date(2015, 12, 31)
+    m = {"id": "x", "start": "2015-03-31T00:25:42Z", "end": "2026-01-16T23:23:15Z"}
+    assert A._mission_window(m, lo, hi) == (dt.date(2015, 3, 31), hi)
+    assert A._mission_window(m, dt.date(2015, 1, 1), dt.date(2015, 1, 7)) is None
+    ended = {"id": "y", "start": "1992-01-01T00:00:00Z", "end": "1996-06-02T00:00:00Z"}
+    assert A._mission_window(ended, lo, hi) is None
+    assert A._mission_window({"id": "fixture"}, lo, hi) == (lo, hi)
+    assert A._split_id("cmems_obs-sl_glo_phy-ssh_my_al-l3-duacs_PT1S_202411") == (
+        "cmems_obs-sl_glo_phy-ssh_my_al-l3-duacs_PT1S", "202411")
+    assert A._split_id("cmems_obs-sl_glo_phy-ssh_my_j3g-l3-duacs_PT1S-i_202506") == (
+        "cmems_obs-sl_glo_phy-ssh_my_j3g-l3-duacs_PT1S-i", "202506")
+    assert A._split_id("plain") == ("plain", None)
