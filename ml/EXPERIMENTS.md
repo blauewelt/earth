@@ -288,10 +288,18 @@ a 250 GB box. Falsifier at dispatch: the assembled store fails `check_store`
 (sortedness, CSR, bounds) or its per-year counts disagree with the lanes'
 `done.json` sums; either voids the store, not the parts. Family 7.1 — the global
 gridded tensor with the ocean-colour group `oc025` added (recipe `f7l1`,
-E-077) — has still not published, its manifest answering 404 as of 08:05Z on
-2026-09-14, so the registry's tier-G half describes `f7l0` (the same tensor
-without ocean colour) and says so in a stated fallback note rather than
-silently describing a different tensor.
+E-077) — had still not published when the registry was written, its manifest
+answering 404 as of 08:05Z on 2026-09-14, so **the registry now on the Hub**
+describes `f7l0` (the same tensor without ocean colour) in its tier-G half and
+says so in a stated fallback note rather than silently describing a different
+tensor. *Superseded 2026-09-14 20:20Z:* family 7.1 has since published twice
+(`f7l1` 15:19Z, the corrected `f7l2` 19:58Z), the builder's preference list now
+reads `f7l2` → `f7l1` → `f7l0`, and a local run produces the registry E-079 §2
+asks for — **8 groups, 4 tier-G at recipe `f7l2` with the manifest's four file
+hashes and no fallback note**, plus the same four tier-P stores. It is NOT on
+the Hub: `--publish` needs a Hugging Face WRITE token, which this sandbox does
+not hold. Re-run with the token to replace the `f7l0` copy; `slatrack` is still
+the one group missing from either.
 
 Cost: **$0 for the three stores that ran** (GitHub-hosted runners, ~20 + ~20 +
 85 minutes) plus minutes for the registry — against the estimate at dispatch
@@ -310,7 +318,7 @@ Evidence for this RESULT: [the family-10 verification of 2026-09-14](https://bla
 ---
 
 <a id="e-077"></a>
-## E-077 · Family 7.1 — ocean colour joins the global tensor as a fourth group (recipe `f7l1`) — BUILT AND PUBLISHED 2026-09-14 (unseeded rebuild)
+## E-077 · Family 7.1 — ocean colour joins the global tensor as a fourth group (recipes `f7l1`, then `f7l2`) — BUILT AND PUBLISHED 2026-09-14; CORRECTED BUILD `f7l2` PUBLISHED THE SAME DAY
 
 **E-077 · Add the observed surface chlorophyll-a field to the family-7 global
 tensor as a fourth channel group, `oc025`, WITHOUT rebuilding the three groups
@@ -398,7 +406,8 @@ same pass: the published f7l1 npz carries `elev` as ALL NaN** (0 finite of
 the ETOPO fetch was lost on the box the same way rg100's SIO fetch was in
 #10, and no guard caught the static. Consumers take `elev` from the f7l0
 npz (a grid-only static, identical by construction) until the npz is
-republished with the statics stage re-run.
+republished with the statics stage re-run — **which it was, four hours
+later: see "RESULT 2" below, and take `f7l2`.**
 
 - [Hub folder `tensors/family7_global025_pentad_l1`](https://huggingface.co/datasets/chfrank/earth-tensors/tree/main/tensors/family7_global025_pentad_l1) · [the npz](https://huggingface.co/datasets/chfrank/earth-tensors/resolve/main/tensors/family7_global025_pentad_l1/family7_global025_pentad_l1.npz) (5.4 MB; manifest sha256 `91a8d86f…` verified from the sandbox) · g025 45.67 GB · g100 6.14 GB · rg100 1.05 GB · oc025 8.29 GB. Index: `data/family7_index.json` (recipe f7l1, `--trust-manifest`: the build job restore-verified all five files; the sandbox re-verified the npz and one range read).
 
@@ -448,7 +457,114 @@ $1.7**, plus storage; hosted runners free; ~35 dispatches across six
 workflows, eleven of them family7-build. Against the stub's 4–5 h, $1.5–2 —
 about right in money, two days in calendar time, all of it in the inputs.
 
-Runs: [#10 (the full unseeded build, void rg100)](https://github.com/blauewelt/earth/actions/runs/34846257797) · [#11 (rg100 rebuilt in place, re-published)](https://github.com/blauewelt/earth/actions/runs/34859237016).
+### RESULT 2 (2026-09-14 19:58Z) — `f7l2`, the corrected build: the statics are real and `g100` reproduces
+
+**#12 (E-077 f7l2 — g100 + statics rebuilt on the f7l1 seed) · `params` n/a
+(nothing trains — a DATA build) · `stage` data-build · `data`
+`family7_global025_pentad_l2` · `arch` n/a · `steps×batch` n/a · `resume`
+seed-from the finished `f7l1` work directory (`g025`, `rg100`, `oc025`
+hard-linked, `g100` rebuilt).**
+
+Two defects of `f7l1` made a second build worth its hour. **(a) `elev` was
+published as 1,038,240 NaN** — the ETOPO 2022 elevation file is served from
+one host with no mirror, the box read it at 0.145–0.220 MB/s, the fetch
+throughput guard (a 1.00 MB/s floor, sized for the 45 GB OISST streams)
+aborted all four attempts, and `stage_static` then filled the array with NaN,
+recorded no `etopo` source, and wrote its done-marker anyway. The globe's
+"Surface elevation" layer has been blank for every point on Earth since.
+**(b) `g100`'s two logarithmic channels did not reproduce** — `np.log1p` was
+being evaluated on float32, which is not correctly rounded, so the same NCEP
+files gave different bytes on different machines. Neither is a science
+finding; both are the kind of thing that makes a tensor unre-derivable.
+Fixes, all on `f25f1a6`: the static stage REFUSES rather than degrading
+(`--allow-empty-statics` to opt out) and leaves no marker when it does; the
+ETOPO floor is sized from the file (0.10 MB/s, 2.6 h for the whole 933 MB)
+instead of from the streams; `log1p_channel` evaluates in float64; `meta` and
+`publish` refuse an empty static independently of any marker; `stage_sst` and
+`stage_ncep` no longer mark a year they could not read.
+
+**What the build did.** Seeded from the finished `f7l1` work directory on the
+same box (`gpu-box-46694776`, Vast 50928407): `g025`, `rg100` and `oc025`
+hard-linked (one inode, zero new bytes), the `glorys`/`sst`/`rg`/`occci`/
+`truth` markers copied, `g100`'s normalisation and stage state cleared. Stage
+timings: **ncep 1,227 s** (560 files from the Hub mirror of NOAA PSL),
+**static 4,025 s** — the ETOPO fetch took **three attempts**, two of them
+dying on an `IncompleteRead`, at a probed NGDC rate of **2.99 MB/s**, an order
+of magnitude better than the day before and still 67 minutes — **norm 30 s**
+(g100 alone), **meta 9 s**, **publish 551 s** with **5 files verified by
+restore**. Job 18:17:30 → 19:58:46 = **1 h 41 m** on a $0.31/h box ≈ **$0.52**,
+well inside "≲ $1".
+
+**What the manifest says, and what the sandbox verified against the bytes.**
+
+| | |
+|---|---|
+| `static_n_finite` | `{"elev": 1038240, "sphere": 1038240}` — both statics complete, in the npz AND the manifest |
+| `sphere` histogram | 702,642 ocean · 226,495 land · 107,074 ice sheet · 2,029 inland water — identical to `f7l1`'s |
+| `elev` | 1,038,240 finite, −9,687.95 m … 6,004.33 m, and **bit-identical to `f7l0`'s array**, compared cell by cell |
+| inherited | `g025`, `rg100`, `oc025`: `same_as_base: true`, sha256 equal to `f7l1`'s |
+| rebuilt | `g100`: `same_as_base: false`, `79c8075e…` against `f7l1`'s `ba59ed7c…` |
+| npz | `0837c450…` (5,412,430 bytes), 41 keys, `recipe == "f7l2"`, builder `f25f1a6` |
+| the four `norm_*` arrays | **all four bit-identical to `f7l1`'s, `norm_g100` included** |
+
+That last row is worth stating plainly because §10.4 of the plan predicted the
+opposite: `norm_g100` is recomputed from the rebuilt group and was expected to
+move. It did not, and that is the right answer — ten changed float16 cells per
+bin out of 2.82 billion observed values cannot move a float32 mean or standard
+deviation. Only five keys of the npz differ from `f7l1`'s at all (`recipe`,
+`builder_git_sha`, `built_at`, `sources`, `elev`), plus the new
+`static_n_finite`.
+
+**The `g100` difference, range-read from the Hub on five bins** (200, 1500,
+2411, 3000, 3141; one bin is 181 × 360 × 15 float16 = 1.95 MB): thirteen of
+fifteen channels **byte-identical** to both `f7l1` and `f7l0` in every bin.
+`log_prate` differs from `f7l1` in **9, 9, 9, 12, 0** cells of 65,160 and
+`log_swe` in **1, 0, 2, 0, 0**; every difference is **exactly one float16
+step** (≤ 4.9e-4 in the stored z ≈ 4e-5 mm/day), no NaN-payload or
+signed-zero differences, and bin 3141 — the record's one-day last bin — is
+identical in every channel. Note the direction: `f7l0` and `f7l1` differ from
+EACH OTHER in only **1–3** `log_prate` cells per bin, so the float64 fix moves
+about four times as many cells as the drift it removes. That is expected — the
+two float32 builds were both wandering near the correctly rounded value and
+`f7l2` is at it — but it means §10.1's estimate of "≈ 2 cells per bin" sized
+the float32↔float32 drift, not the float32→float64 correction.
+
+**A per-channel, per-bin finite-count scan of the whole `f7l1` record** (run
+in the sandbox by streaming each group's `.npy` and counting finite cells per
+bin per channel; the bytes are `f7l2`'s too for the three inherited groups)
+found **no hole the sources do not have**:
+
+- `g025`: the five GLORYS channels are empty for bins 0–804 and full from bin
+  805 — GLORYS begins 1993-01-01, and that is the archive, not a gap. `sst` is
+  full in every one of the other 3,141 bins (703,902 cells). `sea_ice` is
+  empty in **433–439** (1987-12-06 → 1988-01-05, the SMMR → SSM/I instrument
+  transition, a documented OISST gap), **2846** (2020-12-17) and **3090**
+  (2024-04-20) — three isolated source outages.
+- `g100`: all fifteen channels full in all 3,141 bins (65,160 cells; `soilw`
+  and `tsoil` 24,876, which is the land mask).
+- `rg100`: all 32 channels full in all 252 months.
+- `oc025`: bin **8** (1997-10-14) empty — the satellite returned nothing that
+  pentad — and bins **0–2** and **88** low; everything else is ordinary cloud
+  cover.
+- Every group's **last bin, 3141, is empty or short**: 2024-12-31 is a
+  one-day pentad. That is the calendar, not the build.
+
+- [Hub folder `tensors/family7_global025_pentad_l2`](https://huggingface.co/datasets/chfrank/earth-tensors/tree/main/tensors/family7_global025_pentad_l2) · [the npz](https://huggingface.co/datasets/chfrank/earth-tensors/resolve/main/tensors/family7_global025_pentad_l2/family7_global025_pentad_l2.npz) (5.4 MB, sha256 `0837c450…` verified from the sandbox) · g025 45.67 GB · g100 6.14 GB · rg100 1.05 GB · oc025 8.29 GB — 61.2 GB, of which only g100's 6.14 GB is new bytes.
+- `data/family7_index.json` and both static grids regenerated at recipe f7l2
+  (`--trust-manifest`); `data/family7_elev.json` now carries 1,038,240
+  non-null values where it carried 1,038,240 nulls, and
+  `data/family7_sphere.json` is byte-unchanged. `tests/data.spec.js` gained
+  the assertion whose absence let the empty grid ship — the committed
+  elevation grid has a non-zero, > 90 % non-null count — verified to fail on
+  the old file and pass on the new one.
+
+**Deliberately not fixed** (E-077 §10.3): `oc025`'s `log_chl` takes a float32
+`log10` on a 4320 × 8640 raster about ten thousand times, where a float64
+working copy is 300 MB per temporary; its bytes are inherited unchanged, so
+the colour group still does not reproduce bit-for-bit across machines. Closed
+whenever `oc025` is next rebuilt for another reason.
+
+Runs: [#10 (E-077 f7l1 — the full unseeded build, void rg100)](https://github.com/blauewelt/earth/actions/runs/34846257797) · [#11 (E-077 f7l1 — rg100 rebuilt in place, re-published)](https://github.com/blauewelt/earth/actions/runs/34859237016) · [#12 (E-077 f7l2 — g100 + statics rebuilt on the f7l1 seed)](https://github.com/blauewelt/earth/actions/runs/34879795075).
 
 Spec: [E-077](https://blauewelt.github.io/earth/docs.html?f=ml/plans/E077_family7_ocean_colour.md).
 Code: `ml/build_family7.py` (stage `occci`), `tests/test_build_family7.py`,

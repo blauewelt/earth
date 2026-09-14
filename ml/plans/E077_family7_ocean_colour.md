@@ -433,20 +433,62 @@ repaired**: the colour group is not expected to reproduce bit-for-bit across
 boxes. A chunked float64 `log10` would close it at roughly zero extra peak
 memory whenever `oc025` is next rebuilt for another reason.
 
-### 10.4 · What to verify after it lands
+### 10.4 · What to verify after it lands — DONE 2026-09-14 20:20Z
 
-1. `static_n_finite` in the manifest reads
-   `{"sphere": 1038240, "elev": 1038240}`, and `sources` carries both `etopo`
-   and a `naturalearth` entry naming both layers.
-2. `sphere`'s code histogram matches f7l1's exactly — 702,642 · 226,495 ·
-   107,074 · 2,029.
-3. `same_as_base` is `true` for `g025`, `rg100` and `oc025`, and `false` for
-   `g100` with f7l1's hash beside ours. A `false` on any of the first three is
-   a fault, and the publish will already have refused.
-4. `norm_g100` differs from f7l1's — it is recomputed from the rebuilt group —
-   while `norm_g025`, `norm_rg100` and `norm_oc025` are bit-identical.
-5. `data/family7_index.json` and the two static grids are regenerated, and
-   `data/family7_elev.json` has 1,038,240 non-null values. Add the assertion
-   `tests/data.spec.js` is missing — that the committed elevation grid has a
-   non-zero count of values — in the same commit; it would fail today, which
-   is why it is not there yet.
+`f7l2` published at 19:58:44Z from run
+[#12 (E-077 f7l2 — g100 + statics rebuilt on the f7l1 seed)](https://github.com/blauewelt/earth/actions/runs/34879795075),
+builder `f25f1a6`. Every item below was checked against the published bytes
+from the sandbox — the npz downloaded whole, `g100` by HTTP range read, the
+manifest by its URL. Four of the five read as written; the fifth, item 4, is
+FALSE — the prediction was wrong rather than the build, and the arithmetic
+that makes it wrong is spelled out where it sits.
+
+1. ✅ **`static_n_finite` reads `{"elev": 1038240, "sphere": 1038240}`** in
+   both the manifest and the npz, and `sources` carries `etopo` (the NGDC
+   THREDDS URL) and `naturalearth` (naming `ne_10m_glaciated_areas` and
+   `ne_10m_lakes`). The ETOPO fetch took **three attempts and 4,025 s** at a
+   probed **2.99 MB/s** — two attempts died on an `IncompleteRead`, which is
+   the host being flaky rather than slow, and the re-sized floor (0.10 MB/s)
+   let the third finish instead of aborting it.
+2. ✅ **`sphere`'s histogram is `f7l1`'s exactly** — 702,642 ocean · 226,495
+   land · 107,074 ice sheet · 2,029 inland water — and the array is
+   bit-identical to both `f7l1`'s and `f7l0`'s.
+3. ✅ **`same_as_base` is `true` for `g025`, `rg100` and `oc025`** (sha256
+   `1cb1e1af…`, `55c49f1b…`, `c50c79b5…`, each equal to `f7l1`'s) **and
+   `false` for `g100`**, with `base_sha256` `ba59ed7c…` recorded beside ours,
+   `79c8075e…`. `inherited_groups` and `rebuilt_groups` agree.
+4. ❌ **`norm_g100` does NOT differ from `f7l1`'s — it is bit-identical, and
+   so are the other three `norm_*` arrays.** This prediction was wrong, and
+   the reason it was wrong is the same arithmetic that made the defect
+   invisible: the rebuild moves about ten float16 cells per bin out of the
+   **2,816,949,312 observed values** the statistic is computed over, which is
+   4 × 10⁻⁹ of the sample and cannot move a float32 mean or standard
+   deviation. A moved `norm_g100` would have meant something else had changed.
+   In total only five npz keys differ from `f7l1`'s — `recipe`,
+   `builder_git_sha`, `built_at`, `sources`, `elev` — plus the new
+   `static_n_finite`.
+5. ✅ **`data/family7_index.json` and both static grids regenerated** at
+   recipe `f7l2` (`python3 ml/publish_family7_index.py --recipe f7l2
+   --trust-manifest`, CORS re-measured from the deployed origin: HTTP 206,
+   `access-control-allow-origin: *`). `data/family7_elev.json` carries
+   **1,038,240 non-null values** where it carried 1,038,240 nulls, min
+   −9,688 m, max 6,004 m; `data/family7_sphere.json` is byte-unchanged
+   (sha256 `2f537b3a…`). The script's default recipe is now `f7l2`.
+   **The missing assertion is in `tests/data.spec.js`**: a new block over the
+   COMMITTED grids (not the fixture) asserts a non-zero and > 90 % non-null
+   elevation count, that the extremes are a real terrain range, and that
+   every `sphere` class the palette names is actually present — checked to
+   FAIL on the old file and pass on the new one. 79 of 79 in that spec pass.
+
+**And one measurement the checklist did not ask for.** The `g100` difference
+was read back from the Hub on five bins (200, 1500, 2411, 3000, 3141):
+thirteen of fifteen channels byte-identical to both predecessors, `log_prate`
+differing from `f7l1` in 9, 9, 9, 12 and 0 cells of 65,160, `log_swe` in 1, 0,
+2, 0 and 0, every difference exactly one float16 step. §10.1 estimated
+**≈ 2 cells per bin**; the true figure is about ten, because ≈ 2 is the size
+of the drift BETWEEN two float32 builds (`f7l0` and `f7l1` differ from each
+other in 1–3 `log_prate` cells per bin, measured) while this build moves from
+float32 to the correctly rounded float64 value. The estimate described the
+wrong pair of numbers. Nothing follows from it scientifically — one float16
+step is 4 × 10⁻⁵ mm/day — but the sentence in §10.1 should be read as
+characterising the SYMPTOM, not the size of the fix.

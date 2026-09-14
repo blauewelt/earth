@@ -2010,6 +2010,81 @@ test.describe("family7 index + fixture (the global tensor's range-read contract)
   });
 });
 
+/* ============ the COMMITTED family-7 statics (the two grids the app paints) ==
+ *
+ * The block above pins the FIXTURE's statics — a decimated 5° copy built from
+ * the smoke tensor. The grids the deployed page actually reads are
+ * `data/family7_elev.json` and `data/family7_sphere.json`, written from the
+ * published tensor by `ml/publish_family7_index.py`, and until 2026-09-14
+ * NOTHING in this suite looked at them.
+ *
+ * That gap published an empty map. The f7l1 build's elevation static came out
+ * of a failed ETOPO download as 1,038,240 NaN (E-077 §10.1); the publisher
+ * dutifully turned all of them into `null`, the globe's "Surface elevation"
+ * layer and the pixel card's elevation row were blank for every point on
+ * Earth, and every test here stayed green — because the fixture's own elev,
+ * built from different bytes, was fine. A grid's SHAPE being right says
+ * nothing about whether there is anything in it. */
+test.describe("the committed family-7 statics are grids with data in them", () => {
+  const idx = JSON.parse(fs.readFileSync(
+    path.join(DATA, "family7_index.json"), "utf8"));
+  const elv = JSON.parse(fs.readFileSync(
+    path.join(DATA, "family7_elev.json"), "utf8"));
+  const sph = JSON.parse(fs.readFileSync(
+    path.join(DATA, "family7_sphere.json"), "utf8"));
+
+  test("the index points at the grids on disk, at the tensor's own geometry", () => {
+    expect(idx.fixture).toBe(false);
+    expect(idx.statics.elev.file).toBe("data/family7_elev.json");
+    expect(idx.statics.sphere.file).toBe("data/family7_sphere.json");
+    const gr = idx.groups.g025.grid;
+    for (const [name, g] of [["sphere", sph], ["elev", elv]]) {
+      expect(g.nx, `${name} nx`).toBe(gr.nx);
+      expect(g.ny, `${name} ny`).toBe(gr.ny);
+      expect(g.dlon).toBeCloseTo(gr.step, 9);
+      expect(g.dlat).toBeCloseTo(gr.step, 9);
+    }
+  });
+
+  test("elevation is not an empty map", () => {
+    expect(elv.values).toHaveLength(elv.nx * elv.ny);
+    expect(elv.units).toBe("m");
+    // Reduce to counts and assert on the counts — never one expect() per cell
+    // (CLAUDE.md §4): this grid is 1,038,240 values.
+    let n = 0, lo = Infinity, hi = -Infinity;
+    for (const v of elv.values) {
+      if (v === null) continue;
+      n++;
+      if (v < lo) lo = v;
+      if (v > hi) hi = v;
+    }
+    // THE ASSERTION THIS BLOCK EXISTS FOR. An all-null elevation grid is what
+    // shipped on 2026-09-14, and the number it needs to be caught by is zero.
+    expect(n, "non-null elevation cells").toBeGreaterThan(0);
+    // ETOPO covers the whole sphere, land and sea floor alike, so a real grid
+    // is essentially complete; 90 % leaves room for a future coastal mask
+    // without leaving room for a failed download.
+    expect(n / elv.values.length).toBeGreaterThan(0.9);
+    // and it is an elevation, not a constant: mountains above, ocean below.
+    expect(hi).toBeGreaterThan(3000);
+    expect(lo).toBeLessThan(-3000);
+  });
+
+  test("the sphere map is not an empty map either", () => {
+    expect(sph.packed).toHaveLength(sph.nx * sph.ny);
+    const filled = sph.packed.length - (sph.packed.match(/\./g) || []).length;
+    expect(filled, "coded sphere cells").toBeGreaterThan(0);
+    expect(filled / sph.packed.length).toBeGreaterThan(0.9);
+    // Natural Earth answering for the land layer and failing for the other two
+    // would leave a sphere with no ice and no lakes and no complaint anywhere,
+    // so assert every class the palette names is actually present.
+    const codes = new Set(sph.packed.replace(/\./g, "").split(""));
+    for (const c of sph.classes) {
+      expect(codes.has(String(c.code)), `class ${c.label} is present`).toBe(true);
+    }
+  });
+});
+
 /* ================= the cone geometry on the GLOBAL grid (the dateline wrap) ==
  *
  * The Python side exports a `global` block into data/cone_geometry.json: the

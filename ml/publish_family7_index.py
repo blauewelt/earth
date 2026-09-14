@@ -7,12 +7,13 @@ WHAT FAMILY 7 IS, in one sentence: the first input tensor covering the whole
 globe rather than the North Atlantic window — every 0.25° grid point from the
 South Pole to the North Pole, one value per channel per five-day bin from 1982
 to 2024 — built by `ml/build_family7.py` and published to
-`chfrank/earth-tensors` under `tensors/family7_global025_pentad_l1/`
-(recipe `f7l1`; see `ml/plans/E070_family7_build.md` for the first three
+`chfrank/earth-tensors` under `tensors/family7_global025_pentad_l2/`
+(recipe `f7l2`; see `ml/plans/E070_family7_build.md` for the first three
 channel groups and `ml/plans/E077_family7_ocean_colour.md` for the fourth —
 `oc025`, ocean colour, whose time axis is OFFSET: its first row is the pentad
 holding the colour record's first day, 1997-09-04, and the index says so per
-group as `bin_first`. `--recipe f7l0` still writes the three-group index.
+group as `bin_first`. `--recipe f7l1` writes the index of the build f7l2
+corrected; `--recipe f7l0` still writes the three-group index.
 
 The globe's "Global tensor (family 7)" layer paints ONE channel of ONE pentad
 by a single HTTP range read of the group's `.npy`. To compute that read it
@@ -77,19 +78,21 @@ ROOT = os.path.dirname(HERE)
 REPO_ID = "chfrank/earth-tensors"
 ORIGIN = "https://blauewelt.github.io"
 
-# TWO RECIPES, ONE SCRIPT. `f7l1` (E-077) is family 7 plus a fourth group of
-# ocean colour; `f7l0` is what the Hub has carried since 2026-09-04 and what
-# `docs/FAMILY7_DATA_HANDOVER.md` describes. Both stay addressable, because the
-# index is written AFTER a build lands and the l1 build may not have landed
-# yet — a script that could only describe the newer one would be unable to
-# regenerate the index the app is currently serving.
+# THREE RECIPES, ONE SCRIPT. `f7l2` (E-077 §10) is the corrected four-group
+# tensor and the DEFAULT; `f7l1` is the first four-group build, the one whose
+# elevation static was published empty; `f7l0` is the three-group tensor the
+# Hub carried from 2026-09-04 and what `docs/FAMILY7_DATA_HANDOVER.md`
+# describes. All three stay addressable, because the index is written AFTER a
+# build lands: a script that could only describe the newest one would be unable
+# to regenerate the index of the tensor the app is currently serving, which is
+# what going back to an earlier one requires.
 RECIPES = {
     # f7l2 is the CORRECTED build (E-077 §10): f7l1's `elev` was published as
-    # 1,038,240 NaN and its g100 log channels did not reproduce. Its entry is
-    # here so `--recipe f7l2` works the moment the folder exists; the DEFAULT
-    # below stays f7l1 until it does, because this script's job is to describe
-    # what the app is actually being served, and a default pointing at an
-    # unpublished folder would regenerate an index of nothing.
+    # 1,038,240 NaN and its g100 log channels did not reproduce. It landed on
+    # 2026-09-14 19:58Z and is what the app is served from, so it is the
+    # DEFAULT below. f7l1 and f7l0 stay addressable by name — the index is
+    # written after a build lands, and being able to regenerate the index of an
+    # earlier published tensor is the only way to go back to one.
     "f7l2": dict(stem="family7_global025_pentad_l2",
                  groups=("g025", "g100", "rg100", "oc025"),
                  plan="ml/plans/E077_family7_ocean_colour.md"),
@@ -100,7 +103,7 @@ RECIPES = {
                  groups=("g025", "g100", "rg100"),
                  plan="ml/plans/E070_family7_build.md"),
 }
-RECIPE = "f7l1"
+RECIPE = "f7l2"
 STEM = RECIPES[RECIPE]["stem"]
 PREFIX = f"tensors/{STEM}"
 GROUPS = RECIPES[RECIPE]["groups"]
@@ -648,9 +651,11 @@ def main(argv=None):
                     help="skip the re-download restore check (record it in the "
                          "index); only when the build job verified in-session")
     ap.add_argument("--recipe", default=RECIPE, choices=sorted(RECIPES),
-                    help="which published tensor to describe. f7l1 is family 7 "
-                         "plus the ocean-colour group (E-077); f7l0 is the "
-                         "three-group tensor the handover describes.")
+                    help="which published tensor to describe. f7l2 is family 7 "
+                         "plus the ocean-colour group with the elevation "
+                         "static and a reproducible g100 (E-077 §10, the "
+                         "default); f7l1 is the first four-group build; f7l0 "
+                         "is the three-group tensor the handover describes.")
     ap.add_argument("--index", default=INDEX)
     ap.add_argument("--sphere", default=SPHERE)
     ap.add_argument("--elev", default=ELEV)
