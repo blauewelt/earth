@@ -1,0 +1,80 @@
+  .../family10/gdp/gdp/lon.npy: 100%|██████████|  194MB /  194MB            [A[A
+
+  .../family10/gdp/gdp/lon.npy: 100%|██████████|  194MB /  194MB            [A[AProcessing Files (1 / 1)      : 100%|██████████|  194MB /  194MB, 18.9MB/s  
+New Data Upload               : |          |  0.00B /  0.00B,  0.00B/s  
+  .../family10/gdp/gdp/lon.npy: 100%|██████████|  194MB /  194MB            
+No files have been modified since last commit. Skipping to prevent empty commit.
+  [publish gdp] lon.npy  5/10  10.8s
+Processing Files (0 / 0)      : |          |  0.00B /  0.00B            
+New Data Upload               : |          |  0.00B /  0.00B            [A
+
+  ...ly10/gdp/gdp/platform.npy:  31%|███       |  120MB /  388MB            [A[A
+
+  ...ly10/gdp/gdp/platform.npy:  31%|███       |  120MB /  388MB            [A[AProcessing Files (0 / 1)      :  31%|███       |  120MB /  388MB,   ???B/s  
+
+  ...ly10/gdp/gdp/platform.npy:  66%|██████▌   |  256MB /  388MB            [A[AProcessing Files (0 / 1)      :  66%|██████▌   |  256MB /  388MB, 25.3MB/s  
+
+  ...ly10/gdp/gdp/platform.npy: 100%|██████████|  388MB /  388MB            [A[AProcessing Files (1 / 1)      : 100%|██████████|  388MB /  388MB, 38.1MB/s  
+
+  ...ly10/gdp/gdp/platform.npy: 100%|██████████|  388MB /  388MB            [A[A
+
+  ...ly10/gdp/gdp/platform.npy: 100%|██████████|  388MB /  388MB            [A[AProcessing Files (1 / 1)      : 100%|██████████|  388MB /  388MB, 37.4MB/s  
+New Data Upload               : |          |  0.00B /  0.00B,  0.00B/s  
+  ...ly10/gdp/gdp/platform.npy: 100%|██████████|  388MB /  388MB            
+No files have been modified since last commit. Skipping to prevent empty commit.
+  [publish gdp] platform.npy  6/10  13.5s
+Processing Files (0 / 0)      : |          |  0.00B /  0.00B            
+New Data Upload               : |          |  0.00B /  0.00B            [A
+
+  ...e/family10/gdp/gdp/qc.npy: 100%|██████████| 48.5MB / 48.5MB            [A[A
+
+  ...e/family10/gdp/gdp/qc.npy: 100%|██████████| 48.5MB / 48.5MB            [A[AProcessing Files (1 / 1)      : 100%|██████████| 48.5MB / 48.5MB,   ???B/s  
+
+  ...e/family10/gdp/gdp/qc.npy: 100%|██████████| 48.5MB / 48.5MB            [A[A
+
+  ...e/family10/gdp/gdp/qc.npy: 100%|██████████| 48.5MB / 48.5MB            [A[AProcessing Files (1 / 1)      : 100%|██████████| 48.5MB / 48.5MB, 4.78MB/s  
+New Data Upload               : |          |  0.00B /  0.00B,  0.00B/s  
+  ...e/family10/gdp/gdp/qc.npy: 100%|██████████| 48.5MB / 48.5MB            
+No files have been modified since last commit. Skipping to prevent empty commit.
+  [publish gdp] qc.npy  7/10  14.4s
+Processing Files (0 / 0)      : |          |  0.00B /  0.00B            
+New Data Upload               : |          |  0.00B /  0.00B            [A
+
+  ...y10/gdp/gdp/time_days.npy:   8%|▊         | 16.0MB /  194MB            [A[A
+
+  ...y10/gdp/gdp/time_days.npy:   8%|▊         | 16.0MB /  194MB            [A[AProcessing Files (0 / 1)      :   8%|▊         | 16.0MB /  194MB,   ???B/s  
+
+  ...y10/gdp/gdp/time_days.npy:  66%|██████▌   |  128MB /  194MB            [A[AProcessing Files (0 / 1)      :  66%|██████▌   |  128MB /  194MB,   ???B/s  
+
+  ...y10/gdp/gdp/time_days.npy: 100%|██████████|  194MB /  194MB            [A[AProcessing Files (1 / 1)      : 100%|██████████|  194MB /  194MB,   ???B/s  
+
+  ...y10/gdp/gdp/time_days.npy: 100%|██████████|  194MB /  194MB            [A[AProcessing Files (1 / 1)      : 100%|██████████|  194MB /  194MB, 19.0MB/s  
+New Data Upload               : |          |  0.00B /  0.00B,  0.00B/s  
+  ...y10/gdp/gdp/time_days.npy: 100%|██████████|  194MB /  194MB            
+No files have been modified since last commit. Skipping to prevent empty commit.
+  [publish gdp] time_days.npy  8/10  15.6s
+Processing Files (0 / 0)      : |          |  0.00B /  0.00B            
+New Data Upload               : |          |  0.00B /  0.00B            [A
+
+  ...mily10/gdp/gdp/values.npy:  14%|█▍        | 55.9MB /  388MB            [A[A
+
+  ...mily10/gdp/gdp/values.npy:  14%|█▍        | 55.9MB /  388MB            [A[AProcessing Files (0 / 1)      :  14%|█▍        | 55.9MB /  388MB,   ???B/s  
+
+  ...mily10/gdp/gdp/values.npy:  45%|████▌     |  176MB /  388MB            [A[AProcessing Files (0 / 1)      :  45%|████▌     |  176MB /  388MB,   ???B/s  
+
+  ...mily10/gdp/gdp/values.npy:  80%|████████  |  312MB /  388MB            [A[AProcessing Files (0 / 1)      :  80%|████████  |  312MB /  388MB, 30.8MB/s  
+
+  ...mily10/gdp/gdp/values.npy: 100%|██████████|  388MB /  388MB            [A[AProcessing Files (1 / 1)      : 100%|██████████|  388MB /  388MB, 37.9MB/s  
+
+  ...mily10/gdp/gdp/values.npy: 100%|██████████|  388MB /  388MB            [A[A
+
+  ...mily10/gdp/gdp/values.npy: 100%|██████████|  388MB /  388MB            [A[A
+
+  ...mily10/gdp/gdp/values.npy: 100%|██████████|  388MB /  388MB            [A[AProcessing Files (1 / 1)      : 100%|██████████|  388MB /  388MB, 37.1MB/s  
+New Data Upload               : |          |  0.00B /  0.00B,  0.00B/s  
+  ...mily10/gdp/gdp/values.npy: 100%|██████████|  388MB /  388MB            
+No files have been modified since last commit. Skipping to prevent empty commit.
+  [publish gdp] values.npy  9/10  21.0s
+  [publish gdp] store.json  10/10  22.0s
+  publish: 10 file(s) verified by restore -> https://huggingface.co/datasets/chfrank/earth-tensors/tree/main/tensors/family10/gdp
+=== stage publish done in 29.2s ===

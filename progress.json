@@ -1,0 +1,10 @@
+{
+ "at": "2026-09-14T09:46:54+00:00",
+ "done": 10,
+ "elapsed_s": 22.0,
+ "eta_s": 0.0,
+ "item": "store.json",
+ "sha256": "c3a14beb8d51db73",
+ "stage": "publish gdp",
+ "total": 10
+}
