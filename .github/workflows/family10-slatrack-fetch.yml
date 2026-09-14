@@ -33,6 +33,18 @@
 # (`family10_parts_hub.py status`) and skips those years, so a firing that hits
 # the wall loses only the year it was in the middle of. Once a lane is complete
 # its firings are one-minute no-ops that say so. `runs-on: ubuntu-latest` is
+#
+# A GREEN LANE MEANS THE LANE IS COMPLETE, and the last step is what makes that
+# true. The year loop deliberately `continue`s past a year that failed -- the
+# rest of the lane is worth having and the failed year is refetched next firing
+# -- but that left the JOB green with years missing, which is the one shape
+# Chris's rule forbids: the failure ended up looking like "no data there". The
+# final step re-asks the Hub and FAILS the job while any year of the lane lacks
+# a done.json, whether the cause was an error or the six-hour budget. An
+# incomplete lane is red until it finishes; nothing about the resume changes,
+# because done.json is still written only after a verified push.
+#
+# `runs-on: ubuntu-latest` is
 # HARD-CODED and there is deliberately no `runner` input: §6 forbids pointing a
 # `schedule:`-triggered workflow at `runs-on: gpu`, and this one both has a
 # schedule and carries credentials.
@@ -260,6 +272,63 @@ jobs:
             df -h "${RUNNER_TEMP}" | tail -1
           done
           echo "lane ${{ matrix.lane }}: ${fetched} year(s) pushed this firing"
+
+      # A GREEN LANE MEANS THE LANE IS COMPLETE, and until this step existed it
+      # did not. The loop above `continue`s past a year whose fetch or push
+      # failed -- deliberately, because the other years are worth having and
+      # the failed one is refetched next firing -- but the step then ended
+      # normally and the JOB went green. So a lane in which every single year
+      # died left six ::error:: lines inside a successful run, and the only
+      # place the loss was visible was a log nobody reads after a green tick.
+      # Downstream that is invisible too: a year with no done.json is a year
+      # `--parts-from-hub` skips, so the assembled store is simply shorter and
+      # its `per_year` block reports the hole as a measurement.
+      #
+      # The check asks the HUB, not the loop's own bookkeeping: the question is
+      # "does every year of this lane now carry a done.json", and only the Hub
+      # can answer it (another firing, or another lane, may have landed one).
+      # A budget stop is not exempt -- a lane that has years left to fetch is
+      # not complete, whatever the reason, and saying so is the entire point.
+      - name: Every year of the lane must carry a done.json
+        if: always() && steps.preflight.outcome == 'success'
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+          LANE: ${{ matrix.lane }}
+          YEARS: ${{ github.event.inputs.years || '1993-2024' }}
+          PROBE_ONLY: ${{ github.event.inputs.probe_only }}
+        run: |
+          set -o pipefail
+          if [ "${PROBE_ONLY}" = "true" ]; then
+            echo "probe_only: nothing was fetched, so completeness is not this"
+            echo "run's question."
+            exit 0
+          fi
+          python3 -u ml/family10_parts_hub.py status --store slatrack \
+              --years "${LANE}" | tee "${RUNNER_TEMP}/status-end.txt"
+          left=$(sed -n 's/^missing_years: *//p' "${RUNNER_TEMP}/status-end.txt" | head -1)
+          # The lane's years intersected with the dispatch input -- the same
+          # arithmetic the `todo` step does, through the builder's own
+          # `parse_years`, and every value through the ENVIRONMENT.
+          left=$(LEFT="${left}" python3 -c "import os, sys; sys.path.insert(0, 'ml'); from build_family7 import parse_years; want = set(parse_years(os.environ['YEARS'])); print(' '.join(str(y) for y in sorted(set(int(x) for x in os.environ['LEFT'].split()) & want)))")
+          if [ -z "${left}" ]; then
+            echo "lane ${LANE}: COMPLETE — every year in range carries a"
+            echo "done.json on the Hub."
+            exit 0
+          fi
+          echo "::error::lane ${LANE} is INCOMPLETE: no done.json on the Hub"
+          echo "for [${left}]."
+          echo "This job is red because a green one would mean the lane is"
+          echo "finished, and it is not. Either a year's fetch or push failed"
+          echo "above (look for ::error:: lines and the uploaded artifact), or"
+          echo "the six-hour budget stopped the loop before it reached them."
+          echo "Both are resumable and nothing is half-marked: done.json is"
+          echo "written only after the push verifies, so the next scheduled"
+          echo "firing picks up exactly these years."
+          echo "Do NOT assemble slatrack until this lane is green --"
+          echo "--parts-from-hub SKIPS a year with no done.json, so the store"
+          echo "would come out short with its per_year block reporting the"
+          echo "hole as if it were the archive."
+          exit 1
 
       # A dead job must still tell its story (ml/CLAUDE.md §5.25/§5.26). The
       # parts themselves are NEVER collected — they are on the Hub, verified by

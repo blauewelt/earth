@@ -153,6 +153,92 @@ def main():
           "dispatch-only, hosted, and inside the input ceiling")
     ok += 1
 
+    # ---- case 7: the family-10 lanes, and what a GREEN one means ---------
+    # `family10-slatrack-fetch.yml` is the one workflow in this repo that has
+    # BOTH a `schedule:` trigger and repository credentials, so two facts have
+    # to stay true of it and neither is enforced by anything else.
+    #
+    #   * `runs-on` is the literal `ubuntu-latest`. ml/CLAUDE.md §6 forbids
+    #     pointing a scheduled workflow at a rented box, and this one carries
+    #     the Copernicus pair: an expression here (a `runner` input, say) is
+    #     how that would arrive by accident.
+    #   * A GREEN LANE MEANS THE LANE IS COMPLETE. The year loop deliberately
+    #     `continue`s past a year whose fetch or push failed — the rest of the
+    #     lane is worth having — and until 2026-09-14 the step then ended
+    #     normally and the job went green with years missing. Downstream that
+    #     loss is invisible: `--parts-from-hub` SKIPS a year with no done.json,
+    #     so the assembled store is simply shorter and its `per_year` block
+    #     reports the hole as though it were the archive. The final step
+    #     re-asks the Hub and fails while any year of the lane lacks a marker,
+    #     so this case pins that the gate exists and still says `exit 1`.
+    #
+    # Credentials in `env:` only, everywhere in both files: `${{ secrets.X }}`
+    # inside a `run:` block is a secret spliced into the shell source text, and
+    # from there into argv, which is world readable on a box (§6).
+    fetch_rel = "family10-slatrack-fetch.yml"
+    f10_path = os.path.join(ROOT, ".github", "workflows", fetch_rel)
+    if not os.path.exists(f10_path):
+        raise SystemExit(f"case 7 FAILED: {fetch_rel} is missing")
+    f10_d = yaml.safe_load(open(f10_path))
+    f10_job = (f10_d.get("jobs") or {}).get("fetch") or {}
+    if f10_job.get("runs-on") != "ubuntu-latest":
+        raise SystemExit(
+            f"case 7 FAILED: {fetch_rel} runs on {job.get('runs-on')!r}. It "
+            f"must be the literal `ubuntu-latest`: this workflow has a "
+            f"`schedule:` trigger AND holds the Copernicus secrets, and "
+            f"ml/CLAUDE.md §6 forbids either of those on a rented box.")
+    f10_steps = f10_job.get("steps") or []
+    gate = [s for s in f10_steps
+            if isinstance(s.get("run"), str)
+            and "family10_parts_hub.py status" in s["run"]
+            and "missing_years" in s["run"] and "exit 1" in s["run"]]
+    if not gate:
+        raise SystemExit(
+            f"case 7 FAILED: {fetch_rel} has no step that fails the job when a "
+            f"year of the lane has no done.json on the Hub. Without it the "
+            f"year loop's `continue` — which is correct, the year is refetched "
+            f"next firing — leaves a GREEN job with years missing, and a green "
+            f"lane is the only signal anybody reads before assembling. Add the "
+            f"final `status --years <lane>` step back.")
+    if gate[-1] is not f10_steps[-1] and gate[-1] not in f10_steps[-3:]:
+        raise SystemExit(
+            f"case 7 FAILED: {fetch_rel}'s completeness gate is not near the "
+            f"end of the job; it must run after the fetch loop.")
+    n_secret_in_run = 0
+    for rel in (fetch_rel, "family10-build.yml"):
+        p2 = os.path.join(ROOT, ".github", "workflows", rel)
+        d2 = yaml.safe_load(open(p2))
+        for jname, j2 in (d2.get("jobs") or {}).items():
+            for i, st in enumerate(j2.get("steps") or []):
+                r = st.get("run")
+                if isinstance(r, str) and "secrets." in r:
+                    n_secret_in_run += 1
+                    raise SystemExit(
+                        f"case 7 FAILED: {rel} job {jname!r} step "
+                        f"{st.get('name', i)!r} interpolates `secrets.` inside "
+                        f"its `run:` block. A secret belongs in `env:` and "
+                        f"nowhere else — spliced into the shell source it "
+                        f"reaches argv, which every process on a box can read "
+                        f"(ml/CLAUDE.md §6).")
+    b10 = yaml.safe_load(open(os.path.join(ROOT, ".github", "workflows",
+                                           "family10-build.yml")))
+    f10_trig = b10.get("on", b10.get(True))
+    if not isinstance(f10_trig, dict) or list(f10_trig) != ["workflow_dispatch"]:
+        raise SystemExit(
+            f"case 7 FAILED: family10-build.yml triggers on "
+            f"{sorted(f10_trig) if isinstance(f10_trig, dict) else f10_trig!r}. It can be "
+            f"pointed at a rented box by its `runner` input, so it must be "
+            f"workflow_dispatch ONLY (ml/CLAUDE.md §6).")
+    n_in = len((f10_trig["workflow_dispatch"] or {}).get("inputs") or {})
+    if n_in > 25:
+        raise SystemExit(
+            f"case 7 FAILED: family10-build.yml declares {n_in} dispatch "
+            f"inputs; a 26th breaks the whole file's parse (§7).")
+    print(f"case 7 ok — {fetch_rel} is hosted-only and fails a lane with a "
+          f"year missing; family10-build.yml is dispatch-only, {n_in}/25 "
+          f"inputs; no secret in any run: block")
+    ok += 1
+
     # ---- case 3: recipes are real and wired ------------------------------
     blk = raw[raw.index("  workflow_dispatch:"):raw.index("\npermissions:")]
     valid = set(re.findall(r"^      (\w+):\s*$", blk, re.M))

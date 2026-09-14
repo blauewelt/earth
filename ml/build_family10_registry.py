@@ -123,8 +123,23 @@ def hub_json(repo, path, timeout=60):
     try:
         return http_json(HUB_BASE.format(repo=repo, path=path), timeout)
     except urllib.error.HTTPError as e:
-        if e.code in (401, 403, 404):
-            return None
+        if e.code == 404:
+            return None                    # the store is not published yet
+        if e.code in (401, 403):
+            # NOT the same answer as a 404, and returning None for both meant
+            # a private repo, a revoked token or a rate limit came out of this
+            # function as "that store does not exist" — and the registry then
+            # PUBLISHED itself with the store in `groups_missing`, which is a
+            # promise about the Hub made by something that could not read the
+            # Hub. §0.2: an access failure is not evidence of absence.
+            raise IOError(
+                f"{repo}:{path} answered HTTP {e.code} — the Hub refused the "
+                f"read rather than saying the file is absent. This registry "
+                f"would otherwise list that store as MISSING, which is a "
+                f"statement about the archive made from a failure to reach "
+                f"it. Check HF_TOKEN's read access to {repo} (the registry "
+                f"reads anonymously, so a repo that has gone private needs "
+                f"one) and re-run.") from e
         raise
 
 

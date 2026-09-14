@@ -131,7 +131,23 @@ def _by_name(done):
 
 
 def read_done(api, repo, tok, store, year, scratch, listing=None):
-    """The year's `done.json` off the Hub, or None if it is not there."""
+    """The year's `done.json` off the Hub, or None if it is NOT THERE.
+
+    "Not there" means not there: the repo listing does not carry the path, so
+    the year was never pushed (or its push did not finish). It does NOT mean
+    "the Hub would not give it to us", and the two used to arrive here as the
+    same `None` — one bare `except Exception`. A Hub outage, an expired token
+    or a rate limit therefore read as "that year was never fetched", which is
+    the wrong half of the sentence: `pull` then told the operator to re-run a
+    fetch lane that had already done its work, and `pull --allow-missing`
+    assembled a store that silently dropped a year whose parts were sitting on
+    the Hub the whole time. So a download that fails on a path the listing DOES
+    carry raises, naming the year (ml/CLAUDE.md §4.6, and family 7's
+    `truth_files` in commit fd3b446).
+
+    With no `listing` in hand there is no way to tell the two apart, so a 404
+    is read out of the error text and anything else raises.
+    """
     path = f"{hub_prefix(store, year)}/{DONE}"
     if listing is not None and path not in listing:
         return None
@@ -139,11 +155,38 @@ def read_done(api, repo, tok, store, year, scratch, listing=None):
     shutil.rmtree(tmp, ignore_errors=True)
     try:
         p = _download(repo, path, tok, tmp)
-        return read_json(p, None)
-    except Exception:                                         # noqa: BLE001
-        return None
+        got = read_json(p, None)
+        if got is None:
+            raise IOError(f"{repo}:{path} downloaded but does not parse as "
+                          f"JSON — the marker for {store} {year} is corrupt")
+        return got
+    except Exception as e:                                    # noqa: BLE001
+        if listing is None and _looks_absent(e):
+            return None
+        raise IOError(
+            f"cannot read {repo}:{path}, the marker for {store} {year}: "
+            f"{type(e).__name__}: {e}. The path IS in the repository listing, "
+            f"so this is the Hub refusing to serve it (an outage, a rate "
+            f"limit, or an HF_TOKEN without read access) and NOT a year that "
+            f"was never fetched — refusing to report it as missing, because "
+            f"--allow-missing would then drop a year whose parts are on the "
+            f"Hub.") from e
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
+
+
+def _looks_absent(exc):
+    """Is this exception the Hub saying 404, rather than saying no?"""
+    try:
+        from huggingface_hub.utils import EntryNotFoundError
+        if isinstance(exc, EntryNotFoundError):
+            return True
+    except Exception:                                         # noqa: BLE001
+        pass
+    code = getattr(getattr(exc, "response", None), "status_code", None)
+    if code == 404:
+        return True
+    return type(exc).__name__ in ("EntryNotFoundError", "FileNotFoundError")
 
 
 # ==================================================================== push ===

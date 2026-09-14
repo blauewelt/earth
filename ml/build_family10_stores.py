@@ -232,25 +232,46 @@ def http_to_file(url, path, timeout=SOCKET_TIMEOUT):
     return path
 
 
-def fetch_first(urls, path=None, attempts=3, sleep=5.0):
+def fetch_first(urls, path=None, attempts=3, sleep=5.0, reason=False):
     """The first URL that serves. None if EVERY url is a 404 or an empty result.
 
     A definite "not there" is a legitimate gap and the caller continues; any
     other error retries across the whole list and then RAISES, never silently
     (ml/CLAUDE.md §4.6).
+
+    `reason=True` RETURNS (result, why) AND THE TWO KINDS OF "NOT THERE" ARE
+    TOLD APART, because they are not the same fact and the callers were
+    treating them as one. ERDDAP answers `"your query produced no matching
+    results"` — `_Empty` — when a dataset genuinely holds no row in the window
+    asked for, which is how the archive says "the ADCP was not deployed in
+    1977"; a bare 404 — `_NotFound` — says the URL itself is gone, i.e. the
+    dataset id moved under a build that the index stage had already checked.
+    Collapsing them made a moved dataset look exactly like an empty year, and
+    the store that came out of that had a hole nothing named. `why` is:
+
+      "ok"        something served
+      "empty"     every url answered "no matching results" — a gap in the
+                  archive, legitimate, and the caller counts it
+      "notfound"  every url 404'd without saying that — an ABSENCE, and the
+                  caller refuses on it
     """
     errs = []
     for i in range(attempts):
-        n_gone = 0
+        n_gone = n_empty = 0
         for u in urls:
             try:
-                return http_to_file(u, path) if path else http_bytes(u)
-            except (_NotFound, _Empty):
+                got = http_to_file(u, path) if path else http_bytes(u)
+                return (got, "ok") if reason else got
+            except _Empty:
+                n_gone += 1
+                n_empty += 1
+            except _NotFound:
                 n_gone += 1
             except Exception as e:                              # noqa: BLE001
                 errs.append(f"{u}: {type(e).__name__}: {e}")
         if n_gone == len(urls):
-            return None
+            why = "empty" if n_empty == len(urls) else "notfound"
+            return (None, why) if reason else None
         if i < attempts - 1:
             time.sleep(sleep * (2 ** i))
     raise IOError(f"{attempts} attempt(s) over {len(urls)} url(s) all failed — "
@@ -470,20 +491,49 @@ class GDPAdapter(SourceAdapter):
                               "counts": counts}}
 
     def _month(self, ctx, lo, hi, preflight=False):
+        """One month's CSV, parsed. A month that could not be READ is an ABSENCE.
+
+        This used to answer a missing file and a dead service with the same
+        `{"missing_month": 1}` as an ERDDAP "no matching results", hand back
+        zero rows, and let `stage_fetch` mark the year COMPLETE — so a month
+        the mirrors would not serve became a permanent, invisible hole in a
+        green build (ml/CLAUDE.md §5.21; family 7's 1989, commit fd3b446). The
+        three cases are now distinct: an empty ERDDAP answer is a GAP and is
+        counted; a 404 or an absent local file is an ABSENCE and is reported to
+        `ctx.note_absent`, which stops the year from being marked.
+        """
         tmp = os.path.join(ctx.scratch, "gdp", f"{lo:%Y-%m}.csv")
         owned = False
         if ctx.source_dir:
             p = self.local(ctx, lo)
             if not os.path.exists(p):
+                # `months()` NAMES this month off the axis, not off a directory
+                # listing, so a local mirror that does not hold it is short —
+                # the same distinction family 7's `glorys_chunk_names` had to
+                # make before its absence branch could fire at all.
+                ctx.note_absent(f"{lo:%Y-%m}", f"{p} does not exist "
+                                               f"(--source-dir {ctx.source_dir})")
                 return empty_rows(self.C), {"missing_month": 1}
         else:
-            got = fetch_first(self.urls(lo, hi), tmp, attempts=ctx.a.attempts)
+            got, why = fetch_first(self.urls(lo, hi), tmp,
+                                   attempts=ctx.a.attempts, reason=True)
+            if got is None and why == "empty":
+                # The service answered, and its answer is "no rows in this
+                # month". A legitimate gap — 1979-01 is one, the archive's
+                # first sample is 1979-02-15.
+                return empty_rows(self.C), {"empty_month": 1}
             if got is None:
+                ctx.note_absent(
+                    f"{lo:%Y-%m}",
+                    f"every ERDDAP 404'd for {GDP_DATASET} "
+                    f"{lo:%Y-%m-%d}..{hi:%Y-%m-%d} without saying the query "
+                    f"produced no matching results — the access path has "
+                    f"moved, this is not an empty month")
                 return empty_rows(self.C), {"missing_month": 1}
             p, owned = got, True
         try:
             with open(p, newline="") as fh:
-                rows, counts = self._parse(ctx, fh)
+                rows, counts = self._parse(ctx, fh, f"{lo:%Y-%m}", p)
         finally:
             if owned and not preflight and os.path.exists(p):
                 os.remove(p)
@@ -491,10 +541,17 @@ class GDPAdapter(SourceAdapter):
                 os.remove(p)
         return rows, counts
 
-    def _parse(self, ctx, fh):
+    def _parse(self, ctx, fh, label="", path=""):
         r = csv.reader(fh)
         hdr = next(r, None)
         if hdr is None:
+            # A CSV WITH NO HEADER LINE AT ALL is not an empty month — ERDDAP
+            # writes the header before it knows whether there are rows, so a
+            # zero-byte body is a transfer that ended before it began. It used
+            # to be counted and forgotten, with the year marked done.
+            ctx.note_absent(label or "?", f"{path or 'the month CSV'} is empty "
+                                          f"— not even a header line, so the "
+                                          f"transfer did not deliver a month")
             return empty_rows(self.C), {"empty_file": 1}
         col = {h.split(" (")[0].strip(): i for i, h in enumerate(hdr)}
         need = ("time", "latitude", "longitude", "ve", "vn", "sst",
@@ -753,24 +810,58 @@ class GTMBAAdapter(SourceAdapter):
             variables = list(GTMBA_KEYS) + [var, qcv]
             path = None
             if ctx.source_dir:
-                p = os.path.join(ctx.source_dir, "gtmba", ds, f"{year}.csv")
+                d_ds = os.path.join(ctx.source_dir, "gtmba", ds)
+                p = os.path.join(d_ds, f"{year}.csv")
+                if not os.path.isdir(d_ds):
+                    # THE MIRROR DOES NOT CARRY THIS DATASET AT ALL. That is a
+                    # property of the local archive, not of the year — the test
+                    # fixtures carry three of the eight — so it is counted, not
+                    # refused. A dataset directory that EXISTS and lacks the
+                    # year is the other case, below.
+                    counts["datasets_absent_locally"] = \
+                        counts.get("datasets_absent_locally", 0) + 1
+                    continue
                 if not os.path.exists(p):
+                    ctx.note_absent(
+                        f"{year} {ds}", f"{p} does not exist, but "
+                                        f"{d_ds}/ does — this mirror carries "
+                                        f"{ds} and is missing that year")
                     counts["datasets_empty"] += 1
                     continue
                 path = p
                 owned = False
             else:
                 tmp = os.path.join(ctx.scratch, "gtmba", ds, f"{year}.csv")
-                got = fetch_first(self.urls(ds, variables, lo, hi), tmp,
-                                  attempts=ctx.a.attempts)
+                got, why = fetch_first(self.urls(ds, variables, lo, hi), tmp,
+                                       attempts=ctx.a.attempts, reason=True)
+                if got is None and why == "empty":
+                    # ERDDAP said "your query produced no matching results":
+                    # this array published nothing for this quantity in this
+                    # year, which is most of what `datasets_empty` counts (37
+                    # of 384 dataset-years in the store published 2026-09-14 —
+                    # the ADCP before it was deployed, RAMA before 2000).
+                    counts["datasets_empty"] += 1
+                    continue
                 if got is None:
+                    # A 404 that did NOT say "no matching results". The index
+                    # stage checked this dataset id against the live listing an
+                    # hour ago, so this is the access path moving mid-build —
+                    # and it used to be indistinguishable from the empty answer
+                    # above: one counter, seven channels quietly all-NaN for
+                    # the year, and the year marked COMPLETE.
+                    ctx.note_absent(
+                        f"{year} {ds}", f"every ERDDAP 404'd for {ds} "
+                                        f"({var}/{qcv}) over "
+                                        f"{lo}..{hi} without saying the query "
+                                        f"produced no matching results")
                     counts["datasets_empty"] += 1
                     continue
                 path, owned = got, True
             try:
                 with open(path, newline="") as fh:
                     self._merge(ctx, fh, var, qcv, ch, scale, acc, sites,
-                                counts, depth_hits, ch_index)
+                                counts, depth_hits, ch_index,
+                                label=f"{year} {ds}", path=path)
             finally:
                 if owned and os.path.exists(path):
                     os.remove(path)
@@ -779,10 +870,15 @@ class GTMBAAdapter(SourceAdapter):
         yield str(year), self._pack(acc, counts), counts
 
     def _merge(self, ctx, fh, var, qcv, ch, scale, acc, sites, counts,
-               depth_hits, ch_index):
+               depth_hits, ch_index, label="", path=""):
         r = csv.reader(fh)
         hdr = next(r, None)
         if hdr is None:
+            # Not one line, header included. A served CSV always carries its
+            # header, so this is a transfer that delivered nothing — an
+            # absence, not a year in which the array reported nothing.
+            ctx.note_absent(label or "?", f"{path or 'the dataset CSV'} is "
+                                          f"empty — not even a header line")
             return
         names = [h.split(" (")[0].strip() for h in hdr]
         units = [h.split(" (")[1].rstrip(")") if " (" in h else ""
@@ -797,9 +893,11 @@ class GTMBAAdapter(SourceAdapter):
             # a missing value column over the network has already failed above.
             # Counted and announced rather than swallowed (ml/CLAUDE.md §4.6).
             counts["column_absent"] = counts.get("column_absent", 0) + 1
-            print(f"::warning::{var}/{qcv} absent from this file "
-                  f"({names}) — that channel stays NaN for these rows",
-                  flush=True)
+            ctx.note_absent(
+                label or "?",
+                f"{var}/{qcv} absent from {path or 'the dataset CSV'} "
+                f"(columns {names}) — that channel would stay NaN for every "
+                f"row of this dataset-year while the year read as complete")
             return
         # THE UNIT IS READ, NOT ASSUMED. The ADCP velocities are cm/s in the
         # archive and m/s in the store; a silent factor of 100 is exactly the
@@ -1008,7 +1106,11 @@ class SOCATAdapter(SourceAdapter):
                 out["last_modified"] = r.headers.get("Last-Modified")
             # PREFLIGHT: the first 8 MB, inflated, must contain the data header.
             head = http_bytes(out["url"], headers={"Range": "bytes=0-8388607"})
-            hdr = _socat_header_from(_zip_member_stream(io.BytesIO(head)))
+            # `partial_ok`: this prefix is deliberately truncated — 8 MB of a
+            # 1.4 GB member — so ending without the deflate end marker is the
+            # expected outcome here and an error everywhere else.
+            hdr = _socat_header_from(_zip_member_stream(io.BytesIO(head),
+                                                        partial_ok=True))
             out["columns"] = hdr
             out["n_columns"] = len(hdr)
         return out
@@ -1358,7 +1460,20 @@ class SLATrackAdapter(SourceAdapter):
             try:
                 out["slatrack_files_probe"] = self._probe_files(ctx, ms)
             except Exception as e:                              # noqa: BLE001
-                print(f"  slatrack files probe failed: {e!r}", flush=True)
+                # STILL NOT FATAL — an index must not fail because a probe did
+                # — but the failure goes into plan.json rather than into a log
+                # line, because this probe is the only measurement anyone has
+                # of the remote layout the fetch depends on. A plan.json that
+                # simply lacks the key reads as "the probe was not run"; this
+                # says which of the two it was.
+                out["slatrack_files_probe"] = {
+                    "failed": f"{type(e).__name__}: {e}",
+                    "note": ("the remote path layout is therefore still "
+                             "unmeasured; the fetch refuses any mission-year "
+                             "whose listing comes back empty rather than "
+                             "treating it as a year with no data")}
+                print(f"  ::warning::slatrack files probe failed: {e!r} — "
+                      f"recorded in plan.json", flush=True)
         return out
 
     @staticmethod
@@ -1539,6 +1654,25 @@ class SLATrackAdapter(SourceAdapter):
                   + (f"; first {paths[:3]} last {paths[-3:]}" if paths else ""),
                   flush=True)
             if not paths:
+                # A MISSION THAT FLEW AND LISTED NOTHING IS THE LOUDEST THING
+                # IN THIS FILE, because the remote path layout is still NOT
+                # MEASURED (see the docstring): `filter=*<year>*` is matched
+                # against the absolute remote path, and if that pattern does
+                # not fit the layout then EVERY mission-year lists zero files,
+                # every year finishes in seconds with no rows, `done.json` is
+                # written for each, and 1993-2024 assembles into an empty
+                # store that is green from end to end. `_mission_window` has
+                # already said this mission was in orbit over this window, so
+                # zero files is not "it did not fly" — it is "the listing did
+                # not work", and the build must not guess which.
+                ctx.note_absent(
+                    f"{year} {mid}",
+                    f"copernicusmarine.get(filter='*{year}*', dry_run=True) "
+                    f"listed NO original file, though the mission's STAC "
+                    f"window covers {lo}..{hi}. Either the archive holds no "
+                    f"{year} file for this mission or the filter does not "
+                    f"match the remote layout — and those are not the same "
+                    f"thing, so this year is not marked")
                 continue
             y_lo = max(lo, dt.date(year, 1, 1))
             y_hi = min(hi, dt.date(year, 12, 31))
@@ -1556,6 +1690,21 @@ class SLATrackAdapter(SourceAdapter):
                                  if n.endswith(".nc"))
                     print(f"  {label} {mid}: {len(names)} file(s) asked, "
                           f"{len(got)} downloaded", flush=True)
+                    if len(got) < len(names):
+                        # THE BATCH IS SHORT. `copernicusmarine.get` does not
+                        # raise on a file it could not serve; it returns, and
+                        # the days in the gap simply have no samples. One
+                        # missing day of one mission is invisible in a store of
+                        # 2e9 rows — nothing downstream can tell a day the
+                        # altimeter did not fly from a day the transfer
+                        # dropped — so the difference is NAMED here and the
+                        # year is not marked.
+                        lost = [n for n in names if n not in set(got)]
+                        ctx.note_absent(
+                            f"{label} {mid}",
+                            f"copernicusmarine.get returned {len(got)} of the "
+                            f"{len(names)} file(s) the listing named; missing "
+                            f"{lost[:4]}" + (" …" if len(lost) > 4 else ""))
                     for n in got:
                         rows, counts = self._read_nc(ctx,
                                                      os.path.join(out, n), mid)
@@ -1989,7 +2138,7 @@ def _raw_chunks(fh, size=CHUNK):
         yield b
 
 
-def _zip_member_stream(fh, size=CHUNK):
+def _zip_member_stream(fh, size=CHUNK, partial_ok=False):
     """The single deflate member of a zip, inflated as a byte-chunk generator.
 
     `zipfile` cannot read from a non-seekable HTTP body, and the SOCAT
@@ -2033,6 +2182,27 @@ def _zip_member_stream(fh, size=CHUNK):
                 fh.close()
             except Exception:                                   # noqa: BLE001
                 pass
+            # THE STREAM ENDED BEFORE THE DEFLATE MEMBER DID. `d.eof` is the
+            # decompressor saying it saw the member's end marker; without it
+            # the body was cut mid-transfer, and this generator used to end
+            # exactly as it does on a clean finish. Nothing above could tell:
+            # `fetch_stream` had long since found the data header, so `col` is
+            # set, no exception is raised, every year in range is marked done
+            # and a SHORT socat store is published — 1.4 GB of source with no
+            # length check anywhere (the live path is a bare `urlopen`, not
+            # `http_to_file`, so Content-Length is never compared). A
+            # truncation that reaches the store is unfindable afterwards; one
+            # that raises here costs a retry.
+            if not d.eof and not partial_ok:
+                raise IOError(
+                    "the zip member ended without its deflate end marker — "
+                    "the transfer was cut short. Everything read so far is a "
+                    "PREFIX of the synthesis file, and a prefix parses "
+                    "perfectly: it would have produced a store that is short "
+                    "by however much did not arrive, with every year marked "
+                    "done. Re-run the fetch stage (it re-reads the file from "
+                    "the start; socat's resume granularity is the whole "
+                    "pass).")
             return
         out = d.decompress(b)
         if out:
@@ -2098,6 +2268,34 @@ class Ctx:
         self.prog = Progress(self.root)
         self._cmems_missions = None
         self.socat_columns = None
+        # EVERY INPUT AN ADAPTER COULD NOT READ, collected here and answered by
+        # `stage_fetch` — the family-7 shape (commit fd3b446). An adapter never
+        # decides what a missing input means: it NAMES the unit it could not
+        # read and carries on filling the year, and the stage then refuses to
+        # mark that year and refuses to mark itself, so a resume retries the
+        # year instead of inheriting a hole. Nothing in here is a legitimate
+        # gap — those are counted into counts.json by their own names
+        # (`empty_month`, `datasets_empty`) and never reach this list.
+        self.absent = []
+        self.degraded_years = []
+
+    def note_absent(self, unit, why):
+        """An input this build needed and could not read. NOT a gap: an ABSENCE.
+
+        `unit` is the resumable unit it belongs to (`"2015"`, `"2015-03"`,
+        `"2015 <mission>"`), `why` says which file or url and what is missing.
+        """
+        self.absent.append({"unit": str(unit), "why": str(why)})
+        print(f"  ::warning::{self.a.store}: {unit} — {why}", flush=True)
+
+    def absent_years(self):
+        """The YEARS the absences touch: the first 4-digit token of each unit."""
+        out = set()
+        for e in self.absent:
+            m = re.match(r"(-?\d{4})", e["unit"])
+            if m:
+                out.add(int(m.group(1)))
+        return out
 
     def year_dir(self, year):
         return os.path.join(self.parts, str(year))
@@ -2169,15 +2367,84 @@ def _merge_counts(into, new):
 
 def read_parts(ctx):
     """Every part of every year in range, in year order. Yields arrays."""
+    for y, p in _part_paths(ctx):
+        with np.load(p) as z:
+            yield y, {k: z[k] for k in ROW_KEYS}
+
+
+def year_part_names(ctx, y):
+    """The `.npz` files a year directory holds, sorted. Never a marker read."""
+    d = ctx.year_dir(y)
+    if not os.path.isdir(d):
+        return []
+    return sorted(n for n in os.listdir(d) if n.endswith(".npz"))
+
+
+def parts_preflight(ctx):
+    """REFUSE to assemble parts that no marker claims (E-079 §4, §5.21).
+
+    Both assemblers walk the parts DIRECTORY — `_part_paths` — and until now
+    neither looked at the year's marker or at its ledger. Three ways that
+    turned a failure into "no data there":
+
+      * a fetch killed mid-year (the six-hour cap, an OOM, a lost box) leaves
+        flushed parts behind and no marker. A later `--stage fetch` sees the
+        year unmarked and re-fetches it, which is right — but a later
+        `--stage publish`, or an assemble after a `--force` on one other year,
+        read those orphan parts as if they were a year.
+      * a year marked done whose counts.json says `parts: 7` while six files
+        are on disk: one npz lost to a full disk or a half-written flush. Both
+        assemblers would have assembled six and said nothing.
+      * the same with rows — checked in `_finish_store`, where the scan has
+        counted them.
+
+    Under `--allow-missing-years` an unmarked year is ADMITTED rather than
+    refused, and named in store.json's `degraded` block, because that flag is
+    the caller saying "a short store is what I want" — but it is never the
+    default, and it never silently rewrites the ledger.
+    """
+    allow = bool(getattr(ctx.a, "allow_missing_years", False))
+    bad, degraded = [], []
     for y in ctx.years:
-        d = ctx.year_dir(y)
-        if not os.path.isdir(d):
+        npz = year_part_names(ctx, y)
+        # `read_json` answers a missing file and an unparseable one with {},
+        # so presence is asked of the filesystem: a counts.json that exists and
+        # does not parse must NOT read as "no ledger here" and be skipped.
+        cp = os.path.join(ctx.year_dir(y), "counts.json")
+        c = read_json(cp, {}) if os.path.exists(cp) else None
+        m = marked(ctx.root, f"parts/{y}")
+        if not npz and c is None and not m:
+            continue                       # never fetched; the stage said so
+        if not m:
+            msg = (f"{y}: {len(npz)} part file(s) in {ctx.year_dir(y)} and no "
+                   f"{marker(ctx.root, f'parts/{y}')} — the fetch of that year "
+                   f"did not finish, so these parts are a PREFIX of the year")
+            (degraded if allow else bad).append(msg)
             continue
-        for n in sorted(os.listdir(d)):
-            if not n.endswith(".npz"):
-                continue
-            with np.load(os.path.join(d, n)) as z:
-                yield y, {k: z[k] for k in ROW_KEYS}
+        if c is None:
+            bad.append(f"{y}: marked done with no counts.json — the marker was "
+                       f"written without the ledger it is supposed to describe")
+            continue
+        want = int(c.get("parts", -1))
+        if want != len(npz):
+            bad.append(f"{y}: counts.json says {want} part(s), "
+                       f"{ctx.year_dir(y)} holds {len(npz)} "
+                       f"({', '.join(npz[:4])}{' …' if len(npz) > 4 else ''})")
+    if bad:
+        sys.exit(
+            f"REFUSING to assemble {ctx.adapter.store}: the parts on disk do "
+            f"not match what claims them.\n  " + "\n  ".join(bad) +
+            f"\nAssembling anyway would write a store whose `per_year` block "
+            f"is simply the rows that happened to be there — the one number "
+            f"that would have shown the loss, computed FROM the loss. Re-run "
+            f"the fetch stage with the same --work value (an unmarked year is "
+            f"re-fetched whole and its stale parts are cleared first), or pass "
+            f"--allow-missing-years to assemble a deliberately short store.")
+    if degraded:
+        for m in degraded:
+            print(f"  ::warning::{m} — --allow-missing-years admits it")
+        ctx.degraded_years = degraded
+    return degraded
 
 
 # ================================================================== stages ===
@@ -2228,12 +2495,41 @@ def stage_fetch(ctx):
             if marked(ctx.root, f"parts/{y}") and not ctx.a.force:
                 print(f"  {y}: already fetched — skipping")
                 continue
+            # A RE-FETCH STARTS FROM AN EMPTY YEAR. `PartWriter` numbers its
+            # flushes from 00000, so a --force re-run that produces FEWER parts
+            # than the last one left the tail of the old run on disk — and both
+            # assemblers read the directory, not the ledger, so those stale
+            # parts would be assembled into the new store. The one-stream
+            # branch below has always done this; the per-year branch now does
+            # too.
+            shutil.rmtree(ctx.year_dir(y), ignore_errors=True)
+            mp = marker(ctx.root, f"parts/{y}")
+            if os.path.exists(mp):
+                os.remove(mp)
             t0 = time.time()
+            before = len(ctx.absent)
             pw = PartWriter(ctx, y)
             for label, rows, counts in ad.fetch_year(ctx, y):
                 pw.add(rows, counts)
                 ctx.prog.item(f"{ad.store} {label}", i,
                               {"year_rows": pw.n})
+            lost = ctx.absent[before:]
+            if lost:
+                # DO NOT MARK A YEAR WHOSE INPUTS WERE NOT ALL READ. The rows
+                # that DID arrive stay on disk — they cost hours and the retry
+                # overwrites them — but without the marker and without the
+                # counts.json ledger they are not a year: `parts_preflight`
+                # refuses to assemble them, `family10_parts_hub.push` refuses
+                # to publish them, and the next run re-fetches the year whole.
+                # This is the whole mechanism (ml/CLAUDE.md §5.21, family 7's
+                # commit fd3b446): a marker may only UNDER-claim.
+                pw.flush()
+                print(f"  ::warning::{y}: NOT MARKED — {len(lost)} input(s) "
+                      f"could not be read ({'; '.join(e['unit'] for e in lost[:4])}"
+                      f"{' …' if len(lost) > 4 else ''}); the {pw.n:,} row(s) "
+                      f"that did arrive stay on disk, and the retry clears "
+                      f"them and re-fetches the year whole")
+                continue
             n = pw.close()
             print(f"  {y}: {n:,} row(s) in {pw.seq} part(s) "
                   f"({time.time() - t0:.1f}s)")
@@ -2278,27 +2574,81 @@ def stage_fetch(ctx):
             ledger = next((y for y in sorted(writers) if y in ctx.years), None)
             if ledger is None:
                 ledger = ctx.years[0] if ctx.years else None
-            for year in sorted(writers):
-                if year in ctx.years:
-                    writers[year].counts = (dict(final) if year == ledger
-                                            else {})
-                    writers[year].close()
-                else:
+            # THE RESUMABLE UNIT IS THE WHOLE PASS, so an absence anywhere in it
+            # withholds EVERY year's marker, not one year's. There is no
+            # cheaper granularity to fall back to: the file is sorted by
+            # expocode, so a year is spread across the whole 1.4 GB.
+            if ctx.absent:
+                for year in sorted(writers):
                     writers[year].flush()
-            for y in ctx.years:
-                if y not in writers:
-                    w = PartWriter(ctx, y)
-                    if y == ledger:
-                        w.counts = dict(final)
-                    w.close()
+                print(f"  ::warning::{ad.store}: NO year marked — "
+                      f"{len(ctx.absent)} input(s) could not be read in the "
+                      f"one pass that is this store's resumable unit; "
+                      f"{total:,} row(s) kept on disk for the retry")
+            else:
+                for year in sorted(writers):
+                    if year in ctx.years:
+                        writers[year].counts = (dict(final) if year == ledger
+                                                else {})
+                        writers[year].close()
+                    else:
+                        writers[year].flush()
+                for y in ctx.years:
+                    if y not in writers:
+                        w = PartWriter(ctx, y)
+                        if y == ledger:
+                            w.counts = dict(final)
+                        w.close()
             print(f"  {ad.store}: {total:,} row(s) over "
                   f"{len(writers)} year(s) in one pass "
                   f"({time.time() - t0:.1f}s)")
+    fetch_absence_check(ctx)
     ctx.prog.stage_start(f"{ad.store} store", 1)
     meta = assemble(ctx)
     mark(ctx.root, "fetch")
     ctx.prog.item("store", 1, {"N": meta["N"], "bin_first": meta["bin_first"]})
     return meta
+
+
+def fetch_absence_check(ctx):
+    """REFUSE the stage when an input could not be read (family 7, fd3b446).
+
+    Every adapter above collects rather than decides, so this is the one place
+    that answers, and it answers the way §5.21 requires: the years that could
+    not be read are NOT marked, the stage is NOT marked, and a resume retries
+    exactly those years. A store that is deliberately short has to be asked for
+    BY NAME — and then the degrade is written into `store.json`, so the store
+    says what it did rather than what it meant to do.
+    """
+    if not ctx.absent:
+        return
+    ad = ctx.adapter
+    units = [e["unit"] for e in ctx.absent]
+    years = sorted(ctx.absent_years())
+    if not getattr(ctx.a, "allow_missing_years", False):
+        sys.exit(
+            f"stage fetch ({ad.store}): {len(ctx.absent)} input(s) could not "
+            f"be read, and every one of them is a hole nothing downstream can "
+            f"see — a store of point observations has no empty cell to look "
+            f"at, so a month, a dataset-year or a mission-year that did not "
+            f"arrive is indistinguishable from an ocean nobody sampled. "
+            f"REFUSING to mark the stage.\n  "
+            + "\n  ".join(f"{e['unit']}: {e['why']}" for e in ctx.absent[:8])
+            + (f"\n  … and {len(ctx.absent) - 8} more" if len(ctx.absent) > 8
+               else "")
+            + f"\nThe year(s) {years} carry no `parts/<year>.done` marker and "
+              f"no counts.json, so nothing will assemble or publish them and "
+              f"a re-run with the SAME --work value retries exactly those — "
+              f"the years that DID land are marked and skipped. "
+              f"{'`family10_parts_hub.py push` will refuse them too. ' if ad.store == 'slatrack' else ''}"
+              f"Two ways on: (1) fix the source (a moved ERDDAP dataset id, a "
+              f"short mirror, a filter that does not match the remote layout) "
+              f"and re-run; or (2) pass --allow-missing-years if a store with "
+              f"those inputs missing is genuinely what you want.")
+    print(f"  ::warning::{ad.store}: {len(ctx.absent)} input(s) could not be "
+          f"read ({', '.join(units[:6])}{' …' if len(units) > 6 else ''}) — "
+          f"--allow-missing-years says that is deliberate; the degrade goes "
+          f"into store.json")
 
 
 # ---------------------------------------------------- assembly, two ways ----
@@ -2574,6 +2924,7 @@ def _peak_rss_gb():
 
 def assemble(ctx):
     """Pick an assembler and say which one ran (`--assemble`)."""
+    parts_preflight(ctx)
     how = str(getattr(ctx.a, "assemble", "auto") or "auto")
     if how == "auto":
         rows = sum(_part_ledgers(ctx)[0].values())
@@ -2646,6 +2997,37 @@ def assemble_store(ctx):
 
 
 
+def _check_year_ledgers(ctx, per_year):
+    """The rows the parts HOLD against the rows the year's ledger CLAIMS.
+
+    `counts.json` is written by `PartWriter.close()` from the rows it actually
+    flushed, so the two can only disagree if a part file was lost, truncated or
+    replaced between the fetch and the assembly — and the store.json that came
+    out would have recorded the smaller number in `per_year` as though it were
+    the measurement. The one number that shows the loss must not be computed
+    from the loss, which is why this compares against a record written earlier.
+
+    Both assemblers reach this through `_finish_store`, so neither can skip it.
+    """
+    bad = []
+    for y in ctx.years:
+        cp = os.path.join(ctx.year_dir(y), "counts.json")
+        if not os.path.exists(cp):
+            continue                       # `parts_preflight` has ruled on it
+        want = int(read_json(cp, {}).get("rows", -1))
+        got = int(per_year.get(y, 0))
+        if want != got:
+            bad.append(f"{y}: counts.json says {want:,} row(s), the parts hold "
+                       f"{got:,}")
+    if bad:
+        sys.exit(
+            f"REFUSING to write {ctx.adapter.store}/store.json: a year's parts "
+            f"no longer hold what its ledger recorded.\n  " + "\n  ".join(bad) +
+            f"\nThe store would have published the smaller number as its own "
+            f"`per_year` measurement. Re-fetch those years with the same "
+            f"--work value.")
+
+
 def _finish_store(ctx, dest, files, N, off, bin_first, bin_last, n_bins,
                   per_year, counts_all, values):
     """The bookkeeping tail BOTH assemblers share: statistics, store.json, the
@@ -2661,6 +3043,7 @@ def _finish_store(ctx, dest, files, N, off, bin_first, bin_last, n_bins,
     fixed-size chunks either way, so the numbers are identical.
     """
     ad = ctx.adapter
+    _check_year_ledgers(ctx, per_year)
     per_channel, measured_fraction = _channel_stats(values, ad.channels, N)
     live = int((np.diff(off) > 0).sum())
     plan = read_json(os.path.join(ctx.root, "plan.json"), {})
@@ -2731,6 +3114,22 @@ def _finish_store(ctx, dest, files, N, off, bin_first, bin_last, n_bins,
     }
     if ad.notes:
         meta["notes"] = ad.notes
+    # THE STORE SAYS WHAT IT DID, NOT WHAT IT MEANT TO DO. A build that was
+    # allowed past an unreadable input carries the list of them here, in the
+    # file every consumer already reads — `store.json`'s `sources` and
+    # `per_year` are where a hole has to be visible, because the arrays
+    # themselves cannot show one (family 7, fd3b446).
+    if ctx.absent or ctx.degraded_years:
+        meta["degraded"] = {
+            "allow_missing_years": bool(getattr(ctx.a, "allow_missing_years",
+                                                False)),
+            "inputs_not_read": ctx.absent,
+            "years_admitted_unmarked": ctx.degraded_years,
+            "note": ("this store was built past inputs that could not be read "
+                     "— the rows below are what arrived, not what the archive "
+                     "holds. Every unit named here is a gap that nothing "
+                     "downstream can see in the arrays."),
+        }
     meta["sha256"] = {n: sha256(p) for n, p in sorted(files.items())}
     atomic_json(os.path.join(dest, "store.json"), meta)
     check_store(dest, ad, chunk_rows=ctx.check_chunk)
@@ -2765,6 +3164,22 @@ def check_store(path, adapter=None, anchor=None, chunk_rows=CHECK_CHUNK_ROWS):
         row in the wrong slice, the second an offset vector that is
         internally tidy but describes a different store.
     """
+    # EVERY CHECK BELOW IS AN `assert`, AND `python3 -O` DELETES THOSE. Run
+    # under -O (or PYTHONOPTIMIZE set in the environment, which a runner image
+    # or a helpful wrapper can do without anybody typing it) this whole
+    # function becomes: open the store, return it. `_finish_store` calls it
+    # before writing store.json and `stage_publish` calls it before uploading,
+    # so an optimised interpreter would publish an UNCHECKED store and print
+    # the same lines as a checked one. That is the quietest possible way to
+    # silence an assertion, so it is refused here rather than rewritten into
+    # sixteen `if ...: raise`s that would drift from the ones above them.
+    if not __debug__:
+        raise RuntimeError(
+            "check_store cannot run under `python3 -O` / PYTHONOPTIMIZE: every "
+            "E-079 §4 assertion in it is an `assert` statement and -O removes "
+            "them all, so the check would pass by not existing. Re-run without "
+            "-O (unset PYTHONOPTIMIZE); the check is seconds on the small "
+            "stores and reads the big ones in blocks.")
     st = f10.Store(path)
     N = int(st.N)
     chunk = max(1, int(chunk_rows))
@@ -2902,18 +3317,45 @@ def stage_publish(ctx):
     is not evidence the bytes are retrievable, so a publish that cannot verify
     FAILS the job.
     """
-    from huggingface_hub import hf_hub_download
     ad = ctx.adapter
     dest = ctx.store
     prefix = f"{HF_ROOT}/{ad.store}"
-    api, repo, tok = hub_repo()
-    names = sorted(n for n in os.listdir(dest) if n.endswith(".npy"))
-    names += ["store.json"]
+    # THE FILE LIST COMES FROM store.json, NOT FROM THE DIRECTORY. A listing
+    # publishes whatever is there, and `family10_store.Store` opens `qc.npy`
+    # and `fp.npy` through `_optional` — so a store that reached the Hub
+    # without one of them opens cleanly, answers every search, and silently
+    # reports no quality flag and the default footprint for every row. The
+    # sha256 block names exactly the files the assembler wrote; anything else
+    # on disk is not this store, and anything missing from disk is a publish
+    # that must not happen.
+    sm = read_json(os.path.join(dest, "store.json"), {})
+    want = sorted(sm.get("sha256") or {})
+    if not want:
+        sys.exit(f"cannot publish: {os.path.join(dest, 'store.json')} carries "
+                 f"no sha256 block, so there is no record of which files this "
+                 f"store is made of. Re-run the fetch stage.")
+    names = want + ["store.json"]
     for n in names:
         if not os.path.exists(os.path.join(dest, n)):
-            sys.exit(f"cannot publish: {os.path.join(dest, n)} is missing")
+            sys.exit(f"cannot publish: {os.path.join(dest, n)} is missing — "
+                     f"store.json names it in its sha256 block. Publishing the "
+                     f"rest would put a store on the Hub that opens, searches "
+                     f"and answers with that column silently absent.")
+    have = sorted(n for n in os.listdir(dest) if n.endswith(".npy"))
+    extra = sorted(set(have) - set(want))
+    if extra:
+        sys.exit(f"cannot publish: {extra} sit in {dest} and store.json does "
+                 f"not name them. They are not part of this store — a leftover "
+                 f"from an earlier build with a different schema — and a "
+                 f"publish that uploaded them would leave the Hub holding "
+                 f"columns of two different stores under one prefix. Remove "
+                 f"them or rebuild into a clean directory.")
     _restore_disk_preflight(ctx, dest, names)
     check_store(dest, ad, chunk_rows=ctx.check_chunk)
+    # The Hub is reached only after every question that can be answered from
+    # the store itself has been (ml/CLAUDE.md §0.3).
+    from huggingface_hub import hf_hub_download
+    api, repo, tok = hub_repo()
     api.create_repo(repo, repo_type="dataset", exist_ok=True, private=False)
     ctx.prog.stage_start(f"publish {ad.store}", len(names))
     entries = []
@@ -3338,9 +3780,21 @@ def main():
                          "(ml/CLAUDE.md §6). Refuses if any requested year has "
                          "no done.json on the Hub.")
     ap.add_argument("--allow-missing-years", action="store_true",
-                    help="with --parts-from-hub: assemble even though some "
-                         "years are not on the Hub. The store will be short "
-                         "and its per_year block says which years are empty.")
+                    help="BUILD PAST AN INPUT THAT COULD NOT BE READ. Without "
+                         "it the fetch stage refuses — and leaves the "
+                         "unreadable years unmarked, so a re-run retries "
+                         "exactly those — whenever a month's CSV, a GTMBA "
+                         "dataset-year, a slatrack mission-year listing or a "
+                         "batch of original files did not arrive, and the "
+                         "assembler refuses parts that no marker claims. With "
+                         "it, all of those become warnings, the store is built "
+                         "from what arrived, and store.json grows a "
+                         "`degraded` block naming every unit that is missing. "
+                         "Also (as before) with --parts-from-hub: assemble "
+                         "even though some years have no done.json on the Hub. "
+                         "An ERDDAP 'produced no matching results' is NOT one "
+                         "of these — that is the archive saying the year is "
+                         "empty, and it is counted, not refused.")
     ap.add_argument("--check-chunk-rows", type=int, default=CHECK_CHUNK_ROWS,
                     help="rows per block in the assertion pass over the "
                          "finished store (default "

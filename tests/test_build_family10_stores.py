@@ -1592,3 +1592,385 @@ def test_rows_pack_keeps_lon_below_180_after_the_float32_cast(tmp_path, built):
     assert lon.dtype == np.float32
     assert np.all((lon >= np.float32(-180.0)) & (lon < np.float32(180.0))), lon
     assert lon[0] == np.float32(-180.0) and lon[1] == np.float32(-180.0)
+
+
+# =============================================== 57-71 · no silent skip path ==
+# Chris's rule, applied to family 10 the way commit fd3b446 applied it to
+# family 7: there must be NO code path where an input cannot be read, the
+# builder warns (or says nothing), and the unit is marked done anyway. For a
+# store of POINT observations that rule bites harder than it does for a
+# gridded tensor — a grid has an empty cell to look at, and a store of
+# scattered measurements has nothing at all. A month that did not download and
+# an ocean nobody sampled produce the same store.
+#
+# Each test below is one of the sites, and each asserts the same three things
+# the family-7 pass did: the stage REFUSES, the unit is NOT marked (so a resume
+# retries exactly it), and the `--allow-missing-years` path RECORDS what it
+# gave up.
+def _ns(**over):
+    ns = dict(stage="all", force=False, attempts=1, qc_keep=2, socat_url="",
+              smoke=True, assemble="auto", parts_from_hub=False,
+              allow_missing_years=False)
+    ns.update(over)
+    return __import__("argparse").Namespace(**ns)
+
+
+def _gdp_ctx(tmp, **over):
+    """A gdp build laid out but not run, so a test can break its source."""
+    src = os.path.join(tmp, "src_gdp_skip")
+    work = os.path.join(tmp, "work_gdp_skip")
+    os.makedirs(work, exist_ok=True)
+    b10.make_smoke_sources(src, "gdp", b10.parse_date(SMOKE_START),
+                           b10.parse_date(SMOKE_END))
+    return b10.Ctx(_ns(store="gdp", work=work, source_dir=src,
+                       start=SMOKE_START, end=SMOKE_END, **over)), src
+
+
+def test_57_a_month_that_could_not_be_read_refuses_and_leaves_the_year_unmarked(
+        tmp_path):
+    """The GDP site. `_month` used to answer a missing file with
+    `{"missing_month": 1}` and zero rows; `stage_fetch` then marked the year
+    COMPLETE, and because a resume trusts the marker the hole was permanent,
+    invisible and green — family 7's 1989, one family over."""
+    tmp = str(tmp_path)
+    ctx, src = _gdp_ctx(tmp)
+    b10.run_stages(ctx, ["index"])
+    gone = os.path.join(src, "gdp", "1982-01.csv")
+    assert os.path.exists(gone)
+    os.remove(gone)
+
+    with pytest.raises(SystemExit) as e:
+        b10.run_stages(ctx, ["fetch"])
+    msg = str(e.value)
+    assert "1982-01" in msg and "allow-missing-years" in msg
+
+    # THE MARKER IS THE POINT: 1982 is not marked, so a resume refetches it,
+    # and neither the year nor the stage claims to be done.
+    assert not b10.marked(ctx.root, "parts/1982")
+    assert not b10.marked(ctx.root, "fetch")
+    # 1981 landed whole and IS marked — a refusal must not cost the years that
+    # worked, or a resume would redo the archive every time.
+    assert b10.marked(ctx.root, "parts/1981")
+    # and no store was written from the short parts
+    assert not os.path.exists(os.path.join(ctx.store, "store.json"))
+
+
+def test_58_the_flag_is_the_only_way_through_and_the_store_records_the_hole(
+        tmp_path):
+    """--allow-missing-years builds, and store.json says what it gave up."""
+    tmp = str(tmp_path)
+    ctx, src = _gdp_ctx(tmp, allow_missing_years=True)
+    b10.run_stages(ctx, ["index"])
+    os.remove(os.path.join(src, "gdp", "1982-01.csv"))
+    b10.run_stages(ctx, ["fetch"])
+
+    meta = json.load(open(os.path.join(ctx.store, "store.json")))
+    deg = meta["degraded"]
+    assert deg["allow_missing_years"] is True
+    assert any("1982-01" in e["unit"] for e in deg["inputs_not_read"])
+    assert any("does not exist" in e["why"] for e in deg["inputs_not_read"])
+    # The year is still NOT marked — the flag admits the parts, it does not
+    # promote a short year to a complete one.
+    assert not b10.marked(ctx.root, "parts/1982")
+    assert meta["per_year"]["1982"] < meta["per_year"]["1981"]
+
+
+def test_59_fetch_first_tells_an_empty_archive_from_a_moved_one():
+    """ERDDAP's "produced no matching results" is the archive saying the year
+    is empty; a bare 404 is the dataset id moving under the build. They used
+    to arrive at the caller as the same `None`, and the caller counted both as
+    a gap — which is how `missing_month` and `datasets_empty` could hold a
+    download failure and an empty year under one number."""
+    calls = []
+
+    def fake(url, path=None, **k):
+        calls.append(url)
+        raise b10._Empty(url) if "empty" in url else b10._NotFound(url)
+
+    import builtins  # noqa: F401  (keeps the monkeypatch local and obvious)
+    old = b10.http_bytes
+    try:
+        b10.http_bytes = lambda u, **k: fake(u)
+        assert b10.fetch_first(["http://x/empty"], attempts=1,
+                               reason=True) == (None, "empty")
+        assert b10.fetch_first(["http://x/gone"], attempts=1,
+                               reason=True) == (None, "notfound")
+        # a MIX is not an empty archive: one url said "no rows", the other is
+        # simply gone, so the pessimistic answer is the honest one.
+        assert b10.fetch_first(["http://x/empty", "http://x/gone"], attempts=1,
+                               reason=True) == (None, "notfound")
+        # and the old two-value call still behaves exactly as it did
+        assert b10.fetch_first(["http://x/empty"], attempts=1) is None
+    finally:
+        b10.http_bytes = old
+
+
+def test_60_gtmba_refuses_a_year_missing_from_a_dataset_the_mirror_carries(
+        tmp_path):
+    """A mirror that holds `pmelTaoDySst/` and not `pmelTaoDySst/1982.csv` is
+    SHORT — that year's sst is NaN at every mooring. A mirror that holds no
+    `pmelTaoDyAdcp/` at all simply does not carry the ADCP, which is a
+    property of the archive copy and not a failure (the test fixtures are
+    exactly that: three of the eight dataset-years)."""
+    tmp = str(tmp_path)
+    src = os.path.join(tmp, "src_gtmba_skip")
+    work = os.path.join(tmp, "work_gtmba_skip")
+    os.makedirs(work, exist_ok=True)
+    b10.make_smoke_sources(src, "gtmba", b10.parse_date(SMOKE_START),
+                           b10.parse_date(SMOKE_END))
+    ctx = b10.Ctx(_ns(store="gtmba", work=work, source_dir=src,
+                      start=SMOKE_START, end=SMOKE_END))
+    b10.run_stages(ctx, ["index"])
+    os.remove(os.path.join(src, "gtmba", "pmelTaoDySst", "1982.csv"))
+    with pytest.raises(SystemExit) as e:
+        b10.run_stages(ctx, ["fetch"])
+    assert "1982 pmelTaoDySst" in str(e.value)
+    assert not b10.marked(ctx.root, "parts/1982")
+    assert b10.marked(ctx.root, "parts/1981")
+
+
+def test_61_gtmba_counts_a_dataset_the_mirror_does_not_carry_at_all(built):
+    """The other half of 60: the five datasets the fixture omits are COUNTED,
+    under a name that says which case it is, and nothing refuses."""
+    ctx, _ = built["gtmba"]
+    counts = json.load(open(os.path.join(ctx.year_dir(1982),
+                                         "counts.json")))["counts"]
+    assert counts.get("datasets_absent_locally", 0) >= 4
+    assert counts.get("datasets_empty", 0) == 0
+    assert b10.marked(ctx.root, "parts/1982")
+
+
+class _FakeCM:
+    """Just enough `copernicusmarine` for `_fetch_files`: a listing and a get
+    that writes files. `serve` says how many of the asked-for files arrive."""
+
+    def __init__(self, listed, serve=None):
+        self.listed = listed
+        self.serve = serve
+        self.out = None
+
+    def get(self, dry_run=False, regex=None, output_directory=None, **k):
+        if dry_run:
+            return {"files": [{"filename": n} for n in self.listed]}
+        names = [n for n in self.listed
+                 if regex is None or __import__("re").search(regex, n)]
+        if self.serve is not None:
+            names = names[:self.serve]
+        os.makedirs(output_directory, exist_ok=True)
+        for n in names:
+            open(os.path.join(output_directory, os.path.basename(n)),
+                 "wb").write(b"")
+        return {"files": []}
+
+
+def _slatrack_files(ctx, fake, monkeypatch, mid="cmems_m_PT1S_202411"):
+    monkeypatch.setitem(sys.modules, "copernicusmarine", fake)
+    ad = b10.SLATrackAdapter()
+    monkeypatch.setattr(ad, "_read_nc",
+                        lambda c, p, m: (b10.empty_rows(ad.C), {"kept": 0}))
+    return list(ad._fetch_files(ctx, mid, dt.date(1982, 1, 1),
+                                dt.date(1982, 1, 31)))
+
+
+def test_62_a_mission_year_that_lists_no_file_is_an_absence_not_an_empty_year(
+        tmp_path, monkeypatch):
+    """THE ONE THAT WOULD HAVE COST THE WHOLE ARCHIVE. The remote path layout
+    is not measured (the adapter says so), and `filter=*<year>*` is matched
+    against the absolute remote path. If that pattern does not fit, EVERY
+    mission-year lists zero files, every year finishes in seconds with no
+    rows, done.json is written for each, and 1993-2024 assembles into an empty
+    store that is green from end to end."""
+    tmp = str(tmp_path)
+    ctx, _ = _gdp_ctx(tmp)                       # any ctx: only paths are used
+    ctx.a.store = "slatrack"
+    fake = _FakeCM(listed=[])
+    _slatrack_files(ctx, fake, monkeypatch)
+    assert ctx.absent, "an empty listing must be reported as an absence"
+    assert "listed NO original file" in ctx.absent[0]["why"]
+    with pytest.raises(SystemExit, match="allow-missing-years"):
+        b10.fetch_absence_check(ctx)
+
+
+def test_63_a_batch_that_downloads_fewer_files_than_it_asked_for_refuses(
+        tmp_path, monkeypatch):
+    """`copernicusmarine.get` does not raise on a file it could not serve. One
+    missing day of one mission is invisible in a store of 2e9 rows."""
+    tmp = str(tmp_path)
+    ctx, _ = _gdp_ctx(tmp)
+    ctx.a.store = "slatrack"
+    names = [f"/remote/1982/track_1982010{k}.nc" for k in range(1, 5)]
+    _slatrack_files(ctx, _FakeCM(listed=names, serve=2), monkeypatch)
+    assert ctx.absent and "2 of the 4 file(s)" in ctx.absent[0]["why"]
+    with pytest.raises(SystemExit, match="allow-missing-years"):
+        b10.fetch_absence_check(ctx)
+    # and the complete batch is silent
+    ctx.absent = []
+    _slatrack_files(ctx, _FakeCM(listed=names), monkeypatch)
+    assert ctx.absent == []
+
+
+def test_64_the_assembler_refuses_parts_that_no_marker_claims(tmp_path):
+    """A fetch killed mid-year (the six-hour cap, an OOM, a lost box) leaves
+    flushed parts and no marker. Both assemblers walked the DIRECTORY, so
+    those orphan parts assembled as if they were a year — and store.json's
+    per_year block then reported the loss as a measurement."""
+    tmp = str(tmp_path)
+    ctx, _ = build(tmp, "gdp")
+    os.remove(b10.marker(ctx.root, "parts/1982"))
+    with pytest.raises(SystemExit) as e:
+        b10.assemble(ctx)
+    assert "did not finish" in str(e.value) and "1982" in str(e.value)
+
+    # the flag admits them, and store.json says which year it admitted
+    ctx.a.allow_missing_years = True
+    ctx.degraded_years = []
+    b10.assemble(ctx)
+    deg = json.load(open(os.path.join(ctx.store, "store.json")))["degraded"]
+    assert any("1982" in m for m in deg["years_admitted_unmarked"])
+
+
+def test_65_the_assembler_refuses_a_year_short_of_the_parts_it_recorded(
+        tmp_path):
+    """counts.json is written from the rows that were flushed, so the two can
+    only disagree if a part was lost between the fetch and the assembly."""
+    tmp = str(tmp_path)
+    ctx, _ = build(tmp, "gdp")
+    d = ctx.year_dir(1982)
+    lost = sorted(n for n in os.listdir(d) if n.endswith(".npz"))[0]
+    os.remove(os.path.join(d, lost))
+    with pytest.raises(SystemExit) as e:
+        b10.assemble(ctx)
+    assert "counts.json says" in str(e.value)
+
+
+def test_66_the_assembler_refuses_a_year_short_of_the_rows_it_recorded(
+        tmp_path):
+    """The same guard one level down: the part file is there and holds fewer
+    rows than the ledger recorded. The number that would show the loss must
+    not be computed FROM the loss."""
+    tmp = str(tmp_path)
+    ctx, _ = build(tmp, "gdp")
+    d = ctx.year_dir(1982)
+    p = os.path.join(d, sorted(n for n in os.listdir(d)
+                               if n.endswith(".npz"))[0])
+    with np.load(p) as z:
+        half = {k: z[k][: max(1, len(z["bin"]) // 2)] for k in b10.ROW_KEYS}
+    np.savez(p, **half)
+    with pytest.raises(SystemExit) as e:
+        b10.assemble(ctx)
+    assert "row(s), the parts hold" in str(e.value)
+
+
+def test_67_a_truncated_socat_transfer_raises_instead_of_shortening_the_store():
+    """The 1.4 GB synthesis streams through a bare urlopen — no Content-Length
+    check anywhere — and a prefix of a zip parses perfectly. The store would
+    have come out short by however much did not arrive, with every year marked
+    done, and nothing could tell afterwards."""
+    import io
+    import zipfile
+    buf = io.BytesIO()
+    payload = ("Expocode\tversion\n" + "x\ty\n" * 20000).encode()
+    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as z:
+        z.writestr("SOCAT.tsv", payload)
+    raw = buf.getvalue()
+    cut = raw[: len(raw) // 2]                   # the transfer dies halfway
+    with pytest.raises(IOError, match="cut short"):
+        list(b10._zip_member_stream(io.BytesIO(cut), size=97))
+    # the deliberate prefix the index stage reads is exempt, by name
+    got = b"".join(b10._zip_member_stream(io.BytesIO(cut), size=97,
+                                          partial_ok=True))
+    assert payload.startswith(got) and 0 < len(got) < len(payload)
+
+
+def test_68_check_store_refuses_to_run_with_its_assertions_optimised_away():
+    """Every E-079 §4 check is an `assert`, and `python3 -O` deletes all of
+    them — so under -O the function would open the store, check nothing, and
+    return it to a `_finish_store` and a `stage_publish` that print exactly
+    the same lines as a checked build."""
+    import subprocess
+    r = subprocess.run(
+        [sys.executable, "-O", "-c",
+         "import sys; sys.path.insert(0, %r); import build_family10_stores as b;"
+         "b.check_store('/nonexistent')" % os.path.join(ROOT, "ml")],
+        capture_output=True, text=True)
+    assert r.returncode != 0
+    assert "PYTHONOPTIMIZE" in r.stderr or "-O" in r.stderr
+    assert "check_store cannot run" in r.stderr
+
+
+def test_69_publish_takes_its_file_list_from_store_json_not_the_directory(
+        tmp_path, built, monkeypatch):
+    """`family10_store.Store` opens `qc.npy` and `fp.npy` through `_optional`,
+    so a store published without one of them opens cleanly, answers every
+    search, and silently reports no flag and the default footprint for every
+    row. A directory listing publishes whatever is there; the sha256 block
+    names what the assembler wrote."""
+    import shutil
+    ctx, _ = built["gdp"]
+    dest = str(tmp_path / "store")
+    shutil.copytree(ctx.store, dest)
+    ctx2 = b10.Ctx(_ns(store="gdp", work=str(tmp_path / "w"), source_dir="",
+                       start=SMOKE_START, end=SMOKE_END))
+    monkeypatch.setattr(ctx2, "store", dest, raising=False)
+    os.remove(os.path.join(dest, "qc.npy"))
+    with pytest.raises(SystemExit, match="qc.npy"):
+        b10.stage_publish(ctx2)
+    # and a stray column from an older schema is refused rather than uploaded
+    shutil.copyfile(os.path.join(dest, "lat.npy"),
+                    os.path.join(dest, "qc.npy"))
+    open(os.path.join(dest, "pressure.npy"), "wb").write(b"")
+    with pytest.raises(SystemExit, match="pressure.npy"):
+        b10.stage_publish(ctx2)
+
+
+def test_70_a_hub_that_will_not_serve_a_marker_is_not_a_year_that_was_never_fetched(
+        tmp_path, fakehub):
+    """`read_done` swallowed every exception and returned None, so a Hub
+    outage, an expired token and "that year was never pushed" were one answer.
+    `pull --allow-missing` would then drop a year whose parts were sitting on
+    the Hub the whole time."""
+    tmp = str(tmp_path)
+    ctx, _ = build(tmp, "gdp")
+    y = ctx.years[0]
+    ph.push("gdp", y, ctx.work)
+
+    real = fakehub.download
+
+    def refuse(repo, rel, token, dest_dir):
+        if rel.endswith("done.json"):
+            raise RuntimeError("503 Service Unavailable")
+        return real(repo, rel, token, dest_dir)
+
+    fakehub.download = refuse
+    import family10_parts_hub as _ph
+    _ph._download = refuse
+    try:
+        fresh = os.path.join(tmp, "pulled")
+        with pytest.raises(IOError, match="NOT a year that was never fetched"):
+            ph.pull("gdp", [y], fresh, allow_missing=True)
+    finally:
+        _ph._download = real
+        fakehub.download = real
+
+
+def test_71_the_registry_refuses_to_call_an_unreadable_store_a_missing_one():
+    """A 404 means the store is not published. A 401/403 means the Hub would
+    not answer — and returning None for both put a statement about the archive
+    into a registry written by something that could not read the archive."""
+    import urllib.error
+
+    def raise_code(code):
+        def go(url, timeout=60):
+            raise urllib.error.HTTPError(url, code, "no", None, None)
+        return go
+
+    old = reg.http_json
+    try:
+        reg.http_json = raise_code(404)
+        assert reg.hub_json("x/y", "a/b.json") is None
+        for code in (401, 403):
+            reg.http_json = raise_code(code)
+            with pytest.raises(IOError, match="refused the read"):
+                reg.hub_json("x/y", "a/b.json")
+    finally:
+        reg.http_json = old
