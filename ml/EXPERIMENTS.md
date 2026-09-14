@@ -255,12 +255,38 @@ float32 and is unaffected, which is the property the builder was written to
 preserve; **a consumer that needs a calendar date should derive it from `bin`,
 not from `time_days`.**
 
-WHAT IS STILL PENDING. `slatrack` — the along-track sea-level store, 29
-altimeter missions at 1 Hz — **has never been fetched**. It needs two Copernicus
-Marine repository secrets that do not exist in this repository, and a machine
-with at least 100 GB of disk; the `copernicusmarine` toolbox call and the shape
-of the netCDF it returns remain unverified assumptions exercised only against a
-synthetic file. Whether to run it is Chris's call. Family 7.1 — the global
+`slatrack` — IN FLIGHT SINCE 2026-09-14 14:00Z (Chris: "let's do slatrack as
+well"). The along-track sea-level store — 29 altimeter missions at 1 Hz,
+1993 → 2024 — was "never fetched" that morning; the sentence above about
+missing repository secrets was wrong when it was written: both Copernicus
+Marine secrets have existed in the repository since 2026-08-16 (the GLORYS pull
+workflows use them) and nobody had checked. Four one-week probes on a hosted
+runner (January 2015, ~2 min each) turned the unverified assumptions into
+measurements, and each one changed the design:
+
+1. [probe 1](https://github.com/blauewelt/earth/actions/runs/34847980911) — the toolbox's `subset` DOES serve these sparse datasets, but a mission not in orbit for the window raises `CoordinatesOutOfDatasetBounds`; the index now reads every mission's coverage from the public STAC item and clips (`b1798ad`).
+2. [probe 2](https://github.com/blauewelt/earth/actions/runs/34848513007) — the rows came back and the toolbox's OWN netCDF writer crashed (`index must be monotonic`, its `download_sparse.py`); switched to `read_dataframe` (`c7ebe16`).
+3. [probe 3](https://github.com/blauewelt/earth/actions/runs/34849670866) — that frame is LONG format (one row per variable per sample: `variable, platform_id, time, longitude, latitude, value, value_qc`) and slow: 942,612–1,062,987 long rows per mission-week at ~100 s each for h2a, al, c2, j2 — **3.3 k samples/s, ~220 runner-hours for the record**. Pivot added; the original files tried instead (`ce1336c`).
+4. [probe 4](https://github.com/blauewelt/earth/actions/runs/34851552800) — the original per-day netCDF files via `copernicusmarine.get`: **the whole week, four missions, 1,314,846 rows in 43 s**, ~3 MB per mission-week, all three channels in the files (`sla_filtered`, `sla_unfiltered`, `mdt`; time in days since 1950-01-01). That is the route.
+
+The volume that follows — ~68 M rows in 2015, roughly 1.5–2.5 billion over
+32 years, 33 B/row → 50–80 GB — and `ml/CLAUDE.md` §6 (Copernicus credentials
+never reach a rented box) fix the shape of the build (`237735c`, `dae845c`):
+**six GitHub-hosted lanes** over year ranges fetch year by year and publish
+each year's column parts to the Hub under `partials/family10/slatrack/<year>/`
+(restore-verified, `done.json` written last; every 6 h as the resume — the
+GLORYS pattern), then a **keyless box** pulls the parts (`--parts-from-hub`)
+and runs a new **streaming assembler** (bin counts → CSR offsets → scatter into
+memmaps → stable per-bin sort by time; proven byte-identical to the in-RAM
+assembler on a synthetic archive with cross-part ties) and a chunked check, and
+publishes. The lanes were dispatched at 14:00Z
+([the six lanes](https://github.com/blauewelt/earth/actions/runs/34853130853)):
+1993 (32,981,063 rows, 33 parts, 957 MB), 2000 (47,290,137) and 2006
+(47,799,785) were on the Hub, verified and marked by 14:19Z — **10–16 minutes
+per year**, so the record is expected up by ~16:30Z and the assembly follows on
+a 250 GB box. Falsifier at dispatch: the assembled store fails `check_store`
+(sortedness, CSR, bounds) or its per-year counts disagree with the lanes'
+`done.json` sums; either voids the store, not the parts. Family 7.1 — the global
 gridded tensor with the ocean-colour group `oc025` added (recipe `f7l1`,
 E-077) — has still not published, its manifest answering 404 as of 08:05Z on
 2026-09-14, so the registry's tier-G half describes `f7l0` (the same tensor
