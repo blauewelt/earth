@@ -1355,14 +1355,32 @@ def stage_state_check(ctx, stage, n_live=None):
 
 
 # ============================================================ stage: glorys ==
+GLORYS_YEARS = (1993, 2024)           # the archive's own span, inclusive
+
+
 def glorys_chunk_names(ctx):
-    """The `glorys025_global_YYYYMM.nc` chunks that touch the axis."""
-    if ctx.source_dir:
-        pat = os.path.join(ctx.source_dir, "daily025_global",
-                           "glorys025_global_*.nc")
-        return sorted(os.path.basename(p) for p in glob.glob(pat))
-    return [f"glorys025_global_{y}{m:02d}.nc"
-            for y in range(1993, 2025) for m in range(1, 13)]
+    """The `glorys025_global_YYYYMM.nc` chunks that touch the axis.
+
+    DERIVED FROM THE ARCHIVE AND THE AXIS, never from a directory listing.
+    Under `--source-dir` this used to be a `glob`, which meant a month the
+    local mirror did not hold was not "missing" — it was never NAMED, so the
+    absence branch below it could not fire and the stage could not notice the
+    hole at all. It simply built a tensor with six empty pentads in it and
+    marked itself done. The two paths now enumerate the same months, and an
+    absent file is answered by the same refusal on either.
+
+    On the network path the list is unchanged for a full-span build (every
+    1993-2024 month intersects it) and shorter for a narrowed one, which is
+    what the docstring always claimed.
+    """
+    out = []
+    for y in range(GLORYS_YEARS[0], GLORYS_YEARS[1] + 1):
+        for m in range(1, 13):
+            first = dt.date(y, m, 1)
+            last = dt.date(y + (m == 12), m % 12 + 1, 1) - dt.timedelta(days=1)
+            if last >= ctx.d_lo and first <= ctx.d_hi:
+                out.append(f"glorys025_global_{y}{m:02d}.nc")
+    return out
 
 
 def hub_repo(token=None):
@@ -1577,6 +1595,7 @@ def stage_glorys(ctx):
                 flush(b)
 
     ctx.prog.stage_start("glorys", len(names))
+    absent = []
     for i, (name, ym) in enumerate(zip(names, yms), 1):
         if marked(work, f"glorys/{ym}"):
             continue
@@ -1584,8 +1603,16 @@ def stage_glorys(ctx):
         if ctx.source_dir:
             path = ctx.local("daily025_global", name)
             if not os.path.exists(path):
-                print(f"  ::warning:: {path} absent — that month is missing")
-                mark(work, f"glorys/{ym}")
+                # DO NOT MARK A MONTH DONE THAT WAS NEVER READ. This is the
+                # 1989 mechanism of `stage_sst` (see the comment there), one
+                # stage over and on the OFFLINE path: the chunk was absent,
+                # one `::warning::` was printed, `glorys/{ym}` was marked
+                # COMPLETE, and every resume then skipped a month whose six
+                # pentads carry no current, no mixed layer and no sea surface
+                # height — permanently, invisibly, and green. A marker may
+                # only UNDER-claim (ml/CLAUDE.md §5.21), so the month is
+                # RECORDED and the stage refuses at the end instead.
+                absent.append(ym)
                 continue
             drop = False
         else:
@@ -1652,6 +1679,30 @@ def stage_glorys(ctx):
         ctx.note_source("glorys", ctx.local("daily025_global") + "/")
     elif "glorys" not in ctx.sources:
         ctx.note_source("glorys", f"hf://<ns>/{HF_DATASET}/daily025_global/")
+    if absent and not getattr(ctx.a, "allow_missing_years", False):
+        sys.exit(
+            f"stage glorys: the monthly chunk could not be read for "
+            f"{', '.join(absent)} — "
+            f"{', '.join('glorys025_global_' + m + '.nc' for m in absent[:4])}"
+            + (" …" if len(absent) > 4 else "") +
+            f" are not under {ctx.local('daily025_global')}/. Each missing "
+            f"month is ~6 pentad bins in which `cur_speed`, `cur_u`, `cur_v`, "
+            f"`log_mld` and `ssh` are entirely NaN over the GLORYS rows, and "
+            f"marking the month done would make that hole permanent across "
+            f"every resume (ml/CLAUDE.md §5.21) — the same mechanism that left "
+            f"f7l0 with 73 all-NaN `sst` pentads in 1989. REFUSING rather than "
+            f"marking the stage done. Two ways on: (1) put the chunk where this "
+            f"box can read it and re-dispatch with the same `work` value — the "
+            f"months that DID land are marked and skipped, only the missing "
+            f"ones are retried (drop --source-dir and the chunks stream from "
+            f"hf://<ns>/{HF_DATASET}/daily025_global/); or (2) pass "
+            f"--allow-missing-years if a tensor with those months missing is "
+            f"genuinely what you want.")
+    if absent:
+        print(f"  ::warning:: glorys: {len(absent)} month(s) missing "
+              f"({', '.join(absent)}) — --allow-missing-years says that is "
+              f"deliberate")
+        bump_counts(work, glorys_missing_months=absent)
     mark(work, "glorys")
     print(f"  glorys: {n_bins}/{ctx.T} bins carry currents/MLD/SSH")
 
@@ -1913,7 +1964,20 @@ def ncep_year_paths(ctx, year, keys):
 
 
 def ncep_land_mask(ctx):
-    """The gaussian land/sea mask, applied BEFORE regridding (plan §2)."""
+    """The gaussian land/sea mask, applied BEFORE regridding (plan §2).
+
+    Returns the boolean mask, or None ONLY under `--allow-missing-years`.
+
+    The absence is reachable only on the `--source-dir` path — over the
+    network `download_verified` raises and the stage dies there — and on that
+    path it used to print one `::warning::` and return None, which every
+    caller reads as "no mask needed". `soilw` and `tsoil` then went into g100
+    UNMASKED, carrying the reanalysis' meaningless over-ocean values as if
+    they were soil, over 71% of the planet, and nothing downstream could tell
+    that tensor from a masked one: the channels are finite, plausibly scaled
+    and z-scored like everything else. So a missing mask is a REFUSAL, and
+    the degrade has to be asked for by name (ml/CLAUDE.md §0.2).
+    """
     import netCDF4 as ncdf
     if ctx.source_dir:
         p = ctx.local("ncep", f"{NCEP_LAND}.nc")
@@ -1922,9 +1986,27 @@ def ncep_land_mask(ctx):
         download_verified(f"{PSL_NCEP}/{NCEP_LAND}.nc", p,
                           mirrors=(f"{THREDDS_NCEP}/{NCEP_LAND}.nc",))
     if not p or not os.path.exists(p):
+        if not getattr(ctx.a, "allow_missing_years", False):
+            sys.exit(
+                f"stage ncep: the gaussian land/sea mask {NCEP_LAND}.nc could "
+                f"not be read — {p} does not exist"
+                + (f" (--source-dir {ctx.source_dir})" if ctx.source_dir else
+                   f" and {PSL_NCEP}/{NCEP_LAND}.nc could not be fetched") +
+                f". Without it `soilw` and `tsoil` are written UNMASKED: every "
+                f"ocean cell of those two g100 channels would carry the "
+                f"reanalysis' over-ocean values, which are not a measurement "
+                f"of anything, and the tensor would be indistinguishable from "
+                f"a masked one — finite, plausibly scaled, z-scored. REFUSING. "
+                f"Two ways on: (1) put {NCEP_LAND}.nc beside the gaussian "
+                f"dailies (it is one 15 KB file; "
+                f"{THREDDS_NCEP}/{NCEP_LAND}.nc is the mirror, and "
+                f"`ml/mirror_psl.py` puts it on the Hub mirror this build "
+                f"reads first); or (2) pass --allow-missing-years if an "
+                f"UNMASKED soilw/tsoil is genuinely what you want.")
         print("  ::warning:: no gaussian land mask — soilw/tsoil will NOT be "
               "sea-masked, and those two channels will carry the model's "
-              "meaningless over-ocean values")
+              "meaningless over-ocean values; --allow-missing-years says that "
+              "is deliberate")
         return None
     d = ncdf.Dataset(p)
     land = squeeze_level(np.ma.filled(np.asarray(pick_var(d, "land")[:]), 0.0))
@@ -1953,8 +2035,12 @@ def stage_ncep(ctx):
     import netCDF4 as ncdf
     work = ctx.work
     repair_sst_channel(ctx)
-    Xg = open_fill(work, "g100", ctx.shapes()["g100"], create=True)
+    # THE MASK IS READ BEFORE THE FILL FILE IS CREATED. It depends only on the
+    # inputs, so it is checked while the inputs are all it has cost (ml/CLAUDE.md
+    # §0.3) — a refusal here leaves no g100 fill behind for a later stage to
+    # find and reason about.
     land = ncep_land_mask(ctx)
+    Xg = open_fill(work, "g100", ctx.shapes()["g100"], create=True)
 
     years = list(range(ctx.d_lo.year, ctx.d_hi.year + 1))
     carry = Carry(work, "ncep", years)
@@ -2150,9 +2236,17 @@ def stage_ncep(ctx):
         flush(b)
     Xg.flush()
     bump_counts(work, n_ncep_days=n_days)
+    # WHAT THE MANIFEST SAYS ABOUT THE MASK IS WHAT HAPPENED, not what the
+    # stage intended (`stage_static`'s rule, one stage over): this line used to
+    # name `land.sfc.gauss.nc` unconditionally, so a build that ran without it
+    # published a tensor whose own provenance claimed soilw/tsoil were
+    # sea-masked when they were not.
     ctx.note_source("ncep", f"{PSL_NCEP}/<var>.gauss.YYYY.nc "
                             f"(NCEP/NCAR Reanalysis 1, NOAA PSL) + "
-                            f"{NCEP_LAND}.nc")
+                    + (f"{NCEP_LAND}.nc (soilw/tsoil sea-masked)"
+                       if land is not None else
+                       f"NO {NCEP_LAND}.nc — soilw/tsoil are UNMASKED "
+                       f"(--allow-missing-years)"))
     hub_mirror_note(ctx, "ncep_mirror", "ncep.reanalysis")
     if absent and not getattr(ctx.a, "allow_missing_years", False):
         sys.exit(
@@ -2306,6 +2400,7 @@ def stage_rg(ctx):
             X[row, :, :, L + k] = s
 
     ctx.prog.stage_start("rg", n_live)
+    absent = []
     for row, (b, ym, src) in enumerate(live):
         if marked(work, f"rg/{ym}"):
             continue
@@ -2316,6 +2411,14 @@ def stage_rg(ctx):
         else:
             p = rg_cube(ctx, f"RG_{ym}")
             if not p:
+                # `rg_extension_months` NAMED this month off the directory, so
+                # the file was there when the list was made and is not there
+                # now. The bare `continue` that used to stand here left the row
+                # all-NaN — a live bin that says the subsurface was observed
+                # and carries nothing — and the stage still marked itself done
+                # at the end, so the hole survived every resume. Same shape as
+                # the 1989 `sst` hole; same answer.
+                absent.append(ym)
                 continue
             dE = ncdf.Dataset(p)
             write(row, np.ma.filled(dE.variables["ARGO_TEMPERATURE_ANOMALY"][0][lidx],
@@ -2333,6 +2436,25 @@ def stage_rg(ctx):
     bump_counts(work, n_rg_live=n_live)
     ctx.note_source("rg", f"{RG_BASE}/RG_ArgoClim_{{Temperature,Salinity}}_2019"
                           f".nc.gz + RG_YYYYMM extensions")
+    if absent and not getattr(ctx.a, "allow_missing_years", False):
+        sys.exit(
+            f"stage rg: the extension cube could not be read for "
+            f"{', '.join(absent)} — {os.path.join(CACHE, 'rg')} named "
+            f"RG_{absent[0]}.nc when the month list was built and does not "
+            f"hold it now. Each one is a LIVE bin of `rg100` — a row that "
+            f"tells the model the subsurface was observed — carrying nothing "
+            f"but NaN, and marking the stage done would make it permanent "
+            f"across every resume (ml/CLAUDE.md §5.21). REFUSING. Two ways "
+            f"on: (1) re-seed {os.path.join(CACHE, 'rg')} from the GitHub "
+            f"release `data-cache-v1` and re-dispatch with the same `work` "
+            f"value — the months that landed are marked and skipped; or (2) "
+            f"pass --allow-missing-years if a tensor with those months empty "
+            f"is genuinely what you want.")
+    if absent:
+        print(f"  ::warning:: rg: {len(absent)} extension month(s) missing "
+              f"({', '.join(absent)}) — --allow-missing-years says that is "
+              f"deliberate")
+        bump_counts(work, rg_missing_months=absent)
     mark(work, "rg")
     print(f"  rg: {n_live} live bins (one per month, the bin holding the 15th)"
           f"; NaN outside {RG_LAT_LO}..{RG_LAT_HI}")
@@ -4049,15 +4171,6 @@ def stage_static(ctx):
     """
     work = ctx.work
     lats, lons = ctx.lats, ctx.lons
-    ocean = np.zeros((NLAT, NLON), bool)
-    for p in (os.path.join(work, "oisst_seen.npy"),
-              os.path.join(work, "glorys_seen.npy")):
-        if os.path.exists(p):
-            ocean |= np.load(p)
-        else:
-            print(f"  ::warning:: {os.path.basename(p)} absent — `sphere`'s "
-                  f"ocean code is built from the other source only")
-    ctx.prog.stage_start("static", 3)
 
     # EVERY SOURCE THIS STAGE READS IS OPTIONAL TO THE CODE AND MANDATORY TO
     # THE TENSOR, so each absence is COLLECTED and answered once, below —
@@ -4065,6 +4178,26 @@ def stage_static(ctx):
     # returns None, and both of those look exactly like a legitimately empty
     # answer to the arithmetic that follows (ml/CLAUDE.md §0.2).
     missing = []
+
+    # BOTH SEEN MASKS ARE MANDATORY. They are not downloads — `stage_sst` and
+    # `stage_glorys` write them, `seed_from` copies both (`_SEED_FILES_ALWAYS`),
+    # and `sphere`'s ocean code is their UNION. With one of them absent the
+    # stage used to warn and build the ocean from whatever was left, which is
+    # the worst shape this failure can take: `sphere` is an int8 field of
+    # perfectly valid codes either way, `check_statics` passes it, and the
+    # difference against the base — tens of thousands of cells that say "land"
+    # where GLORYS or OISST observed water — is invisible to everything
+    # downstream, including to the seeded build whose whole point is that its
+    # inherited groups are byte-identical.
+    ocean = np.zeros((NLAT, NLON), bool)
+    for p in (os.path.join(work, "oisst_seen.npy"),
+              os.path.join(work, "glorys_seen.npy")):
+        if os.path.exists(p):
+            ocean |= np.load(p)
+        else:
+            missing.append(f"{os.path.basename(p)} (half of `sphere`'s ocean "
+                           f"code — {p} does not exist)")
+    ctx.prog.stage_start("static", 3)
     gp_ice = ne_geojson(ctx, "ne_10m_glaciated_areas")
     if gp_ice is None:
         missing.append("ne_10m_glaciated_areas (the ice-sheet code of `sphere`)")
@@ -4103,14 +4236,19 @@ def stage_static(ctx):
             "stage static: " + "; ".join(missing) + " could not be read.\n"
             "REFUSING to continue: the only thing this stage could do next is "
             "write a static that says the world has no elevation (or no ice "
-            "sheets, or no lakes) and let `meta` and `publish` ship it as a "
-            "tensor — a step that reports success while doing nothing "
-            "(ml/CLAUDE.md §0.2). Two ways on: (1) re-dispatch with the same "
-            "`work` value once the host serves this box (nothing else is "
-            "redone — every other stage is skipped by its own marker, and "
-            "this one has no marker to skip); or (2) pass "
-            "--allow-empty-statics if a tensor with NO elevation is genuinely "
-            "what you want.")
+            "sheets, or no lakes, or no ocean where one of the two seen masks "
+            "observed it) and let `meta` and `publish` ship it as a tensor — a "
+            "step that reports success while doing nothing (ml/CLAUDE.md "
+            "§0.2). A missing *_seen.npy is the quietest of the four: `sphere` "
+            "is a field of valid codes either way, so a build that lost one "
+            "publishes a DIFFERENT sphere from the base and nothing says so. "
+            "Two ways on: (1) re-dispatch with the same `work` value once the "
+            "host serves this box, or once `sst`/`glorys` have run in this "
+            "work dir and written their seen masks (nothing else is redone — "
+            "every other stage is skipped by its own marker, and this one has "
+            "no marker to skip); or (2) pass --allow-empty-statics if a tensor "
+            "with NO elevation — or a `sphere` built from one ocean source — "
+            "is genuinely what you want.")
     if missing:
         print("  ::warning:: static: " + "; ".join(missing) + " — "
               "--allow-empty-statics says that is deliberate")
@@ -4135,12 +4273,29 @@ def stage_static(ctx):
 
 
 # ============================================================= stage: truth ==
+# The file `stage_truth` CANNOT do without, named once. `truth_daily.npz` is
+# pulled beside it as a convenience for family 5 and is read by nothing on this
+# path, so a failed pull of THAT one is a warning and not a hole — the
+# distinction is written down here rather than left to be inferred from a
+# `::warning::` that names both.
+TRUTH_REQUIRED = "truth_pentad.npz"
+TRUTH_ALSO = ("truth_daily.npz",)
+
+
 def truth_files(ctx):
-    """`ml/cache/truth/truth_pentad.npz`, pulled off the Hub when absent."""
+    """`ml/cache/truth/truth_pentad.npz`, pulled off the Hub when absent.
+
+    Returns `(path, why)` — `why` is the pull failure for the REQUIRED file,
+    carried out to `stage_truth` so its refusal can say why the file is not
+    there instead of only that it is not (the exception was previously printed
+    as a `::warning::` and discarded, so a Hub outage and a typo in the repo
+    path produced the same final message).
+    """
     root = os.path.join(ctx.source_dir, "truth") if ctx.source_dir \
         else os.path.join(CACHE, "truth")
     os.makedirs(root, exist_ok=True)
-    want = ["truth_pentad.npz", "truth_daily.npz"]
+    want = [TRUTH_REQUIRED, *TRUTH_ALSO]
+    why = ""
     if not ctx.source_dir:
         for name in want:
             if os.path.exists(os.path.join(root, name)):
@@ -4160,10 +4315,16 @@ def truth_files(ctx):
                     raise FileNotFoundError(dest)
                 print(f"  pulled truth/{name} from the Hub -> {dest}")
             except Exception as e:                            # noqa: BLE001
-                print(f"  ::warning:: truth/{name}: {str(e)[:140]}")
+                if name == TRUTH_REQUIRED:
+                    why = f"{type(e).__name__}: {str(e)[:220]}"
+                    print(f"  ::warning:: truth/{name}: {why} — `stage_truth` "
+                          f"will refuse unless the file is already on disk")
+                else:
+                    print(f"  ::warning:: truth/{name}: {str(e)[:140]} — not "
+                          f"read on this path, the build does not need it")
         shutil.rmtree(os.path.join(root, "truth"), ignore_errors=True)
         shutil.rmtree(os.path.join(root, ".cache"), ignore_errors=True)
-    return os.path.join(root, "truth_pentad.npz")
+    return os.path.join(root, TRUTH_REQUIRED), why
 
 
 def stage_truth(ctx):
@@ -4175,11 +4336,16 @@ def stage_truth(ctx):
     trained for twenty hours and died on `KeyError: 'rapid'`.
     """
     work = ctx.work
-    path = truth_files(ctx)
+    path, why = truth_files(ctx)
     if not os.path.exists(path):
-        sys.exit(f"no {path} — the labels are Atlantic and the stage-2 gates "
-                 f"need them. Publish truth/truth_pentad.npz to the Hub or "
-                 f"run ml/build_truth_pentad.py.")
+        sys.exit(f"stage truth: {path} does not exist"
+                 + (f" and the Hub pull of truth/{TRUTH_REQUIRED} failed "
+                    f"({why})" if why else "") +
+                 f" — the labels are Atlantic and the stage-2 gates need "
+                 f"them. Publish truth/{TRUTH_REQUIRED} to the Hub or run "
+                 f"ml/build_truth_pentad.py. There is no flag for this: a "
+                 f"tensor with no transport labels trains for twenty hours "
+                 f"and dies in the probe on `KeyError: 'rapid'` (run #365).")
     truths = f4.truth_pentad(ctx.bins, PENTAD_DAYS, path=path)
     if "truth_rapid" in truths:
         truths.setdefault("rapid", truths["truth_rapid"])
@@ -4188,6 +4354,26 @@ def stage_truth(ctx):
         sys.exit(f"REFUSING: {path} offers {lack} but this axis carries none "
                  f"of them. A state tensor with no transport labels trains for "
                  f"twenty hours and dies in the probe.")
+    # AND THE FILE MAY BE THERE AND SAY NOTHING. `f4.truth_pentad` returns {}
+    # for a file with no `truth_*` keys, and `missing_truth_keys` then asks
+    # {} - {} and answers [] — so a truth npz that is present but empty (a
+    # half-written publish, a file for another product) sailed through both
+    # guards above and wrote a `truth.npz` with zero series, marked the stage
+    # done, and left the failure to surface twenty hours later in exactly the
+    # probe those guards exist to protect. `REQUIRED_KEYS` demands `rapid`, so
+    # the same question is asked HERE, where the answer is still cheap.
+    empty = [k for k, v in truths.items() if len(v) == 0]
+    if not truths or empty:
+        sys.exit(f"REFUSING: {path} carries "
+                 + (f"no `truth_*` series at all"
+                    if not truths else
+                    f"{len(empty)} label series with no pentad inside this "
+                    f"axis ({', '.join(sorted(empty))})") +
+                 f". The axis is {bin_start(ctx.bins[0], PENTAD_DAYS)} .. "
+                 f"{bin_start(ctx.bins[-1], PENTAD_DAYS)}. Rebuild the labels "
+                 f"on THIS axis with ml/build_truth_pentad.py — a truth.npz "
+                 f"of empty arrays passes every downstream shape check and "
+                 f"fails in the probe (ml/CLAUDE.md §0.2).")
     atomic_npz(os.path.join(work, "truth.npz"), **truths)
     mark(work, "truth")
     print(f"  truth: {len(truths)} label series attached")
@@ -5709,19 +5895,27 @@ def main():
                          "was in place).")
     ap.add_argument("--allow-empty-statics", action="store_true",
                     help="let `static` write an all-NaN `elev` (or a `sphere` "
-                         "with no ice/lake codes) when ETOPO or Natural Earth "
-                         "cannot be read, instead of refusing. For a "
+                         "with no ice/lake codes, or one whose ocean code was "
+                         "built from a single seen mask because "
+                         "oisst_seen.npy or glorys_seen.npy is absent) when a "
+                         "source cannot be read, instead of refusing. For a "
                          "deliberate no-elevation build only — family7-build "
                          "#10/#11 published 1,038,240 NaN this way and went "
                          "green (2026-09-14). `meta` and `publish` still "
                          "refuse an empty static: this flag lets the STAGE "
                          "finish, it does not let the tensor ship.")
     ap.add_argument("--allow-missing-years", action="store_true",
-                    help="let `sst` and `ncep` mark themselves done with "
-                         "source years they could not read, instead of "
-                         "refusing. For a deliberate partial build only — "
-                         "f7l0 carries 73 all-NaN pentads in 1989 because "
-                         "this was the silent default (2026-09-04).")
+                    help="let a fill stage mark itself done over an input it "
+                         "could not read, instead of refusing: `sst` and "
+                         "`ncep` over a source YEAR, `glorys` over a monthly "
+                         "CHUNK, and `ncep` over the gaussian land mask "
+                         "(land.sfc.gauss.nc — without it soilw/tsoil go into "
+                         "g100 UNMASKED, carrying over-ocean values). For a "
+                         "deliberate partial build only — f7l0 carries 73 "
+                         "all-NaN pentads in 1989 because this was the silent "
+                         "default (2026-09-04). Every use is recorded: the "
+                         "missing items land in counts.json and the manifest's "
+                         "`sources` says whether the mask was applied.")
     ap.add_argument("--allow-empty-rg", action="store_true",
                     help="let `rg` write a ZERO-ROW rg100 when the "
                          "Roemmich-Gilson cubes cannot be read, instead of "

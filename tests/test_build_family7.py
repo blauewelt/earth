@@ -690,14 +690,24 @@ def test_11_glorys_resumes_across_a_month_boundary(tmp_path):
                 os.path.join(src_part, "daily025_global", chunks[0]))
     two = str(tmp_path / "two")
     ctx = ctx_for(two, src_part)
-    b7.stage_glorys(ctx)                       # "crashes" after chunk 0
+    # "crashes" after chunk 0 — which since 2026-09-14 is also what the stage
+    # itself says about a source dir holding fewer months than the axis needs:
+    # it does chunk 0, records the absent month and REFUSES. Everything the
+    # resume depends on (chunk 0's marker, its carry, the flushed bins) is
+    # written before the refusal, and the STAGE marker is not.
+    with pytest.raises(SystemExit) as e:
+        b7.stage_glorys(ctx)
+    assert chunks[1].split("_")[-1][:6] in str(e.value), str(e.value)
     part = np.load(b7.group_file(two, "g025"), mmap_mode="r")
     assert not np.array_equal(np.asarray(part), np.asarray(whole),
                               equal_nan=True), \
         "the one-chunk build already equals the whole one — nothing carried"
     assert os.path.exists(os.path.join(two, "glorys",
                                        f"carry_{chunks[0].split('_')[-1][:6]}.npz"))
-    os.remove(b7.marker(two, "glorys"))        # the stage marker, not the chunk
+    assert not b7.marked(two, "glorys"), \
+        "the refused run must leave no stage marker for the resume to trust"
+    assert b7.marked(two, f"glorys/{chunks[0].split('_')[-1][:6]}"), \
+        "the chunk that DID land must stay marked, or the resume redoes it"
     for c in chunks[1:]:
         shutil.copy(os.path.join(src_all, "daily025_global", c),
                     os.path.join(src_part, "daily025_global", c))
@@ -3581,3 +3591,185 @@ def test_47_a_seeded_dir_reruns_exactly_static_and_ncep(build, tmp_path,
             "the re-run static stage did not fill `elev`"
     finally:
         d.close()
+
+
+# ======================================================================== #
+# 2026-09-14 · "if the download fails, silently skip" is gone from the      #
+# family-7 builder: every unreadable INPUT either stops the stage or is a   #
+# degrade a dispatch asked for BY NAME (tests 48-50)                        #
+# ======================================================================== #
+def _month_less_sources(root, drop_month=None):
+    """The smoke sources with one GLORYS monthly chunk REMOVED — the offline
+    shape of the 1989 failure: a chunk the box cannot read."""
+    d_lo = dt.date(*(int(x) for x in b7.SMOKE_START.split("-")))
+    d_hi = dt.date(*(int(x) for x in b7.SMOKE_END.split("-")))
+    b7.make_smoke_sources(root, d_lo, d_hi)
+    d = os.path.join(root, "daily025_global")
+    names = sorted(os.listdir(d))
+    assert len(names) >= 2, "the fixture must have more than one month"
+    gone = drop_month or names[0]
+    os.remove(os.path.join(d, gone))
+    return root, gone.split("_")[-1].split(".")[0]
+
+
+# ------------------------------------------------------------------ 48 -----
+def test_48_glorys_never_marks_a_month_it_could_not_read(tmp_path):
+    """The 1989 mechanism on the OFFLINE path: `--source-dir` with a chunk
+    absent printed one `::warning::`, marked `glorys/<ym>` COMPLETE and moved
+    on, so six pentads of currents, mixed layer and sea surface height stayed
+    NaN through every resume. A marker may only UNDER-claim (ml/CLAUDE.md
+    §5.21), which means the month must stay unmarked and the STAGE must stay
+    unmarked too — the second half is what stops a resume from skipping it.
+    """
+    src, ym = _month_less_sources(str(tmp_path / "src"))
+    work = str(tmp_path / "work")
+    os.makedirs(work, exist_ok=True)
+    ctx = b7.Ctx(_redo_ns(work=work, source_dir=src))
+
+    with pytest.raises(SystemExit) as e:
+        b7.stage_glorys(ctx)
+    msg = str(e.value)
+    assert ym in msg, msg
+    assert f"glorys025_global_{ym}.nc" in msg, msg
+    assert "--allow-missing-years" in msg, msg
+    assert not b7.marked(work, "glorys"), \
+        "a refusal must not mark the stage done"
+    assert not b7.marked(work, f"glorys/{ym}"), \
+        "the month that could not be read must stay unmarked, or the hole " \
+        "survives every resume"
+    # the months that DID land are marked, so the retry is only the hole
+    other = [os.path.basename(p)[:-5] for p in
+             b7.glob.glob(os.path.join(work, "glorys", "*.done"))]
+    assert other and ym not in other, other
+
+    # ...and the deliberate partial build finishes, says so, and writes down
+    # exactly what it gave up
+    work2 = str(tmp_path / "work2")
+    os.makedirs(work2, exist_ok=True)
+    ctx2 = b7.Ctx(_redo_ns(work=work2, source_dir=src,
+                           allow_missing_years=True))
+    b7.stage_glorys(ctx2)
+    assert b7.marked(work2, "glorys")
+    assert not b7.marked(work2, f"glorys/{ym}"), \
+        "even the opt-in may not claim the month was read"
+    assert b7.read_json(os.path.join(work2, "counts.json"),
+                        {}).get("glorys_missing_months") == [ym]
+
+
+# ------------------------------------------------------------------ 49 -----
+def _mask_less_sources(root):
+    """The smoke sources with the gaussian land/sea mask REMOVED."""
+    d_lo = dt.date(*(int(x) for x in b7.SMOKE_START.split("-")))
+    d_hi = dt.date(*(int(x) for x in b7.SMOKE_END.split("-")))
+    b7.make_smoke_sources(root, d_lo, d_hi)
+    p = os.path.join(root, "ncep", f"{b7.NCEP_LAND}.nc")
+    assert os.path.exists(p), p
+    os.remove(p)
+    return root
+
+
+def test_49_ncep_refuses_without_the_land_mask_and_says_so_when_it_ran_without(
+        tmp_path):
+    """`ncep_land_mask` returned None with a warning, and `soilw`/`tsoil` then
+    went into g100 UNMASKED over 71% of the planet — finite, plausibly scaled,
+    z-scored like everything else, and indistinguishable from a masked tensor.
+    Worse, the manifest named `land.sfc.gauss.nc` either way, so the tensor's
+    own provenance claimed a mask that was never applied.
+    """
+    src = _mask_less_sources(str(tmp_path / "src"))
+    work = str(tmp_path / "work")
+    os.makedirs(work, exist_ok=True)
+    ctx = b7.Ctx(_redo_ns(work=work, source_dir=src))
+    b7.run_stages(ctx, ["glorys", "sst"])
+
+    with pytest.raises(SystemExit) as e:
+        b7.stage_ncep(ctx)
+    msg = str(e.value)
+    assert b7.NCEP_LAND in msg, msg
+    assert os.path.join(src, "ncep") in msg, msg     # names the file AND host
+    assert "--allow-missing-years" in msg, msg
+    assert not b7.marked(work, "ncep"), \
+        "a refusal must not mark the stage done"
+    assert not os.path.exists(b7.fill_file(work, "g100")), \
+        "the precondition must be checked before the fill file is created"
+
+    # ...and under the flag the stage finishes, the two channels are written
+    # unmasked, and the MANIFEST says which of the two tensors this is
+    ctx2 = b7.Ctx(_redo_ns(work=work, source_dir=src,
+                           allow_missing_years=True))
+    assert b7.ncep_land_mask(ctx2) is None
+    b7.stage_ncep(ctx2)
+    assert b7.marked(work, "ncep")
+    assert "UNMASKED" in ctx2.sources["ncep"], ctx2.sources["ncep"]
+    assert b7.NCEP_LAND not in ctx2.sources["ncep"].split("NO ")[0], \
+        "a source that was not read may not be claimed"
+
+    # the positive control: with the mask present the same line says so, and
+    # soilw/tsoil really are NaN at sea
+    work3 = str(tmp_path / "work3")
+    os.makedirs(work3, exist_ok=True)
+    good = _statics_less_sources(str(tmp_path / "src3"), drop=())
+    ctx3 = b7.Ctx(_redo_ns(work=work3, source_dir=good))
+    b7.run_stages(ctx3, ["glorys", "sst", "ncep"])
+    assert "sea-masked" in ctx3.sources["ncep"], ctx3.sources["ncep"]
+    Xg = np.load(b7.fill_file(work3, "g100"), mmap_mode="r")
+    i_soil = b7.CHAN_G100.index("soilw")
+    masked = np.isnan(np.asarray(Xg[:, :, :, i_soil]))
+    assert masked.any() and not masked.all(), \
+        "the mask must blank some cells and keep others"
+
+
+# ------------------------------------------------------------------ 50 -----
+def test_50_static_refuses_a_missing_seen_mask(tmp_path):
+    """`sphere`'s ocean code is the UNION of `oisst_seen.npy` and
+    `glorys_seen.npy`. With one absent the stage warned and built the ocean
+    from the other — and the result is an int8 field of perfectly valid codes
+    that `check_statics` passes, so a build which lost one publishes a
+    DIFFERENT `sphere` from the base with nothing anywhere saying so. That is
+    the quietest of this stage's four failures, which is why it refuses.
+    """
+    src = _statics_less_sources(str(tmp_path / "src"), drop=())
+    work = str(tmp_path / "work")
+    os.makedirs(work, exist_ok=True)
+    ctx = b7.Ctx(_redo_ns(work=work, source_dir=src))
+    b7.run_stages(ctx, ["glorys", "sst"])
+    for p in ("oisst_seen.npy", "glorys_seen.npy"):
+        assert os.path.exists(os.path.join(work, p)), p
+    both = b7.np.load(os.path.join(work, "oisst_seen.npy")) | \
+        b7.np.load(os.path.join(work, "glorys_seen.npy"))
+
+    # drop ONE of the two; ETOPO and Natural Earth are both present, so the
+    # seen mask is the only thing this refusal can be about
+    os.remove(os.path.join(work, "glorys_seen.npy"))
+    with pytest.raises(SystemExit) as e:
+        b7.stage_static(ctx)
+    msg = str(e.value)
+    assert "glorys_seen.npy" in msg, msg
+    assert "--allow-empty-statics" in msg, msg
+    assert "ETOPO" not in msg, msg
+    assert not b7.marked(work, "static"), \
+        "a refusal must not mark the stage done"
+    assert not os.path.exists(os.path.join(work, "statics.npz"))
+
+    # ...and the opt-in builds the half-sphere, loudly
+    ctx2 = b7.Ctx(_redo_ns(work=work, source_dir=src,
+                           allow_empty_statics=True))
+    b7.stage_static(ctx2)
+    assert b7.marked(work, "static")
+    half = np.load(os.path.join(work, "statics.npz"))["sphere"]
+
+    # the degrade is REAL — that is the point of refusing on it. Rebuild with
+    # both masks and the two spheres disagree on the cells only GLORYS saw.
+    os.remove(b7.marker(work, "static"))
+    np.save(os.path.join(work, "glorys_seen.npy"),
+            both ^ np.load(os.path.join(work, "oisst_seen.npy")))
+    ctx3 = b7.Ctx(_redo_ns(work=work, source_dir=src))
+    b7.stage_static(ctx3)
+    full = np.load(os.path.join(work, "statics.npz"))["sphere"]
+    assert int((half != full).sum()) > 0, \
+        "the fixture must make the two sources disagree, or this test is " \
+        "asserting nothing"
+    assert b7.check_statics({"sphere": half,
+                             "elev": np.zeros(half.shape, np.float32)}), \
+        "the half sphere passes every downstream check — which is why the " \
+        "gate has to sit in the stage that builds it"
