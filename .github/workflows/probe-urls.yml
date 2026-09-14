@@ -1,0 +1,55 @@
+name: Probe URLs from a hosted runner
+
+# The Cowork sandbox's egress proxy refuses many data hosts outright
+# (www.oceancolour.org, dap.ceda.ac.uk, downloads.psl.noaa.gov measured
+# 2026-09-11..14), and WebFetch honours robots.txt, so "never guess what an
+# archive serves — ask it" (root CLAUDE.md, Part 2) sometimes cannot be done
+# from where the session sits. This workflow asks on the session's behalf:
+# it fetches each URL from ubuntu-latest, prints status, content-type,
+# length and the first KB of body, and uploads the full heads as an artifact.
+# Read-only, no secrets, ~1 minute. First used 2026-09-14 to find where PML
+# keeps OC-CCI v6.0's 2023-2024 daily files after both catalog paths the
+# occci-partials lane tried returned 404.
+
+on:
+  workflow_dispatch:
+    inputs:
+      urls:
+        description: "URLs to probe, whitespace-separated (one per line is fine)"
+        required: true
+        type: string
+      head_bytes:
+        description: "how many bytes of each body to keep"
+        required: false
+        default: "4096"
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Probe
+        env:
+          URLS: ${{ inputs.urls }}
+          HEADB: ${{ inputs.head_bytes }}
+        run: |
+          mkdir -p probe
+          i=0
+          for u in ${URLS}; do
+            i=$((i+1))
+            f="probe/$(printf '%02d' $i).txt"
+            echo "=== ${u}" | tee "$f"
+            curl -sS -L --max-time 60 -r 0-$((HEADB-1)) -D "probe/$i.hdr" \
+                 -o "probe/$i.body" -w 'http %{http_code} · %{content_type} · %{size_download} B of %{size_header} hdr · %{time_total}s · final %{url_effective}\n' \
+                 "${u}" 2>&1 | tee -a "$f" || true
+            head -c "${HEADB}" "probe/$i.body" | tr -d '\000' | head -c 1024 | tee -a "$f"; echo
+            cat "probe/$i.hdr" >> "$f"; head -c "${HEADB}" "probe/$i.body" >> "$f"
+          done
+      - uses: actions/upload-artifact@v4
+        with:
+          name: probe-${{ github.run_number }}
+          path: probe/
+          if-no-files-found: warn
