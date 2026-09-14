@@ -1,0 +1,54 @@
+store     slatrack — Copernicus Marine along-track sea level anomaly (L3, all missions)
+axis      2015-01-01 .. 2015-01-07  bins 2410..2411 (epoch 1982-01-01, 5-day bins; negative bins are KEPT)
+channels  C=3: sla, sla_unfiltered, mdt
+footprint log2_fp -2, log2_dt -4
+source    copernicusmarine subset --dataset-id cmems_obs-sl_glo_phy-ssh_my_<mission>-l3-duacs_PT1S_<ver>
+verified  2026-09-13: the product's 29 per-mission dataset ids and the variable names sla_filtered / sla_unfiltered / mdt read from the PUBLIC STAC metadata with no credentials. The download path itself is UNVERIFIED from this sandbox — no credentials here by design, and the copernicusmarine toolbox cannot be installed (pypi 403 through the egress proxy).
+
+=== stage index (slatrack) ===
+  [index slatrack] start (1 items)  0/1  0.0s
+  [index slatrack] plan.json  1/1  4.6s
+  index: slatrack — 1 year(s), C=3 (sla, sla_unfiltered, mdt), bins 2410..2411
+=== stage index done in 4.6s ===
+
+=== stage fetch (slatrack) ===
+  [fetch slatrack] start (1 items)  0/1  0.0s
+WARNING - 2026-09-14T13:14:55Z - The dataset version has been included in the dataset_id argument. This is not recommended. Please either omit the version —allowing the Toolbox to select it automatically— or specify it using the dataset_version argument.
+INFO - 2026-09-14T13:14:57Z - Selected dataset version: "202411"
+INFO - 2026-09-14T13:14:57Z - Selected dataset part: "default"
+Traceback (most recent call last):
+  File "/home/runner/work/earth/earth/ml/build_family10_stores.py", line 2363, in <module>
+    sys.exit(main())
+             ^^^^^^
+  File "/home/runner/work/earth/earth/ml/build_family10_stores.py", line 2358, in main
+    run_stages(ctx, parse_stages(a.stage))
+  File "/home/runner/work/earth/earth/ml/build_family10_stores.py", line 2018, in run_stages
+    STAGE_FN[s](ctx)
+  File "/home/runner/work/earth/earth/ml/build_family10_stores.py", line 1649, in stage_fetch
+    for label, rows, counts in ad.fetch_year(ctx, y):
+  File "/home/runner/work/earth/earth/ml/build_family10_stores.py", line 1245, in fetch_year
+    paths, owned = self._files(ctx, mid, lo, hi, year)
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/work/earth/earth/ml/build_family10_stores.py", line 1270, in _files
+    copernicusmarine.subset(
+  File "/home/runner/.local/lib/python3.12/site-packages/copernicusmarine/core_functions/deprecated_options.py", line 78, in wrapper
+    return f(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^
+  File "/home/runner/.local/lib/python3.12/site-packages/copernicusmarine/python_interface/exception_handler.py", line 17, in wrapper
+    raise exception
+  File "/home/runner/.local/lib/python3.12/site-packages/copernicusmarine/python_interface/exception_handler.py", line 13, in wrapper
+    return function(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/.local/lib/python3.12/site-packages/copernicusmarine/python_interface/subset.py", line 211, in subset
+    return subset_function(
+           ^^^^^^^^^^^^^^^^
+  File "/home/runner/.local/lib/python3.12/site-packages/copernicusmarine/core_functions/subset.py", line 38, in subset_function
+    retrieval_service = retrieve_metadata_and_check_request(subset_request)
+                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/.local/lib/python3.12/site-packages/copernicusmarine/core_functions/subset.py", line 78, in retrieve_metadata_and_check_request
+    check_dataset_subset_bounds(
+  File "/home/runner/.local/lib/python3.12/site-packages/copernicusmarine/download_functions/subset_xarray.py", line 715, in check_dataset_subset_bounds
+    _check_coordinate_overlap(
+  File "/home/runner/.local/lib/python3.12/site-packages/copernicusmarine/download_functions/subset_xarray.py", line 798, in _check_coordinate_overlap
+    raise CoordinatesOutOfDatasetBounds(message)
+copernicusmarine.core_functions.exceptions.CoordinatesOutOfDatasetBounds: Some of your subset selection [2015-01-01 00:00:00+00:00, 2015-01-07 23:59:59+00:00] for the time dimension exceed the dataset coordinates [2015-03-31 00:25:42+00:00, 2026-01-16 23:23:15+00:00]

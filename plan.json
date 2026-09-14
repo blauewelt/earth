@@ -1,0 +1,179 @@
+{
+ "bins": [
+  2410,
+  2411
+ ],
+ "builder_git_sha": "b02f04eb5322532ba471d963857ad1c48c80f4e6",
+ "built_at": "2026-09-14T13:14:54+00:00",
+ "channels": [
+  {
+   "max": 3.0,
+   "min": -3.0,
+   "name": "sla",
+   "unit": "m"
+  },
+  {
+   "max": 3.0,
+   "min": -3.0,
+   "name": "sla_unfiltered",
+   "unit": "m"
+  },
+  {
+   "max": 3.0,
+   "min": -3.0,
+   "name": "mdt",
+   "unit": "m"
+  }
+ ],
+ "credentials_present": {
+  "COPERNICUSMARINE_SERVICE_PASSWORD": true,
+  "COPERNICUSMARINE_SERVICE_USERNAME": true
+ },
+ "date_range": [
+  "2015-01-01",
+  "2015-01-07"
+ ],
+ "footprint": {
+  "log2_dt": -4.0,
+  "log2_fp": -2.0
+ },
+ "missions": [
+  {
+   "id": "cmems_obs-sl_glo_phy-ssh_my_alg-l3-duacs_PT1S_202411",
+   "title": "Saral/AltiKa geodetic orbit"
+  },
+  {
+   "id": "cmems_obs-sl_glo_phy-ssh_my_c2n-l3-duacs_PT1S_202411",
+   "title": "CryoSat-2 new orbit"
+  },
+  {
+   "id": "cmems_obs-sl_glo_phy-ssh_my_e1g-l3-duacs_PT1S_202411",
+   "title": "ERS-1 geodetic phase"
+  },
+  {
+   "id": "cmems_obs-sl_glo_phy-ssh_my_h2a-l3-duacs_PT1S_202411",
+   "title": "HaiYang-2A"
+  },
+  {
+   "id": "cmems_obs-sl_glo_phy-ssh_my_h2b-l3-duacs_PT1S_202411",
+   "title": "HaiYang-2B"
+  },
+  {
+   "id": "cmems_obs-sl_glo_phy-ssh_my_j2g-l3-duacs_PT1S_202411",
+   "title": "Jason-2 long-repeat orbit"
+  },
+  {
+   "id": "cmems_obs-sl_glo_phy-ssh_my_j2n-l3-duacs_PT1S_202411",
+   "title": "Jason-2 interleaved orbit"
+  },
+  {
+   "id": "cmems_obs-sl_glo_phy-ssh_my_j3n-l3-duacs_PT1S_202411",
+   "title": "Jason-3 interleaved orbit"
+  },
+  {
+   "id": "cmems_obs-sl_glo_phy-ssh_my_s3a-l3-duacs_PT1S_202411",
+   "title": "Sentinel-3A"
+  },
+  {
+   "id": "cmems_obs-sl_glo_phy-ssh_my_s3b-l3-duacs_PT1S_202411",
+   "title": "Sentinel-3B"
+  },
+  {
+   "id": "cmems_obs-sl_glo_phy-ssh_my_s6a-lr-l3-duacs_PT1S_202411",
+   "title": "Sentinel-6A LRM"
+  },
+  {
+   "id": "cmems_obs-sl_glo_phy-ssh_my_swon-l3-duacs_PT1S_202411",
+   "title": "SWOT nadir"
+  },
+  {
+   "id": "cmems_obs-sl_glo_phy-ssh_my_tpn-l3-duacs_PT1S_202411",
+   "title": "TOPEX/Poseidon new orbit"
+  },
+  {
+   "id": "cmems_obs-sl_glo_phy-ssh_my_j1g-l3-duacs_PT1S_202411",
+   "title": "Jason-1 geodetic orbit"
+  },
+  {
+   "id": "cmems_obs-sl_glo_phy-ssh_my_swonc-l3-duacs_PT1S_202411",
+   "title": "SWOT nadir CalVal"
+  },
+  {
+   "id": "cmems_obs-sl_glo_phy-ssh_my_e1-l3-duacs_PT1S_202411",
+   "title": "ERS-1"
+  },
+  {
+   "id": "cmems_obs-sl_glo_phy-ssh_my_j3g-l3-duacs_PT1S-i_202506",
+   "title": "Jason-3 long-repeat orbit"
+  },
+  {
+   "id": "cmems_obs-sl_glo_phy-ssh_my_al-l3-duacs_PT1S_202411",
+   "title": "Saral/AltiKa"
+  },
+  {
+   "id": "cmems_obs-sl_glo_phy-ssh_my_c2-l3-duacs_PT1S_202411",
+   "title": "CryoSat-2"
+  },
+  {
+   "id": "cmems_obs-sl_glo_phy-ssh_my_e2-l3-duacs_PT1S_202411",
+   "title": "ERS-2"
+  },
+  {
+   "id": "cmems_obs-sl_glo_phy-ssh_my_en-l3-duacs_PT1S_202411",
+   "title": "Envisat"
+  },
+  {
+   "id": "cmems_obs-sl_glo_phy-ssh_my_enn-l3-duacs_PT1S_202411",
+   "title": "Envisat new orbit"
+  },
+  {
+   "id": "cmems_obs-sl_glo_phy-ssh_my_g2-l3-duacs_PT1S_202411",
+   "title": "GFO"
+  },
+  {
+   "id": "cmems_obs-sl_glo_phy-ssh_my_h2ag-l3-duacs_PT1S_202411",
+   "title": "HaiYang-2A geodetic orbit"
+  },
+  {
+   "id": "cmems_obs-sl_glo_phy-ssh_my_j1-l3-duacs_PT1S_202411",
+   "title": "Jason-1"
+  },
+  {
+   "id": "cmems_obs-sl_glo_phy-ssh_my_j1n-l3-duacs_PT1S_202411",
+   "title": "Jason-1 new orbit"
+  },
+  {
+   "id": "cmems_obs-sl_glo_phy-ssh_my_j2-l3-duacs_PT1S_202411",
+   "title": "Jason-2"
+  },
+  {
+   "id": "cmems_obs-sl_glo_phy-ssh_my_j3-l3-duacs_PT1S_202411",
+   "title": "Jason-3"
+  },
+  {
+   "id": "cmems_obs-sl_glo_phy-ssh_my_tp-l3-duacs_PT1S_202411",
+   "title": "TOPEX/Poseidon"
+  }
+ ],
+ "n_missions": 29,
+ "per_year_resume": true,
+ "product": "SEALEVEL_GLO_PHY_L3_MY_008_062",
+ "qc_policy": "The DUACS level-3 product is already quality controlled and edited upstream; it publishes no per-sample flag, so every kept row carries qc 1 and the store says so rather than inventing a grade. A sample whose `sla_filtered` is the netCDF fill or outside +/- 3 m is dropped and counted; `sla_unfiltered` and `mdt` outside the same bounds become NaN for that channel alone. Rows are kept per mission and the mission is the platform, so a consumer can hold out a mission the way it holds out a year.",
+ "sources": [
+  "copernicusmarine subset --dataset-id cmems_obs-sl_glo_phy-ssh_my_<mission>-l3-duacs_PT1S_<ver>",
+  "https://stac.marine.copernicus.eu/metadata/SEALEVEL_GLO_PHY_L3_MY_008_062/product.stac.json (public metadata, no login)"
+ ],
+ "stac": "https://stac.marine.copernicus.eu/metadata/SEALEVEL_GLO_PHY_L3_MY_008_062/product.stac.json",
+ "store": "slatrack",
+ "title": "Copernicus Marine along-track sea level anomaly (L3, all missions)",
+ "toolbox_importable": true,
+ "variables": [
+  "sla_filtered",
+  "sla_unfiltered",
+  "mdt"
+ ],
+ "verified": "2026-09-13: the product's 29 per-mission dataset ids and the variable names sla_filtered / sla_unfiltered / mdt read from the PUBLIC STAC metadata with no credentials. The download path itself is UNVERIFIED from this sandbox \u2014 no credentials here by design, and the copernicusmarine toolbox cannot be installed (pypi 403 through the egress proxy).",
+ "years": [
+  2015
+ ]
+}
