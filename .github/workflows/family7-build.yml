@@ -52,6 +52,36 @@
 # non-reproducibility. Its per-year partials are already computed and its bytes
 # are inherited unchanged; the plan records it as a known limitation.
 #
+# THE REPRODUCIBILITY RUN, AND THE `verify` STAGE IT ENDS WITH (2026-09-14).
+# Everything above describes how f7l2 was BUILT: by inheritance, three of four
+# group files hard-linked from f7l1. That is the cheapest route to a tensor and
+# the one that proves least about the builder -- an inherited file is evidence
+# about `os.link`, not about the code that made the bytes. The proof is a
+# SECOND build, from scratch, in a work dir of its own:
+#
+#   runner gpu-box-46694776 - work ml/cache/family7_l2_repro - seed_from none -
+#   stage glorys,sst,ncep,rg,occci,static,truth,norm,meta,verify
+#
+# Every stage re-reads its own sources (GLORYS chunks from the Hub, OISST and
+# NCEP from the Hub PSL mirror, the RG cubes from the release seed, the colour
+# group folded from the published per-year partials, ETOPO and Natural Earth
+# live), and then `verify` compares the result with the PUBLISHED tensor and
+# publishes nothing -- `publish` is not in the list, so this build cannot
+# become the published one by accident.
+#
+# `verify` costs no disk and almost no network: it hashes each local file and
+# compares with the published manifest's sha256 for the same stem, and reads
+# the published BYTES only where they differ -- by HTTP range, 64 MB at a time,
+# against the same chunk of the local file. For a group .npy it reports, per
+# channel, how many cells differ, the largest gap in float16 ULPs and in the
+# stored value, and the first bin; for the npz it reports which KEYS differ,
+# with `built_at`, `builder_git_sha` and `sources` recorded as EXPECTED (a
+# repro run that claimed the published build's timestamp and provenance would
+# be the defect). It writes `<work>/verify.json`, prints a table, and THEN
+# exits non-zero if anything unexpected differs -- in that order, so the story
+# upload below always carries the finding. `--allow-drift` in extra_args
+# records the same finding and exits 0.
+#
 # WHY A BOX AND NOT A HOSTED RUNNER. A GitHub-hosted job dies at six hours and
 # has ~14 GB of free disk. A full build is ~61 GB of memmaps plus up to ~3 GB of
 # sources in flight plus the verify downloads, and about five hours of wall
@@ -98,7 +128,7 @@ on:
         description: "runner label. A Vast box's runner NAME is an implicit label; the default is the 300 GB Ontario box, which is the only one with room for the seed's 53 GB plus the colour group's 25 GB plus sources"
         default: "gpu-box-31299601"
       stage:
-        description: "all | glorys | sst | ncep | rg | occci | static | truth | norm | meta | publish. Order is fixed (ncep needs sst for the sst repair; norm needs everything including occci; publish last) -- a single stage is for resuming or re-running one, never for building out of order"
+        description: "all | one stage | a COMMA LIST of them: glorys,sst,ncep,rg,occci,static,truth,norm,meta,verify,publish. The builder sorts the list into its own fixed order (ncep needs sst for the sst repair; norm needs everything including occci; publish last), so typing them backwards is harmless. Two stages are never part of `all`: `occci-partial` (one year of colour on a throwaway runner) and `verify` (compare this work dir with the PUBLISHED tensor and publish nothing -- the repro run's last stage, `...,meta,verify`)"
         default: "all"
       work:
         description: "the build directory for THIS (f7l2) build. RE-DISPATCH WITH THE SAME VALUE TO RESUME: finished stages are skipped by their .done markers. A different path is a different build"
@@ -241,12 +271,42 @@ jobs:
             echo "work value -- the finished stages will be skipped."
             exit 1
           fi
-          if [ "${free_gb}" -lt 80 ]; then
+          # AN UNSEEDED BUILD IS PRICED SEPARATELY, because it is a different
+          # allocation and 80 GB would let it start and die at hour four
+          # (ml/CLAUDE.md 5.18). Nothing is hard-linked, so every byte of all
+          # four groups is NEW, and the peak is the moment each coarse group's
+          # float16 is written while its float32 source is still on disk --
+          # `Ctx.byte_peak`'s own arithmetic, for the full 1982-2024 axis with
+          # 252 live Argo months:
+          #   g025 f16 45.67 + g100 f32 12.28 + g100 f16 6.14
+          #   + rg100 f32 2.10 + rg100 f16 1.05
+          #   + oc025 f32 16.59 + oc025 f16 8.29 + occci sources 0.20
+          #   = 92.33 GB, and the builder adds 3 GB of headroom -> 95.33 GB.
+          # Plus the streamed sources that land in <work>/src and are deleted
+          # as they are read: one OISST year (1.6 + 0.6 GB), one GLORYS chunk
+          # (0.26), one NCEP year, ETOPO (0.93) -- ~2.5 GB at any instant.
+          # 100 GB is that sum with a little room, and it is NOT sized exactly
+          # at the allocation it guards, which is the point. A run that also
+          # PUBLISHES needs no more: the restore check downloads one file at a
+          # time and the largest is 45.7 GB, well inside the 92 GB already
+          # committed. `verify` needs none at all -- it range-reads.
+          need_gb=80
+          if [ -z "${SEED}" ]; then need_gb=100; fi
+          if [ "${free_gb}" -lt "${need_gb}" ]; then
             echo "::error::only ${free_gb} GB free on the cache mount; this"
-            echo "build needs ~31 GB to compute oc025 (16.6 GB float32 +"
-            echo "8.3 GB float16 + <= 3 GB of sources in flight + 3 GB"
-            echo "headroom) and peaks at ~46 GB transiently while the publish"
-            echo "step downloads each file back to verify it."
+            echo "build needs ${need_gb} GB."
+            if [ -z "${SEED}" ]; then
+              echo "It is UNSEEDED (seed_from=none), so all four groups are"
+              echo "built from scratch: 92.3 GB of memmaps at peak (45.7 g025"
+              echo "+ 18.4 g100 f32+f16 + 3.1 rg100 f32+f16 + 24.9 oc025"
+              echo "f32+f16 + sources) + 3 GB headroom + ~2.5 GB of streamed"
+              echo "sources in flight."
+            else
+              echo "A SEEDED build needs ~31 GB to compute oc025 (16.6 GB"
+              echo "float32 + 8.3 GB float16 + <= 3 GB of sources in flight +"
+              echo "3 GB headroom) and peaks at ~46 GB transiently while the"
+              echo "publish step downloads each file back to verify it."
+            fi
             echo "Rent a bigger box or free space, then re-dispatch with the"
             echo "same work value to resume."
             exit 1
@@ -261,7 +321,7 @@ jobs:
             if [ ! -d "${SEED}" ]; then
               echo "::error::seed_from=${SEED} does not exist. It must be a"
               echo "FINISHED f7l0 build (its three *_X_*.npy group files, its"
-              echo ".done markers and its norm.npz). Set seed_from to `none` to"
+              echo ".done markers and its norm.npz). Set seed_from to 'none' to"
               echo "build all four groups from scratch instead -- that is"
               echo "about five more hours and it republishes bytes that"
               echo "already exist on the Hub."
@@ -300,7 +360,10 @@ jobs:
           else
             echo "::warning::seed_from is none -- building all four groups"
             echo "from scratch (~5 h more, and it recomputes 53 GB that f7l0"
-            echo "already published)."
+            echo "already published). That is the REPRODUCIBILITY run: pair it"
+            echo "with a work dir of its own and a stage list ending in"
+            echo "'verify', which compares the result with the published"
+            echo "tensor and publishes nothing."
           fi
           echo "preflight ok: token present, ${free_gb} GB free, ${use}% used"
 
@@ -410,7 +473,11 @@ jobs:
       # different merge and would publish a channel nobody chose. Skipped when
       # the dispatch is not going to do colour work at all.
       - name: OC-CCI preflight (one real file)
-        if: ${{ (github.event.inputs.stage == '' || github.event.inputs.stage == 'all' || github.event.inputs.stage == 'occci') && !contains(github.event.inputs.extra_args, '--smoke') && !contains(github.event.inputs.extra_args, '--source-dir') }}
+        # `contains`, not `==`, since `stage` became a comma list: a repro
+        # dispatch spells the colour stage as one name inside
+        # "glorys,sst,...,occci,...,verify" and an equality test would skip the
+        # one preflight that stands between this box and 400 GB of CEDA.
+        if: ${{ (github.event.inputs.stage == '' || github.event.inputs.stage == 'all' || contains(github.event.inputs.stage, 'occci')) && !contains(github.event.inputs.extra_args, '--smoke') && !contains(github.event.inputs.extra_args, '--source-dir') }}
         env:
           WORK: ${{ github.event.inputs.work || 'ml/cache/family7_l2' }}
           EXTRA: ${{ github.event.inputs.extra_args }}
@@ -512,6 +579,18 @@ jobs:
           rm -rf "${out}"; mkdir -p "${out}"
           [ -f "${WORK}/progress.json" ] && cp "${WORK}/progress.json" "${out}/" \
             || echo "::warning::no ${WORK}/progress.json -- the build did not reach its first phase boundary"
+          # THE WHOLE POINT OF A REPRO RUN IS THIS FILE, and the stage that
+          # writes it exits non-zero when it finds a difference -- so it is
+          # collected here, in the `if: always()` step, and printed in full
+          # (it is a few kB). A finding that stayed on the box would be a
+          # finding nobody has (ml/CLAUDE.md 5.25).
+          for f in "${WORK}/verify.json" "${WORK}/counts.json" "${WORK}/sources.json"; do
+            if [ -f "${f}" ]; then cp "${f}" "${out}/"; fi
+          done
+          if [ -f "${WORK}/verify.json" ]; then
+            echo "--- verify.json ---"
+            cat "${WORK}/verify.json"
+          fi
           n=0
           for f in "${WORK}"/*.done; do
             [ -e "${f}" ] || break

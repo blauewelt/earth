@@ -83,6 +83,12 @@ Run:
   python3 ml/build_family7.py --work /opt/earth-cache/f7l1 \
       --seed-from /opt/earth-cache/family7 --stage all      # inherit, then colour
   python3 ml/build_family7.py --work ... --stage occci      # one stage
+  python3 ml/build_family7.py --work ... \
+      --stage glorys,sst,ncep,rg,occci,static,truth,norm,meta,verify
+                                   # the from-scratch repro run: build every
+                                   # stage but `publish`, then compare with the
+                                   # PUBLISHED tensor (`verify` is never in
+                                   # `all`, exits non-zero on a difference)
   python3 ml/build_family7.py --work ... --source-dir DIR   # no network at all
 """
 import argparse
@@ -169,7 +175,7 @@ STAGE_SPEC_RECIPE = {
     "occci": "f7l1", "occci-partial": "f7l1",
     "ncep": "f7l2",            # float64 log1p — g100's bytes change
     "static": "f7l2",          # refuses an empty static, records its sources
-    "norm": RECIPE, "meta": RECIPE, "publish": RECIPE,
+    "norm": RECIPE, "meta": RECIPE, "verify": RECIPE, "publish": RECIPE,
 }
 
 PENTAD_DAYS = 5
@@ -427,7 +433,15 @@ OC_SOURCES = {
 }
 
 STAGES = ["glorys", "sst", "ncep", "rg", "occci", "static", "truth", "norm",
-          "meta", "publish"]
+          "meta", "verify", "publish"]
+# WHAT `all` MEANS DID NOT CHANGE when `verify` was added, and that is the
+# whole reason it is a separate list. `verify` sits in `STAGES` because a
+# comma list has to be able to PLACE it — after `meta`, which writes the npz it
+# compares, and before `publish` — but it reads the published tensor off the
+# Hub and a build that silently started doing that at the end of every run
+# would be a different experiment from the one anybody dispatched. It is opt-in
+# by name: `--stage ...,meta,verify`.
+ALL_STAGES = [s for s in STAGES if s != "verify"]
 # `occci-partial` is a stage you can ASK for and never a stage `all` runs: it
 # does not write into the tensor at all. It runs one YEAR of the colour
 # reduction on a throwaway machine (a hosted GitHub runner) and publishes the
@@ -441,8 +455,38 @@ DEPS = {
     "ncep": ["sst"],
     "norm": ["glorys", "sst", "ncep", "rg", "occci"],
     "meta": ["norm", "static", "truth"],
+    "verify": ["meta"],
     "publish": ["meta"],
 }
+
+
+def parse_stages(spec):
+    """`all` -> every stage `all` means; `meta,verify` -> both, IN STAGE ORDER.
+
+    The order is the builder's, never the typist's (plan §4: stage order is
+    fixed), and an unknown name refuses before anything runs rather than after
+    four hours. `all` deliberately does not include `verify` — see `STAGES`.
+    `occci-partial` writes no tensor at all and cannot be mixed with stages
+    that do.
+    """
+    spec = str(spec).strip()
+    if spec == "all":
+        return list(ALL_STAGES)
+    want = [x.strip() for x in spec.split(",") if x.strip()]
+    known = STAGES + SIDE_STAGES
+    bad = [x for x in want if x not in known]
+    if bad or not want:
+        sys.exit(f"--stage {spec!r}: unknown stage(s) {bad} — choose from "
+                 f"{known}, `all`, or a comma list of them")
+    side = [x for x in want if x in SIDE_STAGES]
+    if side and len(set(want)) > len(set(side)):
+        sys.exit(f"--stage {spec!r}: {side} builds no tensor and cannot be "
+                 f"run in the same dispatch as {sorted(set(want) - set(side))}"
+                 f" — it is a one-year side job on a throwaway machine "
+                 f"(`stage_occci_partial`).")
+    if side:
+        return [s for s in SIDE_STAGES if s in want]
+    return [s for s in STAGES if s in want]
 
 
 # --------------------------------------------------------------- utilities --
@@ -1031,7 +1075,12 @@ class Ctx:
         n = {k: int(np.prod(v)) for k, v in sh.items()}
         peak = {"g025 f16": n["g025"] * 2,
                 "g100 f32": n["g100"] * 4, "g100 f16": n["g100"] * 2,
-                "rg100 f32": n["rg100"] * 4,
+                # rg100's float16 was missing from this sum until 2026-09-14.
+                # It is only 1.0 GB — inside the headroom, which is why it was
+                # never the reason a build failed — but a guard that does not
+                # price a file it writes is a guard whose number cannot be
+                # quoted in a preflight (ml/CLAUDE.md §5.18).
+                "rg100 f32": n["rg100"] * 4, "rg100 f16": n["rg100"] * 2,
                 # oc025 is the biggest transient in the build: 16.6 GB of
                 # float32 with its 8.3 GB float16 written beside it before the
                 # f32 is dropped. Both are counted, because for a few minutes
@@ -1050,6 +1099,7 @@ class Ctx:
                  "g100 f32": raw_file(self.work, "g100"),
                  "g100 f16": group_file(self.work, "g100"),
                  "rg100 f32": raw_file(self.work, "rg100"),
+                 "rg100 f16": group_file(self.work, "rg100"),
                  "oc025 f32": raw_file(self.work, "oc025"),
                  "oc025 f16": group_file(self.work, "oc025")}
         for k, p in where.items():
@@ -1182,8 +1232,8 @@ def repair_sst_channel(ctx):
 # (float64 log1p; refuse-an-empty-static plus honest source recording), so a
 # work directory that still holds their old state must be told, not trusted.
 SPEC_VERSION = {"glorys": 1, "sst": 1, "ncep": 3, "rg": 1, "occci": 1,
-                "static": 2, "truth": 1, "norm": 1, "meta": 1, "publish": 1,
-                "occci-partial": 1}
+                "static": 2, "truth": 1, "norm": 1, "meta": 1, "verify": 1,
+                "publish": 1, "occci-partial": 1}
 
 # Which array a stage OWNS — the one it may delete when its spec moves. A
 # stage never touches another stage's files: glorys and sst share g025 and own
@@ -3382,7 +3432,31 @@ OC_PARTIAL_DIR = "occci_partial"
 
 
 def oc_partial_prefix():
+    """Where a partial THIS build publishes goes. The write path, alone."""
     return f"partials/{RECIPE}/occci"
+
+
+def oc_partial_read_prefixes():
+    """Every folder a partial this build may FOLD can live in, best first.
+
+    A PARTIAL IS RECIPE-FREE BY CONSTRUCTION, and the builder already says so
+    twice: `stage_spec` drops the axis from its digest ("that is exactly what
+    makes one partial re-usable across rebuilds"), and `STAGE_SPEC_RECIPE`
+    records the generation in which the reduction itself last changed —
+    `f7l1` — which has not moved since. The 28 published years live under
+    `partials/f7l1/occci/`, so a build that looked only under its OWN recipe's
+    folder would find nothing and stream ~400 GB from CEDA to recompute bytes
+    it already has. That is not a hypothetical: it is exactly what the
+    from-scratch f7l2 reproducibility run would have done (2026-09-14).
+
+    The build's own folder is still tried FIRST, so a future recipe that
+    changes the reduction publishes its partials and they win.
+    """
+    out = [oc_partial_prefix()]
+    gen = stage_recipe("occci-partial")
+    if gen != RECIPE:
+        out.append(f"partials/{gen}/occci")
+    return out
 
 
 def oc_partial_name(y):
@@ -3467,7 +3541,12 @@ def oc_partial_publish(ctx, year, path):
 
 
 def oc_partials_on_hub():
-    """`{year: {"path": …, "sha256": … or None}}` — ONE listing of the folder."""
+    """`{year: {"path": …, "sha256": … or None}}` — one listing per folder.
+
+    Every folder in `oc_partial_read_prefixes()`, best first; the first folder
+    that holds a year wins, so a partial published by this recipe is never
+    shadowed by an older generation's.
+    """
     from huggingface_hub import HfApi
     tok = hf_token()
     if not tok:
@@ -3475,22 +3554,25 @@ def oc_partials_on_hub():
     api = HfApi(token=tok)
     repo = f"{api.whoami()['name']}/{HF_DATASET}"
     out = {}
-    try:
-        entries = list(api.list_repo_tree(repo, path_in_repo=oc_partial_prefix(),
-                                          repo_type="dataset"))
-    except Exception:                                         # noqa: BLE001
-        return {}                       # no folder yet: nothing is published
-    for e in entries:
-        p = getattr(e, "path", "")
-        if not p.endswith(".npz"):
-            continue
+    for pre in oc_partial_read_prefixes():
         try:
-            y = int(os.path.basename(p)[:-4])
-        except ValueError:
-            continue
-        lfs = getattr(e, "lfs", None)
-        out[y] = {"path": p,
-                  "sha256": getattr(lfs, "sha256", None) if lfs else None}
+            entries = list(api.list_repo_tree(repo, path_in_repo=pre,
+                                              repo_type="dataset"))
+        except Exception:                                     # noqa: BLE001
+            continue                    # no folder yet: nothing is published
+        for e in entries:
+            p = getattr(e, "path", "")
+            if not p.endswith(".npz"):
+                continue
+            try:
+                y = int(os.path.basename(p)[:-4])
+            except ValueError:
+                continue
+            if y in out:
+                continue                # an earlier prefix already has it
+            lfs = getattr(e, "lfs", None)
+            out[y] = {"path": p, "prefix": pre,
+                      "sha256": getattr(lfs, "sha256", None) if lfs else None}
     return out
 
 
@@ -3525,13 +3607,15 @@ def oc_partials_index(ctx, years):
     try:
         hub = oc_partials_on_hub()
     except Exception as e:                                    # noqa: BLE001
-        print(f"  ::warning:: could not list {oc_partial_prefix()} on the Hub "
+        print(f"  ::warning:: could not list "
+              f"{'/'.join(oc_partial_read_prefixes())} on the Hub "
               f"({type(e).__name__}: {str(e)[:160]}) — every year is reduced "
               f"day by day")
         return {}
     out = {y: hub[y] for y in years if y in hub}
+    where = sorted({v.get("prefix", oc_partial_prefix()) for v in out.values()})
     print(f"  occci: {len(out)}/{len(years)} pending year(s) have a partial "
-          f"at hf://…/{oc_partial_prefix()}/")
+          f"at {', '.join('hf://…/' + w + '/' for w in where) or 'hf://…/' + oc_partial_prefix() + '/'}")
     return out
 
 
@@ -4880,6 +4964,468 @@ def stage_meta(ctx):
     return out
 
 
+# ============================================================ stage: verify ==
+# WHAT A REPRODUCIBILITY PROOF ACTUALLY IS: a comparison, and one that spends
+# no disk and publishes nothing.
+#
+# The audited builder's claim is that an f7l2 work dir rebuilt FROM SCRATCH —
+# `seed_from: none`, every stage re-reading its own sources — reproduces the
+# published tensor byte for byte. That claim is only worth what the comparison
+# costs to make, and the obvious comparison (download the published files and
+# diff) costs 61 GB of disk on a box that is already holding the 61 GB it just
+# built. So this stage:
+#
+#   * reads the published `manifest.json` ANONYMOUSLY (the repo is public; a
+#     token would only raise the rate limit) and takes its sha256 per file;
+#   * hashes the LOCAL file and compares. That is the whole test for four of
+#     the five files, and it costs one sequential read;
+#   * only when a file differs does it read the published bytes at all, and
+#     then by HTTP RANGE, a chunk at a time, against the same chunk of the
+#     local file — so a 45.7 GB file is diffed in 64 MB of RAM and 0 bytes of
+#     disk. For a group `.npy` it reports, per channel, how many cells differ,
+#     the largest gap in float16 ULPs and in the stored value, and the first
+#     bin it happens in; for the npz it reports which KEYS differ.
+#
+# IT PUBLISHES NOTHING AND WRITES NOTHING OUTSIDE THE WORK DIR. `publish` is a
+# separate stage and `verify` is not in what `all` means, so a repro dispatch
+# that names every stage up to `verify` cannot overwrite the tensor it is
+# checking (E-070 §5: two builds are two experiments — and this one is not
+# allowed to become the published one by accident).
+#
+# THREE KEYS OF THE NPZ ARE EXPECTED TO DIFFER AND ARE NOT DRIFT. `built_at` is
+# the wall clock, `builder_git_sha` is the commit the run started from, and
+# `sources` records WHERE each stage read its bytes — a repro run reads OISST
+# off the Hub mirror where the published build read PSL, and says so. A tensor
+# whose provenance line matched a build it did not do would be the defect. The
+# npz's sha256 differs for a third reason that is not about values at all: the
+# zip container stores a modification time per member.
+VERIFY_EXPECTED_NPZ_KEYS = ("built_at", "builder_git_sha", "sources")
+# 64 MB per range request: ~715 requests for the whole 45.7 GB g025, small
+# enough that both chunks plus the two int32 ULP arrays of a DIFFERING chunk
+# fit in a fraction of the box's RAM (the identical case never allocates an
+# array at all — the two buffers are compared as bytes).
+VERIFY_CHUNK_BYTES = 64 << 20
+VERIFY_UA = ("earth-science-pipeline/1.0 "
+             "(research; github blauewelt/earth)")
+
+
+def hub_resolve_url(name, prefix=HF_PREFIX, repo=None):
+    """The public `resolve/main` URL of one published file.
+
+    Deliberately NOT `hf_hub_download` / `hub_mirror_fetch`: those fetch a
+    whole file into the cache, which for `g025` is the 45.7 GB this stage
+    exists to avoid spending. `resolve/main` 302s to the CDN, which answers
+    Range requests with 206 — `urllib` follows the redirect and carries the
+    header with it.
+    """
+    if repo is None:
+        ns = os.environ.get("EARTH_HF_NAMESPACE") or HF_NAMESPACE
+        repo = f"{ns}/{HF_DATASET}"
+    return (f"https://huggingface.co/datasets/{repo}/resolve/main/"
+            f"{prefix}/{name}")
+
+
+def _range_open(url, start, length, timeout):
+    import urllib.request
+    end = "" if length is None else start + length - 1
+    req = urllib.request.Request(url, headers={
+        "User-Agent": VERIFY_UA, "Range": f"bytes={start}-{end}",
+        # Ask for nothing clever: a transparently gzipped response would make
+        # the byte offsets this stage computes meaningless.
+        "Accept-Encoding": "identity"})
+    return urllib.request.urlopen(req, timeout=timeout)
+
+
+def http_range(url, start=0, length=None, attempts=4, timeout=300):
+    """Bytes [start, start+length) of a public URL. `length=None` = to the end.
+
+    Short reads are a FAILURE, not a result (`download_verified`'s rule at the
+    granularity of a chunk): a range that came back short would be compared
+    against the wrong slice of the local file and reported as drift.
+    """
+    last = None
+    for i in range(attempts):
+        try:
+            with _range_open(url, start, length, timeout) as r:
+                blob = r.read()
+            if length is not None and len(blob) != length:
+                raise IOError(f"asked for {length:,} bytes at {start:,}, got "
+                              f"{len(blob):,}")
+            return blob
+        except Exception as e:                                # noqa: BLE001
+            last = e
+            if i + 1 < attempts:
+                time.sleep(2 * (i + 1))
+    raise IOError(f"{url}: range {start}+{length} failed after {attempts} "
+                  f"attempts ({str(last)[:200]})")
+
+
+def http_size(url, attempts=4, timeout=120):
+    """The published file's size, from the Content-Range of a one-byte read.
+
+    A HEAD would do it on a server that answers HEAD; the CDN behind
+    `resolve/main` redirects, and a one-byte GET proves in the same call that
+    ranges are honoured at all (a 200 with the whole body would say they are
+    not, and this stage's arithmetic would be wrong rather than slow).
+    """
+    last = None
+    for i in range(attempts):
+        try:
+            with _range_open(url, 0, 1, timeout) as r:
+                code = getattr(r, "status", None) or r.getcode()
+                cr = r.headers.get("Content-Range") or ""
+                n = r.headers.get("Content-Length")
+                r.read(1)
+            if code != 206 or "/" not in cr:
+                raise IOError(f"server answered {code} to a Range request "
+                              f"(Content-Range {cr!r}, Content-Length {n!r}) "
+                              f"— it will not serve partial reads")
+            total = cr.rsplit("/", 1)[1].strip()
+            return int(total)
+        except Exception as e:                                # noqa: BLE001
+            last = e
+            if i + 1 < attempts:
+                time.sleep(2 * (i + 1))
+    raise IOError(f"{url}: could not be sized ({str(last)[:200]})")
+
+
+def npy_header(head):
+    """(shape, dtype, fortran_order, data_offset) from a .npy file's first bytes."""
+    import io
+    fh = io.BytesIO(head)
+    ver = np.lib.format.read_magic(fh)
+    if ver == (1, 0):
+        shape, fortran, dtype = np.lib.format.read_array_header_1_0(fh)
+    elif ver == (2, 0):
+        shape, fortran, dtype = np.lib.format.read_array_header_2_0(fh)
+    else:
+        raise ValueError(f"unsupported .npy version {ver}")
+    return tuple(shape), dtype, bool(fortran), fh.tell()
+
+
+def f16_order(x):
+    """float16 bit patterns -> a MONOTONE integer key, so |ka - kb| is ULPs.
+
+    The distance a float16 comparison should report is not the arithmetic gap
+    (which is meaningless across magnitudes — 1 ULP is 0.00098 near 1.0 and
+    0.031 near 35) but how many representable values apart the two are. Sign
+    and magnitude are stored separately in IEEE-754, so the mapping is: a
+    positive pattern keeps its value, a negative one is mirrored about zero.
+    +0 and -0 both map to 0, which is right — they are the same number.
+    """
+    u = np.asarray(x).view(np.uint16).astype(np.int32)
+    mag = (u & 0x7FFF).astype(np.int32)
+    return np.where((u & 0x8000) != 0, -mag, mag)
+
+
+def verify_npy(local, url, chan, first_bin=None, chunk_bytes=None,
+               prog=None, label=""):
+    """Diff a local .npy against a published one, streaming both.
+
+    Never loads either file: the local side is read with a file handle at its
+    own data offset, the published side by HTTP Range at ITS data offset (the
+    two headers can legitimately differ in padding), and a chunk whose bytes
+    match is dropped without ever becoming an array.
+    """
+    chunk_bytes = chunk_bytes or VERIFY_CHUNK_BYTES
+    with open(local, "rb") as fh:
+        lshape, ldtype, lorder, loff = npy_header(fh.read(4096))
+        fh.seek(0)
+        lhead = fh.read(loff)
+    rhead_buf = http_range(url, 0, 4096)
+    rshape, rdtype, rorder, roff = npy_header(rhead_buf)
+    out = {"shape": list(lshape), "dtype": str(ldtype),
+           "shape_published": list(rshape), "dtype_published": str(rdtype),
+           "header_identical": bool(lhead == rhead_buf[:roff])}
+    if lshape != rshape or ldtype != rdtype or lorder != rorder:
+        out["comparable"] = False
+        out["note"] = (f"the published array is {rshape} {rdtype} and this "
+                       f"one is {lshape} {ldtype} — not the same array, so "
+                       f"there is nothing to compare cell by cell")
+        return out
+    out["comparable"] = True
+    nch = int(lshape[-1])
+    rows = int(lshape[0])
+    row_b = int(np.prod(lshape[1:])) * ldtype.itemsize
+    per = max(1, int(chunk_bytes // max(row_b, 1)))
+    n_diff = np.zeros(nch, np.int64)
+    n_nan_l = np.zeros(nch, np.int64)          # NaN here, a number there
+    n_nan_p = np.zeros(nch, np.int64)
+    max_ulp = np.zeros(nch, np.int64)
+    max_abs = np.zeros(nch, np.float64)
+    first_row = np.full(nch, -1, np.int64)
+    n_chunks_read = 0
+    with open(local, "rb") as fh:
+        for r0 in range(0, rows, per):
+            n = min(per, rows - r0)
+            fh.seek(loff + r0 * row_b)
+            lbuf = fh.read(n * row_b)
+            if len(lbuf) != n * row_b:
+                out["comparable"] = False
+                out["note"] = (f"the local file ends after "
+                               f"{len(lbuf) + r0 * row_b:,} data bytes, short "
+                               f"of the {rows * row_b:,} its header declares")
+                return out
+            rbuf = http_range(url, roff + r0 * row_b, n * row_b)
+            n_chunks_read += 1
+            if prog is not None:
+                prog.item(f"{label} rows {r0}..{r0 + n - 1}", extra={
+                    "cells_differ": int(n_diff.sum())})
+            if lbuf == rbuf:
+                continue
+            a = np.frombuffer(lbuf, ldtype).reshape((n, -1, nch))
+            b = np.frombuffer(rbuf, ldtype).reshape((n, -1, nch))
+            an, bn = np.isnan(a), np.isnan(b)
+            # NaN != NaN, so "both NaN" has to be taken OUT of the difference
+            # or every hole in the ocean mask is reported as drift.
+            neq = (a != b) & ~(an & bn)
+            if not neq.any():
+                continue
+            n_diff += neq.sum(axis=(0, 1))
+            n_nan_l += (neq & an).sum(axis=(0, 1))
+            n_nan_p += (neq & bn).sum(axis=(0, 1))
+            both = neq & ~an & ~bn
+            if both.any():
+                ulp = np.abs(f16_order(a) - f16_order(b))
+                ulp = np.where(both, ulp, 0)
+                max_ulp = np.maximum(max_ulp, ulp.max(axis=(0, 1)))
+                gap = np.abs(a.astype(np.float64) - b.astype(np.float64))
+                gap = np.where(both, gap, 0.0)
+                max_abs = np.maximum(max_abs, gap.max(axis=(0, 1)))
+            any_row = neq.any(axis=1)                       # (n, nch)
+            hit = any_row.any(axis=0)
+            fr = np.argmax(any_row, axis=0) + r0
+            new = hit & (first_row < 0)
+            first_row = np.where(new, fr, first_row)
+    chans = []
+    for c in range(nch):
+        if not n_diff[c]:
+            continue
+        rec = {"channel": (chan[c] if c < len(chan) else f"#{c}"), "index": c,
+               "n_differ": int(n_diff[c]), "max_ulp": int(max_ulp[c]),
+               "max_abs_delta": float(max_abs[c]),
+               "n_nan_local_only": int(n_nan_l[c]),
+               "n_nan_published_only": int(n_nan_p[c]),
+               "first_row": int(first_row[c])}
+        if first_bin is not None:
+            rec["first_bin"] = int(first_bin) + int(first_row[c])
+        chans.append(rec)
+    out["n_cells_differ"] = int(n_diff.sum())
+    out["n_cells"] = int(np.prod(lshape))
+    out["chunks_range_read"] = n_chunks_read
+    out["channels"] = chans
+    if chans:
+        r = min(c["first_row"] for c in chans)
+        out["first_differing_row"] = int(r)
+        if first_bin is not None:
+            out["first_differing_bin"] = int(first_bin) + int(r)
+    return out
+
+
+def _npz_equal(a, b):
+    if a.shape != b.shape or a.dtype.kind != b.dtype.kind:
+        return False
+    if a.dtype.kind in "fc":
+        return bool(np.array_equal(a, b, equal_nan=True))
+    return bool(np.array_equal(a, b))
+
+
+def verify_npz(local, url, scratch):
+    """Diff the small npz KEY BY KEY. 5 MB: this one is fetched whole.
+
+    The container's sha256 is expected to differ even when every value is
+    identical — `np.savez` writes a zip and a zip stores a timestamp per
+    member — so the file-level hash is never the answer here; the keys are.
+    """
+    blob = http_range(url, 0, None)
+    os.makedirs(scratch, exist_ok=True)
+    pub = os.path.join(scratch, "published_" + os.path.basename(local))
+    with open(pub, "wb") as fh:
+        fh.write(blob)
+    try:
+        # `allow_pickle` because the npz is ours and carries object arrays in
+        # the hand-built case; every key read here is a plain array otherwise.
+        la = np.load(local, allow_pickle=True)
+        pa = np.load(pub, allow_pickle=True)
+        lk, pk = set(la.files), set(pa.files)
+        out = {"keys_local": len(lk), "keys_published": len(pk),
+               "keys_only_local": sorted(lk - pk),
+               "keys_only_published": sorted(pk - lk), "keys": []}
+        for k in sorted(lk & pk):
+            x, y = np.asarray(la[k]), np.asarray(pa[k])
+            if _npz_equal(x, y):
+                continue
+            rec = {"key": k,
+                   "expected": k in VERIFY_EXPECTED_NPZ_KEYS,
+                   "dtype": str(x.dtype), "shape": list(x.shape),
+                   "dtype_published": str(y.dtype),
+                   "shape_published": list(y.shape)}
+            if x.dtype.kind in "fiu" and y.dtype.kind in "fiu" \
+                    and x.shape == y.shape:
+                d = np.abs(x.astype(np.float64) - y.astype(np.float64))
+                rec["n_differ"] = int(np.count_nonzero(
+                    (x != y) & ~(np.isnan(x.astype(np.float64))
+                                 & np.isnan(y.astype(np.float64)))))
+                rec["max_abs_delta"] = (float(np.nanmax(d)) if d.size
+                                        else 0.0)
+            else:
+                rec["local"] = str(x)[:400]
+                rec["published"] = str(y)[:400]
+            out["keys"].append(rec)
+        la.close()
+        pa.close()
+    finally:
+        try:
+            os.remove(pub)
+        except OSError:
+            pass
+    out["keys_differ"] = [r["key"] for r in out["keys"]]
+    out["keys_differ_unexpected"] = [r["key"] for r in out["keys"]
+                                     if not r["expected"]]
+    return out
+
+
+def stage_verify(ctx):
+    """Compare this work dir with the PUBLISHED tensor. Publish nothing.
+
+    Exits non-zero when anything differs that was not expected to, and does it
+    AFTER `verify.json` is written and the table is printed: a job whose whole
+    output is a finding must still be able to upload the finding.
+    `--allow-drift` turns the exit off and changes nothing else.
+    """
+    work = ctx.work
+    allow = bool(getattr(ctx.a, "allow_drift", False))
+    scratch = os.path.join(ctx.scratch, "verify")
+    names = [STEM + ".npz"] + [group_file(work, g) for g in GROUPS]
+    names = [os.path.basename(p) for p in names]
+    man_url = hub_resolve_url("manifest.json")
+    print(f"  verify: reading {man_url}")
+    man = json.loads(http_range(man_url, 0, None).decode("utf-8"))
+    pub = {str(r.get("name")): r for r in man.get("files", [])}
+    print(f"  verify: published manifest — recipe {man.get('recipe')}, built "
+          f"{man.get('built_at')}, builder {str(man.get('builder_git_sha'))[:12]}, "
+          f"{len(pub)} file(s)")
+    chan = {"g025": CHAN_G025, "g100": CHAN_G100,
+            "rg100": CHAN_RG100, "oc025": CHAN_OC025}
+    bin0 = {"g025": ctx.b_lo, "g100": ctx.b_lo, "oc025": ctx.b_oc}
+    ctx.prog.stage_start("verify", len(names))
+    recs = []
+    for i, name in enumerate(names, 1):
+        p = os.path.join(work, name)
+        g = next((x for x in GROUPS if name == f"{STEM}_X_{x}.npy"), None)
+        rec = {"name": name, "group": g,
+               "kind": "npz" if name.endswith(".npz") else "npy",
+               "url": hub_resolve_url(name)}
+        if not os.path.exists(p):
+            rec.update(drift=True, identical=False,
+                       note="this work dir has no such file")
+            recs.append(rec)
+            print(f"  verify: {name} MISSING locally")
+            continue
+        rec["bytes_local"] = os.path.getsize(p)
+        rec["sha256_local"] = sha256(p)
+        prec = pub.get(name)
+        if prec is None:
+            rec.update(drift=True, identical=False,
+                       note=f"{HF_PREFIX}/manifest.json does not list this "
+                            f"file — there is nothing published to compare "
+                            f"it with")
+            recs.append(rec)
+            print(f"  verify: {name} is NOT in the published manifest")
+            continue
+        rec["bytes_published"] = prec.get("bytes")
+        rec["sha256_published"] = prec.get("sha256")
+        rec["identical"] = (rec["sha256_local"] == rec["sha256_published"])
+        if rec["identical"]:
+            rec["drift"] = False
+            print(f"  verify: {name} sha256 {rec['sha256_local'][:16]}… "
+                  f"IDENTICAL")
+        elif rec["kind"] == "npz":
+            print(f"  verify: {name} sha256 differs — comparing key by key "
+                  f"(the zip stores a timestamp, so this is expected)")
+            det = verify_npz(p, rec["url"], scratch)
+            rec["npz"] = det
+            rec["drift"] = bool(det["keys_differ_unexpected"]
+                                or det["keys_only_local"]
+                                or det["keys_only_published"])
+        else:
+            print(f"  verify: {name} sha256 differs — streaming both "
+                  f"({rec['bytes_local'] / 1e9:.1f} GB local, "
+                  f"range-reading the published copy)")
+            try:
+                size = http_size(rec["url"])
+                rec["bytes_published_http"] = size
+            except Exception as e:                            # noqa: BLE001
+                rec["bytes_published_http_error"] = str(e)[:200]
+            det = verify_npy(p, rec["url"], chan.get(g, []),
+                             first_bin=bin0.get(g), prog=ctx.prog, label=name)
+            rec["npy"] = det
+            rec["drift"] = True
+        ctx.prog.item(name, i, {"identical": bool(rec.get("identical")),
+                                "drift": bool(rec.get("drift"))})
+        recs.append(rec)
+
+    drift = [r for r in recs if r.get("drift")]
+    out = {"recipe": RECIPE, "stem": STEM, "at": utcnow(), "work": work,
+           "builder_git_sha": git_sha(),
+           "seeded": bool(getattr(ctx.a, "seed_from", "")),
+           "published": {"url": man_url, "repo": man.get("repo"),
+                         "prefix": man.get("prefix", HF_PREFIX),
+                         "recipe": man.get("recipe"),
+                         "built_at": man.get("built_at"),
+                         "builder_git_sha": man.get("builder_git_sha"),
+                         "seeded_from_base": man.get("seeded_from_base")},
+           "expected_npz_keys": list(VERIFY_EXPECTED_NPZ_KEYS),
+           "allow_drift": allow,
+           "files": recs,
+           "n_identical": sum(1 for r in recs if r.get("identical")),
+           "n_files": len(recs),
+           "drift": bool(drift),
+           "drift_files": [r["name"] for r in drift]}
+    vp = os.path.join(work, "verify.json")
+    atomic_json(vp, out)
+
+    w = max(len(r["name"]) for r in recs)
+    print(f"\n  {'file'.ljust(w)}  {'local sha256':<18}{'published':<18}"
+          f"result")
+    for r in recs:
+        res = "identical"
+        if r.get("note") and "npz" not in r and "npy" not in r:
+            res = "DRIFT: " + str(r["note"])[:90]
+        elif r.get("identical") is False and r["kind"] == "npz":
+            d = r.get("npz", {})
+            same = not d.get("keys_differ_unexpected") \
+                and not d.get("keys_only_local") \
+                and not d.get("keys_only_published")
+            res = ("every value identical; " if same else "DRIFT: ") + \
+                  (", ".join(d.get("keys_differ", [])) or "container only") + \
+                  (" (expected)" if same else "")
+        elif r.get("identical") is False:
+            d = r.get("npy", {})
+            if not d.get("comparable", True):
+                res = "DRIFT: " + str(d.get("note", ""))[:90]
+            else:
+                res = (f"DRIFT: {d.get('n_cells_differ', 0):,} cells in "
+                       + ", ".join(f"{c['channel']} (max {c['max_ulp']} ULP, "
+                                   f"{c['max_abs_delta']:.3g}, first row "
+                                   f"{c['first_row']})"
+                                   for c in d.get("channels", [])))
+        print(f"  {r['name'].ljust(w)}  "
+              f"{str(r.get('sha256_local', ''))[:16]:<18}"
+              f"{str(r.get('sha256_published', ''))[:16]:<18}{res}")
+    print(f"\n  verify: {out['n_identical']}/{out['n_files']} byte-identical "
+          f"to {man.get('prefix', HF_PREFIX)}; wrote {vp}")
+    # NO `.done` MARKER. `verify` answers a question about the CURRENT state of
+    # the work dir and the CURRENT published tensor, and both can move; a
+    # marker would make the second dispatch print the first one's answer.
+    if drift and not allow:
+        sys.exit(f"VERIFY: {len(drift)} of {len(recs)} file(s) differ from the "
+                 f"published tensor ({', '.join(r['name'] for r in drift)}). "
+                 f"That is the finding this stage exists to make — read "
+                 f"{vp}. Re-run with --allow-drift to record it and exit 0.")
+    return vp
+
+
 # =========================================================== stage: publish ==
 def base_manifest_hashes(api, repo, tok):
     """{group: sha256} from the PUBLISHED base manifest (E-077 §5).
@@ -5061,7 +5607,7 @@ def stage_publish(ctx):
 STAGE_FN = {"glorys": stage_glorys, "sst": stage_sst, "ncep": stage_ncep,
             "rg": stage_rg, "occci": stage_occci, "static": stage_static,
             "truth": stage_truth, "norm": stage_norm, "meta": stage_meta,
-            "publish": stage_publish,
+            "verify": stage_verify, "publish": stage_publish,
             # Asked for by name, never run by `all`: it writes no tensor.
             "occci-partial": stage_occci_partial}
 
@@ -5629,7 +6175,8 @@ def run_smoke(root=None, keep=False, start=SMOKE_START, end=SMOKE_END,
           f"{bin_start(c1.bins[-1], 5)}  T={c1.T} pentad bins "
           f"(bins {c1.b_lo}..{c1.b_hi}, recipe {BASE_RECIPE} shape)")
     disk_guard(seed, c1.byte_peak(64), headroom=2e8)
-    run_stages(c1, [s for s in STAGES if s not in ("norm", "meta", "publish")])
+    run_stages(c1, [s for s in ALL_STAGES
+                    if s not in ("norm", "meta", "publish")])
     stage_norm(c1, groups=BASE_GROUPS)
     seed_layout(seed)
     before = {g: sha256(os.path.join(seed, f"{BASE_STEM}_X_{g}.npy"))
@@ -5648,7 +6195,7 @@ def run_smoke(root=None, keep=False, start=SMOKE_START, end=SMOKE_END,
     # skips the inherited ones on their copied markers and re-enters the rest;
     # that skipping IS the thing under test, so naming the survivors by hand
     # would test the list instead of the mechanism.
-    run_stages(ctx, [s for s in STAGES if s != "publish"])
+    run_stages(ctx, [s for s in ALL_STAGES if s != "publish"])
 
     out = check_smoke(work, ctx, seed=seed, seed_sha=before)
     print(f"\nsmoke     OK in {time.time() - t0:.1f}s — {out}")
@@ -5836,13 +6383,15 @@ def main():
                          "`occci` is built. Must be on the same filesystem; a "
                          "missing directory is an error, not a full rebuild.")
     ap.add_argument("--stage", default="all",
-                    choices=["all"] + STAGES + SIDE_STAGES,
-                    help="one stage, or `all`. Order is fixed: ncep needs sst "
-                         "for the sst repair, norm needs everything including "
-                         "occci. `occci-partial` is never part of `all`: it "
-                         "reduces ONE YEAR of ocean colour on a machine too "
-                         "small to hold the tensor and publishes the result "
-                         "for a later `occci` stage to fold.")
+                    help="`all`, one stage, or a COMMA LIST of them "
+                         f"({', '.join(STAGES + SIDE_STAGES)}). Order is the "
+                         "builder's whatever order they are typed in: ncep "
+                         "needs sst for the sst repair, norm needs everything "
+                         "including occci. Two stages are never part of "
+                         "`all` — `occci-partial` reduces ONE YEAR of ocean "
+                         "colour on a machine too small to hold the tensor, "
+                         "and `verify` compares this work dir with the "
+                         "PUBLISHED tensor and publishes nothing.")
     ap.add_argument("--years", default="",
                     help="which calendar years `--stage occci-partial` "
                          "reduces: one year, a comma-separated list, or a "
@@ -5922,6 +6471,12 @@ def main():
                          "refusing. For a deliberate no-subsurface build only "
                          "— family7-build #10 published 128 bytes of rg100 "
                          "this way and went green (2026-09-14).")
+    ap.add_argument("--allow-drift", action="store_true",
+                    help="with `--stage verify`: write verify.json, print the "
+                         "table and exit 0 even when a file differs from the "
+                         "published tensor. Without it a difference is a "
+                         "FAILED job, which is the point — verify.json is "
+                         "written either way, so the finding is never lost.")
     ap.add_argument("--dry-run", action="store_true",
                     help="print the axis and the byte arithmetic, spend nothing")
     a = ap.parse_args()
@@ -5970,7 +6525,7 @@ def main():
         print("\n--dry-run: nothing built.")
         return 0
 
-    stages = STAGES if a.stage == "all" else [a.stage]
+    stages = parse_stages(a.stage)
     if stages == ["occci-partial"]:
         # A PARTIAL RUNNER HOLDS NO TENSOR, so `byte_peak`'s 46 GB is the wrong
         # allocation to guard (ml/CLAUDE.md §5.18: size a guard from the

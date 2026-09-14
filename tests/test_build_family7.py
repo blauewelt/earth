@@ -633,8 +633,11 @@ def test_10_smoke_produces_every_file_and_key(build):
     src = json.loads(str(d["sources"]))
     for k in ("glorys", "oisst", "ncep", "rg", "naturalearth", "etopo"):
         assert k in src, f"`sources` does not name {k}"
-    # every stage left a marker, and progress.json is a real artefact
-    for s in b7.STAGES:
+    # every stage left a marker, and progress.json is a real artefact.
+    # `verify` deliberately leaves none — it is not part of `all` and its
+    # answer is about the CURRENT published tensor, so a marker would let the
+    # second dispatch print the first one's result.
+    for s in b7.ALL_STAGES:
         if s == "publish":
             continue
         assert b7.marked(work, s), f"stage {s} left no marker"
@@ -3084,7 +3087,8 @@ def _redo_ns(**kw):
              oc_source="occci", oc_start=b7.SMOKE_OC_START, oc_preflight=False,
              years="", oc_partials_dir="", no_upload=True,
              redo_group=[], allow_empty_rg=False, dry_run=False,
-             allow_empty_statics=False, allow_missing_years=False)
+             allow_empty_statics=False, allow_missing_years=False,
+             allow_drift=False)
     a.update(kw)
     return argparse.Namespace(**a)
 
@@ -3152,7 +3156,7 @@ def unseeded():
         src, [d_lo + dt.timedelta(days=k) for k in range((d_hi - d_lo).days + 1)],
         dt.date(*(int(x) for x in b7.SMOKE_OC_START.split("-"))))
     ctx = b7.Ctx(_redo_ns(work=work, source_dir=src, smoke=True))
-    b7.run_stages(ctx, [s for s in b7.STAGES if s != "publish"])
+    b7.run_stages(ctx, [s for s in b7.ALL_STAGES if s != "publish"])
     yield dict(root=root, src=src, work=work, ctx=ctx)
     shutil.rmtree(root, ignore_errors=True)
 
@@ -3509,7 +3513,7 @@ def test_47_a_seeded_dir_reruns_exactly_static_and_ncep(build, tmp_path,
         years="", oc_partials_dir="", dry_run=False, oc_preflight=False))
     b7.seed_from(ctx, seed)
 
-    rerun = [s for s in b7.STAGES if s not in b7.INHERITED_STAGES
+    rerun = [s for s in b7.ALL_STAGES if s not in b7.INHERITED_STAGES
              and s not in ("norm", "meta", "publish")]
     assert sorted(rerun) == ["ncep", "static"], rerun
 
@@ -3569,7 +3573,7 @@ def test_47_a_seeded_dir_reruns_exactly_static_and_ncep(build, tmp_path,
 
     # and now actually run it: the skips and the re-runs, from the log
     capsys.readouterr()
-    b7.run_stages(ctx, [s for s in b7.STAGES if s != "publish"])
+    b7.run_stages(ctx, [s for s in b7.ALL_STAGES if s != "publish"])
     log = capsys.readouterr().out
     for s in b7.INHERITED_STAGES:
         assert f"stage {s}: already done — skipping" in log, s
@@ -3773,3 +3777,314 @@ def test_50_static_refuses_a_missing_seen_mask(tmp_path):
                              "elev": np.zeros(half.shape, np.float32)}), \
         "the half sphere passes every downstream check — which is why the " \
         "gate has to sit in the stage that builds it"
+
+
+# ======================================================================== #
+# 2026-09-14 · `verify`: the from-scratch rebuild is COMPARED with the      #
+# published tensor — without downloading 61 GB and without publishing       #
+# anything (tests 51-54)                                                    #
+# ======================================================================== #
+def _fake_published(work, pubdir, monkeypatch, mutate=None, **man_extra):
+    """A local stand-in for `tensors/<stem>/` on the Hub.
+
+    The five files are COPIED (never linked: the mutation below must not reach
+    the work dir, which is the thing under test), `mutate` is given the copy to
+    damage, the manifest is written from the copies' own hashes, and the
+    stage's two network primitives are pointed at the directory. Nothing else
+    is patched — `stage_verify` reaches the Hub through exactly `http_range`
+    and `http_size`, and a test that had to patch more than that would be
+    telling us the stage had grown a second way to fetch bytes.
+    """
+    names = [b7.STEM + ".npz"] + [f"{b7.STEM}_X_{g}.npy" for g in b7.GROUPS]
+    os.makedirs(pubdir, exist_ok=True)
+    for n in names:
+        shutil.copy(os.path.join(work, n), os.path.join(pubdir, n))
+    if mutate is not None:
+        mutate(pubdir)
+    man = dict(recipe=b7.RECIPE, stem=b7.STEM, prefix=b7.HF_PREFIX,
+               repo="chfrank/earth-tensors", groups=b7.GROUPS,
+               seeded_from_base=True, built_at="2026-09-14T01:02:03+00:00",
+               builder_git_sha="0123456789abcdef0123456789abcdef01234567",
+               files=[{"name": n,
+                       "bytes": os.path.getsize(os.path.join(pubdir, n)),
+                       "sha256": b7.sha256(os.path.join(pubdir, n))}
+                      for n in names])
+    man.update(man_extra)
+    with open(os.path.join(pubdir, "manifest.json"), "w") as fh:
+        json.dump(man, fh)
+
+    def _local(url):
+        return os.path.join(pubdir, url.rsplit("/", 1)[1])
+
+    def http_range(url, start=0, length=None, attempts=4, timeout=300):
+        with open(_local(url), "rb") as fh:
+            fh.seek(start)
+            return fh.read(-1 if length is None else length)
+
+    def http_size(url, attempts=4, timeout=120):
+        return os.path.getsize(_local(url))
+
+    monkeypatch.setattr(b7, "http_range", http_range)
+    monkeypatch.setattr(b7, "http_size", http_size)
+    return man
+
+
+def _verify_ctx(work, **kw):
+    return b7.Ctx(_redo_ns(work=work, start=b7.SMOKE_START, end=b7.SMOKE_END,
+                           oc_start=b7.SMOKE_OC_START, stage="verify", **kw))
+
+
+def _flip_one_ulp(path, group_index_wanted=None):
+    """Move ONE finite cell of a .npy by one float16 ULP, and say which.
+
+    One ULP is the smallest difference the storage can express — the exact
+    size of the drift a float32-vs-float64 intermediate leaves behind — so it
+    is the difference `verify` has to be able to see. Anything larger would
+    prove nothing about the floor.
+    """
+    m = np.lib.format.open_memmap(path, mode="r+")
+    flat = m.reshape(m.shape[0], -1, m.shape[-1])
+    for row in range(flat.shape[0]):
+        fin = np.isfinite(flat[row])
+        if not fin.any():
+            continue
+        cell, ch = [int(x[0]) for x in np.nonzero(fin)]
+        u = flat[row, cell, ch].view(np.uint16)
+        flat[row, cell, ch] = (u + np.uint16(1)).view(np.float16)
+        m.flush()
+        del flat, m
+        return row, cell, ch
+    raise AssertionError(f"{path} has no finite cell to flip")
+
+
+# ------------------------------------------------------------------ 51 -----
+def test_51_verify_calls_an_identical_rebuild_identical(build, tmp_path,
+                                                        monkeypatch, capsys):
+    """The green case, and the two properties that make the stage usable at
+    all: it downloads nothing but a 5 MB manifest, and it publishes nothing.
+
+    WHY THIS EXISTS. f7l2 was built by INHERITING three of its four group
+    files as hard links from f7l1 — the fastest way to a tensor and the one
+    that proves least about the builder. The claim that the audited builder
+    reproduces the published bytes from its own sources is only worth what
+    checking it costs, and checking it by download costs 61 GB on a box that
+    is already holding the 61 GB it just built. So `verify` hashes what is on
+    disk, asks the published manifest for the same file's sha256, and reads
+    the published BYTES only where they disagree.
+    """
+    work = build["work"]
+    _fake_published(work, str(tmp_path / "hub"), monkeypatch)
+    before = {n: b7.sha256(os.path.join(work, n))
+              for n in os.listdir(work) if n.endswith((".npy", ".npz"))}
+    capsys.readouterr()
+    ctx = _verify_ctx(work)
+    vp = b7.stage_verify(ctx)                      # no SystemExit: exit 0
+    log = capsys.readouterr().out
+
+    v = json.load(open(vp))
+    assert v["drift"] is False and v["drift_files"] == []
+    assert v["n_identical"] == v["n_files"] == 5, v["files"]
+    assert [f["name"] for f in v["files"]] == \
+        [b7.STEM + ".npz"] + [f"{b7.STEM}_X_{g}.npy" for g in b7.GROUPS]
+    for f in v["files"]:
+        assert f["identical"] is True and f["drift"] is False, f
+        assert f["sha256_local"] == f["sha256_published"], f
+        assert "npy" not in f and "npz" not in f, \
+            f"{f['name']} was streamed even though its hash matched — the " \
+            f"whole point is that an identical file costs one local read"
+    assert v["published"]["built_at"] == "2026-09-14T01:02:03+00:00"
+    assert v["expected_npz_keys"] == list(b7.VERIFY_EXPECTED_NPZ_KEYS)
+    assert "5/5 byte-identical" in log, log[-1500:]
+
+    # the work dir is untouched and no marker was left, so a second dispatch
+    # asks the question again instead of reprinting this answer
+    assert not b7.marked(work, "verify")
+    assert {n: b7.sha256(os.path.join(work, n))
+            for n in before} == before, "verify wrote through a tensor file"
+
+
+# ------------------------------------------------------------------ 52 -----
+def test_52_verify_finds_one_flipped_cell_and_fails_the_job(build, tmp_path,
+                                                            monkeypatch):
+    """ONE cell of g025, one ULP: the channel, the bin and the size of it.
+
+    A comparison that only said "the sha256 differs" would send somebody back
+    to the box to write this loop by hand, at 45.7 GB a time. And the exit
+    code is the finding: a repro run that ends green having found a difference
+    is exactly the failure family7-build #10/#11 taught (a stage that reported
+    success while publishing an all-NaN channel) — so `verify` fails the job,
+    AFTER verify.json is on disk for the story upload.
+    """
+    hub = str(tmp_path / "hub")
+    flipped = {}
+
+    def damage(d):
+        row, cell, ch = _flip_one_ulp(os.path.join(
+            d, f"{b7.STEM}_X_g025.npy"))
+        flipped.update(row=row, cell=cell, ch=ch)
+
+    _fake_published(build["work"], hub, monkeypatch, mutate=damage)
+    ctx = _verify_ctx(build["work"])
+    with pytest.raises(SystemExit) as e:
+        b7.stage_verify(ctx)
+    msg = str(e.value)
+    assert f"{b7.STEM}_X_g025.npy" in msg and "--allow-drift" in msg, msg
+
+    v = json.load(open(os.path.join(build["work"], "verify.json")))
+    assert v["drift"] is True
+    assert v["drift_files"] == [f"{b7.STEM}_X_g025.npy"], v["drift_files"]
+    rec = [f for f in v["files"] if f["name"].endswith("g025.npy")][0]
+    assert rec["identical"] is False
+    d = rec["npy"]
+    assert d["comparable"] is True and d["n_cells_differ"] == 1, d
+    assert len(d["channels"]) == 1, d["channels"]
+    c = d["channels"][0]
+    assert c["index"] == flipped["ch"]
+    assert c["channel"] == b7.CHAN_G025[flipped["ch"]]
+    assert c["n_differ"] == 1
+    assert c["max_ulp"] == 1, "one ULP is the floor this has to be able to see"
+    assert c["max_abs_delta"] > 0
+    assert c["n_nan_local_only"] == 0 and c["n_nan_published_only"] == 0
+    assert c["first_row"] == flipped["row"] == d["first_differing_row"]
+    assert c["first_bin"] == ctx.b_lo + flipped["row"] == \
+        d["first_differing_bin"], "the bin is the row plus the axis origin"
+    # every other file is still called identical — a drift in one group must
+    # not smear across the report
+    for f in v["files"]:
+        if not f["name"].endswith("g025.npy"):
+            assert f["drift"] is False, f["name"]
+
+    # ...and the opt-in records the same finding and exits 0
+    b7.stage_verify(_verify_ctx(build["work"], allow_drift=True))
+    v2 = json.load(open(os.path.join(build["work"], "verify.json")))
+    assert v2["allow_drift"] is True and v2["drift"] is True
+    assert v2["files"][1]["npy"]["n_cells_differ"] == 1
+
+
+# ------------------------------------------------------------------ 53 -----
+def test_53_verify_expects_built_at_builder_and_sources_to_differ(
+        build, tmp_path, monkeypatch):
+    """THE NPZ ALWAYS DIFFERS, AND THAT IS NOT THE FINDING.
+
+    `np.savez` writes a zip and a zip stores a timestamp per member, so the
+    container's sha256 cannot match even when every value does. Three KEYS are
+    expected to differ too: `built_at` is a wall clock, `builder_git_sha` is
+    the commit this run started from, and `sources` says where each stage read
+    its bytes — a repro run reading OISST off the Hub mirror where the
+    published build read PSL must SAY so. A tensor whose provenance line
+    matched a build it did not do would be the defect (ml/CLAUDE.md §0.1).
+    Any OTHER key moving is drift.
+    """
+    def only_expected(d):
+        p = os.path.join(d, b7.STEM + ".npz")
+        z = np.load(p, allow_pickle=True)
+        keys = {k: z[k] for k in z.files}
+        z.close()
+        keys["built_at"] = np.array("2020-01-01T00:00:00+00:00")
+        keys["builder_git_sha"] = np.array("f" * 40)
+        keys["sources"] = np.array(json.dumps({"oisst": "psl"}))
+        np.savez(p, **keys)
+
+    _fake_published(build["work"], str(tmp_path / "hub1"), monkeypatch,
+                    mutate=only_expected)
+    vp = b7.stage_verify(_verify_ctx(build["work"]))     # exit 0
+    v = json.load(open(vp))
+    assert v["drift"] is False, v["drift_files"]
+    npz = v["files"][0]["npz"]
+    assert v["files"][0]["identical"] is False, \
+        "the zip container carries a timestamp; its hash cannot match"
+    assert sorted(npz["keys_differ"]) == sorted(b7.VERIFY_EXPECTED_NPZ_KEYS)
+    assert npz["keys_differ_unexpected"] == []
+    assert npz["keys_only_local"] == [] and npz["keys_only_published"] == []
+    assert all(r["expected"] for r in npz["keys"])
+    got = {r["key"]: r for r in npz["keys"]}
+    assert got["builder_git_sha"]["published"] == "f" * 40
+
+    # ...and ONE value key moving is a finding, with the size of the move
+    def a_value_too(d):
+        only_expected(d)
+        p = os.path.join(d, b7.STEM + ".npz")
+        z = np.load(p, allow_pickle=True)
+        keys = {k: z[k] for k in z.files}
+        z.close()
+        keys["n_sst_days"] = np.array(int(keys["n_sst_days"]) + 3)
+        norm = np.array(keys["norm_g100"], np.float64)
+        norm[0, 0] += 0.25
+        keys["norm_g100"] = norm
+        np.savez(p, **keys)
+
+    _fake_published(build["work"], str(tmp_path / "hub2"), monkeypatch,
+                    mutate=a_value_too)
+    with pytest.raises(SystemExit) as e:
+        b7.stage_verify(_verify_ctx(build["work"]))
+    assert b7.STEM + ".npz" in str(e.value)
+    v = json.load(open(os.path.join(build["work"], "verify.json")))
+    npz = v["files"][0]["npz"]
+    assert sorted(npz["keys_differ_unexpected"]) == ["n_sst_days", "norm_g100"]
+    got = {r["key"]: r for r in npz["keys"]}
+    assert got["n_sst_days"]["max_abs_delta"] == 3.0
+    assert got["norm_g100"]["n_differ"] == 1
+    assert abs(got["norm_g100"]["max_abs_delta"] - 0.25) < 1e-9
+
+
+# ------------------------------------------------------------------ 54 -----
+def test_54_stage_is_a_comma_list_and_all_never_verifies():
+    """`--stage` takes a list, orders it itself, and `all` is unchanged.
+
+    The repro dispatch has to name every stage except `publish`, which is a
+    list of ten; and `verify` must be reachable by name while never joining
+    `all` — a build that quietly compared itself with the Hub at the end of
+    every run would be a different experiment from the one dispatched, and
+    a `verify` inside `all` would have made the SMOKE reach the network.
+    """
+    assert b7.parse_stages("all") == b7.ALL_STAGES
+    assert "verify" not in b7.ALL_STAGES and "verify" in b7.STAGES
+    assert b7.ALL_STAGES == [s for s in b7.STAGES if s != "verify"]
+    assert b7.STAGES.index("verify") == b7.STAGES.index("meta") + 1
+    assert b7.STAGES.index("verify") == b7.STAGES.index("publish") - 1
+    assert b7.parse_stages("glorys") == ["glorys"]
+    # typed backwards, run forwards
+    assert b7.parse_stages("verify,meta,norm") == ["norm", "meta", "verify"]
+    assert b7.parse_stages(
+        "glorys,sst,ncep,rg,occci,static,truth,norm,meta,verify") == \
+        [s for s in b7.STAGES if s != "publish"]
+    assert b7.DEPS["verify"] == ["meta"]
+    for bad in ("", "  ", "glorys,verfy", "nonsense"):
+        with pytest.raises(SystemExit) as e:
+            b7.parse_stages(bad)
+        assert "--stage" in str(e.value), bad
+    # the side stage stays a side stage
+    assert b7.parse_stages("occci-partial") == ["occci-partial"]
+    with pytest.raises(SystemExit) as e:
+        b7.parse_stages("occci-partial,occci")
+    assert "builds no tensor" in str(e.value), str(e.value)
+
+
+# ------------------------------------------------------------------ 55 -----
+def test_55_partials_are_read_from_the_generation_that_published_them():
+    """A from-scratch f7l2 build must FIND the 28 published colour partials.
+
+    They live under `partials/f7l1/occci/` — the generation in which the
+    reduction itself last changed, which is what `STAGE_SPEC_RECIPE` records
+    and what makes a partial re-usable across rebuilds at all (`stage_spec`
+    drops the axis from a partial's digest for exactly this reason). A builder
+    that looked only under its OWN recipe's folder would find none and stream
+    ~400 GB from CEDA to recompute bytes already on the Hub — which is what
+    the unseeded reproducibility run would have done (2026-09-14).
+
+    The WRITE path is untouched: a partial this recipe builds is published
+    under this recipe, and this recipe's folder is searched first, so a future
+    generation that changes the reduction cannot be shadowed by an old one.
+    """
+    assert b7.oc_partial_prefix() == f"partials/{b7.RECIPE}/occci"
+    pre = b7.oc_partial_read_prefixes()
+    assert pre[0] == b7.oc_partial_prefix(), "the build's own folder wins"
+    assert pre == ["partials/f7l2/occci", "partials/f7l1/occci"], pre
+    assert b7.stage_recipe("occci-partial") == "f7l1"
+    # ...and when the two coincide the list does not repeat itself
+    keep = b7.STAGE_SPEC_RECIPE["occci-partial"]
+    b7.STAGE_SPEC_RECIPE["occci-partial"] = b7.RECIPE
+    try:
+        assert b7.oc_partial_read_prefixes() == [b7.oc_partial_prefix()]
+    finally:
+        b7.STAGE_SPEC_RECIPE["occci-partial"] = keep
