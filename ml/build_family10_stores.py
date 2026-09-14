@@ -1859,8 +1859,13 @@ class SLATrackAdapter(SourceAdapter):
             if la is None or lo_ is None:
                 raise ValueError(f"{path} has no latitude/longitude "
                                  f"(has {sorted(ds.variables)})")
-            if np.isfinite(lo_).any() and np.nanmax(lo_) > 180.0:
-                lo_ = np.where(lo_ > 180.0, lo_ - 360.0, lo_)
+            # The store's contract is [-180, 180). The DUACS files carry a
+            # few samples at EXACTLY +180.0 (measured 2026-09-14: 1994, 2011,
+            # 2014, 2015, 2016 each failed the assembler's range assertion on
+            # "lon runs -180.0..180.0"), and some archives use 0..360; both
+            # fold with one exact subtraction, which touches no other value.
+            if np.isfinite(lo_).any() and np.nanmax(lo_) >= 180.0:
+                lo_ = np.where(lo_ >= 180.0, lo_ - 360.0, lo_)
             frame = {"latitude": la, "longitude": lo_}
             for v in CMEMS_VARS:
                 got = rd(v.lower())

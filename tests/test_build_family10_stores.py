@@ -1544,3 +1544,24 @@ def test_parts_from_hub_refuses_when_a_year_is_not_on_the_hub(tmp_path,
     b10.run_stages(ctx2, ["index"])
     with pytest.raises(SystemExit, match=str(ctx.years[-1])):
         b10.run_stages(ctx2, ["fetch"])
+
+
+def test_slatrack_read_nc_folds_a_sample_at_exactly_180_east(tmp_path, built):
+    """The DUACS files carry samples at lon == +180.0; the store wants [-180, 180)."""
+    import netCDF4 as ncdf
+    ctx, _ = built["slatrack"]
+    p = tmp_path / "edge.nc"
+    ds = ncdf.Dataset(p, "w")
+    ds.createDimension("time", 3)
+    t = ds.createVariable("time", "f8", ("time",)); t.units = "days since 1950-01-01 00:00:00"
+    t[:] = [11690.5, 11690.6, 11690.7]        # 1982-01-03, inside the smoke window
+    ds.createVariable("latitude", "f8", ("time",))[:] = [0.0, 10.0, -10.0]
+    ds.createVariable("longitude", "f8", ("time",))[:] = [180.0, -180.0, 179.5]
+    for v in ("sla_filtered", "sla_unfiltered", "mdt"):
+        ds.createVariable(v, "f8", ("time",))[:] = [0.1, 0.2, 0.3]
+    ds.close()
+    rows, counts = b10.SLATrackAdapter()._read_nc(ctx, str(p), "cmems_test")
+    lon = np.asarray(rows["lon"], np.float64)
+    assert counts["kept"] == 3
+    assert lon.min() >= -180.0 and lon.max() < 180.0
+    assert lon[0] == -180.0
