@@ -382,10 +382,23 @@ consequence per group instead of refusing (`same_as_f7l0`): **g025 and g100
 differ from f7l0's bytes; rg100 is bit-identical** (sha256 `55c49f1b…`, the
 same Roemmich-Gilson cubes through a deterministic stage). g025 was expected
 to differ — f7l0's `sst` channel is missing 1989 (a truncated THREDDS
-transfer on 2026-09-04) and this build has all 15,706 OISST days. g100's
-drift has not been characterised (same NCEP files, byte-identical via the
-mirror; the regridding is deterministic — the difference is worth one
-comparison before g100 numbers are compared across the two recipes).
+transfer on 2026-09-04) and this build has all 15,706 OISST days. **Both
+drifts characterised the same evening, by range-reading one pentad per year
+from both builds** (`docs/FAMILY71_INGEST_HANDOVER.md` §2): in f7l0 `sst`
+AND `sea_ice` are all-NaN over bins 511–583 (1988-12-30 → 1989-12-29, 365
+days exactly = the `n_sst_days` delta 15,341 → 15,706); f7l1 fills them
+(bin 547: 703,902 / 153,002 finite). The five GLORYS channels are
+bit-identical in all 43 sampled bins; `sst`/`sea_ice` elsewhere differ by
+one float16 ULP (≤ 0.0113 K, ≤ 0.0023 ice fraction) because `norm_g025` was
+recomputed over the complete record. g100: `norm_g100` identical, 13 of 15
+channels byte-identical, `log_prate`/`log_swe` differ in 1–2 cells per bin by
+one ULP — accumulation-order noise. **One more void artefact, found in the
+same pass: the published f7l1 npz carries `elev` as ALL NaN** (0 finite of
+1,038,240; f7l0's is 100 % finite) and its `sources` has no `etopo` key —
+the ETOPO fetch was lost on the box the same way rg100's SIO fetch was in
+#10, and no guard caught the static. Consumers take `elev` from the f7l0
+npz (a grid-only static, identical by construction) until the npz is
+republished with the statics stage re-run.
 
 - [Hub folder `tensors/family7_global025_pentad_l1`](https://huggingface.co/datasets/chfrank/earth-tensors/tree/main/tensors/family7_global025_pentad_l1) · [the npz](https://huggingface.co/datasets/chfrank/earth-tensors/resolve/main/tensors/family7_global025_pentad_l1/family7_global025_pentad_l1.npz) (5.4 MB; manifest sha256 `91a8d86f…` verified from the sandbox) · g025 45.67 GB · g100 6.14 GB · rg100 1.05 GB · oc025 8.29 GB. Index: `data/family7_index.json` (recipe f7l1, `--trust-manifest`: the build job restore-verified all five files; the sandbox re-verified the npz and one range read).
 
