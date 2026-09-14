@@ -1,0 +1,80 @@
+  ...10/socat/socat/values.npy:  13%|█▎        | 43.9MB /  335MB            [A[AProcessing Files (0 / 1)      :  13%|█▎        | 43.9MB /  335MB, 4.18MB/s  
+New Data Upload               :  16%|█▋        | 43.9MB /  268MB, 4.18MB/s  [A
+
+  ...10/socat/socat/values.npy:  18%|█▊        | 60.8MB /  335MB            [A[AProcessing Files (0 / 1)      :  18%|█▊        | 60.8MB /  335MB, 5.76MB/s  
+New Data Upload               :  23%|██▎       | 60.8MB /  268MB, 5.76MB/s  [A
+
+  ...10/socat/socat/values.npy:  24%|██▍       | 79.5MB /  335MB            [A[AProcessing Files (0 / 1)      :  24%|██▍       | 79.5MB /  335MB, 7.50MB/s  
+New Data Upload               :  24%|██▍       | 79.5MB /  335MB, 7.50MB/s  [A
+
+  ...10/socat/socat/values.npy:  31%|███       |  102MB /  335MB            [A[AProcessing Files (0 / 1)      :  31%|███       |  102MB /  335MB, 9.61MB/s  
+New Data Upload               :  31%|███       |  102MB /  335MB, 9.61MB/s  [A
+
+  ...10/socat/socat/values.npy:  36%|███▋      |  122MB /  335MB            [A[AProcessing Files (0 / 1)      :  36%|███▋      |  122MB /  335MB, 11.3MB/s  
+New Data Upload               :  36%|███▋      |  122MB /  335MB, 11.3MB/s  [A
+
+  ...10/socat/socat/values.npy:  42%|████▏     |  142MB /  335MB            [A[AProcessing Files (0 / 1)      :  42%|████▏     |  142MB /  335MB, 13.1MB/s  
+New Data Upload               :  42%|████▏     |  142MB /  335MB, 13.1MB/s  [A
+
+  ...10/socat/socat/values.npy:  47%|████▋     |  156MB /  335MB            [A[AProcessing Files (0 / 1)      :  47%|████▋     |  156MB /  335MB, 14.4MB/s  
+New Data Upload               :  47%|████▋     |  156MB /  335MB, 14.4MB/s  [A
+
+  ...10/socat/socat/values.npy:  53%|█████▎    |  178MB /  335MB            [A[AProcessing Files (0 / 1)      :  53%|█████▎    |  178MB /  335MB, 16.3MB/s  
+New Data Upload               :  53%|█████▎    |  178MB /  335MB, 16.3MB/s  [A
+
+  ...10/socat/socat/values.npy:  61%|██████    |  202MB /  335MB            [A[AProcessing Files (0 / 1)      :  61%|██████    |  202MB /  335MB, 18.5MB/s  
+New Data Upload               :  61%|██████    |  202MB /  335MB, 18.5MB/s  [A
+
+  ...10/socat/socat/values.npy:  66%|██████▌   |  220MB /  335MB            [A[AProcessing Files (0 / 1)      :  66%|██████▌   |  220MB /  335MB, 19.9MB/s  
+New Data Upload               :  66%|██████▌   |  220MB /  335MB, 19.9MB/s  [A
+
+  ...10/socat/socat/values.npy:  72%|███████▏  |  241MB /  335MB            [A[AProcessing Files (0 / 1)      :  72%|███████▏  |  241MB /  335MB, 21.8MB/s  
+New Data Upload               :  72%|███████▏  |  241MB /  335MB, 21.8MB/s  [A
+
+  ...10/socat/socat/values.npy:  76%|███████▋  |  256MB /  335MB            [A[AProcessing Files (0 / 1)      :  76%|███████▋  |  256MB /  335MB, 22.9MB/s  
+New Data Upload               :  76%|███████▋  |  256MB /  335MB, 22.9MB/s  [A
+
+  ...10/socat/socat/values.npy:  82%|████████▏ |  274MB /  335MB            [A[AProcessing Files (0 / 1)      :  82%|████████▏ |  274MB /  335MB, 24.4MB/s  
+New Data Upload               :  82%|████████▏ |  274MB /  335MB, 24.4MB/s  [A
+
+  ...10/socat/socat/values.npy:  85%|████████▌ |  285MB /  335MB            [A[AProcessing Files (0 / 1)      :  85%|████████▌ |  285MB /  335MB, 25.2MB/s  
+New Data Upload               :  85%|████████▌ |  285MB /  335MB, 25.2MB/s  [A
+
+  ...10/socat/socat/values.npy:  92%|█████████▏|  306MB /  335MB            [A[AProcessing Files (0 / 1)      :  92%|█████████▏|  306MB /  335MB, 26.9MB/s  
+New Data Upload               :  92%|█████████▏|  306MB /  335MB, 26.9MB/s  [A
+
+  ...10/socat/socat/values.npy:  94%|█████████▍|  315MB /  335MB            [A[AProcessing Files (0 / 1)      :  94%|█████████▍|  315MB /  335MB, 27.5MB/s  
+New Data Upload               :  94%|█████████▍|  315MB /  335MB, 27.5MB/s  [A
+
+  ...10/socat/socat/values.npy:  98%|█████████▊|  327MB /  335MB            [A[AProcessing Files (0 / 1)      :  98%|█████████▊|  327MB /  335MB, 28.3MB/s  
+New Data Upload               :  98%|█████████▊|  327MB /  335MB, 28.3MB/s  [A
+
+  ...10/socat/socat/values.npy:  99%|█████████▉|  332MB /  335MB            [A[AProcessing Files (0 / 1)      :  99%|█████████▉|  332MB /  335MB, 28.5MB/s  
+New Data Upload               :  99%|█████████▉|  332MB /  335MB, 28.5MB/s  [A
+
+  ...10/socat/socat/values.npy: 100%|█████████▉|  335MB /  335MB            [A[AProcessing Files (0 / 1)      : 100%|█████████▉|  335MB /  335MB, 28.5MB/s  
+New Data Upload               : 100%|█████████▉|  335MB /  335MB, 28.5MB/s  [A
+
+  ...10/socat/socat/values.npy: 100%|█████████▉|  335MB /  335MB            [A[A
+
+  ...10/socat/socat/values.npy: 100%|█████████▉|  335MB /  335MB            [A[A
+
+  ...10/socat/socat/values.npy: 100%|█████████▉|  335MB /  335MB            [A[AProcessing Files (0 / 1)      : 100%|█████████▉|  335MB /  335MB, 27.7MB/s  
+New Data Upload               : 100%|█████████▉|  335MB /  335MB, 27.7MB/s  [A
+
+  ...10/socat/socat/values.npy: 100%|█████████▉|  335MB /  335MB            [A[A
+
+  ...10/socat/socat/values.npy: 100%|█████████▉|  335MB /  335MB            [A[A
+
+  ...10/socat/socat/values.npy: 100%|██████████|  335MB /  335MB            [A[AProcessing Files (1 / 1)      : 100%|██████████|  335MB /  335MB, 27.0MB/s  
+New Data Upload               : 100%|██████████|  335MB /  335MB, 27.0MB/s  [A
+
+  ...10/socat/socat/values.npy: 100%|██████████|  335MB /  335MB            [A[A
+
+  ...10/socat/socat/values.npy: 100%|██████████|  335MB /  335MB            [A[AProcessing Files (1 / 1)      : 100%|██████████|  335MB /  335MB, 26.6MB/s  
+New Data Upload               : 100%|██████████|  335MB /  335MB, 26.6MB/s  
+  ...10/socat/socat/values.npy: 100%|██████████|  335MB /  335MB            
+  [publish socat] values.npy  9/10  45.5s
+  [publish socat] store.json  10/10  47.3s
+  publish: 10 file(s) verified by restore -> https://huggingface.co/datasets/chfrank/earth-tensors/tree/main/tensors/family10/socat
+=== stage publish done in 54.1s ===
