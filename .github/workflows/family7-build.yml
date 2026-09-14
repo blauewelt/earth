@@ -318,6 +318,12 @@ jobs:
         env:
           WORK: ${{ github.event.inputs.work || 'ml/cache/family7_l1' }}
           EXTRA: ${{ github.event.inputs.extra_args }}
+          # The preflight first asks whether every pending colour year has a
+          # published partial (then CEDA is never read and the check stands
+          # down). Listing the Hub needs the token; without it the preflight
+          # falls back to fetching one CEDA file, which is what refused #9
+          # on 2026-09-14 from a box reading CEDA at 0.2 MB/s. Env, never argv.
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
         run: |
           set -o pipefail
           mkdir -p "${WORK}"
