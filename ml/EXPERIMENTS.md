@@ -120,9 +120,9 @@ a real measurement with its own position, time, footprint and provenance.
 | date range | 1979-02-15 → 2024-12-31 | 1977-01-01 → 2024-12-31 | 1957-01-01 → 2024-12-31 |
 | overall measured fraction (of N × C channel slots holding a number) | 0.963865 | 0.568374 | 0.923146 |
 | rows read → kept | 48,708,540 → 48,480,798 (99.53 %) | 35,771,817 samples read → 15,781,023 kept, joined into 1,001,282 mooring-days | 44,018,204 → 41,830,675 (95.0 %) |
-| the main drop, by reason | `drop_pos_err` **227,174** — derived position error over 50 km (§4.2's rule; the GDP product publishes no per-row flag, so the flag is derived from the error estimates) | `drop_fill` **15,835,928** — the archive's fill value, then `drop_depth` 3,261,857 (non-standard depths) and `drop_qc` 893,009 (PMEL quality codes worse than 2) | `drop_out_of_range` **2,160,005** — outside the 1957 → 2024 window, the file's 498,786-line preamble excluded — then `drop_no_fco2` 27,520 |
+| the main drop, by reason | `drop_pos_err` **227,174** — derived position error over 50 km (§4.2's rule; the GDP product publishes no per-row flag, so the flag is derived from the error estimates) — then `drop_no_values` 568 (fixes with nothing measured on them; recorded since the 09:47Z rebuild) | `drop_fill` **15,835,928** — the archive's fill value, then `drop_depth` 3,261,857 (non-standard depths) and `drop_qc` 893,009 (PMEL quality codes worse than 2) | `drop_out_of_range` **2,160,005** — outside the 1957 → 2024 window, the file's 498,786-line preamble excluded — then `drop_no_fco2` 27,520 |
 | distinct platforms | **28,689** drifters (AOML ids) | **159** moorings (WMO codes) | **8,024** cruises (hashed expocodes) |
-| build time | 85 min | ~20 min | ~20 min |
+| build time | 85 min (rebuild: 69 min) | ~20 min | ~20 min (rebuild: ~17 min) |
 | size on the Hub | 1.6 GB | 63 MB | 1.37 GB |
 
 One note on the socat row: the store published at 07:00Z recorded those
@@ -138,9 +138,20 @@ carries over unchanged and nothing had to be re-checked.
 - [the `socat` rebuild](https://github.com/blauewelt/earth/actions/runs/34822844466) — re-streamed the SOCAT v2026 synthesis file from builder commit `0d5860d` with the corrected counter, ~17 min, `built_at` 2026-09-14T08:45:54Z, log ending `publish: 10 file(s) verified by restore`.
 
 The same counter-ordering fix applies to `gdp`'s `drogue_uncertain` (finding
-(d) below). **That rebuild is in flight** — dispatched 08:27Z, run
-34822846450, still running at the time of writing — so `gdp`'s published
-`store.json` still carries the 568-row discrepancy described there.
+(d) below), and **`gdp` was rebuilt the same way, landing 09:47Z**: the new
+`store.json` reads `drogue_uncertain` **1,416,828** — now exactly the NaN count
+in the `drogue` channel — and a new `drop_no_values` **568**, so the row ledger
+closes: `rows_read` 48,708,540 − `drop_pos_err` 227,174 − `drop_no_values` 568
+− N 48,480,798 = **0**. As with socat, **all nine array sha256 values are
+byte-identical to the build verified that morning** (checked digest by digest
+against the copy of the verified `store.json` fetched before the publish),
+`N`, the bin range, the live-bin count, the measured fraction, `per_channel`
+and `per_year` are unchanged, and the registry was rewritten 70 s later. The
+only fields that differ are `built_at`, `builder_git_sha` and `counts`. Finding
+(d) is therefore closed for the store on the Hub; it stays below as the record
+of what the first build carried.
+
+- [the `gdp` rebuild](https://github.com/blauewelt/earth/actions/runs/34822846450) — re-fetched 46 years of 6-hourly drifter data from the AOML ERDDAP server from builder commit `0d5860d` with the corrected counter, 69 min (08:38Z → 09:47Z, against the first build's 85 — the AOML server's pace, not the builder's), `built_at` 2026-09-14T09:46:18Z, log ending `publish: 10 file(s) verified by restore`, then `Rewrite the family-10 registry` → `publish: verified by restore`.
 
 Each build ran on a GitHub-hosted `ubuntu-latest` runner at **$0**, all three
 from builder commit `c5bc2ce`:
@@ -234,7 +245,9 @@ symptoms. The rows are fixes on which *nothing at all* was measured: no
 velocity, no temperature, an uncertain drogue, so they were counted as
 drogue-uncertain and then discarded unrecorded. Every array-side identity
 closes, and the builder now increments that counter only for a row it keeps and
-records the drop as `drop_no_values`, so a future build closes both halves. In
+records the drop as `drop_no_values` — **the 09:47Z rebuild closed both halves
+(1,416,828 and 568, ledger residual 0) with the arrays unchanged; see the RESULT
+section above.** In
 `socat`, `time_days` is float32 and resolves about **84 s** at the end of the
 record, so three rows late on 2024-12-31 round up across midnight into
 2025-01-01 — 3 rows in 41.8 M. The five-day bin is computed from the stored

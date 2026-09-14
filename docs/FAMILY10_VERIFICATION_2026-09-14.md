@@ -429,9 +429,10 @@ dominated by a single platform in both stores (`socat` median 1 of 8,
 Downloaded and checked identically to §1–§7. 1.6 GB of arrays.
 **Result: every integrity and structural check PASSES.** Two things do not
 match an expectation: a 568-row gap between `counts.drogue_uncertain` and the
-NaN count actually in `values.npy` (§8.4), and the Gulf Stream anchor does
-*not* return |u| ≈ 1 m s⁻¹ (§8.5) — the store contains such speeds, the k = 8
-at 300 km simply does not reach them.
+NaN count actually in `values.npy` (§8.4 — **closed by the 09:47Z rebuild,
+arrays unchanged; see the note at the end of §8.4**), and the Gulf Stream
+anchor does *not* return |u| ≈ 1 m s⁻¹ (§8.5) — the store contains such
+speeds, the k = 8 at 300 km simply does not reach them.
 
 ## 8.1 · store.json, as published
 
@@ -448,7 +449,7 @@ at 300 km simply does not reach them.
 | `values_measured_fraction` | 0.963865 |
 | `qc_keep_max` | 2 |
 | builder / commit | `ml/build_family10_stores.py` @ `c5bc2ced06a2d1473f1fc47e2126d190c26ea0f4` (same commit as `gtmba`/`socat`) |
-| built_at | **2026-09-14T08:04:35Z** |
+| built_at | **2026-09-14T08:04:35Z** (the verified build; the 09:47Z rebuild reads 2026-09-14T09:46:18Z @ `0d5860d`, same arrays — §8.4) |
 | sources | `erddap.aoml.noaa.gov/gdp/erddap/tabledap/drifter_6hour_qc.csvp`; OSMC mirror |
 | resume_granularity | year |
 
@@ -571,8 +572,24 @@ drogue-uncertain and then dropped unrecorded. That single cause produces both
 why the two numbers are equal. `ml/build_family10_stores.py` now increments the
 counter only for a row it keeps and counts that drop as `drop_no_values`, so a
 future build closes both halves. That rebuild was dispatched 2026-09-14 08:27Z
-(run 34822846450) and was **still running** when this note was written, so the
-published store may still carry the gap and this note is the reconciliation.
+(run 34822846450) and landed at **09:47Z**, 69 minutes after its build step
+started.
+
+**Rebuilt, and this verification carries over unchanged.** The new `store.json`
+(`built_at` 2026-09-14T09:46:18Z, builder commit `0d5860d`, the log ending
+`publish: 10 file(s) verified by restore`) reads `counts.drogue_uncertain`
+**1,416,828** — equal to the NaN count in §8.4's histogram — and a new
+`drop_no_values` **568**, so `rows_read − drop_pos_err − drop_no_values − N`
+= 48,708,540 − 227,174 − 568 − 48,480,798 = **0**. The comparison was made
+against a copy of the verified `store.json` fetched from the Hub at 09:39Z,
+before the rebuild's publish step ran: **all nine array sha256 values are
+identical, digest by digest**, and `N`, `bin_first`/`bin_last`, `n_live_bins`,
+`values_measured_fraction`, `per_channel` and `per_year` are equal as JSON. The
+only top-level keys that differ are `built_at`, `builder_git_sha` and
+`counts`. So the rebuild changed the ledger and nothing else, and every
+measurement in §8 still describes the file on the Hub.
+
+- [the `gdp` rebuild](https://github.com/blauewelt/earth/actions/runs/34822846450) — re-fetched the 46 years of 6-hourly drifter data from AOML with the corrected counter and republished the store, arrays unchanged; its last step rewrote the registry (`generated_utc` 2026-09-14T09:47:00Z, `gdp` entry `built_at` 09:46:18Z @ `0d5860d`).
 
 | `qc` | rows | fraction |
 |---|---|---|
@@ -720,7 +737,7 @@ recent pentads.
 | per-channel measured / fraction / min / max / mean | **PASS (4/4)** |
 | per_year sums to N, and reproduces from `time_days` | **PASS (exact, 46/46)** |
 | `drogue` is exactly three-state (1 / 0 / NaN), no fourth value | PASS |
-| `drogue` NaN count vs `counts.drogue_uncertain` | **DIFFERS by 568 rows (1.2e-5)** — reconciles exactly with `rows_read − drop_pos_err − N` = 568, i.e. the counter is pre-drop. Arrays are self-consistent; a counter-ordering note is owed in store.json |
+| `drogue` NaN count vs `counts.drogue_uncertain` | **DIFFERED by 568 rows (1.2e-5) in the 08:05Z build** — reconciled exactly with `rows_read − drop_pos_err − N` = 568, i.e. the counter was pre-drop; arrays self-consistent. **PASS since the 09:47Z rebuild**: 1,416,828 = 1,416,828, `drop_no_values` 568, ledger residual 0, arrays byte-identical (§8.4) |
 | qc ⊆ {1, 2}, split 93.571 % / 6.429 % | PASS |
 | `knearest` fixed-k, miss tokens where empty | PASS |
 | values physically plausible | PASS (global mean drift ≈ 0; Gulf Stream box p99 1.90, max 2.39 m s⁻¹) |
@@ -734,7 +751,12 @@ Downloaded (38,128 B). `family: family10`, `repo: chfrank/earth-tensors`,
 `ml/build_family10_registry.py` @ `c5bc2ced06a2d1473f1fc47e2126d190c26ea0f4`
 (the same commit as all three stores), `generated_utc`
 **2026-09-14T08:05:45Z** — 70 s after `gdp`'s `built_at`, so the registry was
-regenerated to pick `gdp` up. `n_groups: 7`.
+regenerated to pick `gdp` up. `n_groups: 7`. *(Rewritten twice since, by the
+`socat` rebuild at 08:46Z and the `gdp` rebuild at 09:47Z — builder commit
+`0d5860d`, `generated_utc` 2026-09-14T09:47:00Z; the seven groups, every N,
+`bin_first` and file count, `groups_missing: [slatrack]` and the tier-G
+`f7l0` fallback are unchanged; only the `gdp` and `socat` entries' `built_at`
+and `builder_git_sha` moved.)*
 
 ### `groups` (7)
 

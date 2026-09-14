@@ -465,21 +465,28 @@ summing to N. The files:
 - [the `gdp` store on the Hub](https://huggingface.co/datasets/chfrank/earth-tensors/tree/main/tensors/family10/gdp) — surface drifters, 6-hourly, 1.6 GB.
 - [the `gtmba` store on the Hub](https://huggingface.co/datasets/chfrank/earth-tensors/tree/main/tensors/family10/gtmba) — the tropical moored arrays, daily, 63 MB.
 - [the `socat` store on the Hub](https://huggingface.co/datasets/chfrank/earth-tensors/tree/main/tensors/family10/socat) — ship and mooring surface CO₂, 1.37 GB.
-- [the family-10 registry on the Hub](https://huggingface.co/datasets/chfrank/earth-tensors/blob/main/tensors/family10/family10.json) — seven groups, regenerated 2026-09-14T08:05:45Z; every tier-P entry's N, `bin_first` and file count agrees with the `store.json` verified above.
+- [the family-10 registry on the Hub](https://huggingface.co/datasets/chfrank/earth-tensors/blob/main/tensors/family10/family10.json) — seven groups, regenerated 2026-09-14T09:47:00Z by the `gdp` rebuild's last step; every tier-P entry's N, `bin_first` and file count agrees with the `store.json` verified above.
 
 The evidence, number by number, is in
 `docs/FAMILY10_VERIFICATION_2026-09-14.md`.
 
-**One store was rebuilt after that verification, and the verification still
-holds.** `socat`'s first build wrote a wrong ledger — the counters in `counts`
-were 59× too large (§10) — so it was rebuilt the same day at **08:46Z** from
-builder commit `0d5860d` with the fix. Only the ledger changed: **all nine
-array sha256 values in the new `store.json` are byte-identical to the ones
-verified that morning**, so every number in the table above is a number about
-the file on the Hub today, and `rows_read` now reads 44,018,204 with
-`drop_out_of_range` 2,160,005 and `drop_no_fco2` 27,520.
+**Two stores were rebuilt after that verification, and the verification still
+holds for both.** `socat`'s first build wrote a wrong ledger — the counters in
+`counts` were 59× too large (§10) — so it was rebuilt the same day at
+**08:46Z** from builder commit `0d5860d` with the fix; `gdp`'s first build
+counted 568 drogue-uncertain rows it then dropped (§10), so it was rebuilt from
+the same commit, landing **09:47Z**. In both cases only the ledger changed:
+**all nine array sha256 values in each new `store.json` are byte-identical to
+the ones verified that morning** (`gdp`'s compared digest by digest against
+the verified `store.json` fetched before the publish), so every number in the
+table above is a number about the files on the Hub today. `socat`'s
+`rows_read` now reads 44,018,204 with `drop_out_of_range` 2,160,005 and
+`drop_no_fco2` 27,520; `gdp`'s `drogue_uncertain` reads 1,416,828 — exactly
+the `drogue` channel's NaN count — beside a new `drop_no_values` 568, and
+`rows_read − drop_pos_err − drop_no_values − N` = 0.
 
 - [the `socat` rebuild](https://github.com/blauewelt/earth/actions/runs/34822844466) — re-streamed the SOCAT v2026 synthesis file with the corrected counter and republished the store, ~17 min, arrays unchanged.
+- [the `gdp` rebuild](https://github.com/blauewelt/earth/actions/runs/34822846450) — re-fetched the 46 years of drifter data from AOML with the corrected counter and republished the store, 69 min, arrays unchanged; its last step rewrote the registry.
 
 **Historical context: the access paths, verified against the live archive on
 2026-09-13** — from a sandbox that can reach these hosts, by listing and
@@ -527,11 +534,12 @@ they come from two different PMEL datasets joined on `(station, day)`.
   before anything is fetched. The builder reads
   `COPERNICUSMARINE_SERVICE_USERNAME` and `COPERNICUSMARINE_SERVICE_PASSWORD`
   from the **environment only** — never a file, never a command line.
-- **`gdp`'s `counts.drogue_uncertain` is still 568 higher than the NaN count in
-  the `drogue` channel** in the store published at 08:05Z (§10 explains why and
-  why the arrays are fine). The builder is fixed and **the rebuild is in
-  flight** — dispatched 2026-09-14 08:27Z, still running — so until it lands
-  the published ledger keeps that gap.
+- **`gdp`'s ledger is closed since the 09:47Z rebuild.** The store published
+  at 08:05Z carried `counts.drogue_uncertain` 568 higher than the NaN count in
+  the `drogue` channel (§10 explains why and why the arrays are fine); the
+  store on the Hub now reads 1,416,828 and records the 568 as
+  `drop_no_values`. A copy fetched before 09:47Z has the old ledger and the
+  same arrays.
 - **The `socat` resume granularity is the whole stream, not the year.** The
   synthesis file is sorted by expocode, not by time, so there is no per-year
   request to make and an interrupted fetch re-reads the file from the start.
@@ -591,9 +599,10 @@ they come from two different PMEL datasets joined on `(station, day)`.
   `rows_read − drop_pos_err − N` does not close. Every array-side identity does
   close (drogue is exactly three-state, 1 + 0 = the `measured` count, and the
   claimed mean reproduces). The builder now counts only rows it keeps and
-  records that drop as `drop_no_values`, so a rebuilt store closes both halves;
-  that rebuild was dispatched 2026-09-14 08:27Z and was **still running** when
-  this was written, so the file on the Hub may still carry the gap.
+  records that drop as `drop_no_values`; **the rebuild landed 2026-09-14
+  09:47Z and closed both halves** — `drogue_uncertain` 1,416,828,
+  `drop_no_values` 568, arrays byte-identical (§9). A copy fetched before
+  09:47Z carries the old ledger; its arrays are the same bytes.
 - **`socat`'s counters were inflated 59× in the first build, and are correct in
   the store on the Hub now.** One pass over the file, its counters copied into
   every year part and then summed across the 59 years that held rows. The
