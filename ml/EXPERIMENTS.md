@@ -310,7 +310,7 @@ Evidence for this RESULT: [the family-10 verification of 2026-09-14](https://bla
 ---
 
 <a id="e-077"></a>
-## E-077 · Family 7.1 — ocean colour joins the global tensor as a fourth group (recipe `f7l1`) — DISPATCH STUB, not yet run
+## E-077 · Family 7.1 — ocean colour joins the global tensor as a fourth group (recipe `f7l1`) — BUILT AND PUBLISHED 2026-09-14 (unseeded rebuild)
 
 **E-077 · Add the observed surface chlorophyll-a field to the family-7 global
 tensor as a fourth channel group, `oc025`, WITHOUT rebuilding the three groups
@@ -370,6 +370,72 @@ Cost estimate at dispatch: ~400 GB streamed at the box's ~44 MB/s ≈ 2.5–3 h,
 plus norm (minutes) and publish + restore-verify (~1 h) on box
 `gpu-box-31299601` (Vast 49102182, Ontario, 300 GB, $0.33/h) — **≈ 4–5 h,
 ≈ $1.5–2**.
+
+### RESULT (2026-09-14) — published, restore-verified, 61.2 GB on the Hub
+
+**What was actually built differs from the dispatch stub in one way that
+matters: it is an UNSEEDED rebuild.** Box 49102182 (which holds the f7l0
+seed) refused to start six times on 2026-09-13, so 7.1 was built on a fresh
+box (Vast 50928407, UK, runner `gpu-box-46694776`) with `seed_from=none`:
+all four groups computed, nothing hard-linked. The publish step records the
+consequence per group instead of refusing (`same_as_f7l0`): **g025 and g100
+differ from f7l0's bytes; rg100 is bit-identical** (sha256 `55c49f1b…`, the
+same Roemmich-Gilson cubes through a deterministic stage). g025 was expected
+to differ — f7l0's `sst` channel is missing 1989 (a truncated THREDDS
+transfer on 2026-09-04) and this build has all 15,706 OISST days. g100's
+drift has not been characterised (same NCEP files, byte-identical via the
+mirror; the regridding is deterministic — the difference is worth one
+comparison before g100 numbers are compared across the two recipes).
+
+- [Hub folder `tensors/family7_global025_pentad_l1`](https://huggingface.co/datasets/chfrank/earth-tensors/tree/main/tensors/family7_global025_pentad_l1) · [the npz](https://huggingface.co/datasets/chfrank/earth-tensors/resolve/main/tensors/family7_global025_pentad_l1/family7_global025_pentad_l1.npz) (5.4 MB; manifest sha256 `91a8d86f…` verified from the sandbox) · g025 45.67 GB · g100 6.14 GB · rg100 1.05 GB · oc025 8.29 GB. Index: `data/family7_index.json` (recipe f7l1, `--trust-manifest`: the build job restore-verified all five files; the sandbox re-verified the npz and one range read).
+
+**The numbers §7.4 asked for.** Pentad bin 2411 (2015-01-03): global mean
+`log_chl` **−0.8295** (= **0.148 mg m⁻³**) over **421,137** finite 0.25°
+cells — **40.6 % of the grid**; mean `chl_cov` **0.249**. Over the whole
+record: 9,955 daily 4 km fields folded into 1,997 pentad rows from 1997-09-04
+(bin 1145), 26 days absent from the archive listings; 855.7 M finite values
+per channel; z-score constants `log_chl` (−0.776, 0.457), `chl_cov`
+(0.282, 0.214). **`n_oc_inland` = 4,588,447** finite colour cell-pentads on
+land cells that touch no sea (the 4 km product resolves estuaries and lakes
+the 0.25° mask calls land — measured, not masked, as the plan said). A
+sandbox range read of that bin (offset 128 + 1266·721·1440·2·2, HTTP 206,
+4.15 MB) shows NaN at 40° N 30° W (January, cloud), z = 0.33 on the
+equatorial Pacific, z = 1.80 in the Southern Ocean bloom, NaN on land.
+Other groups: 2,339 GLORYS bins, 15,706 sst and ncep days, 252 rg months.
+
+**How the sources were actually read — none of it the way the stub said.**
+The box read every US archive at 0.2–0.4 MB/s that day (CEDA, PSL, SIO),
+which is why the day's work was mostly moving inputs to where the box reads
+fast: (1) OC-CCI reduced to per-year partials on 28 free hosted runners
+(`occci-partials.yml`, ~1 h a year at 12 parallel CEDA connections), the box
+FOLDING them (189 s for the whole stage); 1997–2022 from CEDA's per-file
+archive, **2023–2024 from PML's NCSS subset of the `CCI_ALL-v6.0-DAILY`
+aggregate** — CEDA's copy ends 2022 and PML has no per-year 4 km directories,
+so the stub's "PML's runs to the end of 2024" was a guess that measured
+false. (2) All 646 OISST + NCEP files mirrored to the Hub (`mirrors/psl/`),
+the last ~300 via PSL's THREDDS front after `downloads.psl.noaa.gov` went
+dark at 10:15Z — byte-identical files, ~half of transfers truncated,
+size-verified and retried; the build then read 644 files from the Hub with
+zero PSL fallbacks (sst 1,632 s, ncep 1,724 s). (3) The RG cubes seeded from
+the `data-cache-v1` release.
+
+**One void artefact, caught after the fact (ml/CLAUDE.md §0.2).** Run #10
+went GREEN and published rg100 as **128 bytes, shape (0, 181, 360, 32)**:
+the SIO fetch was aborted by the throughput guard, `stage_rg` degraded to an
+empty group behind a `::warning::`, norm ran over zero values, publish
+verified the restore of a 128-byte file. Found by reading the manifest's
+byte counts, not the run's colour. Fixed on `3a13f8a`: the stage now refuses
+without cubes, `--redo-group rg100` rebuilt that one group in place in run
+#11 (rg 15 s, norm 5 s, publish 554 s), and the box seeds rg from the release
+before any stage runs.
+
+**Cost.** Box 50928407: ~2 h on 2026-09-13 (glorys + one sst year before
+the PSL crawl was diagnosed) + ~3.4 h on 2026-09-14 ≈ **5.4 h × $0.31 ≈
+$1.7**, plus storage; hosted runners free; ~35 dispatches across six
+workflows, eleven of them family7-build. Against the stub's 4–5 h, $1.5–2 —
+about right in money, two days in calendar time, all of it in the inputs.
+
+Runs: [#10 (the full unseeded build, void rg100)](https://github.com/blauewelt/earth/actions/runs/34846257797) · [#11 (rg100 rebuilt in place, re-published)](https://github.com/blauewelt/earth/actions/runs/34859237016).
 
 Spec: [E-077](https://blauewelt.github.io/earth/docs.html?f=ml/plans/E077_family7_ocean_colour.md).
 Code: `ml/build_family7.py` (stage `occci`), `tests/test_build_family7.py`,
