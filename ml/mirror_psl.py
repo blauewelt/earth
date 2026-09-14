@@ -123,8 +123,12 @@ def hub_listing(api, repo):
     """
     out = {}
     try:
-        tree = api.list_repo_tree(repo, path_in_repo=MIRROR_PREFIX,
-                                  repo_type="dataset", recursive=True)
+        # list() INSIDE the try: list_repo_tree is a lazy paginator, so a
+        # missing prefix raises on the first iteration, not on the call —
+        # the first-ever psl-mirror run (2026-09-14) died on exactly that,
+        # with this except never reached.
+        tree = list(api.list_repo_tree(repo, path_in_repo=MIRROR_PREFIX,
+                                       repo_type="dataset", recursive=True))
     except Exception as e:                                     # noqa: BLE001
         print(f"  (no {MIRROR_PREFIX}/ on {repo} yet: {str(e)[:100]})")
         return out
