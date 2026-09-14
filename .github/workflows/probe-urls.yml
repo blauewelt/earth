@@ -19,9 +19,13 @@ on:
         required: true
         type: string
       head_bytes:
-        description: "how many bytes of each body to keep"
+        description: "how many bytes of each body to keep in the artifact"
         required: false
         default: "4096"
+      log_bytes:
+        description: "how many of those to also print in the job log"
+        required: false
+        default: "1024"
 
 permissions:
   contents: read
@@ -35,6 +39,7 @@ jobs:
         env:
           URLS: ${{ inputs.urls }}
           HEADB: ${{ inputs.head_bytes }}
+          LOGB: ${{ inputs.log_bytes }}
         run: |
           mkdir -p probe
           i=0
@@ -42,13 +47,16 @@ jobs:
             i=$((i+1))
             f="probe/$(printf '%02d' $i).txt"
             echo "=== ${u}" | tee "$f"
-            curl -sS -L --max-time 60 -r 0-$((HEADB-1)) -D "probe/$i.hdr" \
+            curl -g -sS -L --max-time 60 -r 0-$((HEADB-1)) -D "probe/$i.hdr" \
                  -o "probe/$i.body" -w 'http %{http_code} · %{content_type} · %{size_download} B of %{size_header} hdr · %{time_total}s · final %{url_effective}\n' \
                  "${u}" 2>&1 | tee -a "$f" || true
-            head -c "${HEADB}" "probe/$i.body" | tr -d '\000' | head -c 1024 | tee -a "$f"; echo
-            cat "probe/$i.hdr" >> "$f"; head -c "${HEADB}" "probe/$i.body" >> "$f"
+            # -g: no URL globbing, so OPeNDAP constraint brackets survive.
+            # `|| true` everywhere: one dead URL must not end the probe.
+            { head -c "${HEADB}" "probe/$i.body" 2>/dev/null | tr -d '\000' | head -c "${LOGB}" | tee -a "$f"; echo; } || true
+            { cat "probe/$i.hdr"; head -c "${HEADB}" "probe/$i.body"; } >> "$f" 2>/dev/null || true
           done
       - uses: actions/upload-artifact@v4
+        if: always()
         with:
           name: probe-${{ github.run_number }}
           path: probe/
