@@ -63,7 +63,11 @@ HF_TOKEN and no credentials assembles them:
 chooses between the in-RAM assembler and `assemble_store_streaming`, which
 writes the same store BYTE FOR BYTE in three memmap passes and never holds more
 than one part (default `auto`: streaming above 50 M rows, and always for
-slatrack).
+slatrack). Everything AFTER the assembly is bounded the same way: the store's
+statistics and E-079 §4's assertion pass both read the finished arrays in row
+blocks off their memmaps (`--check-chunk-rows`, default 16 M rows), and the
+publish refuses up front if the scratch disk cannot hold one copy of the
+largest file its restore check downloads back.
 
 ONE EXCEPTION, AND IT IS A PROPERTY OF THE SOURCE, NOT A SHORTCUT. The SOCAT
 synthesis is a single 1.4 GB file sorted by EXPOCODE, not by time — measured
@@ -2075,6 +2079,8 @@ class Ctx:
         self.b_hi = int(np.floor((self.t_hi - 1e-9) / PENTAD_DAYS))
         self.years = list(range(self.d_lo.year, self.d_hi.year + 1))
         self.qc_keep = int(getattr(a, "qc_keep", 2) or 2)
+        self.check_chunk = int(getattr(a, "check_chunk_rows", 0)
+                               or CHECK_CHUNK_ROWS)
         self.prog = Progress(self.root)
         self._cmems_missions = None
         self.socat_columns = None
@@ -2303,6 +2309,7 @@ def stage_fetch(ctx):
 #   year that carries duplicate (bin, time_days) rows ACROSS two parts so the
 #   tie-break is actually exercised.
 STAT_CHUNK = 1 << 22          # rows per statistics block; both assemblers use it
+CHECK_CHUNK_ROWS = 16_000_000  # rows per block in `check_store`
 STREAM_ROWS = 50_000_000      # `--assemble auto` switches above this
 # bytes per stored row, excluding the tiny bin_offsets vector: bin 2 +
 # time_days 4 + lat 4 + lon 4 + platform 8 + qc 1 + fp 4 + values 2*C.
@@ -2310,22 +2317,30 @@ ROW_BYTES_FIXED = 2 + 4 + 4 + 4 + 8 + 1 + 4
 DISK_HEADROOM = 1.2
 
 
-def _channel_stats(values, channels, N):
+def _channel_stats(values, channels, N, chunk=STAT_CHUNK):
     """Per-channel measured counts, ranges and means, read in fixed chunks.
 
     Chunked deliberately: `values` is a memmap in the streaming assembler and
     materialising a 2e9-row float32 column would defeat the whole exercise.
     The memory assembler calls the SAME function with the SAME chunk size, so
     the two cannot disagree about a number in store.json.
+
+    `chunk` is a PARAMETER only so a test can drive tiny blocks across the
+    boundaries; every caller in the publish path leaves it at `STAT_CHUNK`,
+    because the mean is a sum of per-chunk `np.nansum`s and numpy's pairwise
+    summation makes that sum depend, in the last bits, on where the blocks
+    fall. Changing the default would rewrite store.json for the three stores
+    that already exist.
     """
+    chunk = max(1, int(chunk))
     C = len(channels)
     measured = [0] * C
     vmin = [None] * C
     vmax = [None] * C
     vsum = [0.0] * C
     finite_total = 0
-    for lo in range(0, int(N), STAT_CHUNK):
-        blk = np.asarray(values[lo:lo + STAT_CHUNK], np.float32)
+    for lo in range(0, int(N), chunk):
+        blk = np.asarray(values[lo:lo + chunk], np.float32)
         if blk.size == 0:
             continue
         fin = np.isfinite(blk)
@@ -2704,76 +2719,168 @@ def _finish_store(ctx, dest, files, N, off, bin_first, bin_last, n_bins,
         meta["notes"] = ad.notes
     meta["sha256"] = {n: sha256(p) for n, p in sorted(files.items())}
     atomic_json(os.path.join(dest, "store.json"), meta)
-    check_store(dest, ad)
+    check_store(dest, ad, chunk_rows=ctx.check_chunk)
     print(f"  store: {N:,} row(s), C={ad.C}, bins {bin_first}..{bin_last} "
           f"({live:,} live) -> {dest}")
     return meta
 
 # ============================================================== assertions ===
-def check_store(path, adapter=None, anchor=None):
+def check_store(path, adapter=None, anchor=None, chunk_rows=CHECK_CHUNK_ROWS):
     """E-079 §4's assertions, run on the store before anybody trusts it.
 
     Every one of these is a property a broken build can have while looking
     completely ordinary from the outside, which is the only reason they are
     worth the seconds they cost.
+
+    IN BOUNDED MEMORY, by row blocks of `chunk_rows` over the store's own
+    memmaps (`f10.Store` opens every column with `mmap_mode="r"`). The old
+    form read `np.asarray(st["bin"], np.int64)` and a float32 view of
+    `values` — 16 GB and 12 GB respectively at slatrack's ~2e9 rows, so the
+    assertion pass after a streaming assembly would have OOM'd on any box
+    that could afford the assembly. There is ONE implementation: the small
+    stores take the same path with one block, because a second whole-array
+    branch is a second set of numbers that can disagree.
+
+    Two checks need care across a block boundary and get it:
+      * SORTEDNESS carries the previous block's LAST row into the next
+        block's comparison, so the seam is checked like any other pair.
+      * The CSR index is checked twice — each block asserts its rows lie
+        inside the slice `bin_offsets` gives their bin (`searchsorted`'s own
+        answer, via `Store._slice`), and a running `np.bincount` recount is
+        compared with `np.diff(bin_offsets)` at the end. The first catches a
+        row in the wrong slice, the second an offset vector that is
+        internally tidy but describes a different store.
     """
     st = f10.Store(path)
-    b = np.asarray(st["bin"], np.int64)
-    t = np.asarray(st["time_days"], np.float64)
-    if st.N:
-        assert np.all(np.diff(b) >= 0), "rows are not sorted by bin"
-        same = b[1:] == b[:-1]
-        assert np.all(t[1:][same] >= t[:-1][same]), \
+    N = int(st.N)
+    chunk = max(1, int(chunk_rows))
+    off = np.asarray(st.bin_offsets, np.int64)
+    assert off[0] == 0 and off[-1] == st.N, "CSR offsets do not span the rows"
+    assert np.all(np.diff(off) >= 0), "bin_offsets is not monotone"
+
+    b_col, t_col = st["bin"], st["time_days"]
+    lat_col, lon_col = st["lat"], st["lon"]
+    v_col, fp_col = st["values"], st["fp"]
+    counts = np.zeros(max(st.n_bins, 0), np.int64)
+    C = int(st.C)
+    lo_m = np.full(C, np.inf, np.float64)
+    hi_m = np.full(C, -np.inf, np.float64)
+    seen = np.zeros(C, bool)
+    fp0 = None
+    prev_b = prev_t = None
+
+    for lo in range(0, N, chunk):
+        hi = min(lo + chunk, N)
+        b = np.asarray(b_col[lo:hi], np.int64)
+        t = np.asarray(t_col[lo:hi], np.float64)
+        # -- sorted by (bin, time), the seam included
+        if prev_b is None:
+            bb_, tt_ = b, t
+        else:
+            bb_ = np.concatenate(([prev_b], b))
+            tt_ = np.concatenate(([prev_t], t))
+        assert np.all(np.diff(bb_) >= 0), "rows are not sorted by bin"
+        same = bb_[1:] == bb_[:-1]
+        assert np.all(tt_[1:][same] >= tt_[:-1][same]), \
             "rows inside a bin are not sorted by time"
+        prev_b, prev_t = b[-1], t[-1]
+
         # The bin column must BE the bin of the time column — a store whose
         # index and timestamps disagree answers every search with the wrong
         # pentad and nothing says so.
         assert np.array_equal(b, f10.bin_of_days(t)), \
             "bin.npy disagrees with floor(time_days / 5)"
-        lon = np.asarray(st["lon"], np.float64)
+        lon = np.asarray(lon_col[lo:hi], np.float64)
         assert np.all((lon >= -180.0) & (lon < 180.0)), \
             f"lon runs {lon.min()}..{lon.max()}, not [-180, 180)"
-        lat = np.asarray(st["lat"], np.float64)
+        lat = np.asarray(lat_col[lo:hi], np.float64)
         assert np.all(np.abs(lat) <= 90.0), "lat outside [-90, 90]"
-    off = st.bin_offsets
-    assert off[0] == 0 and off[-1] == st.N, "CSR offsets do not span the rows"
-    assert np.all(np.diff(off) >= 0), "bin_offsets is not monotone"
-    for bb in (np.unique(b) if st.N else []):
-        lo, hi = st._slice(int(bb), int(bb))
-        assert np.all(b[lo:hi] == bb), f"bin {bb}'s CSR slice holds other bins"
-    v = np.asarray(st["values"], np.float32)
-    assert not np.isinf(v).any(), "values.npy holds an infinity"
-    fp = np.asarray(st["fp"], np.float32)
-    if st.N:
-        assert np.all(fp[:, 0] == fp[0, 0]) and np.all(fp[:, 1] == fp[0, 1]), \
-            "the footprint columns are not constant for this source"
-        assert (f10.LOG2_FP_RANGE[0] <= fp[0, 0] <= f10.LOG2_FP_RANGE[1]), \
-            f"log2_fp {fp[0, 0]} outside E-078 §2's clamp"
-    if adapter is not None:
-        lo_b, hi_b = adapter.bounds()
+
+        # -- CSR, per block: every row of bin bb inside bb's own slice
+        assert np.all((b >= st.bin_first) & (b <= st.bin_last)), \
+            "a row's bin lies outside the range bin_offsets indexes"
+        uniq, first = np.unique(b, return_index=True)
+        counts += np.bincount(b - st.bin_first, minlength=st.n_bins)
+        s = lo + first
+        e = lo + np.append(first[1:], b.size)
+        s_off = off[uniq - st.bin_first]
+        e_off = off[uniq - st.bin_first + 1]
+        bad = np.nonzero((s_off > s) | (e > e_off))[0]
+        assert bad.size == 0, \
+            f"bin {int(uniq[bad[0]])}'s CSR slice holds other bins"
+
+        # -- values and the footprint
+        v = np.asarray(v_col[lo:hi], np.float32)
+        assert not np.isinf(v).any(), "values.npy holds an infinity"
         fin = np.isfinite(v)
         if fin.any():
-            lo_m = np.where(fin, v, np.inf).min(axis=0)
-            hi_m = np.where(fin, v, -np.inf).max(axis=0)
-            for i, nm in enumerate(adapter.channel_names):
-                if not fin[:, i].any():
-                    continue
-                assert lo_b[i] <= lo_m[i] and hi_m[i] <= hi_b[i], (
-                    f"channel {nm} runs {lo_m[i]}..{hi_m[i]}, outside its "
-                    f"physical bounds {lo_b[i]}..{hi_b[i]}")
+            lo_m = np.minimum(lo_m, np.where(fin, v, np.inf).min(axis=0))
+            hi_m = np.maximum(hi_m, np.where(fin, v, -np.inf).max(axis=0))
+            seen |= fin.any(axis=0)
+        fp = np.asarray(fp_col[lo:hi], np.float32)
+        if fp0 is None:
+            fp0 = (fp[0, 0], fp[0, 1])
+            assert (f10.LOG2_FP_RANGE[0] <= fp0[0] <= f10.LOG2_FP_RANGE[1]), \
+                f"log2_fp {fp0[0]} outside E-078 §2's clamp"
+        assert np.all(fp[:, 0] == fp0[0]) and np.all(fp[:, 1] == fp0[1]), \
+            "the footprint columns are not constant for this source"
+
+    assert np.array_equal(counts, np.diff(off)), \
+        "bin_offsets disagrees with a recount of bin.npy"
+    if adapter is not None:
+        lo_b, hi_b = adapter.bounds()
+        for i, nm in enumerate(adapter.channel_names):
+            if not seen[i]:
+                continue
+            assert lo_b[i] <= lo_m[i] and hi_m[i] <= hi_b[i], (
+                f"channel {nm} runs {lo_m[i]}..{hi_m[i]}, outside its "
+                f"physical bounds {lo_b[i]}..{hi_b[i]}")
         assert st.C == adapter.C and st.channels == list(adapter.channel_names)
-    if anchor is not None and st.N:
+    if anchor is not None and N:
         lat0, lon0, bin0 = anchor
         tok = st.knearest(lat0, lon0, bin0, k=5, R_max_km=1000.0,
                           T_max_days=30.0)
         assert np.all(tok["dt_days"][tok["valid"]] >= 0.0), \
             "the search returned an observation from the future"
-        assert np.all(b[tok["row"][tok["valid"]]] <= bin0), \
+        rows = np.asarray(tok["row"][tok["valid"]], np.int64)
+        # a handful of rows, fancy-indexed straight off the memmap
+        assert np.all(np.asarray(b_col[rows], np.int64) <= bin0), \
             "the search read past the anchor's bin"
     return st
 
 
 # ========================================================== stage: publish ===
+RESTORE_HEADROOM = 1.1
+
+
+def _restore_disk_preflight(ctx, dest, names):
+    """Refuse BEFORE the upload if the RESTORE could not land (§5.18).
+
+    The publish downloads every file back to hash it, one at a time into
+    `<scratch>/verify`, which is removed between files — so the requirement
+    is free space for the LARGEST file, not for the store. At slatrack's
+    50-80 GB that largest file is `values.npy` at ~1.5x2e9x C bytes, and a
+    box that cannot hold one more copy of it would upload for hours and then
+    fail the verification it cannot skip.
+    """
+    sizes = {n: os.path.getsize(os.path.join(dest, n)) for n in names}
+    big, need = max(sizes.items(), key=lambda kv: kv[1])
+    os.makedirs(ctx.scratch, exist_ok=True)
+    free = shutil.disk_usage(ctx.scratch).free
+    want = need * RESTORE_HEADROOM
+    print(f"  restore: the largest file is {big} at {need / 1e9:.2f} GB; "
+          f"{free / 1e9:.2f} GB free under {ctx.scratch}; "
+          f"{RESTORE_HEADROOM:g}x margin wants {want / 1e9:.2f} GB")
+    if free < want:
+        sys.exit(f"REFUSING to publish: the restore check downloads every "
+                 f"file back and {big} is {need / 1e9:.2f} GB, but "
+                 f"{ctx.scratch} has only {free / 1e9:.2f} GB free "
+                 f"({RESTORE_HEADROOM:g}x = {want / 1e9:.2f} GB with margin). "
+                 f"Free space or point --work at a bigger disk; nothing has "
+                 f"been uploaded.")
+    return need
+
+
 def stage_publish(ctx):
     """Upload the store, DOWNLOAD EACH FILE BACK and compare sha256.
 
@@ -2791,7 +2898,8 @@ def stage_publish(ctx):
     for n in names:
         if not os.path.exists(os.path.join(dest, n)):
             sys.exit(f"cannot publish: {os.path.join(dest, n)} is missing")
-    check_store(dest, ad)
+    _restore_disk_preflight(ctx, dest, names)
+    check_store(dest, ad, chunk_rows=ctx.check_chunk)
     api.create_repo(repo, repo_type="dataset", exist_ok=True, private=False)
     ctx.prog.stage_start(f"publish {ad.store}", len(names))
     entries = []
@@ -3097,7 +3205,8 @@ def check_smoke(ctx, truth):
     ad = ctx.adapter
     st = check_store(ctx.store, ad,
                      anchor=(float(truth[0]["lat"]), float(truth[0]["lon"]),
-                             int(np.floor(truth[0]["t"] / PENTAD_DAYS))))
+                             int(np.floor(truth[0]["t"] / PENTAD_DAYS))),
+                     chunk_rows=ctx.check_chunk)
     assert st.N == len(truth), (
         f"the store holds {st.N} row(s), the generator kept {len(truth)} "
         f"(a row that should have been dropped survived, or a good row "
@@ -3218,6 +3327,14 @@ def main():
                     help="with --parts-from-hub: assemble even though some "
                          "years are not on the Hub. The store will be short "
                          "and its per_year block says which years are empty.")
+    ap.add_argument("--check-chunk-rows", type=int, default=CHECK_CHUNK_ROWS,
+                    help="rows per block in the assertion pass over the "
+                         "finished store (default "
+                         f"{CHECK_CHUNK_ROWS:,}). The checks read the store's "
+                         "memmaps block by block and carry the seam, so the "
+                         "answer does not depend on this number; it only "
+                         "bounds the peak RAM of the check. Lower it on a "
+                         "small box, raise it on a big one.")
     ap.add_argument("--attempts", type=int, default=3,
                     help="download attempts per file before the year fails. A "
                          "404 or an empty ERDDAP result is not an attempt "

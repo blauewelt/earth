@@ -401,6 +401,180 @@ def test_check_store_catches_every_invariant_it_claims_to(built):
         b10.check_store(pf)
 
 
+# ======================================= the check in bounded memory (E-079) ==
+#
+# slatrack is 1.5-2.5e9 rows, so the assertion pass cannot materialise a
+# column: `np.asarray(st["bin"], np.int64)` alone is 16 GB there and the
+# float32 view of `values` another 12 GB. `check_store` reads the memmaps in
+# blocks of `--check-chunk-rows` instead, and the tests below drive it at
+# absurdly small block sizes so every seam is a real boundary.
+def test_the_chunked_check_passes_every_real_store_at_a_seven_row_block(built):
+    """Same verdict at 7 rows a block as at 16 million — on all four stores."""
+    for s in STORES:
+        ctx, truth = built[s]
+        anchor = (float(truth[0]["lat"]), float(truth[0]["lon"]),
+                  int(np.floor(truth[0]["t"] / b10.PENTAD_DAYS)))
+        for k in (7, 1, 3, b10.CHECK_CHUNK_ROWS):
+            st = b10.check_store(ctx.store, ctx.adapter, anchor=anchor,
+                                 chunk_rows=k)
+            assert st.N == len(truth), (s, k)
+
+
+def test_the_chunked_check_still_catches_a_violation_at_a_block_seam():
+    """A break BETWEEN two blocks is the one a chunked check can lose.
+
+    The time case is the one that needs the carried row: every block below is
+    internally sorted, and only the pair that straddles a boundary is out of
+    order. (A bin that goes BACKWARDS is caught twice over — by the same
+    carried-row comparison and by the per-block CSR containment check, since
+    an offsets vector that still counts the rows correctly can no longer hold
+    them in one slice.)
+    """
+    import tempfile
+    tmp = tempfile.mkdtemp(prefix="f10seam_")
+    n = 9
+    times = [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9]
+    good = dict(bins=[0] * n, times=times, lat=[0.0] * n,
+                lon=[0.0] * n, values=[[1.0]] * n)
+    p = _write_store(os.path.join(tmp, "ok"), **good)
+    for k in (1, 2, 3, 4, n, n + 1):
+        b10.check_store(p, chunk_rows=k)
+
+    # row 3 (the first row of the second block at chunk 3) predates row 2
+    bad = list(times)
+    bad[3] = 0.25
+    p = _write_store(os.path.join(tmp, "seam"), **dict(good, times=bad))
+    # k = 3 puts the offending pair either side of a boundary; every other
+    # size here has it inside one block, or inside the carried comparison
+    for k in (1, 2, 3, 4, n, b10.CHECK_CHUNK_ROWS):
+        with pytest.raises(AssertionError, match="sorted by time"):
+            b10.check_store(p, chunk_rows=k)
+
+    # a bin that walks backwards across the seam, with an offsets vector that
+    # still COUNTS every bin correctly — only the ordering is wrong
+    p = _write_store(os.path.join(tmp, "binseam"),
+                     bins=[0, 0, 1, 0, 1, 1], times=[0.1, 0.2, 5.1, 0.3,
+                                                     5.2, 5.3],
+                     lat=[0.0] * 6, lon=[0.0] * 6, values=[[1.0]] * 6,
+                     offsets=[0, 3, 6])
+    for k in (2, 3, 6):
+        with pytest.raises(AssertionError, match="sorted by bin|CSR slice"):
+            b10.check_store(p, chunk_rows=k)
+
+
+def test_the_chunked_check_catches_an_offsets_vector_that_miscounts():
+    """`bin_offsets` that spans the rows and is monotone and still wrong.
+
+    The old check looped `np.unique(bin)` and sliced the whole column; the
+    chunked one compares a running `np.bincount` recount against
+    `np.diff(bin_offsets)`. This store is the case that separates the two:
+    the offsets are internally impeccable — 0, monotone, ending at N — and
+    they describe a different store.
+    """
+    import tempfile
+    tmp = tempfile.mkdtemp(prefix="f10csr_")
+    rows = dict(bins=[0, 0, 0, 1, 1, 1], times=[0.1, 0.2, 0.3, 5.1, 5.2, 5.3],
+                lat=[0.0] * 6, lon=[0.0] * 6, values=[[1.0]] * 6)
+    b10.check_store(_write_store(os.path.join(tmp, "ok"), **rows),
+                    chunk_rows=2)
+    p = _write_store(os.path.join(tmp, "miscount"), offsets=[0, 2, 6], **rows)
+    for k in (2, 3, 6, b10.CHECK_CHUNK_ROWS):
+        with pytest.raises(AssertionError, match="CSR slice|recount"):
+            b10.check_store(p, chunk_rows=k)
+
+
+def test_the_chunked_channel_statistics_are_the_whole_array_numbers(built):
+    """store.json's per-channel block must not depend on the block size.
+
+    The reference here is plain numpy over the WHOLE `values` array — what
+    the statistics reduce to when the chunk is bigger than the store, and
+    therefore what produced the three published stores' store.json. The
+    chunked pass is run at 7 rows a block so the boundaries fall inside
+    every store, and the numbers must come back BIT-IDENTICAL: the mean is
+    accumulated as a float64 sum of `np.nansum(float64)` per block, and on
+    these archives that reassociation costs nothing.
+    """
+    for s in STORES:
+        ctx, _ = built[s]
+        ad = ctx.adapter
+        v = np.load(os.path.join(ctx.store, "values.npy"), mmap_mode="r")
+        N = int(v.shape[0])
+        assert N > 7, (s, N)          # or the seams are not exercised
+        whole = np.asarray(v, np.float32)
+        fin = np.isfinite(whole)
+        want = {}
+        for i, (nm, unit, lo_b, hi_b) in enumerate(ad.channels):
+            col, f = whole[:, i], fin[:, i]
+            k = int(f.sum())
+            want[nm] = {
+                "unit": unit, "measured": k,
+                "fraction": round(k / N, 6) if N else 0.0,
+                "min": float(np.nanmin(col)) if k else None,
+                "max": float(np.nanmax(col)) if k else None,
+                "mean": (float(np.nansum(col.astype(np.float64))) / k)
+                        if k else None,
+                "bounds": [lo_b, hi_b]}
+        want_frac = round(int(fin.sum()) / (N * ad.C), 6)
+
+        got, frac = b10._channel_stats(v, ad.channels, N, chunk=7)
+        assert frac == want_frac, (s, frac, want_frac)
+        assert got == want, s                      # bit-identical, not close
+        # and the numbers store.json actually carries came from the same call
+        meta = json.load(open(os.path.join(ctx.store, "store.json")))
+        assert meta["per_channel"] == want, s
+        assert meta["values_measured_fraction"] == want_frac, s
+
+
+def test_the_publish_restore_check_refuses_a_disk_that_cannot_hold_it():
+    """The restore downloads each file back; the largest one must fit.
+
+    An 80 GB store is fine to upload on a small disk and impossible to
+    VERIFY on one, and the verification is not optional — so the refusal has
+    to happen before the hours of upload, and it has to name the numbers.
+    """
+    import shutil as sh
+    import tempfile
+    tmp = tempfile.mkdtemp(prefix="f10pub_")
+    dest = os.path.join(tmp, "store")
+    os.makedirs(dest)
+    for n, nbytes in (("values.npy", 4096), ("bin.npy", 64)):
+        with open(os.path.join(dest, n), "wb") as fh:
+            fh.write(b"\0" * nbytes)
+    names = ["bin.npy", "values.npy"]
+
+    class _Ctx:
+        scratch = os.path.join(tmp, "src")
+
+    usage = sh.disk_usage
+    free = {"n": 4096 * 1.1 + 1}
+    b10.shutil.disk_usage = lambda p: type(
+        "U", (), {"total": 1 << 40, "used": 0, "free": free["n"]})()
+    try:
+        assert b10._restore_disk_preflight(_Ctx(), dest, names) == 4096
+        free["n"] = 4096 * 1.1 - 1
+        with pytest.raises(SystemExit) as e:
+            b10._restore_disk_preflight(_Ctx(), dest, names)
+        msg = str(e.value)
+        assert "values.npy" in msg and "REFUSING to publish" in msg
+        assert "1.1" in msg and "0.00 GB" in msg   # the numbers, named
+    finally:
+        b10.shutil.disk_usage = usage
+
+
+def test_the_check_chunk_size_is_a_cli_argument_that_reaches_the_check():
+    """`--check-chunk-rows` exists, defaults sanely and lands on the Ctx."""
+    import argparse
+    ns = dict(store="gdp", work="/tmp/f10cli", source_dir="", start="",
+              end="1982-01-12", stage="all", force=False, attempts=1,
+              qc_keep=2, socat_url="", smoke=True)
+    assert b10.Ctx(argparse.Namespace(**ns)).check_chunk == \
+        b10.CHECK_CHUNK_ROWS
+    ctx = b10.Ctx(argparse.Namespace(check_chunk_rows=11, **ns))
+    assert ctx.check_chunk == 11
+    src = open(os.path.join(ROOT, "ml", "build_family10_stores.py")).read()
+    assert "--check-chunk-rows" in src
+
+
 def test_verify_store_refuses_a_truncated_file(built):
     """A half-written values.npy still memmaps and still answers a search."""
     import shutil
