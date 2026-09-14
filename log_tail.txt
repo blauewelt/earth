@@ -1,0 +1,40 @@
+store     slatrack — Copernicus Marine along-track sea level anomaly (L3, all missions)
+axis      2015-01-01 .. 2015-01-07  bins 2410..2411 (epoch 1982-01-01, 5-day bins; negative bins are KEPT)
+channels  C=3: sla, sla_unfiltered, mdt
+footprint log2_fp -2, log2_dt -4
+source    copernicusmarine subset --dataset-id cmems_obs-sl_glo_phy-ssh_my_<mission>-l3-duacs_PT1S_<ver>
+verified  2026-09-13: the product's 29 per-mission dataset ids and the variable names sla_filtered / sla_unfiltered / mdt read from the PUBLIC STAC metadata with no credentials. 2026-09-14 (runs 34847980911 and 34848513007, a hosted runner with real credentials): the toolbox logs in, resolves these sparse datasets and SERVES the subset — the run got as far as the toolbox's own netCDF writer, which then crashed with `ValueError: index must be monotonic increasing or decreasing` in _dataframe_to_netcdf_per_platform / _add_attributes_to_dataset (a bug in the toolbox's download_sparse.py, not in the data). The adapter therefore uses copernicusmarine.read_dataframe, month by month, and never asks the toolbox to write a file. That path cannot be run from this sandbox — no credentials here by design, and the toolbox cannot be installed (pypi 403 through the egress proxy); the frame-to-rows step it depends on is exercised by the tests and is the same code the fixture netCDFs go through.
+
+=== stage index (slatrack) ===
+  [index slatrack] start (1 items)  0/1  0.0s
+  [index slatrack] plan.json  1/1  29.9s
+  index: slatrack — 1 year(s), C=3 (sla, sla_unfiltered, mdt), bins 2410..2411
+=== stage index done in 29.9s ===
+
+=== stage fetch (slatrack) ===
+  [fetch slatrack] start (1 items)  0/1  0.0s
+INFO - 2026-09-14T13:31:40Z - Selected dataset version: "202411"
+INFO - 2026-09-14T13:31:40Z - Selected dataset part: "default"
+  2015-01 cmems_obs-sl_glo_phy-ssh_my_h2a-l3-duacs_PT1S_202411: 942612 row(s), 255.7 MB
+  cmems_obs-sl_glo_phy-ssh_my_h2a-l3-duacs_PT1S_202411 frame columns: ['variable', 'platform_id', 'platform_type', 'time', 'longitude', 'latitude', 'depth', 'pressure', 'is_depth_from_producer', 'value', 'value_qc', 'institution', 'doi', 'product_doi']
+  [fetch slatrack] slatrack 2015-01 cmems_obs-sl_glo_phy-ssh_my_h2a-l3-duacs_PT1S_202411  1/1  102.0s
+INFO - 2026-09-14T13:33:22Z - Selected dataset version: "202411"
+INFO - 2026-09-14T13:33:22Z - Selected dataset part: "default"
+  2015-01 cmems_obs-sl_glo_phy-ssh_my_al-l3-duacs_PT1S_202411: 976836 row(s), 261.1 MB
+  cmems_obs-sl_glo_phy-ssh_my_al-l3-duacs_PT1S_202411 frame columns: ['variable', 'platform_id', 'platform_type', 'time', 'longitude', 'latitude', 'depth', 'pressure', 'is_depth_from_producer', 'value', 'value_qc', 'institution', 'doi', 'product_doi']
+  [fetch slatrack] slatrack 2015-01 cmems_obs-sl_glo_phy-ssh_my_al-l3-duacs_PT1S_202411  1/1  200.7s
+INFO - 2026-09-14T13:35:01Z - Selected dataset version: "202411"
+INFO - 2026-09-14T13:35:01Z - Selected dataset part: "default"
+  2015-01 cmems_obs-sl_glo_phy-ssh_my_c2-l3-duacs_PT1S_202411: 965802 row(s), 261.0 MB
+  cmems_obs-sl_glo_phy-ssh_my_c2-l3-duacs_PT1S_202411 frame columns: ['variable', 'platform_id', 'platform_type', 'time', 'longitude', 'latitude', 'depth', 'pressure', 'is_depth_from_producer', 'value', 'value_qc', 'institution', 'doi', 'product_doi']
+  [fetch slatrack] slatrack 2015-01 cmems_obs-sl_glo_phy-ssh_my_c2-l3-duacs_PT1S_202411  1/1  300.8s
+INFO - 2026-09-14T13:36:41Z - Selected dataset version: "202411"
+INFO - 2026-09-14T13:36:41Z - Selected dataset part: "default"
+  2015-01 cmems_obs-sl_glo_phy-ssh_my_j2-l3-duacs_PT1S_202411: 1062987 row(s), 290.5 MB
+  cmems_obs-sl_glo_phy-ssh_my_j2-l3-duacs_PT1S_202411 frame columns: ['variable', 'platform_id', 'platform_type', 'time', 'longitude', 'latitude', 'depth', 'pressure', 'is_depth_from_producer', 'value', 'value_qc', 'institution', 'doi', 'product_doi']
+  [fetch slatrack] slatrack 2015-01 cmems_obs-sl_glo_phy-ssh_my_j2-l3-duacs_PT1S_202411  1/1  409.1s
+  2015: 0 row(s) in 0 part(s) (409.1s)
+  [slatrack store] start (1 items)  0/1  0.0s
+  store: 0 row(s), C=3, bins 2410..2410 (0 live) -> /home/runner/work/earth/earth/ml/cache/family10/slatrack/slatrack
+  [slatrack store] store  1/1  0.0s
+=== stage fetch done in 409.1s ===
