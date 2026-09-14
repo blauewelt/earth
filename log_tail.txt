@@ -1,0 +1,80 @@
+=== stage fetch (slatrack) ===
+  [fetch slatrack] start (1 items)  0/1  0.0s
+INFO - 2026-09-14T13:20:38Z - Selected dataset version: "202411"
+INFO - 2026-09-14T13:20:38Z - Selected dataset part: "default"
+Traceback (most recent call last):
+  File "/home/runner/work/earth/earth/ml/build_family10_stores.py", line 2399, in <module>
+    sys.exit(main())
+             ^^^^^^
+  File "/home/runner/work/earth/earth/ml/build_family10_stores.py", line 2394, in main
+    run_stages(ctx, parse_stages(a.stage))
+  File "/home/runner/work/earth/earth/ml/build_family10_stores.py", line 2054, in run_stages
+    STAGE_FN[s](ctx)
+  File "/home/runner/work/earth/earth/ml/build_family10_stores.py", line 1685, in stage_fetch
+    for label, rows, counts in ad.fetch_year(ctx, y):
+  File "/home/runner/work/earth/earth/ml/build_family10_stores.py", line 1280, in fetch_year
+    paths, owned = self._files(ctx, mid, win[0], win[1], year)
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/work/earth/earth/ml/build_family10_stores.py", line 1306, in _files
+    copernicusmarine.subset(
+  File "/home/runner/.local/lib/python3.12/site-packages/copernicusmarine/core_functions/deprecated_options.py", line 78, in wrapper
+    return f(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^
+  File "/home/runner/.local/lib/python3.12/site-packages/copernicusmarine/python_interface/exception_handler.py", line 17, in wrapper
+    raise exception
+  File "/home/runner/.local/lib/python3.12/site-packages/copernicusmarine/python_interface/exception_handler.py", line 13, in wrapper
+    return function(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/.local/lib/python3.12/site-packages/copernicusmarine/python_interface/subset.py", line 211, in subset
+    return subset_function(
+           ^^^^^^^^^^^^^^^^
+  File "/home/runner/.local/lib/python3.12/site-packages/copernicusmarine/core_functions/subset.py", line 47, in subset_function
+    subset_response = download_zarr_or_sparse(
+                      ^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/.local/lib/python3.12/site-packages/copernicusmarine/core_functions/subset.py", line 140, in download_zarr_or_sparse
+    return download_sparse(
+           ^^^^^^^^^^^^^^^^
+  File "/home/runner/.local/lib/python3.12/site-packages/copernicusmarine/download_functions/download_sparse.py", line 157, in download_sparse
+    file_names = _dataframe_to_netcdf_per_platform(
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/.local/lib/python3.12/site-packages/copernicusmarine/download_functions/download_sparse.py", line 484, in _dataframe_to_netcdf_per_platform
+    ds = _add_attributes_to_dataset(
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/.local/lib/python3.12/site-packages/copernicusmarine/download_functions/download_sparse.py", line 688, in _add_attributes_to_dataset
+    ds.sel(
+  File "/home/runner/.local/lib/python3.12/site-packages/xarray/core/dataset.py", line 3073, in sel
+    query_results = map_index_queries(
+                    ^^^^^^^^^^^^^^^^^^
+  File "/home/runner/.local/lib/python3.12/site-packages/xarray/core/indexing.py", line 219, in map_index_queries
+    results.append(index.sel(labels, **options))
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/.local/lib/python3.12/site-packages/xarray/core/indexes.py", line 873, in sel
+    indexer = get_indexer_nd(self.index, label_array, method, tolerance)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/.local/lib/python3.12/site-packages/xarray/core/indexes.py", line 641, in get_indexer_nd
+    flat_indexer = index.get_indexer(
+                   ^^^^^^^^^^^^^^^^^^
+  File "/home/runner/.local/lib/python3.12/site-packages/pandas/core/indexes/base.py", line 3796, in get_indexer
+    return self._get_indexer(target, method, limit, tolerance)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/.local/lib/python3.12/site-packages/pandas/core/indexes/base.py", line 3811, in _get_indexer
+    indexer = self._get_nearest_indexer(target, limit, tolerance)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/.local/lib/python3.12/site-packages/pandas/core/indexes/base.py", line 3982, in _get_nearest_indexer
+    left_indexer = self.get_indexer(target, "pad", limit=limit)
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/.local/lib/python3.12/site-packages/pandas/core/indexes/base.py", line 3796, in get_indexer
+    return self._get_indexer(target, method, limit, tolerance)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/.local/lib/python3.12/site-packages/pandas/core/indexes/base.py", line 3809, in _get_indexer
+    indexer = self._get_fill_indexer(target, method, limit, tolerance)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/.local/lib/python3.12/site-packages/pandas/core/indexes/base.py", line 3931, in _get_fill_indexer
+    indexer = self._get_fill_indexer_searchsorted(target, method, limit)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/.local/lib/python3.12/site-packages/pandas/core/indexes/base.py", line 3955, in _get_fill_indexer_searchsorted
+    indexer[nonexact] = self._searchsorted_monotonic(target[nonexact], side)
+                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/.local/lib/python3.12/site-packages/pandas/core/indexes/base.py", line 6910, in _searchsorted_monotonic
+    raise ValueError("index must be monotonic increasing or decreasing")
+ValueError: index must be monotonic increasing or decreasing
