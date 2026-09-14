@@ -93,8 +93,18 @@ The arrays are untouched by this — N, the bins, the values and every
 per-channel statistic below verify exactly — which is why the fault was
 invisible until someone divided. `ml/build_family10_stores.py` now attaches the
 stream's counters to one part only, and a test pins that a two-year single
-stream yields the stream's own `rows_read`. **The published `store.json` keeps
-the inflated ledger until the store is rebuilt.**
+stream yields the stream's own `rows_read`.
+
+**Rebuilt, and this verification carries over unchanged.** The store was
+rebuilt the same day — `built_at` 2026-09-14T08:45:54Z, builder commit
+`0d5860d`, ~17 min, the log ending `publish: 10 file(s) verified by restore` —
+and its `store.json` now reads `rows_read` 44,018,204, `drop_out_of_range`
+2,160,005, `drop_no_fco2` 27,520 and `preamble_lines` 8,454. **All nine array
+sha256 values in the new file are byte-identical to the ones checked in §2**,
+so the rebuild changed the ledger and nothing else, and every measurement in
+this document still describes the file on the Hub.
+
+- [the `socat` rebuild](https://github.com/blauewelt/earth/actions/runs/34822844466) — re-streamed the SOCAT v2026 synthesis file with the corrected counter and republished the store, arrays unchanged.
 
 **Verification notes recorded in the stores** (verbatim):
 
@@ -560,8 +570,9 @@ drogue-uncertain and then dropped unrecorded. That single cause produces both
 `rows_read − drop_pos_err − N` failing to close by the same amount — which is
 why the two numbers are equal. `ml/build_family10_stores.py` now increments the
 counter only for a row it keeps and counts that drop as `drop_no_values`, so a
-future build closes both halves; the published store keeps the gap, and this
-note is the reconciliation.
+future build closes both halves. That rebuild was dispatched 2026-09-14 08:27Z
+(run 34822846450) and was **still running** when this note was written, so the
+published store may still carry the gap and this note is the reconciliation.
 
 | `qc` | rows | fraction |
 |---|---|---|

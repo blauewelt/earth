@@ -470,6 +470,17 @@ summing to N. The files:
 The evidence, number by number, is in
 `docs/FAMILY10_VERIFICATION_2026-09-14.md`.
 
+**One store was rebuilt after that verification, and the verification still
+holds.** `socat`'s first build wrote a wrong ledger — the counters in `counts`
+were 59× too large (§10) — so it was rebuilt the same day at **08:46Z** from
+builder commit `0d5860d` with the fix. Only the ledger changed: **all nine
+array sha256 values in the new `store.json` are byte-identical to the ones
+verified that morning**, so every number in the table above is a number about
+the file on the Hub today, and `rows_read` now reads 44,018,204 with
+`drop_out_of_range` 2,160,005 and `drop_no_fco2` 27,520.
+
+- [the `socat` rebuild](https://github.com/blauewelt/earth/actions/runs/34822844466) — re-streamed the SOCAT v2026 synthesis file with the corrected counter and republished the store, ~17 min, arrays unchanged.
+
 **Historical context: the access paths, verified against the live archive on
 2026-09-13** — from a sandbox that can reach these hosts, by listing and
 fetching rather than by reading documentation. This is how the parsers were
@@ -516,15 +527,11 @@ they come from two different PMEL datasets joined on `(station, day)`.
   before anything is fetched. The builder reads
   `COPERNICUSMARINE_SERVICE_USERNAME` and `COPERNICUSMARINE_SERVICE_PASSWORD`
   from the **environment only** — never a file, never a command line.
-- **`socat`'s drop counters in the PUBLISHED `store.json` are 59× too large.**
-  The one-pass fetch gave the whole stream's counters to every year part and
-  the assembler summed them once per non-empty year, so `rows_read` reads
-  2,597,074,036 where the file holds 44,018,204 rows, `drop_out_of_range`
-  127,440,295 where it is 2,160,005, and `drop_no_fco2` 1,623,680 where it is
-  27,520. **The arrays are unaffected** — N, the bins, the values and every
-  per-channel statistic verified exactly — and the bug is fixed in the builder,
-  but the published store keeps the inflated ledger **until the store is
-  rebuilt**. Divide by 59 to read it, or ignore `counts` for this store.
+- **`gdp`'s `counts.drogue_uncertain` is still 568 higher than the NaN count in
+  the `drogue` channel** in the store published at 08:05Z (§10 explains why and
+  why the arrays are fine). The builder is fixed and **the rebuild is in
+  flight** — dispatched 2026-09-14 08:27Z, still running — so until it lands
+  the published ledger keeps that gap.
 - **The `socat` resume granularity is the whole stream, not the year.** The
   synthesis file is sorted by expocode, not by time, so there is no per-year
   request to make and an interrupted fetch re-reads the file from the start.
@@ -584,12 +591,16 @@ they come from two different PMEL datasets joined on `(station, day)`.
   `rows_read − drop_pos_err − N` does not close. Every array-side identity does
   close (drogue is exactly three-state, 1 + 0 = the `measured` count, and the
   claimed mean reproduces). The builder now counts only rows it keeps and
-  records that drop as `drop_no_values`, so a rebuilt store closes both halves.
-- **`socat`'s counters are inflated 59× in the store published 2026-09-14**
-  (§9): one pass over the file, its counters copied into every year part and
-  then summed. `rows_read` is really 44,018,204, of which 41,830,675 were kept
-  (95.0 %). Arrays unaffected; fixed in the builder; the published file keeps
-  the inflated numbers until the store is rebuilt.
+  records that drop as `drop_no_values`, so a rebuilt store closes both halves;
+  that rebuild was dispatched 2026-09-14 08:27Z and was **still running** when
+  this was written, so the file on the Hub may still carry the gap.
+- **`socat`'s counters were inflated 59× in the first build, and are correct in
+  the store on the Hub now.** One pass over the file, its counters copied into
+  every year part and then summed across the 59 years that held rows. The
+  published ledger reads `rows_read` 44,018,204 → 41,830,675 kept (95.0 %)
+  since the **08:46Z rebuild** from builder commit `0d5860d`, whose nine arrays
+  are byte-identical to the verified build (§9). If you hold a copy fetched
+  before that, its `counts` are the inflated ones — divide by 59, or re-fetch.
 - **The k observations a search returns are usually ONE platform.** Median 1 of
   8 for `gdp` and `socat`, 2 of 4 for `gtmba`, measured on the published stores
   (§6). A consumer that treats k as k independent looks at the ocean is wrong

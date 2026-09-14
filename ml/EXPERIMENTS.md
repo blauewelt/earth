@@ -125,14 +125,22 @@ a real measurement with its own position, time, footprint and provenance.
 | build time | 85 min | ~20 min | ~20 min |
 | size on the Hub | 1.6 GB | 63 MB | 1.37 GB |
 
-One caveat on the socat row: the store published on 2026-09-14 records those
+One note on the socat row: the store published at 07:00Z recorded those
 counters **59× too large** — `rows_read` 2,597,074,036 rather than 44,018,204 —
 because the one-pass fetch attached the whole stream's counters to every year
-part and the assembler summed them once per non-empty year. The table above
-states the corrected values (the published numbers divided by the 59 years that
-held rows); the arrays are unaffected, the ledger bug is fixed in this commit,
-and **the published `store.json` keeps the inflated numbers until the store is
-rebuilt.**
+part and the assembler summed them once per non-empty year. The bug was fixed
+in the builder and **the store was rebuilt the same day at 08:46Z**, so the
+published `store.json` now reads the corrected counters the table above states.
+The rebuild changed only the ledger: **all nine array sha256 values are
+byte-identical to the build verified that morning**, so the verification below
+carries over unchanged and nothing had to be re-checked.
+
+- [the `socat` rebuild](https://github.com/blauewelt/earth/actions/runs/34822844466) — re-streamed the SOCAT v2026 synthesis file from builder commit `0d5860d` with the corrected counter, ~17 min, `built_at` 2026-09-14T08:45:54Z, log ending `publish: 10 file(s) verified by restore`.
+
+The same counter-ordering fix applies to `gdp`'s `drogue_uncertain` (finding
+(d) below). **That rebuild is in flight** — dispatched 08:27Z, run
+34822846450, still running at the time of writing — so `gdp`'s published
+`store.json` still carries the 568-row discrepancy described there.
 
 Each build ran on a GitHub-hosted `ubuntu-latest` runner at **$0**, all three
 from builder commit `c5bc2ce`:
