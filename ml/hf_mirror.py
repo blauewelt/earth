@@ -200,9 +200,15 @@ def main():
             gh_download(x["id"], tmp)
             src_sha = sha256(tmp)
             print(f"    sha256 {src_sha[:16]}… uploading …", flush=True)
-            api.upload_file(path_or_fileobj=tmp, path_in_repo=name,
-                            repo_id=a.repo, repo_type="model",
-                            commit_message=f"mirror {name} from GitHub release")
+            # Through build_family7.hub_commit: the Hub allows 256 commits
+            # per repository per hour and an upload is one commit, so a long
+            # mirror run meets a 429 (measured 2026-09-14) — which it now
+            # sleeps through instead of failing the file.
+            sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+            import build_family7 as _b7                       # noqa: E402
+            _b7.hub_upload_with_backoff(
+                api, a.repo, tmp, name,
+                f"mirror {name} from GitHub release", repo_type="model")
             if a.no_verify:
                 print("    ::warning:: --no-verify: the RESTORE path was not "
                       "exercised, so this is a copy, not yet a backup")

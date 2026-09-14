@@ -389,6 +389,13 @@ everything else. Nothing else changes: the grid of §2, the time axis of §2,
 the z-scoring of §4, the NaN convention of §5, the statics and truth series of
 §6 and the holdout convention of §9 are identical.
 
+**Where the colour comes from** (measured 2026-09-14 from a hosted runner):
+1997–2022 are CEDA's per-file v6.0 archive, whose daily directory listing ends
+at 2022 and answers 404 beyond it, and 2023–2024 are Plymouth Marine
+Laboratory's aggregate `CCI_ALL-v6.0-DAILY` subset **one day at a time** by
+NetcdfSubset — PML serves no per-year 4 km file directory at all. Both paths
+produce the same 4 km `chlor_a` field and are reduced by the same code.
+
 **Where it is.** A different folder, under the same public repository and on
 the same terms (no login, HTTP `Range:` answered with status 206):
 

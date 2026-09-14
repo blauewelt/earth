@@ -32,8 +32,18 @@ absent one, because the builder would trust it: such a file is DELETED from
 the Hub and counted as failed. The job continues through the rest of the list
 and exits non-zero at the end if anything failed.
 
-DISK. A hosted runner has ~14 GB free and one OISST year is 477 MB, so exactly
-one file is on disk at a time: downloaded, uploaded, downloaded back, deleted.
+ONE COMMIT PER BATCH, NOT PER FILE (2026-09-14). `upload_file` is one Hugging
+Face Hub COMMIT, and the Hub allows **256 commits per repository per hour**.
+Measured at 08:50Z: after 308 of 646 files the Hub answered `429 … You have
+exceeded the rate limit for repository commits (256 per hour)` and 46 further
+files failed. So up to `--batch-files` (8) or `--batch-gb` (3.0) of files are
+downloaded and hashed, uploaded in ONE `create_commit`, and only then restored
+and verified one by one — 646 files become ~81 commits, and a 429 is slept
+through by `build_family7.hub_commit` rather than losing the file.
+
+DISK. A hosted runner has ~14 GB free and one OISST year is 477 MB, so the
+batch is capped by BYTES as well as by count: at most `--batch-gb` of source
+files are on disk at once, plus the one file being restored for the check.
 
 Credentials: `HF_TOKEN` in the environment, never argv (ml/CLAUDE.md §6).
 
@@ -164,53 +174,113 @@ def read_manifest(repo, token):
 
 
 # ------------------------------------------------------------------ one file --
-def mirror_one(api, repo, url, rel, workdir, token=None):
-    """Download from PSL, upload, DOWNLOAD BACK, compare sha256.
+def stage_one(url, rel, workdir):
+    """Download from PSL onto the disk, size-verified, and hash it.
 
-    Returns the manifest record. Raises MirrorError on any failure — and when
-    the failure is the ROUND TRIP, the Hub copy is deleted first: a mirrored
-    file whose restore does not match is worse than an absent one, because the
-    builder would read it and the truncation would surface hours later as
-    `NetCDF: HDF error`.
+    Returns `{url, rel, name, path, bytes, sha256, down_s}`; raises
+    MirrorError when PSL sent a short file. Nothing has touched the Hub yet —
+    the caller batches several of these into one commit.
     """
     name = os.path.basename(rel)
     local = os.path.join(workdir, name)
-    back = os.path.join(workdir, "back")
+    want = remote_size(url)
+    t0 = time.time()
     try:
-        want = remote_size(url)
-        t0 = time.time()
         fetch(url, local)
         down_s = max(time.time() - t0, 1e-6)
         got = os.path.getsize(local)
         if want is not None and got != want:
             raise MirrorError(f"{name}: PSL sent {got:,} of {want:,} bytes")
-        digest = sha256(local)
+    except Exception:
+        drop_staged({"path": local})
+        raise
+    return {"url": url, "rel": rel, "name": name, "path": local,
+            "bytes": got, "sha256": sha256(local), "down_s": down_s}
 
-        t1 = time.time()
-        api.upload_file(path_or_fileobj=local, path_in_repo=rel, repo_id=repo,
-                        repo_type="dataset",
-                        commit_message=f"PSL mirror: {name} ({got:,} bytes)")
-        up_s = max(time.time() - t1, 1e-6)
 
+def drop_staged(s):
+    """Delete one staged file and its `.part` sibling. A runner has ~14 GB."""
+    for p in (s["path"], s["path"] + ".part"):
+        if p and os.path.exists(p):
+            try:
+                os.remove(p)
+            except OSError:
+                pass
+
+
+def publish_batch(api, repo, staged, workdir, token=None):
+    """ONE commit for the whole batch, then DOWNLOAD EACH BACK and compare.
+
+    Returns `(records, failures)`. A file whose restore does not match is
+    DELETED from the Hub — a mirrored file that does not round-trip is worse
+    than an absent one, because the builder would read it and the truncation
+    would surface hours later as `NetCDF: HDF error` — and is reported as a
+    failure. The whole batch is one commit because the Hub allows only 256 per
+    repository per hour (2026-09-14).
+    """
+    from huggingface_hub import CommitOperationAdd, CommitOperationDelete
+    ops = [CommitOperationAdd(path_in_repo=s["rel"], path_or_fileobj=s["path"])
+           for s in staged]
+    names = ", ".join(s["name"] for s in staged)
+    total = sum(s["bytes"] for s in staged)
+    t0 = time.time()
+    b7.hub_commit(api, repo, ops,
+                  f"PSL mirror: {len(staged)} file(s), {total:,} bytes — "
+                  f"{names}"[:900])
+    up_s = max(time.time() - t0, 1e-6)
+    print(f"  commit: {len(staged)} file(s), {total / 1e6:,.0f} MB in one "
+          f"Hub commit, {up_s:.0f}s", flush=True)
+
+    back = os.path.join(workdir, "back")
+    records, failures, bad = [], [], []
+    for s in staged:
         shutil.rmtree(back, ignore_errors=True)
         os.makedirs(back, exist_ok=True)
-        p = hf_download(repo, rel, back, token)
-        restored = sha256(p)
-        if restored != digest:
-            api.delete_file(path_in_repo=rel, repo_id=repo, repo_type="dataset",
-                            commit_message=f"PSL mirror: DELETE {name} — the "
-                                           f"round trip did not verify")
-            raise MirrorError(f"{name}: RESTORE MISMATCH (uploaded {digest[:16]}, "
-                              f"downloaded {restored[:16]}) — deleted from the Hub")
-        return {"path": rel, "bytes": got, "sha256": digest,
-                "source_url": url, "mirrored_at": b7.utcnow(),
-                "_mb": got / 1e6, "_down_mbps": got / 1e6 / down_s,
-                "_up_s": up_s}
+        try:
+            p = hf_download(repo, s["rel"], back, token)
+            restored = sha256(p)
+        except Exception as e:                                 # noqa: BLE001
+            failures.append((s["rel"], f"{s['name']}: restore FAILED "
+                                       f"({type(e).__name__}: {str(e)[:120]})"))
+            bad.append(s["rel"])
+            continue
+        finally:
+            shutil.rmtree(back, ignore_errors=True)
+        if restored != s["sha256"]:
+            failures.append((s["rel"],
+                             f"{s['name']}: RESTORE MISMATCH (uploaded "
+                             f"{s['sha256'][:16]}, downloaded {restored[:16]}) "
+                             f"— deleted from the Hub"))
+            bad.append(s["rel"])
+            continue
+        records.append({"path": s["rel"], "bytes": s["bytes"],
+                        "sha256": s["sha256"], "source_url": s["url"],
+                        "mirrored_at": b7.utcnow(),
+                        "_mb": s["bytes"] / 1e6,
+                        "_down_mbps": s["bytes"] / 1e6 / s["down_s"],
+                        "_up_s": up_s})
+    if bad:
+        b7.hub_commit(api, repo,
+                      [CommitOperationDelete(path_in_repo=r) for r in bad],
+                      f"PSL mirror: DELETE {len(bad)} file(s) — the round trip "
+                      f"did not verify")
+    return records, failures
+
+
+def mirror_one(api, repo, url, rel, workdir, token=None):
+    """One file, staged and published on its own. Raises MirrorError.
+
+    The batch path is what `main` runs; this is the one-file form the tests
+    and an operator use, and it goes through exactly the same commit helper.
+    """
+    s = stage_one(url, rel, workdir)
+    try:
+        records, failures = publish_batch(api, repo, [s], workdir, token)
     finally:
-        for p in (local, local + ".part"):
-            if os.path.exists(p):
-                os.remove(p)
-        shutil.rmtree(back, ignore_errors=True)
+        drop_staged(s)
+    if failures:
+        raise MirrorError(failures[0][1])
+    return records[0]
 
 
 # ---------------------------------------------------------------------- main --
@@ -224,6 +294,12 @@ def main(argv=None):
     ap.add_argument("--force", action="store_true",
                     help="re-upload even when the Hub already holds the file "
                          "at the same size")
+    ap.add_argument("--batch-files", type=int, default=8,
+                    help="how many files go into ONE Hub commit (the Hub "
+                         "allows 256 commits per repo per hour)")
+    ap.add_argument("--batch-gb", type=float, default=3.0,
+                    help="and how many gigabytes — a hosted runner has ~14 GB "
+                         "free and one OISST year is 477 MB")
     a = ap.parse_args(argv)
     if a.end < a.start:
         sys.exit(f"--end {a.end} precedes --start {a.start}")
@@ -266,22 +342,56 @@ def main(argv=None):
 
     work = tempfile.mkdtemp(prefix="pslmirror_")
     failed, done = [], 0
+    cap_files = max(1, int(a.batch_files))
+    cap_bytes = max(1, int(a.batch_gb * 1e9))
+    print(f"  batching up to {cap_files} file(s) / {a.batch_gb:.1f} GB per "
+          f"Hub commit")
     try:
+        staged, nb = [], 0
+
+        def flush():
+            """Publish what is staged, record it, and free the disk."""
+            nonlocal staged, nb, done
+            if not staged:
+                return
+            try:
+                records, failures = publish_batch(api, repo, staged, work, tok)
+            except Exception as e:                             # noqa: BLE001
+                for s in staged:
+                    failed.append((s["rel"], f"commit FAILED: {str(e)[:180]}"))
+                    print(f"  {s['name']}  FAILED: commit "
+                          f"{str(e)[:140]}", flush=True)
+                records, failures = [], []
+            for rel_, why in failures:
+                failed.append((rel_, why))
+                print(f"  {os.path.basename(rel_)}  FAILED: {why[:160]}",
+                      flush=True)
+            for rec in records:
+                done += 1
+                print(f"  [{done}/{len(todo)}] {os.path.basename(rec['path'])}"
+                      f"  {rec.pop('_mb'):,.0f} MB  "
+                      f"{rec.pop('_down_mbps'):.1f} MB/s down  "
+                      f"{rec.pop('_up_s'):.0f}s up (batch)", flush=True)
+                manifest[rec["path"]] = rec
+                if done % 25 == 0:
+                    write_manifest(api, repo, manifest)
+            for s in staged:
+                drop_staged(s)
+            staged, nb = [], 0
+
         for i, (u, rel) in enumerate(todo, 1):
             try:
-                rec = mirror_one(api, repo, u, rel, work, tok)
+                s = stage_one(u, rel, work)
             except Exception as e:                             # noqa: BLE001
                 failed.append((rel, str(e)[:200]))
                 print(f"  [{i}/{len(todo)}] {os.path.basename(rel)}  FAILED: "
                       f"{str(e)[:160]}", flush=True)
                 continue
-            done += 1
-            print(f"  [{i}/{len(todo)}] {os.path.basename(rel)}  "
-                  f"{rec.pop('_mb'):,.0f} MB  {rec.pop('_down_mbps'):.1f} MB/s down  "
-                  f"{rec.pop('_up_s'):.0f}s up", flush=True)
-            manifest[rel] = rec
-            if done % 25 == 0:
-                write_manifest(api, repo, manifest)
+            staged.append(s)
+            nb += s["bytes"]
+            if len(staged) >= cap_files or nb >= cap_bytes:
+                flush()
+        flush()
     finally:
         shutil.rmtree(work, ignore_errors=True)
 
@@ -315,10 +425,8 @@ def write_manifest(api, repo, manifest):
         p = os.path.join(tmp, "manifest.json")
         with open(p, "w") as fh:
             json.dump(body, fh, indent=1, sort_keys=True)
-        api.upload_file(path_or_fileobj=p, path_in_repo=MANIFEST_PATH,
-                        repo_id=repo, repo_type="dataset",
-                        commit_message=f"PSL mirror: manifest "
-                                       f"({len(recs)} files)")
+        b7.hub_upload_with_backoff(api, repo, p, MANIFEST_PATH,
+                                   f"PSL mirror: manifest ({len(recs)} files)")
         print(f"  manifest: {len(recs)} file(s), "
               f"{body['bytes'] / 1e9:.1f} GB")
     finally:

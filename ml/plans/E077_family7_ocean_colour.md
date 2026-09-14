@@ -39,10 +39,34 @@ are byte-identical to what is on the Hub as `f7l0`.
 ## 2 · Source
 
 **Primary — OC-CCI v6.0, geographic projection, daily, chlorophyll-a only.**
-Plymouth Marine Laboratory's THREDDS server (no account; HTTP `fileServer`
-path), with the CEDA archive as the mirror (`dap.ceda.ac.uk/neodc/esacci/
-ocean_colour/data/v6.0-release/geographic/netcdf/chlor_a/daily/v6.0/<YYYY>/`;
-CEDA's copy of v6.0 ends 2022-12-31, PML's runs to the end of 2024). The file
+Two hosts, and **MEASURED 2026-09-14 from a GitHub-hosted runner** (workflow
+`probe-urls.yml`, runs 34823048523 and 34824765373) rather than assumed. The
+CEDA archive (`dap.ceda.ac.uk/neodc/esacci/ocean_colour/data/v6.0-release/
+geographic/netcdf/chlor_a/daily/v6.0/<YYYY>/`) serves one file per day and its
+directory listing runs **1997–2022**; 2023 and 2024 are 404 there. Plymouth
+Marine Laboratory serves **no per-year 4 km file directory at all** — every
+`thredds/catalog/cci/v6.0-release/…` path, chlor_a or all_products, any year
+including 2022, answers HTTP 404, so the earlier sentence here claiming PML's
+per-year copy runs to the end of 2024 was wrong and the two `pml-thredds*`
+entries it produced have been removed from `OC_SOURCES`. What PML does serve
+(catalog `https://www.oceancolour.org/thredds/catalog-cci.xml`) is ONE
+aggregated dataset per cadence, `urlPath="CCI_ALL-v6.0-DAILY"`, with OPENDAP,
+HTTPServer and NetcdfSubset services. Its time axis is days since 1970-01-01
+(`.dds` → `Int32 time[time = 10501]`; `.ascii?time[0:1:1]` → `10108, 10110`,
+i.e. 1997-09-04 and 1997-09-06; the axis ends at 20154 = 2025-03-07), and a
+day absent from that axis is *missing* in exactly the sense a file absent from
+a CEDA directory is. A per-day NetcdfSubset request returns a real netCDF4
+file: `…/thredds/ncss/grid/CCI_ALL-v6.0-DAILY?var=chlor_a&time=2023-01-01T00:
+00:00Z&accept=netcdf4` → HTTP 200, `application/x-netcdf4`, HDF5 signature,
+**20,118,883 bytes in 7.5 s**; 2024-12-31 → **19,659,419 bytes in 9.6 s**.
+So **CEDA stays FIRST** — 1997–2022 keep coming from the same per-file archive
+the already-published partials used, and provenance does not change — and
+2023–2024 fall through to `pml-ncss`. Two consequences for the stage: the NCSS
+response is GENERATED, so it declares no Content-Length and cannot be
+size-verified — it is verified by being opened and read for a `chlor_a` field
+instead — and it is a subset, so the variable arrives as
+`chlor_a(time=1, lat, lon)`, which `oc_open` reduces to the same two
+dimensions CEDA's `chlor_a(lat, lon)` gives. The file
 name pattern is expected to be
 `ESACCI-OC-L3S-CHLOR_A-MERGED-1D_DAILY_4km_GEO_PML_OCx-<YYYYMMDD>-fv6.0.nc`
 (~30–60 MB each), **but the stage must not assume it**: rule from the root

@@ -1630,6 +1630,30 @@ def test_24_an_inherited_group_cannot_be_written_through_the_hard_link(
             for g in b7.BASE_GROUPS} == before
 
 
+class _Op:
+    """Stand-in for `CommitOperationAdd` / `CommitOperationDelete`.
+
+    huggingface_hub is not installed in the sandbox, which is why the builder
+    imports the operation classes lazily inside `hub_add_ops` /
+    `hub_delete_ops`; this is what the fake module answers with.
+    """
+
+    def __init__(self, path_in_repo=None, path_or_fileobj=None):
+        self.path_in_repo = path_in_repo
+        self.path_or_fileobj = path_or_fileobj
+
+    @property
+    def kind(self):
+        return "add" if self.path_or_fileobj is not None else "delete"
+
+
+def _install_commit_ops(mod):
+    """Give a fake `huggingface_hub` module the two operation classes."""
+    mod.CommitOperationAdd = _Op
+    mod.CommitOperationDelete = _Op
+    return mod
+
+
 def _publish_harness(tmp_path, monkeypatch, seeded, drift):
     """Drive `stage_publish` against a FAKE Hub: no network, tiny files.
 
@@ -1650,10 +1674,17 @@ def _publish_harness(tmp_path, monkeypatch, seeded, drift):
     base = dict(ours)
     if drift:
         base["g025"] = "f" * 64
+    commits = []
 
     class FakeApi:
         def create_repo(self, *a, **k): pass
-        def upload_file(self, *a, **k): pass
+
+        def create_commit(self, repo_id=None, repo_type=None, operations=(),
+                          commit_message=None):
+            # ONE commit for the five tensor files, one more for the manifest
+            # (the Hub allows 256 commits per repo per hour — 2026-09-14).
+            commits.append([o.path_in_repo for o in operations])
+            return "sha"
 
     def fake_download(repo, path, repo_type=None, token=None, local_dir=None):
         src = os.path.join(work, os.path.basename(path))
@@ -1662,18 +1693,19 @@ def _publish_harness(tmp_path, monkeypatch, seeded, drift):
         shutil.copy2(src, dst)
         return dst
 
-    fake_hf = types.ModuleType("huggingface_hub")
+    fake_hf = _install_commit_ops(types.ModuleType("huggingface_hub"))
     fake_hf.hf_hub_download = fake_download
     fake_hf.HfApi = lambda *a, **k: FakeApi()
     monkeypatch.setitem(sys.modules, "huggingface_hub", fake_hf)
+    api = FakeApi()
     monkeypatch.setattr(b7, "hub_repo", lambda token=None:
-                        (FakeApi(), "chfrank/earth-tensors", "x"))
+                        (api, "chfrank/earth-tensors", "x"))
     monkeypatch.setattr(b7, "base_manifest_hashes", lambda api, repo, tok: base)
     ctx = types.SimpleNamespace(
         work=work, scratch=os.path.join(work, "src"), prog=b7.Progress(work),
         sources={}, b_oc=1145,
         a=types.SimpleNamespace(seed_from="/some/f7l0" if seeded else ""))
-    return ctx, work, base
+    return ctx, work, base, commits
 
 
 def test_25_publish_records_drift_for_unseeded_and_refuses_for_seeded(
@@ -1688,7 +1720,8 @@ def test_25_publish_records_drift_for_unseeded_and_refuses_for_seeded(
     the fatal check — there the bytes ARE f7l0's or something is very wrong.
     """
     # (a) unseeded + drift: publishes, records same_as_f7l0=false for g025
-    ctx, work, base = _publish_harness(tmp_path, monkeypatch, False, True)
+    ctx, work, base, commits = _publish_harness(
+        tmp_path, monkeypatch, False, True)
     b7.stage_publish(ctx)
     man = json.load(open(os.path.join(work, "manifest.json")))
     assert man["seeded_from_base"] is False
@@ -1701,15 +1734,23 @@ def test_25_publish_records_drift_for_unseeded_and_refuses_for_seeded(
         assert recs[f"{b7.STEM}_X_{g}.npy"]["same_as_f7l0"] is True
     assert "same_as_f7l0" not in recs[f"{b7.STEM}_X_oc025.npy"]
     assert b7.marked(work, "publish")
+    # ONE commit for the five files, ONE for the manifest — not six. The Hub
+    # allows 256 commits per repository per hour and `upload_file` is one
+    # commit each (measured 2026-09-14, the 429 that killed the PSL mirror).
+    assert len(commits) == 2, commits
+    assert len(commits[0]) == 5 and commits[1] == [
+        f"{b7.HF_PREFIX}/manifest.json"]
     # (b) unseeded, no drift: identical bytes are still reported as such
-    ctx, work, _ = _publish_harness(tmp_path / "b", monkeypatch, False, False)
+    ctx, work, _, _ = _publish_harness(tmp_path / "b", monkeypatch,
+                                       False, False)
     b7.stage_publish(ctx)
     man = json.load(open(os.path.join(work, "manifest.json")))
     assert all(r["same_as_f7l0"] for r in man["files"]
                if r["name"] != f"{b7.STEM}_X_oc025.npy"
                and not r["name"].endswith(".npz"))
     # (c) seeded + drift: the fatal check is unchanged
-    ctx, work, _ = _publish_harness(tmp_path / "c", monkeypatch, True, True)
+    ctx, work, _, _ = _publish_harness(tmp_path / "c", monkeypatch,
+                                       True, True)
     with pytest.raises(SystemExit) as e:
         b7.stage_publish(ctx)
     assert "INHERITANCE BROKEN on g025" in str(e.value)
@@ -2052,24 +2093,33 @@ def test_29_mirror_psl_deletes_a_hub_file_whose_round_trip_fails(tmp_path):
     good = b"the real bytes"
 
     class FakeApi:
+        """One `create_commit`, as the batching mirror now calls it."""
+
         def __init__(self):
-            self.uploaded, self.deleted = [], []
+            self.uploaded, self.deleted, self.commits = [], [], []
 
-        def upload_file(self, path_or_fileobj=None, path_in_repo=None,
-                        repo_id=None, repo_type=None, commit_message=None):
+        def create_commit(self, repo_id=None, repo_type=None, operations=(),
+                          commit_message=None):
             assert repo_type == "dataset" and repo_id == "ns/earth-tensors"
-            assert os.path.basename(rel) in commit_message, (
-                "the commit message must NAME the file — a wall of "
-                '"PSL mirror" commits says nothing about what landed')
-            self.uploaded.append((path_in_repo, open(path_or_fileobj, "rb").read()))
-
-        def delete_file(self, path_in_repo=None, repo_id=None, repo_type=None,
-                        commit_message=None):
-            self.deleted.append(path_in_repo)
+            ops = list(operations)
+            self.commits.append([o.path_in_repo for o in ops])
+            for o in ops:
+                if o.kind == "add":
+                    assert os.path.basename(o.path_in_repo) in commit_message, (
+                        "the commit message must NAME the files — a wall of "
+                        '"PSL mirror" commits says nothing about what landed')
+                    self.uploaded.append(
+                        (o.path_in_repo, open(o.path_or_fileobj, "rb").read()))
+                else:
+                    self.deleted.append(o.path_in_repo)
+            return "sha"
 
     def run(restored):
         api = FakeApi()
         keep = (mp.fetch, mp.remote_size, mp.hf_download)
+        keep_mod = sys.modules.get("huggingface_hub")
+        sys.modules["huggingface_hub"] = _install_commit_ops(
+            types.ModuleType("huggingface_hub"))
         work = tempfile.mkdtemp(prefix="mp_", dir=str(tmp_path))
         try:
             def fake_fetch(u, p, **kw):
@@ -2096,6 +2146,10 @@ def test_29_mirror_psl_deletes_a_hub_file_whose_round_trip_fails(tmp_path):
             return api, rec, err, left
         finally:
             mp.fetch, mp.remote_size, mp.hf_download = keep
+            if keep_mod is None:
+                sys.modules.pop("huggingface_hub", None)
+            else:
+                sys.modules["huggingface_hub"] = keep_mod
             shutil.rmtree(work, ignore_errors=True)
 
     # The round trip does not verify -> the Hub copy is DELETED and it fails.
@@ -2453,3 +2507,339 @@ def test_32_the_prefetch_pool_keeps_date_order_and_the_same_bytes(tmp_path):
                                        start=str(OCP_LO), end=str(OCP_HI),
                                        oc_start=str(OCP_LO)))) == 1, \
         "a --source-dir build has nothing to overlap and defaults to 1 worker"
+
+
+# ----------------------------------------------------------------- 33 -----
+def test_33_hub_commit_sleeps_through_the_hub_s_429(tmp_path):
+    """256 COMMITS PER REPOSITORY PER HOUR is a rate limit, not an error.
+
+    MEASURED 2026-09-14 08:50Z: after 308 of 646 files the Hub answered
+    `429 … You have exceeded the rate limit for repository commits (256 per
+    hour). You can retry this action in about 1 hour.` — and three
+    `occci-partials` lanes died on the same answer AT PUBLISH, each having
+    already spent ~60 minutes reducing a year that the runner then took with
+    it. Waiting an hour is cheaper than losing one, so `hub_commit` sleeps the
+    Hub's OWN interval and retries; a 4xx that is not a 429 does not become
+    true by waiting and raises at once.
+    """
+    class _Resp:
+        def __init__(self, code):
+            self.status_code = code
+
+    class HfHubHTTPError(Exception):
+        def __init__(self, msg, code):
+            super().__init__(msg)
+            self.response = _Resp(code)
+
+    naps = []
+
+    def fake_sleep(s):
+        naps.append(s)
+
+    msg429 = ("429 Client Error: Too Many Requests for url: "
+              "https://huggingface.co/api/datasets/chfrank/earth-tensors/"
+              "commit/main. You have exceeded the rate limit for repository "
+              "commits (256 per hour). You can retry this action in about "
+              "1 hour.")
+
+    class Api:
+        def __init__(self, fail, code=429, text=msg429):
+            self.left, self.code, self.text = fail, code, text
+            self.calls = []
+
+        def create_commit(self, repo_id=None, repo_type=None, operations=(),
+                          commit_message=None):
+            self.calls.append((repo_id, [o.path_in_repo for o in operations],
+                               commit_message))
+            if self.left > 0:
+                self.left -= 1
+                raise HfHubHTTPError(self.text, self.code)
+            return "sha"
+
+    ops = [_Op(path_in_repo="a.npy", path_or_fileobj="/tmp/a")]
+
+    # (a) 429 twice, then through — and the sleep is the Hub's own hour.
+    api = Api(2)
+    assert b7.hub_commit(api, "ns/repo", ops, "m", sleep=fake_sleep) == "sha"
+    assert len(api.calls) == 3
+    # The Hub's own hour (plus a margin, because it says "about"), then what
+    # is LEFT of the 75-minute cap — a lane has 5.8 h and has already spent an
+    # hour of it, so the wait is bounded by construction rather than by luck.
+    assert naps == [3660, b7.HUB_RETRY_CAP_S - 3660], naps
+    assert sum(naps) <= b7.HUB_RETRY_CAP_S
+
+    # (b) no hint in the message -> exponential from 60 s, still capped.
+    naps.clear()
+    api = Api(3, text="429 Too Many Requests")
+    b7.hub_commit(api, "ns/repo", ops, "m", sleep=fake_sleep)
+    assert naps == [60, 120, 240]
+
+    # (c) a 5xx and a bare connection error retry too.
+    naps.clear()
+    api = Api(1, code=503, text="503 Service Unavailable")
+    b7.hub_commit(api, "ns/repo", ops, "m", sleep=fake_sleep)
+    assert naps == [60]
+
+    class Flaky:
+        def __init__(self):
+            self.n = 0
+
+        def create_commit(self, **kw):
+            self.n += 1
+            if self.n == 1:
+                raise ConnectionResetError("connection reset by peer")
+            return "sha"
+
+    naps.clear()
+    assert b7.hub_commit(Flaky(), "ns/repo", ops, "m", sleep=fake_sleep) == "sha"
+    assert naps == [60]
+
+    # (d) ANY OTHER 4xx raises immediately — waiting cannot make a 403 true.
+    naps.clear()
+    api = Api(1, code=403, text="403 Forbidden")
+    with pytest.raises(HfHubHTTPError):
+        b7.hub_commit(api, "ns/repo", ops, "m", sleep=fake_sleep)
+    assert naps == [] and len(api.calls) == 1
+
+    # (e) the total wait is CAPPED: a Hub that never lets up eventually raises.
+    naps.clear()
+    api = Api(99)
+    with pytest.raises(HfHubHTTPError):
+        b7.hub_commit(api, "ns/repo", ops, "m", sleep=fake_sleep)
+    assert sum(naps) <= b7.HUB_RETRY_CAP_S
+
+
+# ----------------------------------------------------------------- 34 -----
+def test_34_mirror_psl_batches_files_into_one_commit_each(tmp_path):
+    """Five files at --batch-files 2 are THREE commits, and all five verify.
+
+    646 files at one commit each is 646 of the Hub's 256 hourly commits. The
+    mirror stages up to `--batch-files` / `--batch-gb`, commits them together,
+    and only then restores each one — the round-trip check is per file and is
+    unchanged, because a mirrored file that does not restore is worse than an
+    absent one.
+    """
+    sys.path.insert(0, ML)
+    import mirror_psl as mp                                    # noqa: E402
+
+    files = mp.wanted("oisst", 1982, 1984)[:5]
+    bodies = {rel: f"bytes of {os.path.basename(rel)}".encode()
+              for _, rel in files}
+
+    class Api:
+        def __init__(self):
+            self.commits, self.tree = [], {}
+
+        def create_commit(self, repo_id=None, repo_type=None, operations=(),
+                          commit_message=None):
+            ops = list(operations)
+            self.commits.append([o.path_in_repo for o in ops])
+            for o in ops:
+                if o.kind == "add":
+                    self.tree[o.path_in_repo] = open(o.path_or_fileobj,
+                                                     "rb").read()
+                else:
+                    self.tree.pop(o.path_in_repo, None)
+            return "sha"
+
+        def create_repo(self, *a, **k): pass
+
+        def whoami(self):
+            return {"name": "ns"}
+
+        def list_repo_tree(self, *a, **k):
+            return []
+
+    api = Api()
+    restored = []
+    keep = (mp.fetch, mp.remote_size, mp.hf_download, mp.hub_api,
+            mp.read_manifest, mp.write_manifest, mp.wanted)
+    keep_mod = sys.modules.get("huggingface_hub")
+    sys.modules["huggingface_hub"] = _install_commit_ops(
+        types.ModuleType("huggingface_hub"))
+    written = {}
+    try:
+        def fake_fetch(u, p, **kw):
+            rel = b7.psl_mirror_path(u)
+            with open(p, "wb") as fh:
+                fh.write(bodies[rel])
+            return p
+
+        def fake_back(repo, path_in_repo, dest, token=None):
+            restored.append(path_in_repo)
+            os.makedirs(dest, exist_ok=True)
+            q = os.path.join(dest, os.path.basename(path_in_repo))
+            with open(q, "wb") as fh:
+                fh.write(api.tree[path_in_repo])
+            return q
+
+        mp.fetch = fake_fetch
+        mp.remote_size = lambda u: len(bodies[b7.psl_mirror_path(u)])
+        mp.hf_download = fake_back
+        mp.hub_api = lambda: (api, "ns/earth-tensors", "tok")
+        mp.read_manifest = lambda repo, tok: {}
+        mp.write_manifest = lambda a_, r_, man: written.update(man)
+        mp.wanted = lambda what, lo, hi: list(files)
+        rc = mp.main(["--what", "oisst", "--start", "1982", "--end", "1984",
+                      "--batch-files", "2"])
+    finally:
+        (mp.fetch, mp.remote_size, mp.hf_download, mp.hub_api,
+         mp.read_manifest, mp.write_manifest, mp.wanted) = keep
+        if keep_mod is None:
+            sys.modules.pop("huggingface_hub", None)
+        else:
+            sys.modules["huggingface_hub"] = keep_mod
+
+    assert rc == 0
+    rels = [rel for _, rel in files]
+    # 5 files, 2 per commit -> 2 + 2 + 1. Not five commits, and not one.
+    assert len(api.commits) == 3, api.commits
+    assert [len(c) for c in api.commits] == [2, 2, 1]
+    assert [p for c in api.commits for p in c] == rels
+    # EVERY file was restore-verified, and the manifest records every one.
+    assert sorted(restored) == sorted(rels)
+    assert sorted(written) == sorted(rels)
+    assert all(written[r]["sha256"] == hashlib.sha256(bodies[r]).hexdigest()
+               for r in rels)
+
+
+# ----------------------------------------------------------------- 35 -----
+def test_35_the_ncss_host_lists_a_year_from_the_aggregate_s_time_axis():
+    """2023/2024 come from PML's AGGREGATE, listed by its own time axis.
+
+    MEASURED 2026-09-14 from a hosted runner: CEDA's v6.0 daily directory
+    lists 1997..2022 and 404s for 2023/2024, and PML serves NO per-year 4 km
+    directory at all — every `thredds/catalog/cci/v6.0-release/…` path is 404,
+    which is why the two `pml-thredds*` entries are gone. What PML does serve
+    is one aggregate, `CCI_ALL-v6.0-DAILY`, whose time axis is days since
+    1970-01-01 (`.dds` says `Int32 time[time = 10501]`, `.ascii?time[0:1:1]`
+    says `10108, 10110`). THE AXIS IS THE LISTING: a day absent from it is
+    missing, exactly like a file absent from a CEDA directory.
+    """
+    names = [h["name"] for h in b7.OC_SOURCES["occci"]]
+    assert names == ["ceda", "pml-ncss"], (
+        "ceda stays FIRST so 1997-2022 keep coming from the per-file archive "
+        "the published partials used — provenance must not change")
+    assert not any("thredds/catalog" in h.get("catalog", "")
+                   for h in b7.OC_SOURCES["occci"])
+    host = b7.OC_SOURCES["occci"][1]
+
+    # A synthetic axis: all of 2023 except 2023-03-02, plus a 2022 and a 2024
+    # day either side, in the server's own spelling.
+    days = ([dt.date(2022, 12, 31)]
+            + [dt.date(2023, 1, 1) + dt.timedelta(days=k) for k in range(365)
+               if dt.date(2023, 1, 1) + dt.timedelta(days=k)
+               != dt.date(2023, 3, 2)]
+            + [dt.date(2024, 1, 1)])
+    vals = [(d - dt.date(1970, 1, 1)).days for d in days]
+    dds = (b"Dataset {\n    Grid {\n     ARRAY:\n        Float32 chlor_a"
+           b"[time = %d][lat = 4320][lon = 8640];\n    } chlor_a;\n"
+           b"    Int32 time[time = %d];\n} CCI_ALL-v6.0-DAILY;\n"
+           % (len(vals), len(vals)))
+    ascii_body = ("Dataset {\n    Int32 time[time = %d];\n} "
+                  "CCI_ALL-v6.0-DAILY;\n"
+                  "---------------------------------------------\n"
+                  "time[%d]\n%s\n\n" % (len(vals), len(vals),
+                                        ", ".join(str(v) for v in vals))
+                  ).encode()
+
+    asked = []
+
+    def fake_get(url, timeout=180):
+        asked.append(url)
+        if "ceda" in url:
+            # MEASURED: CEDA's v6.0 daily directory lists 1997..2022 and
+            # answers 404 for 2023 — which is what sends the year here.
+            raise IOError("HTTP Error 404: Not Found")
+        return dds if url.endswith(".dds") else ascii_body
+
+    keep = b7._http_get
+    b7._http_get = fake_get
+    b7._OC_AXIS_CACHE.clear()
+    try:
+        ctx = types.SimpleNamespace(oc_source="occci")
+        got_host, by_date = b7.oc_list_year(ctx, 2023)
+    finally:
+        b7._http_get = keep
+        b7._OC_AXIS_CACHE.clear()
+
+    assert got_host["name"] == "pml-ncss"
+    # 364 days, and the ONE the axis does not carry is simply not listed —
+    # `oc_year_reduce` then records it as missing, as it does a CEDA hole.
+    assert len(by_date) == 364
+    assert "2023-03-02" not in by_date
+    assert min(by_date) == "2023-01-01" and max(by_date) == "2023-12-31"
+    # The axis is asked for ONCE for the whole record, not once per year.
+    pml = [u for u in asked if "oceancolour" in u]
+    assert pml[0] == host["catalog"] and pml[0].endswith(".dds")
+    assert pml[1] == host["time_ascii"].format(last=len(vals) - 1)
+    assert len(pml) == 2
+    # The URL is the measured NCSS subset, and the day is named in the
+    # archive's own pattern so every marker downstream is unchanged.
+    u = by_date["2023-01-01"]
+    assert u == ("https://www.oceancolour.org/thredds/ncss/grid/"
+                 "CCI_ALL-v6.0-DAILY?var=chlor_a&time=2023-01-01T00:00:00Z"
+                 "&accept=netcdf4")
+    assert b7.oc_local_name(u) == b7.oc_canonical_name(dt.date(2023, 1, 1))
+    assert b7.oc_date_of_name(b7.oc_local_name(u)) == dt.date(2023, 1, 1)
+    assert b7.oc_generated_url(u) and not b7.oc_generated_url(
+        b7.OC_SOURCES["occci"][0]["file"].format(year=2015, name="x.nc"))
+    # Two days of one aggregate must not collide on one on-disk name.
+    assert b7.oc_local_name(by_date["2023-01-02"]) != b7.oc_local_name(u)
+
+
+# ----------------------------------------------------------------- 36 -----
+def test_36_a_leading_time_dimension_of_one_parses_identically(tmp_path):
+    """`chlor_a(time=1, lat, lon)` and `chlor_a(lat, lon)` are ONE field.
+
+    CEDA's archived daily is the second shape; PML's NCSS subset is the first
+    (it slices the aggregate, so the time axis survives with length one). The
+    two hosts feed the SAME accumulator, so they must reduce to the same
+    numbers, and an unknown-size source is verified by OPENING it — the NCSS
+    response is generated and carries no Content-Length to compare against.
+    """
+    # The real archive's registration, at the coarsest spacing 0.25 divides:
+    # cell-centred, north-first, so `oc_block_factors` accepts it.
+    nlat, nlon = 720, 1440
+    s_lat = 90.0 - (np.arange(nlat) + 0.5) * (180.0 / nlat)
+    s_lon = -180.0 + (np.arange(nlon) + 0.5) * (360.0 / nlon)
+    fill = np.float32(-999.0)
+    rng = np.random.default_rng(20260914)
+    a = rng.random((nlat, nlon)).astype(np.float32)
+    a[2, 3] = fill
+
+    flat = str(tmp_path / "flat.nc")
+    b7._nc_write(flat, {"lat": nlat, "lon": nlon},
+                 {"lat": (("lat",), s_lat, {"units": "degrees_north"}),
+                  "lon": (("lon",), s_lon, {"units": "degrees_east"}),
+                  b7.OC_VAR: (("lat", "lon"), a,
+                              {"_FillValue": fill, "units": "mg m^-3"})})
+    timed = str(tmp_path / "timed.nc")
+    b7._nc_write(timed, {"time": 1, "lat": nlat, "lon": nlon},
+                 {"time": (("time",), np.asarray([19358], np.int32),
+                           {"units": "days since 1970-01-01"}),
+                  "lat": (("lat",), s_lat, {"units": "degrees_north"}),
+                  "lon": (("lon",), s_lon, {"units": "degrees_east"}),
+                  b7.OC_VAR: (("time", "lat", "lon"), a[None, :, :],
+                              {"_FillValue": fill, "units": "mg m^-3"})})
+
+    f_chl, f_lat, f_lon, f_fill = b7.oc_open(flat)
+    t_chl, t_lat, t_lon, t_fill = b7.oc_open(timed)
+    assert f_chl.shape == (nlat, nlon) and t_chl.shape == (nlat, nlon)
+    assert np.array_equal(f_chl, t_chl, equal_nan=True)
+    assert np.array_equal(f_lat, t_lat) and np.array_equal(f_lon, t_lon)
+    assert float(f_fill) == float(t_fill)
+    # And the block reduction — the thing the accumulator actually sums — is
+    # bit-identical, which is the claim the two hosts have to satisfy.
+    blk_y, blk_x = b7.oc_block_factors(f_lat, f_lon)
+    sf, cf = b7.oc_block_stats(f_chl, blk_y, blk_x, fill=f_fill)
+    st, ct = b7.oc_block_stats(t_chl, blk_y, blk_x, fill=t_fill)
+    assert np.array_equal(sf, st, equal_nan=True) and np.array_equal(cf, ct)
+
+    # The open-it check accepts both shapes and REFUSES a truncated transfer.
+    b7.oc_check_day_file(flat)
+    b7.oc_check_day_file(timed)
+    with open(timed, "r+b") as fh:
+        fh.truncate(200)
+    with pytest.raises(Exception):
+        b7.oc_check_day_file(timed)

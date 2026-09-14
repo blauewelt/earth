@@ -86,7 +86,8 @@ sys.path.insert(0, HERE)
 
 import family10_store as f10                                   # noqa: E402
 from build_family7 import (START, END, Progress, atomic_json,   # noqa: E402
-                           git_sha, hub_repo, mark, marked, marker,
+                           git_sha, hub_add_ops, hub_commit, hub_repo,
+                           hub_upload_with_backoff, mark, marked, marker,
                            read_json, sha256, utcnow)
 
 CACHE = os.path.join(HERE, "cache")
@@ -1942,12 +1943,18 @@ def stage_publish(ctx):
     ctx.prog.stage_start(f"publish {ad.store}", len(names))
     entries = []
     scratch = os.path.join(ctx.scratch, "verify")
+    # ONE COMMIT for the nine arrays + store.json. The Hub allows 256 commits
+    # per repository per hour and `upload_file` is one commit each; a store
+    # publish that spent ten of them per store is what put the PSL mirror over
+    # the line on 2026-09-14. The restore check below is unchanged.
+    digests = {n: sha256(os.path.join(dest, n)) for n in names}
+    hub_commit(api, repo,
+               hub_add_ops([(f"{prefix}/{n}", os.path.join(dest, n))
+                            for n in names]),
+               f"family 10 ({ad.store}): {len(names)} file(s)")
     for i, n in enumerate(names, 1):
         p = os.path.join(dest, n)
-        src = sha256(p)
-        api.upload_file(path_or_fileobj=p, path_in_repo=f"{prefix}/{n}",
-                        repo_id=repo, repo_type="dataset",
-                        commit_message=f"family 10 ({ad.store}): {n}")
+        src = digests[n]
         shutil.rmtree(scratch, ignore_errors=True)
         back = hf_hub_download(repo, f"{prefix}/{n}", repo_type="dataset",
                                token=tok, local_dir=scratch)
@@ -1971,9 +1978,8 @@ def stage_publish(ctx):
            "files": entries}
     mp = os.path.join(ctx.root, "manifest.json")
     atomic_json(mp, man)
-    api.upload_file(path_or_fileobj=mp, path_in_repo=f"{prefix}/manifest.json",
-                    repo_id=repo, repo_type="dataset",
-                    commit_message=f"family 10 ({ad.store}): manifest")
+    hub_upload_with_backoff(api, repo, mp, f"{prefix}/manifest.json",
+                            f"family 10 ({ad.store}): manifest")
     mark(ctx.root, "publish")
     print(f"  publish: {len(entries)} file(s) verified by restore -> "
           f"https://huggingface.co/datasets/{repo}/tree/main/{prefix}")

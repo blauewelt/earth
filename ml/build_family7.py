@@ -300,25 +300,15 @@ OC_REPORT_DAY = dt.date(2015, 1, 3)
 # workflow runs it before the build: one real file, fetched and opened, on the
 # box that can reach them, before four hundred gigabytes are spent.
 OC_SOURCES = {
+    # MEASURED 2026-09-14 from a GitHub-hosted runner (workflow `probe-urls`,
+    # runs 34823048523 and 34824765373) — the two `pml-thredds*` entries that
+    # used to stand FIRST here were written blind and are DEAD: every
+    # `thredds/catalog/cci/v6.0-release/…` and `thredds/catalog/
+    # CCI_ALL-v6.0-DAILY/<year>/` path answers HTTP 404, for chlor_a and for
+    # all_products, for every year including 2022. PML serves no per-year 4 km
+    # file directory at all. They are removed rather than left as a first host
+    # that costs every listing one 404.
     "occci": [
-        {"name": "pml-thredds",
-         "host": "www.oceancolour.org",
-         "catalog": "https://www.oceancolour.org/thredds/catalog/cci/"
-                    "v6.0-release/geographic/netcdf/chlor_a/daily/v6.0/"
-                    "{year}/catalog.xml",
-         "file": "https://www.oceancolour.org/thredds/fileServer/cci/"
-                 "v6.0-release/geographic/netcdf/chlor_a/daily/v6.0/"
-                 "{year}/{name}",
-         "server": "https://www.oceancolour.org/thredds/fileServer/",
-         "kind": "thredds"},
-        {"name": "pml-thredds-allproducts",
-         "host": "www.oceancolour.org",
-         "catalog": "https://www.oceancolour.org/thredds/catalog/"
-                    "CCI_ALL-v6.0-DAILY/{year}/catalog.xml",
-         "file": "https://www.oceancolour.org/thredds/fileServer/"
-                 "CCI_ALL-v6.0-DAILY/{year}/{name}",
-         "server": "https://www.oceancolour.org/thredds/fileServer/",
-         "kind": "thredds"},
         {"name": "ceda",
          "host": "dap.ceda.ac.uk",
          # CEDA's copy of v6.0 ends 2022-12-31; a year it does not carry simply
@@ -330,6 +320,43 @@ OC_SOURCES = {
                  "v6.0-release/geographic/netcdf/chlor_a/daily/v6.0/"
                  "{year}/{name}",
          "kind": "json"},
+        # PML's aggregate, subset ONE DAY AT A TIME (measured 2026-09-14).
+        # CEDA stays FIRST so 1997–2022 keep coming from the per-file archive
+        # the already-published partials used — provenance stays identical —
+        # and 2023/2024, which CEDA does not list at all, fall through to here
+        # exactly as the loop already does for a host that lists nothing.
+        #
+        # What PML really serves (catalog
+        # https://www.oceancolour.org/thredds/catalog-cci.xml) is ONE
+        # aggregated dataset per cadence: `urlPath="CCI_ALL-v6.0-DAILY"`, with
+        # OPENDAP, HTTPServer and NetcdfSubset. Its time axis is days since
+        # 1970-01-01 — `.dds` reads `Int32 time[time = 10501]`, `.ascii?
+        # time[0:1:1]` reads `10108, 10110` (= 1997-09-04, 1997-09-06) and the
+        # axis ends at 20154 (= 2025-03-07). NOT EVERY DAY IS PRESENT, so the
+        # axis is the listing: a day absent from it is "missing", exactly like
+        # a file absent from a CEDA directory.
+        #
+        # The per-day NCSS subset returns a real netCDF4 file — verified
+        # 2023-01-01 → HTTP 200, application/x-netcdf4, HDF5 signature,
+        # 20,118,883 bytes in 7.5 s; 2024-12-31 → 19,659,419 bytes in 9.6 s —
+        # but it is GENERATED, so there is no Content-Length before the fetch
+        # and size verification is impossible. Such a day is verified by
+        # OPENING it and reading `chlor_a`'s own dims instead (`oc_fetch_day`).
+        {"name": "pml-ncss",
+         "host": "www.oceancolour.org",
+         "dataset": "CCI_ALL-v6.0-DAILY",
+         # The catalog fetched per year is the aggregate's DDS — it carries
+         # the axis LENGTH, and `oc_ncss_listing` then asks for the axis
+         # itself. It has no `{year}` placeholder on purpose: one aggregate
+         # covers the whole record.
+         "catalog": "https://www.oceancolour.org/thredds/dodsC/"
+                    "CCI_ALL-v6.0-DAILY.dds",
+         "time_ascii": "https://www.oceancolour.org/thredds/dodsC/"
+                       "CCI_ALL-v6.0-DAILY.ascii?time[0:1:{last}]",
+         "file": "https://www.oceancolour.org/thredds/ncss/grid/"
+                 "CCI_ALL-v6.0-DAILY?var=chlor_a&time={date}T00:00:00Z"
+                 "&accept=netcdf4",
+         "kind": "ncss"},
     ],
     # THE FALLBACK IS A DECISION, NOT AN AUTOMATIC RETRY (E-077 §2). GlobColour
     # is a DIFFERENT merge — not the CCI bias-corrected chain — so a build that
@@ -1277,6 +1304,117 @@ def hub_repo(token=None):
                  "project doc claude/huggingface-access.md")
     api = HfApi(token=tok)
     return api, f"{api.whoami()['name']}/{HF_DATASET}", tok
+
+
+# ------------------------------------------- the Hub's commit rate limit ----
+# MEASURED 2026-09-14, 08:50Z. `upload_file` is ONE Hub COMMIT per file, and
+# the Hub allows **256 commits per repository per hour**. The PSL mirror does
+# 646 files one at a time; at 308 done the Hub began answering
+#   HfHubHTTPError … 429 Too Many Requests … You have exceeded the rate limit
+#   for repository commits (256 per hour). You can retry this action in about
+#   1 hour.
+# and 46 further files failed. Worse, three `occci-partials` jobs each spent
+# ~60 minutes reducing a year and then died on the same 429 AT PUBLISH — the
+# runner is discarded, the npz is gone, the year must be redone.
+#
+# So two things change. Files that belong to one publish go into ONE commit
+# (five tensors, or nine store arrays, cost one commit instead of five or
+# nine), and every commit RETRIES on 429. Waiting an hour is cheaper than
+# losing one: a lane has a 5.8 h job limit and has already spent an hour of
+# it, so the cap below is 75 minutes of total sleep — long enough for the
+# Hub's own "about 1 hour" plus a margin, short enough to leave the job time
+# to finish after the window rolls.
+HUB_RETRY_CAP_S = 75 * 60
+HUB_RETRY_BASE_S = 60
+HUB_RETRY_MARGIN_S = 60     # the Hub says "about"; wake after the window, not in it
+
+
+def hub_http_status(e):
+    """The HTTP status of a huggingface_hub error, or None if it has none.
+
+    `HfHubHTTPError` carries `.response.status_code`; a bare connection error
+    carries nothing, and its absence is what tells the two apart.
+    """
+    import re as _re
+    code = getattr(getattr(e, "response", None), "status_code", None)
+    if isinstance(code, int):
+        return code
+    m = _re.search(r"\b([45]\d\d)\b", str(e))
+    return int(m.group(1)) if m else None
+
+
+def hub_retry_after(text):
+    """Seconds out of the Hub's OWN sentence, or None.
+
+    "You can retry this action in about 1 hour." / "… in about 12 minutes."
+    The number is the server's, not ours — an exponential guess would sleep
+    for the wrong hour.
+    """
+    import re as _re
+    m = _re.search(r"retry this action in about\s+(\d+)\s*"
+                   r"(second|minute|hour)s?", str(text), _re.I)
+    if not m:
+        return None
+    n, unit = int(m.group(1)), m.group(2).lower()
+    return n * {"second": 1, "minute": 60, "hour": 3600}[unit]
+
+
+def hub_commit(api, repo, ops, message, *, repo_type="dataset", sleep=None):
+    """ONE `create_commit` for `ops`, retried through the Hub's 429.
+
+    `ops` is a list of `CommitOperationAdd`/`CommitOperationDelete`. A 429 or
+    a 5xx or a connection error SLEEPS and retries — the Hub's own "retry in
+    about N" when it gives one, else 60 s doubling — up to `HUB_RETRY_CAP_S`
+    of total sleep. Any other 4xx (401, 403, 404, 413) raises at once: those
+    do not become true by waiting.
+    """
+    slp = sleep or time.sleep
+    waited, attempt = 0.0, 0
+    while True:
+        try:
+            return api.create_commit(repo_id=repo, repo_type=repo_type,
+                                     operations=list(ops),
+                                     commit_message=message)
+        except Exception as e:                                # noqa: BLE001
+            attempt += 1
+            code = hub_http_status(e)
+            if code is not None and 400 <= code < 500 and code != 429:
+                raise
+            hinted = hub_retry_after(e) if code == 429 else None
+            nap = (hinted + HUB_RETRY_MARGIN_S) if hinted is not None else \
+                HUB_RETRY_BASE_S * (2 ** (attempt - 1))
+            left = HUB_RETRY_CAP_S - waited
+            if left <= 0:
+                raise
+            nap = min(nap, left)
+            why = (f"HTTP {code}" if code is not None
+                   else f"{type(e).__name__}")
+            print(f"::warning::hub commit ({len(ops)} op(s), {message[:60]!r}): "
+                  f"{why} — {str(e)[:160]} — sleeping {nap / 60:.1f} min "
+                  f"(attempt {attempt}, {waited / 60:.1f} min waited of "
+                  f"{HUB_RETRY_CAP_S / 60:.0f} allowed)", flush=True)
+            slp(nap)
+            waited += nap
+
+
+def hub_add_ops(pairs):
+    """[(path_in_repo, local_path)] -> [CommitOperationAdd]."""
+    from huggingface_hub import CommitOperationAdd
+    return [CommitOperationAdd(path_in_repo=rel, path_or_fileobj=p)
+            for rel, p in pairs]
+
+
+def hub_delete_ops(paths):
+    """[path_in_repo] -> [CommitOperationDelete]."""
+    from huggingface_hub import CommitOperationDelete
+    return [CommitOperationDelete(path_in_repo=rel) for rel in paths]
+
+
+def hub_upload_with_backoff(api, repo, local_path, path_in_repo, message,
+                            *, repo_type="dataset"):
+    """`upload_file` for ONE file, through `hub_commit`'s 429 backoff."""
+    return hub_commit(api, repo, hub_add_ops([(path_in_repo, local_path)]),
+                      message, repo_type=repo_type)
 
 
 def hub_get(ctx, path_in_repo, dest_dir):
@@ -2291,6 +2429,133 @@ def oc_date_of_name(name):
     return None
 
 
+# The archive's own daily file name. PML's NCSS subset carries no file name at
+# all (the bytes are generated on request), so a day it serves is NAMED with
+# this pattern — the same name CEDA's directory would have used — and every
+# marker, on-disk file and `oc_date_of_name` call downstream is unchanged
+# whichever host answered.
+OC_NAME_FMT = ("ESACCI-OC-L3S-CHLOR_A-MERGED-1D_DAILY_4km_GEO_PML_OCx-"
+               "{ymd}-fv6.0.nc")
+OC_TIME_EPOCH = dt.date(1970, 1, 1)      # the aggregate's `days since` origin
+
+
+def oc_canonical_name(d):
+    """The archive's file name for one date."""
+    return OC_NAME_FMT.format(ymd=f"{d:%Y%m%d}")
+
+
+def parse_dds_time_n(blob):
+    """`Int32 time[time = 10501]` in an OPeNDAP `.dds` -> 10501, or None.
+
+    Defensive: the type word and the spacing are the server's, so only the
+    dimension's own `[time = N]` is matched.
+    """
+    import re as _re
+    text = blob.decode("utf-8", "replace") if isinstance(blob, bytes) else blob
+    m = _re.search(r"time\s*\[\s*time\s*=\s*(\d+)\s*\]", text)
+    return int(m.group(1)) if m else None
+
+
+def parse_opendap_ascii_ints(blob):
+    """The integers of an OPeNDAP `.ascii?time[…]` answer, in order.
+
+    The body is a DDS header, a dashed rule, a `time[N]` line and then the
+    values. Only what follows the LAST `time[N]` line is read, so the header's
+    own `[time = 10501]` cannot be mistaken for data.
+    """
+    import re as _re
+    text = blob.decode("utf-8", "replace") if isinstance(blob, bytes) else blob
+    lines = text.splitlines()
+    start = 0
+    for i, ln in enumerate(lines):
+        if _re.match(r"^\s*time\s*\[\s*\d+\s*\]\s*$", ln):
+            start = i + 1
+    body = "\n".join(lines[start:])
+    return [int(v) for v in _re.findall(r"-?\d+", body)]
+
+
+_OC_AXIS_CACHE = {}
+
+
+def oc_ncss_axis(host, dds_blob):
+    """The aggregate's time axis as `[int days since 1970-01-01]`.
+
+    Cached per URL: `oc_index` lists one year at a time and the axis is one
+    fetch of ~10,500 integers for the whole record.
+    """
+    n = parse_dds_time_n(dds_blob)
+    if not n:
+        return []
+    url = host["time_ascii"].format(last=int(n) - 1)
+    if url not in _OC_AXIS_CACHE:
+        _OC_AXIS_CACHE[url] = parse_opendap_ascii_ints(_http_get(url))
+    return _OC_AXIS_CACHE[url]
+
+
+def oc_ncss_listing(host, dds_blob, year):
+    """{date: NCSS url} for one year, out of the aggregate's OWN time axis.
+
+    THE AXIS IS THE LISTING. A day the aggregate does not carry is absent from
+    it and is therefore "missing" — the same fact a file absent from a CEDA
+    directory carries, recorded the same way.
+    """
+    out = {}
+    for v in oc_ncss_axis(host, dds_blob):
+        d = OC_TIME_EPOCH + dt.timedelta(days=int(v))
+        if d.year != year:
+            continue
+        out[str(d)] = host["file"].format(date=d.isoformat(), year=year,
+                                          name=oc_canonical_name(d))
+    return out
+
+
+def oc_generated_url(url):
+    """True for a day the server MAKES on request (NCSS) rather than stores.
+
+    Such a response has no Content-Length before the fetch, so the size check
+    `download_verified` performs cannot fire and the file is verified by being
+    OPENED instead (ml/CLAUDE.md §0.1 — verify the artefact).
+    """
+    return isinstance(url, str) and "/thredds/ncss/" in url
+
+
+def oc_local_name(url):
+    """The name a day's URL is stored under on the disk.
+
+    An NCSS url's path ends in the AGGREGATE's name, identical for every day,
+    so a prefetch pool would collide eight files onto one path. The date in
+    `time=` names it instead, in the archive's own pattern.
+    """
+    import re as _re
+    q = url.split("?", 1)[1] if "?" in url else ""
+    m = _re.search(r"time=(\d{4})-(\d{2})-(\d{2})", q)
+    if m:
+        try:
+            return oc_canonical_name(dt.date(int(m.group(1)), int(m.group(2)),
+                                             int(m.group(3))))
+        except ValueError:
+            pass
+    return os.path.basename(url.split("?")[0])
+
+
+def oc_check_day_file(path):
+    """Raise unless `path` opens as a `chlor_a` field. The size check's stand-in."""
+    import netCDF4 as ncdf
+    d = ncdf.Dataset(path)
+    try:
+        if OC_VAR not in d.variables:
+            raise IOError(f"no {OC_VAR!r} variable (has {sorted(d.variables)})")
+        v = d.variables[OC_VAR]
+        shp = [int(n) for n in v.shape]
+        while len(shp) > 2 and shp[0] == 1:       # a length-1 time dimension
+            shp = shp[1:]
+        if len(shp) != 2 or min(shp) < 2:
+            raise IOError(f"{OC_VAR} is {tuple(v.shape)} with dims "
+                          f"{v.dimensions} — not a lat/lon field")
+    finally:
+        d.close()
+
+
 def oc_list_year(ctx, year):
     """LIST one year of the archive. Returns (host record, {date: url}).
 
@@ -2317,6 +2582,21 @@ def oc_list_year(ctx, year):
                 blob = _http_get(url)
             except Exception as e:                            # noqa: BLE001
                 tried.append(f"{host['name']}: {url} -> {str(e)[:160]}")
+                continue
+            if host["kind"] == "ncss":
+                # The listing IS the aggregate's time axis; the names are
+                # synthetic (the archive's own pattern) because the server
+                # generates the bytes and offers no file name.
+                try:
+                    by_date = oc_ncss_listing(host, blob, year)
+                except Exception as e:                        # noqa: BLE001
+                    tried.append(f"{host['name']}: {url} -> time axis "
+                                 f"{type(e).__name__}: {str(e)[:140]}")
+                    continue
+                if by_date:
+                    return host, by_date
+                tried.append(f"{host['name']}: {url} — the aggregate's time "
+                             f"axis carries no {year} day")
                 continue
             if host["kind"] == "thredds":
                 found = parse_thredds_catalog(blob, host.get("server"))
@@ -2416,24 +2696,66 @@ def oc_open(path):
                      f"would mirror the planet.")
         fill = getattr(v, "_FillValue", None)
         arr = np.ma.filled(np.asarray(v[:]), np.nan)
-        return np.squeeze(np.asarray(arr, np.float64)), s_lat, s_lon, fill
+        arr = np.asarray(arr, np.float64)
+        # A LEADING LENGTH-1 DIMENSION IS DROPPED BY NAME, not by `squeeze`.
+        # CEDA's archived file is `chlor_a(lat, lon)`; PML's NCSS subset is
+        # `chlor_a(time=1, lat, lon)` (measured 2026-09-14), and the two must
+        # reduce identically. A bare squeeze would also collapse a genuine
+        # one-row grid, which is a file this build must refuse rather than
+        # reshape, so only leading axes are dropped and only while the array
+        # is still more than two-dimensional.
+        while arr.ndim > 2 and arr.shape[0] == 1:
+            arr = arr[0]
+        if arr.ndim != 2:
+            sys.exit(f"{path}: {OC_VAR} is {arr.shape} with dims "
+                     f"{v.dimensions} — the block mean reduces one lat/lon "
+                     f"field per day and this is not one.")
+        return arr, s_lat, s_lon, fill
     finally:
         d.close()
 
 
-def oc_fetch_day(ctx, url, dest_dir):
-    """One daily file onto the disk, size-verified. The caller DELETES it.
+def oc_fetch_day(ctx, url, dest_dir, attempts=3):
+    """One daily file onto the disk, VERIFIED. The caller DELETES it.
 
     ~10,000 files of ~40 MB is 400 GB: the Argo builder's discipline is the
     only one that fits on a 300 GB box — one file on the disk at a time, read,
     dropped, next.
+
+    Two kinds of source, two verifications, and the difference is a MEASURED
+    property of the server rather than a preference. An archived file declares
+    a Content-Length and `download_verified` compares against it. PML's NCSS
+    subset GENERATES the bytes, so there is no length to compare against
+    (measured 2026-09-14) — such a file is verified by being OPENED and read
+    for a `chlor_a` field of two real dimensions, which is the failure a
+    truncated transfer would otherwise show hours later as `NetCDF: HDF
+    error`.
     """
     os.makedirs(dest_dir, exist_ok=True)
     if ctx.source_dir or os.path.isabs(url) and os.path.exists(url):
         return url, False
-    path = os.path.join(dest_dir, os.path.basename(url.split("?")[0]))
-    download_verified(url, path)
-    return path, True
+    path = os.path.join(dest_dir, oc_local_name(url))
+    if not oc_generated_url(url):
+        download_verified(url, path)
+        return path, True
+    last = None
+    for i in range(attempts):
+        if os.path.exists(path):
+            os.remove(path)
+        download_verified(url, path)
+        try:
+            oc_check_day_file(path)
+            return path, True
+        except Exception as e:                                # noqa: BLE001
+            last = e
+            print(f"  ::warning:: {os.path.basename(path)}: {str(e)[:140]} — "
+                  f"the server generates this file and declares no length, so "
+                  f"it is verified by opening it; refetching "
+                  f"({i + 1}/{attempts})", flush=True)
+    if os.path.exists(path):
+        os.remove(path)
+    raise IOError(f"{url}: {attempts} transfers did not open as a {OC_VAR} "
+                  f"field ({last})")
 
 
 def oc_preflight(ctx, year=2015):
@@ -2770,9 +3092,11 @@ def oc_partial_publish(ctx, year, path):
     rel = f"{oc_partial_prefix()}/{oc_partial_name(year)}"
     api.create_repo(repo, repo_type="dataset", exist_ok=True, private=False)
     src = sha256(path)
-    api.upload_file(path_or_fileobj=path, path_in_repo=rel, repo_id=repo,
-                    repo_type="dataset",
-                    commit_message=f"family 7 ({RECIPE}): occci partial {year}")
+    # Through `hub_commit`: three of these lanes died on the Hub's 256-commits
+    # per hour 429 AFTER an hour of reducing a year, and the partial is the
+    # only surviving record of that hour (2026-09-14).
+    hub_upload_with_backoff(api, repo, path, rel,
+                            f"family 7 ({RECIPE}): occci partial {year}")
     scratch = os.path.join(ctx.scratch, "verify")
     shutil.rmtree(scratch, ignore_errors=True)
     back = hf_hub_download(repo, rel, repo_type="dataset", token=tok,
@@ -4034,12 +4358,18 @@ def stage_publish(ctx):
     ctx.prog.stage_start("publish", len(files))
     entries = []
     scratch = os.path.join(ctx.scratch, "verify")
+    # ONE COMMIT FOR THE FIVE FILES. The Hub allows 256 commits per repo per
+    # hour and `upload_file` is one commit each (2026-09-14); the restore
+    # check below is unchanged and still runs per file.
+    digests = {os.path.basename(p): sha256(p) for p in files}
+    hub_commit(api, repo,
+               hub_add_ops([(f"{HF_PREFIX}/{os.path.basename(p)}", p)
+                            for p in files]),
+               f"family 7 ({RECIPE}): "
+               + ", ".join(os.path.basename(p) for p in files))
     for i, p in enumerate(files, 1):
         name = os.path.basename(p)
-        src = sha256(p)
-        api.upload_file(path_or_fileobj=p, path_in_repo=f"{HF_PREFIX}/{name}",
-                        repo_id=repo, repo_type="dataset",
-                        commit_message=f"family 7 ({RECIPE}): {name}")
+        src = digests[name]
         shutil.rmtree(scratch, ignore_errors=True)
         back = hf_hub_download(repo, f"{HF_PREFIX}/{name}", repo_type="dataset",
                                token=tok, local_dir=scratch)
@@ -4090,10 +4420,8 @@ def stage_publish(ctx):
            "sources": ctx.sources, "files": entries}
     mp = os.path.join(work, "manifest.json")
     atomic_json(mp, man)
-    api.upload_file(path_or_fileobj=mp,
-                    path_in_repo=f"{HF_PREFIX}/manifest.json",
-                    repo_id=repo, repo_type="dataset",
-                    commit_message=f"family 7 ({RECIPE}): manifest")
+    hub_upload_with_backoff(api, repo, mp, f"{HF_PREFIX}/manifest.json",
+                            f"family 7 ({RECIPE}): manifest")
     mark(work, "publish")
     print(f"  publish: {len(entries)} files verified by restore -> "
           f"https://huggingface.co/datasets/{repo}/tree/main/{HF_PREFIX}")
@@ -4475,8 +4803,7 @@ def make_smoke_oc_sources(root, days, oc_start,
                     a[rr, c] = np.float32(10.0 ** v)
             else:                                   # the two pole blocks
                 a[rr, cc] = np.float32(10.0 ** SMOKE_OC_UNIFORM)
-        name = (f"ESACCI-OC-L3S-CHLOR_A-MERGED-1D_DAILY_4km_GEO_PML_OCx-"
-                f"{day:%Y%m%d}-fv6.0.nc")
+        name = oc_canonical_name(day)
         _nc_write(os.path.join(root, "occci", name),
                   {"lat": nlat_s, "lon": nlon_s},
                   {"lat": (("lat",), s_lat, {"units": "degrees_north"}),
