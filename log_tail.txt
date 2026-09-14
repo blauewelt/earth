@@ -1,0 +1,80 @@
+Processing Files (0 / 0)      : |          |  0.00B /  0.00B            
+New Data Upload               : |          |  0.00B /  0.00B            [A
+
+  .../socat/socat/platform.npy:  10%|▉         | 31.9MB /  335MB            [A[A
+
+  .../socat/socat/platform.npy:  10%|▉         | 31.9MB /  335MB            [A[AProcessing Files (0 / 1)      :  10%|▉         | 31.9MB /  335MB, 3.16MB/s  
+
+  .../socat/socat/platform.npy:  45%|████▌     |  152MB /  335MB            [A[AProcessing Files (0 / 1)      :  45%|████▌     |  152MB /  335MB, 15.0MB/s  
+
+  .../socat/socat/platform.npy:  81%|████████▏ |  272MB /  335MB            [A[AProcessing Files (0 / 1)      :  81%|████████▏ |  272MB /  335MB, 26.7MB/s  
+
+  .../socat/socat/platform.npy: 100%|██████████|  335MB /  335MB            [A[AProcessing Files (1 / 1)      : 100%|██████████|  335MB /  335MB, 32.6MB/s  
+
+  .../socat/socat/platform.npy: 100%|██████████|  335MB /  335MB            [A[A
+
+  .../socat/socat/platform.npy: 100%|██████████|  335MB /  335MB            [A[A
+
+  .../socat/socat/platform.npy: 100%|██████████|  335MB /  335MB            [A[AProcessing Files (1 / 1)      : 100%|██████████|  335MB /  335MB, 31.8MB/s  
+New Data Upload               : |          |  0.00B /  0.00B,  0.00B/s  
+  .../socat/socat/platform.npy: 100%|██████████|  335MB /  335MB            
+No files have been modified since last commit. Skipping to prevent empty commit.
+  [publish socat] platform.npy  6/10  16.9s
+Processing Files (0 / 0)      : |          |  0.00B /  0.00B            
+New Data Upload               : |          |  0.00B /  0.00B            [A
+
+  ...mily10/socat/socat/qc.npy:  76%|███████▌  | 31.9MB / 41.8MB            [A[A
+
+  ...mily10/socat/socat/qc.npy:  76%|███████▌  | 31.9MB / 41.8MB            [A[AProcessing Files (0 / 1)      :  76%|███████▌  | 31.9MB / 41.8MB,   ???B/s  
+
+  ...mily10/socat/socat/qc.npy: 100%|██████████| 41.8MB / 41.8MB            [A[AProcessing Files (1 / 1)      : 100%|██████████| 41.8MB / 41.8MB,   ???B/s  
+New Data Upload               : 100%|██████████|  131kB /  131kB,   ???B/s  [A
+
+  ...mily10/socat/socat/qc.npy: 100%|██████████| 41.8MB / 41.8MB            [A[A
+
+  ...mily10/socat/socat/qc.npy: 100%|██████████| 41.8MB / 41.8MB            [A[AProcessing Files (1 / 1)      : 100%|██████████| 41.8MB / 41.8MB, 4.08MB/s  
+New Data Upload               : 100%|██████████|  131kB /  131kB, 12.8kB/s  
+  ...mily10/socat/socat/qc.npy: 100%|██████████| 41.8MB / 41.8MB            
+No files have been modified since last commit. Skipping to prevent empty commit.
+  [publish socat] qc.npy  7/10  18.3s
+Processing Files (0 / 0)      : |          |  0.00B /  0.00B            
+New Data Upload               : |          |  0.00B /  0.00B            [A
+
+  ...socat/socat/time_days.npy:  62%|██████▏   |  104MB /  167MB            [A[A
+
+  ...socat/socat/time_days.npy:  62%|██████▏   |  104MB /  167MB            [A[AProcessing Files (0 / 1)      :  62%|██████▏   |  104MB /  167MB, 10.3MB/s  
+
+  ...socat/socat/time_days.npy: 100%|██████████|  167MB /  167MB            [A[AProcessing Files (1 / 1)      : 100%|██████████|  167MB /  167MB, 16.5MB/s  
+
+  ...socat/socat/time_days.npy: 100%|██████████|  167MB /  167MB            [A[A
+
+  ...socat/socat/time_days.npy: 100%|██████████|  167MB /  167MB            [A[AProcessing Files (1 / 1)      : 100%|██████████|  167MB /  167MB, 16.2MB/s  
+New Data Upload               : |          |  0.00B /  0.00B,  0.00B/s  
+  ...socat/socat/time_days.npy: 100%|██████████|  167MB /  167MB            
+No files have been modified since last commit. Skipping to prevent empty commit.
+  [publish socat] time_days.npy  8/10  20.5s
+Processing Files (0 / 0)      : |          |  0.00B /  0.00B            
+New Data Upload               : |          |  0.00B /  0.00B            [A
+
+  ...10/socat/socat/values.npy:   7%|▋         | 23.9MB /  335MB            [A[A
+
+  ...10/socat/socat/values.npy:   7%|▋         | 23.9MB /  335MB            [A[AProcessing Files (0 / 1)      :   7%|▋         | 23.9MB /  335MB, 2.37MB/s  
+
+  ...10/socat/socat/values.npy:  43%|████▎     |  144MB /  335MB            [A[AProcessing Files (0 / 1)      :  43%|████▎     |  144MB /  335MB, 14.2MB/s  
+
+  ...10/socat/socat/values.npy:  79%|███████▉  |  264MB /  335MB            [A[AProcessing Files (0 / 1)      :  79%|███████▉  |  264MB /  335MB, 25.9MB/s  
+
+  ...10/socat/socat/values.npy: 100%|██████████|  335MB /  335MB            [A[AProcessing Files (1 / 1)      : 100%|██████████|  335MB /  335MB, 32.6MB/s  
+
+  ...10/socat/socat/values.npy: 100%|██████████|  335MB /  335MB            [A[A
+
+  ...10/socat/socat/values.npy: 100%|██████████|  335MB /  335MB            [A[A
+
+  ...10/socat/socat/values.npy: 100%|██████████|  335MB /  335MB            [A[AProcessing Files (1 / 1)      : 100%|██████████|  335MB /  335MB, 31.8MB/s  
+New Data Upload               : |          |  0.00B /  0.00B,  0.00B/s  
+  ...10/socat/socat/values.npy: 100%|██████████|  335MB /  335MB            
+No files have been modified since last commit. Skipping to prevent empty commit.
+  [publish socat] values.npy  9/10  23.8s
+  [publish socat] store.json  10/10  24.4s
+  publish: 10 file(s) verified by restore -> https://huggingface.co/datasets/chfrank/earth-tensors/tree/main/tensors/family10/socat
+=== stage publish done in 31.6s ===
