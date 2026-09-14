@@ -827,3 +827,14 @@ def test_the_adapters_declare_the_footprints_the_plan_specifies():
 
 if __name__ == "__main__":
     sys.exit(pytest.main([__file__, "-q"]) if hasattr(pytest, "main") else 0)
+
+
+def test_parse_stages_accepts_a_comma_list_in_fixed_order():
+    assert b10.parse_stages("all") == ["index", "fetch", "publish"]
+    assert b10.parse_stages("fetch") == ["fetch"]
+    assert b10.parse_stages("fetch,index") == ["index", "fetch"]
+    assert b10.parse_stages(" index, fetch ") == ["index", "fetch"]
+    with pytest.raises(SystemExit):
+        b10.parse_stages("index,assemble")
+    with pytest.raises(SystemExit):
+        b10.parse_stages("")

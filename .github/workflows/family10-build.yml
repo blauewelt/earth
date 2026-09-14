@@ -79,7 +79,7 @@ on:
         type: choice
         options: [gdp, gtmba, socat, slatrack]
       stage:
-        description: "all | index | fetch | publish. Order is fixed (fetch needs the index's preflight; publish needs the store) -- a single stage is for resuming or re-running one, never for building out of order"
+        description: "all | index | fetch | publish | a comma list such as index,fetch (a PROBE: fetch a short window, publish nothing). Order is fixed (fetch needs the index's preflight; publish needs the store) -- a single stage is for resuming or re-running one, never for building out of order"
         default: "all"
       start:
         description: "first day, YYYY-MM-DD. Empty = the source's own first year (gdp 1979, gtmba 1977, socat 1957, slatrack 1993). Pre-1982 rows are KEPT, with negative bins"

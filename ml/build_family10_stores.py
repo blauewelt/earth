@@ -1990,6 +1990,20 @@ def stage_publish(ctx):
 STAGE_FN = {"index": stage_index, "fetch": stage_fetch, "publish": stage_publish}
 
 
+def parse_stages(spec):
+    """`all` -> every stage; `fetch` -> [fetch]; `index,fetch` -> both, in the
+    fixed stage order whatever order they were typed in. Unknown names refuse
+    before anything runs."""
+    if spec.strip() == "all":
+        return list(STAGES)
+    want = [x.strip() for x in spec.split(",") if x.strip()]
+    bad = [x for x in want if x not in STAGES]
+    if bad or not want:
+        sys.exit(f"--stage {spec!r}: unknown stage(s) {bad} — choose from "
+                 f"{STAGES}, `all`, or a comma list of them")
+    return [s for s in STAGES if s in want]
+
+
 def run_stages(ctx, stages):
     for s in stages:
         for dep in DEPS.get(s, []):
@@ -2296,9 +2310,11 @@ def main():
                     help="the build directory: plan.json, per-year parts, the "
                          "store, markers, progress.json. RE-RUN WITH THE SAME "
                          "VALUE TO RESUME.")
-    ap.add_argument("--stage", default="all", choices=["all"] + STAGES,
-                    help="one stage, or `all`. Order is fixed: fetch needs "
-                         "index, publish needs fetch.")
+    ap.add_argument("--stage", default="all",
+                    help="`all`, one stage, or a comma-separated prefix of the "
+                         "stage order such as `index,fetch` (a probe that "
+                         "fetches but does not publish). Order is fixed: "
+                         "fetch needs index, publish needs fetch.")
     ap.add_argument("--start", default="",
                     help="first day (YYYY-MM-DD); default is the source's own "
                          "first year")
@@ -2339,8 +2355,7 @@ def main():
     print(f"footprint log2_fp {ad.log2_fp:g}, log2_dt {ad.log2_dt:g}")
     print(f"source    {ad.sources[0] if not ctx.source_dir else ctx.source_dir}")
     print(f"verified  {ad.verified}")
-    stages = STAGES if a.stage == "all" else [a.stage]
-    run_stages(ctx, stages)
+    run_stages(ctx, parse_stages(a.stage))
     return 0
 
 
