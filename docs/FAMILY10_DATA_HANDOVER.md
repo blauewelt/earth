@@ -5,13 +5,18 @@ download, open, validate and search family 10's tier-P observation stores, and
 to read the registry that ties them to the gridded tensors, is on this page;
 nothing below requires reading another document. Where a section says "see
 also", it is optional background. Written 2026-09-13, the day the builder
-landed.
+landed; updated 2026-09-14, the day the first three stores were published.
 
-**Read §9 before you trust a number.** Every access path here was verified
-against the live archive on 2026-09-13 and the parsers were run on real data,
-but **no full build has been dispatched**: the stores described below exist as
-a contract and as one-month proofs, not yet as published files. §9 says exactly
-which sentences are measured and which are pending.
+**Read §9 before you trust a number.** Three of the four stores — `gdp`
+(surface drifters), `gtmba` (the tropical moored arrays) and `socat` (ship
+CO₂) — were built, published and then **independently verified on 2026-09-14**
+by a session that did not build them: 91,312,755 observations, every file
+re-hashed against its own record, and every count, range and per-channel
+statistic recomputed from the arrays rather than read out of the metadata that
+claims them. Those sentences are now measurements. **`slatrack` (along-track
+sea level) has still never been fetched**, so everything this page says about it
+remains a contract. §9 says exactly which is which; the full evidence is
+`docs/FAMILY10_VERIFICATION_2026-09-14.md`.
 
 Family 8's Argo store has its own self-contained handover and is **part of this
 family unchanged** — §7 says how (optional background:
@@ -101,13 +106,16 @@ these four. Per group: `tier`, `layout`, `cadence`, `channels` with units, the
 footprint constants, `bin_first`, the files with their sha256, the sources and
 the builder commit. **A consumer dispatches on `tier` and needs nothing else.**
 
-Two properties are load-bearing. A group the builder could not read is **not**
-in `groups` and **is** in `groups_missing` — a registry that listed a group it
-could not describe would be worse than a short one. And `tier_g` says *which*
-family-7 manifest it describes: E-079 §2 names family 7.1 (recipe `f7l1`), whose
-build has not been dispatched, so the builder falls back to `f7l0` and states
-the fallback in `tier_g.fallback_note` rather than silently describing a
-different tensor.
+Two properties are load-bearing, and both were exercised by the registry as it
+stands (regenerated 2026-09-14T08:05:45Z, seven groups). A group the builder
+could not read is **not** in `groups` and **is** in `groups_missing` — a
+registry that listed a group it could not describe would be worse than a short
+one; `slatrack` is the group in `groups_missing` today. And `tier_g` says
+*which* family-7 manifest it describes: E-079 §2 names family 7.1 (recipe
+`f7l1`, the global gridded tensor with ocean colour added), whose build has
+still not published, so the builder falls back to `f7l0` (the same tensor
+without ocean colour) and states the fallback in `tier_g.fallback_note` rather
+than silently describing a different tensor.
 
 ## 3 · The channels
 
@@ -325,18 +333,63 @@ old rather than arriving from the future.
 `qc_max=1` narrows to the source's best grade, **before** `n_R` is counted: a
 token the reader will not return must not inflate the density feature.
 
-## 6 · Suggested search radii
+## 6 · Search radii — measured
 
-These are starting points from each system's own sampling, not measured optima.
-Measure the k-th-neighbour distance on the real store before fixing them, the
-way `ml/build_family8_argo.py::index_stats` did for Argo.
+Until 2026-09-14 this section held four guesses derived from each observing
+system's sampling geometry. Three of them have now been measured on the
+published stores, and all three were **too loose by a factor of three to ten**
+at anchors where the store has data. The measured numbers:
 
-| store | typical spacing | a reasonable (k, R_max, T_max) | why |
-|---|---|---|---|
-| `gdp` | ~1,300 drifters globally, 4 fixes a day each | k = 8, 300 km, 10 d | dense along a track and sparse between tracks; a short window keeps the track coherent |
-| `gtmba` | ~70–96 moorings on a fixed lattice, one row a day | k = 4, 1,500 km, 15 d | the array's own spacing is 2–15° — a small R returns nothing at most anchors |
-| `socat` | ship tracks: thousands of points on one line, nothing for a thousand km | k = 8, 500 km, 30 d | the sampling is the shipping lanes; `n_R` is the honest measure of how much is known here |
-| `slatrack` | ~7 km along track, tracks ~150 km apart, 10-day repeat | k = 16, 200 km, 10 d | one repeat cycle is the natural window |
+| store | k | k-th neighbour distance (median / p90 / p99) | k-th neighbour age (median / p99) | measured (R_max, T_max) covering the 99th percentile ON-TRACK | the old suggestion |
+|---|---|---|---|---|---|
+| `gdp` | 8 | **19 km** / 68 km / **104 km** | **2.0 d** / 3.8 d | **≈ 110 km, ≈ 4 d** | 300 km, 10 d |
+| `gtmba` | 4 | **0 km** / 334 km / **334 km** | **2.5 d** / 3.5 d | **≈ 350 km, ≈ 5 d** | 1,500 km, 15 d |
+| `socat` | 8 | **4.5 km** / 46 km / **111 km** | **1.8 d** / 4.9 d | **≈ 150 km**; keep **30 d** for T | 500 km, 30 d |
+| `slatrack` | 16 | *not measured — the store has never been built* | — | *suggested only:* 200 km, 10 d, one repeat cycle | 200 km, 10 d |
+
+Read the third column before fixing anything. `gtmba`'s 4th neighbour is at
+0 km at the median because the array is a fixed lattice and the same mooring
+contributes several daily rows inside the window — the temporal bound, not the
+spatial one, is what k = 4 actually spends. `socat`'s T is the one bound worth
+leaving generous: the 8th neighbour is under 5 days old at the 99th percentile,
+but that is one cruise's own track, and a ship revisiting a piece of ocean is
+rare, so a shorter window would not cost much and a longer one is the only way
+a *second* cruise can ever enter the search.
+
+**Off-track, the radius is not the binding constraint — the observing system
+is.** At anchors drawn uniformly over the globe rather than from the store's own
+rows, the search returns **nothing at all** inside the suggested bounds on
+**71 %** of anchors for `gdp`, **81 %** for `gtmba` and **89 %** for `socat`.
+Widening R does not rescue them; it only makes the search slower. The miss
+token is the normal answer over most of the ocean, and `n_R` (§5.1) is the
+feature that says so honestly — this is §8.3, measured.
+
+**The k tokens come from ONE platform.** Over 600 on-track anchors per store,
+the median number of *distinct* platforms among the k returned observations is
+**1 of 8** for `gdp`, **1 of 8** for `socat`, and **2 of 4** for `gtmba`. The
+eight `gdp` slots are one drifter at 6-hourly steps; the eight `socat` slots are
+one research cruise, seconds apart along one line. Generous bounds do not change
+it. The consequence for a consumer: **k buys one track's redundancy, not k
+independent measurements of the ocean.** If independent information is what the
+tokens are meant to carry, the search has to be de-duplicated by `platform`, or
+k made much larger than 8. That is an open design question, not a decision this
+page makes.
+
+**Method, so the numbers can be reproduced or disputed.** Two draws, following
+`ml/build_family8_argo.py::index_stats`: a **catalogue draw** whose anchors are
+the store's own rows with `bin ≥ 0`, stratified equally across the years present
+so no dense recent year dominates, and a **globe draw** of lat ~ U(−60, 60),
+lon ~ U(−180, 180) at a random live bin, land included, where the honest answer
+is that nothing is measured. 2,000 anchors per draw per store, seed 20260914.
+The search itself ran with **generous bounds** (R_max = 5,000 km,
+T_max = 60 d) so the k-th neighbour is nearly always found, while the ranking
+**metric scales `L_km` and `T_days` stayed pinned to the old suggested (R, T)**
+— so the ordering is the one a consumer would actually get, and `dist_km[k−1]`
+is exactly "the R_max that would have retained the k-th token". `n_R` was
+measured separately at the suggested bounds. The scripts are
+`ml/tools/family10_verify/measure_knn.py` and
+`ml/tools/family10_verify/platform_diversity.py`; the full result is
+`docs/FAMILY10_VERIFICATION_2026-09-14.md` §5 and §8.6.
 
 ## 7 · Family 8's Argo store is part of this family, unchanged
 
@@ -386,11 +439,41 @@ stores carry the **whole** record, pre-1982 included; the loader restricts. That
 is why negative bins are kept rather than dropped at build time — dropping
 cannot be undone.
 
-## 9 · What is verified, and what is pending the first build
+## 9 · What is verified (2026-09-14) and what is pending
 
-**Verified against the live archive on 2026-09-13**, from a sandbox that can
-reach these hosts, by listing and fetching rather than by reading
-documentation:
+**The three keyless stores are built, published and independently verified.**
+They were built on 2026-09-14 from builder commit `c5bc2ce` on GitHub-hosted
+runners, and checked the same day by a session that did not build them: every
+file fetched from the Hub and re-hashed against `store.json`'s own record, then
+every structural property and every statistic **recomputed from the arrays**
+rather than read out of the metadata claiming it.
+
+| store | N | live bins / total | overall measured fraction | sha256 | `verify_store` | per-channel statistics |
+|---|---|---|---|---|---|---|
+| `gdp` | 48,480,798 | **3,353 / 3,353 (100 %)** | 0.963865 | **9 / 9 match** | returns 9, no raise | 4 of 4 reproduced exactly |
+| `gtmba` | 1,001,282 | 3,386 / 3,446 (98.3 %) | 0.568374 | **9 / 9 match** | returns 9, no raise | 18 of 18 reproduced exactly |
+| `socat` | 41,830,675 | 3,266 / 4,910 (66.5 %) | 0.923146 | **9 / 9 match** | returns 9, no raise | 4 of 4 reproduced exactly |
+
+"Reproduced exactly" means the measured count matched to the row and the
+fraction, minimum, maximum and mean to float precision. Also recomputed and
+passing in all three: N and the bin range, the live-bin count, ascending sort by
+`(bin, time_days)`, the CSR offsets reproduced by `searchsorted`,
+`bin == floor(time_days / 5)` on every row, longitude in [−180, 180), constant
+footprint columns, quality codes within `qc_keep_max`, and per-year counts
+summing to N. The files:
+
+- [the `gdp` store on the Hub](https://huggingface.co/datasets/chfrank/earth-tensors/tree/main/tensors/family10/gdp) — surface drifters, 6-hourly, 1.6 GB.
+- [the `gtmba` store on the Hub](https://huggingface.co/datasets/chfrank/earth-tensors/tree/main/tensors/family10/gtmba) — the tropical moored arrays, daily, 63 MB.
+- [the `socat` store on the Hub](https://huggingface.co/datasets/chfrank/earth-tensors/tree/main/tensors/family10/socat) — ship and mooring surface CO₂, 1.37 GB.
+- [the family-10 registry on the Hub](https://huggingface.co/datasets/chfrank/earth-tensors/blob/main/tensors/family10/family10.json) — seven groups, regenerated 2026-09-14T08:05:45Z; every tier-P entry's N, `bin_first` and file count agrees with the `store.json` verified above.
+
+The evidence, number by number, is in
+`docs/FAMILY10_VERIFICATION_2026-09-14.md`.
+
+**Historical context: the access paths, verified against the live archive on
+2026-09-13** — from a sandbox that can reach these hosts, by listing and
+fetching rather than by reading documentation. This is how the parsers were
+written; the builds above are what they produced.
 
 | store | the access path, exactly | what was confirmed |
 |---|---|---|
@@ -410,12 +493,14 @@ documentation:
 `t_1m` and `sst` agreeing to the last digit is the free cross-check of §3.2:
 they come from two different PMEL datasets joined on `(station, day)`.
 
-**NOT yet verified, and stated as such:**
+**STILL NOT verified, as of 2026-09-14, and stated as such:**
 
-- **No full build has run.** The N, the per-year counts, the live-bin coverage
-  and the published sizes of all four stores are the contract, not a
-  measurement. So are the sha256 blocks — no file has been published, and the
-  Hub paths in §2 are where they will be.
+- **`slatrack` has not been built.** Everything this page says about its N, its
+  live bins, its per-year counts, its size and its sha256 block is the
+  contract, not a measurement, and the Hub path in §2 is where the store *will*
+  be. It is also absent from the registry's `groups` and named in
+  `groups_missing` — a registry that listed a group it could not describe would
+  be worse than one that is short.
 - **`slatrack` has never been fetched.** The dataset ids and variable names
   are verified from public metadata; **the download itself is not**. The writing
   sandbox deliberately holds no Copernicus credentials and cannot install the
@@ -431,18 +516,32 @@ they come from two different PMEL datasets joined on `(station, day)`.
   before anything is fetched. The builder reads
   `COPERNICUSMARINE_SERVICE_USERNAME` and `COPERNICUSMARINE_SERVICE_PASSWORD`
   from the **environment only** — never a file, never a command line.
+- **`socat`'s drop counters in the PUBLISHED `store.json` are 59× too large.**
+  The one-pass fetch gave the whole stream's counters to every year part and
+  the assembler summed them once per non-empty year, so `rows_read` reads
+  2,597,074,036 where the file holds 44,018,204 rows, `drop_out_of_range`
+  127,440,295 where it is 2,160,005, and `drop_no_fco2` 1,623,680 where it is
+  27,520. **The arrays are unaffected** — N, the bins, the values and every
+  per-channel statistic verified exactly — and the bug is fixed in the builder,
+  but the published store keeps the inflated ledger **until the store is
+  rebuilt**. Divide by 59 to read it, or ignore `counts` for this store.
 - **The `socat` resume granularity is the whole stream, not the year.** The
   synthesis file is sorted by expocode, not by time, so there is no per-year
   request to make and an interrupted fetch re-reads the file from the start.
   Each store's `store.json` states its own `resume_granularity`; the other three
   say `"year"`.
-- **The registry's tier-G half currently describes `f7l0`, not family 7.1.**
-  E-077's `f7l1` build has not been dispatched, so the ocean-colour group
-  `oc025` is absent. `tier_g.fallback_note` says this; re-running the registry
+- **The registry's tier-G half still describes `f7l0`, not family 7.1.** Family
+  7.1 is the global 0.25° gridded tensor with ocean colour added as a fourth
+  channel group, `oc025`; its build (recipe `f7l1`, E-077) has still not
+  published, and its manifest was still a 404 on the Hub when the registry was
+  regenerated on 2026-09-14. So the registry describes `f7l0` — the same tensor
+  without ocean colour, three groups — and says so in `tier_g.fallback_note`
+  rather than silently describing a different tensor. Re-running the registry
   builder after that build picks up l1 and the fourth group with no code change.
-- **The suggested search radii in §6 are not measured.** They come from each
-  system's sampling geometry. Measure the k-th-neighbour distance on the real
-  store before fixing them.
+- **`slatrack`'s suggested search radii in §6 are still a guess**, as the other
+  three were until they were measured on the published stores. Measure the
+  k-th-neighbour distance on the real store before fixing them, with
+  `ml/tools/family10_verify/measure_knn.py`.
 
 ## 10 · Known limits and gotchas
 
@@ -469,6 +568,33 @@ they come from two different PMEL datasets joined on `(station, day)`.
 - **`slatrack` is tens of gigabytes** and is the only store that needs
   credentials and a large machine. The other three are keyless and fit a hosted
   runner.
+- **`time_days` is float32, so derive calendar dates from `bin`, not from it.**
+  At the end of the record (t ≈ 15,700 days) float32 spacing is 0.00098 d =
+  **84 seconds**. Measured on the published `socat` store, three rows late on
+  2024-12-31 round up across midnight and read as 2025-01-01 — 3 rows in
+  41.8 M. The five-day `bin` is computed from the stored float32 and is
+  unaffected, which is exactly what §4.5's last paragraph was written to
+  guarantee, so `store.json`'s per-year counts (taken from the source dates) are
+  the correct ones and a year recomputed from `time_days` is the imprecise side.
+- **`gdp`'s `counts.drogue_uncertain` runs 568 ahead of the NaNs in the
+  `drogue` channel**, in the store published 2026-09-14. The cause is known and
+  the arrays are not affected: those 568 source rows had nothing measured on
+  them at all — no velocity, no temperature, an uncertain drogue — so they were
+  counted and then dropped, and the same 568 is why
+  `rows_read − drop_pos_err − N` does not close. Every array-side identity does
+  close (drogue is exactly three-state, 1 + 0 = the `measured` count, and the
+  claimed mean reproduces). The builder now counts only rows it keeps and
+  records that drop as `drop_no_values`, so a rebuilt store closes both halves.
+- **`socat`'s counters are inflated 59× in the store published 2026-09-14**
+  (§9): one pass over the file, its counters copied into every year part and
+  then summed. `rows_read` is really 44,018,204, of which 41,830,675 were kept
+  (95.0 %). Arrays unaffected; fixed in the builder; the published file keeps
+  the inflated numbers until the store is rebuilt.
+- **The k observations a search returns are usually ONE platform.** Median 1 of
+  8 for `gdp` and `socat`, 2 of 4 for `gtmba`, measured on the published stores
+  (§6). A consumer that treats k as k independent looks at the ocean is wrong
+  about its own inputs: it has one drifter's or one cruise's track, sampled k
+  times. De-duplicate by `platform` if independence is what is wanted.
 
 ## 11 · Provenance
 

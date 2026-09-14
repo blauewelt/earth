@@ -142,6 +142,18 @@ def test_gdp_drops_a_bad_position_and_keeps_the_drogue_as_a_channel(built):
     dro = np.asarray(st["values"], np.float32)[:, st.channels.index("drogue")]
     assert np.isnan(dro).sum() == st.N // 2
     assert set(np.unique(dro[np.isfinite(dro)]).tolist()) == {1.0}
+    # The counter counts KEPT rows, so it equals the NaN count in the array it
+    # describes. In the first published store it did not: it was incremented
+    # before the "nothing measured on this row" drop, and ran 568 rows ahead of
+    # `values`. A counter that describes rows the store does not contain is a
+    # counter a reader cannot reconcile, so the ledger is asserted here.
+    assert meta["counts"]["drogue_uncertain"] == int(np.isnan(dro).sum())
+    assert (meta["counts"]["rows_read"]
+            - meta["counts"]["drop_pos_err"]
+            - meta["counts"]["drop_no_time"]
+            - meta["counts"]["drop_no_position"]
+            - meta["counts"]["drop_out_of_range"]
+            - meta["counts"]["drop_no_values"]) == st.N, meta["counts"]
     # every kept row is flagged, and the store's own policy text says how
     assert set(np.unique(np.asarray(st["qc"])).tolist()) <= {1, 2}
     assert "50 km" in meta["qc_policy"]
@@ -228,6 +240,39 @@ def test_socat_resume_granularity_is_the_whole_stream_and_says_so(built):
     for s in ("gdp", "gtmba", "slatrack"):
         m = json.load(open(os.path.join(built[s][0].store, "store.json")))
         assert m["resume_granularity"] == "year", s
+
+
+def test_socat_stream_counts_are_the_streams_not_one_copy_per_year(built):
+    """A one-pass adapter's ledger counts the pass ONCE, not once per year.
+
+    The `socat` store published 2026-09-14 claims `rows_read` 2,597,074,036 —
+    exactly 59 times the 44,018,204 rows its source file actually holds, one
+    copy for each year that ended up with rows, because the fetch loop attached
+    the whole-stream counters to every year part and `assemble_store` summed
+    them. The arrays were untouched and every statistic derived from them
+    verified; only the ledger was wrong, which is the kind of error that is
+    invisible until someone computes a drop RATE from it. The smoke source
+    spans 1981 and 1982, so a regression here shows up as a factor of two.
+    """
+    ctx, _ = built["socat"]
+    meta = json.load(open(os.path.join(ctx.store, "store.json")))
+    years = [y for y, n in meta["per_year"].items() if n]
+    assert len(years) >= 2, meta["per_year"]      # or the test proves nothing
+
+    ad = b10.ADAPTERS["socat"]()
+    stream = {}
+    for year, _rows, counts in ad.fetch_stream(ctx):
+        if year is None:
+            stream = counts or {}
+    assert stream.get("rows_read"), stream
+
+    for key in ("rows_read", "drop_out_of_range", "drop_no_fco2",
+                "preamble_lines"):
+        if key in stream:
+            assert meta["counts"].get(key) == stream[key], (
+                key, meta["counts"].get(key), stream[key], len(years))
+    # and the ledger closes against the store it describes
+    assert meta["counts"]["rows_read"] >= meta["N"]
 
 
 def test_slatrack_reads_the_cf_time_axis_and_names_the_archive_variable(built):

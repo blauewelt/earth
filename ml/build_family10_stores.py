@@ -483,7 +483,7 @@ class GDPAdapter(SourceAdapter):
         vals = []
         counts = {"rows_read": 0, "drop_pos_err": 0, "drop_no_time": 0,
                   "drop_no_position": 0, "drop_out_of_range": 0,
-                  "drogue_uncertain": 0}
+                  "drop_no_values": 0, "drogue_uncertain": 0}
         oob = np.zeros(self.C, np.int64)
         lo_b, hi_b = self.bounds()
         for row in r:
@@ -519,6 +519,7 @@ class GDPAdapter(SourceAdapter):
             v[0] = _num(row[c["ve"]])
             v[1] = _num(row[c["vn"]])
             v[2] = _num(row[c["sst"]])
+            dro_unc = False
             dl = row[c["drogue_lost_date"]].strip()
             if not dl or dl == "NaN":
                 v[3] = 1.0                      # fill = drogue still attached
@@ -531,14 +532,25 @@ class GDPAdapter(SourceAdapter):
                     v[3] = np.nan
                 elif lost <= dt.datetime(1970, 1, 2):
                     v[3] = np.nan               # "uncertain from the beginning"
-                    counts["drogue_uncertain"] += 1
+                    dro_unc = True
                 else:
                     v[3] = 1.0 if when < lost else 0.0
             bad = np.isfinite(v) & ((v < lo_b) | (v > hi_b))
             oob += bad
             v[bad] = np.nan
             if not np.isfinite(v).any():
+                # Nothing measured on this row at all — it is not stored, and
+                # it must not be counted either. The 2026-09-14 verification of
+                # the first published `gdp` store found `drogue_uncertain`
+                # 1,417,396 against 1,416,828 NaNs in `values`, and the same
+                # 568 missing from `rows_read − drop_pos_err − N`: these rows,
+                # counted as drogue-uncertain and then silently dropped here.
+                # Both halves close now — the counter is incremented only for a
+                # row that is kept, and the drop has a reason of its own.
+                counts["drop_no_values"] += 1
                 continue
+            if dro_unc:
+                counts["drogue_uncertain"] += 1
             t_l.append(td)
             lat_l.append(la)
             lon_l.append(lo_)
@@ -1670,15 +1682,30 @@ def stage_fetch(ctx):
                     ctx.prog.item(f"{ad.store} {year}", None,
                                   {"rows": total,
                                    "elapsed_s": round(time.time() - t0, 1)})
+            # The stream's counters describe ONE pass over the whole file, so
+            # they belong to exactly one part. Giving a copy to every year made
+            # `assemble_store` sum them once per non-empty year: the `socat`
+            # store published 2026-09-14 records `rows_read` 2,597,074,036,
+            # which is 44,018,204 — the file's real row count — times the 59
+            # years that held rows. The arrays were never affected; only the
+            # ledger in `store.json` was, and only for an adapter that fetches
+            # in one stream rather than per year.
+            ledger = next((y for y in sorted(writers) if y in ctx.years), None)
+            if ledger is None:
+                ledger = ctx.years[0] if ctx.years else None
             for year in sorted(writers):
                 if year in ctx.years:
-                    writers[year].counts = dict(final)
+                    writers[year].counts = (dict(final) if year == ledger
+                                            else {})
                     writers[year].close()
                 else:
                     writers[year].flush()
             for y in ctx.years:
                 if y not in writers:
-                    PartWriter(ctx, y).close()
+                    w = PartWriter(ctx, y)
+                    if y == ledger:
+                        w.counts = dict(final)
+                    w.close()
             print(f"  {ad.store}: {total:,} row(s) over "
                   f"{len(writers)} year(s) in one pass "
                   f"({time.time() - t0:.1f}s)")

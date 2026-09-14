@@ -45,14 +45,16 @@ low-pass).
 ---
 
 <a id="e-079"></a>
-## E-079 · Family 10 — four observation stores and the registry — DISPATCH STUB, not yet run
+## E-079 · Family 10 — four observation stores and the registry — THREE OF FOUR STORES BUILT AND VERIFIED 2026-09-14 (drifters, tropical moorings, ship CO₂ — 91.3 M observations, $0); `slatrack` pending
 
 **E-079 · Build the first four tier-P observation stores of family 10 — surface
 drifters, the tropical moored arrays, ship CO₂ and altimeter tracks — as
 measurement tables a model reads with "what are the k nearest observations, and
 how far away are they", and write the registry that makes family 7.1, family 8
 and these four ONE family (absolute description; the code landed 2026-09-13,
-no build has been dispatched) · `params` n/a (nothing trains — these are DATA
+three of the four stores were built, published and independently verified on
+2026-09-14, the fourth has not been dispatched) · `params` n/a (nothing trains
+— these are DATA
 builds) · `stage` data-build · `data` `family10/{gdp,gtmba,socat,slatrack}` ·
 `arch` n/a · `steps×batch` n/a (no training step of any kind) · `resume` none
 — each store is built from its own archive; family 8's Argo store joins the
@@ -105,22 +107,158 @@ the variable names `sla_filtered` / `sla_unfiltered` / `mdt`, from Copernicus's
 unverified**, because the writing sandbox deliberately holds no CMEMS
 credentials and cannot install the toolbox.
 
-WHAT WILL BE FILLED IN WHEN IT RUNS. Per store: N, the live-bin count, the
-per-year counts, the per-channel measured fraction and value range, and the
-drop counts by reason — and against the source's own published totals where it
-publishes them (E-079 §4). The one anchor assertion: a nearest-neighbour search
-at 36° N, 70° W, bin 2411 returns a plausible drifter set.
+RESULT — three of the four stores built, published and verified, 2026-09-14.
+**91,312,755 observations** across `gdp`, `gtmba` and `socat`, every one of them
+a real measurement with its own position, time, footprint and provenance.
+`slatrack` was not attempted (see below).
 
-Cost estimate at dispatch (E-079 §5): `gdp`, `gtmba`, `socat` on hosted
-runners, **$0**, under an hour each once the parsers are right. `slatrack`:
-one box-day, **≈ $8** at $0.33/h, tens of GB on the Hub. Registry: minutes.
+| | `gdp` — surface drifters | `gtmba` — tropical moorings | `socat` — ship CO₂ |
+|---|---|---|---|
+| N (rows) | **48,480,798** | **1,001,282** | **41,830,675** |
+| bin range (five-day pentads from 1982-01-01, negative before it) | −211 … 3141 | −304 … 3141 | −1768 … 3141 |
+| live bins / total | **3,353 / 3,353 (100 %)** | 3,386 / 3,446 (98.3 %) | 3,266 / 4,910 (66.5 %) |
+| date range | 1979-02-15 → 2024-12-31 | 1977-01-01 → 2024-12-31 | 1957-01-01 → 2024-12-31 |
+| overall measured fraction (of N × C channel slots holding a number) | 0.963865 | 0.568374 | 0.923146 |
+| rows read → kept | 48,708,540 → 48,480,798 (99.53 %) | 35,771,817 samples read → 15,781,023 kept, joined into 1,001,282 mooring-days | 44,018,204 → 41,830,675 (95.0 %) |
+| the main drop, by reason | `drop_pos_err` **227,174** — derived position error over 50 km (§4.2's rule; the GDP product publishes no per-row flag, so the flag is derived from the error estimates) | `drop_fill` **15,835,928** — the archive's fill value, then `drop_depth` 3,261,857 (non-standard depths) and `drop_qc` 893,009 (PMEL quality codes worse than 2) | `drop_out_of_range` **2,160,005** — outside the 1957 → 2024 window, the file's 498,786-line preamble excluded — then `drop_no_fco2` 27,520 |
+| distinct platforms | **28,689** drifters (AOML ids) | **159** moorings (WMO codes) | **8,024** cruises (hashed expocodes) |
+| build time | 85 min | ~20 min | ~20 min |
+| size on the Hub | 1.6 GB | 63 MB | 1.37 GB |
+
+One caveat on the socat row: the store published on 2026-09-14 records those
+counters **59× too large** — `rows_read` 2,597,074,036 rather than 44,018,204 —
+because the one-pass fetch attached the whole stream's counters to every year
+part and the assembler summed them once per non-empty year. The table above
+states the corrected values (the published numbers divided by the 59 years that
+held rows); the arrays are unaffected, the ledger bug is fixed in this commit,
+and **the published `store.json` keeps the inflated numbers until the store is
+rebuilt.**
+
+Each build ran on a GitHub-hosted `ubuntu-latest` runner at **$0**, all three
+from builder commit `c5bc2ce`:
+
+- [the `gtmba` build](https://github.com/blauewelt/earth/actions/runs/34814444103) — fetched the nine PMEL daily datasets from the OSMC ERDDAP server, joined them into one row per mooring per day, and published the store.
+- [the `socat` build](https://github.com/blauewelt/earth/actions/runs/34814445849) — streamed and parsed the 1.4 GB SOCAT v2026 synthesis file end to end and published the store.
+- [the `gdp` build](https://github.com/blauewelt/earth/actions/runs/34814442453) — fetched 46 years of 6-hourly drifter data from the AOML ERDDAP server and published the store, then rewrote the family-10 registry to pick it up 70 s later.
+
+`gdp` took 85 minutes rather than 20 for a reason that is the source and not the
+builder: the AOML ERDDAP server is served one month per request, so 46 years is
+about 550 sequential HTTP requests, and the build step ran 06:40:36Z →
+08:05:44Z. **Every one of the three logs ends with `publish: N file(s) verified
+by restore`** — the publish step downloads back what it just uploaded and
+re-hashes it before declaring success; `gdp`'s reads 10 files, the nine arrays
+plus `store.json`.
+
+VERIFIED INDEPENDENTLY, the same day, by a session that did not build them.
+Every file was fetched from the Hub, hashed against `store.json`'s own record —
+**9 of 9 files matching in each of the three stores** — and
+`ml/family10_store.verify_store` returned 9 per store without raising. The
+stores were then opened and **recomputed from the arrays rather than read out of
+the metadata that claims them**: N, `bin_first` / `bin_last` / `n_bins`, the
+live-bin count, ascending sort by `(bin, time_days)`, the CSR offsets
+reproduced by `searchsorted`, `bin == floor(time_days / 5)` on every row,
+longitude in [−180, 180), the footprint columns constant, the quality codes
+within `qc_keep_max`, and the per-year counts summing to N. All of it passed.
+So did the statistics: the overall measured fraction to six decimals in each
+store, and **every one of the 26 channels' measured count exactly and its
+fraction, minimum, maximum and mean to float precision**. Physical
+cross-checks passed too — `gtmba`'s `sst` and `t_1m`, which come from two
+different PMEL datasets, agree to 0.0003 °C; the ADCP currents peak at
+1.19 m s⁻¹, so the centimetres-per-second conversion is applied and a silent
+factor of 100 is excluded; `gdp`'s global mean drift is ≈ 0 in both components,
+which is what a global drifter ensemble should give. Evidence:
+[the family-10 verification of 2026-09-14](https://blauewelt.github.io/earth/docs.html?f=docs/FAMILY10_VERIFICATION_2026-09-14.md).
+
+FINDINGS — four things the build was not expecting.
+
+**(a) The suggested search radii are three to ten times too loose where the
+data is, and irrelevant where it is not.** The handover's §6 said so of itself
+("starting points, not measured optima"); measured, at 2,000 anchors per store
+drawn from the stores' own rows, the k-th nearest observation is far closer
+than the suggestion assumed. For `gdp` the 8th neighbour sits at a median of
+**19 km** (p99 104 km) and is **2 days** old, against a suggested 300 km and
+10 days. For `gtmba` the 4th neighbour is at **0 km** at the median — the same
+mooring on an earlier day — and never beyond **334 km**, with an age of 2.5 to
+3.5 days, against a suggested 1,500 km and 15 days. For `socat` the 8th
+neighbour is **4.5 km** away (p99 111 km) and under 5 days old, against a
+suggested 500 km and 30 days. But tightening the radius buys nothing off-track,
+because off-track there is nothing to find: at uniformly drawn globe anchors
+the search returns **no observation at all** inside the suggested bounds on
+**71 %** of anchors for `gdp`, **81 %** for `gtmba` and **89 %** for `socat`.
+The honest reading is the one §6 already offered — the miss token is the normal
+answer over most of the ocean, and `n_R`, the count of observations within
+reach, is the feature that says so.
+
+**(b) The k tokens are one platform, not k independent looks.** Measured over
+600 on-track anchors per store, the number of *distinct* platforms among the k
+returned observations is a median of **1 of 8** for `gdp`, **1 of 8** for
+`socat` and **2 of 4** for `gtmba`. The eight `gdp` slots are one drifter at
+0.25-day intervals; the eight `socat` slots are one research cruise, seconds
+apart along one line. Raising the radius does not change it: at generous bounds
+with the same ranking the medians are unchanged. So k buys one track's
+redundancy — which is genuine information about that track's coherence, and is
+not the same thing as eight nearby measurements of the ocean. Whether the
+search should be **de-duplicated by `platform`**, or k made much larger, or
+neither, is a design question for E-078 (the multi-granularity token design)
+and its E-078a/b follow-ups. **This is stated as an open question, not a
+decision**: the right answer depends on what the token is for, and nothing here
+measures that.
+
+**(c) The one anchor assertion passes; the expectation behind it does not.** The
+assertion was that a nearest-neighbour search at 36° N, 70° W in bin 2411
+(2015-01-03) returns a plausible drifter set, and it does — eight rows from one
+drogued drifter (AOML id 116295) at exact 6-hourly steps, quality flag 1,
+moving at 0.3–0.5 m s⁻¹ in the anticyclonic recirculation south of the Gulf
+Stream, 210 km east-southeast of the anchor. What it does *not* return is the
+metre-per-second jet the anchor was chosen for, and the store is not at fault:
+checked directly over the Gulf Stream box (32–45 N, 80–50 W) across bins
+2409–2411 the store holds 1,645 rows from 37 drifters with a speed p99 of
+**1.90 m s⁻¹** and a maximum of **2.39 m s⁻¹**, 51 of them above 1 m s⁻¹. The
+search at (k = 8, 300 km, 10 d) simply never reaches the core, because it
+spends all eight slots on the nearest track. The assertion as written passes;
+the expectation of the jet does not. That is finding (b) in physical dress.
+
+**(d) Two small ledger notes, neither of them a corrupt array.** In `gdp`,
+`counts.drogue_uncertain` is **568 higher** than the number of NaNs in the
+`drogue` channel it describes, and the row ledger
+`rows_read − drop_pos_err − N` fails to close by the same 568 — one cause, two
+symptoms. The rows are fixes on which *nothing at all* was measured: no
+velocity, no temperature, an uncertain drogue, so they were counted as
+drogue-uncertain and then discarded unrecorded. Every array-side identity
+closes, and the builder now increments that counter only for a row it keeps and
+records the drop as `drop_no_values`, so a future build closes both halves. In
+`socat`, `time_days` is float32 and resolves about **84 s** at the end of the
+record, so three rows late on 2024-12-31 round up across midnight into
+2025-01-01 — 3 rows in 41.8 M. The five-day bin is computed from the stored
+float32 and is unaffected, which is the property the builder was written to
+preserve; **a consumer that needs a calendar date should derive it from `bin`,
+not from `time_days`.**
+
+WHAT IS STILL PENDING. `slatrack` — the along-track sea-level store, 29
+altimeter missions at 1 Hz — **has never been fetched**. It needs two Copernicus
+Marine repository secrets that do not exist in this repository, and a machine
+with at least 100 GB of disk; the `copernicusmarine` toolbox call and the shape
+of the netCDF it returns remain unverified assumptions exercised only against a
+synthetic file. Whether to run it is Chris's call. Family 7.1 — the global
+gridded tensor with the ocean-colour group `oc025` added (recipe `f7l1`,
+E-077) — has still not published, its manifest answering 404 as of 08:05Z on
+2026-09-14, so the registry's tier-G half describes `f7l0` (the same tensor
+without ocean colour) and says so in a stated fallback note rather than
+silently describing a different tensor.
+
+Cost: **$0 for the three stores that ran** (GitHub-hosted runners, ~20 + ~20 +
+85 minutes) plus minutes for the registry — against the estimate at dispatch
+(E-079 §5) of $0 and under an hour each. `slatrack` remains estimated at one
+box-day, **≈ $8** at $0.33/h and tens of GB on the Hub.
 
 Spec: [E-079](https://blauewelt.github.io/earth/docs.html?f=ml/plans/E079_family10_point_stores.md).
 Design it implements: [E-078](https://blauewelt.github.io/earth/docs.html?f=ml/plans/E078_multi_granularity.md).
 Code: `ml/build_family10_stores.py`, `ml/family10_store.py`,
 `ml/build_family10_registry.py`, `tests/test_build_family10_stores.py`,
-`.github/workflows/family10-build.yml`.
-Reader contract: `docs/FAMILY10_DATA_HANDOVER.md`.
+`.github/workflows/family10-build.yml`, and the two measurement scripts behind
+finding (a) and finding (b), `ml/tools/family10_verify/`.
+Reader contract: [the family-10 data handover](https://blauewelt.github.io/earth/docs.html?f=docs/FAMILY10_DATA_HANDOVER.md).
+Evidence for this RESULT: [the family-10 verification of 2026-09-14](https://blauewelt.github.io/earth/docs.html?f=docs/FAMILY10_VERIFICATION_2026-09-14.md).
 
 ---
 
