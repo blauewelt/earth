@@ -1,0 +1,10 @@
+{
+ "at": "2026-09-15T10:59:22+00:00",
+ "done": 10,
+ "elapsed_s": 18.7,
+ "eta_s": 0.0,
+ "item": "store.json",
+ "sha256": "58dcb9e126264c4e",
+ "stage": "publish socat",
+ "total": 10
+}

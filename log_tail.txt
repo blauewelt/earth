@@ -1,0 +1,80 @@
+
+
+
+  ...cat/socat/bin_offsets.npy: 100%|██████████| 39.4kB / 39.4kB            [A[A[A[A[A[A[A[A[A[A
+
+  ...ly10_1/socat/socat/qc.npy: 100%|██████████| 41.8MB / 41.8MB            [A[A
+
+
+  ...y10_1/socat/socat/bin.npy: 100%|██████████| 83.7MB / 83.7MB            [A[A[A
+
+
+
+  ...ly10_1/socat/socat/fp.npy: 100%|██████████|  167MB /  167MB            [A[A[A[A
+
+
+
+
+  .../socat/socat/platform.npy: 100%|██████████|  335MB /  335MB            [A[A[A[A[A
+
+
+
+
+
+  ...y10_1/socat/socat/lon.npy: 100%|██████████|  167MB /  167MB            [A[A[A[A[A[A
+
+
+
+
+
+
+  ...y10_1/socat/socat/lat.npy: 100%|██████████|  167MB /  167MB            [A[A[A[A[A[A[A
+
+
+
+
+
+
+
+  ..._1/socat/socat/values.npy: 100%|██████████|  335MB /  335MB            [A[A[A[A[A[A[A[A
+
+
+
+
+
+
+
+
+  ..._1/socat/socat/time_s.npy: 100%|██████████|  167MB /  167MB            [A[A[A[A[A[A[A[A[A
+
+
+
+
+
+
+
+
+
+  ...cat/socat/bin_offsets.npy: 100%|██████████| 39.4kB / 39.4kB            [A[A[A[A[A[A[A[A[A[AProcessing Files (9 / 9)      : 100%|██████████| 1.46GB / 1.46GB,  112MB/s  
+New Data Upload               : 100%|██████████| 1.23GB / 1.23GB, 95.6MB/s  
+  ...ly10_1/socat/socat/qc.npy: 100%|██████████| 41.8MB / 41.8MB            
+  ...y10_1/socat/socat/bin.npy: 100%|██████████| 83.7MB / 83.7MB            
+  ...ly10_1/socat/socat/fp.npy: 100%|██████████|  167MB /  167MB            
+  .../socat/socat/platform.npy: 100%|██████████|  335MB /  335MB            
+  ...y10_1/socat/socat/lon.npy: 100%|██████████|  167MB /  167MB            
+  ...y10_1/socat/socat/lat.npy: 100%|██████████|  167MB /  167MB            
+  ..._1/socat/socat/values.npy: 100%|██████████|  335MB /  335MB            
+  ..._1/socat/socat/time_s.npy: 100%|██████████|  167MB /  167MB            
+  ...cat/socat/bin_offsets.npy: 100%|██████████| 39.4kB / 39.4kB            
+  [publish socat] bin.npy  1/10  7.1s
+  [publish socat] bin_offsets.npy  2/10  7.3s
+  [publish socat] fp.npy  3/10  7.9s
+  [publish socat] lat.npy  4/10  10.0s
+  [publish socat] lon.npy  5/10  11.6s
+  [publish socat] platform.npy  6/10  13.8s
+  [publish socat] qc.npy  7/10  14.1s
+  [publish socat] time_s.npy  8/10  15.7s
+  [publish socat] values.npy  9/10  18.6s
+  [publish socat] store.json  10/10  18.7s
+  publish: 10 file(s) verified by restore -> https://huggingface.co/datasets/chfrank/earth-tensors/tree/main/tensors/family10_1/socat
+=== stage publish done in 28.0s ===
