@@ -377,7 +377,7 @@ def cds_fetch(item, lane, workdir, note=None) -> Dict[str, Any]:
             "ERA5 is blocked: no CDS (Copernicus Climate Data Store) "
             "credentials. Set CDSAPI_URL and CDSAPI_KEY in the environment. "
             "The free account can only be created by Chris — see "
-            "README_FOR_GEMINI.md §7. Nothing was requested; the item stays "
+            "README_FOR_OPERATOR.md §7. Nothing was requested; the item stays "
             "in the queue.")
     try:
         import cdsapi

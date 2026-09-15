@@ -3,7 +3,7 @@
 Written 2026-09-04 by the session that implemented `DESIGN.md`, and rewritten
 the same day for **revision 2** (no Hugging Face Hub; never drop data; a
 sharded `tf.train.Example` output in two stages). This is the record for
-whoever has to trust or repair the package; `README_FOR_GEMINI.md` is the
+whoever has to trust or repair the package; `README_FOR_OPERATOR.md` is the
 howto, this is the audit.
 
 ---
@@ -12,7 +12,7 @@ howto, this is the audit.
 
 ```
 handover/
-  README_FOR_GEMINI.md   the howto, rewritten for revision 2
+  README_FOR_OPERATOR.md   the howto, rewritten for revision 2
   DESIGN.md              revision 2 — unchanged, not one substantive edit
   CREDENTIALS.md         CMEMS + the CDS placeholder. The HF token is GONE.
   sources.yaml           the registry: 17 hosts, 27 sources, 3 tiers

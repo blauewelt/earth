@@ -21,7 +21,7 @@ design's whole point is that the limit is enforced by construction, not by
 good intentions.
 
 Companion files, all under `ml/import_beam/` in this repo:
-[the howto for the operating agent](https://github.com/blauewelt/earth/blob/main/ml/import_beam/README_FOR_GEMINI.md) (`README_FOR_GEMINI.md`),
+[the howto for the operating agent](https://github.com/blauewelt/earth/blob/main/ml/import_beam/README_FOR_OPERATOR.md) (`README_FOR_OPERATOR.md`),
 [the registry](https://github.com/blauewelt/earth/blob/main/ml/import_beam/sources.yaml) (`sources.yaml` — every source, every host budget),
 the code under `beam_import/`, the tests, and
 [the one-slide design](https://github.com/blauewelt/earth/blob/main/ml/import_beam/slide/E073_parallel_import_design.png).

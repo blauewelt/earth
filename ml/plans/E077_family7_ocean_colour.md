@@ -30,7 +30,7 @@ are byte-identical to what is on the Hub as `f7l0`.
   (`ml/plans/E078_multi_granularity.md`, in preparation) — this build must not
   wait for it.
 - A **new recipe, a new folder on the Hub.** `f7l0`'s files, hashes and
-  handover are cited by other agents (the Gemini handover); rewriting its
+  handover are cited by other agents (the external-agent handover); rewriting its
   `.npz` to say four groups would change a published dataset under its own
   name. So 7.1 is `f7l1`, stem `family7_global025_pentad_l1`, its own folder,
   its own manifest — and its three inherited group files hash-identical to

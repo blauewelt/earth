@@ -20,7 +20,7 @@ accelerator: the speed limit is set by politeness towards each host, and the
 design's whole point is that the limit is enforced by construction, not by
 good intentions.
 
-Companion files: `README_FOR_GEMINI.md` (the step-by-step howto),
+Companion files: `README_FOR_OPERATOR.md` (the step-by-step howto),
 `sources.yaml` (the registry — every source, every host budget),
 `CREDENTIALS.md`, and the code under `beam_import/`.
 

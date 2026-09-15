@@ -2,7 +2,7 @@
 
 PDF design note: https://blauewelt.github.io/earth/ml/paper/notes/family72.pdf
 
-*Written 2026-09-14 for an agent (a Gemini instance, or any other) that has
+*Written 2026-09-14 for an external agent (any team or model) that has
 already ingested family 7 (`f7l0`) from `docs/FAMILY7_DATA_HANDOVER.md` into
 its own infrastructure and now needs family 7.1. It is a DELTA document: it
 assumes the reader knows the grid, the time axis, the z-scoring, the NaN

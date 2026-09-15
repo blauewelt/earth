@@ -1,6 +1,6 @@
 """beam_import — the polite parallel import of the Earth training data (E-073).
 
-Read DESIGN.md first, then README_FOR_GEMINI.md. The modules in reading order:
+Read DESIGN.md first, then README_FOR_OPERATOR.md. The modules in reading order:
 
     registry.py       load and validate sources.yaml
     manifest.py       expand sources into work items
