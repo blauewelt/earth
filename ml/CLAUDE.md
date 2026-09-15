@@ -1224,6 +1224,17 @@ archive.
   healthy box). Fresh Vast hosts can simply be broken — destroy and re-rent
   on a different machine; do not debug a lemon.
 
+- **A SEEDED BUILD PROVES NOTHING ABOUT THE BUILDER — only an unseeded rebuild
+  through `verify` does.** A seed is a hard link or a copied marker: it shows
+  the file system moved an inode, never that the code can derive the bytes.
+  Measured both ways in one day (E-077): family 7.1's `elev` shipped as
+  1,038,240 NaN through a GREEN seeded re-publish that verified the restore of
+  the file it had been handed; then a from-scratch, `seed_from=none` rebuild of
+  `f7l2` reproduced 4 of 5 files BYTE-IDENTICAL in 3 h 23 m for ≈ $1 (the fifth
+  identical in every array value — `np.savez` stores a zip timestamp). A
+  publishable tensor is cheap to re-derive; claim reproducibility only from a
+  run that did.
+
 - **A BOX WHOSE CONTAINER CANNOT SEE ITS GPU LOOKS EXACTLY LIKE A SLOW ONE,
   AND THE ONLY CHEAP TEST IS A CONTROL'S FIRST-RECORD TIME.** Measured
   2026-08-28 on #506 (E-056b, a rented H100 SXM at $2.028/h): the job ran 3 h

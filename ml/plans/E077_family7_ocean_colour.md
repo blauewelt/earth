@@ -420,7 +420,7 @@ Code changes behind that, all in `ml/build_family7.py` unless stated:
 - **`ml/publish_family7_index.py` refuses** to write `data/family7_elev.json`
   or `data/family7_sphere.json` from an empty static.
 
-### 10.3 · What is deliberately NOT fixed
+### 10.3 · What is deliberately NOT fixed — and, for `oc025`, MEASURED 2026-09-15: the fold from the published partials IS bit-reproducible
 
 **`oc025`'s `log_chl` has the same non-reproducibility as the two `g100` log
 channels, and stays.** `oc_block_stats` takes `np.log10` on a float32 raster —
@@ -432,6 +432,19 @@ change far below the float16 storage. **Recorded as a known limitation, not
 repaired**: the colour group is not expected to reproduce bit-for-bit across
 boxes. A chunked float64 `log10` would close it at roughly zero extra peak
 memory whenever `oc025` is next rebuilt for another reason.
+
+**MEASURED 2026-09-15 (§10.5): the fold from the published partials is
+bit-reproducible, so this concern is narrower than the paragraph above says.**
+The from-scratch rebuild recomputed `oc025` on another day into a fresh work
+directory, folding `partials/f7l1/occci/`, and got `c50c79b5…` — the published
+bytes exactly. The float32 `log10` runs ONCE, on the hosted runner that reduces
+a year into its partial; the box's fold is exact arithmetic over those stored
+accumulators. What remains open is therefore not "`oc025` does not reproduce"
+but the strictly smaller "a colour year RE-REDUCED from the CEDA dailies on a
+different machine is not expected to reproduce" — a path nothing has yet
+exercised, because every build so far has folded the same 28 partials. The
+float64 fix is still worth making the next time `oc025` is rebuilt; it is no
+longer what stands between this tensor and a reproducibility claim.
 
 ### 10.4 · What to verify after it lands — DONE 2026-09-14 20:20Z
 
@@ -492,3 +505,33 @@ float32 to the correctly rounded float64 value. The estimate described the
 wrong pair of numbers. Nothing follows from it scientifically — one float16
 step is 4 × 10⁻⁵ mm/day — but the sentence in §10.1 should be read as
 characterising the SYMPTOM, not the size of the fix.
+
+### 10.5 · Reproducibility (2026-09-15) — the published tensor rebuilt from the sources with nothing inherited
+
+Everything in §10.4 was checked against bytes that were, in three of four
+groups, HARD LINKS out of the `f7l1` work directory. A hard link says the file
+system copied an inode; it says nothing about the code that wrote it — which is
+exactly how `f7l1`'s all-NaN `elev` shipped green through a re-publish. So
+family7-build **#13 (E-077 f7l2 reproducibility — unseeded rebuild from the
+sources through `verify`, no publish)** started from an empty work directory
+(`ml/cache/family7_l2_repro`, `seed_from=none`), ran
+`glorys,sst,ncep,rg,occci,static,truth,norm,meta,verify` with no `publish`
+stage at all, and compared what it built against what is on the Hub.
+
+**Verdict: 4 of 5 files byte-identical** — `g025` `1cb1e1af…`, `g100`
+`79c8075e…`, `rg100` `55c49f1b…`, `oc025` `c50c79b5…`, each equal to the
+published sha256 — and the fifth, the npz, **identical in every array value**
+(`sphere` and `elev` included, all four `norm_*` included). Its sha256 differs
+only because `np.savez` writes a ZIP and a ZIP stores a per-member timestamp;
+compared key by key, 41 against 41, the only differences are `builder_git_sha`
+(`f25f1a6` → `0d737cf`), `built_at` and `sources`, all three classified
+expected. `drift: false`, `drift_files: []`, exit 0. 3 h 23 m on a $0.31/h box,
+≈ $1.1.
+
+So the claim this plan can now make is the one it could not make on 2026-09-14:
+the builder at `0d737cf`, given the Hub mirrors, the Natural Earth master
+branch and NGDC's ETOPO file, reproduces `family7_global025_pentad_l2` bit for
+bit. The one path still unmeasured is a fresh CEDA stream of a colour year
+(§10.3). Full stage timings, the verify table and the account of what would
+have happened without `0d737cf`'s partials-prefix fix: **RESULT 3** in
+[the experiment log](https://blauewelt.github.io/earth/docs.html?f=ml/EXPERIMENTS.md#e-077).

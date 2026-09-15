@@ -439,7 +439,7 @@ Evidence for this RESULT: [the family-10 verification of 2026-09-14](https://bla
 ---
 
 <a id="e-077"></a>
-## E-077 · Family 7.1 — ocean colour joins the global tensor as a fourth group (recipes `f7l1`, then `f7l2`) — BUILT AND PUBLISHED 2026-09-14; CORRECTED BUILD `f7l2` PUBLISHED THE SAME DAY
+## E-077 · Family 7.1 — ocean colour joins the global tensor as a fourth group (recipes `f7l1`, then `f7l2`) — BUILT AND PUBLISHED 2026-09-14; CORRECTED BUILD `f7l2` PUBLISHED THE SAME DAY; `f7l2` REPRODUCED BIT-FOR-BIT FROM SCRATCH 2026-09-15 (RESULT 3)
 
 **E-077 · Add the observed surface chlorophyll-a field to the family-7 global
 tensor as a fourth channel group, `oc025`, WITHOUT rebuilding the three groups
@@ -683,9 +683,117 @@ found **no hole the sources do not have**:
 `log10` on a 4320 × 8640 raster about ten thousand times, where a float64
 working copy is 300 MB per temporary; its bytes are inherited unchanged, so
 the colour group still does not reproduce bit-for-bit across machines. Closed
-whenever `oc025` is next rebuilt for another reason.
+whenever `oc025` is next rebuilt for another reason. **Measured 2026-09-15 and
+the answer is better than the caveat: see RESULT 3.**
 
-Runs: [#10 (E-077 f7l1 — the full unseeded build, void rg100)](https://github.com/blauewelt/earth/actions/runs/34846257797) · [#11 (E-077 f7l1 — rg100 rebuilt in place, re-published)](https://github.com/blauewelt/earth/actions/runs/34859237016) · [#12 (E-077 f7l2 — g100 + statics rebuilt on the f7l1 seed)](https://github.com/blauewelt/earth/actions/runs/34879795075).
+### RESULT 3 — reproducibility (2026-09-15 01:20Z) — the tensor was rebuilt from the sources with NOTHING inherited, and four of its five files came back byte-identical
+
+**#13 (E-077 f7l2 reproducibility — unseeded rebuild from the sources through
+`verify`, no publish) · `params` n/a (nothing trains — a DATA build) ·
+`stage` data-build · `data` `family7_global025_pentad_l2` · `arch` n/a ·
+`steps×batch` n/a · `resume` NONE — `seed_from=none`, its own work directory
+`ml/cache/family7_l2_repro`, stages
+`glorys,sst,ncep,rg,occci,static,truth,norm,meta,verify`, and no `publish`
+stage at all.**
+
+WHY IT WAS WORTH 3 h 23 m. Both builds that produced the published `f7l2` were
+SEEDED: #10/#11 inherited nothing but re-used a box's own work directory, and
+#12 hard-linked three of the four groups straight out of `f7l1`'s. A hard link
+is not an act of the builder — it proves the file system copied an inode, and
+nothing whatever about the code that wrote the bytes. The lesson had already
+been paid for once: `f7l1`'s all-NaN `elev` shipped GREEN through a re-publish
+because the publish step verified the restore of the file it had been handed,
+not the derivation of it. So the only statement worth making about a tensor is
+"the sources plus this commit produce these bytes", and the only run that can
+make it is one that starts with an empty directory and ends in `verify`.
+That is this run, on `gpu-box-46694776` (Vast 50928407, the same box family
+7.1 was built on), 21:56Z → 01:20Z.
+
+**What each stage cost, and what it read.**
+
+| stage | s | what it actually read |
+|---|---|---|
+| `glorys` | 2,669 | the 2,339 daily 0.25° cubes from the Hub mirror `hf://chfrank/earth-tensors/daily025_global/` |
+| `sst` | 1,479 | 43 OISST years from the Hub mirror `mirrors/psl/` |
+| `ncep` | 1,400 | 645 NCEP files from the same mirror — 15,706 daily `skt` fields, 15 `g100` channels |
+| `rg` | 20 | the Roemmich–Gilson cubes, seeded from the `data-cache-v1` release |
+| `occci` | 176 | **the 28 published per-year colour partials, folded off the Hub** — `partials/f7l1/occci/`, each checked against the Hub's own sha256 before folding. Zero bytes from CEDA |
+| `static` | 5,774 | Natural Earth (`ne_10m_glaciated_areas`, `ne_10m_lakes`, 11 s) and ETOPO 2022 from NGDC — **TWO attempts**, the first dying on an `IncompleteRead` after 42 min, the second finishing in 54 min (933 MB ≈ 0.29 MB/s sustained, against a 5.86 MB/s probe) |
+| `truth` | 0 | the RAPID/forecast label series, seeded from the repo — 1,459 + 2,490 pentad labels inside the axis |
+| `norm` | 465 | nothing; four groups' statistics and z-scores recomputed from the arrays just written |
+| `meta` | 4.5 | the npz, 41 keys |
+| `verify` | 40 | the five published files' sha256, and the published npz key by key |
+
+12,029 s of stage time inside a 3 h 23 m job. **Cost ≈ $1.1** at $0.31/h — for
+comparison, the build being reproduced (#12, seeded) cost $0.52 and the
+original `f7l1` ≈ $1.7.
+
+**THE VERDICT: 4 of 5 files byte-identical, and the fifth identical in every
+value.** `drift: false`, `drift_files: []`, exit 0.
+
+| file | local sha256 | published | result |
+|---|---|---|---|
+| `…_X_g025.npy` (45.67 GB) | `1cb1e1af…` | `1cb1e1af…` | **identical** |
+| `…_X_g100.npy` (6.14 GB) | `79c8075e…` | `79c8075e…` | **identical** |
+| `…_X_rg100.npy` (1.05 GB) | `55c49f1b…` | `55c49f1b…` | **identical** |
+| `…_X_oc025.npy` (8.29 GB) | `c50c79b5…` | `c50c79b5…` | **identical** |
+| `…_l2.npz` | `a955e996…` | `0837c450…` | **every value identical**; only `builder_git_sha`, `built_at`, `sources` differ, all three classified `expected` |
+
+The npz's sha256 differs for a reason that is not about the data at all:
+`np.savez` writes a ZIP, and a ZIP stores a per-member timestamp, so two
+archives of identical arrays cannot hash equally. `verify` therefore opens both
+and compares KEY BY KEY — 41 keys local, 41 published, none only-local, none
+only-published, `keys_differ_unexpected: []`. The three that differ are the
+build's own signature: `builder_git_sha` `f25f1a6` → `0d737cf`, `built_at`
+`2026-09-14T19:58:44Z` → `2026-09-15T01:19:08Z`, and `sources` (longer now —
+`<U1229` → `<U4132` — because the unseeded run recorded every source it
+actually read rather than the subset #12's two rebuilt stages touched). **Every
+array is bit-identical, `sphere` and `elev` included**, and so are all four
+`norm_*` arrays, recomputed here from scratch over 10.76 G + 2.82 G + 0.26 G +
+1.71 G observed values.
+
+**What that proves.** The audited builder at `0d737cf`, given the Hub mirrors
+(GLORYS, PSL, the colour partials), the Natural Earth master branch and NGDC's
+ETOPO file, reproduces the published family-7.2 tensor BIT FOR BIT. That is the
+claim `f7l1`'s green re-publish could not support and `f7l2`'s seeded build did
+not test. It includes `oc025`: §10.3 recorded the float32 `log10` in
+`oc_block_stats` as a known non-reproducibility, and this run shows the concern
+**does not bite when the fold reads the published partials** — the float32
+`log10` is evaluated once, on the hosted runner that made the partial, and the
+box's fold is exact arithmetic over those stored accumulators, so the colour
+group is reproducible as long as the partials are. **The one path still
+unmeasured is a fresh CEDA stream**: re-reducing a colour year from the daily
+4 km files on a different machine would exercise the float32 `log10` again, and
+nothing here says it would land on the same bytes.
+
+**The one thing that would have broken it, and exactly how.** The occci stage
+found its 28 partials under `partials/f7l1/occci/` — a folder belonging to a
+DIFFERENT recipe. Before `0d737cf` the builder looked only under its own,
+`partials/f7l2/occci`, which does not exist. **The failure would not have been
+a refusal.** `oc_partials_on_hub` catches a per-prefix listing error with
+`continue` ("no folder yet: nothing is published") and returns `{}`;
+`oc_partials_index` then takes neither of its warning paths — there IS a token
+and no exception escapes — and prints the plain informational line
+`occci: 0/28 pending year(s) have a partial at hf://…/partials/f7l2/occci/`.
+`--oc-preflight` would have found 28 `lacking` years, announced "will be reduced
+from CEDA", fetched one real 2015 file (79 MB at the probed 1.20 MB/s ≈ 66 s,
+inside the guard's 90 s probe window, so the 1.00 MB/s floor never judges it)
+and PASSED. `stage_occci` would then have taken its `else` branch — "no partial
+— reducing this year day by day" — for all 28 years. **There is no guard
+anywhere that refuses on an empty partials listing, and the `7e6b14f`/`fd3b446`
+guards do not cover this case**: those stop a stage on an INPUT the archive
+lists and we cannot read, and on a month / dataset-year / mission-year that did
+not arrive. A missing partial is neither — partials are a re-derivable cache of
+the CEDA source and "no partial, stream it" is a designed, correct fallback.
+So the run would have streamed CEDA silently and at length: this job's own
+preflight probe measured CEDA at **1.20 MB/s** and printed the arithmetic —
+**"~400 GB … 92.6 h of transfer alone, against a 24 h job timeout"**. The
+build would have been killed by the timeout somewhere inside the colour stage,
+after burning a box-day, and would never have reached `verify` at all. Had it
+somehow finished, its `oc025` would have re-run the float32 `log10` §10.3 warns
+about and would most likely NOT have matched. One prefix, one build.
+
+Runs: [#10 (E-077 f7l1 — the full unseeded build, void rg100)](https://github.com/blauewelt/earth/actions/runs/34846257797) · [#11 (E-077 f7l1 — rg100 rebuilt in place, re-published)](https://github.com/blauewelt/earth/actions/runs/34859237016) · [#12 (E-077 f7l2 — g100 + statics rebuilt on the f7l1 seed)](https://github.com/blauewelt/earth/actions/runs/34879795075) · [#13 (E-077 f7l2 reproducibility — unseeded rebuild from the sources through `verify`, no publish)](https://github.com/blauewelt/earth/actions/runs/34901446819).
 
 Spec: [E-077](https://blauewelt.github.io/earth/docs.html?f=ml/plans/E077_family7_ocean_colour.md).
 Code: `ml/build_family7.py` (stage `occci`), `tests/test_build_family7.py`,
