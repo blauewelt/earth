@@ -44,6 +44,36 @@ low-pass).
 
 ---
 
+<a id="e-080"></a>
+## E-080 · The cut-off mirrored double cone — stage 1 as an hourglass, with a cone the model shapes itself — DESIGN ONLY, nothing dispatched (written 2026-09-15)
+
+TL;DR — can the stage-1 codec (the part that reads the raw fields around one
+place and time and turns them into an embedding) do better if its reading
+stencil is shaped like an HOURGLASS rather than a cone, and if the model is
+allowed to learn that shape per region? Three changes: the present is a WAIST
+of several cells instead of a single point, because a gradient does not exist
+inside one cell; a PREDICTION CONE — the past cone mirrored through the anchor
+into the future — supplies targets and is never read; and seven numbers per 2°
+region and channel group (drift, orientation, two waist semi-axes, two growth
+rates) warp a fixed sunflower, read by interpolated gathers so the loss reaches
+the geometry. Pre-registered: at the RAPID line (the mooring array at 26.5° N
+that measures the Atlantic overturning) the surface cone should point
+south-west, up the Florida Current, and the deep cone north, up the Deep
+Western Boundary Current.
+
+**Status.** DESIGN ONLY — nothing is implemented, nothing is measured, no run
+is dispatched and no box is rented. Three arms (A0 fixed geometry · A1 learned
+· A2 learned and primed from the climatological current), three seeds, five
+read-outs and a verdict rule are written in the plan BEFORE any run, per §1 of
+this file.
+
+Plan: [E-080 · the hourglass cone](https://blauewelt.github.io/earth/docs.html?f=ml/plans/E080_hourglass_cone.md) ·
+[slides as PDF](https://blauewelt.github.io/earth/ml/plans/E080_hourglass_cone_deck.pdf) ·
+[slides with speaker notes](https://blauewelt.github.io/earth/ml/plans/E080_hourglass_cone_deck_with_notes.pdf) ·
+[PowerPoint](https://github.com/blauewelt/earth/raw/main/ml/plans/E080_hourglass_cone_deck.pptx)
+
+---
+
 <a id="e-079"></a>
 ## E-079 · Family 10 — four observation stores and the registry — ALL FOUR BUILT, PUBLISHED AND INDEPENDENTLY VERIFIED 2026-09-14 (drifters, tropical moorings, ship CO₂ and 29 altimeter missions — 2.12 BILLION observations for $0.55), and the registry is complete at nine groups
 
