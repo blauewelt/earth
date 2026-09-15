@@ -6,10 +6,17 @@ They need only `numpy` and this repository's reader, `ml/family10_store.py`.
 
 ```sh
 python3 ml/tools/family10_verify/measure_knn.py --store gdp \
-    --dir chfrank/earth-tensors:tensors/family10/gdp --json /tmp/gdp.json
+    --dir chfrank/earth-tensors:tensors/family10_1/gdp --json /tmp/gdp.json
 python3 ml/tools/family10_verify/platform_diversity.py --store gdp \
-    --dir chfrank/earth-tensors:tensors/family10/gdp
+    --dir chfrank/earth-tensors:tensors/family10_1/gdp
 ```
+
+Both read **either schema**: the family-10.1 stores under
+`tensors/family10_1/` carry `time_s` (int32 seconds) and the family-10 stores
+under `tensors/family10/` carry `time_days` (float32 days), and
+`ml/family10_store.py` opens both — so the same command measures the old store
+and its rebuild, and the two numbers are comparable. `measure_knn.py` records
+which schema answered (`schema_version`, `time_column`) in its JSON.
 
 `measure_knn.py` reports how far away and how old the k-th nearest observation
 is, at the store's own rows and at uniform globe anchors — the numbers that

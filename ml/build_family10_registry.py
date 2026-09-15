@@ -2,10 +2,19 @@
 """Family 10's REGISTRY — one file that lists every group of the family.
 
 E-079 §2 ("The registry") and E-078 §3 ("One registry"), made runnable.
-Writes `tensors/family10/family10.json`: every group of family 10 with its
+Writes `tensors/family10_1/family10.json`: every group of family 10.1 with its
 `tier`, layout, cadence, channels with units, footprint constants, `bin_first`,
 files with sha256, sources and builder commit. **A consumer dispatches on
 `tier` and needs no other document.**
+
+FAMILY 10.1. The registry carries `family_version` "10.1" and
+`schema_version` 2 — the tier-P stores' time column is `time_s`, int32 seconds
+since 1982-01-01T00:00:00Z, where family 10's was `time_days`, float32 days
+(E-079 §10.1). Tier G is UNCHANGED: the same `f7l2` family-7.1 manifest, listed
+by reference. Each tier-P entry additionally states ITS OWN `schema_version`,
+read out of its `store.json`, because family 8's Argo store joins the family
+unchanged and is still schema 1 — a consumer that needs the seconds has to be
+able to see which groups have them.
 
 WHAT A GROUP IS, and why the two tiers look different on purpose.
 
@@ -35,7 +44,7 @@ described the wrong tensor would be worse than one that refused.
 
 Run:
   python3 ml/build_family10_registry.py --out /tmp/family10.json
-  python3 ml/build_family10_registry.py --work ml/cache/family10 --publish
+  python3 ml/build_family10_registry.py --work ml/cache/family10_1 --publish
   python3 ml/build_family10_registry.py --stores gdp,socat --no-hub   # offline
 """
 import argparse
@@ -53,9 +62,14 @@ import family10_store as f10                                    # noqa: E402
 from build_family7 import (atomic_json, git_sha, hub_repo,       # noqa: E402
                            read_json, sha256, utcnow)
 
-FAMILY = "family10"
-HF_ROOT = "tensors/family10"
-REGISTRY_NAME = "family10.json"
+# ONE CONSTANT, in `ml/family10_store.py`: FAMILY_VERSION = "10.1" derives
+# `tensors/family10_1` here and `partials/family10_1` in the parts hub, so the
+# registry cannot end up describing one prefix while the builder writes another.
+FAMILY = f10.FAMILY
+FAMILY_VERSION = f10.FAMILY_VERSION
+SCHEMA_VERSION = f10.SCHEMA_VERSION
+HF_ROOT = f10.HF_ROOT                          # tensors/family10_1
+REGISTRY_NAME = f10.REGISTRY_NAME              # family10.json
 HUB_REPO_DEFAULT = "chfrank/earth-tensors"
 HUB_BASE = "https://huggingface.co/datasets/{repo}/resolve/main/{path}"
 
@@ -261,13 +275,25 @@ def _store_entry(name, meta, repo, prefix, local=None):
                         if local and os.path.exists(os.path.join(local, n))
                         else None)}
              for n, h in sorted((meta.get("sha256") or {}).items())]
+    # The store's OWN schema, out of its own store.json. Family 8's Argo store
+    # is schema 1 and stays so; E-079 §10.1's four rebuilds are schema 2.
+    sv = int(meta.get("schema_version", 1) or 1)
+    tcol = f10.TIME_COLUMN[sv]
     return {
         "name": name, "tier": "P",
-        "layout": "columns sorted by (bin, time_days) with CSR bin offsets; a "
-                  "read is a k-nearest search, one-sided in time, bounded by "
-                  "(R_max_km, T_max_days), miss tokens to a fixed k",
+        "schema_version": sv,
+        "time_column": (
+            f"{tcol}.npy — "
+            + ("int32 SECONDS since 1982-01-01T00:00:00Z, exact"
+               if sv >= 2 else
+               "float32 days since 1982-01-01, which resolves 21 s in 1993 "
+               "and 84 s in 2024 (schema 1)")),
+        "layout": f"columns sorted by (bin, {tcol}) with CSR bin offsets; a "
+                  f"read is a k-nearest search, one-sided in time, bounded by "
+                  f"(R_max_km, T_max_days), miss tokens to a fixed k",
         "reader": "ml/family10_store.py :: Store.open(<dir or "
-                  "'<owner>/<repo>:<prefix>'>).knearest(...)",
+                  "'<owner>/<repo>:<prefix>'>).knearest(...) — reads schema 1 "
+                  "and schema 2, and reports dt in days under both",
         "cadence": meta.get("cadence") or _cadence_of(meta),
         "channels": channels,
         "C": meta.get("C", len(channels)),
@@ -354,6 +380,17 @@ def build_registry(repo=HUB_REPO_DEFAULT, work=None, stores=F10_STORES,
     groups = g + p
     reg = {
         "family": FAMILY,
+        "family_version": FAMILY_VERSION,
+        "schema_version": SCHEMA_VERSION,
+        "schema_version_note": (
+            "schema 2 (family 10.1): a tier-P store's time column is "
+            "`time_s`, int32 SECONDS since 1982-01-01T00:00:00Z, and "
+            "bin = floor(time_s / 432000) is integer arithmetic. Schema 1 "
+            "(family 10, family 8) carried `time_days`, float32 days, which "
+            "resolves 21 s in 1993 and 84 s in 2024 — against slatrack's 1 Hz "
+            "sampling up to 316 consecutive samples shared one timestamp. "
+            "Every group states its own `schema_version`; family 8's Argo "
+            "store is schema 1 and is not rebuilt. Tier G is unchanged."),
         "description": (
             "Family 10 is family 7.1's dense gridded groups (tier G) and the "
             "observation stores (tier P) as ONE family under one token schema: "
@@ -366,10 +403,12 @@ def build_registry(repo=HUB_REPO_DEFAULT, work=None, stores=F10_STORES,
         "design": "ml/plans/E078_multi_granularity.md",
         "handover": "docs/FAMILY10_DATA_HANDOVER.md",
         "epoch": f10.EPOCH, "pentad_days": f10.PENTAD_DAYS,
-        "bin_rule": ("bin = floor((date - 1982-01-01) / 5 days); a tier-P "
-                     "store may hold NEGATIVE bins (drifters from 1979, SOCAT "
-                     "from 1957) and its CSR index runs over its own "
-                     "bin_first .. bin_first + n_bins - 1"),
+        "bin_rule": ("bin = floor(time_s / 432000 s) on a schema-2 store, "
+                     "floor((date - 1982-01-01) / 5 days) on a schema-1 one — "
+                     "the same bins, derived without a float in the newer "
+                     "form. A tier-P store may hold NEGATIVE bins (drifters "
+                     "from 1979, SOCAT from 1957) and its CSR index runs over "
+                     "its own bin_first .. bin_first + n_bins - 1"),
         "token_schema": TOKEN_SCHEMA,
         "tiers": {
             "G": "gridded dense — one bin-major .npy at the native grid; a "
@@ -431,11 +470,12 @@ def publish(path, repo=None):
 
 def main():
     ap = argparse.ArgumentParser(
-        description="Write tensors/family10/family10.json — the family-10 "
-                    "registry (E-079 §2, E-078 §3).")
+        description=f"Write {HF_ROOT}/{REGISTRY_NAME} — the family-"
+                    f"{FAMILY_VERSION} registry (E-079 §2, §10.1, E-078 §3).")
     ap.add_argument("--out", default="",
                     help="where to write it (default <work>/family10.json)")
-    ap.add_argument("--work", default=os.path.join(HERE, "cache", FAMILY),
+    ap.add_argument("--work",
+                    default=os.path.join(HERE, "cache", f10.CACHE_DIRNAME),
                     help="a local build directory; a store.json found here is "
                          "preferred over the Hub copy")
     ap.add_argument("--repo", default=HUB_REPO_DEFAULT)

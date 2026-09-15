@@ -1,7 +1,21 @@
-# E-079: FETCH family 10's `slatrack` store -- Copernicus Marine's reprocessed
-# level-3 along-track sea-level anomaly, 29 altimeter missions at 1 Hz, 1993 ->
-# -- ONE YEAR AT A TIME on GitHub-HOSTED runners, and park each finished year's
-# column parts on the Hugging Face Hub. This workflow NEVER assembles a store.
+# E-079: FETCH family 10.1's `slatrack` store -- Copernicus Marine's
+# reprocessed level-3 along-track sea-level anomaly, 29 altimeter missions at
+# 1 Hz, 1993 -> -- ONE YEAR AT A TIME on GitHub-HOSTED runners, and park each
+# finished year's column parts on the Hugging Face Hub. This workflow NEVER
+# assembles a store.
+#
+# FAMILY 10.1, AND WHY THE PREFIX MOVED (E-079 10.1). The parts now carry
+# `time_s`, int32 SECONDS since 1982-01-01T00:00:00Z, where family 10 carried
+# `time_days`, float32 days. That column resolves 21 s in 1993 and 84 s in
+# 2024, and THIS archive samples at 1 Hz: up to 316 consecutive along-track
+# samples shared one timestamp in the published store, which is the measurement
+# that bought this rebuild. A v1 part cannot be upgraded -- the seconds were
+# destroyed at the cast, before the part was written -- so the lanes park under
+# `partials/family10_1/slatrack/<year>/`, a FRESH prefix, the per-year work
+# directory is `$RUNNER_TEMP/f10_1` so no local state is inherited, and
+# `ml/family10_parts_hub.py` refuses a `time_days` part on both push and pull.
+# The v1 parts under `partials/family10/` are not inputs to anything and this
+# workflow never reads them; every year is refetched from Copernicus.
 #
 # WHY THE BUILD IS SPLIT IN TWO, AND WHY THIS HALF CANNOT RUN ON A BOX.
 # `ml/CLAUDE.md` §6: the Vast boxes are strangers' machines whose host has root,
@@ -14,7 +28,7 @@
 # the store -- 50 to 80 GB. So:
 #
 #     hosted lanes (HERE)         a box (family10-build.yml)
-#     fetch one year -----------> partials/family10/slatrack/<year>/ on the Hub
+#     fetch one year -----------> partials/family10_1/slatrack/<year>/ on the Hub
 #     push, verify, delete                     |
 #     next year                                v
 #                                 --stage fetch,publish --parts-from-hub
@@ -77,7 +91,7 @@
 # or passes one to `family10_parts_hub.py` (which touches HF_TOKEN only).
 # `permissions: contents: read` -- the parts go to Hugging Face, nothing is
 # committed to this repo.
-name: Family 10 slatrack fetch (hosted lanes -> parts on the Hub)
+name: Family 10.1 slatrack fetch (hosted lanes -> parts on the Hub)
 run-name: slatrack fetch ${{ github.event.inputs.years || '1993-2024' }}
 
 on:
@@ -194,8 +208,8 @@ jobs:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
           TODO: ${{ steps.done.outputs.todo }}
           PROBE_ONLY: ${{ github.event.inputs.probe_only }}
-          WORK: ${{ runner.temp }}/f10
-          LOGS: ${{ runner.temp }}/f10-logs
+          WORK: ${{ runner.temp }}/f10_1
+          LOGS: ${{ runner.temp }}/f10_1-logs
           # 355 minutes of job, minus the margin below, is what the loop may
           # spend STARTING years. A year that does not finish is refetched
           # whole next firing -- the marker is written only after the push --
@@ -336,8 +350,8 @@ jobs:
       - name: Collect the log tails
         if: always() && steps.preflight.outcome == 'success'
         env:
-          LOGS: ${{ runner.temp }}/f10-logs
-          WORK: ${{ runner.temp }}/f10
+          LOGS: ${{ runner.temp }}/f10_1-logs
+          WORK: ${{ runner.temp }}/f10_1
         run: |
           out="${RUNNER_TEMP}/slatrack-story"
           rm -rf "${out}"; mkdir -p "${out}"

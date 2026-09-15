@@ -26,12 +26,13 @@ in no others:
      `bin_first + i`, and `bin_first` is in `store.json`. Family 8's
      `bin_first` is 0 and its index is the familiar 3,143 entries.
 
-WHAT IS IN A FAMILY-10 STORE (`tensors/family10/<store>/`, N rows sorted by
-`(bin, time_days)` ascending):
+WHAT IS IN A FAMILY-10 STORE (`tensors/family10_1/<store>/`, N rows sorted by
+`(bin, time_s)` ascending):
 
-    bin.npy         int16   [N]      five-day bin, floor((date - 1982-01-01)/5);
+    bin.npy         int16   [N]      five-day bin, floor(time_s / 432000 s);
                                      NEGATIVE before 1982 and kept
-    time_days.npy   float32 [N]      days since 1982-01-01 00:00 UTC, fractional
+    time_s.npy      int32   [N]      SECONDS since 1982-01-01T00:00:00Z,
+                                     negative before it (schema 2)
     lat.npy         float32 [N]      degrees north
     lon.npy         float32 [N]      degrees east, in [-180, 180)
     values.npy      float16 [N, C]   the channels, RAW units, NaN = not measured
@@ -44,6 +45,31 @@ WHAT IS IN A FAMILY-10 STORE (`tensors/family10/<store>/`, N rows sorted by
     store.json                       schema, footprint, QC policy, provenance,
                                      per-year counts, sha256 of every file
 
+TWO SCHEMAS, AND THIS READER OPENS BOTH.
+
+  schema 1 (family 10, family 8) carried the time as `time_days.npy`, float32
+  days since the epoch. float32 has 24 bits of mantissa, so at 15,700 days —
+  the end of the record — consecutive representable values are **0.977 ms x
+  86400 = 84 seconds** apart (21 s in 1993, where the exponent is one lower).
+  Against slatrack's 1 Hz along-track sampling that is a column in which up to
+  316 consecutive samples share one timestamp: the order inside a bin is
+  correct and the timestamps cannot express it (measured, E-079 §10.1).
+
+  schema 2 (family 10.1) carries `time_s.npy`, int32 seconds. One second is
+  the finest thing any of these four archives reports, so the column is exact
+  everywhere, and `bin = floor(time_s / 432000)` is integer arithmetic with no
+  float rounding anywhere in it. int32 spans **1913-12-13 20:45:52 ..
+  2050-01-19 03:14:07**; the builder refuses a row outside that (E-079 §10.1),
+  which is the 2050 limit stated where it can be acted on rather than
+  discovered.
+
+`store.json` says which: `schema_version` 1 or 2, and `family_version` "10.1"
+on a schema-2 store. A schema-1 store is read by converting its days to
+seconds on the fly — the precision it never had is NOT recovered, the two
+schemas are only put in one unit — so family 8's Argo store and family 10's
+published stores keep opening unchanged. `dt_days` out of `knearest` is
+float64 days under both.
+
 THE SEARCH (`knearest`) is family 8's, unchanged in behaviour:
 
   ONE-SIDED IN TIME is a hard constraint of the search, not a mask applied
@@ -55,8 +81,8 @@ THE SEARCH (`knearest`) is family 8's, unchanged in behaviour:
   anchor's own bin is 0 to 5 days old rather than arriving from the future.
 
     from family10_store import Store
-    st = Store.open("ml/cache/family10/gdp")            # a directory
-    st = Store.open("chfrank/earth-tensors:tensors/family10/gdp")   # the Hub
+    st = Store.open("ml/cache/family10_1/gdp")          # a directory
+    st = Store.open("chfrank/earth-tensors:tensors/family10_1/gdp")  # the Hub
     tok = st.knearest(36.0, -70.0, bin=2411, k=8,
                       R_max_km=300.0, T_max_days=10.0)
     tok["values"]     # (8, C) float32, NaN where a channel or a slot is missing
@@ -76,6 +102,30 @@ import numpy as np
 # ---------------------------------------------------------------- the axis --
 EPOCH = "1982-01-01"
 PENTAD_DAYS = 5
+SECONDS_PER_DAY = 86400
+# 5 days, in seconds, EXACTLY. Every bin derivation in family 10.1 is
+# `floor_divide` by this integer; no float appears anywhere in it.
+PENTAD_SECONDS = PENTAD_DAYS * SECONDS_PER_DAY            # 432_000
+
+# ------------------------------------------------------------- the version --
+# ONE constant. Every prefix, every directory name and every registry field
+# below is derived from it, so the family's version is changed in one place
+# and the paths cannot disagree with the schema they carry.
+FAMILY = "family10"
+FAMILY_VERSION = "10.1"
+SCHEMA_VERSION = 2
+_VER_SLUG = "family" + FAMILY_VERSION.replace(".", "_")   # family10_1
+HF_ROOT = f"tensors/{_VER_SLUG}"                          # the stores + registry
+HF_PARTIALS = f"partials/{_VER_SLUG}"                     # the slatrack lanes
+REGISTRY_NAME = "family10.json"
+CACHE_DIRNAME = _VER_SLUG                                 # ml/cache/family10_1
+
+# int32 seconds since 1982-01-01T00:00:00Z. The bounds are the dtype's, stated
+# as dates because that is the form in which anybody will meet them.
+TIME_S_MIN = -2_147_483_648            # 1913-12-13T20:45:52Z
+TIME_S_MAX = 2_147_483_647             # 2050-01-19T03:14:07Z
+TIME_S_MIN_DATE = "1913-12-13T20:45:52Z"
+TIME_S_MAX_DATE = "2050-01-19T03:14:07Z"
 
 # ONE definition of the ground scale, shared with ml/family8_store.py,
 # ml/temporal.py (KM_PER_DEG) and ml/cone.py (0.25 deg x 111.32 = 27.83 km a
@@ -92,9 +142,14 @@ LOG2_FP_RANGE = (-12.0, 12.0)
 DEFAULT_LOG2_FP = -4.0
 DEFAULT_LOG2_DT = -4.0
 
-CORE_COLUMNS = ("bin", "time_days", "lat", "lon")
-CORE_DTYPES = {"bin": "int16", "time_days": "float32",
+# The core columns, per schema. The TIME column is the only difference.
+CORE_COLUMNS = ("bin", "time_s", "lat", "lon")                  # schema 2
+CORE_COLUMNS_V1 = ("bin", "time_days", "lat", "lon")            # schema 1
+CORE_DTYPES = {"bin": "int16", "time_s": "int32",
                "lat": "float32", "lon": "float32"}
+CORE_DTYPES_V1 = {"bin": "int16", "time_days": "float32",
+                  "lat": "float32", "lon": "float32"}
+TIME_COLUMN = {1: "time_days", 2: "time_s"}
 
 # The family-8 layout, recognised so its store opens here with no rebuild.
 FAMILY8_BLOCKS = ("temp", "psal")
@@ -107,6 +162,17 @@ def anchor_time_days(b):
     must not read as being in the future (family 8's rule, unchanged).
     """
     return float(PENTAD_DAYS * (int(b) + 1))
+
+
+def anchor_time_s(b):
+    """The same instant, in SECONDS — the END of bin `b`, exactly.
+
+    `PENTAD_SECONDS * (b + 1)` is an integer for every bin, so the anchor of a
+    schema-2 store is representable with no rounding at all. `anchor_time_days`
+    is the same number divided by 86400 and stays the reader's public form,
+    because `dt` is reported in days under both schemas.
+    """
+    return int(PENTAD_SECONDS * (int(b) + 1))
 
 
 def offsets_km(lat0, lon0, lat, lon):
@@ -129,13 +195,77 @@ def wrap_lon(lon):
     return np.mod(np.asarray(lon, np.float64) + 180.0, 360.0) - 180.0
 
 
+def bin_of_seconds(sec):
+    """floor(time_s / 432000), NEGATIVE before the epoch. INTEGER arithmetic.
+
+    This is family 10.1's bin rule and there is no float in it: numpy's
+    `floor_divide` on int64 floors toward minus infinity exactly as Python's
+    `//` does, so -1 s is bin -1 and 431,999 s is bin 0 with nothing to round.
+    The old float path (`bin_of_days`) could put a timestamp a microsecond
+    before a boundary on the wrong side of it, which is why `_pack` had to
+    compute the bin from the value it was about to STORE rather than from the
+    value it had parsed. That whole class is gone.
+    """
+    return np.floor_divide(np.asarray(sec, np.int64), PENTAD_SECONDS)
+
+
 def bin_of_days(days):
     """floor(days-since-1982-01-01 / 5), NEGATIVE before the epoch.
 
-    `np.floor_divide` on floats is a true floor, so -0.5 days is bin -1 and not
-    bin 0. That is the whole reason pre-1982 rows can be kept at all.
+    The SCHEMA-1 rule, kept because schema-1 stores (family 8's Argo store and
+    family 10's published four) are still opened by this reader and still have
+    to be checked against their own float32 column. `np.floor` is a true floor,
+    so -0.5 days is bin -1 and not bin 0 — which is the whole reason pre-1982
+    rows can be kept at all. New stores use `bin_of_seconds`.
     """
     return np.floor(np.asarray(days, np.float64) / PENTAD_DAYS).astype(np.int64)
+
+
+def seconds_of_days(days):
+    """Schema-1 float32 DAYS -> int64 SECONDS, rounded to the nearest second.
+
+    The one conversion the v1 read path needs. It does NOT recover precision
+    the column never had — a slatrack v1 row is still only good to 84 s — it
+    only puts the two schemas in one unit so a single code path can read both.
+    """
+    return np.rint(np.asarray(days, np.float64) * SECONDS_PER_DAY).astype(np.int64)
+
+
+def check_part_schema(path):
+    """REFUSE a schema-1 column part. A v1 part CANNOT be upgraded.
+
+    `ml/family10_parts_hub.py` parks a fetch lane's per-year `.npz` parts on
+    the Hub and a box assembles them, so the two halves of a slatrack build can
+    be months and a schema apart. A part written by the v1 builder carries
+    `time_days` — float32 days — and there is no arithmetic that turns it back
+    into the seconds the archive had: the precision was destroyed at the cast,
+    before the part was written. Multiplying by 86400 would produce an int
+    column that LOOKS like schema 2 and is wrong by up to 84 seconds, which is
+    the one outcome this whole change exists to remove. So the part is refused,
+    by name, and the year is refetched from the source.
+
+    Reads only the zip directory (npz is a zip), so it costs a seek on a
+    multi-gigabyte part.
+    """
+    import zipfile
+    with zipfile.ZipFile(path) as z:
+        names = {n[:-4] for n in z.namelist() if n.endswith(".npy")}
+    if "time_s" in names:
+        return 2
+    if "time_days" in names:
+        raise ValueError(
+            f"{path} is a SCHEMA-1 column part: it carries `time_days` "
+            f"(float32 days) and family {FAMILY_VERSION} stores `time_s` "
+            f"(int32 seconds). A v1 part cannot be upgraded — float32 days "
+            f"resolve 21-84 s over this record, so the seconds the archive "
+            f"published are already gone and multiplying by 86400 would write "
+            f"a column that looks exact and is wrong by up to 84 s. Refetch "
+            f"the year from the source with the current builder; the v1 parts "
+            f"under the old `partials/family10/` prefix are not inputs to this "
+            f"build and nothing reads them.")
+    raise ValueError(
+        f"{path} carries no time column at all (members {sorted(names)}) — it "
+        f"is not a family-10 column part")
 
 
 def csr_offsets(bin_sorted, bin_first, n_bins):
@@ -276,8 +406,34 @@ class Store:
         with open(mp) as fh:
             self.meta = json.load(fh)
 
+        # -- WHICH SCHEMA. The COLUMN ON DISK decides, and `store.json` is
+        # then checked against it: a store.json that claims schema 2 over a
+        # float32 `time_days` would have every consumer believing a precision
+        # the bytes do not carry, so the disagreement is fatal rather than
+        # resolved in either direction.
+        has_s = os.path.exists(os.path.join(self.path, "time_s.npy"))
+        has_d = os.path.exists(os.path.join(self.path, "time_days.npy"))
+        if has_s:
+            self.schema_version = 2
+        elif has_d:
+            self.schema_version = 1
+        else:
+            raise FileNotFoundError(
+                f"{self.path} carries neither time_s.npy (schema 2) nor "
+                f"time_days.npy (schema 1) — nothing in it has a time")
+        claimed = int(self.meta.get("schema_version", 1) or 1)
+        if claimed != self.schema_version:
+            raise ValueError(
+                f"{mp} says schema_version {claimed} and the store holds "
+                f"{TIME_COLUMN[self.schema_version]}.npy, which is schema "
+                f"{self.schema_version}. Refusing to guess which is right: "
+                f"one of them is a store assembled under one schema and "
+                f"described under the other.")
+        self.time_column = TIME_COLUMN[self.schema_version]
+
         self._col = {}
-        for name in CORE_COLUMNS:
+        for name in (CORE_COLUMNS if self.schema_version == 2
+                     else CORE_COLUMNS_V1):
             p = os.path.join(self.path, name + ".npy")
             if not os.path.exists(p):
                 raise FileNotFoundError(f"{p} is missing from the store")
@@ -388,7 +544,41 @@ class Store:
     def __len__(self):
         return self.N
 
+    def time_s(self, lo=0, hi=None):
+        """Rows [lo, hi) as int64 SECONDS since the epoch, under BOTH schemas.
+
+        Schema 2 reads the column; schema 1 converts its float32 days through
+        `seconds_of_days`, which rounds and recovers nothing.
+        """
+        hi = self.N if hi is None else hi
+        a = self._col[self.time_column][lo:hi]
+        if self.schema_version == 2:
+            return np.asarray(a, np.int64)
+        return seconds_of_days(a)
+
+    def time_days(self, lo=0, hi=None):
+        """Rows [lo, hi) as float64 DAYS since the epoch, under BOTH schemas.
+
+        This is what the search measures `dt` in, so it is the one number the
+        two schemas must agree on for a timestamp they both represent.
+        """
+        hi = self.N if hi is None else hi
+        a = self._col[self.time_column][lo:hi]
+        if self.schema_version == 2:
+            return np.asarray(a, np.int64) / float(SECONDS_PER_DAY)
+        return np.asarray(a, np.float64)
+
     def __getitem__(self, name):
+        # `time_s` and `time_days` both answer on either schema: the NATIVE one
+        # hands back the memmap, the other computes the whole column. A caller
+        # that wants a block (and on slatrack every caller should) asks
+        # `st.time_s(lo, hi)` instead.
+        if name == "time_s":
+            return (self._col["time_s"] if self.schema_version == 2
+                    else self.time_s())
+        if name == "time_days":
+            return (self._col["time_days"] if self.schema_version == 1
+                    else self.time_days())
         if name in self._col:
             return self._col[name]
         for nm, a in self._blocks:
@@ -415,9 +605,15 @@ class Store:
         return hi - lo
 
     def bins(self, b0, b1):
-        """Every row of bins b0..b1 inclusive, as a dict of array views."""
+        """Every row of bins b0..b1 inclusive, as a dict of array views.
+
+        Carries BOTH time forms, whichever schema the store is in, so a caller
+        never has to ask which one it opened.
+        """
         lo, hi = self._slice(b0, b1)
         out = {k: v[lo:hi] for k, v in self._col.items()}
+        out["time_s"] = self.time_s(lo, hi)
+        out["time_days"] = self.time_days(lo, hi)
         out["values"] = self._gather_values(np.arange(lo, hi, dtype=np.int64))
         out["row"] = np.arange(lo, hi, dtype=np.int64)
         return out
@@ -447,8 +643,10 @@ class Store:
         one and the store's constants where it does not; `platform` (k,) int64;
         `qc` (k,) uint8; `n_R` (scalar) — how many observations lay inside
         `(R_max_km, T_max_days)`, the local density feature; `valid` (k,) bool;
-        `row`, `lat`, `lon`, `time_days` (k,) for provenance; `n_found`,
-        `channels`.
+        `row`, `lat`, `lon`, `time_days` and `time_s` (k,) for provenance —
+        `time_s` is float64 seconds so that a miss slot can be NaN like every
+        other per-slot field, and every real value in it is an exact integer;
+        `n_found`, `channels`.
 
         `qc_max` additionally excludes rows whose stored flag is worse than it.
         The builder already applies the store's QC policy, so this is the
@@ -484,7 +682,12 @@ class Store:
         if hi <= lo:
             return out
 
-        t = np.asarray(self._col["time_days"][lo:hi], np.float64)
+        # DAYS, float64, from whichever column this store carries. Under
+        # schema 2 that is `time_s / 86400`, which is exact to the last bit for
+        # every second the int32 can hold; under schema 1 it is the float32
+        # column widened. Either way `dt_days` below is in DAYS, so the
+        # search's bounds and its metric are unchanged by the schema.
+        t = self.time_days(lo, hi)
         ok = (t_anchor - t >= 0.0) & (t_anchor - t <= T_max_days)
         if qc_max is not None and self._qc is not None:
             ok &= np.asarray(self._qc[lo:hi], np.int32) <= int(qc_max)
@@ -523,7 +726,11 @@ class Store:
         out["d2"][:n] = d2[order]
         out["lat"][:n] = self._col["lat"][rows]
         out["lon"][:n] = self._col["lon"][rows]
-        out["time_days"][:n] = self._col["time_days"][rows]
+        out["time_days"][:n] = t[order]
+        out["time_s"][:n] = (np.asarray(self._col["time_s"][rows], np.int64)
+                             if self.schema_version == 2
+                             else seconds_of_days(
+                                 self._col["time_days"][rows]))
         if self._platform is not None:
             out["platform"][:n] = self._platform[rows]
         if self._qc is not None:
@@ -537,6 +744,13 @@ class Store:
     def _miss(self, k):
         """k miss tokens — the shape every answer has before it is filled."""
         nan1 = np.full(k, np.nan, np.float32)
+        # The TIME fields are float64: a schema-2 timestamp is an exact integer
+        # number of seconds and float32 would throw that away in the very field
+        # a consumer reads to find out when the observation was made (float32
+        # resolves 84 s at the end of the record — the whole reason for 10.1).
+        # NaN is the miss token, which is why `time_s` is a float64 second
+        # count rather than an int64 column with no way to say "nothing here".
+        nan64 = np.full(k, np.nan, np.float64)
         return {
             "k": k, "n_found": 0, "n_R": 0,
             "valid": np.zeros(k, bool),
@@ -544,8 +758,9 @@ class Store:
             "values": np.full((k, self.C), np.nan, np.float32),
             "mask": np.zeros((k, self.C), bool),
             "dx_km": nan1.copy(), "dy_km": nan1.copy(),
-            "dt_days": nan1.copy(), "dist_km": nan1.copy(), "d2": nan1.copy(),
-            "lat": nan1.copy(), "lon": nan1.copy(), "time_days": nan1.copy(),
+            "dt_days": nan64.copy(), "dist_km": nan1.copy(), "d2": nan1.copy(),
+            "lat": nan1.copy(), "lon": nan1.copy(),
+            "time_days": nan64.copy(), "time_s": nan64.copy(),
             "platform": np.zeros(k, np.int64),
             "qc": np.zeros(k, np.uint8),
             # Constants where the store has no fp column — which is exactly the
@@ -563,6 +778,7 @@ class Store:
                 f"({', '.join(self.channels[:6])}"
                 f"{' …' if self.C > 6 else ''}) · bins {self.bin_first}.."
                 f"{self.bin_last} ({live:,} live) · layout {self.layout} · "
+                f"schema {self.schema_version} ({self.time_column}) · "
                 f"fp ({self.log2_fp_const:g}, {self.log2_dt_const:g})")
 
 

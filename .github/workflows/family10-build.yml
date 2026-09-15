@@ -4,12 +4,24 @@
 # away are they" instead of "is there a value in this cell".
 #
 # WHAT IT BUILDS. `ml/build_family10_stores.py --store <one of four>` writes
-# one store into `tensors/family10/<store>/` on the Hugging Face dataset repo
+# one store into `tensors/family10_1/<store>/` on the Hugging Face dataset repo
 # `chfrank/earth-tensors`, in the layout `ml/family10_store.py` defines:
-# bin / time_days / lat / lon / values[N, C] / platform / qc / fp[N, 2] plus a
+# bin / time_s / lat / lon / values[N, C] / platform / qc / fp[N, 2] plus a
 # CSR bin index and a `store.json` carrying the schema, the footprint
 # constants, the QC policy, the provenance, the per-year counts and the sha256
-# of every file. The whole specification is
+# of every file.
+#
+# FAMILY 10.1, SCHEMA 2 (E-079 10.1). The time column is `time_s`, int32
+# SECONDS since 1982-01-01T00:00:00Z, and `bin = floor(time_s / 432000)` is
+# integer arithmetic. Family 10 stored `time_days`, float32 days, which
+# resolves 21 s in 1993 and 84 s in 2024 -- against slatrack's 1 Hz sampling,
+# up to 316 consecutive samples shared one timestamp. The stores go to
+# `tensors/family10_1/` and the slatrack lanes park their parts under
+# `partials/family10_1/`; the family-10 stores stay published and untouched
+# until 10.1 is verified. A v1 column part CANNOT be upgraded (the precision
+# was destroyed at the cast) and the builder refuses one by name, which is why
+# the default `work` directory is the FRESH `ml/cache/family10_1`: a resume
+# must not pick up v1 parts. The whole specification is
 # ml/plans/E079_family10_point_stores.md, rendered for a phone at
 # https://blauewelt.github.io/earth/docs.html?f=ml/plans/E079_family10_point_stores.md
 # and the consumer contract is docs/FAMILY10_DATA_HANDOVER.md.
@@ -45,7 +57,7 @@
 #   1. `.github/workflows/family10-slatrack-fetch.yml` fetches ONE YEAR AT A
 #      TIME on hosted lanes (six of them, every 6 hours, resuming by asking the
 #      Hub what is done) and parks each finished year's column parts under
-#      `partials/family10/slatrack/<year>/` on the Hugging Face dataset repo,
+#      `partials/family10_1/slatrack/<year>/` on the Hugging Face dataset repo,
 #      writing `done.json` LAST and only after a restore check (5.21, 0.2).
 #   2. THIS workflow assembles them on a box:
 #        store=slatrack, runner=<a box>, stage=fetch,publish,
@@ -93,8 +105,8 @@
 # WHOLE file -- GitHub refuses to parse it, every dispatch 422s, and the
 # Actions list shows a failed run named after the file path with no jobs
 # (ml/CLAUDE.md 7). Count them before pushing an edit to this file.
-name: Family 10 build (tier-P observation stores)
-run-name: family10 ${{ github.event.inputs.store }} ${{ github.event.inputs.stage || 'all' }} -> ${{ github.event.inputs.work || 'ml/cache/family10' }}
+name: Family 10.1 build (tier-P observation stores, integer-second time)
+run-name: family10 ${{ github.event.inputs.store }} ${{ github.event.inputs.stage || 'all' }} -> ${{ github.event.inputs.work || 'ml/cache/family10_1' }}
 
 on:
   workflow_dispatch:
@@ -117,10 +129,10 @@ on:
         description: "runner label. `ubuntu-latest` fits gdp, gtmba and socat (each streams; the RESULT is <= ~1 GB). slatrack's ASSEMBLY is 50-80 GB and must be sent to a box -- a Vast box's runner NAME is an implicit label, e.g. gpu-box-31299601, whose /opt/earth-cache persists across jobs and makes the resume real. A box NEVER receives the Copernicus credentials (ml/CLAUDE.md 6), so a slatrack build there must pass --parts-from-hub"
         default: "ubuntu-latest"
       work:
-        description: "the build directory. RE-DISPATCH WITH THE SAME VALUE TO RESUME: finished stages and finished years are skipped by their .done markers. A different path is a different build"
-        default: "ml/cache/family10"
+        description: "the build directory. RE-DISPATCH WITH THE SAME VALUE TO RESUME: finished stages and finished years are skipped by their .done markers. A different path is a different build. The default is FRESH for family 10.1 (`ml/cache/family10_1`, not `family10`) so nothing resumes from a v1 part -- those carry `time_days` and are refused rather than upgraded"
+        default: "ml/cache/family10_1"
       extra_args:
-        description: "extra flags for ml/build_family10_stores.py: --parts-from-hub (HOW SLATRACK IS ASSEMBLED ON A BOX -- stage fetch pulls each year's column parts from partials/family10/<store>/<year>/ on the Hub instead of the source archive, so the box needs HF_TOKEN ONLY and no Copernicus credentials; add --allow-missing-years to accept a short store), --assemble streaming|memory|auto (auto streams above 50M rows and always for slatrack), --qc-keep N (worst QC grade kept, default 2), --socat-url URL, --attempts N, --slatrack-fetch files|dataframe (files = the original per-day netCDFs through copernicusmarine.get, the default; dataframe = the ~3.3k samples/s subset route, the fallback), --force, --source-dir DIR, --smoke. Word-split deliberately; leave empty for a real build"
+        description: "extra flags for ml/build_family10_stores.py: --parts-from-hub (HOW SLATRACK IS ASSEMBLED ON A BOX -- stage fetch pulls each year's column parts from partials/family10_1/<store>/<year>/ on the Hub instead of the source archive, so the box needs HF_TOKEN ONLY and no Copernicus credentials; add --allow-missing-years to accept a short store), --assemble streaming|memory|auto (auto streams above 50M rows and always for slatrack), --qc-keep N (worst QC grade kept, default 2), --socat-url URL, --attempts N, --slatrack-fetch files|dataframe (files = the original per-day netCDFs through copernicusmarine.get, the default; dataframe = the ~3.3k samples/s subset route, the fallback), --force, --source-dir DIR, --smoke. Word-split deliberately; leave empty for a real build"
         default: ""
 
 permissions:
@@ -177,7 +189,7 @@ jobs:
           CMEMS_PASS: ${{ secrets.COPERNICUSMARINE_SERVICE_PASSWORD }}
           STORE: ${{ github.event.inputs.store }}
           STAGE: ${{ github.event.inputs.stage || 'all' }}
-          WORK: ${{ github.event.inputs.work || 'ml/cache/family10' }}
+          WORK: ${{ github.event.inputs.work || 'ml/cache/family10_1' }}
           RUNNER_INPUT: ${{ github.event.inputs.runner || 'ubuntu-latest' }}
           EXTRA: ${{ github.event.inputs.extra_args }}
         run: |
@@ -221,7 +233,7 @@ jobs:
                 echo "Copernicus credentials (ml/CLAUDE.md 6), so this job could"
                 echo "only fail at the first fetch. slatrack's parts are fetched"
                 echo "by .github/workflows/family10-slatrack-fetch.yml on hosted"
-                echo "lanes and parked at partials/family10/slatrack/<year>/ on"
+                echo "lanes and parked at partials/family10_1/slatrack/<year>/ on"
                 echo "the Hub. Re-dispatch with"
                 echo "  stage=fetch,publish  extra_args=--parts-from-hub"
                 echo "(add --allow-missing-years to assemble a deliberately"
@@ -340,7 +352,7 @@ jobs:
           GITHUB_TOKEN: ${{ github.token }}
           STORE: ${{ github.event.inputs.store }}
           STAGE: ${{ github.event.inputs.stage || 'all' }}
-          WORK: ${{ github.event.inputs.work || 'ml/cache/family10' }}
+          WORK: ${{ github.event.inputs.work || 'ml/cache/family10_1' }}
           START: ${{ github.event.inputs.start }}
           END: ${{ github.event.inputs.end || '2024-12-31' }}
           EXTRA: ${{ github.event.inputs.extra_args }}
@@ -387,7 +399,7 @@ jobs:
         if: ${{ success() && (github.event.inputs.stage == 'publish' || github.event.inputs.stage == 'all' || github.event.inputs.stage == '') }}
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
-          WORK: ${{ github.event.inputs.work || 'ml/cache/family10' }}
+          WORK: ${{ github.event.inputs.work || 'ml/cache/family10_1' }}
         run: |
           python3 -u ml/build_family10_registry.py \
               --work "${WORK}" --out "${WORK}/family10.json" --publish
@@ -399,7 +411,7 @@ jobs:
         if: always() && steps.preflight.outcome == 'success'
         env:
           STORE: ${{ github.event.inputs.store }}
-          WORK: ${{ github.event.inputs.work || 'ml/cache/family10' }}
+          WORK: ${{ github.event.inputs.work || 'ml/cache/family10_1' }}
         run: |
           out="${RUNNER_TEMP}/family10-story"
           rm -rf "${out}"; mkdir -p "${out}"

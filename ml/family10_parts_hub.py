@@ -21,11 +21,22 @@ nothing but `HF_TOKEN` pulls every year back and assembles
 
 THE LAYOUT, and it is the whole contract:
 
-    partials/family10/<store>/<year>/00000.npz     the column parts, as
-    partials/family10/<store>/<year>/00001.npz     `PartWriter` wrote them
-    partials/family10/<store>/<year>/...
-    partials/family10/<store>/<year>/counts.json   the year's own ledger
-    partials/family10/<store>/<year>/done.json     THE MARKER — written last
+    partials/family10_1/<store>/<year>/00000.npz   the column parts, as
+    partials/family10_1/<store>/<year>/00001.npz   `PartWriter` wrote them
+    partials/family10_1/<store>/<year>/...
+    partials/family10_1/<store>/<year>/counts.json the year's own ledger
+    partials/family10_1/<store>/<year>/done.json   THE MARKER — written last
+
+THE PREFIX CARRIES THE FAMILY VERSION, and that is not decoration. Family 10.1
+stores the time as `time_s` (int32 seconds) where family 10 stored `time_days`
+(float32 days), and a v1 part CANNOT be upgraded — float32 days resolve 21-84 s
+over this record, so the seconds the archive published were destroyed at the
+cast, before the part was written. `partials/family10_1/` is therefore a fresh
+prefix rather than a place to mix schemas, and `push` and `pull` BOTH refuse a
+part carrying `time_days` by name (`family10_store.check_part_schema`), because
+a store assembled from one would claim a precision it does not have. The v1
+parts under `partials/family10/` are not inputs to any build and nothing here
+reads them.
 
 `done.json` is the year's marker and it obeys §5.21: it is uploaded only after
 every part has been uploaded AND DOWNLOADED BACK with a matching sha256. A year
@@ -51,11 +62,14 @@ import sys
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 
+import family10_store as f10                                     # noqa: E402
 from build_family7 import (atomic_json, git_sha, hub_add_ops,    # noqa: E402
                            hub_commit, hub_repo, mark, marked, parse_years,
                            read_json, sha256, utcnow)
 
-HF_PARTIALS = "partials/family10"
+# ONE CONSTANT, derived from `family10_store.FAMILY_VERSION` like every other
+# family-10.1 path. Nothing here spells a prefix out.
+HF_PARTIALS = f10.HF_PARTIALS                      # partials/family10_1
 DONE = "done.json"
 COUNTS = "counts.json"
 
@@ -208,6 +222,16 @@ def push(store, year, work, scratch=None):
     names = local_part_files(d)
     if COUNTS not in names:
         sys.exit(f"push refuses {store} {year}: no {COUNTS} in {d}")
+    # SCHEMA FIRST, before a byte is uploaded: a v1 part on this prefix would
+    # be pulled by a box months later and assembled into a store claiming
+    # seconds it does not have (§0.3 — check the precondition where the inputs
+    # are all it has cost).
+    for n in names:
+        if n.endswith(".npz"):
+            try:
+                f10.check_part_schema(os.path.join(d, n))
+            except ValueError as e:
+                sys.exit(f"push refuses {store} {year}: {e}")
     entries = _entries(d, names)
     rows = int(read_json(os.path.join(d, COUNTS), {}).get("rows", 0))
     n_parts = sum(1 for n in names if n.endswith(".npz"))
@@ -302,6 +326,18 @@ def pull(store, years, work, allow_missing=False, scratch=None):
                 sys.exit(f"PULL MISMATCH {store} {y} {e['name']}: done.json "
                          f"says {e['sha256']}, the Hub served {h}")
             got.append((e["name"], p))
+        # THE SCHEMA IS CHECKED ON WHAT ARRIVED, not on what the marker says.
+        # `done.json` records names, bytes and sha256 and knows nothing about
+        # the column layout inside a part, so a year pushed by an older builder
+        # verifies perfectly and is still unusable. Refusing here, before the
+        # year is moved into place and marked, keeps it a year that is simply
+        # not present rather than one the assembler has to discover.
+        for n, p in got:
+            if n.endswith(".npz"):
+                try:
+                    f10.check_part_schema(p)
+                except ValueError as ex:
+                    sys.exit(f"pull refuses {store} {y}: {ex}")
         os.makedirs(d, exist_ok=True)
         for n, p in got:
             os.replace(p, os.path.join(d, n))
@@ -375,10 +411,12 @@ def status(store, years=None, scratch=None):
 # =================================================================== driver ==
 def main(argv=None):
     ap = argparse.ArgumentParser(
-        description="Park a family-10 store's per-year column parts on the "
-                    "Hub under partials/family10/<store>/<year>/, so the "
-                    "credentialed fetch and the big assembly can happen on "
-                    "different machines. See the module docstring.")
+        description=f"Park a family-{f10.FAMILY_VERSION} store's per-year "
+                    f"column parts on the Hub under "
+                    f"{HF_PARTIALS}/<store>/<year>/, so the credentialed fetch "
+                    f"and the big assembly can happen on different machines. "
+                    f"A part carrying the v1 `time_days` column is refused by "
+                    f"both push and pull. See the module docstring.")
     sub = ap.add_subparsers(dest="cmd", required=True)
 
     p = sub.add_parser("push", help="upload ONE fetched year, verify by "

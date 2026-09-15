@@ -13,8 +13,11 @@ Anchors are drawn from the store's own rows inside the tensor epoch, so this
 measures the on-track case, which is the favourable one.
 
 Usage:
-    python3 platform_diversity.py --store gdp --dir /path/to/family10/gdp
+    python3 platform_diversity.py --store gdp --dir /path/to/family10_1/gdp
     python3 platform_diversity.py --store socat --dir ... --anchors 600
+
+Reads either schema — `time_s` (family 10.1) or `time_days` (family 10 and
+family 8) — through `ml/family10_store.py`, and touches no time column itself.
 """
 import argparse
 import os

@@ -171,3 +171,116 @@ held-out per-family loss on velocity with drifter tokens vs. without (the
 E-069 H1 question, now answerable against observed velocity); SST — the
 held-out OSTIA-cell loss with drifter SST tokens vs. without. Falsifier for
 each: no change inside the tier's replicate band.
+
+<a id="10-1-integer-seconds"></a>
+## 10.1 — integer seconds
+
+Chris, 2026-09-15: family 10's tier-P stores store time as **integer seconds**,
+not float32 days. The rebuilt stores are **family 10.1**. Family 10 — the four
+stores now published under `tensors/family10/` — stays published and untouched
+until 10.1 is built, verified and handed over.
+
+### Why
+
+The published stores carry `time_days.npy`, float32 days since 1982-01-01.
+float32 has a 24-bit mantissa, so the spacing between representable values is
+proportional to the magnitude: at the start of the altimeter record (1993,
+≈ 4,000 days) it is **21 seconds**, and at the end (2024, ≈ 15,700 days) it is
+**84 seconds**. That was known when the format was chosen and was judged
+harmless, because the stores it was chosen for sample every six hours or every
+day.
+
+`slatrack` samples at **1 Hz**. The independent verification of 2026-09-14
+([docs/FAMILY10_VERIFICATION_2026-09-14.md](https://blauewelt.github.io/earth/docs.html?f=docs/FAMILY10_VERIFICATION_2026-09-14.md)
+§9.7, §10) measured the consequence on the published store: consecutive
+along-track samples share a timestamp, **up to 316 rows to one value** — at
+6.5 km between samples, 550 km of ground track with a single time on it. The
+column cannot order the rows it stores. Nothing in the store is *wrong*: the
+rows are in the right order, the bins are right, and `bin == floor(time_days /
+5)` holds on all 2,030,800,150 rows — the column simply cannot express the
+distinction the archive published, so a consumer that wants "which sample came
+first" has to be told to use the row order and not the timestamp. A format that
+has to be accompanied by that instruction is the wrong format.
+
+An integer second is the finest thing any of the four archives reports. It is
+exact everywhere, it costs the same four bytes float32 did, and it removes the
+float rounding from the bin derivation at the same time.
+
+### What changes
+
+- **Schema 2.** `time_days.npy` (float32 days) → **`time_s.npy`, int32 seconds
+  since 1982-01-01T00:00:00Z**, negative before the epoch. int32 spans
+  1913-12-13T20:45:52Z .. **2050-01-19T03:14:07Z**; the builder refuses a row
+  past it rather than letting it wrap into 1913, and widening to int64 (twice
+  the column) is the change to make when the archives get there.
+- **`bin = floor(time_s / 432000)`**, integer `floor_divide`, no float anywhere
+  in the derivation. Under v1 the builder had to compute the bin from the
+  float32 value it was about to *store* rather than from the float64 it had
+  parsed, because a timestamp a microsecond before a pentad boundary could
+  round up across it; that whole class of fault is gone rather than guarded.
+- **`store.json`** gains `schema_version: 2` and `family_version: "10.1"`.
+- **The reader reads BOTH.** `ml/family10_store.py` opens a schema-1 store
+  (family 8's Argo store, family 10's published four) by converting its days to
+  seconds on the fly — recovering nothing, only putting the two in one unit —
+  so the family-10 verification tooling and every existing consumer keep
+  working. `dt` out of `knearest` is float64 **days** under both.
+- **Prefixes.** `tensors/family10_1/` for the stores and the registry
+  (`tensors/family10_1/family10.json`, `family_version` "10.1",
+  `schema_version` 2), `partials/family10_1/` for the slatrack lanes,
+  `ml/cache/family10_1` for the build directories. One constant,
+  `family10_store.FAMILY_VERSION`, derives all of them.
+- **A v1 column part cannot be upgraded, so every store is rebuilt from the
+  source.** The lanes park `.npz` column parts on the Hub and a box assembles
+  them, so the two halves of a slatrack build can be a schema apart — and
+  `done.json` records names, bytes and sha256, nothing about the layout inside
+  a part. A v1 part therefore verifies perfectly and is unusable: multiplying
+  float32 days by 86,400 produces an integer column that *looks* exact and is
+  wrong by up to 84 s, which is the single outcome this change exists to
+  prevent. `family10_parts_hub` refuses a `time_days` part on push and on pull,
+  and the assembler refuses one before either assembler reads it. The fresh
+  `partials/family10_1/` prefix and the fresh `ml/cache/family10_1` work
+  directory are what stop a resume from finding one.
+
+### What does NOT change
+
+The **bins** (same rule, same numbers, same `bin_first` per store), the
+**footprints** (`fp.npy`, same constants), the **channels** (names, order,
+units, physical bounds), the **QC policy** (same flags, same `qc_keep_max`),
+the **platform-id rule**, the **[−180, 180) longitude invariant and its
+float32-cast lesson**, the CSR index, the nine-array layout, the streaming
+assembler's byte-identity claim, and **tier G** (the registry still points at
+the same `f7l2` family-7.1 manifest, by reference). Family 8's Argo store joins
+family 10.1 unchanged and is still schema 1; the registry states each group's
+own `schema_version` so a consumer can see which groups have the seconds.
+
+### The falsifier
+
+Only the time column's *precision* changes. No row is added, dropped or moved
+by it: the QC clauses, the bounds, the window and the bin rule are all
+untouched, and the bin of a timestamp is the same integer whether it is derived
+from exact seconds or from the float32 days that timestamp rounded to (the one
+case where they could differ — a row within 84 s of a pentad boundary — was
+already forced to agree by v1's cast-then-bin rule).
+
+**So each 10.1 store's `N` and its per-year row counts must equal v1's
+exactly.** A difference is a bug in the rebuild, not an improvement, and it
+must be explained before the store is published. v1's numbers, from the
+published `store.json` of each:
+
+| store | v1 `N` | v1 `bin_first` | C |
+|---|---|---|---|
+| `gdp` | 48,480,798 | −211 | 4 |
+| `gtmba` | 1,001,282 | −304 | 18 |
+| `socat` | 41,830,675 | −1768 | 4 |
+| `slatrack` | **2,030,800,150** | 803 | 3 |
+
+Per-year counts: v1's `per_year` block, store by store, must reproduce entry
+for entry. One documented exception is *expected to disappear*, not to persist:
+v1's `socat` per-year counts recomputed **from `time_days`** differ from the
+builder's by ≤ 3 rows/year at year boundaries (§8.5 of the verification), which
+is precisely the float32 artefact — 10.1's counts recomputed from `time_s` must
+match its `per_year` block **exactly**, in every year, for every store.
+
+And the measurement that prompted this: `slatrack`'s largest group of rows
+sharing one timestamp must fall from **316** to **1** wherever the archive
+published distinct seconds.

@@ -25,11 +25,17 @@ actually use, and dist_km[k-1] is exactly "the R_max that would have retained
 the k-th token". n_R is reported separately at the suggested bounds.
 
 Usage:
-    python3 measure_knn.py --store gdp --dir /path/to/tensors/family10/gdp
+    python3 measure_knn.py --store gdp --dir /path/to/tensors/family10_1/gdp
     python3 measure_knn.py --store gtmba --dir ... --anchors 500 --json out.json
 
 `--dir` also accepts a Hub prefix, e.g.
-`chfrank/earth-tensors:tensors/family10/gdp`.
+`chfrank/earth-tensors:tensors/family10_1/gdp`.
+
+BOTH SCHEMAS. A family-10.1 store carries `time_s` (int32 seconds) and a
+family-10 or family-8 store `time_days` (float32 days); `Store.time_s()` reads
+either, so this script runs unchanged against the stores published in
+September 2026 and against their 10.1 rebuilds, and the two are comparable.
+The result records which schema answered.
 """
 import argparse
 import json
@@ -76,12 +82,17 @@ def main():
     b = np.asarray(st["bin"])
     lat = np.asarray(st["lat"])
     lon = np.asarray(st["lon"])
-    t = np.asarray(st["time_days"])
+    # SECONDS, under either schema: `Store.time_s` reads a schema-2 `time_s`
+    # column straight and converts a schema-1 `time_days` one. The year below
+    # is then integer arithmetic on an integer — under schema 1 it inherits
+    # that column's 21-84 s of resolution, which is invisible at year
+    # granularity and is why this script reads both without a branch.
+    t_s = np.asarray(st.time_s(), np.int64)
 
     # Catalogue anchors: rows inside the tensor epoch (bin >= 0), one equal
     # share per calendar year present.
     pos = np.nonzero(b >= 0)[0]
-    yr = ((np.datetime64("1982-01-01") + (t[pos] * 86400).astype("timedelta64[s]"))
+    yr = ((np.datetime64("1982-01-01") + t_s[pos].astype("timedelta64[s]"))
           .astype("datetime64[Y]").astype(int) + 1970)
     years = np.unique(yr)
     per = int(np.ceil(a.anchors / len(years)))
@@ -100,6 +111,8 @@ def main():
 
     out = {"store": a.store, "k": k, "suggested_R_km": r_sug,
            "suggested_T_days": t_sug, "anchors": a.anchors, "seed": a.seed,
+           "schema_version": int(st.schema_version),
+           "time_column": st.time_column,
            "years": [int(years.min()), int(years.max())]}
     for draw in ("catalogue", "globe"):
         if draw == "catalogue":

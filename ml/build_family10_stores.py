@@ -38,10 +38,21 @@ THREE STAGES, IN FIXED ORDER — `index | fetch | publish` (or `all`):
            under `<work>/<store>/parts/<year>/`, and mark each year DONE only
            after its parts are on disk (ml/CLAUDE.md §5.21 — a marker may only
            under-claim). Then assemble the store.
-  publish  upload to `tensors/family10/<store>/` on the Hub and DOWNLOAD EVERY
-           FILE BACK to compare sha256. A publish that cannot verify fails the
-           job (§0.2 — an upload that returns 200 is not evidence the bytes are
-           retrievable).
+  publish  upload to `tensors/family10_1/<store>/` on the Hub and DOWNLOAD
+           EVERY FILE BACK to compare sha256. A publish that cannot verify
+           fails the job (§0.2 — an upload that returns 200 is not evidence the
+           bytes are retrievable).
+
+FAMILY 10.1 — THE TIME COLUMN IS INTEGER SECONDS (E-079 §10.1). Schema 2
+replaces v1's `time_days` (float32 days since the epoch) with `time_s`, int32
+seconds. float32 days resolve 21 s in 1993 and 84 s in 2024, and slatrack
+samples at 1 Hz, so up to 316 consecutive along-track samples shared one v1
+timestamp. Every adapter below therefore produces EXACT SECONDS — the calendar
+sources parse their own stamp to the second, the netCDF path rounds a float64
+CF axis to the nearest second — and `bin = floor(time_s / 432000)` is integer
+arithmetic with no float in it anywhere. int32 reaches 2050-01-19T03:14:07Z and
+`_pack` refuses a row past it. Nothing else about the store changes: same nine
+arrays, same bins, same footprints, same channels, same QC.
 
 RESUMABILITY IS THE CONTRACT, the same one families 7 and 8 have: re-run with
 the same `--work` and finished stages and finished years are skipped.
@@ -52,9 +63,10 @@ it may only run on a GitHub-hosted runner; its store is 50-80 GB (measured
 2026-09-14: ~70 M samples in 2015 alone, ~1.5-2.5 e9 rows over 1993-2024 at ~33
 bytes a row), which a hosted runner's ~14 GB of disk cannot hold. So
 `.github/workflows/family10-slatrack-fetch.yml` fetches ONE YEAR at a time on
-hosted lanes and parks its column parts at `partials/family10/slatrack/<year>/`
-on the Hub (`ml/family10_parts_hub.py`, done.json written LAST), and a box with
-HF_TOKEN and no credentials assembles them:
+hosted lanes and parks its column parts at
+`partials/family10_1/slatrack/<year>/` on the Hub (`ml/family10_parts_hub.py`,
+done.json written LAST), and a box with HF_TOKEN and no credentials assembles
+them:
 
   python3 ml/build_family10_stores.py --store slatrack --work W \
       --stage index,fetch,publish --parts-from-hub --start 1993-01-01
@@ -116,11 +128,23 @@ from build_family7 import (START, END, Progress, atomic_json,   # noqa: E402
 
 CACHE = os.path.join(HERE, "cache")
 HF_DATASET = "earth-tensors"
-HF_ROOT = "tensors/family10"
-FAMILY = "family10"
+# ONE CONSTANT, IN ONE PLACE. `ml/family10_store.py` derives every path from
+# FAMILY_VERSION ("10.1") — `tensors/family10_1`, `partials/family10_1`,
+# `ml/cache/family10_1` — and this builder, `ml/build_family10_registry.py` and
+# `ml/family10_parts_hub.py` all import them from there rather than spelling a
+# prefix out. A version that appears twice is a version that will disagree with
+# itself on the day one of the two is changed.
+HF_ROOT = f10.HF_ROOT                          # tensors/family10_1
+FAMILY = f10.FAMILY                            # family10
+FAMILY_VERSION = f10.FAMILY_VERSION            # 10.1
+SCHEMA_VERSION = f10.SCHEMA_VERSION            # 2
 
 PENTAD_DAYS = 5
+SECONDS_PER_DAY = 86400
+PENTAD_SECONDS = f10.PENTAD_SECONDS            # 432_000, exactly
 assert f10.PENTAD_DAYS == PENTAD_DAYS
+assert f10.SECONDS_PER_DAY == SECONDS_PER_DAY
+assert PENTAD_SECONDS == PENTAD_DAYS * SECONDS_PER_DAY
 assert str(START) == f10.EPOCH, (START, f10.EPOCH)
 
 UA = {"User-Agent": "earth-science-pipeline/1.0 "
@@ -138,12 +162,22 @@ DEPS = {"fetch": ["index"], "publish": ["fetch"]}
 BIN_MIN_INT16, BIN_MAX_INT16 = -32768, 32767
 
 
-def days_since_epoch(d):
-    """A date or datetime -> fractional days since 1982-01-01 00:00 UTC."""
+def seconds_since_epoch(d):
+    """A date or datetime -> EXACT integer seconds since 1982-01-01T00:00:00Z.
+
+    Family 10.1's one time conversion for every archive that publishes a
+    calendar timestamp (gdp, gtmba, socat). `timedelta.total_seconds()` is a
+    float, but the values here are whole seconds under 2.2e9 — far inside
+    float64's exact-integer range — so `int(round(...))` is exact rather than
+    nearly exact. A date (no time of day) is midnight UTC.
+
+    NEGATIVE before the epoch, and kept: drifters start in 1979 and SOCAT in
+    1957, and their rows are the reason `bin` is signed.
+    """
     if isinstance(d, dt.datetime):
         base = dt.datetime(START.year, START.month, START.day)
-        return (d - base).total_seconds() / 86400.0
-    return float((d - START).days)
+        return int(round((d - base).total_seconds()))
+    return int((d - START).days) * SECONDS_PER_DAY
 
 
 def parse_date(s):
@@ -296,8 +330,8 @@ def erddap_url(base, dataset, fmt, variables, constraints):
 
 # =============================================================== the columns ==
 # One tier-P row. `values` is the only wide column; everything else is per row.
-ROW_KEYS = ("bin", "time_days", "lat", "lon", "values", "platform", "qc")
-ROW_DTYPE = {"bin": np.int16, "time_days": np.float32, "lat": np.float32,
+ROW_KEYS = ("bin", "time_s", "lat", "lon", "values", "platform", "qc")
+ROW_DTYPE = {"bin": np.int16, "time_s": np.int32, "lat": np.float32,
              "lon": np.float32, "values": np.float16,
              "platform": np.int64, "qc": np.uint8}
 
@@ -579,7 +613,10 @@ class GDPAdapter(SourceAdapter):
             except ValueError:
                 counts["drop_no_time"] += 1
                 continue
-            td = days_since_epoch(when)
+            # ERDDAP's `time` is an ISO-8601 stamp TO THE SECOND, and this
+            # product is kriged onto the 00/06/12/18 UTC grid, so every value
+            # is a whole second and the conversion is exact.
+            td = seconds_since_epoch(when)
             if not (ctx.t_lo <= td <= ctx.t_hi):
                 counts["drop_out_of_range"] += 1
                 continue
@@ -924,7 +961,8 @@ class GTMBAAdapter(SourceAdapter):
                 continue
             # The archive centres a daily value at 12:00 UTC; the store keeps
             # the stamp the archive gives rather than flooring it to midnight.
-            td = days_since_epoch(when)
+            # Whole seconds out of an ISO stamp, so exact.
+            td = seconds_since_epoch(when)
             if not (ctx.t_lo <= td <= ctx.t_hi):
                 continue
             st = row[col["station"]].strip()
@@ -1200,8 +1238,13 @@ class SOCATAdapter(SourceAdapter):
                 counts["drop_no_position"] += 1
                 continue
             try:
+                # SOCAT publishes the stamp as six integer fields — yr, mon,
+                # day, hh, mm, ss — so the store's second IS the file's second
+                # and nothing is interpolated. `ss` is written as "00." in the
+                # synthesis, hence the float parse; a leap second (60) is
+                # clamped to 59, the only rounding in this path.
                 yr = int(p[col["yr"]])
-                td = days_since_epoch(dt.datetime(
+                td = seconds_since_epoch(dt.datetime(
                     yr, int(p[col["mon"]]), int(p[col["day"]]),
                     int(p[col["hh"]]), int(p[col["mm"]]),
                     min(59, int(float(p[col["ss"]] or 0)))))
@@ -1784,7 +1827,7 @@ class SLATrackAdapter(SourceAdapter):
                     return low[n]
             return None
 
-        tcol = pick("time_days", "time", "datetime", "date", "juld",
+        tcol = pick("time_s", "time", "datetime", "date", "juld",
                     "time_counter")
         lacol = pick("latitude", "lat")
         locol = pick("longitude", "lon", "long")
@@ -1811,12 +1854,14 @@ class SLATrackAdapter(SourceAdapter):
                 f"`_rows_from_frame` (ml/CLAUDE.md §0.3).")
 
         t = self._column(frame, tcol)
-        # `time_days` is the one column already in the store's own units: the
+        # `time_s` is the one column already in the store's own units: the
         # netCDF path resolves the axis's CF epoch itself (that epoch is the
-        # one thing a frame does not carry) and hands the days straight over,
-        # so no value is converted twice.
-        td = (np.asarray(t, np.float64) if str(tcol).lower() == "time_days"
-              else self._time_days(t))
+        # one thing a frame does not carry) and hands the SECONDS straight
+        # over, so no value is converted twice. It stays float64 here rather
+        # than int so that a NaT can still be NaN and fall out of `keep` below;
+        # `_pack` rounds it to int32 once, at the end.
+        td = (np.asarray(t, np.float64) if str(tcol).lower() == "time_s"
+              else self._time_seconds(t))
         la = np.asarray(self._column(frame, lacol), np.float64)
         lo_ = np.asarray(self._column(frame, locol), np.float64)
         cols_v = []
@@ -1924,32 +1969,38 @@ class SLATrackAdapter(SourceAdapter):
         return getattr(col, "to_numpy", lambda: col)()
 
     @staticmethod
-    def _time_days(t):
-        """A time column -> days since START (1982-01-01), fractional float64.
+    def _time_seconds(t):
+        """A time column -> SECONDS since START (1982-01-01), float64.
 
         Two shapes, because the toolbox's frame is datetime64 and a netCDF axis
         is a CF number. A datetime64 column is converted through the SAME
-        `_cf_time_to_days` the netCDF path uses, with the epoch it already
+        `_cf_time_to_seconds` the netCDF path uses, with the epoch it already
         carries, so the two paths cannot drift apart: nanoseconds -> seconds
-        since 1970 -> days since START. Timezone-aware input is moved to UTC
+        since 1970 -> seconds since START. Timezone-aware input is moved to UTC
         and made naive first — the store's axis is naive UTC throughout.
+
+        float64 rather than int64 ONLY so a NaT survives as NaN; `_pack` rounds
+        to the nearest second and stores int32. A nanosecond stamp divided by
+        1e9 is exact to well under a microsecond over this range, so the
+        rounding is a formality here and a real (documented) one for the DUACS
+        `days since 1950-01-01` axis.
         """
         arr = np.asarray(t)
         if arr.dtype.kind == "M":
             ns = arr.astype("datetime64[ns]").astype(np.int64)
             ns = ns.astype(np.float64)
             ns[np.asarray(np.isnat(arr.astype("datetime64[ns]")))] = np.nan
-            return _cf_time_to_days(ns / 1e9,
-                                    "seconds since 1970-01-01 00:00:00")
+            return _cf_time_to_seconds(ns / 1e9,
+                                       "seconds since 1970-01-01 00:00:00")
         if arr.dtype.kind == "O":
             # a tz-aware pandas column arrives as object under .to_numpy();
             # ask pandas to normalise it rather than guessing here.
             import pandas as pd
             s = pd.to_datetime(pd.Series(arr), utc=True)
             arr = s.dt.tz_convert("UTC").dt.tz_localize(None).to_numpy()
-            return SLATrackAdapter._time_days(arr)
-        return _cf_time_to_days(np.asarray(arr, np.float64),
-                                "seconds since 1970-01-01 00:00:00")
+            return SLATrackAdapter._time_seconds(arr)
+        return _cf_time_to_seconds(np.asarray(arr, np.float64),
+                                   "seconds since 1970-01-01 00:00:00")
 
     def _read_nc(self, ctx, path, mid):
         """The FIXTURE path: a netCDF -> the same frame shape, same filter.
@@ -1959,8 +2010,18 @@ class SLATrackAdapter(SourceAdapter):
         implementation and a change to the keep rule cannot reach one path
         without the other. The CF `units` of the axis are honoured HERE, since
         they are the one thing a DataFrame does not carry, and the axis goes in
-        as `time_days` — days since START, the store's own convention, which
+        as `time_s` — SECONDS since START, the store's own convention, which
         `_rows_from_frame` takes as-is rather than converting a second time.
+
+        THE 1 Hz SAMPLES LAND ON DISTINCT SECONDS, and that is a property of
+        the source that was checked rather than hoped for. DUACS publishes the
+        axis as float64 `days since 1950-01-01 00:00:00`; float64 carries 53
+        bits of mantissa, so at ~27,400 days (the end of the record) the gap
+        between representable values is ~6e-12 days = **~0.5 microseconds**.
+        One second is 2 million times that, so consecutive 1 Hz samples are
+        distinct float64 days, and `round(seconds)` sends them to consecutive
+        integers. This is exactly what float32 DAYS could not do: 84 s of
+        resolution against a 1 s sampling rate (E-079 §10.1).
 
         HARDENED FOR THE REAL DUACS FILES, which the `files` route now hands
         it: the fill is taken from the MASK (`np.ma.filled(..., nan)`) rather
@@ -1969,7 +2030,7 @@ class SLATrackAdapter(SourceAdapter):
         out-of-bounds sample instead of a missing one; variable names are
         matched case-insensitively; the axis epoch may be any CF `<unit> since
         <date>` (DUACS writes "days since 1950-01-01 00:00:00", which
-        `_cf_time_to_days` already handles); and a longitude axis published in
+        `_cf_time_to_seconds` already handles); and a longitude axis published in
         [0, 360) is folded to [-180, 180). The variable names and the time
         units are printed once per mission — a measurement for the next probe,
         since no real file has been opened here yet.
@@ -2021,7 +2082,10 @@ class SLATrackAdapter(SourceAdapter):
                 frame[v] = np.full(len(t), np.nan) if got is None else got
         finally:
             ds.close()
-        frame["time_days"] = _cf_time_to_days(t, units)
+        # ONE rounding, HERE, where the CF units are in scope: float64 seconds
+        # since the epoch -> the nearest whole second. `_rows_from_frame` takes
+        # `time_s` as-is and `_pack` casts it to int32.
+        frame["time_s"] = np.rint(_cf_time_to_seconds(t, units))
         return self._rows_from_frame(ctx, frame, mid)
 
 
@@ -2059,8 +2123,13 @@ def _platform_int(s):
     return platform_hash(s) if s else 0
 
 
-def _cf_time_to_days(t, units):
-    """A CF `<unit> since <date>` axis -> days since 1982-01-01, fractional."""
+def _cf_time_to_seconds(t, units):
+    """A CF `<unit> since <date>` axis -> SECONDS since 1982-01-01, float64.
+
+    The epoch offset is computed as an exact integer number of seconds and
+    added last, so the only inexactness is whatever the source's own axis
+    carries. The caller rounds to the nearest second (`_read_nc`).
+    """
     u = (units or "").lower().strip()
     if " since " not in u:
         raise ValueError(f"time units {units!r} carry no epoch — refusing to "
@@ -2075,36 +2144,64 @@ def _cf_time_to_days(t, units):
             b = None
     if b is None:
         raise ValueError(f"cannot parse the epoch out of {units!r}")
-    per_day = {"days": 1.0, "day": 1.0, "hours": 24.0, "hour": 24.0,
-               "minutes": 1440.0, "minute": 1440.0,
-               "seconds": 86400.0, "second": 86400.0,
-               "milliseconds": 86400e3, "microseconds": 86400e6}.get(unit)
-    if per_day is None:
+    per_unit_s = {"days": 86400.0, "day": 86400.0,
+                  "hours": 3600.0, "hour": 3600.0,
+                  "minutes": 60.0, "minute": 60.0,
+                  "seconds": 1.0, "second": 1.0,
+                  "milliseconds": 1e-3, "microseconds": 1e-6}.get(unit)
+    if per_unit_s is None:
         raise ValueError(f"unknown time unit {unit!r} in {units!r}")
-    off = (b - dt.datetime(START.year, START.month, START.day)).total_seconds() \
-        / 86400.0
-    return np.asarray(t, np.float64) / per_day + off
+    off = int(round(
+        (b - dt.datetime(START.year, START.month, START.day)).total_seconds()))
+    return np.asarray(t, np.float64) * per_unit_s + off
 
 
 def _pack(t, lat, lon, values, platform, qc, C):
     """Lists (or arrays) -> the seven store columns, bins computed, lon wrapped.
 
-    THE BIN IS COMPUTED FROM THE float32 TIME THAT IS ACTUALLY STORED, not
-    from the float64 the parser had. That is not fussiness: `time_days` runs to
-    ~16,000 days and float32 resolves about 0.001 d there, so a timestamp a
-    microsecond before a pentad boundary can round UP across it. If `bin` were
-    computed at full precision and the stored time rounded the other way, the
-    row would sit in bin b with a timestamp that reads as bin b+1 — and the
-    reader, which asks for `dt_days = 5*(b+1) - t >= 0`, would silently refuse
-    to return it for its own anchor. A row the index says is there and the
-    search will never return is exactly the kind of fault that leaves no trace.
-    Making the store self-consistent costs nothing and removes the class.
+    `t` is SECONDS since 1982-01-01T00:00:00Z — an integer array from the
+    calendar adapters, a float64 one from the netCDF axis, which is rounded to
+    the nearest second HERE and only here.
+
+    THE BIN IS EXACT INTEGER ARITHMETIC on the value that is actually stored:
+    `floor_divide(time_s, 432000)`. Under v1 this function had to cast the
+    parsed float64 down to float32 FIRST and derive the bin from the cast
+    value, because float32 days resolve ~0.001 d at the end of the record and a
+    timestamp a microsecond before a pentad boundary could round up across it —
+    leaving a row in bin b whose stored timestamp read as bin b+1, which the
+    reader (`dt_days = 5*(b+1) - t >= 0`) would then never return for its own
+    anchor. int32 seconds have no such cast: the stored value IS the parsed
+    value, so the store is self-consistent by construction rather than by
+    precaution, and the whole class of fault is gone rather than guarded.
+
+    THE 2050 LIMIT IS REFUSED HERE, not discovered later. int32 seconds reach
+    2050-01-19T03:14:07Z; a row past it would wrap to 1913 and look like an
+    ordinary pre-epoch observation.
     """
     n = len(t)
     if n == 0:
         return empty_rows(C)
-    td = np.asarray(np.asarray(t, np.float64).astype(np.float32), np.float64)
-    b = f10.bin_of_days(td)
+    ts = np.asarray(t)
+    if ts.dtype.kind == "f":
+        if not np.isfinite(ts).all():
+            raise ValueError(
+                f"{int((~np.isfinite(ts)).sum())} of {n} timestamp(s) are NaN "
+                f"or infinite by the time they reach _pack — an adapter's keep "
+                f"rule let a row without a time through, and it would be "
+                f"stored as an arbitrary second")
+        s = np.rint(np.asarray(ts, np.float64)).astype(np.int64)
+    else:
+        s = ts.astype(np.int64)
+    if s.size and (s.min() < f10.TIME_S_MIN or s.max() > f10.TIME_S_MAX):
+        raise ValueError(
+            f"time_s runs {int(s.min())}..{int(s.max())} s, outside int32 — "
+            f"family {FAMILY_VERSION}'s time column spans "
+            f"{f10.TIME_S_MIN_DATE} .. {f10.TIME_S_MAX_DATE} and this build "
+            f"reaches past it. A row beyond 2050 would WRAP into 1913 and read "
+            f"as an ordinary pre-epoch observation, so it is refused. Widening "
+            f"the column to int64 doubles the store and is the change to make "
+            f"when the archives get there.")
+    b = f10.bin_of_seconds(s)
     if b.size and (b.min() < BIN_MIN_INT16 or b.max() > BIN_MAX_INT16):
         raise ValueError(f"bin {b.min()}..{b.max()} does not fit int16 — the "
                          f"axis has outgrown the column's dtype")
@@ -2120,7 +2217,7 @@ def _pack(t, lat, lon, values, platform, qc, C):
     lo32 = np.where(lo32 >= np.float32(180.0), lo32 - np.float32(360.0), lo32)
     return {
         "bin": b.astype(np.int16),
-        "time_days": td.astype(np.float32),
+        "time_s": s.astype(np.int32),
         "lat": np.asarray(lat, np.float64).astype(np.float32),
         "lon": lo32.astype(np.float32),
         "values": v.astype(np.float16),
@@ -2257,10 +2354,14 @@ class Ctx:
         self.d_hi = parse_date(a.end) if a.end else END
         if self.d_hi < self.d_lo:
             sys.exit(f"--end {self.d_hi} precedes --start {self.d_lo}")
-        self.t_lo = days_since_epoch(self.d_lo)
-        self.t_hi = days_since_epoch(self.d_hi) + 1.0        # inclusive of the day
-        self.b_lo = int(np.floor(self.t_lo / PENTAD_DAYS))
-        self.b_hi = int(np.floor((self.t_hi - 1e-9) / PENTAD_DAYS))
+        # THE WINDOW IS IN SECONDS, like the column. `t_hi` is the last
+        # instant of the last requested day — 23:59:59 — rather than midnight
+        # of the day after, so the inclusive bound needs no epsilon and the
+        # bin it lands in is the bin of a real observation.
+        self.t_lo = seconds_since_epoch(self.d_lo)
+        self.t_hi = seconds_since_epoch(self.d_hi) + SECONDS_PER_DAY - 1
+        self.b_lo = int(f10.bin_of_seconds(self.t_lo))
+        self.b_hi = int(f10.bin_of_seconds(self.t_hi))
         self.years = list(range(self.d_lo.year, self.d_hi.year + 1))
         self.qc_keep = int(getattr(a, "qc_keep", 2) or 2)
         self.check_chunk = int(getattr(a, "check_chunk_rows", 0)
@@ -2402,11 +2503,21 @@ def parts_preflight(ctx):
     refused, and named in store.json's `degraded` block, because that flag is
     the caller saying "a short store is what I want" — but it is never the
     default, and it never silently rewrites the ledger.
+
+    AND A FOURTH, ADDED WITH FAMILY 10.1: a part written by the v1 builder
+    carries `time_days` and cannot be upgraded, so it is refused by name here
+    rather than assembled into a store that would claim a precision it does not
+    have (`f10.check_part_schema`). `--allow-missing-years` does NOT admit it:
+    the flag says "a short store is what I want", never "a wrong one".
     """
     allow = bool(getattr(ctx.a, "allow_missing_years", False))
     bad, degraded = [], []
     for y in ctx.years:
         npz = year_part_names(ctx, y)
+        for n in npz:
+            # Reads the npz's zip directory only — a seek, on a part that may
+            # be a gigabyte.
+            f10.check_part_schema(os.path.join(ctx.year_dir(y), n))
         # `read_json` answers a missing file and an unparseable one with {},
         # so presence is asked of the filesystem: a counts.json that exists and
         # does not parse must NOT read as "no ledger here" and be skipped.
@@ -2480,7 +2591,7 @@ def stage_fetch(ctx):
         # THE KEYLESS HALF of slatrack's build. The credentialed fetch happens
         # on GitHub-HOSTED lanes (ml/CLAUDE.md §6 forbids CMEMS credentials on
         # a rented box) and parks each finished year under
-        # `partials/family10/<store>/<year>/` on the Hub; this branch brings
+        # `partials/family10_1/<store>/<year>/` on the Hub; this branch brings
         # those parts back and hands them straight to the assembler. Nothing
         # here touches the source archive, so HF_TOKEN is the only secret the
         # machine running it ever sees.
@@ -2659,24 +2770,29 @@ def fetch_absence_check(ctx):
 # second assembler, and its ONLY claim is that it writes THE SAME BYTES.
 #
 # WHY THE TWO ORDERS ARE THE SAME PERMUTATION, exactly:
-#   `np.lexsort((time_days, bin))` sorts by bin, then by time_days, and it is
+#   `np.lexsort((time_s, bin))` sorts by bin, then by time_s, and it is
 #   STABLE — rows equal in both keys keep their INPUT order, which is the order
 #   `read_parts` yields (years ascending, parts in sorted name order).
 #   The streaming assembler reproduces that in three passes: it counts rows per
 #   bin (pass 1) to get the CSR offsets, scatters every part's rows into its
 #   bin's slice IN THAT SAME INPUT ORDER (pass 2), and then sorts each bin's
-#   slice by time_days with a STABLE argsort (pass 3). Sorting by bin is what
+#   slice by time_s with a STABLE argsort (pass 3). Sorting by bin is what
 #   the scatter does; the stable per-bin sort by time breaks ties in the order
 #   the scatter laid rows down, i.e. input order. Same permutation, therefore
 #   the same bytes — and `tests/test_build_family10_stores.py` proves it by
 #   building one synthetic archive and hashing both assemblers' output, with a
-#   year that carries duplicate (bin, time_days) rows ACROSS two parts so the
-#   tie-break is actually exercised.
+#   year that carries duplicate (bin, time_s) rows ACROSS two parts so the
+#   tie-break is actually exercised. Ties are RARER under schema 2 than they
+#   were under v1 — a second is finer than 84 s — but they are not gone (two
+#   drifters report on the same six-hourly slot), so the tie-break still has to
+#   be the same one in both assemblers.
 STAT_CHUNK = 1 << 22          # rows per statistics block; both assemblers use it
 CHECK_CHUNK_ROWS = 16_000_000  # rows per block in `check_store`
 STREAM_ROWS = 50_000_000      # `--assemble auto` switches above this
 # bytes per stored row, excluding the tiny bin_offsets vector: bin 2 +
-# time_days 4 + lat 4 + lon 4 + platform 8 + qc 1 + fp 4 + values 2*C.
+# time_s 4 + lat 4 + lon 4 + platform 8 + qc 1 + fp 4 + values 2*C. Schema 2
+# costs exactly what schema 1 did — int32 seconds are the same four bytes
+# float32 days were, so 10.1 buys its precision for nothing.
 ROW_BYTES_FIXED = 2 + 4 + 4 + 4 + 8 + 1 + 4
 DISK_HEADROOM = 1.2
 
@@ -2765,7 +2881,11 @@ def _scan_bins(ctx):
     """PASS 1 — read ONLY the `bin` member of every part.
 
     `np.load` on an npz is lazy per member, so this touches ~2 bytes a row
-    instead of ~33. Returns (N, per_year, {bin: rows}).
+    instead of the ~27 + 2C a whole row costs. Returns (N, per_year,
+    {bin: rows}).
+
+    The `bin` member is the one column this pass needs and it is written by
+    `_pack` from `time_s` alone, so pass 1 never has to look at a timestamp.
     """
     counts, per_year, N = {}, {}, 0
     for y, p in _part_paths(ctx):
@@ -2809,7 +2929,7 @@ def assemble_store_streaming(ctx):
       2. scatter each part's rows into `offsets[bin] + cursor[bin]`, walking
          the parts in `read_parts` order, straight into `open_memmap`ed
          output arrays;
-      3. sort each bin's slice by `time_days` with a STABLE argsort.
+      3. sort each bin's slice by `time_s` with a STABLE argsort.
     Peak RAM is one part (FLUSH_ROWS rows) plus one bin's slice.
     """
     ad = ctx.adapter
@@ -2841,7 +2961,7 @@ def assemble_store_streaming(ctx):
     _disk_preflight(dest, N, C, n_bins)
 
     from numpy.lib.format import open_memmap
-    shapes = {"bin": (np.int16, (N,)), "time_days": (np.float32, (N,)),
+    shapes = {"bin": (np.int16, (N,)), "time_s": (np.int32, (N,)),
               "lat": (np.float32, (N,)), "lon": (np.float32, (N,)),
               "values": (np.float16, (N, C)),
               "platform": (np.int64, (N,)), "qc": (np.uint8, (N,)),
@@ -2888,7 +3008,7 @@ def assemble_store_streaming(ctx):
         s, e = int(off[j]), int(off[j + 1])
         if e - s < 2:
             continue
-        order = np.argsort(np.asarray(mm["time_days"][s:e], np.float32),
+        order = np.argsort(np.asarray(mm["time_s"][s:e], np.int64),
                            kind="stable")
         if np.array_equal(order, np.arange(e - s)):
             continue
@@ -2964,9 +3084,10 @@ def assemble_store(ctx):
     else:
         cat = empty_rows(ad.C)
     N = int(len(cat["bin"]))
-    # THE DEFINING ORDER: (bin, time_days) ascending. `lexsort` takes its keys
-    # last-major, so time is the secondary key.
-    order = np.lexsort((cat["time_days"].astype(np.float64),
+    # THE DEFINING ORDER: (bin, time_s) ascending. `lexsort` takes its keys
+    # last-major, so time is the secondary key. Both keys are INTEGERS now, so
+    # the comparison the order rests on is exact.
+    order = np.lexsort((cat["time_s"].astype(np.int64),
                         cat["bin"].astype(np.int64)))
     cat = {k: v[order] for k, v in cat.items()}
 
@@ -2982,7 +3103,7 @@ def assemble_store(ctx):
     fp[:, 1] = np.float16(ad.log2_dt)
 
     files = {}
-    to_write = {"bin": cat["bin"], "time_days": cat["time_days"],
+    to_write = {"bin": cat["bin"], "time_s": cat["time_s"],
                 "lat": cat["lat"], "lon": cat["lon"], "values": cat["values"],
                 "platform": cat["platform"], "qc": cat["qc"], "fp": fp,
                 "bin_offsets": off}
@@ -3049,12 +3170,26 @@ def _finish_store(ctx, dest, files, N, off, bin_first, bin_last, n_bins,
     plan = read_json(os.path.join(ctx.root, "plan.json"), {})
     meta = {
         "family": FAMILY, "tier": "P", "store": ad.store, "title": ad.title,
+        "family_version": FAMILY_VERSION,
+        "schema_version": SCHEMA_VERSION,
+        "schema_version_note": (
+            "schema 2 (family 10.1): the time column is `time_s`, int32 "
+            "SECONDS since 1982-01-01T00:00:00Z. Schema 1 (family 10, family "
+            "8) carried `time_days`, float32 days, which resolves 21 s in 1993 "
+            "and 84 s in 2024 — against slatrack's 1 Hz sampling, up to 316 "
+            "consecutive samples shared a timestamp. `ml/family10_store.py` "
+            "reads BOTH; only the time column changed, and the bins, "
+            "footprints, channels and QC policy are identical."),
         "schema": {
             "bin.npy": {"dtype": "int16", "shape": [N],
-                        "meaning": "floor((date - 1982-01-01)/5 days); "
-                                   "NEGATIVE before 1982 and kept"},
-            "time_days.npy": {"dtype": "float32", "shape": [N],
-                              "meaning": "days since 1982-01-01, fractional"},
+                        "meaning": "floor(time_s / 432000 s) — exact integer "
+                                   "arithmetic; NEGATIVE before 1982 and kept"},
+            "time_s.npy": {"dtype": "int32", "shape": [N],
+                           "meaning": "seconds since 1982-01-01T00:00:00Z, "
+                                      "negative before it; int32 spans "
+                                      f"{f10.TIME_S_MIN_DATE} .. "
+                                      f"{f10.TIME_S_MAX_DATE} and the builder "
+                                      f"refuses a row past it"},
             "lat.npy": {"dtype": "float32", "shape": [N],
                         "meaning": "degrees north"},
             "lon.npy": {"dtype": "float32", "shape": [N],
@@ -3163,6 +3298,20 @@ def check_store(path, adapter=None, anchor=None, chunk_rows=CHECK_CHUNK_ROWS):
         compared with `np.diff(bin_offsets)` at the end. The first catches a
         row in the wrong slice, the second an offset vector that is
         internally tidy but describes a different store.
+
+    SCHEMA 2's three time checks, all on `time_s` as INTEGERS:
+      * `bin == floor_divide(time_s, 432000)` on every row — the index and the
+        timestamps must be the same statement. Exact now, where the v1 form
+        compared against a float floor.
+      * `time_s` NON-DECREASING inside every bin, seam included. Under v1 this
+        could only ever be checked to 84 s; a v1 slatrack store passes it
+        because equal timestamps are non-decreasing, which is precisely the
+        weakness 10.1 removes.
+      * every `time_s` INSIDE THE SOURCE WINDOW `store.json` claims
+        (`date_range`), so a store whose rows escape the window it says it
+        covers is refused rather than published with a `per_year` block that
+        quietly disagrees with its own header. Skipped when a store carries no
+        `date_range` — the hand-written fixtures in the tests do not.
     """
     # EVERY CHECK BELOW IS AN `assert`, AND `python3 -O` DELETES THOSE. Run
     # under -O (or PYTHONOPTIMIZE set in the environment, which a runner image
@@ -3187,8 +3336,14 @@ def check_store(path, adapter=None, anchor=None, chunk_rows=CHECK_CHUNK_ROWS):
     assert off[0] == 0 and off[-1] == st.N, "CSR offsets do not span the rows"
     assert np.all(np.diff(off) >= 0), "bin_offsets is not monotone"
 
-    b_col, t_col = st["bin"], st["time_days"]
+    b_col = st["bin"]
     lat_col, lon_col = st["lat"], st["lon"]
+    # The declared window, in seconds, when the store states one.
+    win = None
+    dr = st.meta.get("date_range") or []
+    if len(dr) == 2 and all(dr):
+        win = (seconds_since_epoch(parse_date(dr[0])),
+               seconds_since_epoch(parse_date(dr[1])) + SECONDS_PER_DAY - 1)
     v_col, fp_col = st["values"], st["fp"]
     counts = np.zeros(max(st.n_bins, 0), np.int64)
     C = int(st.C)
@@ -3201,7 +3356,10 @@ def check_store(path, adapter=None, anchor=None, chunk_rows=CHECK_CHUNK_ROWS):
     for lo in range(0, N, chunk):
         hi = min(lo + chunk, N)
         b = np.asarray(b_col[lo:hi], np.int64)
-        t = np.asarray(t_col[lo:hi], np.float64)
+        # INTEGER SECONDS under schema 2; a schema-1 store (family 8, the
+        # published family-10 four) is converted on the fly by the reader so
+        # this one implementation checks both.
+        t = st.time_s(lo, hi)
         # -- sorted by (bin, time), the seam included
         if prev_b is None:
             bb_, tt_ = b, t
@@ -3217,8 +3375,13 @@ def check_store(path, adapter=None, anchor=None, chunk_rows=CHECK_CHUNK_ROWS):
         # The bin column must BE the bin of the time column — a store whose
         # index and timestamps disagree answers every search with the wrong
         # pentad and nothing says so.
-        assert np.array_equal(b, f10.bin_of_days(t)), \
-            "bin.npy disagrees with floor(time_days / 5)"
+        assert np.array_equal(b, f10.bin_of_seconds(t)), \
+            "bin.npy disagrees with floor(time_s / 432000)"
+        if win is not None:
+            assert int(t.min()) >= win[0] and int(t.max()) <= win[1], (
+                f"time_s runs {int(t.min())}..{int(t.max())} s, outside the "
+                f"window store.json declares ({dr[0]} .. {dr[1]} = "
+                f"{win[0]}..{win[1]} s)")
         lon = np.asarray(lon_col[lo:hi], np.float64)
         assert np.all((lon >= -180.0) & (lon < 180.0)), \
             f"lon runs {lon.min()}..{lon.max()}, not [-180, 180)"
@@ -3493,7 +3656,7 @@ def make_smoke_sources(root, store, d_lo, d_hi, seed=20260913):
                                 continue
                             drog = 1.0 if j == 0 else np.nan
                             truth.append({
-                                "t": days_since_epoch(when),
+                                "t": seconds_since_epoch(when),
                                 "lat": lat, "lon": lon,
                                 "v": [u, v, sst, drog],
                                 "platform": 100000 + j, "qc": 1})
@@ -3511,8 +3674,8 @@ def make_smoke_sources(root, store, d_lo, d_hi, seed=20260913):
         def put(day, idx, value):
             key = f"{day:%Y-%m-%d}"
             r = rec.setdefault(key, {
-                "t": days_since_epoch(dt.datetime(day.year, day.month,
-                                                  day.day, 12)),
+                "t": seconds_since_epoch(dt.datetime(day.year, day.month,
+                                                     day.day, 12)),
                 "lat": 0.0, "lon": -140.0, "v": [np.nan] * ad.C,
                 "platform": 51311, "qc": 1})
             r["v"][idx] = value
@@ -3607,7 +3770,7 @@ def make_smoke_sources(root, store, d_lo, d_hi, seed=20260913):
                     if j >= 2:
                         continue
                     truth.append({
-                        "t": days_since_epoch(
+                        "t": seconds_since_epoch(
                             dt.datetime(d.year, d.month, d.day, 6, 30)),
                         "lat": lat,
                         "lon": float(f10.wrap_lon(lon360)),
@@ -3619,15 +3782,23 @@ def make_smoke_sources(root, store, d_lo, d_hi, seed=20260913):
         mid = "cmems_obs-sl_glo_phy-ssh_my_j3-l3-duacs_PT1S_202411"
         # `<mission>/<year>/*.nc` — the shape the toolbox writes, so a fixture
         # and a real pull differ in nothing the parser can see.
+        # 1 Hz, AND WRITTEN THE WAY DUACS WRITES IT: float64 `days since
+        # 1950-01-01`, five consecutive SECONDS per day. Under v1 those five
+        # samples collapsed onto one or two float32 days; under schema 2 they
+        # must come back as five consecutive integers, which is what the
+        # fixture exists to prove.
         n_per = 5
+        cf_epoch = dt.datetime(1950, 1, 1)
         for y in sorted({x.year for x in days}):
             ydays = [x for x in days if x.year == y]
             d = os.path.join(root, "slatrack", mid, str(y))
             os.makedirs(d, exist_ok=True)
             n = len(ydays) * n_per
-            t = np.array([days_since_epoch(
-                dt.datetime(x.year, x.month, x.day, 3)) + 0.001 * k
-                for x in ydays for k in range(n_per)])
+            # seconds since the CF epoch -> days, as a float64 the file carries
+            t = np.array([
+                ((dt.datetime(x.year, x.month, x.day, 3)
+                  - cf_epoch).total_seconds() + k) / 86400.0
+                for x in ydays for k in range(n_per)], np.float64)
             lat = np.linspace(-60, 60, n)
             lon = np.linspace(-179, 179, n)
             sla = 0.01 * np.sin(np.arange(n) + y)
@@ -3637,7 +3808,7 @@ def make_smoke_sources(root, store, d_lo, d_hi, seed=20260913):
             ds = ncdf.Dataset(p, "w", format="NETCDF3_CLASSIC")
             ds.createDimension("time", n)
             tv = ds.createVariable("time", "f8", ("time",))
-            tv.units = "days since 1982-01-01 00:00:00"
+            tv.units = "days since 1950-01-01 00:00:00"   # DUACS's own epoch
             tv[:] = t
             for nm, arr in (("latitude", lat), ("longitude", lon),
                             ("sla_filtered", sla), ("sla_unfiltered", slau),
@@ -3645,34 +3816,43 @@ def make_smoke_sources(root, store, d_lo, d_hi, seed=20260913):
                 v = ds.createVariable(nm, "f8", ("time",))
                 v[:] = arr
             ds.close()
-            for k in range(n):
-                truth.append({"t": float(t[k]), "lat": float(lat[k]),
-                              "lon": float(lon[k]),
-                              "v": [float(sla[k]), float(slau[k]),
-                                    float(mdt[k])],
-                              "platform": platform_hash(mid), "qc": 1})
+            for i, x in enumerate(ydays):
+                base = seconds_since_epoch(dt.datetime(x.year, x.month,
+                                                       x.day, 3))
+                for k in range(n_per):
+                    j = i * n_per + k
+                    truth.append({"t": base + k, "lat": float(lat[j]),
+                                  "lon": float(lon[j]),
+                                  "v": [float(sla[j]), float(slau[j]),
+                                        float(mdt[j])],
+                                  "platform": platform_hash(mid), "qc": 1})
     else:
         raise ValueError(store)
     return truth
 
 
 def check_smoke(ctx, truth):
-    """The store against the truth the generator kept — order, values, search."""
+    """The store against the truth the generator kept — order, values, search.
+
+    The truth's `t` is INTEGER SECONDS, so the comparison is EXACT: schema 2
+    stores the second the generator wrote, and `!=` is the right operator where
+    v1 needed a tolerance of a hundredth of a day.
+    """
     ad = ctx.adapter
     st = check_store(ctx.store, ad,
                      anchor=(float(truth[0]["lat"]), float(truth[0]["lon"]),
-                             int(np.floor(truth[0]["t"] / PENTAD_DAYS))),
+                             int(truth[0]["t"] // PENTAD_SECONDS)),
                      chunk_rows=ctx.check_chunk)
     assert st.N == len(truth), (
         f"the store holds {st.N} row(s), the generator kept {len(truth)} "
         f"(a row that should have been dropped survived, or a good row "
         f"was lost)")
-    want = sorted(truth, key=lambda r: (int(np.floor(r["t"] / PENTAD_DAYS)),
-                                        np.float32(r["t"])))
+    want = sorted(truth, key=lambda r: (int(r["t"]) // PENTAD_SECONDS,
+                                        int(r["t"])))
+    ts = st.time_s()
     v = np.asarray(st["values"], np.float32)
     for i, w in enumerate(want):
-        assert abs(float(st["time_days"][i]) - w["t"]) < 1e-2, (
-            i, float(st["time_days"][i]), w["t"])
+        assert int(ts[i]) == int(w["t"]), (i, int(ts[i]), int(w["t"]))
         assert abs(float(st["lat"][i]) - w["lat"]) < 1e-2
         assert abs(float(st["lon"][i]) - w["lon"]) < 1e-2
         assert int(st["platform"][i]) == int(w["platform"]), (
@@ -3687,8 +3867,10 @@ def check_smoke(ctx, truth):
     # negative bins really are kept, when the window reaches before 1982
     if want and want[0]["t"] < 0:
         assert int(st["bin"][0]) < 0, "a pre-1982 row lost its negative bin"
+        assert int(ts[0]) < 0, "a pre-1982 row lost its negative time_s"
     return (f"N={st.N} · C={st.C} · bins {st.bin_first}..{st.bin_last} · "
-            f"{int((np.diff(st.bin_offsets) > 0).sum())} live bin(s)")
+            f"{int((np.diff(st.bin_offsets) > 0).sum())} live bin(s) · "
+            f"schema {st.schema_version}")
 
 
 def run_smoke(store, root=None, keep=False, start=SMOKE_START, end=SMOKE_END):
@@ -3724,7 +3906,7 @@ def main():
                     help="which source: gdp (surface drifters), gtmba (the "
                          "tropical moored arrays), socat (surface CO2), "
                          "slatrack (along-track sea level)")
-    ap.add_argument("--work", default=os.path.join(CACHE, FAMILY),
+    ap.add_argument("--work", default=os.path.join(CACHE, f10.CACHE_DIRNAME),
                     help="the build directory: plan.json, per-year parts, the "
                          "store, markers, progress.json. RE-RUN WITH THE SAME "
                          "VALUE TO RESUME.")
@@ -3772,8 +3954,8 @@ def main():
                          "(50-80 GB — no box has that in RAM).")
     ap.add_argument("--parts-from-hub", action="store_true",
                     help="stage `fetch` does NOT touch the source archive: it "
-                         "pulls the requested years' column parts from "
-                         "partials/family10/<store>/<year>/ on the Hub (put "
+                         f"pulls the requested years' column parts from "
+                         f"{f10.HF_PARTIALS}/<store>/<year>/ on the Hub (put "
                          "there by ml/family10_parts_hub.py push) and "
                          "assembles them. This is how slatrack is built on a "
                          "box: HF_TOKEN only, no Copernicus credentials "

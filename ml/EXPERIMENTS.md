@@ -466,6 +466,60 @@ scripts behind finding (a) and finding (b), `ml/tools/family10_verify/`.
 Reader contract: [the family-10 data handover](https://blauewelt.github.io/earth/docs.html?f=docs/FAMILY10_DATA_HANDOVER.md).
 Evidence for this RESULT: [the family-10 verification of 2026-09-14](https://blauewelt.github.io/earth/docs.html?f=docs/FAMILY10_VERIFICATION_2026-09-14.md).
 
+### E-079 · family 10.1 — the time column becomes integer seconds — 10.1 DISPATCHED (run numbers to follow)
+
+**E-079 §10.1 · Rebuild all four tier-P observation stores with the time column
+as `time_s`, int32 SECONDS since 1982-01-01T00:00:00Z, in place of v1's
+`time_days`, float32 days — because float32 days resolve 21 s in 1993 and 84 s
+in 2024 and `slatrack` samples at 1 Hz, so the published store has up to 316
+consecutive along-track rows sharing one timestamp (measured, the 2026-09-14
+verification §9.7) and its time column cannot order the rows it holds
+(absolute description; Chris's decision 2026-09-15) · `params` n/a (nothing
+trains — these are DATA builds) · `stage` data-build · `data`
+`family10_1/{gdp,gtmba,socat,slatrack}` → `tensors/family10_1/`, lanes →
+`partials/family10_1/` · `arch` n/a · `steps×batch` n/a (no training step of
+any kind) · `resume` none — a v1 column part CANNOT be upgraded (the seconds
+were destroyed at the float32 cast, before the part was written), so every
+store is rebuilt from its own archive and the fresh prefixes are what stop a
+resume from finding one. Family 8's Argo store joins family 10.1 UNCHANGED, at
+schema 1, and is not rebuilt.**
+
+WHAT A SCHEMA VERSION IS, in a sentence that needs no other document: the
+tier-P stores are column files, and `schema_version` says which columns they
+are — **schema 1** carries `time_days.npy` (float32 days since 1982-01-01) and
+**schema 2** carries `time_s.npy` (int32 seconds since the same instant). Only
+that one column differs. The bins, the footprints, the channels, the QC policy
+and the nine-array layout are identical, and `ml/family10_store.py` opens both,
+reporting `dt` in float64 days either way — which is what lets family 8's store
+and family 10's published four keep working while the rebuilds land.
+
+THE FALSIFIER, stated before the builds run: only the time column's *precision*
+changes, so **each 10.1 store's `N` and its per-year counts must equal v1's
+exactly** — `gdp` 48,480,798 · `gtmba` 1,001,282 · `socat` 41,830,675 ·
+`slatrack` 2,030,800,150. A difference is a bug in the rebuild, not an
+improvement, and has to be explained before anything is published. The one v1
+discrepancy that must *disappear* rather than persist is `socat`'s ≤ 3 rows/year
+disagreement between its `per_year` block and a recount from `time_days` (the
+float32 artefact itself); 10.1's recount from `time_s` must match exactly, in
+every year, for every store. And `slatrack`'s largest group of rows sharing one
+timestamp must fall from **316** to **1**.
+
+WHAT RUNS WHERE (the same split as the first build, and for the same two
+reasons — `ml/CLAUDE.md` §6 forbids the Copernicus credentials on a rented box,
+and a hosted runner's ~14 GB of disk cannot hold a 50–80 GB store):
+`gdp`, `gtmba` and `socat` on `ubuntu-latest` through `family10-build.yml`; the
+`slatrack` year-lanes on hosted runners through `family10-slatrack-fetch.yml`,
+parking their parts under `partials/family10_1/slatrack/<year>/`; then the
+`slatrack` assembly on a box with `--parts-from-hub --assemble streaming`.
+
+**RUN NUMBERS AND RESULTS TO BE FILLED IN HERE.** The stores of family 10
+stay published at `tensors/family10/` and the registry at
+`tensors/family10/family10.json` until 10.1 is built, verified and handed over;
+nothing about them is touched by this change.
+
+Spec: [E-079 §10.1](https://blauewelt.github.io/earth/docs.html?f=ml/plans/E079_family10_point_stores.md#10-1-integer-seconds).
+The measurement that prompted it: [the family-10 verification of 2026-09-14, §9.7](https://blauewelt.github.io/earth/docs.html?f=docs/FAMILY10_VERIFICATION_2026-09-14.md).
+
 ---
 
 <a id="e-077"></a>

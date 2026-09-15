@@ -25,7 +25,16 @@ What each group of tests is FOR:
                     violate each one — because an assertion nobody has seen
                     fail is an assertion nobody knows is wired up.
   negative bins     drifters start in 1979 and SOCAT in 1957, so `bin` is
-                    signed and the CSR index starts wherever the data does.
+                    signed and the CSR index starts wherever the data does —
+                    and under schema 2 so is `time_s`.
+  the time column   family 10.1's whole change: `time_s`, int32 seconds, in
+                    place of v1's float32 `time_days`. 1 Hz slatrack samples
+                    must land on distinct consecutive seconds; a pre-1982 row
+                    keeps a negative second and a negative bin; a row past
+                    2050 is refused rather than wrapped into 1913; a v1 column
+                    part is refused rather than upgraded, on the hub and in
+                    the assembler; and the reader answers a v1 store and a v2
+                    store with the SAME `dt` in days.
   the reader        the search's three rules (one-sided, bounded, fixed k with
                     miss tokens) and the footprint fields.
   family 8          the Argo store, opened through the family-10 reader with
@@ -117,7 +126,7 @@ def test_each_store_publishes_the_channels_its_plan_promises(built):
         assert meta["qc_policy"] and len(meta["qc_policy"]) > 100
         # Every file the store ships is hashed — a store.json with no sha256
         # block is one `family10_store.verify_store` refuses to open.
-        for n in ("bin.npy", "time_days.npy", "lat.npy", "lon.npy",
+        for n in ("bin.npy", "time_s.npy", "lat.npy", "lon.npy",
                   "values.npy", "platform.npy", "qc.npy", "fp.npy",
                   "bin_offsets.npy"):
             assert n in meta["sha256"], (s, n)
@@ -280,21 +289,94 @@ def test_slatrack_reads_the_cf_time_axis_and_names_the_archive_variable(built):
 
     The time axis is read through its own CF `units` attribute rather than an
     assumed epoch — a store whose timestamps were off by the difference between
-    two epochs would look completely ordinary and be wrong by decades.
+    two epochs would look completely ordinary and be wrong by decades. The
+    fixture is written the way DUACS writes it, `days since 1950-01-01`, so
+    the epoch arithmetic is exercised rather than described.
     """
     ctx, _ = built["slatrack"]
     st = f10.Store.open(ctx.store)
     assert st.channels == ["sla", "sla_unfiltered", "mdt"]
     assert list(b10.CMEMS_VARS) == ["sla_filtered", "sla_unfiltered", "mdt"]
     assert st.log2_fp_const == -2.0 and st.log2_dt_const == -4.0
-    got = b10._cf_time_to_days(np.array([0.0, 1.0]),
-                               "seconds since 1970-01-01 00:00:00")
-    assert abs(got[0] - b10.days_since_epoch(dt.date(1970, 1, 1))) < 1e-6
-    assert abs(got[1] - got[0] - 1.0 / 86400.0) < 1e-9
+    got = b10._cf_time_to_seconds(np.array([0.0, 1.0]),
+                                  "seconds since 1970-01-01 00:00:00")
+    assert got[0] == b10.seconds_since_epoch(dt.date(1970, 1, 1))
+    assert got[1] - got[0] == 1.0
+    # DUACS's own axis: days since 1950-01-01, and one DAY apart in seconds
+    duacs = b10._cf_time_to_seconds(np.array([0.0, 1.0]),
+                                    "days since 1950-01-01 00:00:00")
+    assert duacs[0] == b10.seconds_since_epoch(dt.date(1950, 1, 1))
+    assert duacs[1] - duacs[0] == 86400.0
     with pytest.raises(ValueError):
-        b10._cf_time_to_days(np.array([0.0]), "furlongs since 1970-01-01")
+        b10._cf_time_to_seconds(np.array([0.0]), "furlongs since 1970-01-01")
     with pytest.raises(ValueError):
-        b10._cf_time_to_days(np.array([0.0]), "days")
+        b10._cf_time_to_seconds(np.array([0.0]), "days")
+
+
+def test_a_1hz_slatrack_netcdf_lands_on_distinct_consecutive_seconds(tmp_path,
+                                                                     built):
+    """THE MEASUREMENT THAT BOUGHT 10.1, as a test that fails on the old code.
+
+    The DUACS files sample at 1 Hz. Under schema 1 the store's `time_days` was
+    float32, which resolves ~84 s at the end of the record, so a whole minute
+    of consecutive along-track samples collapsed onto one timestamp — the
+    2026-09-14 verification found up to 316 rows sharing one. Under schema 2
+    the same axis must come back as CONSECUTIVE INTEGER SECONDS, and the bin
+    each lands in must be `floor(time_s / 432000)` exactly.
+
+    The fixture writes the real shape: float64 `days since 1950-01-01`, 120
+    samples one second apart, straddling a pentad boundary so the bin actually
+    changes inside the run.
+    """
+    ncdf = pytest.importorskip("netCDF4")
+    ctx, _ = built["slatrack"]
+    ad = b10.SLATrackAdapter()
+    mid = "cmems_obs-sl_glo_phy-ssh_my_j3-l3-duacs_PT1S_202411"
+    # the last two minutes before a pentad boundary in 2015, and the first
+    # minutes after it
+    edge = f10.PENTAD_SECONDS * 2411
+    n = 120
+    first = edge - 60
+    cf_epoch = dt.datetime(1950, 1, 1)
+    off = (dt.datetime(1982, 1, 1) - cf_epoch).total_seconds()
+    p = str(tmp_path / "duacs_1hz.nc")
+    ds = ncdf.Dataset(p, "w", format="NETCDF3_CLASSIC")
+    ds.createDimension("time", n)
+    tv = ds.createVariable("time", "f8", ("time",))
+    tv.units = "days since 1950-01-01 00:00:00"
+    tv[:] = np.array([(first + i + off) / 86400.0 for i in range(n)],
+                     np.float64)
+    for nm, arr in (("latitude", np.linspace(-10, 10, n)),
+                    ("longitude", np.linspace(-20, 20, n)),
+                    ("sla_filtered", np.full(n, 0.05)),
+                    ("sla_unfiltered", np.full(n, 0.06)),
+                    ("mdt", np.full(n, 0.30))):
+        v = ds.createVariable(nm, "f8", ("time",))
+        v[:] = arr
+    ds.close()
+
+    # the fixture window has to admit 2015 for `_rows_from_frame` to keep them
+    ctx2, _ = build(str(tmp_path), "slatrack", start="2015-01-01",
+                    end="2015-12-31", stages=())
+    rows, counts = ad._read_nc(ctx2, p, mid)
+    assert counts["kept"] == n
+    ts = np.asarray(rows["time_s"], np.int64)
+    assert ts.tolist() == list(range(first, first + n)), \
+        "1 Hz samples did not land on distinct consecutive seconds"
+    assert len(set(ts.tolist())) == n          # no two share a timestamp
+    assert np.array_equal(np.asarray(rows["bin"], np.int64),
+                          ts // f10.PENTAD_SECONDS)
+    assert set(np.asarray(rows["bin"], np.int64).tolist()) == {2410, 2411}, \
+        "the run was meant to straddle a pentad boundary"
+
+    # and the same thing through a whole built store, bin column included
+    st = f10.Store.open(built["slatrack"][0].store)
+    assert st.schema_version == 2 and st.time_column == "time_s"
+    s = st.time_s()
+    assert np.array_equal(np.asarray(st["bin"], np.int64),
+                          f10.bin_of_seconds(s))
+    # the smoke fixture is 1 Hz too: five consecutive seconds per day
+    assert len(set(s.tolist())) == st.N, "the store has duplicate timestamps"
 
 
 def test_slatrack_refuses_without_credentials_and_never_reads_a_file():
@@ -321,14 +403,24 @@ def test_slatrack_refuses_without_credentials_and_never_reads_a_file():
 # ============================================================== §4 invariants ==
 def _write_store(path, bins, times, lat, lon, values, platform=None, qc=None,
                  fp=(-4.0, -4.0), channels=(("a", "x", -10.0, 10.0),),
-                 bin_first=None, offsets=None):
-    """A store written from arrays, so each invariant can be broken on purpose."""
+                 bin_first=None, offsets=None, schema=2):
+    """A store written from arrays, so each invariant can be broken on purpose.
+
+    `times` is in DAYS in every caller, because the geometry these fixtures
+    describe is written in pentads and "bin 2, day 12.0" reads. `schema=2`
+    (the default, family 10.1) converts it to `time_s`, int32 SECONDS;
+    `schema=1` writes the old float32 `time_days` column, which is how the
+    reader's both-schemas claim is tested against a store rather than argued.
+    """
     os.makedirs(path, exist_ok=True)
     n = len(bins)
     b = np.asarray(bins, np.int16)
+    td = np.asarray(times, np.float64)
+    tcol = ({"time_s": np.rint(td * 86400.0).astype(np.int32)} if schema == 2
+            else {"time_days": td.astype(np.float32)})
     cols = {
         "bin": b,
-        "time_days": np.asarray(times, np.float32),
+        **tcol,
         "lat": np.asarray(lat, np.float32),
         "lon": np.asarray(lon, np.float32),
         "values": np.asarray(values, np.float16).reshape(n, -1),
@@ -345,6 +437,7 @@ def _write_store(path, bins, times, lat, lon, values, platform=None, qc=None,
     for k, v in cols.items():
         np.save(os.path.join(path, k + ".npy"), v)
     meta = {"family": "family10", "tier": "P", "N": n, "C": cols["values"].shape[1],
+            "schema_version": schema,
             "bin_first": bf, "n_bins": nb,
             "channels": [{"name": c[0], "unit": c[1]} for c in channels],
             "footprint": {"log2_fp": fp[0], "log2_dt": fp[1]},
@@ -369,7 +462,7 @@ def test_check_store_catches_every_invariant_it_claims_to(built):
         b10.check_store(_write_store(os.path.join(tmp, "unsorted"), **bad))
 
     bad = dict(good, bins=[0, 0, 1, 1])          # row 3's time says bin 2
-    with pytest.raises(AssertionError, match="disagrees"):
+    with pytest.raises(AssertionError, match="disagrees with floor"):
         b10.check_store(_write_store(os.path.join(tmp, "binmismatch"), **bad))
 
     bad = dict(good, lon=[0, 10, 20, 200.0])
@@ -624,27 +717,82 @@ def test_bin_of_days_floors_toward_minus_infinity():
     assert got.tolist() == [-2, -2, -1, -1, 0, 0, 1]
 
 
-def test_the_bin_column_survives_the_float32_round_trip(built):
-    """A timestamp near a pentad boundary must not land in a neighbouring bin.
+def test_the_bin_is_exact_integer_arithmetic_on_the_stored_second(built):
+    """A timestamp at a pentad boundary lands in the right bin, EXACTLY.
 
-    `time_days` is float32 and runs to ~16,000 days, where it resolves about
-    0.001 d, so a float64 timestamp a microsecond before a boundary can round
-    UP across it. If `bin` were computed at full precision the row would sit in
-    bin b carrying a timestamp that reads as bin b+1, and the reader — which
-    requires `dt_days = 5*(b+1) - t >= 0` — would silently never return it for
-    its own anchor. The builder computes the bin from the STORED value, so the
-    store is self-consistent by construction.
+    Under schema 1 this was a survival test: `time_days` was float32 and
+    resolved ~0.001 d at the end of the record, so a float64 timestamp a
+    microsecond before a boundary could round UP across it and leave a row in
+    bin b carrying a timestamp that read as bin b+1 — which the reader
+    (`dt_days = 5*(b+1) - t >= 0`) would then never return for its own anchor.
+    The builder had to derive the bin from the value it was about to store.
+
+    Under schema 2 the stored value IS the parsed value and the bin is
+    `floor_divide(time_s, 432000)`, so the whole class is gone rather than
+    guarded. These four seconds straddle a real boundary at bin 2411.
     """
-    edge = 5.0 * 2411                       # exactly a pentad boundary
-    times = [np.nextafter(edge, 0.0), edge, np.nextafter(edge, 1e9),
-             edge + 4.999999]
+    edge = f10.PENTAD_SECONDS * 2411        # exactly a pentad boundary
+    times = [edge - 1, edge, edge + 1, edge + f10.PENTAD_SECONDS - 1]
     rows = b10._pack(times, [0.0] * 4, [0.0] * 4, np.zeros((4, 1)),
                      np.arange(4), np.ones(4), 1)
-    t32 = np.asarray(rows["time_days"], np.float64)
+    ts = np.asarray(rows["time_s"], np.int64)
+    assert ts.dtype == np.int64 and rows["time_s"].dtype == np.int32
+    assert ts.tolist() == times, "the parsed second is not the stored second"
+    assert np.asarray(rows["bin"], np.int64).tolist() == [2410, 2411, 2411,
+                                                          2411]
     assert np.array_equal(np.asarray(rows["bin"], np.int64),
-                          f10.bin_of_days(t32))
-    for b, t in zip(rows["bin"], t32):
-        assert f10.anchor_time_days(int(b)) - t >= 0.0
+                          f10.bin_of_seconds(ts))
+    for b, t in zip(rows["bin"], ts):
+        assert f10.anchor_time_s(int(b)) - int(t) >= 0
+        assert f10.anchor_time_days(int(b)) - t / 86400.0 >= 0.0
+
+
+def test_a_row_past_2050_is_refused_rather_than_wrapped():
+    """int32 seconds end at 2050-01-19T03:14:07Z, and the limit is ENFORCED.
+
+    A row one second past it would wrap to 1913 and read as an ordinary
+    pre-epoch observation — the store would be internally consistent, the
+    search would answer, and the only sign would be a drifter measured
+    thirty-five years before drifters existed. So `_pack` refuses, names the
+    two dates, and says what the fix is (int64, at twice the column's size).
+    """
+    ok = f10.TIME_S_MAX
+    rows = b10._pack([ok], [0.0], [0.0], np.zeros((1, 1)), [0], [1], 1)
+    assert int(rows["time_s"][0]) == ok
+    for bad in (f10.TIME_S_MAX + 1, f10.TIME_S_MIN - 1):
+        with pytest.raises(ValueError) as e:
+            b10._pack([bad], [0.0], [0.0], np.zeros((1, 1)), [0], [1], 1)
+        msg = str(e.value)
+        assert "2050-01-19T03:14:07Z" in msg and "int32" in msg
+    # and the date the limit is stated as really is the second it is
+    assert (dt.datetime(1982, 1, 1) + dt.timedelta(seconds=ok) ==
+            dt.datetime(2050, 1, 19, 3, 14, 7))
+
+
+def test_a_pre_1982_row_keeps_a_negative_second_and_a_negative_bin():
+    """1957 and 1979 are before the epoch, so `time_s` is negative and floors.
+
+    Integer `floor_divide` is what makes this work: -1 s is bin -1, not bin 0.
+    A C-style truncating division would put the last second of 1981 in bin 0
+    with the first second of 1982, and the search would read a 1981 drifter as
+    contemporary with a 1982 anchor.
+    """
+    when = dt.datetime(1981, 12, 31, 23, 59, 59)
+    s = b10.seconds_since_epoch(when)
+    assert s == -1
+    rows = b10._pack([s], [10.0], [20.0], np.zeros((1, 1)), [0], [1], 1)
+    assert int(rows["time_s"][0]) == -1
+    assert int(rows["bin"][0]) == -1
+    # a whole pentad earlier, and the boundary itself
+    for secs, want in ((-f10.PENTAD_SECONDS, -1),
+                       (-f10.PENTAD_SECONDS - 1, -2),
+                       (b10.seconds_since_epoch(dt.date(1957, 1, 1)), -1827),
+                       (b10.seconds_since_epoch(dt.date(1979, 2, 15)), -211)):
+        r = b10._pack([secs], [0.0], [0.0], np.zeros((1, 1)), [0], [1], 1)
+        assert int(r["bin"][0]) == want, (secs, int(r["bin"][0]), want)
+        assert int(r["time_s"][0]) == secs < 0
+    assert f10.bin_of_seconds(np.array([-1, -432000, -432001, 0])).tolist() \
+        == [-1, -1, -2, 0]
 
 
 # ==================================================================== reader ==
@@ -840,7 +988,7 @@ def test_the_registry_lists_every_store_it_can_read_and_names_the_ones_it_cannot
         # hashes, so it cannot carry its own.
         assert len(e["files"]) == 9
         assert {f["name"] for f in e["files"]} == {
-            "bin.npy", "time_days.npy", "lat.npy", "lon.npy", "values.npy",
+            "bin.npy", "time_s.npy", "lat.npy", "lon.npy", "values.npy",
             "platform.npy", "qc.npy", "fp.npy", "bin_offsets.npy"}
         assert all(f["sha256"] for f in e["files"])
         assert e["qc_policy"] and e["sources"] and e["verified"]
@@ -1065,10 +1213,11 @@ def test_slatrack_rows_from_frame_filters_counts_and_packs(built):
     assert counts["rows_read"] == 4
     assert counts["kept"] == 2
     assert counts["out_of_bounds"] == {"sla_unfiltered": 1}
-    assert len(rows["time_days"]) == 2
-    want_t = [b10.days_since_epoch(dt.date(1981, 12, 25)) + 0.25,
-              b10.days_since_epoch(dt.date(1982, 1, 5)) + 0.5]
-    assert np.allclose(rows["time_days"], np.float32(want_t), atol=1e-3)
+    assert len(rows["time_s"]) == 2
+    # EXACT seconds, not a tolerance: 06:00 and 12:00 of two named days.
+    want_t = [b10.seconds_since_epoch(dt.datetime(1981, 12, 25, 6)),
+              b10.seconds_since_epoch(dt.datetime(1982, 1, 5, 12))]
+    assert np.asarray(rows["time_s"], np.int64).tolist() == want_t
     assert np.allclose(rows["lat"], [10.0, -20.0], atol=1e-3)
     assert np.allclose(rows["lon"], [100.0, -170.0], atol=1e-3)
     v = np.asarray(rows["values"], np.float64)
@@ -1176,7 +1325,7 @@ def test_slatrack_pivots_the_long_frame_read_dataframe_returns(built):
     assert counts["kept"] == 2
     # sla_filtered qc only: one 1 (the three-variable sample) and one 2
     assert counts["value_qc"] == {1: 1, 2: 1}
-    order = np.argsort(np.asarray(rows["time_days"], np.float64))
+    order = np.argsort(np.asarray(rows["time_s"], np.int64))
     lat = np.asarray(rows["lat"], np.float64)[order]
     v = np.asarray(rows["values"], np.float64)[order]
     assert np.allclose(lat, [-20.0, 10.0], atol=1e-3)
@@ -1247,7 +1396,7 @@ def test_slatrack_response_paths_reads_the_toolbox_response_shape():
 # RAM — so `assemble_store_streaming` writes the store through memmaps in
 # three passes. Its ONLY claim is byte identity with `assemble_store`, and a
 # claim like that is worth exactly as much as the test that checks it.
-STORE_ARRAYS = ("bin.npy", "time_days.npy", "lat.npy", "lon.npy", "values.npy",
+STORE_ARRAYS = ("bin.npy", "time_s.npy", "lat.npy", "lon.npy", "values.npy",
                 "platform.npy", "qc.npy", "fp.npy", "bin_offsets.npy")
 
 
@@ -1258,7 +1407,7 @@ def _hash_store(dest):
 def _duplicate_rows_across_parts(ctx, year=None):
     """Add a SECOND part to one year holding rows that tie the first part's.
 
-    Same `bin` AND same `time_days`, different lat/platform. That is the only
+    Same `bin` AND same `time_s`, different lat/platform. That is the only
     case where the two assemblers could disagree: `np.lexsort` breaks such a
     tie by INPUT ORDER, and the streaming assembler has to reproduce that
     input order from a scatter plus a per-bin stable sort. Without this part
@@ -1287,7 +1436,9 @@ def test_the_streaming_assembler_writes_the_same_bytes(tmp_path):
     """Build one synthetic archive, assemble it twice, compare every file.
 
     The archive is doctored first so that one year holds duplicate
-    (bin, time_days) rows SPREAD ACROSS TWO PARTS — the tie-break case.
+    (bin, time_s) rows SPREAD ACROSS TWO PARTS — the tie-break case. Ties are
+    rarer at one-second resolution than they were at 84 seconds, which is
+    exactly why the test manufactures them rather than hoping for them.
     """
     import shutil
     tmp = str(tmp_path)
@@ -1320,7 +1471,7 @@ def test_the_streaming_assembler_writes_the_same_bytes(tmp_path):
     # …and the ties really are there, or the test proves nothing.
     st = f10.Store(keep)
     b = np.asarray(st["bin"], np.int64)
-    t = np.asarray(st["time_days"], np.float64)
+    t = st.time_s()
     ties = int(((b[1:] == b[:-1]) & (t[1:] == t[:-1])).sum())
     assert ties >= n_dup, (ties, n_dup)
 
@@ -1544,6 +1695,163 @@ def test_parts_from_hub_refuses_when_a_year_is_not_on_the_hub(tmp_path,
     b10.run_stages(ctx2, ["index"])
     with pytest.raises(SystemExit, match=str(ctx.years[-1])):
         b10.run_stages(ctx2, ["fetch"])
+
+
+def _make_v1_part(path):
+    """A column part in the SCHEMA-1 layout — `time_days`, float32 days.
+
+    Written by hand rather than by an old builder, because the point is the
+    column NAME and dtype a v1 part carries, and that is all any reader of one
+    would have to go on.
+    """
+    with np.load(path) as z:
+        d = {k: z[k] for k in z.files}
+    days = np.asarray(d.pop("time_s"), np.float64) / 86400.0
+    d["time_days"] = days.astype(np.float32)
+    np.savez(path, **d)
+    return path
+
+
+def test_a_v1_part_on_the_hub_is_refused_rather_than_upgraded(tmp_path,
+                                                              fakehub):
+    """A `time_days` part CANNOT become a `time_s` one, so it is refused.
+
+    This is the trap the split build sets: the fetch lanes and the assembly are
+    different machines and can be a schema apart, and `done.json` records
+    names, bytes and sha256 — nothing about the column layout inside a part. So
+    a v1 year verifies perfectly and is still unusable, and the only honest
+    answer is to refetch it from Copernicus. Multiplying float32 days by 86400
+    would produce an integer column that LOOKS exact and is wrong by up to 84
+    seconds, which is the single outcome family 10.1 exists to prevent.
+
+    Refused in THREE places, and each is a different machine's last chance:
+    `push` before a byte is uploaded, `pull` before the year is moved into
+    place and marked, and `parts_preflight` before either assembler reads it.
+    """
+    import shutil
+    tmp = str(tmp_path / "a")
+    os.makedirs(tmp, exist_ok=True)
+    ctx, _ = build(tmp, "gdp")
+    y = ctx.years[0]
+    part = os.path.join(ctx.year_dir(y), "00000.npz")
+
+    # (1) push refuses a v1 part before it uploads anything
+    _make_v1_part(part)
+    before = fakehub.uploads
+    with pytest.raises(SystemExit) as e:
+        ph.push("gdp", y, ctx.work)
+    msg = str(e.value)
+    assert "time_days" in msg and "SCHEMA-1" in msg
+    assert "cannot be upgraded" in msg
+    assert fakehub.uploads == before, "a refused push still uploaded"
+
+    # (2) pull refuses one that reached the Hub some other way. Push the
+    # HEALTHY year first, then swap the bytes on the fake Hub underneath it —
+    # exactly the case done.json cannot see, since the hashes are recomputed
+    # from what is there.
+    tmp2 = str(tmp_path / "b")
+    os.makedirs(tmp2, exist_ok=True)
+    ctx2, _ = build(tmp2, "gdp")
+    ok_part = os.path.join(ctx2.year_dir(y), "00000.npz")
+    assert ph.push("gdp", y, ctx2.work) == 0
+    hub_part = os.path.join(fakehub.root, ph.hub_prefix("gdp", y), "00000.npz")
+    shutil.copyfile(part, hub_part)
+    done = os.path.join(fakehub.root, ph.hub_prefix("gdp", y), "done.json")
+    d = json.load(open(done))
+    for ent in d["files"]:
+        if ent["name"] == "00000.npz":
+            ent["sha256"] = f10.sha256(hub_part)
+            ent["bytes"] = os.path.getsize(hub_part)
+    json.dump(d, open(done, "w"))
+    fresh = os.path.join(tmp2, "pulled")
+    with pytest.raises(SystemExit) as e:
+        ph.pull("gdp", [y], fresh)
+    assert "time_days" in str(e.value) and "pull refuses" in str(e.value)
+    # and the year was NOT marked, so it reads as one to refetch
+    assert not b10.marked(ph.store_root(fresh, "gdp"), f"parts/{y}")
+
+    # (3) the assembler refuses it too, even under --allow-missing-years —
+    # that flag says "a short store is what I want", never "a wrong one".
+    shutil.rmtree(ctx2.store, ignore_errors=True)
+    shutil.copyfile(part, ok_part)
+    ctx2.a.allow_missing_years = True
+    with pytest.raises(ValueError, match="SCHEMA-1"):
+        b10.assemble(ctx2)
+
+    # the message says what to do, not merely that something is wrong
+    with pytest.raises(ValueError) as e:
+        f10.check_part_schema(part)
+    assert "Refetch the year from the source" in str(e.value)
+
+
+def test_the_reader_gives_the_same_dt_from_a_v1_and_a_v2_store(tmp_path):
+    """ONE reader, two schemas, the same answer in days.
+
+    `ml/family10_store.py` has to keep opening the stores that are already
+    published — family 8's Argo store and family 10's four — while reading the
+    10.1 rebuilds, or the verification tooling and every consumer break on the
+    day the prefix moves. So: the same rows written twice, once as float32
+    days and once as int32 seconds, and the search must return the same `dt`.
+
+    The timestamps here are chosen to be EXACTLY representable in float32 days
+    (whole and half days), because a v1 store cannot reproduce anything else —
+    that is the defect, not a tolerance to be papered over. What the test pins
+    is that the reader adds no disagreement of its own.
+    """
+    n = 12
+    bins = np.repeat(np.arange(4), 3)
+    times = bins * 5.0 + np.tile([0.0, 0.5, 4.5], 4)     # days, float32-exact
+    lat = np.linspace(-5, 5, n)
+    lon = np.linspace(-9, 9, n)
+    vals = np.arange(n, dtype=float).reshape(n, 1)
+    v2 = _write_store(str(tmp_path / "v2"), bins=bins, times=times, lat=lat,
+                      lon=lon, values=vals, schema=2)
+    v1 = _write_store(str(tmp_path / "v1"), bins=bins, times=times, lat=lat,
+                      lon=lon, values=vals, schema=1)
+
+    s2, s1 = f10.Store.open(v2), f10.Store.open(v1)
+    assert (s2.schema_version, s2.time_column) == (2, "time_s")
+    assert (s1.schema_version, s1.time_column) == (1, "time_days")
+    # both expose both forms
+    assert np.array_equal(s2.time_s(), s1.time_s())
+    assert np.array_equal(s2.time_days(), s1.time_days())
+    assert np.array_equal(np.asarray(s2["time_s"], np.int64),
+                          np.asarray(s1["time_s"], np.int64))
+    assert s2["time_s"].dtype == np.int32          # the native memmap
+    assert s1["time_days"].dtype == np.float32     # the native memmap
+
+    for b in (0, 1, 2, 3):
+        a = s2.knearest(0.0, 0.0, bin=b, k=6, R_max_km=5000.0,
+                        T_max_days=20.0)
+        c = s1.knearest(0.0, 0.0, bin=b, k=6, R_max_km=5000.0,
+                        T_max_days=20.0)
+        assert a["n_R"] == c["n_R"] and a["n_found"] == c["n_found"], b
+        assert np.array_equal(a["row"], c["row"]), b
+        assert np.array_equal(a["dt_days"], c["dt_days"], equal_nan=True), b
+        assert a["dt_days"].dtype == np.float64    # days, float64, both
+        assert np.array_equal(a["time_s"], c["time_s"], equal_nan=True), b
+        assert np.array_equal(a["time_days"], c["time_days"],
+                              equal_nan=True), b
+        for k in ("dx_km", "dy_km", "dist_km", "d2", "values"):
+            assert np.allclose(a[k], c[k], equal_nan=True), (b, k)
+
+    # and `check_store` gives the same verdict on both, at any block size
+    for st in (v2, v1):
+        for chunk in (1, 5, n):
+            b10.check_store(st, chunk_rows=chunk)
+
+    # a store.json that claims the schema its bytes do not have is refused,
+    # in either direction — that disagreement is not resolvable by guessing.
+    import shutil
+    for src, lie in ((v2, 1), (v1, 2)):
+        d = str(tmp_path / f"lie{lie}")
+        shutil.rmtree(d, ignore_errors=True)
+        shutil.copytree(src, d)
+        m = json.load(open(os.path.join(d, "store.json")))
+        m["schema_version"] = lie
+        json.dump(m, open(os.path.join(d, "store.json"), "w"))
+        with pytest.raises(ValueError, match="schema_version"):
+            f10.Store.open(d)
 
 
 def test_slatrack_read_nc_folds_a_sample_at_exactly_180_east(tmp_path, built):
