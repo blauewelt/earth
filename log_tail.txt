@@ -1,0 +1,80 @@
+
+
+
+  ..._1/gtmba/gtmba/time_s.npy: 100%|██████████| 4.01MB / 4.01MB            [A[A[A[A[A[A[A[A[A[A
+
+  ...ly10_1/gtmba/gtmba/fp.npy: 100%|██████████| 4.01MB / 4.01MB            [A[A
+
+
+  ...y10_1/gtmba/gtmba/bin.npy: 100%|██████████| 2.00MB / 2.00MB            [A[A[A
+
+
+
+  ...mba/gtmba/bin_offsets.npy: 100%|██████████| 27.7kB / 27.7kB            [A[A[A[A
+
+
+
+
+  ...y10_1/gtmba/gtmba/lat.npy: 100%|██████████| 4.01MB / 4.01MB            [A[A[A[A[A
+
+
+
+
+
+  ...y10_1/gtmba/gtmba/lon.npy: 100%|██████████| 4.01MB / 4.01MB            [A[A[A[A[A[A
+
+
+
+
+
+
+  .../gtmba/gtmba/platform.npy: 100%|██████████| 8.01MB / 8.01MB            [A[A[A[A[A[A[A
+
+
+
+
+
+
+
+  ...ly10_1/gtmba/gtmba/qc.npy: 100%|██████████| 1.00MB / 1.00MB            [A[A[A[A[A[A[A[A
+
+
+
+
+
+
+
+
+  ..._1/gtmba/gtmba/values.npy: 100%|██████████| 36.0MB / 36.0MB            [A[A[A[A[A[A[A[A[A
+
+
+
+
+
+
+
+
+
+  ..._1/gtmba/gtmba/time_s.npy: 100%|██████████| 4.01MB / 4.01MB            [A[A[A[A[A[A[A[A[A[AProcessing Files (9 / 9)      : 100%|██████████| 63.1MB / 63.1MB, 6.06MB/s  
+New Data Upload               : 100%|██████████| 4.01MB / 4.01MB,  386kB/s  
+  ...ly10_1/gtmba/gtmba/fp.npy: 100%|██████████| 4.01MB / 4.01MB            
+  ...y10_1/gtmba/gtmba/bin.npy: 100%|██████████| 2.00MB / 2.00MB            
+  ...mba/gtmba/bin_offsets.npy: 100%|██████████| 27.7kB / 27.7kB            
+  ...y10_1/gtmba/gtmba/lat.npy: 100%|██████████| 4.01MB / 4.01MB            
+  ...y10_1/gtmba/gtmba/lon.npy: 100%|██████████| 4.01MB / 4.01MB            
+  .../gtmba/gtmba/platform.npy: 100%|██████████| 8.01MB / 8.01MB            
+  ...ly10_1/gtmba/gtmba/qc.npy: 100%|██████████| 1.00MB / 1.00MB            
+  ..._1/gtmba/gtmba/values.npy: 100%|██████████| 36.0MB / 36.0MB            
+  ..._1/gtmba/gtmba/time_s.npy: 100%|██████████| 4.01MB / 4.01MB            
+  [publish gtmba] bin.npy  1/10  1.7s
+  [publish gtmba] bin_offsets.npy  2/10  1.9s
+  [publish gtmba] fp.npy  3/10  2.1s
+  [publish gtmba] lat.npy  4/10  2.4s
+  [publish gtmba] lon.npy  5/10  2.7s
+  [publish gtmba] platform.npy  6/10  3.1s
+  [publish gtmba] qc.npy  7/10  3.3s
+  [publish gtmba] time_s.npy  8/10  3.6s
+  [publish gtmba] values.npy  9/10  4.3s
+  [publish gtmba] store.json  10/10  4.4s
+  publish: 10 file(s) verified by restore -> https://huggingface.co/datasets/chfrank/earth-tensors/tree/main/tensors/family10_1/gtmba
+=== stage publish done in 6.1s ===
