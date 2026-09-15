@@ -1,0 +1,80 @@
+
+
+
+  ...ly10_1/gdp/gdp/values.npy: 100%|██████████|  388MB /  388MB            [A[A[A[A[A[A[A[A[A[A
+
+  ...1/gdp/gdp/bin_offsets.npy: 100%|██████████| 27.0kB / 27.0kB            [A[A
+
+
+  ...amily10_1/gdp/gdp/bin.npy: 100%|██████████| 97.0MB / 97.0MB            [A[A[A
+
+
+
+  ...family10_1/gdp/gdp/qc.npy: 100%|██████████| 48.5MB / 48.5MB            [A[A[A[A
+
+
+
+
+  ...ly10_1/gdp/gdp/time_s.npy: 100%|██████████|  194MB /  194MB            [A[A[A[A[A
+
+
+
+
+
+  ...family10_1/gdp/gdp/fp.npy: 100%|██████████|  194MB /  194MB            [A[A[A[A[A[A
+
+
+
+
+
+
+  ...amily10_1/gdp/gdp/lat.npy: 100%|██████████|  194MB /  194MB            [A[A[A[A[A[A[A
+
+
+
+
+
+
+
+  ...amily10_1/gdp/gdp/lon.npy: 100%|██████████|  194MB /  194MB            [A[A[A[A[A[A[A[A
+
+
+
+
+
+
+
+
+  ...10_1/gdp/gdp/platform.npy: 100%|██████████|  388MB /  388MB            [A[A[A[A[A[A[A[A[A
+
+
+
+
+
+
+
+
+
+  ...ly10_1/gdp/gdp/values.npy: 100%|██████████|  388MB /  388MB            [A[A[A[A[A[A[A[A[A[AProcessing Files (9 / 9)      : 100%|██████████| 1.70GB / 1.70GB,  151MB/s  
+New Data Upload               : 100%|██████████|  194MB /  194MB, 17.1MB/s  
+  ...1/gdp/gdp/bin_offsets.npy: 100%|██████████| 27.0kB / 27.0kB            
+  ...amily10_1/gdp/gdp/bin.npy: 100%|██████████| 97.0MB / 97.0MB            
+  ...family10_1/gdp/gdp/qc.npy: 100%|██████████| 48.5MB / 48.5MB            
+  ...ly10_1/gdp/gdp/time_s.npy: 100%|██████████|  194MB /  194MB            
+  ...family10_1/gdp/gdp/fp.npy: 100%|██████████|  194MB /  194MB            
+  ...amily10_1/gdp/gdp/lat.npy: 100%|██████████|  194MB /  194MB            
+  ...amily10_1/gdp/gdp/lon.npy: 100%|██████████|  194MB /  194MB            
+  ...10_1/gdp/gdp/platform.npy: 100%|██████████|  388MB /  388MB            
+  ...ly10_1/gdp/gdp/values.npy: 100%|██████████|  388MB /  388MB            
+  [publish gdp] bin.npy  1/10  6.0s
+  [publish gdp] bin_offsets.npy  2/10  6.8s
+  [publish gdp] fp.npy  3/10  8.9s
+  [publish gdp] lat.npy  4/10  11.9s
+  [publish gdp] lon.npy  5/10  22.0s
+  [publish gdp] platform.npy  6/10  29.3s
+  [publish gdp] qc.npy  7/10  31.2s
+  [publish gdp] time_s.npy  8/10  33.3s
+  [publish gdp] values.npy  9/10  39.3s
+  [publish gdp] store.json  10/10  39.6s
+  publish: 10 file(s) verified by restore -> https://huggingface.co/datasets/chfrank/earth-tensors/tree/main/tensors/family10_1/gdp
+=== stage publish done in 47.6s ===

@@ -1,0 +1,338 @@
+{
+ "bins": [
+  -220,
+  3141
+ ],
+ "builder_git_sha": "d7fc30bf1912340afa10a029dff05d01c3598563",
+ "built_at": "2026-09-15T10:41:45+00:00",
+ "channels": [
+  {
+   "max": 5.0,
+   "min": -5.0,
+   "name": "u",
+   "unit": "m s-1"
+  },
+  {
+   "max": 5.0,
+   "min": -5.0,
+   "name": "v",
+   "unit": "m s-1"
+  },
+  {
+   "max": 45.0,
+   "min": -3.0,
+   "name": "sst",
+   "unit": "degC"
+  },
+  {
+   "max": 1.0,
+   "min": 0.0,
+   "name": "drogue",
+   "unit": "1 = drogue attached"
+  }
+ ],
+ "dataset": "drifter_6hour_qc",
+ "datasets_listed": {
+  "OSMC_RealTime": "OSMC flattened observations from GTS",
+  "RAFOS_SOFAR_Floats": "Subsurface Floats",
+  "allDatasets": "* The List of All Active Datasets in this ERDDAP *",
+  "drifter_6hour_qc": "Global Drifter Program - 6 Hour Interpolated QC Drifter Data",
+  "drifter_hourly_qc": "Global Drifter Program - 1 Hour Interpolated QC Drifter Data",
+  "drifter_loopers": "Global Drifter Program - Looper Trajectories",
+  "drifter_nonloopers": "Global Drifter Program - Nonlooper Trajectories"
+ },
+ "date_range": [
+  "1979-01-01",
+  "2024-12-31"
+ ],
+ "footprint": {
+  "log2_dt": -4.3,
+  "log2_fp": -4.0
+ },
+ "months": 552,
+ "per_year_resume": true,
+ "preflight": {
+  "counts": {
+   "empty_month": 1
+  },
+  "month": "1979-01",
+  "rows_parsed": 0
+ },
+ "qc_policy": "The source IS the quality-controlled product \u2014 the GDP's kriging interpolation onto 00/06/12/18 UTC, with per-sample position and SST error estimates and no per-row flag column. So the flag is derived from the errors the archive does publish, and the derivation is here rather than in a consumer: position error = hypot(err_lat, err_lon * cos(lat)) * 111.32 km; a row with > 50 km is DROPPED and counted (E-079 \u00a73.1), <= 5 km is qc 1 (good) and the rest qc 2 (probably good). A velocity or SST equal to the -999999 fill, or outside the physical bounds above, becomes NaN for that channel only and is counted; the row survives if any channel does. `drogue` is 1 where the observation's time precedes `drogue_lost_date`, 0 where it follows it, and NaN where that date is 1970-01-01, which the archive documents as 'drogue status uncertain from the beginning' \u2014 an unknown, not an undrogued drifter.",
+ "sources": [
+  "https://erddap.aoml.noaa.gov/gdp/erddap/tabledap/drifter_6hour_qc.csvp?<vars>&time>=<start>&time<=<end>",
+  "https://osmc.noaa.gov/erddap/tabledap/drifter_6hour_qc.csvp (mirror)"
+ ],
+ "store": "gdp",
+ "title": "Global Drifter Program, 6-hourly QC interpolated",
+ "variables": {
+  "BuoyTypeManufacturer": {
+   "dtype": "String",
+   "long_name": "Buoy Type Manufacturer"
+  },
+  "BuoyTypeSensorArray": {
+   "dtype": "String",
+   "long_name": "Buoy Type Sensor Array"
+  },
+  "DeployingCountry": {
+   "dtype": "String",
+   "long_name": "Deploying Country"
+  },
+  "DeployingShip": {
+   "dtype": "String",
+   "long_name": "Deploying Ship"
+  },
+  "DeploymentComments": {
+   "dtype": "String",
+   "long_name": "Deployment Comments"
+  },
+  "DeploymentStatus": {
+   "dtype": "String",
+   "long_name": "Status of Deployment"
+  },
+  "DragAreaAboveDrogue": {
+   "dtype": "String",
+   "long_name": "Drag Area Above Drogue"
+  },
+  "DragAreaOfDrogue": {
+   "dtype": "String",
+   "long_name": "Drag Area Of Drogue"
+  },
+  "DragAreaRatio": {
+   "dtype": "String",
+   "long_name": "Drag Area Ratio"
+  },
+  "DrogueBallast": {
+   "dtype": "String",
+   "long_name": "Drogue Ballast"
+  },
+  "DrogueCenterDepth": {
+   "dtype": "String",
+   "long_name": "Drogue Center Depth"
+  },
+  "DrogueDetectSensor": {
+   "dtype": "String",
+   "long_name": "Drogue Detect Sensor"
+  },
+  "DrogueLength": {
+   "dtype": "String",
+   "long_name": "Drogue Length"
+  },
+  "DrogueType": {
+   "dtype": "String",
+   "long_name": "Drogue Type"
+  },
+  "FloatDiameter": {
+   "dtype": "String",
+   "long_name": "Float Diameter"
+  },
+  "ID": {
+   "dtype": "String",
+   "long_name": "Global Drifter Program Buoy ID"
+  },
+  "ManufactureMonth": {
+   "dtype": "String",
+   "long_name": "Manufacture Month"
+  },
+  "ManufactureYear": {
+   "dtype": "String",
+   "long_name": "Manufacture Year"
+  },
+  "PurchaserFunding": {
+   "dtype": "String",
+   "long_name": "Purchaser Funding"
+  },
+  "SensorUpgrade": {
+   "dtype": "String",
+   "long_name": "Sensor Upgrade"
+  },
+  "SubsfcFloatPresence": {
+   "dtype": "String",
+   "long_name": "Subsfc Float Presence"
+  },
+  "Transmissions": {
+   "dtype": "String",
+   "long_name": "Transmissions"
+  },
+  "WMO": {
+   "actual_range": "0, 8800888",
+   "dtype": "int",
+   "long_name": "World Meteorological Organization buoy identification number"
+  },
+  "deploy_date": {
+   "actual_range": "2.877984E8, 1.7472672E9",
+   "dtype": "double",
+   "long_name": "Deployment date and time",
+   "units": "seconds since 1970-01-01T00:00:00Z"
+  },
+  "deploy_lat": {
+   "actual_range": "-77.81, 89.9",
+   "dtype": "double",
+   "long_name": "Deployment latitude",
+   "units": "degrees_north"
+  },
+  "deploy_lon": {
+   "actual_range": "-183.52, 180.0",
+   "dtype": "double",
+   "long_name": "Deployment longitude",
+   "units": "degrees_east"
+  },
+  "drogue_lost_date": {
+   "actual_range": "0.0, 1.7497728E9",
+   "dtype": "double",
+   "long_name": "Date of drogue loss (_FillValue=drogue still attached; 0=drogue status uncertain from beginning)",
+   "units": "seconds since 1970-01-01T00:00:00Z"
+  },
+  "end_date": {
+   "actual_range": "2.865024E8, 1.7497728E9",
+   "dtype": "double",
+   "long_name": "Last good date and time derived by DAC quality control",
+   "units": "seconds since 1970-01-01T00:00:00Z"
+  },
+  "end_lat": {
+   "actual_range": "-77.49, 99.54",
+   "dtype": "double",
+   "long_name": "Last good latitude derived by DAC quality control",
+   "units": "degrees_north"
+  },
+  "end_lon": {
+   "actual_range": "-179.99, 179.99",
+   "dtype": "double",
+   "long_name": "Last good longitude derived by DAC quality control",
+   "units": "degrees_east"
+  },
+  "err_lat": {
+   "actual_range": "0.0, 47.451",
+   "dtype": "double"
+  },
+  "err_lon": {
+   "actual_range": "0.0, 31.623",
+   "dtype": "double"
+  },
+  "err_sst": {
+   "actual_range": "0.03, 31.623",
+   "dtype": "double",
+   "units": "degree_C"
+  },
+  "expno": {
+   "actual_range": "40, 32212",
+   "dtype": "int",
+   "long_name": "Experiment number",
+   "units": "count"
+  },
+  "latitude": {
+   "actual_range": "-78.305, 89.984",
+   "dtype": "double",
+   "long_name": "Latitude",
+   "units": "degrees_north"
+  },
+  "lon360": {
+   "actual_range": "0.0, 359.999",
+   "dtype": "double",
+   "long_name": "Longitude",
+   "units": "degrees_east"
+  },
+  "longitude": {
+   "actual_range": "-179.999, 180.0",
+   "dtype": "double",
+   "long_name": "Longitude",
+   "units": "degrees_east"
+  },
+  "sst": {
+   "actual_range": "-7.164, 35.95",
+   "dtype": "double",
+   "long_name": "Sea Surface Bulk Temperature",
+   "units": "degree_C"
+  },
+  "start_date": {
+   "actual_range": "2.877984E8, 1.7496864E9",
+   "dtype": "double",
+   "long_name": "First good date and time derived by DAC quality control",
+   "units": "seconds since 1970-01-01T00:00:00Z"
+  },
+  "start_lat": {
+   "actual_range": "-77.81, 89.9",
+   "dtype": "double",
+   "long_name": "First good latitude derived by DAC quality control",
+   "units": "degrees_north"
+  },
+  "start_lon": {
+   "actual_range": "-179.99, 180.0",
+   "dtype": "float",
+   "long_name": "First good longitude derived by DAC quality control",
+   "units": "degrees_east"
+  },
+  "time": {
+   "actual_range": "2.878848E8, 1.750248E9",
+   "dtype": "double",
+   "long_name": "Time",
+   "units": "seconds since 1970-01-01T00:00:00Z"
+  },
+  "typebuoy": {
+   "dtype": "String",
+   "long_name": "Buoy type (see https://www.aoml.noaa.gov/phod/dac/dirall.html)"
+  },
+  "typedeath": {
+   "actual_range": "0, 6",
+   "dtype": "int",
+   "long_name": "Type of death (0=buoy still alive, 1=buoy ran aground, 2=picked up by vessel, 3=stopped transmitting, 4=sporadic transmissions, 5=bad batteries, 6=inactive status)"
+  },
+  "ve": {
+   "actual_range": "-999999.0, 4.06334",
+   "dtype": "double"
+  },
+  "vn": {
+   "actual_range": "-999999.0, 3.30508",
+   "dtype": "double"
+  }
+ },
+ "verified": "2026-09-13: dataset listing, variable metadata and a real 2015-01 month fetch (149,658 rows) from this sandbox",
+ "years": [
+  1979,
+  1980,
+  1981,
+  1982,
+  1983,
+  1984,
+  1985,
+  1986,
+  1987,
+  1988,
+  1989,
+  1990,
+  1991,
+  1992,
+  1993,
+  1994,
+  1995,
+  1996,
+  1997,
+  1998,
+  1999,
+  2000,
+  2001,
+  2002,
+  2003,
+  2004,
+  2005,
+  2006,
+  2007,
+  2008,
+  2009,
+  2010,
+  2011,
+  2012,
+  2013,
+  2014,
+  2015,
+  2016,
+  2017,
+  2018,
+  2019,
+  2020,
+  2021,
+  2022,
+  2023,
+  2024
+ ]
+}
