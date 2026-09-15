@@ -1,0 +1,921 @@
+\documentclass[10pt]{article}
+\usepackage[a4paper,margin=2.6cm]{geometry}
+\usepackage{array}
+\usepackage{booktabs}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage[hidelinks]{hyperref}
+\usepackage{xcolor}
+\setlength{\parskip}{2pt}
+\newcommand{\code}[1]{\texttt{#1}}
+
+\title{Family 7.2: the global tensor with ocean colour,\\
+a real elevation static, and a build that reproduces\\
+\large recipe \code{f7l2} --- what shipped, measured}
+\author{blauewelt/earth --- design note}
+\date{15 September 2026}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+Family 7.2 (build recipe \code{f7l2}, file stem
+\code{family7\_global025\_pentad\_l2}) is the published form of the
+programme's global input tensor: the Earth's surface and near-surface state on
+a $0.25^\circ$ latitude--longitude grid from pole to pole, in fixed five-day
+bins from 1982 to the end of 2024, in 56 channels across four
+native-resolution groups, plus two static fields and two truth series. It
+supersedes two earlier builds. Family 7 (\code{f7l0}) carried three groups and
+two defects: an entire calendar year of observed sea-surface temperature and
+sea ice was absent, and two logarithmic channels were computed in a precision
+that does not reproduce. Family 7.1 (\code{f7l1}) added the fourth group ---
+observed surface chlorophyll-a from the European Space Agency's Ocean Colour
+Climate Change Initiative --- and filled the missing year, but published an elevation static
+in which none of the 1,038,240 cells carried a number. Family 7.2 inherits
+three groups byte-for-byte from 7.1, rebuilds the fourth and both statics, and
+was afterwards rebuilt from the sources in an empty directory with nothing
+inherited: four of its five files came back byte-identical to the published
+bytes and the fifth is identical in every array value. This note states what
+is in the files, how to read them, what the per-channel coverage actually is,
+what the build refuses to do, and what it still cannot promise. A final
+section is a self-contained ingestion handover for an external, read-only
+agent.
+\end{abstract}
+
+\section{Purpose, and what changed from 7 to 7.1 to 7.2}
+
+The programme builds a forward model of the Earth's surface state: encode what
+is observed at each grid cell into a compact vector, predict that vector
+forward in time, and read out quantities of interest from the predicted state.
+The input to that model is a tensor, and the tensor described here is the third
+published generation of the global one. Its predecessors are not superseded by
+a change of science; they are superseded by three defects, each of which made
+the tensor either wrong or --- more seriously --- impossible to re-derive.
+
+Family 7 (\code{f7l0}, 4 September 2026) is the first tensor in the programme
+to cover the whole planet rather than a North Atlantic window. Family 7.1
+(\code{f7l1}, 14 September 2026) adds a fourth channel group, \code{oc025},
+carrying the observed surface chlorophyll-a concentration from the European
+Space Agency's Ocean Colour Climate Change Initiative (OC-CCI --- a
+bias-corrected merge of the SeaWiFS, MERIS, MODIS-Aqua, VIIRS and OLCI
+satellite records) at 4\,km, September 1997 to December 2024. Family 7.2
+(\code{f7l2}, the same day) is the corrected build.
+
+\begin{table}[h]
+\centering\setlength{\tabcolsep}{4pt}\footnotesize
+\begin{tabular}{@{}l>{\raggedright\arraybackslash}p{2.1cm}>{\raggedright\arraybackslash}p{3.4cm}>{\raggedright\arraybackslash}p{3.3cm}>{\raggedright\arraybackslash}p{4.4cm}@{}}
+\toprule
+recipe & built (UTC) & groups & npz sha256 & what it was and what was wrong \\
+\midrule
+\code{f7l0} & 2026-09-04 17:00:53, builder \code{56d07f4} &
+\code{g025}, \code{g100}, \code{rg100} & \code{27cd45eb\dots} &
+the first global tensor. \textbf{Defect 1:} \code{sst} and \code{sea\_ice}
+are entirely absent for bins 511--583, all of calendar 1989, because one
+source year could not be fetched and the stage marked the year done anyway.
+\textbf{Defect 3} (below) present \\
+\addlinespace
+\code{f7l1} & 2026-09-14 15:19:34, builder \code{3a13f8a} &
+\hbox{$+$ \code{oc025}} & \code{91a8d86f\dots} &
+adds ocean colour; all four groups computed from scratch, because the box
+holding the \code{f7l0} work directory would not start. Fills 1989, so
+\code{g025} legitimately differs from \code{f7l0}. \textbf{Defect 2:}
+\code{elev} published as 1,038,240 NaN. \textbf{Defect 3} present \\
+\addlinespace
+\code{f7l2} & 2026-09-14 19:58:44, builder \code{f25f1a6} &
+same four & \code{0837c450\dots} &
+\textbf{use this one.} Inherits \code{g025}, \code{rg100} and \code{oc025}
+from \code{f7l1} as hard links (same bytes, zero new storage); rebuilds
+\code{g100} and both statics. Defects 2 and 3 closed \\
+\bottomrule
+\end{tabular}
+\caption{The three published builds. Dates, builder commits and hashes are the
+\code{built\_at}, \code{builder\_git\_sha} and \code{files[].sha256} fields of
+each build's own \code{manifest.json} on the public dataset repository. The
+\code{f7l2} npz's internal \code{built\_at} reads 19:49:24 --- the metadata
+stage ran nine minutes before the publish stage stamped the manifest.}
+\end{table}
+
+\paragraph{Defect 3, the one that is not about a number.} Thirteen of the
+fifteen channels of the $1^\circ$ atmosphere-and-land group are byte-identical
+across all three builds. The two that are not, \code{log\_prate} and
+\code{log\_swe}, are the only ones whose transform contains a transcendental
+function, and the builder was evaluating $\log(1+x)$ on a float32 array.
+Float32 $\log(1+x)$ is not correctly rounded: the result depends on the NumPy
+build and on which vector loop the processor dispatches to. Measured on a
+realistic precipitation sample, 8.1\,\% of values differ by one or two units in
+the last place between the float32 loop and float64-then-cast, and about one in
+22,000 of those flips the float16 that is finally stored. \code{f7l2}
+evaluates both channels in float64 and casts once, which is reproducible on any
+machine. The magnitude of the correction is scientifically nil --- one float16
+step is about $4\times10^{-5}$\,mm\,day$^{-1}$ of precipitation --- and the
+property it buys is not: a tensor that does not reproduce cannot be re-derived
+and checked.
+
+\paragraph{Which recipe to use.} \code{f7l2}. It is the only build whose
+elevation static carries data, the only one whose atmosphere group reproduces,
+and the only one that has been rebuilt from scratch and compared with itself
+(\S9). \code{f7l0} remains published as the historical original; \code{f7l1}
+is superseded in every respect and is scheduled for deletion (\S12).
+
+\section{Grid, time axis and bins}
+
+The horizontal grid is \emph{point-aligned} at $0.25^\circ$: the grid points
+are the multiples of the step, with no half-cell offset, and the rows run
+\emph{south first}. Latitudes are $-90 + 0.25\,i$ for $i = 0,\dots,720$ (721
+rows) and longitudes $-180 + 0.25\,j$ for $j = 0,\dots,1439$ (1,440 columns),
+giving 1,038,240 cells; the arrays \code{lats} and \code{lons} in the small
+file state them. Longitude wraps: column 1439 ($179.75^\circ$\,E) is adjacent
+to column 0. A coarse $1^\circ$ grid of $181\times360$ points (\code{lat1},
+\code{lon1}) is defined the same way, and a coarse channel is read at a fine
+position $(y,x)$ by
+\begin{equation}
+y_1 = \min\!\big(\lfloor y/4 + \tfrac12\rfloor,\,180\big),\qquad
+x_1 = \lfloor x/4 + \tfrac12\rfloor \bmod 360 ,
+\end{equation}
+so the two fine points on either side of a coarse point round to it and the
+last two columns wrap to $-180^\circ$.
+
+Time is a fixed five-day bin, a \emph{pentad}, counted from the epoch
+1982-01-01 (npz keys \code{epoch}, \code{cadence}, \code{pentad\_days}): bin
+$b$ covers days $[5b,\,5b+5)$ after the epoch. There are 3,142 bins
+(\code{bin\_index}), the first opening 1982-01-01 and the last, bin 3141,
+opening 2024-12-31 --- which is why that bin holds one day of source data
+rather than five, and is empty or short in every group (\S8). Bins are
+calendar-free: they do not align with months or years, and a year holds 73 of
+them. A bin is an averaging window, not a date.
+
+Two groups do not have one row per bin. The monthly ocean-interior group
+\code{rg100}, built from the Argo array of profiling floats, has 252 rows, one per month from 2004-01 to 2024-12, each assigned to the
+pentad containing that month's fifteenth; \code{rg\_bin\_index} gives the
+absolute bin of every row (1609 to 3137) and \code{rg\_months} the month
+label. The colour group \code{oc025} has 1,997 rows on an \emph{offset} axis:
+row $r$ holds bin $1145 + r$, with \code{oc\_bin\_first} = 1145 the bin
+containing 1997-09-04, and \code{oc025\_bin\_index} listing 1145 to 3141
+contiguously.
+
+\section{The four channel groups}
+
+Channels are stored in four groups, each an array of shape $[T, H, W, C]$ in
+little-endian float16, C (row-major) order, with a 128-byte NumPy header
+(measured on all four published files). The array is bin-major, so one time
+step of one group is a contiguous byte range (\S7). Storing every channel on
+the fine grid instead would mean writing each $1.9^\circ$ reanalysis value
+about sixty times.
+
+\begin{table}[h]
+\centering\small
+\begin{tabular}{@{}llrrl@{}}
+\toprule
+group & grid & shape & bytes & content \\
+\midrule
+\code{g025} & $0.25^\circ$ & $[3142, 721, 1440, 7]$ & 45,670,101,248 & ocean surface \\
+\code{g100} & $1^\circ$ & $[3142, 181, 360, 15]$ & 6,141,981,728 & atmosphere and land, every surface \\
+\code{rg100} & $1^\circ$, monthly & $[252, 181, 360, 32]$ & 1,050,900,608 & ocean interior, Argo \\
+\code{oc025} & $0.25^\circ$, from bin 1145 & $[1997, 721, 1440, 2]$ & 8,293,461,248 & ocean colour \\
+\bottomrule
+\end{tabular}
+\caption{The four channel groups of \code{f7l2}, byte counts from
+\code{manifest.json}. With the 5,412,430-byte small file the published tensor
+is 61.16\,GB, of which only \code{g100}'s 6.14\,GB are bytes \code{f7l1} did
+not already hold.}
+\end{table}
+
+Every channel is standardised before the float16 write, $x' = (x-\mu)/\sigma$,
+with $(\mu,\sigma)$ computed over all finite values in all bins and stored per
+group as \code{norm\_<group>}. \textbf{A stored value is therefore in standard
+deviations, not in the channel's unit.} The $\mu$ and $\sigma$ columns of the
+four tables below are read directly out of those arrays; nothing is retyped.
+Float16 resolves a standardised value near 1 to about $10^{-3}\,\sigma$, which
+is $0.012^\circ$C for sea-surface temperature and
+$2\times10^{-4}$\,m\,s$^{-1}$ for currents. Anomalies are not stored: the
+training code derives them at load time from a training-years-only climatology.
+
+\subsection{Ocean surface, \code{g025}}
+
+\begin{table}[h]
+\centering\setlength{\tabcolsep}{4pt}\footnotesize
+\begin{tabular}{@{}rl>{\raggedright\arraybackslash}p{1.5cm}>{\raggedright\arraybackslash}p{2.5cm}>{\raggedright\arraybackslash}p{4.7cm}rr@{}}
+\toprule
+\# & channel & unit & source & processing rule & $\mu$ & $\sigma$ \\
+\midrule
+0 & \code{cur\_speed} & m\,s$^{-1}$ & GLORYS12 \code{uo},\code{vo} & pentad mean of daily $\sqrt{u^2+v^2}$; $\geq3$ days & 0.1580 & 0.1594 \\
+1 & \code{log\_mld} & $\log_{10}$\,m & GLORYS12 \code{mlotst} & $\log_{10}$ of mixed-layer depth where $>0$ & 1.4785 & 0.3587 \\
+2 & \code{ssh} & m & GLORYS12 \code{zos} & pentad mean of sea-surface height above geoid & $-$0.1668 & 0.7129 \\
+3 & \code{cur\_u} & m\,s$^{-1}$ & GLORYS12 \code{uo} & pentad mean, eastward; same pass as speed & $-$0.0007 & 0.1793 \\
+4 & \code{cur\_v} & m\,s$^{-1}$ & GLORYS12 \code{vo} & pentad mean, northward & 0.0059 & 0.1349 \\
+5 & \code{sst} & $^\circ$C & OISST v2.1 \code{sst} & bilinear to point grid, pentad mean, $\geq3$ days; observed, never filled & 13.6096 & 11.6202 \\
+6 & \code{sea\_ice} & fraction & OISST v2.1 \code{icec} & bilinear, pentad mean; absent below a concentration of 0.15 & 0.8267 & 0.2398 \\
+\bottomrule
+\end{tabular}
+\caption{Group \code{g025}. GLORYS12 is the Copernicus $1/12^\circ$ global
+ocean reanalysis \cite{glorys}; OISST v2.1 is NOAA's daily Optimum
+Interpolation Sea Surface Temperature analysis \cite{oisst}, an observation
+rather than a model. $\mu$ and $\sigma$ are \code{norm\_g025} from the
+published npz, in the channel's own unit. \code{sst}'s constants differ from
+\code{f7l0}'s (13.615001, 11.622964) and \code{sea\_ice}'s from
+(0.8271252, 0.23922408) because 1989 was added to the record before the
+statistics were taken.}
+\end{table}
+
+Speed and the two velocity components are written in one pass, so
+$\sqrt{u^2+v^2}$ equals the stored speed exactly. GLORYS12 covers
+$80^\circ$\,S northward and begins in 1993, so rows 0--39 of the five
+reanalysis channels are absent everywhere and bins 0--803 are absent entirely
+(\S8). Sea-surface temperature is deliberately not filled over land or ice
+from any model.
+
+\subsection{Atmosphere and land, \code{g100}}
+
+\begin{table}[h]
+\centering\setlength{\tabcolsep}{4pt}\footnotesize
+\begin{tabular}{@{}rl>{\raggedright\arraybackslash}p{2.1cm}>{\raggedright\arraybackslash}p{2.1cm}>{\raggedright\arraybackslash}p{4.6cm}rr@{}}
+\toprule
+\# & channel & unit & NCEP R1 file & processing rule & $\mu$ & $\sigma$ \\
+\midrule
+0 & \code{tau\_x} & N\,m$^{-2}$ & \code{uflx.sfc} & sign-flipped: stress on the surface, eastward & 0.0103 & 0.1246 \\
+1 & \code{tau\_y} & N\,m$^{-2}$ & \code{vflx.sfc} & sign-flipped, northward & 0.0042 & 0.0951 \\
+2 & \code{tau\_x\_std} & N\,m$^{-2}$ & \code{uflx.sfc} & within-pentad population $\sigma$ of daily $\tau_x$ & 0.0825 & 0.0724 \\
+3 & \code{tau\_y\_std} & N\,m$^{-2}$ & \code{vflx.sfc} & same, northward & 0.0808 & 0.0721 \\
+4 & \code{t2m} & $^\circ$C & \code{air.2m} & K $\to$ $^\circ$C & 4.8070 & 21.9986 \\
+5 & \code{u10} & m\,s$^{-1}$ & \code{uwnd.10m} & eastward wind at 10\,m & 0.0027 & 4.3680 \\
+6 & \code{v10} & m\,s$^{-1}$ & \code{vwnd.10m} & northward wind at 10\,m & 0.1557 & 3.1669 \\
+7 & \code{sp} & hPa & \code{pres.sfc} & Pa $\to$ hPa & 965.0467 & 94.7640 \\
+8 & \code{log\_prate} & $\log(1{+}x)$, mm\,d$^{-1}$ & \code{prate.sfc} & kg\,m$^{-2}$\,s$^{-1}\times86400$, then $\log(1+x)$ \textbf{in float64} & 0.8662 & 0.7683 \\
+9 & \code{log\_swe} & $\log(1{+}x)$, mm & \code{weasd.sfc} & snow water equivalent, $\log(1+x)$ \textbf{in float64} & 2.0701 & 3.5659 \\
+10 & \code{soilw} & fraction & \code{soilw.0-10cm} & volumetric; land-masked before regridding & 0.3040 & 0.0827 \\
+11 & \code{tsoil} & $^\circ$C & \code{tmp.0-10cm} & K $\to$ $^\circ$C; land-masked before regridding & $-$9.6838 & 33.6608 \\
+12 & \code{lhtfl} & W\,m$^{-2}$ & \code{lhtfl.sfc} & latent heat flux, positive upward & 62.3015 & 62.6118 \\
+13 & \code{shtfl} & W\,m$^{-2}$ & \code{shtfl.sfc} & sensible heat flux, positive upward & 5.7186 & 40.1517 \\
+14 & \code{skt} & $^\circ$C & \code{skt.sfc} & K $\to$ $^\circ$C; every surface, no mask, no splice & 5.0877 & 22.7194 \\
+\bottomrule
+\end{tabular}
+\caption{Group \code{g100}, all from NCEP/NCAR Reanalysis 1 \cite{ncep} ---
+the 1948-onward global atmospheric reanalysis, on its T62 Gaussian grid of
+about $1.9^\circ$ --- bilinearly interpolated to the $1^\circ$ point grid and
+averaged over the pentad with at least three days present. $\mu$ and $\sigma$
+are \code{norm\_g100}, bit-identical across all three builds. The two channels
+marked float64 are the ones \code{f7l2} rebuilt; the reader should not expect
+that to move a mean taken over 2.82 billion values, and it did not.}
+\end{table}
+
+The two soil channels are masked to land \emph{before} regridding, so the
+coastal interpolation renormalises correctly, and are the only \code{g100}
+channels absent over sea. \code{skt}, the reanalysis skin temperature, is
+defined over every surface; it and \code{sst} are two different measurements
+by two different instruments and are stored as two channels rather than
+spliced at the coastline.
+
+\subsection{Ocean interior, \code{rg100}}
+
+Thirty-two channels carry temperature and salinity at sixteen pressure levels
+from 10 to 1900\,dbar, bilinearly interpolated from the product's $1^\circ$
+cell-centred grid to the $1^\circ$ point grid. The salinity standard deviation
+falls from 1.06 at 10\,dbar to 0.13 at 1900\,dbar, the widest scale range of
+any group.
+
+\begin{table}[h]
+\centering\setlength{\tabcolsep}{5pt}\footnotesize
+\begin{tabular}{@{}rrrrrrr@{}}
+\toprule
+level (dbar) & \code{rg\_t} $\mu$ ($^\circ$C) & $\sigma$ & \code{rg\_s} $\mu$ (PSU) & $\sigma$ & channel \# (t, s) & finite cells/month \\
+\midrule
+10 & 17.867 & 9.804 & 34.818 & 1.058 & 0, 16 & 32,611 \\
+30 & 17.519 & 9.679 & 34.864 & 1.032 & 1, 17 & 32,611 \\
+50 & 16.797 & 9.408 & 34.919 & 1.014 & 2, 18 & 32,611 \\
+100 & 14.731 & 8.363 & 35.004 & 0.961 & 3, 19 & 32,611 \\
+150 & 13.032 & 7.113 & 35.013 & 0.867 & 4, 20 & 32,611 \\
+200 & 11.704 & 6.022 & 34.962 & 0.777 & 5, 21 & 32,611 \\
+300 & 9.825 & 4.693 & 34.838 & 0.661 & 6, 22 & 32,611 \\
+400 & 8.436 & 3.884 & 34.739 & 0.595 & 7, 23 & 32,611 \\
+500 & 7.340 & 3.339 & 34.668 & 0.551 & 8, 24 & 32,611 \\
+700 & 5.792 & 2.609 & 34.604 & 0.488 & 9, 25 & 32,503 \\
+900 & 4.704 & 2.082 & 34.603 & 0.452 & 10, 26 & 32,503 \\
+1100 & 4.011 & 1.694 & 34.628 & 0.433 & 11, 27 & 31,621 \\
+1300 & 3.408 & 1.235 & 34.639 & 0.219 & 12, 28 & 31,205 \\
+1500 & 3.005 & 1.030 & 34.672 & 0.179 & 13, 29 & 31,205 \\
+1700 & 2.689 & 0.888 & 34.697 & 0.149 & 14, 30 & 31,205 \\
+1900 & 2.445 & 0.806 & 34.714 & 0.130 & 15, 31 & 31,205 \\
+\bottomrule
+\end{tabular}
+\caption{Group \code{rg100}: the Roemmich--Gilson Argo climatology
+\cite{rg} --- an objective analysis of the global Argo profiling-float array
+--- as temperature (\code{rg\_t}, channels 0--15) and salinity (\code{rg\_s},
+channels 16--31) at sixteen pressure levels. $\mu$ and $\sigma$ are
+\code{norm\_rg100}. The last column is measured (\S8): identical in every one
+of the 252 months and identical between temperature and salinity, and it falls
+with depth because the ocean's floor rises into the deeper levels. Absent
+outside roughly $64.5^\circ$\,S--$79.5^\circ$\,N rather than extrapolated
+toward the poles.}
+\end{table}
+
+\subsection{Ocean colour, \code{oc025}}
+
+Two channels carry the value and the evidence it rests on. The group's own
+time axis, block rule and measured coverage are \S6; the table states what is
+stored.
+
+\begin{table}[h]
+\centering\setlength{\tabcolsep}{4pt}\footnotesize
+\begin{tabular}{@{}rl>{\raggedright\arraybackslash}p{2.1cm}>{\raggedright\arraybackslash}p{2.1cm}>{\raggedright\arraybackslash}p{4.6cm}rr@{}}
+\toprule
+\# & channel & unit & source & processing rule & $\mu$ & $\sigma$ \\
+\midrule
+0 & \code{log\_chl} & $\log_{10}$\,mg\,m$^{-3}$ & OC-CCI v6.0 \code{chlor\_a} & per day, the mean of $\log_{10}$ chlorophyll over the finite cells of the $6\times6$ block; per pentad, the mean of those daily means over the days with at least one finite cell & $-$0.7765 & 0.4566 \\
+1 & \code{chl\_cov} & fraction in $(0,1]$ & OC-CCI v6.0 \code{chlor\_a} & finite cell-days in the block during the pentad, divided by (cells in the block $\times$ days in the bin) & 0.2823 & 0.2137 \\
+\bottomrule
+\end{tabular}
+\caption{Group \code{oc025}. $\mu$ and $\sigma$ are \code{norm\_oc025}. Full
+inversion of a stored value: a stored $z$ becomes
+$\ell = z \times 0.4566048 - 0.7764690$ and the concentration is
+$10^{\ell}$\,mg\,m$^{-3}$; a stored $z$ of zero is 0.167\,mg\,m$^{-3}$. Section 6 describes the group.}
+\end{table}
+
+\section{Missing values}
+
+\code{NaN} --- the floating-point ``not a number'' value --- means ``not
+observed here at this time'' and is information rather
+than damage. The pattern is systematic. Ocean channels are absent over land;
+the GLORYS12 channels are absent south of $80^\circ$\,S and before 1993; soil
+channels are absent over sea; the Argo group is absent outside 2004--2024,
+outside its latitude band, and in any bin not on its monthly list; the colour
+group has no rows at all before bin 1145 --- which is the period before any of
+those satellites flew, not a gap.
+
+Two cases are easy to misread. \textbf{Sea-ice concentration is absent
+wherever it is below 15\,\%}, because that is how the source reports ice, so a
+consumer wanting zeros on open water sets the channel to zero where
+sea-surface temperature is finite and ice is not. And \textbf{\code{chl\_cov}
+is \code{NaN} exactly where \code{log\_chl} is, never 0}: a block that saw
+nothing has no coverage to report, and a stored zero would be
+indistinguishable from ``observed, and the coverage was zero''. The tensor's
+token design rests on that distinction.
+
+A flat 56-channel view of a bin below 1145 has the two colour channels
+\emph{absent} rather than \code{NaN}, and those are different states: absent
+means no satellite yet, \code{NaN} means the satellite looked and saw nothing.
+A consumer whose token design has no missing-versus-unobserved split should
+use \code{NaN}, which is the conservative choice.
+
+Counting the finite values in the whole tensor by streaming every file (\S8):
+$1.0757\times10^{10}$ in \code{g025}, $2.8169\times10^{9}$ in \code{g100},
+$2.5953\times10^{8}$ in \code{rg100} and $1.7115\times10^{9}$ in
+\code{oc025} --- $1.554\times10^{10}$ observed values in total. The middle two
+figures agree exactly with the counts the builder's own normalisation stage
+reports, which is a check on the scan rather than a coincidence.
+
+\section{The statics}
+
+Two static fields ship inside the small file, both $[721, 1440]$ and both
+complete: the manifest and the npz agree that \code{static\_n\_finite} is
+\code{\{"elev": 1038240, "sphere": 1038240\}}. That key exists because the
+previous build published an elevation static with no data in it and nothing
+anywhere said so.
+
+\code{sphere} is an \code{int8} surface class per cell: 0 ocean (702,642
+cells), 1 land (226,495), 2 ice sheet or glacier (107,074, from Natural
+Earth's glaciated-area polygons \cite{ne}), 3 inland water (2,029, from its
+lake polygons). Ice takes precedence over ocean where both apply, because the
+surface an instrument sees on an ice shelf is ice. The histogram is identical
+in all three builds and the array is bit-identical across them.
+
+\code{elev} is float32 elevation in metres from ETOPO 2022 \cite{etopo},
+\emph{averaged over the cell}, negative under the sea, from $-9{,}687.95$\,m
+to $+6{,}004.33$\,m. The convention matters when reading the maximum: a
+quarter-degree box in the Himalaya is about $28\times25$\,km and averages a
+summit with its valleys, so the highest cell on Earth reads 6,004\,m rather
+than Everest's 8,849\,m. The array is bit-identical to \code{f7l0}'s, compared
+cell by cell.
+
+Two truth series are carried as (bin, value) pairs: \code{truth\_rapid}, the
+overturning transport of the Atlantic at $26.5^\circ$\,N in Sverdrups as
+measured by the RAPID moored array, which has watched that section
+continuously since 2004 --- 1,459 pentads from bin 1626 to bin 3084; and \code{truth\_fc}, the Florida
+Current cable transport, 2,490 pentads from bin 15 to bin 3141. Both are
+Atlantic; they exist so that a global model is scored on the same instrument
+as its predecessors.
+
+\section{The ocean-colour group}
+
+Colour is the only routine global observation of the ocean biosphere, and it
+is one of the read-outs the programme has committed to. It enters as a
+\emph{target} and probe before it enters as an input: the question the group
+is built to answer is whether the physical state the model already carries ---
+temperature, mixed layer, currents, wind, light through the calendar ---
+predicts the biosphere a season ahead.
+
+\paragraph{The block.} A point of the $0.25^\circ$ grid sits at a multiple of
+$0.25^\circ = 6/24^\circ$, which is a cell boundary of the source's
+$1/24^\circ$ grid; the six source cells whose centres lie within
+$\pm0.125^\circ$ of the point on each axis are therefore exactly three on
+either side. The block wraps in longitude; at the two pole rows it is
+truncated to the eighteen cells that exist, and the coverage denominator
+counts the cells that exist, so a fully observed pole block still reads 1.0.
+
+\paragraph{Log space.} Chlorophyll is log-normal over four orders of
+magnitude. The arithmetic mean of a block containing one bloom cell at
+30\,mg\,m$^{-3}$ and thirty-five at 0.05 describes neither; the mean of
+$\log_{10}$ does, and the programme's read-out for colour is scored in log
+space, so the stored quantity and the scored quantity agree.
+
+\paragraph{What the built group measures.} The design note for family 7.1
+stated the rule and could not state the outcome; these are the numbers from
+the published bytes and from the npz's own counter keys.
+
+\begin{table}[h]
+\centering\setlength{\tabcolsep}{5pt}\footnotesize
+\begin{tabular}{@{}>{\raggedright\arraybackslash}p{4.6cm}>{\raggedright\arraybackslash}p{2.9cm}>{\raggedright\arraybackslash}p{7.2cm}@{}}
+\toprule
+quantity & value & where it comes from \\
+\midrule
+rows on the offset axis & 1,997 (bins 1145--3141) & shape; \code{oc\_bin\_first}, \code{oc025\_bin\_index} \\
+daily 4\,km fields read & 9,955 & npz \code{n\_occci\_days} \\
+days the archive listings did not offer & 26 & npz \code{n\_occci\_absent} \\
+finite values per channel & 855,742,985 & npz \code{count\_oc025}; 41.3\,\% of $1997\times721\times1440$ \\
+colour on inland land cells & 4,588,447 cell-pentads & npz \code{n\_oc\_inland} --- measured, not masked \\
+bin 2411 (2015-01-03): finite cells & 421,137 of 1,038,240 (40.6\,\%) & E-077 RESULT 1, from the published bytes \\
+bin 2411: global mean \code{log\_chl} & $-0.8295$ ($=0.148$\,mg\,m$^{-3}$) & the same \\
+bin 2411: mean \code{chl\_cov} & 0.249 & the same \\
+bin 2411: \code{log\_chl} range & $-2.24$ to $+1.98$ (0.006 to 95\,mg\,m$^{-3}$) & the same \\
+\bottomrule
+\end{tabular}
+\caption{The colour group as built. Bin 2411 is the comparison pentad the
+family-7 validation already used, which is why it carries the eyeball check
+against the chlorophyll layers on the programme's globe.}
+\end{table}
+
+The design note for 7.1 predicted 1,997 rows from a first bin of 1145 and that
+is what shipped. \textbf{Colour over land is real and was left in:} the 4\,km
+product resolves estuaries, lagoons and shelf water that the $0.25^\circ$
+\code{sphere} mask calls land. Those values are not masked away;
+\code{n\_oc\_inland} counts the finite colour cell-pentads sitting on land
+cells that touch no sea, so a consumer who wants open ocean only can mask them
+with \code{sphere}.
+
+\paragraph{Where the colour actually came from.} 1997--2022 from the per-file
+v6.0 archive of the Centre for Environmental Data Analysis (CEDA), whose daily
+directory listing ends at 2022; 2023--2024 from Plymouth Marine Laboratory's
+aggregate \code{CCI\_ALL-v6.0-DAILY} dataset, subset one day at a time,
+because that laboratory serves no per-year 4\,km file directory at all. Both
+paths yield the same 4\,km field and are reduced by the same code. The
+uncertainty fields shipped with the product are not stored --- an uncertainty
+of a merged algorithm is not an observation --- and the gap-filled level-4
+products are not used, because the target should be what was seen.
+
+\section{Layout, and reading one bin over HTTP}
+
+Each group file is a plain NumPy \code{.npy}: a 128-byte header followed by
+little-endian float16 data in C order. Because the array is bin-major, one
+time step of one group is one contiguous range, and the public dataset
+repository answers HTTP \code{Range:} requests with status 206. The arithmetic
+is
+\begin{equation}
+\text{offset} = 128 + (b - b_{\text{first}})\cdot H\cdot W\cdot C\cdot 2,
+\qquad \text{length} = H\cdot W\cdot C\cdot 2 ,
+\end{equation}
+where $b_{\text{first}}$ is 0 for \code{g025} and \code{g100}, 1145 for
+\code{oc025} (or, equivalently, the row given by \code{oc025\_bin\_index}),
+and for \code{rg100} the row is the position of $b$ in \code{rg\_bin\_index}
+rather than an offset. The slab lengths are 14,535,360 bytes for \code{g025},
+1,954,800 for \code{g100}, 4,170,240 for \code{rg100} and 4,152,960 for
+\code{oc025}.
+
+\begin{verbatim}
+import numpy as np, urllib.request
+
+STEM = "family7_global025_pentad_l2"
+BASE = ("https://huggingface.co/datasets/chfrank/earth-tensors/"
+        "resolve/main/tensors/" + STEM + "/")
+SHAPE = {"g025": (721, 1440, 7), "g100": (181, 360, 15),
+         "rg100": (181, 360, 32), "oc025": (721, 1440, 2)}
+FIRST = {"g025": 0, "g100": 0, "oc025": 1145}       # rg100: use rg_bin_index
+
+def read_bin(group, b, header=128):
+    H, W, C = SHAPE[group]
+    slab = H * W * C * 2                            # float16
+    row = b - FIRST[group]
+    assert row >= 0, "that bin has no row in this group"
+    lo = header + row * slab
+    req = urllib.request.Request(
+        BASE + f"{STEM}_X_{group}.npy",
+        headers={"Range": f"bytes={lo}-{lo + slab - 1}"})
+    with urllib.request.urlopen(req) as r:
+        assert r.status == 206, "the host ignored Range - do not read on"
+        buf = r.read()
+    return np.frombuffer(buf, "<f2").reshape(H, W, C).astype(np.float32)
+
+m = np.load(STEM + ".npz", allow_pickle=True)       # the 5.4 MB small file
+b = (np.datetime64("2015-01-03") - np.datetime64("1982-01-01")).astype(int) // 5
+frame = read_bin("g025", b)                         # -> 2411, 14.5 MB, HTTP 206
+c = list(m["chan_g025"]).index("sst")
+sst_C = frame[..., c] * m["norm_g025"][c, 1] + m["norm_g025"][c, 0]   # degrees C
+\end{verbatim}
+
+The assertion on status 206 is load-bearing: a 200 means the host ignored the
+range header and is about to send 45.67\,GB. The programme's own web front end
+paints a global frame this way, one range read per pentad.
+
+\section{Per-channel coverage, measured}
+
+Every published group file was streamed bin by bin in a sandbox with 30\,GB of
+disk --- nothing stored --- and the finite cells counted per channel per bin.
+The bytes scanned are \code{f7l1}'s, which for \code{g025}, \code{rg100} and
+\code{oc025} are \code{f7l2}'s own bytes; \code{g100} differs between the two
+builds by at most one float16 step in about ten cells of a bin, which cannot
+change a finite count, and was independently confirmed full in all 3,141 live
+bins. The result is that \textbf{every channel is complete over its own
+record, and every hole in the tensor is a hole in a source.}
+
+\begin{table}[h]
+\centering\setlength{\tabcolsep}{4pt}\footnotesize
+\begin{tabular}{@{}l>{\raggedright\arraybackslash}p{3.1cm}>{\raggedright\arraybackslash}p{9.6cm}@{}}
+\toprule
+group & full-bin count & what the scan found \\
+\midrule
+\code{g025} & 693,205--693,310 (GLORYS12), 703,902 (\code{sst}) &
+the five GLORYS12 channels are empty for bins 0--803 and full from bin 804
+(1993-01-03) --- the reanalysis begins 1993-01-01 and bin 803 has only two of
+its days. \code{sst} is full in every one of the 3,141 live bins.
+\code{sea\_ice} ranges 119,813--164,694 with the season and is empty in bins
+\textbf{433--439} (1987-12-06 to 1988-01-09, the changeover from the Scanning Multichannel
+Microwave Radiometer to the Special Sensor Microwave/Imager, a documented gap
+in the source), \textbf{2846} (2020-12-17) and
+\textbf{3090} (2024-04-20) --- two isolated source outages \\
+\addlinespace
+\code{g100} & 65,160; 24,876 for the two soil channels &
+all fifteen channels full in all 3,141 live bins, with no exception anywhere.
+24,876 is the $1^\circ$ land mask \\
+\addlinespace
+\code{rg100} & 31,205--32,611 by level &
+all 32 channels full in all 252 months; the per-level counts of the table in
+\S3.3, identical in every month \\
+\addlinespace
+\code{oc025} & 428,514 mean, 534,264 maximum &
+row \textbf{8} (bin 1153, 1997-10-14) is empty --- the satellite returned
+nothing that pentad --- and rows 0, 1, 2 (10,351 / 49,532 / 125,254 cells:
+the record's first fortnight) and 88 (bin 1233, 142,136) are low. Everything
+else is ordinary cloud cover \\
+\bottomrule
+\end{tabular}
+\caption{The finite-count scan. Counts are cells per bin per channel out of
+1,038,240 at $0.25^\circ$ and 65,160 at $1^\circ$.}
+\end{table}
+
+\paragraph{The last bin is the calendar, not the build.} Bin 3141 opens
+2024-12-31 and the sources end that day, so it holds one day rather than five.
+In \code{g025} and \code{g100} it is empty in every channel, because both
+require at least three days in a pentad. In \code{oc025} --- whose rule needs
+only one day with a retrieval --- it is short: 241,579 finite cells against a
+record mean of 428,514. A consumer that wants only full pentads drops bin
+3141; a consumer that does not should know which of the two states it is in.
+
+\section{The build, its guards, and the reproducibility result}
+
+The tensor is built by one resumable job, stage by stage, with a
+specification digest per stage so that a changed stage discards only its own
+state. \code{f7l2}'s stages are \code{glorys}, \code{sst}, \code{ncep},
+\code{rg}, \code{occci}, \code{static}, \code{truth}, \code{norm},
+\code{meta}, \code{publish}, and an opt-in \code{verify}.
+
+\paragraph{The silent-skip audit.} Every defect in \S1 has the same mechanism:
+a source could not be read, one warning went into a log nobody reads after a
+green tick, and the build carried on and published a tensor with a hole in it
+that nothing downstream could see. Worse, the marker that says ``this item is
+done'' was written anyway, so a resume trusted it and the hole became
+permanent. Six such sites were found and closed in one pass, and the rule they
+now all obey is that \textbf{a marker may only under-claim}: the stage does not
+mark an item it could not read, and refuses at the end rather than marking
+itself done. The six were the monthly ocean-reanalysis chunk loader (whose
+month list was a filesystem glob, so a month the mirror did not hold was never
+even named); the reanalysis land mask (whose absence sent the two soil channels
+into the tensor \emph{unmasked} over 71\,\% of the planet, finite, plausibly
+scaled and indistinguishable from a masked tensor); the statics stage's ocean
+mask; the Argo extension cubes (a bare skip left a \emph{live} monthly row
+carrying nothing but \code{NaN}, which tells a model the subsurface was
+observed); and two paths in the truth stage, including an empty truth file that
+passed both existing guards.
+
+\paragraph{The refusal flags.} A degraded tensor now has to be asked for by
+name, and each flag records what it gave up: \code{--allow-empty-statics} (the
+stage may write an all-\code{NaN} elevation; the metadata and publish stages
+still refuse it, so the flag lets the stage finish and does not let the tensor
+ship), \code{--allow-missing-years} (a fill stage may mark itself done over a
+source year, a monthly chunk or the land mask), \code{--allow-empty-rg} (a
+zero-row subsurface group), and \code{--allow-drift} (the verification stage
+may report a difference and still exit 0 --- without it a difference is a
+failed job, and the report is written either way, so the finding is never
+lost). Two guards are unconditional: the elevation fetch floor is sized from
+the 933\,MB file it guards (0.10\,MB\,s$^{-1}$ over a 180-second probe) rather
+than from the 45\,GB streams it was originally written for, and the metadata
+and publish stages refuse an empty static independently of any marker.
+
+\paragraph{Reproducibility.} A seeded build proves nothing about the builder.
+A hard link shows that the file system copied an inode; it says nothing about
+the code that wrote the bytes, which is exactly how an all-\code{NaN}
+elevation shipped green through a re-publish that verified the restore of the
+file it had been handed. So the tensor was rebuilt with nothing inherited: an
+empty work directory, no seed, the stage list
+\code{glorys,sst,ncep,rg,occci,static,truth,norm,meta,verify} and no publish
+stage at all, on the same rented box, 3\,h 23\,m for about \$1.1 at
+\$0.31\,h$^{-1}$.
+
+\begin{table}[h]
+\centering\setlength{\tabcolsep}{5pt}\footnotesize
+\begin{tabular}{@{}lr>{\raggedright\arraybackslash}p{9.8cm}@{}}
+\toprule
+stage & s & what it read \\
+\midrule
+\code{glorys} & 2,669 & the 2,339 daily $0.25^\circ$ ocean cubes from the project's own mirror \\
+\code{sst} & 1,479 & 43 years of OISST from the mirror of NOAA's Physical Sciences Laboratory \\
+\code{ncep} & 1,400 & 645 reanalysis files from the same mirror \\
+\code{rg} & 20 & the Roemmich--Gilson cubes, seeded from a release asset \\
+\code{occci} & 176 & the 28 published per-year colour partials, each checked against its own sha256 before folding. Zero bytes from CEDA \\
+\code{static} & 5,774 & Natural Earth (11\,s) and ETOPO 2022 --- two attempts, the first dying on an incomplete read after 42 min, the second finishing in 54 \\
+\code{truth} & 0 & the two label series, from the repository \\
+\code{norm} & 465 & nothing; four groups' statistics and z-scores recomputed from the arrays just written \\
+\code{meta} & 4.5 & the npz, 41 keys \\
+\code{verify} & 40 & the five published files' sha256, and the published npz key by key \\
+\bottomrule
+\end{tabular}
+\caption{The unseeded rebuild, stage by stage (E-077 RESULT 3).}
+\end{table}
+
+\textbf{The verdict: four of the five files byte-identical} ---
+\code{g025} \code{1cb1e1af\dots}, \code{g100} \code{79c8075e\dots},
+\code{rg100} \code{55c49f1b\dots}, \code{oc025} \code{c50c79b5\dots}, each
+equal to the published hash --- \textbf{and the fifth identical in every array
+value}. The npz's sha256 differs for a reason that is not about the data:
+\code{np.savez} writes a ZIP archive and a ZIP stores a per-member timestamp,
+so two archives of identical arrays cannot hash equally. The verification
+stage therefore opens both and compares key by key: 41 against 41, none
+only-local, none only-published, and the three that differ are the build's own
+signature --- \code{builder\_git\_sha}, \code{built\_at} and \code{sources}.
+Every array is bit-identical, \code{sphere} and \code{elev} included, and so
+are all four \code{norm\_*} arrays, recomputed here from scratch over the
+$1.554\times10^{10}$ observed values of \S4.
+
+One prefix decided it. The colour stage found its 28 per-year partials under a
+folder belonging to the \emph{previous} recipe. Had it looked only under its
+own, nothing would have refused --- an empty partials listing is a designed
+fallback to streaming the source, not a missing input --- and the run would
+have streamed about 400\,GB from an archive the same job had just measured at
+1.20\,MB\,s$^{-1}$, which is 92.6\,h of transfer against a 24\,h job timeout.
+The build would have died inside the colour stage having burned a box-day and
+would never have reached verification at all.
+
+\section{Verification}
+
+Every item below was checked against the published bytes: the small file
+downloaded whole, the group files by HTTP range read, the manifest by its own
+URL.
+
+\begin{enumerate}\itemsep1pt
+\item \code{static\_n\_finite} reads \code{\{"elev": 1038240, "sphere":
+1038240\}} in both the manifest and the npz, and \code{sources} carries the
+ETOPO and Natural Earth entries. The elevation fetch took three attempts and
+4,025\,s at a probed 2.99\,MB\,s$^{-1}$; two attempts died on an incomplete
+read, and the re-sized floor let the third finish instead of aborting it.
+\item \code{sphere}'s histogram is \code{f7l1}'s exactly --- 702,642 / 226,495
+/ 107,074 / 2,029 --- and the array is bit-identical to both predecessors'.
+\item \code{same\_as\_base} is \code{true} for \code{g025}, \code{rg100} and
+\code{oc025}, with each hash equal to \code{f7l1}'s, and \code{false} for
+\code{g100}, whose \code{base\_sha256} (\code{ba59ed7c\dots}) is recorded
+beside this build's own (\code{79c8075e\dots}); the top-level
+\code{inherited\_groups} and \code{rebuilt\_groups} lists agree with that.
+\item \textbf{\code{norm\_g100} did not move, against the prediction that it
+would.} All four \code{norm\_*} arrays are bit-identical to \code{f7l1}'s. The
+arithmetic that makes the prediction wrong is the same arithmetic that made
+the defect invisible: the rebuild moves about ten float16 cells per bin out of
+the 2,816,949,312 observed values the statistic is taken over --- four parts in
+a billion --- which cannot move a float32 mean or standard deviation. A moved
+\code{norm\_g100} would have meant something else had changed. In total only
+five npz keys differ from \code{f7l1}'s: \code{recipe},
+\code{builder\_git\_sha}, \code{built\_at}, \code{sources} and \code{elev},
+plus the new \code{static\_n\_finite}.
+\item The \code{g100} difference, range-read on five bins (200, 1500, 2411,
+3000, 3141): thirteen of fifteen channels byte-identical to \emph{both}
+predecessors in every bin; \code{log\_prate} differing from \code{f7l1} in 9,
+9, 9, 12 and 0 cells of 65,160 and \code{log\_swe} in 1, 0, 2, 0 and 0; every
+difference exactly one float16 step; no \code{NaN}-payload and no signed-zero
+differences; bin 3141 identical in every channel. Note the direction:
+\code{f7l0} and \code{f7l1} differ from each other in only 1--3
+\code{log\_prate} cells per bin, so the float64 correction moves about four
+times as many cells as the drift it removes. That is expected --- the two
+float32 builds were both wandering near the correctly rounded value and this
+one is at it.
+\item The derived static grids the programme's front end reads were
+regenerated at recipe \code{f7l2}: the elevation grid carries 1,038,240
+non-null values where it carried 1,038,240 nulls, and the surface-class grid
+is byte-unchanged. The browser test that would have noticed the empty grid ---
+a non-zero and above-90\,\% non-null count on the committed file --- was added
+and checked to fail on the old file and pass on the new one.
+\end{enumerate}
+
+\section{Limitations}
+
+\paragraph{Colour reproduces from the partials, and is untested from the
+source.} The colour reduction takes a float32 $\log_{10}$ on a
+$4320\times8640$ raster about ten thousand times, deliberately: a float64
+working copy of that raster is 300\,MB per temporary. Float32 $\log_{10}$ is
+not correctly rounded, so this is the same class of defect as \code{g100}'s
+two channels, and it was recorded as a known limitation rather than repaired.
+The unseeded rebuild narrows it considerably: the float32 $\log_{10}$ runs
+\emph{once}, on the hosted runner that reduces a calendar year into its
+partial, and the box's fold over those stored accumulators is exact
+arithmetic. So the claim is not ``the colour group does not reproduce'' but
+the strictly smaller ``a colour year \emph{re-reduced from the daily 4\,km
+files} on a different machine is not expected to reproduce'' --- a path
+nothing has yet exercised, because every build so far has folded the same 28
+partials. A chunked float64 $\log_{10}$ would close it at roughly zero extra
+peak memory whenever the group is next rebuilt for another reason.
+
+\paragraph{The atmosphere group differs from its predecessors at the last
+bit.} \code{g100} is the correctly rounded build and the two before it are
+not, but any of the three is scientifically usable: one float16 step is about
+$4\times10^{-5}$\,mm\,day$^{-1}$ of precipitation and $1.7\times10^{-3}$ of a
+snow-water-equivalent unit, in about ten of 65,160 cells per bin, in two of
+fifteen channels. A consumer that keys a cache on a file hash must refresh;
+a consumer that does not may keep the older file.
+
+\paragraph{The elevation maximum is a box mean.} 6,004.33\,m is the highest
+\emph{cell average} of ETOPO 2022 over a $0.25^\circ$ box, not the highest
+point on Earth. Anything that compares this static against a summit elevation
+is comparing two different quantities.
+
+\paragraph{Standing limitations inherited from family 7.} The atmosphere and
+land channels are a $1.9^\circ$ reanalysis, the coarsest source in the tensor,
+and a stand-in for ERA5, which needs an account nobody in the programme yet
+holds; the layout is designed so that replacing the source changes no shape.
+Subsurface ocean structure is a monthly objective analysis at sixteen levels,
+present only from 2004 and only inside the Argo latitude band. The colour
+averaging discards 35 of every 36 source pixels; \code{chl\_cov} records the
+loss but does not undo it, and the channel is clear-sky and daylight only, so
+it loses most of its high-latitude bins and all of the polar winter. And the
+record is 43 years, of which colour covers 27: no source shortens that
+constraint, and it is the reason the programme's models are small.
+
+\section{Handover for an external agent (Gemini)}
+
+This section is written for an agent ingesting the tensor into its own
+infrastructure and needs no other document.
+
+\paragraph{THE RULE: read only.} The public dataset repository
+\code{chfrank/earth-tensors} on Hugging Face is your only source. You read it
+over anonymous HTTPS under \code{resolve/main/}; HTTP \code{Range} is
+supported and cross-origin reads are open. \textbf{You must never write to that repository, and never to
+the \code{blauewelt/earth} source repository} --- no upload, no commit, no
+pull request, no branch, no file of any kind, whatever the reason and however
+convenient it would be. Everything you need is readable. If something appears
+to require a write, it is out of scope: report it instead (below).
+
+\paragraph{The five files.} Base URL, to which each file name is appended:
+\begin{verbatim}
+https://huggingface.co/datasets/chfrank/earth-tensors/resolve/main/
+    tensors/family7_global025_pentad_l2/
+\end{verbatim}
+
+\begin{table}[h]
+\centering\setlength{\tabcolsep}{4pt}\footnotesize
+\begin{tabular}{@{}lr>{\raggedright\arraybackslash}p{6.0cm}@{}}
+\toprule
+file (\code{family7\_global025\_pentad\_l2}\dots) & bytes & sha256 \\
+\midrule
+\code{.npz} & 5,412,430 & \code{0837c450eba9e2cda4fb29ea81530987}\allowbreak\code{d5a8b5814d7722813fd100bc5595233f} \\
+\code{\_X\_g025.npy} & 45,670,101,248 & \code{1cb1e1af4132e6acdec76a7341a49453}\allowbreak\code{b32f9b982eee09d3ad577c5dd147d293} \\
+\code{\_X\_g100.npy} & 6,141,981,728 & \code{79c8075eedf68529736fff6c1f4c3cff}\allowbreak\code{0fef091322971919c4e400b9ed825b06} \\
+\code{\_X\_rg100.npy} & 1,050,900,608 & \code{55c49f1bbc55f9e82204d5d4ff2751ca}\allowbreak\code{b5625c62003debe56df8cb5f1acaf2d5} \\
+\code{\_X\_oc025.npy} & 8,293,461,248 & \code{c50c79b5760103cdda1233fe6d6bf776}\allowbreak\code{fa03caf732a59b24cd27bd6a5cdd1700} \\
+\bottomrule
+\end{tabular}
+\caption{61.16\,GB in total. The same list, with per-file \code{inherited},
+\code{same\_as\_base} and \code{base\_sha256}, is in the folder's
+\code{manifest.json}.}
+\end{table}
+
+\paragraph{Verify before you trust.} Four checks, in order of cost.
+\begin{enumerate}\itemsep1pt
+\item \code{sha256} of every downloaded file equals the file table below. The
+manifest URL is the base URL plus \code{manifest.json}, and it carries the
+same list, so a mismatch tells you whether the file or this document is stale.
+\item In the npz: 41 keys; \code{recipe} is \code{"f7l2"}; \code{groups} has
+four entries; \code{oc\_bin\_first} is 1145; the index
+\code{oc025\_bin\_index} has 1,997 entries and its last is 3141; and
+\code{n\_sst\_days} is 15,706.
+\item \code{static\_n\_finite} parses to
+\code{\{"elev": 1038240, "sphere": 1038240\}} and agrees with the arrays:
+\code{np.isfinite(elev).sum() == elev.size == 1038240}, and \code{sphere}'s
+four classes count 702,642 / 226,495 / 107,074 / 2,029.
+\item Two spot reads. \code{g025} bin 547 (July 1989): \code{sst} 703,902
+finite cells, \code{sea\_ice} 153,002 --- in \code{f7l0} both are zero, and
+that is the difference you are ingesting. \code{oc025} row 1266 (bin 2411,
+2015-01-03): 421,137 finite \code{log\_chl} cells, global mean \code{log\_chl}
+$-0.8295$ after un-z-scoring, mean \code{chl\_cov} 0.249, and
+\code{isnan(chl\_cov) == isnan(log\_chl)} everywhere.
+\end{enumerate}
+
+\paragraph{The minimal loader.} Memory-map a local copy, or range-read from
+the Hub with the code of \S7. Either way the decode is the same three steps:
+interpret as little-endian float16, cast to float32, then un-z-score with the
+group's \code{norm}. Do not hold \code{g025} in memory: it is 45.67\,GB
+stored and 91\,GB as float32.
+
+\begin{verbatim}
+import json, numpy as np
+
+m = np.load("family7_global025_pentad_l2.npz", allow_pickle=True)
+groups = list(m["groups"])                       # g025, g100, rg100, oc025
+chans  = {g: list(m["chan_" + g]) for g in groups}
+norm   = {g: m["norm_" + g]       for g in groups}
+n_fin  = json.loads(str(m["static_n_finite"]))
+assert n_fin["elev"] == m["elev"].size == int(np.isfinite(m["elev"]).sum())
+
+def row_of(group, b):
+    """pentad bin -> row in this group's array, or None if it has none."""
+    if group == "rg100":                          # 252 monthly rows
+        idx = m["rg_bin_index"]
+        i = int(np.searchsorted(idx, b))
+        return i if i < len(idx) and idx[i] == b else None
+    if group == "oc025":                          # offset axis
+        r = b - int(m["oc_bin_first"])            # 1145
+        return r if 0 <= r < 1997 else None       # None: before 1997-09-04
+    return b                                      # g025, g100: row == bin
+
+X = np.load("family7_global025_pentad_l2_X_oc025.npy", mmap_mode="r")
+frame = np.asarray(X[row_of("oc025", 2411)], dtype=np.float32)   # [721,1440,2]
+c = chans["oc025"].index("log_chl")
+log10_chl = frame[..., c] * norm["oc025"][c, 1] + norm["oc025"][c, 0]
+mg_per_m3 = 10.0 ** log10_chl                     # NaN stays NaN
+\end{verbatim}
+
+\paragraph{If you already hold an earlier build.} The deltas are small and
+exact.
+
+\begin{table}[h]
+\centering\setlength{\tabcolsep}{5pt}\footnotesize
+\begin{tabular}{@{}>{\raggedright\arraybackslash}p{2.0cm}>{\raggedright\arraybackslash}p{5.9cm}>{\raggedright\arraybackslash}p{6.8cm}@{}}
+\toprule
+you hold & re-fetch & keep \\
+\midrule
+\code{f7l1} & the 5.4\,MB npz (its \code{elev} is now real, and
+\code{static\_n\_finite} is new); \code{\_X\_g100.npy} \emph{only} if you key
+caches by file hash & \code{g025}, \code{rg100}, \code{oc025} --- hard links
+of your files, hash-identical; rename or symlink. Delete any elevation you
+patched in from \code{f7l0}: it is identical, so this is bookkeeping \\
+\addlinespace
+\code{f7l0} & the npz, \code{g025} (1989 is filled and the two observed
+channels were re-z-scored), \code{g100} and \code{oc025} (new) &
+\code{rg100} only --- byte-identical, hash \code{55c49f1b\dots}, so any
+subsurface-derived cache stays valid \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Do not mix builds within a group: \code{f7l2}'s \code{g025} must be decoded
+with \code{f7l2}'s \code{norm\_g025}. If your infrastructure fits its own
+standardisation or climatology on training years, recompute it --- 1989 exists
+now, and any per-year table or fold definition that skipped it should stop
+skipping it.
+
+\paragraph{Deprecation.} \code{family7\_global025\_pentad\_l1} will be
+\textbf{deleted from the Hugging Face dataset repository on 2026-10-15}. It is
+superseded in every respect by \code{f7l2}, whose three inherited files are
+the same bytes; nothing in it is unique. \code{family7\_global025\_pentad\_l0}
+\textbf{stays} as the published original, because its hashes are cited
+elsewhere --- but it carries the 1989 hole and the
+non-reproducing atmosphere group, so it is a historical record rather than a
+recommendation. Pin \code{f7l2} by its hashes and re-read the manifest before
+a re-ingest.
+
+\paragraph{Reporting a problem.} Open an issue on the source repository,
+\code{github.com/blauewelt/earth} --- a read-only agent can still open one,
+and an issue is not a write to the dataset. Quote the file name, its sha256,
+the bin and the check that failed. If issues are unavailable to you, report to
+Chris.
+
+\begin{thebibliography}{9}\small
+\bibitem{occci} Sathyendranath, S.\ et al.\ (2019). An Ocean-Colour Time
+Series for Use in Climate Studies: The Experience of the Ocean-Colour Climate
+Change Initiative (OC-CCI). \emph{Sensors} 19(19), 4285. Version 6.0 data:
+ESA Climate Office / Plymouth Marine Laboratory.
+\bibitem{glorys} Lellouche, J.-M.\ et al.\ (2021). The Copernicus Global
+$1/12^\circ$ Oceanic and Sea Ice GLORYS12 Reanalysis. \emph{Front.\ Earth
+Sci.}\ 9:698876.
+\bibitem{oisst} Huang, B.\ et al.\ (2021). Improvements of the Daily Optimum
+Interpolation Sea Surface Temperature (DOISST) Version 2.1. \emph{J.\
+Climate} 34, 2923--2939.
+\bibitem{ncep} Kalnay, E.\ et al.\ (1996). The NCEP/NCAR 40-Year Reanalysis
+Project. \emph{Bull.\ Amer.\ Meteor.\ Soc.}\ 77, 437--471.
+\bibitem{rg} Roemmich, D.\ and Gilson, J.\ (2009). The 2004--2008 mean and
+annual cycle of temperature, salinity, and steric height in the global ocean
+from the Argo Program. \emph{Prog.\ Oceanogr.}\ 82, 81--100.
+\bibitem{etopo} NOAA National Centers for Environmental Information (2022).
+ETOPO 2022 15 Arc-Second Global Relief Model.
+\bibitem{ne} Natural Earth, version 5.1.1, 1:10m physical vectors
+(glaciated areas; lakes). Public domain.
+\bibitem{f7} blauewelt/earth (2026). Family 7: a global, three-resolution
+input tensor for a forward model of the Earth's surface state. Design note,
+7~September~2026.
+\bibitem{f71} blauewelt/earth (2026). Family 7.1: ocean colour joins the
+global tensor. Design note, 13~September~2026.
+\end{thebibliography}
+
+\end{document}

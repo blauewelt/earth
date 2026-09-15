@@ -1,5 +1,7 @@
 # Family 7.1 — ingestion handover for an agent that already holds family 7
 
+PDF design note: https://blauewelt.github.io/earth/ml/paper/notes/family72.pdf
+
 *Written 2026-09-14 for an agent (a Gemini instance, or any other) that has
 already ingested family 7 (`f7l0`) from `docs/FAMILY7_DATA_HANDOVER.md` into
 its own infrastructure and now needs family 7.1. It is a DELTA document: it
