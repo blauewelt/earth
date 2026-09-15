@@ -53,13 +53,23 @@ stencil is shaped like an HOURGLASS rather than a cone, and if the model is
 allowed to learn that shape per region? Three changes: the present is a WAIST
 of several cells instead of a single point, because a gradient does not exist
 inside one cell; a PREDICTION CONE — the past cone mirrored through the anchor
-into the future — supplies targets and is never read; and seven numbers per 2°
-region and channel group (drift, orientation, two waist semi-axes, two growth
+into the future — supplies targets and is never read; and seven numbers per 1°
+cell and channel group (drift, orientation, two waist semi-axes, two growth
 rates) warp a fixed sunflower, read by interpolated gathers so the loss reaches
 the geometry. Pre-registered: at the RAPID line (the mooring array at 26.5° N
 that measures the Atlantic overturning) the surface cone should point
-south-west, up the Florida Current, and the deep cone north, up the Deep
-Western Boundary Current.
+south-west, up the Florida Current, and the model's attention on deep Argo
+profiles should sit north of it, up the Deep Western Boundary Current.
+
+**Revision 2, 15 Sep** (after a second agent's review, at Chris's decision):
+the learnable geometry's parameter maps are at **1°**, not 2° — a coarse 10°
+map plus a 1° residual under a shrinkage-and-smoothness prior, so a data-poor
+cell inherits its neighbourhood instead of learning noise. And there are **no
+Argo ellipses**: the Argo channels arrive as the k nearest profile tokens
+(E-071 §3, E-076), which have no elliptic shape to learn, so revision 1's three
+depth maps are gone and depth-dependent sourcing — surface upstream is not deep
+upstream — is left to attention over those tokens and checked as the R4
+attention diagnostic.
 
 **Status.** DESIGN ONLY — nothing is implemented, nothing is measured, no run
 is dispatched and no box is rented. Three arms (A0 fixed geometry · A1 learned
