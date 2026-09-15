@@ -9,267 +9,1057 @@
 \setlength{\parskip}{2pt}
 \newcommand{\code}[1]{\texttt{#1}}
 
-\title{Family 10: one schema for every granularity\\
-\large a storage and sampling design in which no source is resampled to a common grid}
+\title{Family 10: the granularity-aware tensor, as built\\
+one registry, three storage tiers, and four observation stores\\
+\large 2.12 billion measurements --- what shipped, measured}
 \author{blauewelt/earth --- design note}
-\date{13 September 2026}
+\date{15 September 2026}
 
 \begin{document}
 \maketitle
 
 \begin{abstract}
-The programme's input tensors so far share one contract: every source is
-brought onto a $0.25^\circ$, five-day grid before the model sees it. That
-contract copies coarse values into fine cells as if they were independent
-measurements, averages fine sources down to the grid and discards what they
-were bought for, and represents a sparse observing system as a grid that is
-mostly empty. Family 10 replaces it with three commitments. Every source is
-stored at its own resolution and cadence in one of three tiers by density:
-gridded dense fields at their native grid, points and profiles in a
-pentad-sorted observation store, and fine imagery as a catalogue plus the
-cached tokens of a small per-tile codec. A single token schema --- the value,
-its offset from the anchor in space and time, and its \emph{footprint} (the
-spatial and temporal support it averaged, in log units) --- is produced by
-each tier's reader, so the encoder never learns which file a value came from,
-only what it is, where it is, and how much it averaged. And the decoder is
-queried at a location and a footprint, so targets can be at any granularity
-too. Families 7.1 and 8 become the first tier-G and tier-P groups of family
-10 unchanged. We state the schema, the tiers, the registry that binds them,
-the local codec, the storage arithmetic, and four staged experiments each
-with a falsifier.
+Family 10 is the programme's storage contract for data of mixed granularity.
+Nothing is resampled onto a common grid when it is stored: every source keeps
+its own resolution and cadence, and the token a model reads carries the
+measurement's \emph{footprint} --- how much area and how much time it averaged
+--- beside its offset from the place and pentad being asked about. One registry
+file, \code{tensors/family10/family10.json} on the public Hugging Face dataset
+repository \code{chfrank/earth-tensors}, lists every group of the family and
+says which of three storage tiers it belongs to: \textbf{G}, gridded dense
+fields held at their native grid and read by a byte range (the four channel
+groups of family 7.2, referenced rather than copied); \textbf{P}, points,
+profiles and tracks held as columns sorted by five-day bin with a
+compressed-sparse-row index and read by a $k$-nearest search; and \textbf{T},
+tiles, which is designed and not built. Experiment E-079 built the four tier-P
+stores: \code{gdp} (the Global Drifter Program's six-hourly surface drifters,
+48,480,798 rows), \code{gtmba} (the tropical moored arrays TAO/TRITON, PIRATA
+and RAMA, one row per mooring per day, 1,001,282 rows), \code{socat} (the
+Surface Ocean CO\textsubscript{2} Atlas, 41,830,675 underway ship and mooring
+measurements) and \code{slatrack} (Copernicus Marine's reprocessed along-track
+sea-level anomaly, 2,030,800,150 samples from 29 altimeter mission datasets).
+All four were published and then independently verified from the bytes on
+2026-09-14, for \$0.55. This note states what the registry says, what a store
+is, what each store contains, how the builds ran, how to read one, and what the
+layout still cannot promise. A final section is a self-contained handover for an
+external agent that reads the public dataset and never writes to it.
 \end{abstract}
 
-\section{Why a common grid is the wrong contract}
+\section{Purpose: four prediction goals, served by measurements}
 
-Three properties of the existing tensors motivate the design; each is a
-measurement rather than a preference.
+The programme tracks four prediction goals: the El Ni\~no--Southern Oscillation
+(the tropical Pacific's warm-and-cold swing, read out as the Ni\~no-3.4
+sea-surface temperature index), the ocean carbon sink (how much carbon dioxide
+the sea surface absorbs), the Atlantic Meridional Overturning Circulation or
+AMOC (the northward heat-carrying flow of the Atlantic, read out as transport at
+26.5$^\circ$\,N), and sea-surface temperature itself. Everything the programme
+had fed a model before family 10 was a \emph{gridded product} --- a field
+someone else had already interpolated onto a regular grid. Family 10's four
+tier-P stores are the measurements themselves.
 
-\paragraph{A coarse value copied into fine cells is one measurement
-presented as many.} Family 7 serves a reanalysis value on a $1.9^\circ$
-Gaussian cell, stored at $1^\circ$, to the sixteen $0.25^\circ$ cells inside
-it and to the nine cells of a lag-0 patch, as sixteen or nine tokens that
-happen to agree. The model cannot distinguish nine readings of $0.31$ from
-one reading copied nine times, and those are different amounts of evidence.
+\begin{table}[h]
+\centering\setlength{\tabcolsep}{4pt}\footnotesize
+\begin{tabular}{@{}>{\raggedright\arraybackslash}p{1.7cm}>{\raggedright\arraybackslash}p{5.2cm}>{\raggedright\arraybackslash}p{8.0cm}@{}}
+\toprule
+store & what it measures & the goal it serves, and why this rather than a grid \\
+\midrule
+\code{gdp} & surface buoy velocity at 15\,m and sea-surface temperature, every six hours & \textbf{AMOC}: observed velocity --- the quantity a learned codec could not recover from gridded fields (E-069). Also an independent temperature instrument \\
+\addlinespace
+\code{gtmba} & one row per tropical mooring per day: surface and air temperature, salinity, wind, current, and subsurface temperature at eleven depths to 500\,m & \textbf{El Ni\~no}: the warm-water volume and thermocline depth, where the six-month lead lives. Warm-water volume is computed by the consumer from the 20\,$^\circ$C isotherm depth at the equatorial sites, not stored: it is a derived quantity of a choice of sites \\
+\addlinespace
+\code{socat} & surface-water carbon-dioxide fugacity from ships and moorings, with temperature, salinity and barometric pressure & \textbf{carbon}: the only direct observation of the quantity --- every global sink estimate is a reconstruction fitted to this archive \\
+\addlinespace
+\code{slatrack} & sea-level anomaly along each altimeter's ground track, one sample per second ($\approx 7$\,km) & \textbf{AMOC} as geostrophic transport measured rather than modelled, and \textbf{El Ni\~no} as Kelvin waves in sea level. Also fronts, for \textbf{sea-surface temperature} \\
+\bottomrule
+\end{tabular}
+\caption{The four tier-P stores against the four prediction goals.}
+\label{tab:goals}
+\end{table}
 
-\paragraph{A fine value averaged into a coarse cell discards what the finer
-source adds.} Family 7.1 keeps one thirty-sixth of the pixels of a 4\,km
-colour product and adds a coverage channel to say how much was discarded.
-Kilometre-scale radiometry is of order $3.5 \times 10^{14}$ values; it
-cannot be a tensor, and ``therefore average it'' is the wrong conclusion.
+The design argument is in the family-10 design note (E-078) and is three
+measurements rather than three preferences. A coarse value copied into fine
+cells is one measurement presented as many, and a model cannot tell nine
+readings that agree from one reading copied nine times. A fine value averaged
+into a coarse cell discards exactly what the finer source was bought for. And
+distance is a feature that a grid hides: from the same five nearest Argo
+profiles, optimal interpolation beat climatology by 21\,\% on temperature where
+the gridded monthly product, read at the nearest cell, gave a learned codec
+3\,\% (E-076b).
 
-\paragraph{Distance is a feature that a grid hides.} With the same five
-nearest Argo profiles, optimal interpolation beats climatology by 21\,\% on
-temperature where the gridded monthly product, read at the nearest cell,
-gave a learned codec 3\,\% (E-076b). The information was in where and when
-the profiles were taken relative to the point being predicted; the grid had
-removed it.
+\section{Three tiers, one registry}
 
-The contract cannot therefore be ``everything on one grid''. It has to be
-``everything at its own granularity, and the token says what that
-granularity is''.
+Sources are stored by \emph{density}, because density decides what a read
+costs --- not by their sphere or their science.
 
-\section{The token}
+\begin{table}[h]
+\centering\setlength{\tabcolsep}{4pt}\footnotesize
+\begin{tabular}{@{}>{\raggedright\arraybackslash}p{1.5cm}>{\raggedright\arraybackslash}p{4.4cm}>{\raggedright\arraybackslash}p{5.0cm}>{\raggedright\arraybackslash}p{4.0cm}@{}}
+\toprule
+tier & what & layout & state \\
+\midrule
+G --- gridded dense & family 7.2's four channel groups: ocean surface, atmosphere and land, ocean interior, ocean colour & one bin-major \code{.npy} per group at its \emph{native} grid; a read is one HTTP byte range of one bin & built; referenced by the registry, never copied \\
+\addlinespace
+P --- points, profiles, tracks & Argo profiles (family 8) plus the four stores of this note & columns sorted by \code{(bin, time\_days)} with compressed-sparse-row bin offsets; a read is a $k$-nearest search & built: five groups \\
+\addlinespace
+T --- tiles & fine imagery and swaths (Sentinel-1/2, Landsat, NISAR) & not values but a tile-date catalogue plus a small per-tile codec's cached tokens, held \emph{as} a tier-P store & \textbf{designed, not built} \\
+\bottomrule
+\end{tabular}
+\caption{The three storage tiers, and what exists.}
+\end{table}
+
+\subsection{The registry, and its exact shape}
+
+\code{tensors/family10/family10.json} on \code{chfrank/earth-tensors} is the
+single entry point. The copy this note describes was regenerated
+\textbf{2026-09-14T22:04:04Z} by the \code{slatrack} build's last step from
+builder commit \code{6d67855}; it is 45,610 bytes and carries
+\code{n\_groups: 9} with \code{groups\_missing: []} --- the first time the
+family has been complete. Its top level:
+
+\begin{verbatim}
+{ "family": "family10", "repo": "chfrank/earth-tensors",
+  "epoch": "1982-01-01", "pentad_days": 5,
+  "bin_rule": "bin = floor((date - 1982-01-01) / 5 days); a tier-P store may
+               hold NEGATIVE bins ... and its CSR index runs over its own
+               bin_first .. bin_first + n_bins - 1",
+  "tiers":        { "G": ..., "P": ..., "T": "... NOT BUILT" },
+  "token_schema": { "fields": ["value[C]", "mask[C]", "dx_km", "dy_km",
+                      "dt_days", "log2_fp", "log2_dt", "n_R", "source",
+                      "channel"],
+                    "log2_fp": "log2(footprint_km / 27.83)",
+                    "log2_dt": "log2(support_days / 5)", "clamp": [-12, 12] },
+  "readers":      { "G": "ml/cone_sampler.py", "P": "ml/family10_store.py" },
+  "tier_g":       { "stem": "family7_global025_pentad_l2", "recipe": "f7l2",
+                    "manifest": ".../manifest.json", "manifest_present": true,
+                    "fallback_note": null, "built_at": ..., "sources": {...} },
+  "groups": [ ... 9 entries ... ], "groups_missing": [], "n_groups": 9,
+  "builder_git_sha": "6d67855...", "generated_utc": "2026-09-14T22:04:04Z",
+  "design": "...E078...", "plan": "...E079...", "handover": "...HANDOVER.md" }
+\end{verbatim}
+
+\noindent\textbf{A consumer dispatches on \code{tier} and needs nothing else.}
+Every group entry carries \code{name}, \code{tier}, \code{cadence}, \code{C},
+\code{channels} (name, unit, label), \code{footprint}, \code{layout},
+\code{prefix}, \code{repo} and its files with their \code{sha256}. A tier-G
+entry adds the grid geometry, \code{shape}, \code{dtype}, the \code{.npy}
+header length and one bin's slab size; a tier-P entry adds \code{N}, its own bin
+range and live-bin count, the date range and per-year counts, the
+quality-control policy and its cut-off, and the platform-identifier rule. The
+two \code{layout} strings are the dispatch in one sentence each: ``one bin-major
+\code{.npy} at the group's NATIVE grid; a read is one HTTP range'' against
+``columns sorted by \code{(bin, time\_days)} with CSR bin offsets; a read is a
+$k$-nearest search, one-sided in time''.
+
+\begin{table}[h]
+\centering\setlength{\tabcolsep}{5pt}\footnotesize
+\begin{tabular}{@{}llllrrr@{}}
+\toprule
+group & tier & cadence & $C$ & \code{bin\_first} & $N$ or shape & files \\
+\midrule
+\code{g025}     & G & pentad    & 7  & 0     & $3142 \times 721 \times 1440$ & 1 \\
+\code{g100}     & G & pentad    & 15 & 0     & $3142 \times 181 \times 360$  & 1 \\
+\code{oc025}    & G & pentad    & 2  & 1145  & $1997 \times 721 \times 1440$ & 1 \\
+\code{rg100}    & G & monthly   & 32 & 0     & $252 \times 181 \times 360$ (live bins only) & 1 \\
+\code{argo}     & P & irregular & 32 & 0     & 2,678,439      & 12 \\
+\code{gdp}      & P & 6-hourly  & 4  & $-211$  & 48,480,798   & 9 \\
+\code{gtmba}    & P & daily     & 18 & $-304$  & 1,001,282    & 9 \\
+\code{socat}    & P & irregular & 4  & $-1768$ & 41,830,675   & 9 \\
+\code{slatrack} & P & irregular & 3  & 803     & 2,030,800,150 & 9 \\
+\bottomrule
+\end{tabular}
+\caption{The nine groups of the registry as regenerated 2026-09-14T22:04:04Z.
+The five tier-P stores hold 2,124,791,344 observations; the four of E-079 hold
+2,122,112,905 of them.}
+\end{table}
+
+\paragraph{Tier G is referenced, not copied.} The \code{tier\_g} block names
+\emph{which} family-7 manifest it describes --- stem
+\code{family7\_global025\_pentad\_l2}, recipe \code{f7l2} --- and the four group
+entries carry that manifest's own file hashes and byte counts, compared against
+it digest by digest in the independent verification: \textbf{4 of 4 match},
+\code{oc025} (8,293,461,248 bytes) included. Two properties of the registry are
+load-bearing and both were exercised before the world caught up with them. A
+group the builder cannot read is \emph{not} in \code{groups} and \emph{is} in
+\code{groups\_missing} --- \code{slatrack} was there for most of 2026-09-14 ---
+because a registry that listed a group it could not describe would be worse than
+a short one. And when family 7.2's manifest was still a 404, the morning's
+registry described the earlier \code{f7l0} tensor and said so in
+\code{tier\_g.fallback\_note} rather than silently describing a different
+tensor. Both mechanisms are retired by the tensor arriving:
+\code{fallback\_note} is \code{null}.
+
+\section{The token, and the two footprint fields}
 
 Every observation, from every tier, becomes one token:
 \begin{equation}
 \mathrm{token} = \big(\,\mathbf{v}[C],\ \mathbf{m}[C],\ \Delta x,\ \Delta y,\ \Delta t,\ \log_2 f_p,\ \log_2 f_t,\ n_R,\ s,\ c\,\big)
 \end{equation}
-where $\mathbf{v}$ is the measurement, standardised per channel, with mask
-$\mathbf{m}$ marking which of its $C$ components were measured;
-$(\Delta x, \Delta y)$ the offset from the anchor in kilometres east and
-north and $\Delta t$ the age in days, measured back from the end of the
-anchor's bin; $n_R$ the number of such observations within the search
-bounds; $s$ and $c$ learned embeddings of the source class and the channel.
-The two footprint fields are
+where $\mathbf{v}$ is the measurement with mask $\mathbf{m}$ marking which of
+its $C$ components were measured; $(\Delta x, \Delta y)$ the offset from the
+anchor in kilometres east and north and $\Delta t$ the age in days, measured
+back from the \emph{end} of the anchor's bin; $n_R$ the number of observations
+inside the search bounds; and $s$, $c$ learned embeddings of the source class
+and the channel. The two footprint fields are
 \begin{equation}
 \log_2 f_p = \log_2\!\frac{\text{footprint in km}}{27.83\,\text{km}}, \qquad
 \log_2 f_t = \log_2\!\frac{\text{support in days}}{5\,\text{days}},
 \end{equation}
-the spatial and temporal support in units of a $0.25^\circ$ cell and a
-pentad, clamped to $\pm 12$. Table~\ref{tab:fp} places the programme's
-sources on that scale. For a dense group both fields are constants and cost
-nothing; for a sparse store they are per row.
+the spatial and temporal support in units of one $0.25^\circ$ cell
+($27.83$\,km, being $0.25^\circ$ of latitude at 111.32\,km per degree) and one
+pentad, clamped to $\pm 12$. They carry what the offsets cannot: a value 30\,km
+from a $1.9^\circ$ reanalysis average and one 30\,km from a point measurement
+say different things about the anchor, because the coarse value is a smoother,
+lower-variance quantity.
 
 \begin{table}[h]
 \centering\footnotesize
-\begin{tabular}{@{}lrr@{}}
+\begin{tabular}{@{}lrrl@{}}
 \toprule
-source & $\log_2 f_p$ & $\log_2 f_t$ \\
+source & $\log_2 f_p$ & $\log_2 f_t$ & why \\
 \midrule
-Sentinel-2 pixel, 10\,m, instantaneous & $-11.4$ & $-4$ (clamped) \\
-Argo profile (point, minutes) & $-4$ (clamped) & $-4$ (clamped) \\
-OLCI pixel, 300\,m, daily & $-6.5$ & $-2.3$ \\
-OC-CCI cell, 4\,km, daily & $-2.8$ & $-2.3$ \\
-OISST cell, $0.25^\circ$, pentad mean & $0$ & $0$ \\
-a $1^\circ$ box average, pentad & $+2$ & $0$ \\
-NCEP/NCAR at its T62 support ($\approx 1.9^\circ$), pentad & $+2.9$ & $0$ \\
-Roemmich--Gilson Argo field, $1^\circ$, monthly & $+2$ & $+2.6$ \\
+\code{gdp} --- a drifter fix              & $-4.0$ & $-4.3$ & a point; a six-hour sample, $\log_2(0.25/5)$ \\
+\code{gtmba} --- a mooring-day            & $-4.0$ & $-2.3$ & a point; a daily mean, $\log_2(1/5)$ \\
+\code{socat} --- an underway sample       & $-4.0$ & $-4.0$ & a point; minutes, at the clamp floor \\
+\code{slatrack} --- one 1\,Hz sample      & $-2.0$ & $-4.0$ & $\log_2(7/27.83)$; one second, at the floor \\
+\code{argo} --- a profile                 & $-4.0$ & $-4.0$ & a point taken in minutes \\
+\code{g025} --- a $0.25^\circ$ pentad cell & $0.0$  & $0.0$  & the unit both fields are defined against \\
+\code{g100} --- a $1^\circ$ pentad cell   & $+2.0$ & $0.0$  & the reanalysis, stored at the grid it is on \\
+\code{rg100} --- a $1^\circ$ monthly field & $+2.0$ & $+2.6$ & $\log_2(30.4/5)$ \\
 \bottomrule
 \end{tabular}
-\caption{The footprint fields for the programme's sources. The reanalysis is entered at the resolution it resolved, not the grid it is stored on.}
-\label{tab:fp}
+\caption{The footprint fields of every group in the registry. They are constant
+per group for the dense tiers and constant per store for the four built tier-P
+stores --- but stored per row, so a store that later mixes supports reads
+identically.}
 \end{table}
 
-The offsets are the correction to the first property above: a $1^\circ$
-value is one token located at the cell's centre, seen from sixteen different
-offsets by the sixteen anchors inside it, and a fine anchor's lag-0 patch
-holds one such token rather than nine. The footprint fields are what the
-offsets cannot carry: a value 30\,km away from a $1.9^\circ$ average and one
-30\,km away from a point profile say different things about the anchor,
-because the coarse value is a smoother, lower-variance quantity. This is
-the choice AlphaEarth makes on the encoder side, conditioning each source's
-decoder on the sensor's own metadata rather than resampling to a common grid
-first \cite{alphaearth}.
+The $\log_2 f_p = -4$ floor is a clamp, not a measurement: a drifter, a
+mooring, a ship intake and an Argo float are all points at any scale this grid
+resolves. \code{slatrack} is the one tier-P store whose spatial footprint is a
+real number --- $-2.0 = \log_2(7/27.83)$ --- and the verification measured its
+along-track ground spacing at \textbf{6.2--6.5\,km}, so the column is not a
+number someone typed.
 
-\section{Three tiers, one registry, one sampler contract}
+\section{What a tier-P store is}
 
-Sources are stored by density, because density decides what a read costs.
+A store is one directory per source under \code{tensors/family10/}, holding
+nine arrays in \code{.npy} format and one \code{store.json}. Every store has
+exactly these files, with exactly these dtypes, whatever the source.
+
+\begin{table}[h]
+\centering\setlength{\tabcolsep}{5pt}\footnotesize
+\begin{tabular}{@{}l>{\raggedright\arraybackslash}p{2.5cm}>{\raggedright\arraybackslash}p{10.0cm}@{}}
+\toprule
+file & dtype, shape & what \\
+\midrule
+\code{bin.npy} & int16 $[N]$ & the five-day bin, \code{floor((date - 1982-01-01)/5\,d)}. \textbf{Signed, and negative before 1982} \\
+\code{time\_days.npy} & float32 $[N]$ & days since 1982-01-01T00:00\,UTC, fractional, negative before it \\
+\code{lat.npy} & float32 $[N]$ & degrees north \\
+\code{lon.npy} & float32 $[N]$ & degrees east, in $[-180, 180)$ \\
+\code{values.npy} & float16 $[N, C]$ & the channels, in \textbf{raw units}; NaN means not measured \\
+\code{platform.npy} & int64 $[N]$ & the platform: a numeric source id where the archive has one, else \code{int(sha1(id)[:15], 16)} --- 60 bits, never negative, deterministic across machines and Python versions (\code{hash()} is not) \\
+\code{qc.npy} & uint8 $[N]$ & 0 not assessed, 1 good, 2 probably good, 3+ the source's worse grades \\
+\code{fp.npy} & float16 $[N, 2]$ & $(\log_2 f_p, \log_2 f_t)$, per row \\
+\code{bin\_offsets.npy} & int64 $[B+1]$ & compressed-sparse-row offsets over \emph{this store's own} bin range \\
+\code{store.json} & JSON & the schema, footprint, quality-control policy, provenance, per-year counts, per-channel statistics, and the \code{sha256} of every file above \\
+\bottomrule
+\end{tabular}
+\caption{The nine arrays. One row costs $27 + 2C$ bytes plus the \code{.npy}
+headers: 33 for \code{slatrack} ($C = 3$), 35 for \code{gdp} and \code{socat},
+63 for \code{gtmba}.}
+\end{table}
+
+\paragraph{The bin, and why it may be negative.} A bin is a five-day period
+counted from 1982-01-01, so
+$\mathrm{bin} = \lfloor (\text{date} - \text{1982-01-01}) / 5\,\text{d}
+\rfloor$. Drifters begin in 1979 and the carbon archive in 1957, and those rows
+are \textbf{kept, with negative bins}, so the store is the whole record and the
+\emph{loader} clips to whatever axis a tensor has --- truncating at build time
+cannot be undone. The reader's definition is a true floor on floats, which is
+the whole reason the negative side works: \code{np.floor(days / 5)} puts $-0.5$
+days in bin $-1$, where integer division would put it in bin 0.
+
+\paragraph{The index.} \code{bin\_offsets} is a compressed-sparse-row index:
+the rows of bin $b$ are \code{off[b - bin\_first] : off[b - bin\_first + 1]},
+with \code{off[0] == 0} and \code{off[-1] == N}. \textbf{\code{bin\_first} is
+not zero} --- it is $-1768$ for \code{socat} and $+803$ for \code{slatrack} ---
+and code that indexes by \code{bin} without subtracting it will either crash
+or, worse, wrap.
+
+\paragraph{The sort order is part of the contract.} Rows are sorted by
+\code{(bin, time\_days)} ascending. The bin order is what makes the index valid
+at all; the within-bin time order is what lets a reader stop at the anchor's own
+bin and still have the most recent observations at the end of the slice.
+
+\paragraph{The longitude invariant, and the float32-cast lesson.} \code{lon}
+is in $[-180, 180)$, half-open, and the dateline is not a wall: the reader wraps
+the longitude difference, and a consumer computing offsets by hand must too.
+Enforcing the half-open interval cost two fixes on the same day, and they are
+one lesson. The first (\code{61ab4fa}) folds a source sample at exactly
+$+180.0^\circ$\,E back into the interval; the second (\code{fb5d5ab}) moves the
+wrap to \emph{after} the float32 cast, because a source longitude of
+$179.99999$ wraps to itself in float64 and \textbf{rounds up to $180.0$} when it
+is stored in float32 --- which the build's own assertion then, rightly, refused.
+\textbf{An invariant has to hold in the column's dtype, not in the wider type it
+was computed in.} Both fixes are visible in the published bytes: over
+\code{slatrack}'s 2.03 billion rows the maximum longitude is $179.99998474$ ---
+\code{nextafter(180, 0)} in float32 --- the minimum is exactly $-180.0$, and not
+one row sits at $+180.0$.
+
+\paragraph{The float32 timestamp.} \code{time\_days} is float32 and runs to
+$\approx 15{,}700$ days, where its spacing is $2^{-10}\,\mathrm{d} = 84.4$
+seconds. The builder therefore computes \code{bin} from the float32 value that
+is \emph{actually stored}, not from the float64 the parser had: otherwise a row
+would sit in bin $b$ carrying a timestamp that reads as bin $b+1$, and the
+search --- which requires $\Delta t = 5(b+1) - t \ge 0$ --- would silently never
+return it for its own anchor. The identity \code{bin == floor(time\_days / 5)}
+holds on every row of all four stores. Section~6.4 says what the 84 seconds
+cost.
+
+\paragraph{Raw units, on purpose.} Nothing is z-scored and nothing is
+anomalised: a measurement already divided by a training-set standard deviation
+is no longer one. Standardise in the loader, from training bins only --- a
+statistic computed over the whole store carries the test years into the weights,
+and that leak is invisible.
+
+\section{The four stores}
+
+All four were built on 2026-09-14 and then \textbf{independently verified the
+same day by a session that did not build them}: every file fetched from the Hub
+and hashed against \code{store.json}'s own record, then every structural
+property and every statistic \emph{recomputed from the arrays} rather than read
+out of the metadata claiming them
+(\code{docs/FAMILY10\_VERIFICATION\_2026-09-14.md}). Physical bounds are shared:
+$|u|, |v| < 5\,\mathrm{m\,s^{-1}}$; $-3 < \mathrm{SST} < 45\,^\circ$C;
+$0 < f\mathrm{CO_2} < 2000\,\mu$atm; $|\mathrm{sla}| < 3$\,m;
+$0 \le \mathrm{sss} \le 45$\,PSU; $|\mathrm{wind}| < 120\,\mathrm{m\,s^{-1}}$;
+$-60 < \mathrm{airt} < 60\,^\circ$C. A value outside is set to \textbf{NaN and
+counted}, never clipped --- clipping puts a fabricated number where a broken
+instrument was.
+
+\subsection{\code{gdp} --- the Global Drifter Program}
+
+\begin{table}[h]
+\centering\setlength{\tabcolsep}{5pt}\footnotesize
+\begin{tabular}{@{}>{\raggedright\arraybackslash}p{2.8cm}>{\raggedright\arraybackslash}p{12.5cm}@{}}
+\toprule
+source & NOAA's Atlantic Oceanographic and Meteorological Laboratory, ERDDAP table \code{drifter\_6hour\_qc} --- ``Global Drifter Program, 6 Hour Interpolated QC Drifter Data'' \\
+cadence & six-hourly: positions and velocities kriged onto 00/06/12/18\,UTC. \textbf{Interpolated, not raw fixes} --- the footprint $(-4.0, -4.3)$ says ``a point, a quarter-day sample'', not ``an instantaneous measurement'' \\
+channels ($C = 4$) & \code{u}, \code{v} (m\,s$^{-1}$, eastward and northward at the 15\,m drogue depth); \code{sst} ($^\circ$C, the buoy's own thermistor); \code{drogue} (1 where the fix precedes the drifter's \code{drogue\_lost\_date}, 0 after it, \textbf{NaN} where that date is 1970-01-01, which the archive documents as ``uncertain from the beginning'') \\
+quality control & no per-row flag is published, only per-sample error estimates, so the flag is \emph{derived} here rather than in a consumer: position error $= \mathrm{hypot}(\mathrm{err_{lat}}, \mathrm{err_{lon}}\cos\phi)\times 111.32$\,km; over 50\,km the row is dropped and counted, $\le 5$\,km is \code{qc}\,1, the rest \code{qc}\,2 \\
+rows & $N = 48{,}480{,}798$ of 48,708,540 read (99.53\,\%): \code{drop\_pos\_err} 227,174, \code{drop\_no\_values} 568, out-of-bounds \code{sst} 5,028 and \code{v} 1 \\
+bins & $-211 \ldots 3141$, \textbf{3,353 of 3,353 live (100\,\%)}; 1979-02-15T00:00Z $\to$ 2024-12-31T18:00Z \\
+years & 46, no gaps: 1979 = 24,046 rows, 2020 = 2,301,964, 2024 = 1,834,400, with a twenty-fold rise between 1986 (47,898) and 1993 (767,697) \\
+platforms & 28,689 distinct drifters, by their AOML identifier \\
+measured & 0.963865 overall; \code{u} 0.998862, \code{v} 0.998861, \code{sst} 0.886963, \code{drogue} 0.970775. \code{qc} is 1 on 93.571\,\% of rows and 2 on 6.429\,\% \\
+\code{store.json} & built 2026-09-14T09:46:18Z at commit \code{0d5860d}; sha256 \code{c3a14beb8d51db73f33636c9b805509e9d71721c9fe92d876b8c9621d4ab1e10} \\
+verdict & \textbf{PASS on every check}: 9 of 9 hashes, every structural property, all four channels reproduced, and the per-year counts reproduced exactly from \code{time\_days} for 46 of 46 years \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\code{drogue} is a channel and not a filter, deliberately: a drogued drifter
+measures the 15\,m current and an undrogued one the surface, and an
+\emph{unknown} drogue is a third state, NaN rather than 0. The verification
+confirmed exactly three states and no fourth value (1 on 21,476,927 rows, 0 on
+25,587,043, NaN on 1,416,828), and a global mean drift of $-0.00013$ and
+$+0.0032\,\mathrm{m\,s^{-1}}$ --- what a global drifter ensemble should give.
+
+\subsection{\code{gtmba} --- the tropical moored arrays}
+
+The smallest store of the four and the widest, and the only one whose rows are a
+fixed lattice rather than a moving platform.
+
+
+\begin{table}[h]
+\centering\setlength{\tabcolsep}{5pt}\footnotesize
+\begin{tabular}{@{}>{\raggedright\arraybackslash}p{2.8cm}>{\raggedright\arraybackslash}p{12.5cm}@{}}
+\toprule
+source & NOAA's Pacific Marine Environmental Laboratory: TAO/TRITON in the Pacific, PIRATA in the Atlantic, RAMA in the Indian Ocean, through the Observing System Monitoring Center ERDDAP (which answers a 302 to the CoastWatch server). Nine \code{pmelTaoDy*} datasets are listed; the six publishing the stored quantities are read and joined on \code{(station, day)} \\
+cadence & daily: one row is \textbf{one mooring on one day}, which is what the array is designed to deliver. Footprint $(-4.0, -2.3)$ \\
+channels ($C = 18$) & \code{sst}, \code{sss}, \code{airt}, \code{wind\_u}, \code{wind\_v}, \code{u\_cur}, \code{v\_cur}, then subsurface temperature at eleven standard depths \code{t\_1m}, \code{t\_20m}, \code{t\_40m}, \code{t\_60m}, \code{t\_80m}, \code{t\_100m}, \code{t\_120m}, \code{t\_140m}, \code{t\_180m}, \code{t\_300m}, \code{t\_500m}. Units $^\circ$C, PSU, $^\circ$C, m\,s$^{-1}\times 4$, then $^\circ$C. A site that does not carry a depth leaves that channel NaN; nothing is interpolated in \\
+quality control & a code beside every daily value (0 missing, 1 highest, 2 default, 3 adjusted, 4 lower, 5 sensor failed). A \emph{sample} is kept only at 1 or 2; a \emph{row} survives if any channel does, and its \code{qc} is the \textbf{worst} code among the survivors. Wind components share the wind-speed code, the only one published for them; depths match the eleven levels within 0.6\,m \\
+rows & 35,771,817 samples read $\to$ 15,781,023 kept, joined into $N = 1{,}001{,}282$ mooring-days. \code{drop\_fill} 15,835,928 (the $10^{35}$ fill), \code{drop\_depth} 3,261,857, \code{drop\_qc} 893,009; 37 dataset-year requests came back empty \\
+bins & $-304 \ldots 3141$, 3,386 of 3,446 live (98.3\,\%); 1977-01-01 $\to$ 2024-12-31 \\
+years & 48: 1977 = 173 rows, 1992 = 16,277 as TRITON and PIRATA come in, a plateau of 33,000--38,000 in 2007--2012, then a decline to 2024 = 20,958 \\
+platforms & 159 distinct moorings, by World Meteorological Organization code; latitudes span $[-25, 21]$ only \\
+measured & 0.568374 overall --- the lowest of the four, and honestly so: the current channels exist on 6.67\,\% of mooring-days (the profiler sites alone) and \code{sss} on 38.3\,\%, while \code{sst} is 78.9\,\% and \code{t\_300m} 86.4\,\%. \code{qc} is 1 on 283,715 rows and 2 on 717,567 \\
+\code{store.json} & built 2026-09-14T07:01:04Z at commit \code{c5bc2ce}; sha256 \code{50c6e57d7c887f6d2fecafde4c4354568070a99ab237e75073279c6bed81b7cb} \\
+verdict & \textbf{PASS on every check}: 9 of 9 hashes, all 18 channels reproduced exactly, and the per-year counts reproduced exactly from \code{time\_days} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Two physical cross-checks were run rather than assumed, and both passed.
+\code{t\_1m} and \code{sst} come from two \emph{different} PMEL datasets joined
+on \code{(station, day)}, and their store-wide means agree to
+$0.0003\,^\circ$C. And the profiler's velocities are published in centimetres
+per second and stored in metres per second, with the factor read from the unit
+the service declares rather than hardcoded: the check is that the currents peak
+at $1.19\,\mathrm{m\,s^{-1}}$ and not at 119, because a silent factor of 100 on
+a current still looks like a plausible ocean.
+
+\subsection{\code{socat} --- the Surface Ocean CO\textsubscript{2} Atlas}
+
+The longest record of the four, and the only one reaching back to 1957 --- which
+is what the negative bins of §4 exist for.
+
+
+\begin{table}[h]
+\centering\setlength{\tabcolsep}{5pt}\footnotesize
+\begin{tabular}{@{}>{\raggedright\arraybackslash}p{2.8cm}>{\raggedright\arraybackslash}p{12.5cm}@{}}
+\toprule
+source & the SOCAT v2026 synthesis release of 2026-06-16 (DOI 10.25921/8dba-fr90, NCEI accession 0315110): one 1,411,801,422-byte zip holding a 32-column tab-separated file behind an 8,454-line preamble, streamed and parsed in one pass \\
+cadence & irregular --- an underway measurement taken while the ship steams. Footprint $(-4.0, -4.0)$ \\
+channels ($C = 4$) & \code{fco2} ($\mu$atm --- \code{fCO2rec}, SOCAT's own recomputed and harmonised fugacity, not one of the six raw variants beside it); \code{sst} ($^\circ$C, the ship's measured intake temperature); \code{sss} (PSU, measured practical salinity); \code{patm} (hPa, the \textbf{measured} barometric pressure \code{PPPP}) \\
+quality control & two flags, both applied: the dataset-level \code{QC\_Flag} keeps A--D and drops E, and the per-value World Ocean Circulation Experiment flag \code{fCO2rec\_flag} maps $2 \to 1$, $3 \to 3$, $4 \to 4$, $9 \to 0$, with rows worse than 2 dropped. The published file states it holds only flag-2 values, so this is a guard rather than a filter --- and the counters say how many rows each clause removed, because a guard that never fires and one that removes a third of the archive look identical from outside (both removed \textbf{0}) \\
+rows & $N = 41{,}830{,}675$ of 44,018,204 read (95.0\,\%). \code{drop\_out\_of\_range} 2,160,005 (outside the 1957--2024 window); \code{drop\_no\_fco2} 27,520 \\
+bins & $-1768 \ldots 3141$, 3,266 of 4,910 live (66.5\,\%) --- the emptiest index of the four, the early record being a handful of cruises a decade; 1957-01-01 $\to$ 2024-12-31 \\
+years & 68 listed, with true gaps (1958--60, 1964--67 and 1971--72 hold zero rows): 1957 = 578, past 1\,M a year in 2005, 2024 = 2,359,858 \\
+platforms & 8,024 distinct cruises, by hashed expocode --- the unit is a \emph{cruise}, not a ship, which is the right unit for holding out a calibration \\
+measured & 0.923146 overall; \code{fco2} 1.000000, \code{sst} 0.999875, \code{sss} 0.945353, \code{patm} 0.747356. \code{qc} is 1 on every row \\
+\code{store.json} & built 2026-09-14T08:45:54Z, builder commit \code{0d5860d}; sha256 \code{aac9f3316ac7cb89ba4a3dabdb74dc22150043a72eeb11bd57c8895b782ad3f7} \\
+verdict & \textbf{PASS on every check}: 9 of 9 file hashes, all four channels reproduced exactly. One difference, and it is the format's: recomputing each row's calendar year from \code{time\_days} differs from \code{store.json}'s \code{per\_year} by 1--3 rows in 16 of 68 years, because three rows late on 2024-12-31 round up across midnight in float32. \code{store.json}'s counts, taken from the source dates, are the correct side \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\paragraph{\code{patm} is never \code{NCEP\_SLP}.} The file carries both the
+measured barometer and a reanalysis pressure interpolated to the ship --- a model
+output wearing a measurement's column --- and substituting the second where the
+first is missing would be making up data, so \code{patm} is NaN there instead.
+The cost is visible: it is the only channel below 90\,\% measured, at 74.7\,\%,
+mean 1009.4\,hPa over 859--1066\,hPa. Two edge findings are flagged rather than
+failed: \code{fco2} sits exactly on its 2000\,$\mu$atm bound on 6 rows, and
+\code{sss} is under 5\,PSU on 128,336 rows of which 175 are exactly 0.0, which
+the builder's $[0, 45]$ bound does not catch.
+
+\subsection{\code{slatrack} --- along-track sea level}
+
+95.7\,\% of the family by row count, and the only store that needs credentials
+to fetch and a large machine to assemble. Section~6 takes it apart further.
+
+
+\begin{table}[h]
+\centering\setlength{\tabcolsep}{5pt}\footnotesize
+\begin{tabular}{@{}>{\raggedright\arraybackslash}p{2.8cm}>{\raggedright\arraybackslash}p{12.5cm}@{}}
+\toprule
+source & Copernicus Marine Service product \code{SEALEVEL\_GLO\_PHY\_L3\_MY\_008\_062}, the DUACS reprocessed level-3 along-track sea level, as \textbf{29 per-mission datasets} read as one table. The product's public STAC (SpatioTemporal Asset Catalog) metadata gives every mission's identifier, window and variable names with no credentials; the data needs them \\
+cadence & 1\,Hz --- one sample per second of flight, $\approx 7$\,km along the ground track. Footprint $(-2.0, -4.0)$ \\
+channels ($C = 3$) & \code{sla} (m --- the archive's \code{sla\_filtered}, the low-pass-filtered anomaly), \code{sla\_unfiltered} (m), \code{mdt} (m, the mean dynamic topography at the point, so absolute dynamic topography is the one addition $\mathrm{adt} = \mathrm{sla} + \mathrm{mdt}$) \\
+quality control & level 3 is edited upstream and publishes no per-sample flag, so every kept row carries \code{qc}\,1 and the store says so rather than inventing a grade. A sample whose \code{sla\_filtered} is the netCDF fill or outside $\pm 3$\,m is dropped; the other two channels outside the same bounds become NaN alone \\
+rows & $N = 2{,}030{,}800{,}150$ of 2,030,924,463 read --- \textbf{124,313 dropped}, 0.0061\,\%, with \code{counts.out\_of\_bounds} empty, so no value was outside $\pm 3$\,m. The store names no rule for those 124,313; read against the builder, the only rule that can have produced them is the keep mask's \code{isfinite(sla\_filtered)} \\
+bins & $803 \ldots 3141$, \textbf{2,339 of 2,339 live (100\,\%)}; 1993-01-01T00:00Z $\to$ 2024-12-31T23:50Z. Rows per live bin: 152,741 minimum, 745,348 median, 1,929,913 maximum \\
+years & 32, none empty: 1993 = 32,981,063 rising to 2023 = 130,879,712, with one fall --- 1994 = 29,146,039 (§6) \\
+platforms & 28 distinct mission hashes carry rows, of 29 dataset identifiers in the plan \\
+measured & 0.999052 overall: \code{sla} and \code{sla\_unfiltered} on \emph{every} row, \code{mdt} NaN on 5,774,351 (0.28\,\%), which is the whole of the store's missingness \\
+size & \textbf{67.02\,GB} --- twenty-two times the other three together, \code{platform.npy} (16,246,401,328 bytes) the largest file \\
+\code{store.json} & built 2026-09-14T21:42:24Z, builder commit \code{6d67855}; sha256 \code{d81b5e27dec71d47549850c442e58d3b88c16aae5e473a588c6c99de9220b12a} \\
+verdict & \textbf{PASS on every check}, by \emph{streaming} rather than download --- 67\,GB against 14\,GB of sandbox disk, so all nine arrays were read over HTTPS in row-aligned lockstep and every check recomputed on the chunk in flight, one pass, 837\,s at 80\,MB/s. Being a pass over every row rather than a sample the checks are exhaustive: 0 descents in 2,030,800,149 adjacent \code{bin} pairs, 0 inside any bin on \code{time\_days}, the index reproduced exactly, \code{bin == floor(time\_days/5)} everywhere, and all three channels' means reproduced to the seventeen digits \code{store.json} prints \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\section{\code{slatrack} in detail}
+
+Four things about this store are worth a section of their own: which satellites
+are in it, why one year is thin, where the archive has holes, and why its time
+column cannot be used as a clock.
+
+\subsection{Twenty-nine mission datasets, and the one with no rows}
+
+\code{platform} is \code{int(sha1(<mission dataset id>)[:15], 16)}. The
+verification hashed the 29 identifiers in \code{store.json}'s
+\code{plan.missions} and matched the store's ids against them: \textbf{every
+row's platform is one of the 29, and not one row of 2.03 billion falls outside
+its own mission's STAC coverage window}, in either direction, at month
+granularity.
 
 \begin{table}[h]
 \centering\setlength{\tabcolsep}{4pt}\footnotesize
-\begin{tabular}{@{}>{\raggedright\arraybackslash}p{2.2cm}>{\raggedright\arraybackslash}p{4.2cm}>{\raggedright\arraybackslash}p{4.6cm}>{\raggedright\arraybackslash}p{4.0cm}@{}}
+\begin{tabular}{@{}lllrl@{}}
 \toprule
-tier & what & layout & reader \\
+id suffix & mission & STAC window & rows & years present \\
 \midrule
-G --- gridded dense ($\gtrsim 4$\,km, daily to monthly, near-complete) & GLORYS, OISST, NCEP/ERA5, OC-CCI, DUACS, GREP levels & one bin-major array per group at its native grid, own first bin or bin list, standardised, NaN = unobserved & a slab read plus a block or nearest lookup at the anchor; footprint a per-group constant. Exists: families 7 and 7.1 \\
-\addlinespace
-P --- points, profiles, tracks (sparse in space or time) & Argo core, Deep and BGC, drifters, moorings, tide gauges, altimeter tracks, SWOT swath samples, lidar footprints, SOCAT & columns sorted by pentad bin with CSR offsets; raw units; per row (lat, lon, $t$, footprint, $\mathbf{v}[C]$, $\mathbf{m}[C]$) & $k$ nearest in a space--time metric, one-sided in time, bounded by $(R_{\max}, T_{\max})$, miss tokens to a fixed $k$. Exists: family 8 \\
-\addlinespace
-T --- tiles (fine imagery, $\lesssim 1$\,km, swaths) & Sentinel-1/2, Landsat, NISAR, OLCI/SLSTR, VIIRS, MODIS 1\,km & not stored as values: a tile-date catalogue (footprint polygon, sensor, time, valid fraction, URL) plus a token cache --- the local codec's output per tile-date --- stored as a tier-P store whose values are the tokens & the tier-P reader; a cached token is an observation with the tile's footprint and $\log_2 f_t = -4$. Not yet built \\
+\code{tp}     & TOPEX/Poseidon                & 1992-10-13 $\to$ 2002-04-24 & 163,504,544 & 1993--2002 \\
+\code{c2}     & CryoSat-2                     & 2010-07-16 $\to$ 2020-07-31 & 161,609,793 & 2010--2020 \\
+\code{alg}    & Saral/AltiKa geodetic orbit   & 2015-03-31 $\to$ 2026-01-16 & 150,903,772 & 2015--2024 \\
+\code{s3a}    & Sentinel-3A                   & 2016-06-28 $\to$ 2026-01-16 & 141,546,156 & 2016--2024 \\
+\code{j2}     & Jason-2                       & 2008-10-19 $\to$ 2016-05-26 & 136,145,157 & 2008--2016 \\
+\code{en}     & Envisat                       & 2002-05-17 $\to$ 2010-10-18 & 134,436,432 & 2002--2010 \\
+\code{g2}     & GFO                           & 2000-01-07 $\to$ 2008-09-07 & 128,066,623 & 2000--2008 \\
+\code{j1}     & Jason-1                       & 2002-04-24 $\to$ 2008-10-19 & 113,811,966 & 2002--2008 \\
+\code{e2}     & ERS-2                         & 1995-05-15 $\to$ 2002-05-14 & 109,297,139 & 1995--2002 \\
+\code{s3b}    & Sentinel-3B                   & 2018-11-27 $\to$ 2026-01-16 & 101,296,799 & 2018--2024 \\
+\code{j3}     & Jason-3                       & 2016-05-26 $\to$ 2021-12-29 & 99,342,274  & 2016--2021 \\
+\code{c2n}    & CryoSat-2 new orbit           & 2020-08-01 $\to$ 2026-01-16 & 74,855,976  & 2020--2024 \\
+\code{h2b}    & HaiYang-2B                    & 2019-12-20 $\to$ 2026-01-16 & 70,829,087  & 2019--2024 \\
+\code{h2ag}   & HaiYang-2A geodetic orbit     & 2016-03-31 $\to$ 2020-06-09 & 61,856,695  & 2016--2020 \\
+\code{s6a-lr} & Sentinel-6A low-rate mode     & 2021-12-29 $\to$ 2026-01-16 & 54,716,036  & 2021--2024 \\
+\code{j1n}    & Jason-1 new orbit             & 2009-02-10 $\to$ 2012-03-03 & 53,323,537  & 2009--2012 \\
+\code{j3n}    & Jason-3 interleaved orbit     & 2022-04-25 $\to$ 2025-01-07 & 48,608,308  & 2022--2024 \\
+\code{tpn}    & TOPEX/Poseidon new orbit      & 2002-09-10 $\to$ 2005-10-03 & 46,627,866  & 2002--2005 \\
+\code{al}     & Saral/AltiKa                  & 2013-03-14 $\to$ 2015-03-31 & 34,309,111  & 2013--2015 \\
+\code{h2a}    & HaiYang-2A                    & 2014-04-12 $\to$ 2016-03-15 & 28,441,563  & 2014--2016 \\
+\code{swon}   & SWOT nadir altimeter          & 2023-07-21 $\to$ 2026-01-16 & 22,545,701  & 2023--2024 \\
+\code{enn}    & Envisat new orbit             & 2010-10-26 $\to$ 2012-04-08 & 21,472,828  & 2010--2012 \\
+\code{j1g}    & Jason-1 geodetic orbit        & 2012-05-07 $\to$ 2013-06-01 & 19,699,076  & 2012--2013 \\
+\code{e1}     & ERS-1                         & 1992-10-23 $\to$ 1995-05-15 & 17,776,350  & 1993--1995 \\
+\code{e1g}    & ERS-1 geodetic phase          & 1994-04-10 $\to$ 1995-03-21 & 14,825,066  & 1994--1995 \\
+\code{j2n}    & Jason-2 interleaved orbit     & 2016-10-17 $\to$ 2017-05-17 & 10,093,265  & 2016--2017 \\
+\code{swonc}  & SWOT nadir, calibration phase & 2023-01-16 $\to$ 2023-07-09 & 7,475,129   & 2023 \\
+\code{j2g}    & Jason-2 long-repeat orbit     & 2017-07-11 $\to$ 2017-09-14 & 3,383,901   & 2017 \\
+\code{j3g}    & Jason-3 long-repeat orbit     & 2025-06-18 $\to$ 2026-01-16 & \textbf{0}  & --- \\
 \bottomrule
 \end{tabular}
-\caption{The three storage tiers.}
+\caption{The 29 mission datasets. \code{j3g}'s zero is correct and not a gap:
+its orbit begins six months after the store's last day, so a row from it would
+be the error.}
 \end{table}
 
-Three properties make the tiers one family. \emph{One time axis:} every
-tier is indexed by the pentad bin from the 1982-01-01 epoch; tier-P rows keep
-their timestamp inside the bin so $\Delta t$ is fractional; a tier-G group
-carries its own first bin or, for a monthly product, its own list of live
-bins. \emph{One registry:} a \code{family.json} at the family's root lists
-every group with its tier, its grid or store schema, its cadence, its channel
-names and units, its footprint constants, its first bin, its file names with
-hashes, its sources and the builder commit; consumers dispatch on the tier,
-so a new group is a new entry rather than a new code path. \emph{One sampler
-contract:} $\mathrm{gather}(\text{anchor}, \text{family}) \to \text{tokens}$
---- for each group, its reader returns tokens in the schema of \S2 under that
-group's cone family (the reach-versus-lag rule of E-071: atmosphere,
-currents and sea-surface height, temperature and mixed layer, land, the
-depth column) with a fixed slot count per group, so batches stay
-rectangular. The existing cone sampler is this contract for tier G, and the
-Argo store's nearest-neighbour search is it for tier P; tier T reuses tier
-P's.
+Missions contributing rise from \textbf{2} in 1993--1999 to \textbf{9} in
+2023, and rows per day with them, 90\,k to 359\,k. That is the altimeter
+constellation's own history, and why the per-year counts quadruple: a consumer
+training on this store is training on an observing system that grew.
 
-\section{The local codec}
+\subsection{January to March 1994 is one satellite}
 
-A $64 \times 64$-pixel tile at 10\,m is 4,096 pixels of 13 bands; a
-$0.25^\circ$ cell holds about 7,700 such tiles. They cannot be dots. The
-local codec is the programme's per-pixel masked-autoencoder codec
-generalised to a tile: input one tile-date --- all bands, with the sensor's
-own metadata (resolution, incidence angle for radar, sun angle for optical)
-as conditioning --- and output $k = 4$--$8$ tokens of 64 dimensions, trained
-by masked-pixel reconstruction plus a same-place-different-date term so that
-the token carries state rather than texture. Tokens are cached once per
-tile-date and reused by every anchor whose cone contains the tile. The codec
-has snapshot semantics; the cone codec supplies the time axis by reading the
-cached tokens of many dates. The hierarchy is: raw observations
-$\rightarrow$ local codec (per tile-date, cached) $\rightarrow$ cone codec
-(per anchor, over local tokens, coarse dots and point observations)
-$\rightarrow$ task heads. AlphaEarth's space--time pyramid does this within
-one image \cite{alphaearth}; here the pyramid runs across sources and time
-scales, and the set encoder is Perceiver-style cross-attention from a fixed
-number of latents to the token set \cite{perceiver}, so cost is linear in
-the number of tokens and a ragged input --- a profile here, a swath there, a
-tile in the corner --- needs no padding.
+1994 is the only year that falls rather than rises: 29,146,039 rows against
+$\approx 33$\,M either side, a deficit of 3,835,024, and per-mission
+\emph{monthly} counts locate it exactly. ERS-1's 35-day repeat (\code{e1}) stops
+in mid-December 1993 --- 1993-12 is itself a half month, 699,535 rows against a
+1.31\,M median --- and does not resume until mid-March 1995, while its geodetic
+phase (\code{e1g}) starts 1994-04-10, exactly its STAC window's first day. So
+the single-satellite interval is \textbf{1993-12-15 $\to$ 1994-04-09}, and
+January, February and March 1994 carry \textbf{TOPEX/Poseidon alone} --- 1.59,
+1.47 and 1.50\,M rows against 2.94, 2.70 and 2.96\,M a year earlier. With
+April's partial start those four months are the whole deficit, and the record's
+thinnest bin, 152,741 rows of 2,339, sits inside it. DUACS publishes no level-3
+product for the 3-day ice-phase orbit ERS-1 flew in between, which is why the
+gap is a hole in \code{e1} rather than a thinner \code{e1}.
+\textbf{Nothing is missing from the build; the constellation was.}
 
-\paragraph{Storage arithmetic.} Over land and coasts ($\approx 1.5 \times
-10^{8}$\,km$^2$) there are $\approx 3.7 \times 10^{8}$ tiles of 640\,m; at
-$\approx 70$ clear dates per year, 6 tokens of 64 float16 dimensions, that
-is $\approx 20$\,TB of tokens per year --- streamable as a tier-P store but
-not small. Tiles of 256 pixels (2.56\,km) cut it sixteenfold to
-$\approx 1.3$\,TB per year and remain a hundred times finer in area than a
-$0.25^\circ$ cell; the tile size is a parameter the first experiment
-measures. The catalogue is metadata only, of order 10\,GB per year. Raw
-imagery is streamed once to train the codec and once to encode, and is never
-kept.
+\subsection{GFO's empty months}
 
-\paragraph{Radar.} NISAR's L-band backscatter at 15\,m on a 12-day repeat,
-through cloud and at night, is the right snapshot input for soil moisture,
-flooding, ice and vegetation structure, and complements Sentinel-1's C band;
-its record begins in late 2025, so it enters as a local-codec input and
-cannot contribute to a 43-year forecast axis. Sentinel-1 (2014--) and
-Sentinel-2 (2015--) carry the record. One codec conditioned on sensor
-metadata serves both radars with different source embeddings, which is the
-reason the codec is conditioned rather than trained per sensor.
+Scanning every mission for a calendar month lying wholly inside its own STAC
+window and carrying \emph{zero} rows turns up two, both GFO: \textbf{2004-03}
+and \textbf{2006-09}, against a 1,435,239-row median month. Two more GFO months
+are far below that median without being empty (2003-09 at 257,212; 2007-02 at
+161,740), and from 2007-02 the mission never again reaches 1.1\,M in a month:
+the shape of a satellite degrading. It is flagged rather than passed over
+silently because this check cannot distinguish ``the archive holds no file''
+from ``the file was not asked for'' from the outside; what it \emph{can} say is
+that the fetch lane refuses to mark a year in which a listing came back empty or
+a download came back short, and all of 2000--2008 are marked. One other
+mission-month is comparable (\code{h2b} 2021-08, 272,078 against a 1,291,653
+median). Treat GFO-era coverage as uneven.
 
-\section{Outputs at any granularity}
+\subsection{The time column is coarser than the sampling, by 84$\times$}
 
-The target side has the same problem as the input side. The recipe already
-has a decoder queried at a location (E-072); it gains the two footprint
-fields of the token. ``The mean chlorophyll of this $0.25^\circ$ cell over
-this pentad'' and ``this 300\,m pixel on this day'' are then two queries of
-one embedding, each scored against the observation that actually has that
-support. A masked-token objective over the schema of \S2 covers every tier
-at once: withhold a token --- a grid cell, a profile, a cached tile token ---
-and predict its value from the rest, at its own footprint. Family 8's two
-objectives, masked-profile reconstruction and next-pentad prediction, are
-the tier-P instances of it. Every read-out remains a head on the frozen
-representation plus the rolled forecast, and is scored against the null
-ladder --- climatology, damped persistence, a linear inverse model in pixel
-and in embedding space --- the programme's protocol requires.
+\code{time\_days} is float32. By 2015 the integer part needs 14 bits, leaving
+10 for the fraction, so the column resolves $2^{-10}\,\mathrm{d} = 84.4$
+seconds --- and the instrument samples \textbf{once a second}.
 
-\section{What is built first}
+\begin{center}\footnotesize
+\begin{tabular}{@{}lrrrr@{}}
+\toprule
+bin & rows read & distinct \code{time\_days} & rows per timestamp & float32 step at that $t$ \\
+\midrule
+803 (1993-01-01)  & 196,177 & 6,939 & 28.3  & 21.09\,s \\
+2411 (2015-01-03) & 400,000 & 2,169 & 184.4 & 84.38\,s \\
+3141 (2024-12-31) & 320,854 & 1,016 & 315.8 & 84.38\,s \\
+\bottomrule
+\end{tabular}
+\end{center}
 
-Four steps, each with its falsifier stated before it is run.
+So 21 to 84 consecutive samples of one mission carry the identical timestamp,
+and at 6.5\,km between samples that is 130\,km of track in 1993 and
+\textbf{550\,km in 2024}. Three consequences, all properties of the format
+rather than errors. The search's $\Delta t$ \textbf{cannot order two samples
+less than 84 seconds apart}: every token from one overflight arrives with the
+same age and the tie-break falls entirely to distance. The store is nonetheless
+correctly sorted --- \code{time\_days} is non-decreasing inside every one of the
+2,339 bins, checked row by row --- because the assembler's stable sort preserved
+the parts' own order inside each run of equal timestamps. And \code{bin} is
+exact, so \textbf{a calendar date must be derived from \code{bin}}. This is
+\code{socat}'s float32 finding one order of magnitude larger: \code{socat} loses
+84 seconds against measurements minutes apart, \code{slatrack} against
+measurements one second apart. Nothing is hidden --- the \code{schema} declares
+float32 --- but this is the first store whose time column is coarser than its own
+sampling interval.
 
-\begin{enumerate}
-\item \textbf{The footprint fields on the tensor that exists.} Read family
-7's coarse groups as offset tokens --- one token at the coarse cell's
-centre, its $(\Delta x, \Delta y)$ to the anchor, $\log_2 f_p = +2.9$ for the
-reanalysis and $+2$ for the monthly Argo field --- instead of nearest-cell
-copies, and add the footprint fields to every sparse token. One cone-codec
-arm against its twin on the same anchors and seed. Falsifier: no change in
-held-out per-family loss, in which case the model does not use the fields at
-this scale and the tile tier must be argued on its own evidence. Cost: a
-sampler change and about one dollar of compute.
-\item \textbf{The registry and the tier dispatch.} Write \code{family.json}
-for families 7.1 and 8 as one family, make the samplers and the front end
-dispatch on the tier, retire the per-family metadata conventions. No model.
-Falsifier: a test that gathers one anchor through the registry and
-reproduces the existing sampler's token bytes exactly.
-\item \textbf{The first local codec, coastal.} Sentinel-2 level-2A 10\,m
-tiles over about three hundred coastal $0.25^\circ$ cells where colour,
-sea-surface temperature and Argo all have coverage; train the tile codec,
-cache its tokens as a tier-P store, add them to the cone; three seeds, since
-a new tier buys its own replication. Verdict: the masked-token loss on the
-colour and temperature targets at those anchors with and without the tile
-tokens. Falsifier: parity, in which case at pentad cadence the coarse fields
-already carry what 10\,m adds and the fine tier is for fine targets, not for
-the forecast. This is the one compute-bound step.
-\item \textbf{NISAR and Sentinel-1 through the same codec} with a radar
-source embedding, over sea-ice-edge and flood-prone cells where the
-day-and-night, through-cloud property matters. After step 3.
+\section{The build, and its guards}
+
+One builder, \code{ml/build\_family10\_stores.py}, with a source adapter per
+store and three stages: \code{index} lists the archive and writes the plan of
+files or years; \code{fetch} streams year by year and appends to per-year column
+parts; \code{publish} concatenates the parts in bin order, writes the index,
+computes hashes, uploads, and then \textbf{downloads each file back and
+re-hashes it} --- a publish that cannot verify fails the job. Every one of the
+four build logs ends with \code{publish: 10 file(s) verified by restore}.
+
+\paragraph{Three stores on a free hosted runner.} \code{gdp}, \code{gtmba} and
+\code{socat} are keyless and each fits a hosted runner's six-hour cap and
+14\,GB of disk, so all three cost \textbf{\$0}: about 20 minutes each for
+\code{gtmba} and \code{socat}, 85 for \code{gdp} --- and the 85 is the source,
+not the builder, because the drifter server serves one month per request and 46
+years is about 550 sequential ones.
+
+\paragraph{\code{slatrack} is built on two machines, because no one machine may
+be both.} The Copernicus credentials may not live on a rented box, and a hosted
+runner cannot hold 67\,GB. The seam is a prefix on the Hub itself. Six hosted
+lanes over weighted year ranges each fetch one year, push that year's column
+parts to \code{partials/family10/slatrack/<year>/}, delete the local copy and
+move on --- with \code{done.json} written \textbf{last}, and only after every
+file has been downloaded back with a matching hash, so a marker can only
+under-claim and a year killed halfway is simply refetched. A schedule every six
+hours is the resume mechanism. A keyless box then pulls every year back,
+verifies each file against its \code{done.json}, refuses by name if any year is
+missing, and assembles.
+
+\paragraph{The streaming assembler.} 2.03 billion rows do not fit in memory
+beside their own sort, so the store is assembled in three passes over the
+parts: count rows per bin to get the CSR offsets;
+scatter each part's rows into \code{offsets[bin] + cursor[bin]} through a
+memory-mapped writer, in the order the parts are read; then sort each bin's
+slice by \code{time\_days} with a \emph{stable} argsort. That is the same
+permutation the in-memory assembler's \code{np.lexsort((time\_days, bin))}
+produces, because lexsort is stable and its final tie-break is input order ---
+which the scatter reproduces. A test hashes both assemblers' output over a
+synthetic archive doctored to hold duplicate \code{(bin, time\_days)} rows
+across two parts and asserts they are \textbf{byte-identical}. Peak memory is
+one part plus one bin's slice, and a disk preflight computes the store's size
+from the dtypes and refuses before pass 2 if free space is under $1.2\times$ it.
+
+\begin{table}[h]
+\centering\footnotesize
+\begin{tabular}{@{}lr>{\raggedright\arraybackslash}p{9.6cm}@{}}
+\toprule
+stage & wall & what it did \\
+\midrule
+index             & 36.6\,s   & the 29 mission windows, clipped to 1993--2024 \\
+parts pull        & 2,855\,s  & 32 year-parts back off the Hub, each re-hashed; 0 missing \\
+assemble          & 365.9\,s  & count rows per bin $\to$ CSR offsets (12.9\,s), scatter 2,030,800,150 rows (240.9\,s), stable sort of the 2,315 bins of 2,339 that needed one (112.1\,s) \\
+check + store.json & $\approx 350$\,s & the chunked \code{check\_store} \\
+\textbf{fetch total} & \textbf{3,579.4\,s} & peak resident memory \textbf{66.06\,GB} \\
+publish           & 1,003.2\,s & 10 files, each verified by restore \\
+registry          & $\approx 4$\,s & \code{family10.json} rewritten and verified by restore \\
+\bottomrule
+\end{tabular}
+\caption{The \code{slatrack} assembly run: 1\,h\,18\,m on a keyless 250\,GB box at \$0.36/h, \textbf{$\approx$\,\$0.55}, while the six credentialed lanes ran 10--16 minutes per year on hosted runners, so about 47 hours of downloading cost \textbf{\$0}. The estimate at dispatch was one box-day and $\approx$\,\$8; splitting the credentialed half onto free parallel lanes is the difference.}
+\end{table}
+
+\paragraph{The assertions a store must pass before it is trusted.}
+\code{check\_store} runs on every assembled store and again before any publish:
+rows sorted by \code{(bin, time\_days)}; \code{bin} equal to
+\code{floor(time\_days / 5)}; the CSR offsets spanning exactly the rows, each
+bin's slice holding only that bin; \code{lon} in $[-180, 180)$ and
+$|\mathrm{lat}| \le 90$; no infinity anywhere in \code{values}; the footprint
+columns constant; every channel inside its declared bounds; and a
+nearest-neighbour search returning nothing from the future. Each is a property a
+broken build can have while looking entirely ordinary from outside, which is the
+only reason they are worth the seconds. Above 50\,M part rows the check runs
+chunked, which is why it fits at all.
+
+\paragraph{Three guards worth naming, because each closed a silent failure.}
+\code{gtmba}'s build records \code{datasets\_empty: 37} --- request-and-year
+combinations that came back with nothing --- because a silent skip of seventeen
+mooring sites is invisible in a store that otherwise looks complete. The
+\code{slatrack} assembler refuses, \emph{by name}, if any requested year is
+absent from the Hub prefix, so a partial store is only ever built deliberately,
+with \code{--allow-missing-years}. And a store built under any relaxation
+records it in a \code{degraded} block, so a consumer can tell a complete build
+from a permitted-partial one without reading a workflow log.
+
+\paragraph{Two ledger bugs, found by arithmetic and fixed with the arrays
+untouched.} \code{socat}'s first build attached the whole stream's counters to
+every year part and the assembler summed them across the 59 years that held
+rows, so \code{rows\_read} read 2,597,074,036 instead of 44,018,204 --- exactly
+59$\times$. \code{gdp}'s \code{drogue\_uncertain} ran 568 ahead of the NaN
+count in the channel it describes, and the row ledger failed to close by the
+same 568: one cause --- 568 source fixes on which \emph{nothing at all} was
+measured, counted and then discarded unrecorded --- and two symptoms. Both stores
+were rebuilt the same day, and in both cases \textbf{all nine array sha256
+values in the new \code{store.json} are byte-identical to the verified build's},
+so only the ledger changed and no measurement had to be re-checked. Both ledgers
+now close: \code{socat} reads 44,018,204 rows with 2,160,005 and 27,520 dropped,
+and \code{gdp} $48{,}708{,}540 - 227{,}174 - 568 - 48{,}480{,}798 = 0$.
+
+\section{Reading a store}
+
+\code{ml/family10\_store.py} is the only thing in the repository that opens a
+store, so the layout is defined once. It is pure numpy: no scipy, no torch.
+
+\begin{verbatim}
+from family10_store import Store
+
+st  = Store.open("tensors/family10/gdp")                        # a directory
+st  = Store.open("chfrank/earth-tensors:tensors/family10/gdp")  # or the Hub
+tok = st.knearest(36.0, -70.0, bin=2411, k=8,
+                  R_max_km=300.0, T_max_days=10.0)
+\end{verbatim}
+
+\code{Store.open} takes a directory or a Hub prefix; the Hub form downloads
+\code{store.json} first and then exactly the files it names, never a whole-repo
+snapshot. \code{verify\_store(dir)} re-hashes every file against
+\code{store.json}'s own record and raises on any mismatch --- worth running,
+because a truncated \code{values.npy} still memory-maps and still answers a
+search, with whatever its tail happens to hold.
+
+\code{knearest} returns a dict of \textbf{fixed length $k$} --- always $k$
+slots, so a batch is never ragged: \code{values} $(k, C)$ float32 in raw units
+with \code{mask} $(k, C)$ beside it; \code{dx\_km} and \code{dy\_km}, signed
+kilometres east and north \emph{from the anchor}, so the model never has to
+learn the cosine of latitude; \code{dt\_days}, always $\ge 0$; \code{dist\_km}
+and \code{d2}; \code{log2\_fp} and \code{log2\_dt} per returned row;
+\code{platform} and \code{qc}; \code{n\_R}, the scalar count of observations
+inside the bounds --- the local-density feature; \code{valid}, False marking a
+\textbf{miss token} (NaN values, \code{row = -1}); and \code{row}, \code{lat},
+\code{lon}, \code{time\_days}, \code{n\_found}, \code{channels}.
+
+Three rules are structural rather than applied afterwards. \textbf{One-sided in
+time}: only observations at or before the anchor's pentad are candidates,
+because the CSR slice stops at the anchor's own bin and never reads a later row
+--- a forecaster that has seen the next pentad is not a forecaster.
+\textbf{Bounded} by \code{R\_max\_km} and \code{T\_max\_days}; where fewer than
+$k$ exist inside them the remaining slots are miss tokens, the same token the
+gridded tensor uses at an empty cell, made rare instead of usual. And the
+\textbf{metric} is $d^2 = (dx^2 + dy^2)/L^2 + dt^2/T^2$ with $L$ and $T$
+defaulting to the search bounds, which makes the two axes commensurate at the
+boundary; pass them explicitly to use a channel's own correlation length.
+$\Delta t$ is measured from the \emph{end} of the anchor's pentad,
+$5(\mathrm{bin}+1)$ days after the epoch, so an observation inside the anchor's
+own bin is 0 to 5 days old rather than arriving from the future. \code{qc\_max}
+narrows to the source's best grade \emph{before} \code{n\_R} is counted: a token
+the reader will not return must not inflate the density feature.
+
+\paragraph{A worked example.} At $36^\circ$\,N, $70^\circ$\,W in bin 2411
+with $k = 8$, $R_{\max} = 300$\,km, $T_{\max} = 10$\,d, \code{gdp} returns
+eight rows in 4.3\,ms from \textbf{one} drogued drifter (identifier 116295) at
+exact 0.25-day steps, walking east over two days at 0.31--0.54\,m\,s$^{-1}$
+with \code{sst} NaN throughout because that buoy's thermistor is not reporting.
+\code{gtmba} returns eight miss tokens there in 0.2\,ms, correctly --- its array
+spans latitudes $[-25, 21]$ only --- while at the TAO site $0^\circ$\,N,
+$140^\circ$\,W it returns the $0/+2/-2^\circ$ triplet at exactly
+$222.64 = 2 \times 111.32$\,km spacing and a monotone thermocline from
+$26\,^\circ$C to $11.6\,^\circ$C, where \code{gdp} returns eight miss tokens.
+\textbf{The two stores are complementary at that anchor, which is the point of
+the family.} Typical cost: \code{gtmba} 0.4\,ms, \code{gdp} 4.3\,ms,
+\code{socat} 11\,ms.
+
+\paragraph{Family 8's Argo store opens through the same class, unchanged.}
+It reads that store's \code{temp} and \code{psal} blocks as one 32-column value
+matrix --- temperature at the 16 Roemmich--Gilson pressures, then salinity at
+the same 16 --- and takes the footprint constants out of its own
+\code{store.json}. The blocks stay separate memory maps and only the $k$
+selected rows are ever concatenated, so opening the 2.68\,M-profile store costs
+nothing. The test suite asserts the result is \textbf{bit-identical} to the
+family-8 reader's on every anchor it tries.
+
+\section{Limitations, and what is still open}
+
+\paragraph{The $k$ tokens are usually one platform.} Measured over 600
+on-track anchors per store, the number of \emph{distinct} platforms among the
+$k$ returned observations has a median of \textbf{1 of 8} for \code{gdp},
+\textbf{1 of 8} for \code{socat} and \textbf{2 of 4} for \code{gtmba}: the
+eight drifter slots are one buoy at six-hour intervals, the eight carbon slots
+one research cruise seconds apart along one line, and raising the radius does
+not change it. So $k$ buys \emph{one track's redundancy} --- genuine information
+about that track's coherence, and not $k$ nearby measurements of the ocean.
+Whether the search should be de-duplicated by \code{platform}, or $k$ made much
+larger than 8, or neither, is \textbf{E-078b's open question}: the answer
+depends on what the token is for, and nothing measured so far measures that.
+\code{slatrack} will be the extreme case --- at 6.5\,km between consecutive
+samples, any $k$ under a few hundred is one overflight.
+
+\paragraph{The suggested search radii were three to ten times too loose.} At anchors drawn from each store's own rows the $k$-th nearest observation sits far closer than the design assumed.
+
+\begin{table}[h]
+\centering\footnotesize
+\begin{tabular}{@{}llllll@{}}
+\toprule
+store & $k$ & $k$-th neighbour, km (med./p90/p99) & age, d (med./p99) & measured $(R, T)$ & old suggestion \\
+\midrule
+\code{gdp}   & 8 & 19.2 / 68.4 / 104.3 & 2.0 / 3.8 & $\approx$\,110\,km, 4\,d & 300\,km, 10\,d \\
+\code{gtmba} & 4 & 0.0 / 334.0 / 334.0 & 2.5 / 3.5 & $\approx$\,350\,km, 5\,d & 1,500\,km, 15\,d \\
+\code{socat} & 8 & 4.5 / 46.2 / 111.3 & 1.8 / 4.9 & $\approx$\,150\,km, 30\,d & 500\,km, 30\,d \\
+\code{slatrack} & --- & \multicolumn{4}{l}{\emph{not measured} --- the measurement memory-maps the store, which is 67\,GB} \\
+\bottomrule
+\end{tabular}
+\caption{2,000 anchors per store, generous search bounds (5,000\,km, 60\,d) with
+the ranking metric's scales pinned to the old suggestion, seed 20260914.}
+\end{table}
+
+\code{gtmba}'s 4th neighbour is at 0\,km at the median because the array is a
+fixed lattice and the same mooring contributes several daily rows inside the
+window --- the temporal bound, not the spatial one, is what $k = 4$ actually
+spends. \code{socat}'s 30-day window is the one bound worth leaving generous: a
+ship revisiting a piece of ocean is rare, so a longer window is the only way a
+\emph{second} cruise can ever enter the search.
+
+\paragraph{Off-track, the miss token is the normal answer.} At anchors drawn
+uniformly over the globe, the search returns \textbf{nothing at all} inside the
+suggested bounds on \textbf{71\,\%} of anchors for \code{gdp},
+\textbf{81\,\%} for \code{gtmba} and \textbf{89\,\%} for \code{socat}, and
+widening $R$ only makes the search slower. \code{mask} and \code{n\_R} are
+\emph{inputs}, not defects: $n_R = 0$ is a true statement about the observing
+system, and exactly what a gridded representation could not say. Do not impute,
+and do not fill NaN with zero --- zero is a real fugacity and a real velocity.
+
+\paragraph{Tier T is not built.} The tile tier --- a tile-date catalogue plus a
+small per-tile codec's cached tokens, held as a tier-P store --- is designed and
+has no bytes. It is the one compute-bound step on the E-078 ladder, and it is
+argued on its own evidence rather than on this note's.
+
+\paragraph{\code{values} is float16.} About three decimal digits: $\approx
+0.002\,^\circ$C at $20\,^\circ$C and $\approx 0.5\,\mu$atm at
+$700\,\mu$atm --- below every instrument's own uncertainty, and it halves the
+store. Cast to float32 before arithmetic; the reader already does.
+
+\paragraph{Two provenance strings in \code{slatrack}'s \code{store.json} are
+stale.} Its \code{verified} field still ends ``Neither route can be run from
+this sandbox \ldots\ NOT YET MEASURED: the remote path layout of the original
+files'', and its \code{sources} names the \code{copernicusmarine subset} call.
+Both were written before any fetch had succeeded; the build that produced the
+store ran the \code{copernicusmarine.get}-on-original-files route end to end
+over 32 years. The product and the dataset identifiers are right, the call named
+is the one that was measured and rejected. Both are class constants, both are
+one-line fixes, and \textbf{no byte of any array is affected}.
+
+\paragraph{The holdout protocol is unchanged.} 2009, 2017 and 2023 are
+development years; train through 2020, test 2021--2024. The stores carry the
+\emph{whole} record, pre-1982 included, and the loader restricts --- which is why
+the negative bins are kept rather than dropped at build time.
+
+\section{Handover for an external agent (Gemini)}
+
+This section is written for an agent ingesting family 10 into its own
+infrastructure and needs no other document.
+
+\paragraph{THE RULE: read only.} The public dataset repository
+\code{chfrank/earth-tensors} on Hugging Face is your only source. You read it
+over anonymous HTTPS under \code{resolve/main/} --- no account, no token; HTTP
+\code{Range} is supported, and the URL answers a 302 redirect to a
+content-delivery host, so follow redirects. \textbf{You must never write to that
+repository, and never to the \code{blauewelt/earth} source repository} --- no
+upload, no commit, no pull request, no branch, no file of any kind, whatever the
+reason and however convenient it would be. Everything you need is readable. If
+something appears to require a write, it is out of scope: report it instead.
+
+\paragraph{The single entry point.}
+\begin{verbatim}
+https://huggingface.co/datasets/chfrank/earth-tensors/resolve/main/
+    tensors/family10/family10.json
+\end{verbatim}
+Read it first. It lists all nine groups, and for each one the \code{tier}, the
+\code{prefix} under which its files live, and the files themselves with their
+\code{sha256}. Dispatch on \code{tier}: \code{"G"} means a bin-major array you
+read by byte range, \code{"P"} means a tier-P store you read with a $k$-nearest
+search. Everything below is reachable from that file; the tables here are a
+convenience and the registry is the authority. The copy described here is 45,610
+bytes, \code{generated\_utc} 2026-09-14T22:04:04Z, sha256
+\code{2e919d5abc66c91788f6dee991be64eba729690d50534f7a8715bc182d0dbdd6}.
+
+\paragraph{The tier-P files.} Base URL, to which \code{<store>/<file>} is appended:
+\begin{verbatim}
+https://huggingface.co/datasets/chfrank/earth-tensors/resolve/main/tensors/family10/
+\end{verbatim}
+Every store holds the same nine arrays plus \code{store.json}. Each array's
+sha256 is in that store's \code{store.json}; \code{store.json}'s own cannot be,
+so it is given here, measured on the bytes the Hub served on 2026-09-15.
+
+\begin{table}[h]
+\centering\setlength{\tabcolsep}{4pt}\footnotesize
+\begin{tabular}{@{}lrrrr@{}}
+\toprule
+file & \code{gdp} bytes & \code{gtmba} bytes & \code{socat} bytes & \code{slatrack} bytes \\
+\midrule
+\code{bin.npy}          & 96,961,724  & 2,002,692  & 83,661,478  & 4,061,600,428 \\
+\code{time\_days.npy}   & 193,923,320 & 4,005,256  & 167,322,828 & 8,123,200,728 \\
+\code{lat.npy}          & 193,923,320 & 4,005,256  & 167,322,828 & 8,123,200,728 \\
+\code{lon.npy}          & 193,923,320 & 4,005,256  & 167,322,828 & 8,123,200,728 \\
+\code{values.npy}       & 387,846,512 & 36,046,280 & 334,645,528 & 12,184,801,028 \\
+\code{platform.npy}     & 387,846,512 & 8,010,384  & 334,645,528 & 16,246,401,328 \\
+\code{qc.npy}           & 48,480,926  & 1,001,410  & 41,830,803  & 2,030,800,278 \\
+\code{fp.npy}           & 193,923,320 & 4,005,256  & 167,322,828 & 8,123,200,728 \\
+\code{bin\_offsets.npy} & 26,960      & 27,704     & 39,416      & 18,848 \\
+\code{store.json}       & 6,873       & 11,341     & 7,897       & 13,038 \\
+\midrule
+\textbf{total}          & \textbf{1.70\,GB} & \textbf{63\,MB} & \textbf{1.46\,GB} & \textbf{67.02\,GB} \\
+\bottomrule
+\end{tabular}
+\caption{70.24\,GB for the four stores. Every byte count is
+$128 + N \times \text{itemsize} \times \text{columns}$, the 128 being the
+\code{.npy} header, so a size that does not match means a truncated file.}
+\end{table}
+
+\begin{table}[h]
+\centering\setlength{\tabcolsep}{4pt}\footnotesize
+\begin{tabular}{@{}ll@{}}
+\toprule
+store & sha256 of \code{store.json} \\
+\midrule
+\code{gdp}      & \code{c3a14beb8d51db73f33636c9b805509e}\allowbreak\code{9d71721c9fe92d876b8c9621d4ab1e10} \\
+\code{gtmba}    & \code{50c6e57d7c887f6d2fecafde4c435456}\allowbreak\code{8070a99ab237e75073279c6bed81b7cb} \\
+\code{socat}    & \code{aac9f3316ac7cb89ba4a3dabdb74dc22}\allowbreak\code{150043a72eeb11bd57c8895b782ad3f7} \\
+\code{slatrack} & \code{d81b5e27dec71d47549850c442e58d3b}\allowbreak\code{88c16aae5e473a588c6c99de9220b12a} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\paragraph{Verify before you trust.} Four checks, in order of cost.
+\begin{enumerate}\itemsep1pt
+\item \textbf{sha256} of every array equals \code{store.json}'s own record, and \code{store.json}'s equals the table above.
+\item \textbf{$N$ from the file size.} Each array must satisfy
+$\mathrm{bytes} = 128 + N \times \mathrm{itemsize} \times \mathrm{cols}$ with
+$N$ equal to \code{store.json}'s \code{N}, and \code{bin\_offsets.npy} must
+hold $\text{\code{n\_bins}} + 1$ int64 entries. The \code{.npy} header declares
+its own dtype and shape; parse it and compare against \code{schema}.
+\item \textbf{\code{bin} is monotonic} and never leaves $[\text{\code{bin\_first}}, \text{\code{bin\_last}}]$; \code{time\_days} is non-decreasing inside each bin; and \code{bin == floor(time\_days / 5)} on every row.
+\item \textbf{The index is consistent}: \code{off[0]} is 0, \code{off[-1]} is
+$N$, the array is non-decreasing, and the cumulative sum of
+\code{bincount(bin - bin\_first)} reproduces it exactly --- equivalently, every
+row of the slice \code{off[i]:off[i+1]} has \code{bin == bin\_first + i}.
 \end{enumerate}
+All four were run on all four stores on 2026-09-14 and all four passed. If a
+store is too large to hold --- \code{slatrack} is 67\,GB --- stream it: read the
+nine files over HTTPS in row-aligned lockstep, one connection per file, hashing
+each as its bytes arrive while one consumer recomputes the checks on the chunk
+in flight. That is how \code{slatrack} was verified, in one pass at 80\,MB/s
+using 1.6\,GB of memory; eight connections were dropped mid-stream by the
+content-delivery network and each was resumed by \code{Range} from the byte it
+had reached, which changes nothing, because the hash is over the byte sequence.
 
-\section{What does not change}
+\paragraph{A minimal reader, in numpy alone,} depending on nothing from the source repository:
 
-The pentad bin as the unit of time; the holdout protocol (2009, 2017 and
-2023 as development years; train through 2020, test 2021--2024); the cone
-families and reaches; family 7.1's files, which become tier-G groups of
-family 10 unchanged; family 8's store, which becomes its first tier-P group
-unchanged. The design adds a registry and a tier and removes nothing.
+\begin{verbatim}
+import json, numpy as np
+
+D = "tensors/family10/gdp"                 # a local copy of one store
+meta = json.load(open(f"{D}/store.json"))
+A = {n: np.load(f"{D}/{n}.npy", mmap_mode="r") for n in
+     ("bin", "time_days", "lat", "lon", "values", "platform", "qc", "fp")}
+off       = np.load(f"{D}/bin_offsets.npy")        # int64 [B+1], read whole
+bin_first = meta["bin_first"]
+channels  = [c["name"] for c in meta["channels"]]
+
+def bin_of(date):                          # "2015-01-03" -> 2411
+    d = (np.datetime64(date) - np.datetime64("1982-01-01")).astype("int64")
+    return int(np.floor(d / 5.0))          # floor, so pre-1982 is negative
+
+def rows_of_bin(b):                        # the CSR slice; may be empty
+    i = b - bin_first
+    return (slice(int(off[i]), int(off[i + 1]))
+            if 0 <= i < len(off) - 1 else slice(0, 0))
+
+def knearest(lat0, lon0, b, k=8, R_max_km=110.0, T_max_days=4.0):
+    """The k nearest observations at or BEFORE bin b.  One-sided by
+    construction: the scan stops at bin b.  dt runs from the END of bin b,
+    so a row inside b is 0..5 days old, never negative."""
+    KM, t_anchor = 111.32, 5.0 * (b + 1)
+    b_lo = b - int(np.ceil(T_max_days / 5.0)) - 1     # bins the bound admits
+    lo = rows_of_bin(max(b_lo, bin_first)).start
+    hi = rows_of_bin(b).stop
+    if hi <= lo:
+        return None
+    lat = np.asarray(A["lat"][lo:hi], np.float64)
+    lon = np.asarray(A["lon"][lo:hi], np.float64)
+    dt  = t_anchor - np.asarray(A["time_days"][lo:hi], np.float64)
+    dy  = (lat - lat0) * KM
+    dlon = np.mod(lon - lon0 + 180.0, 360.0) - 180.0  # the dateline is no wall
+    dx  = dlon * KM * np.maximum(np.cos(np.radians(0.5 * (lat + lat0))), 0.05)
+    dist = np.hypot(dx, dy)
+    ok = (dist <= R_max_km) & (dt >= 0.0) & (dt <= T_max_days)
+    n_R = int(ok.sum())                    # the local-density feature
+    idx = np.flatnonzero(ok)
+    if idx.size == 0:
+        return {"n_R": 0, "valid": np.zeros(k, bool)}   # k miss tokens
+    d2 = ((dx[idx]**2 + dy[idx]**2) / R_max_km**2
+          + dt[idx]**2 / T_max_days**2)
+    idx = idx[np.argsort(d2, kind="stable")[:k]]
+    rows = lo + idx
+    v = np.asarray(A["values"][rows], np.float32)       # float16 -> float32
+    fp = np.asarray(A["fp"][rows], np.float32)
+    return {"values": v, "mask": np.isfinite(v), "channels": channels,
+            "dx_km": dx[idx], "dy_km": dy[idx], "dt_days": dt[idx],
+            "dist_km": dist[idx], "n_R": n_R,
+            "log2_fp": fp[:, 0], "log2_dt": fp[:, 1],
+            "platform": np.asarray(A["platform"][rows]),
+            "qc": np.asarray(A["qc"][rows]),
+            "valid": np.ones(len(rows), bool)}
+
+tok = knearest(36.0, -70.0, bin_of("2015-01-03"))
+\end{verbatim}
+
+Four things this code does that a naive version does not, each load-bearing.
+It floors on \emph{floats}, so a date before 1982 lands in a negative bin rather
+than bin 0. It subtracts \code{bin\_first} before indexing the index array. It
+wraps the longitude difference into $[-180, 180)$, so an anchor near the
+dateline still finds its neighbours. And it measures $\Delta t$ from the end of
+the anchor's bin, so a row inside the anchor's own pentad reads as 0 to 5 days
+old rather than as arriving from the future. Pad to $k$ slots with miss tokens
+if you want rectangular batches, and standardise from your training bins only.
+
+\paragraph{How tier G points at family 7.2.} The four tier-G groups are not
+stored under \code{tensors/family10/}. The registry's \code{tier\_g} block names
+the tensor by stem --- \code{family7\_global025\_pentad\_l2}, recipe \code{f7l2}
+--- and gives its manifest URL; each group entry carries \code{prefix}
+\code{tensors/family7\_global025\_pentad\_l2}, the file name, its byte count and
+sha256, plus \code{grid}, \code{shape}, \code{dtype}, \code{header\_len},
+\code{slab\_bytes} and \code{bin\_first}. A read is one HTTP range: for a
+bin-major array, $\mathrm{offset} = \text{\code{header\_len}} +
+(b - \text{\code{bin\_first}}) \times \text{\code{slab\_bytes}}$ and length
+\code{slab\_bytes}. The response must be HTTP 206; a 200 means the host ignored
+the \code{Range} header and is about to send tens of gigabytes, and should be
+refused rather than consumed. The values are float16 and \emph{z-scored}, so
+un-standardise them with the group's \code{norm} out of the tensor's
+\code{.npz}; the full account of that tensor is the family 7.2 design note,
+\code{ml/paper/notes/family72.pdf}. Verify tier-G files against
+\code{tensors/family7\_global025\_pentad\_l2/manifest.json}, which is their
+authority; the registry's copies were checked against it and matched 4 of 4.
+
+\paragraph{Deprecation.} \code{family7\_global025\_pentad\_l1} will be
+\textbf{deleted from the Hugging Face dataset repository on 2026-10-15}. It is
+superseded in every respect by \code{f7l2}, whose three inherited files are the
+same bytes, and nothing in it is unique. Nothing in family 10 references it ---
+\code{tier\_g} names \code{f7l2} --- so if your ingest points at \code{l1},
+repoint it before that date. \code{family7\_global025\_pentad\_l0} stays as the
+published original, because its hashes are cited elsewhere, but it carries a
+missing year of observed sea-surface temperature and sea ice and a
+non-reproducing atmosphere group, so it is a historical record rather than a
+recommendation. Pin \code{f7l2} by its hashes and re-read the manifest before a
+re-ingest.
+
+\paragraph{Reporting a problem.} Open an issue on the source repository,
+\code{github.com/blauewelt/earth} --- a read-only agent can still open one, and
+an issue is not a write to the dataset. Quote the store, the file name, its
+sha256, the bin or row range, and the check that failed. If issues are
+unavailable to you, report to Chris.
 
 \begin{thebibliography}{9}\small
-\bibitem{alphaearth} Brown, C.\ F.\ et al.\ (2025). AlphaEarth Foundations:
-An embedding field model for accurate and efficient global mapping from
-sparse label data. arXiv:2507.22291.
-\bibitem{perceiver} Jaegle, A.\ et al.\ (2021). Perceiver IO: A General
-Architecture for Structured Inputs \& Outputs. arXiv:2107.14795.
-\bibitem{f7} blauewelt/earth (2026). Family 7: a global, three-resolution
-input tensor. Design note, 7~September~2026.
-\bibitem{f71} blauewelt/earth (2026). Family 7.1: ocean colour joins the
-global tensor. Design note, 13~September~2026.
+\bibitem{gdp} Elipot, S.\ et al.\ (2016). A global surface drifter data set at
+hourly resolution. \emph{J.\ Geophys.\ Res.\ Oceans} 121, 2937--2966. Data:
+NOAA AOML Global Drifter Program, 6-hourly quality-controlled interpolated
+product.
+\bibitem{tao} McPhaden, M.\ J.\ et al.\ (1998). The Tropical Ocean-Global
+Atmosphere observing system: a decade of progress. \emph{J.\ Geophys.\ Res.}
+103(C7), 14169--14240. Data: the TAO Project Office of NOAA/PMEL ---
+TAO/TRITON, PIRATA and RAMA.
+\bibitem{socat} Bakker, D.\ C.\ E.\ et al.\ (2016). A multi-decade record of
+high-quality fCO$_2$ data in version 3 of the Surface Ocean CO$_2$ Atlas
+(SOCAT). \emph{Earth Syst.\ Sci.\ Data} 8(2), 383--413. Release v2026, DOI
+10.25921/8dba-fr90, NCEI accession 0315110. CC-BY 4.0; the SOCAT Fair Data Use
+Statement applies.
+\bibitem{duacs} Copernicus Marine Service product
+\code{SEALEVEL\_GLO\_PHY\_L3\_MY\_008\_062} --- DUACS reprocessed level-3
+along-track sea level. E.U.\ Copernicus Marine Service Information.
+\\bibitem{f72} blauewelt/earth (2026). Family 7.2: the global tensor with ocean
+colour, a real elevation static, and a build that reproduces. Design note,
+15~September~2026.
 \bibitem{f8} blauewelt/earth (2026). E-076: family 8 --- the measurement is
 never missing, only far away. Plan and results, 7--8~September~2026.
+\bibitem{e078} blauewelt/earth (2026). E-078: family 10 --- one schema for
+every granularity. Design note, 12~September~2026.
 \end{thebibliography}
 
 \end{document}

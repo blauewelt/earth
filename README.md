@@ -127,6 +127,7 @@ blocks, and long documents get a contents drawer.
 | [docs/PIXEL_STATE.md](docs/PIXEL_STATE.md) | Which of the 248 sources compose into a holistic per-pixel state vector — state, memory, forcing, flow, future — and the ~25-source minimal composition on a common 0.25° daily grid |
 | [docs/SPECIES_AND_CLIMATE.md](docs/SPECIES_AND_CLIMATE.md) | Why biodiversity occurrence data belongs in a climate app |
 | [ml/paper/notes/family72.pdf](ml/paper/notes/family72.pdf) | Design note for family 7.2 (recipe `f7l2`), the published global input tensor: the grid and five-day bins, all 56 channels with their units and standardisation constants, what changed from family 7 to 7.1 to 7.2, the measured per-channel coverage, the HTTP range-read recipe, the reproducibility result, and an ingestion handover for an external read-only agent |
+| [ml/paper/notes/family10.pdf](ml/paper/notes/family10.pdf) | Design note for family 10, the granularity-aware tensor as it actually shipped: the registry and its three storage tiers, the footprint token, the tier-P store format, the four published observation stores (drifters, tropical moorings, ship CO₂, 29 altimeter missions — 2.12 billion measurements) with their sources, quality-control policies, coverage and verification verdicts, the two-machine build pipeline and its guards, the k-nearest reader, and an ingestion handover for an external read-only agent |
 | [docs/CATALOG.md](docs/CATALOG.md) | The full catalog as a readable reference |
 
 ## The data catalog

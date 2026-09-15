@@ -1,5 +1,7 @@
 # Family 10 — four observation stores and the registry: a self-contained data handover
 
+PDF design note: https://blauewelt.github.io/earth/ml/paper/notes/family10.pdf
+
 **For an agent that has not seen this repository.** Everything needed to
 download, open, validate and search family 10's tier-P observation stores, and
 to read the registry that ties them to the gridded tensors, is on this page;

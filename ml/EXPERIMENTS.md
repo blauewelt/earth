@@ -655,8 +655,10 @@ in the sandbox by streaming each group's `.npy` and counting finite cells per
 bin per channel; the bytes are `f7l2`'s too for the three inherited groups)
 found **no hole the sources do not have**:
 
-- `g025`: the five GLORYS channels are empty for bins 0–804 and full from bin
-  805 — GLORYS begins 1993-01-01, and that is the archive, not a gap. `sst` is
+- `g025`: the five GLORYS channels are empty for bins 0–803 and first live at
+  bin **804** (1993-01-03) — GLORYS begins 1993-01-01, and bin 803 holds only
+  two of the reanalysis's days, below the ≥ 3-day rule, so the start is the
+  archive and the rule, not a gap. `sst` is
   full in every one of the other 3,141 bins (703,902 cells). `sea_ice` is
   empty in **433–439** (1987-12-06 → 1988-01-05, the SMMR → SSM/I instrument
   transition, a documented OISST gap), **2846** (2020-12-17) and **3090**
