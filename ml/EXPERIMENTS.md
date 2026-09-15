@@ -53,10 +53,10 @@ stencil is shaped like an HOURGLASS rather than a cone, and if the model is
 allowed to learn that shape per region? Three changes: the present is a WAIST
 of several cells instead of a single point, because a gradient does not exist
 inside one cell; a PREDICTION CONE — the past cone mirrored through the anchor
-into the future — supplies targets and is never read; and seven numbers per 1°
-cell and channel group (drift, orientation, two waist semi-axes, two growth
-rates) warp a fixed sunflower, read by interpolated gathers so the loss reaches
-the geometry. Pre-registered: at the RAPID line (the mooring array at 26.5° N
+into the future — supplies targets and is never read; and eight numbers per 1°
+cell plus one scale per channel (drift, the waist ellipse and the
+velocity-spread ellipse) warp a fixed sunflower, read by interpolated gathers
+so the loss reaches the geometry. Pre-registered: at the RAPID line (the mooring array at 26.5° N
 that measures the Atlantic overturning) the surface cone should point
 south-west, up the Florida Current, and the model's attention on deep Argo
 profiles should sit north of it, up the Deep Western Boundary Current.
@@ -70,6 +70,22 @@ Argo ellipses**: the Argo channels arrive as the k nearest profile tokens
 depth maps are gone and depth-dependent sourcing — surface upstream is not deep
 upstream — is left to attention over those tokens and checked as the R4
 attention diagnostic.
+
+**Revision 3, 15 Sep** (after the second agent's comments B–D and Chris's
+questions): the ellipse is stored as a **matrix logarithm** — no angle to wrap
+and no kilometres anywhere, so every geometry parameter is dimensionless and
+Adam's fixed step is a fixed fraction; the **direction** (the drift and the
+shape) is shared per flow while the **scale** is per channel, read at zero
+extra tokens through a per-channel aperture over the group's shared
+per-location tokens; and the geometry learns **gate-first** — a soft aperture
+over fixed candidate dots, with regular reads — then **hardens**, the dense dot
+tables being re-baked from the learned ellipses at epoch boundaries so the data
+loader never reads through the live weights. The reviewer's comment E (bound
+the cone at 1,400 km instead of keeping the far ring) is **not adopted**: it
+reverses [E-071 §4](https://blauewelt.github.io/earth/docs.html?f=ml/plans/E071_cone_v2.md)
+(every family's reach set from the fastest measured mechanism) and would
+exclude the equatorial Kelvin wave — ring-vs-no-ring is the first ablation
+after the three arms.
 
 **Status.** DESIGN ONLY — nothing is implemented, nothing is measured, no run
 is dispatched and no box is rented. Three arms (A0 fixed geometry · A1 learned
