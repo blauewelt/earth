@@ -1,0 +1,270 @@
+{
+ "bins": [
+  803,
+  3141
+ ],
+ "builder_git_sha": "732778a3a8927bde009f20a99c63b18d80593a31",
+ "built_at": "2026-09-15T15:54:07+00:00",
+ "channels": [
+  {
+   "max": 3.0,
+   "min": -3.0,
+   "name": "sla",
+   "unit": "m"
+  },
+  {
+   "max": 3.0,
+   "min": -3.0,
+   "name": "sla_unfiltered",
+   "unit": "m"
+  },
+  {
+   "max": 3.0,
+   "min": -3.0,
+   "name": "mdt",
+   "unit": "m"
+  }
+ ],
+ "credentials_present": {
+  "COPERNICUSMARINE_SERVICE_PASSWORD": false,
+  "COPERNICUSMARINE_SERVICE_USERNAME": false
+ },
+ "date_range": [
+  "1993-01-01",
+  "2024-12-31"
+ ],
+ "fetch": "copernicusmarine.get (original files), month batches; fallback read_dataframe",
+ "fetch_route": "files",
+ "footprint": {
+  "log2_dt": -4.0,
+  "log2_fp": -2.0
+ },
+ "missions": [
+  {
+   "end": "2026-01-16T23:23:15Z",
+   "id": "cmems_obs-sl_glo_phy-ssh_my_alg-l3-duacs_PT1S_202411",
+   "start": "2015-03-31T00:25:42Z",
+   "title": "Saral/AltiKa geodetic orbit"
+  },
+  {
+   "end": "2026-01-16T23:39:51Z",
+   "id": "cmems_obs-sl_glo_phy-ssh_my_c2n-l3-duacs_PT1S_202411",
+   "start": "2020-08-01T10:56:11Z",
+   "title": "CryoSat-2 new orbit"
+  },
+  {
+   "end": "1995-03-21T05:40:47Z",
+   "id": "cmems_obs-sl_glo_phy-ssh_my_e1g-l3-duacs_PT1S_202411",
+   "start": "1994-04-10T18:20:38Z",
+   "title": "ERS-1 geodetic phase"
+  },
+  {
+   "end": "2016-03-15T22:55:25Z",
+   "id": "cmems_obs-sl_glo_phy-ssh_my_h2a-l3-duacs_PT1S_202411",
+   "start": "2014-04-12T02:04:55Z",
+   "title": "HaiYang-2A"
+  },
+  {
+   "end": "2026-01-16T23:17:48Z",
+   "id": "cmems_obs-sl_glo_phy-ssh_my_h2b-l3-duacs_PT1S_202411",
+   "start": "2019-12-20T21:44:06Z",
+   "title": "HaiYang-2B"
+  },
+  {
+   "end": "2017-09-14T06:12:02Z",
+   "id": "cmems_obs-sl_glo_phy-ssh_my_j2g-l3-duacs_PT1S_202411",
+   "start": "2017-07-11T11:11:25Z",
+   "title": "Jason-2 long-repeat orbit"
+  },
+  {
+   "end": "2017-05-17T22:00:54Z",
+   "id": "cmems_obs-sl_glo_phy-ssh_my_j2n-l3-duacs_PT1S_202411",
+   "start": "2016-10-17T09:02:07Z",
+   "title": "Jason-2 interleaved orbit"
+  },
+  {
+   "end": "2025-01-07T21:13:39Z",
+   "id": "cmems_obs-sl_glo_phy-ssh_my_j3n-l3-duacs_PT1S_202411",
+   "start": "2022-04-25T11:17:03Z",
+   "title": "Jason-3 interleaved orbit"
+  },
+  {
+   "end": "2026-01-16T23:51:46Z",
+   "id": "cmems_obs-sl_glo_phy-ssh_my_s3a-l3-duacs_PT1S_202411",
+   "start": "2016-06-28T21:39:41Z",
+   "title": "Sentinel-3A"
+  },
+  {
+   "end": "2026-01-16T23:13:06Z",
+   "id": "cmems_obs-sl_glo_phy-ssh_my_s3b-l3-duacs_PT1S_202411",
+   "start": "2018-11-27T13:04:08Z",
+   "title": "Sentinel-3B"
+  },
+  {
+   "end": "2026-01-16T23:44:11Z",
+   "id": "cmems_obs-sl_glo_phy-ssh_my_s6a-lr-l3-duacs_PT1S_202411",
+   "start": "2021-12-29T04:31:33Z",
+   "title": "Sentinel-6A LRM"
+  },
+  {
+   "end": "2026-01-16T23:37:54Z",
+   "id": "cmems_obs-sl_glo_phy-ssh_my_swon-l3-duacs_PT1S_202411",
+   "start": "2023-07-21T09:44:23Z",
+   "title": "SWOT nadir"
+  },
+  {
+   "end": "2005-10-03T23:47:15Z",
+   "id": "cmems_obs-sl_glo_phy-ssh_my_tpn-l3-duacs_PT1S_202411",
+   "start": "2002-09-10T21:37:36Z",
+   "title": "TOPEX/Poseidon new orbit"
+  },
+  {
+   "end": "2013-06-01T22:51:36Z",
+   "id": "cmems_obs-sl_glo_phy-ssh_my_j1g-l3-duacs_PT1S_202411",
+   "start": "2012-05-07T16:04:19Z",
+   "title": "Jason-1 geodetic orbit"
+  },
+  {
+   "end": "2023-07-09T23:41:55Z",
+   "id": "cmems_obs-sl_glo_phy-ssh_my_swonc-l3-duacs_PT1S_202411",
+   "start": "2023-01-16T11:59:13Z",
+   "title": "SWOT nadir CalVal"
+  },
+  {
+   "end": "1995-05-15T20:38:41Z",
+   "id": "cmems_obs-sl_glo_phy-ssh_my_e1-l3-duacs_PT1S_202411",
+   "start": "1992-10-23T22:14:26Z",
+   "title": "ERS-1"
+  },
+  {
+   "end": "2026-01-16T23:49:41Z",
+   "id": "cmems_obs-sl_glo_phy-ssh_my_j3g-l3-duacs_PT1S-i_202506",
+   "start": "2025-06-18T13:19:57Z",
+   "title": "Jason-3 long-repeat orbit"
+  },
+  {
+   "end": "2015-03-31T00:06:13Z",
+   "id": "cmems_obs-sl_glo_phy-ssh_my_al-l3-duacs_PT1S_202411",
+   "start": "2013-03-14T05:44:50Z",
+   "title": "Saral/AltiKa"
+  },
+  {
+   "end": "2020-07-31T11:29:44Z",
+   "id": "cmems_obs-sl_glo_phy-ssh_my_c2-l3-duacs_PT1S_202411",
+   "start": "2010-07-16T00:22:02Z",
+   "title": "CryoSat-2"
+  },
+  {
+   "end": "2002-05-14T18:04:55Z",
+   "id": "cmems_obs-sl_glo_phy-ssh_my_e2-l3-duacs_PT1S_202411",
+   "start": "1995-05-15T22:11:19Z",
+   "title": "ERS-2"
+  },
+  {
+   "end": "2010-10-18T21:26:41Z",
+   "id": "cmems_obs-sl_glo_phy-ssh_my_en-l3-duacs_PT1S_202411",
+   "start": "2002-05-17T07:23:51Z",
+   "title": "Envisat"
+  },
+  {
+   "end": "2012-04-08T10:43:05Z",
+   "id": "cmems_obs-sl_glo_phy-ssh_my_enn-l3-duacs_PT1S_202411",
+   "start": "2010-10-26T07:58:16Z",
+   "title": "Envisat new orbit"
+  },
+  {
+   "end": "2008-09-07T21:11:17Z",
+   "id": "cmems_obs-sl_glo_phy-ssh_my_g2-l3-duacs_PT1S_202411",
+   "start": "2000-01-07T18:26:58Z",
+   "title": "GFO"
+  },
+  {
+   "end": "2020-06-09T19:42:15Z",
+   "id": "cmems_obs-sl_glo_phy-ssh_my_h2ag-l3-duacs_PT1S_202411",
+   "start": "2016-03-31T00:02:01Z",
+   "title": "HaiYang-2A geodetic orbit"
+  },
+  {
+   "end": "2008-10-19T04:56:59Z",
+   "id": "cmems_obs-sl_glo_phy-ssh_my_j1-l3-duacs_PT1S_202411",
+   "start": "2002-04-24T08:56:09Z",
+   "title": "Jason-1"
+  },
+  {
+   "end": "2012-03-03T12:59:12Z",
+   "id": "cmems_obs-sl_glo_phy-ssh_my_j1n-l3-duacs_PT1S_202411",
+   "start": "2009-02-10T18:01:39Z",
+   "title": "Jason-1 new orbit"
+  },
+  {
+   "end": "2016-05-26T14:12:39Z",
+   "id": "cmems_obs-sl_glo_phy-ssh_my_j2-l3-duacs_PT1S_202411",
+   "start": "2008-10-19T04:25:58Z",
+   "title": "Jason-2"
+  },
+  {
+   "end": "2021-12-29T05:09:44Z",
+   "id": "cmems_obs-sl_glo_phy-ssh_my_j3-l3-duacs_PT1S_202411",
+   "start": "2016-05-26T14:14:02Z",
+   "title": "Jason-3"
+  },
+  {
+   "end": "2002-04-24T08:57:13Z",
+   "id": "cmems_obs-sl_glo_phy-ssh_my_tp-l3-duacs_PT1S_202411",
+   "start": "1992-10-13T00:32:22Z",
+   "title": "TOPEX/Poseidon"
+  }
+ ],
+ "n_missions": 29,
+ "per_year_resume": true,
+ "product": "SEALEVEL_GLO_PHY_L3_MY_008_062",
+ "qc_policy": "The DUACS level-3 product is already quality controlled and edited upstream; it publishes no per-sample flag, so every kept row carries qc 1 and the store says so rather than inventing a grade. A sample whose `sla_filtered` is the netCDF fill or outside +/- 3 m is dropped and counted; `sla_unfiltered` and `mdt` outside the same bounds become NaN for that channel alone. Rows are kept per mission and the mission is the platform, so a consumer can hold out a mission the way it holds out a year.",
+ "sources": [
+  "copernicusmarine subset --dataset-id cmems_obs-sl_glo_phy-ssh_my_<mission>-l3-duacs_PT1S_<ver>",
+  "https://stac.marine.copernicus.eu/metadata/SEALEVEL_GLO_PHY_L3_MY_008_062/product.stac.json (public metadata, no login)"
+ ],
+ "stac": "https://stac.marine.copernicus.eu/metadata/SEALEVEL_GLO_PHY_L3_MY_008_062/product.stac.json",
+ "store": "slatrack",
+ "title": "Copernicus Marine along-track sea level anomaly (L3, all missions)",
+ "toolbox_importable": true,
+ "variables": [
+  "sla_filtered",
+  "sla_unfiltered",
+  "mdt"
+ ],
+ "verified": "2026-09-13: the product's 29 per-mission dataset ids and the variable names sla_filtered / sla_unfiltered / mdt read from the PUBLIC STAC metadata with no credentials. 2026-09-14 (runs 34847980911 and 34848513007, a hosted runner with real credentials): the toolbox logs in, resolves these sparse datasets and SERVES the subset \u2014 the run got as far as the toolbox's own netCDF writer, which then crashed with `ValueError: index must be monotonic increasing or decreasing` in _dataframe_to_netcdf_per_platform / _add_attributes_to_dataset (a bug in the toolbox's download_sparse.py, not in the data). The adapter therefore never asks the toolbox to write a subset file. 2026-09-14 (run 34849670866, one week of January 2015, four missions \u2014 h2a, al, c2, j2): read_dataframe RETURNS DATA, in LONG format \u2014 columns ['variable', 'platform_id', 'platform_type', 'time', 'longitude', 'latitude', 'depth', 'pressure', 'is_depth_from_producer', 'value', 'value_qc', 'institution', 'doi', 'product_doi'], one row per (variable, sample), `variable` in {sla_filtered, sla_unfiltered, mdt}, at ~950k-1.06M long rows (~320-355k samples) and ~100 s per mission-week, i.e. ~3.3k samples/s, which is ~220 runner-hours for 1993-2024. That measurement is why the DEFAULT route is now copernicusmarine.get on the original per-day files, month by month, with read_dataframe kept as --slatrack-fetch dataframe. Neither route can be run from this sandbox \u2014 no credentials here by design, and the toolbox cannot be installed (pypi 403 through the egress proxy); the pivot, the file batching and the frame-to-rows step they depend on are exercised by the tests and are the same code the fixture netCDFs go through. NOT YET MEASURED: the remote path layout of the original files (the first probe of the `files` route prints it) and what values `value_qc` takes (the pivot now records its histogram).",
+ "years": [
+  1993,
+  1994,
+  1995,
+  1996,
+  1997,
+  1998,
+  1999,
+  2000,
+  2001,
+  2002,
+  2003,
+  2004,
+  2005,
+  2006,
+  2007,
+  2008,
+  2009,
+  2010,
+  2011,
+  2012,
+  2013,
+  2014,
+  2015,
+  2016,
+  2017,
+  2018,
+  2019,
+  2020,
+  2021,
+  2022,
+  2023,
+  2024
+ ]
+}
