@@ -1235,6 +1235,19 @@ archive.
   publishable tensor is cheap to re-derive; claim reproducibility only from a
   run that did.
 
+- **A STAC WINDOW IS A CLAIM; THE FILE LISTING IS THE MEASUREMENT.** The
+  ERS-1 35-day along-track product (`…e1-l3-duacs…`) declares 1992-10-23 →
+  1995-05-15 and holds no 1994 file at all: that year flew as the geodetic
+  phase, a SEPARATE dataset (`…e1g-l3-duacs…`, 1994-04-10 → 1995-03-21) that
+  lists and downloads fine — the same over-declaring the globe app's GIBS lore
+  records in Part 2 of the root file. Found in the family-10.1 slatrack
+  refetch, 2026-09-15, where the mission-year refusal was blocking a real gap.
+  An empty mission-year listing now MEASURES the mission's whole archive
+  (unfiltered `get(dry_run=True)`, once per mission) and records a gap under
+  its own counter, `mission_year_gap_measured`, with the files it did find;
+  a filter that missed files the archive holds, a listing empty for the whole
+  mission, and a basename with no date token all stay refusals.
+
 - **A BOX WHOSE CONTAINER CANNOT SEE ITS GPU LOOKS EXACTLY LIKE A SLOW ONE,
   AND THE ONLY CHEAP TEST IS A CONTROL'S FIRST-RECORD TIME.** Measured
   2026-08-28 on #506 (E-056b, a rented H100 SXM at $2.028/h): the job ran 3 h

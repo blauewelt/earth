@@ -1683,6 +1683,10 @@ class SLATrackAdapter(SourceAdapter):
         build's own scratch, parsed with `_read_nc`, yielded, and deleted
         before the next batch is asked for, so a mission-year never occupies
         more than a month of files on disk.
+
+        AN EMPTY MISSION-YEAR LISTING IS NOT A VERDICT, it is a question, and
+        `_empty_year_verdict` answers it by MEASURING the mission's whole
+        archive rather than by guessing between the two stories. See there.
         """
         import copernicusmarine
         did, ver = self._split_id(mid)
@@ -1696,29 +1700,14 @@ class SLATrackAdapter(SourceAdapter):
             print(f"  {mid} {year}: {len(paths)} original file(s) listed"
                   + (f"; first {paths[:3]} last {paths[-3:]}" if paths else ""),
                   flush=True)
-            if not paths:
-                # A MISSION THAT FLEW AND LISTED NOTHING IS THE LOUDEST THING
-                # IN THIS FILE, because the remote path layout is still NOT
-                # MEASURED (see the docstring): `filter=*<year>*` is matched
-                # against the absolute remote path, and if that pattern does
-                # not fit the layout then EVERY mission-year lists zero files,
-                # every year finishes in seconds with no rows, `done.json` is
-                # written for each, and 1993-2024 assembles into an empty
-                # store that is green from end to end. `_mission_window` has
-                # already said this mission was in orbit over this window, so
-                # zero files is not "it did not fly" — it is "the listing did
-                # not work", and the build must not guess which.
-                ctx.note_absent(
-                    f"{year} {mid}",
-                    f"copernicusmarine.get(filter='*{year}*', dry_run=True) "
-                    f"listed NO original file, though the mission's STAC "
-                    f"window covers {lo}..{hi}. Either the archive holds no "
-                    f"{year} file for this mission or the filter does not "
-                    f"match the remote layout — and those are not the same "
-                    f"thing, so this year is not marked")
-                continue
             y_lo = max(lo, dt.date(year, 1, 1))
             y_hi = min(hi, dt.date(year, 12, 31))
+            if not paths:
+                part = self._empty_year_verdict(ctx, mid, year, lo, hi,
+                                                y_lo, y_hi, base)
+                if part is not None:
+                    yield part
+                continue
             for label, names in self._file_batches(paths, y_lo, y_hi,
                                                    str(year)):
                 shutil.rmtree(out, ignore_errors=True)
@@ -1754,6 +1743,139 @@ class SLATrackAdapter(SourceAdapter):
                         yield f"{label} {mid}", rows, counts
                 finally:
                     shutil.rmtree(out, ignore_errors=True)
+
+    def _full_listing(self, ctx, mid, base):
+        """Every file the mission's dataset holds, listed ONCE per process.
+
+        `copernicusmarine.get(dry_run=True)` with no filter and no regex is
+        the archive's own answer to "what do you hold for this mission", and
+        it is the measurement the empty-year verdict below is built on. One
+        mission is asked at most once — the listing is the same for every
+        year of that mission, and a dataset with a decade of daily files is
+        not something to fetch thirty times. The cache hangs off `ctx`
+        (created lazily) rather than off `self`, so it dies with the build
+        rather than outliving it.
+        """
+        import copernicusmarine
+        cache = getattr(ctx, "_cmems_full_listing", None)
+        if cache is None:
+            cache = {}
+            ctx._cmems_full_listing = cache
+        if mid not in cache:
+            cache[mid] = self._response_paths(
+                copernicusmarine.get(dry_run=True, **base))
+            print(f"  {mid}: unfiltered listing holds "
+                  f"{len(cache[mid])} original file(s)", flush=True)
+        return cache[mid]
+
+    @staticmethod
+    def _basename_date(path):
+        """The 8-digit date token of a BASENAME, or None. `_file_batches`'s rule.
+
+        Read exactly as `_file_batches` reads it, so "the archive holds a file
+        in this window" and "this file goes in this month's batch" can never
+        disagree: the same regex over the same basename, and a token that is
+        not a valid calendar date counts as no token at all.
+        """
+        m = re.search(r"(\d{8})", str(path).rsplit("/", 1)[-1])
+        if not m:
+            return None
+        try:
+            return dt.date(int(m.group(1)[:4]), int(m.group(1)[4:6]),
+                           int(m.group(1)[6:8]))
+        except ValueError:
+            return None
+
+    def _empty_year_verdict(self, ctx, mid, year, lo, hi, y_lo, y_hi, base):
+        """An empty `*{year}*` listing -> a MEASURED answer, not a guess.
+
+        A STAC window is a CLAIM about what a mission covers; the file listing
+        is the MEASUREMENT of what the archive holds. They disagree, and the
+        disagreement is not rare: ERS-1's 35-day product
+        (`…_my_e1-l3-duacs_PT1S_202411`) declares 1992-10-23..1995-05-15 and
+        holds NO 1994 file at all, because the 1994 geodetic phase is a
+        SEPARATE dataset (`…_my_e1g-…`, 1994-04-10..1995-03-21) which lists
+        and downloads perfectly well. Refusing the whole year there refuses a
+        gap that is real — the same shape as the root CLAUDE.md Part 2 lore
+        that a published time domain can run PAST the served archive.
+
+        So the ambiguity the old refusal named is turned into a measurement:
+        ask the archive for the mission's WHOLE listing (once, cached) and
+        read the date token off every basename. Four definite answers, and
+        only the fourth is a gap:
+
+          * the unfiltered listing is EMPTY   -> absence (a dataset id or a
+            layout problem; the mission is not there at all).
+          * a basename carries no valid date  -> absence (the archive's files
+            cannot be placed in time, so "none in this year" is unmeasurable).
+          * a file's date falls INSIDE the mission-year window -> absence, and
+            now a DEFINITE one: `*{year}*` missed files the archive holds, so
+            the filter does not match the remote layout.
+          * files exist, all dated, none in the window -> a MEASURED GAP.
+            Not an absence: it is counted under its own name in counts.json
+            (`mission_year_gap_measured`, with the measurement beside it in
+            `gaps_measured`), printed, and the year is free to be marked on
+            the strength of the other missions' rows.
+
+        Returns the part to yield for that gap, or None when it noted an
+        absence (§5.17: only a DEFINITE answer may be fatal).
+        """
+        full = self._full_listing(ctx, mid, base)
+        if not full:
+            ctx.note_absent(
+                f"{year} {mid}",
+                f"copernicusmarine.get(filter='*{year}*', dry_run=True) "
+                f"listed NO original file, and neither did the UNFILTERED "
+                f"listing of the whole mission, though the mission's STAC "
+                f"window covers {lo}..{hi}. An archive that lists nothing at "
+                f"all for a mission is a dataset id or a remote-layout "
+                f"problem, not a gap in the record, so this year is not "
+                f"marked")
+            return None
+        dates, undated = [], []
+        for p in full:
+            d = self._basename_date(p)
+            if d is None:
+                undated.append(str(p).rsplit("/", 1)[-1])
+            else:
+                dates.append(d)
+        if undated:
+            ctx.note_absent(
+                f"{year} {mid}",
+                f"copernicusmarine.get(filter='*{year}*', dry_run=True) "
+                f"listed no file, and the mission's unfiltered listing holds "
+                f"{len(full)} file(s) of which {len(undated)} carry no valid "
+                f"8-digit date token in the basename ({undated[:3]}"
+                + (" …" if len(undated) > 3 else "")
+                + f"). Those files cannot be placed in time, so whether the "
+                  f"archive holds {year} for this mission CANNOT BE MEASURED "
+                  f"— and an unmeasured empty year is not a gap, so this year "
+                  f"is not marked")
+            return None
+        inside = [d for d in dates if y_lo <= d <= y_hi]
+        if inside:
+            ctx.note_absent(
+                f"{year} {mid}",
+                f"copernicusmarine.get(filter='*{year}*', dry_run=True) "
+                f"listed no file, but the mission's unfiltered listing holds "
+                f"{len(inside)} file(s) dated inside {y_lo}..{y_hi} "
+                f"({min(inside)}..{max(inside)}): the filter DOES NOT MATCH "
+                f"THE REMOTE LAYOUT and missed {len(inside)} file(s) the "
+                f"archive holds. That is a listing bug, not a gap, so this "
+                f"year is not marked")
+            return None
+        first, last = min(dates), max(dates)
+        print(f"  {mid} {year}: the archive's own listing holds {len(dates)} "
+              f"file(s) spanning {first}..{last} and none in {year} — a gap "
+              f"inside the STAC window ({lo}..{hi}), measured, not guessed",
+              flush=True)
+        counts = {"kept": 0, "mission_year_gap_measured": 1,
+                  "gaps_measured": [{"mission": mid, "year": int(year),
+                                     "files_total": len(dates),
+                                     "archive_first": str(first),
+                                     "archive_last": str(last),
+                                     "stac_window": [str(lo), str(hi)]}]}
+        return f"{year} {mid}", empty_rows(self.C), counts
 
     @staticmethod
     def _file_batches(paths, lo, hi, fallback):
@@ -2461,6 +2583,16 @@ def _merge_counts(into, new):
                 sub[kk] = sub.get(kk, 0) + vv
         elif isinstance(v, (int, float)):
             into[k] = into.get(k, 0) + v
+        elif isinstance(v, list):
+            # A LIST IS A LEDGER OF MEASUREMENTS, so it CONCATENATES. It used
+            # to fall into the `else` below and OVERWRITE, which meant the
+            # last part of a year was the only one whose measurement reached
+            # counts.json — and `gaps_measured` (one entry per mission-year
+            # the archive's own listing shows is empty) is exactly a list with
+            # one entry per part. A counter that survives and a measurement
+            # that does not is the worst of both.
+            cur = into.get(k)
+            into[k] = (list(cur) if isinstance(cur, list) else []) + list(v)
         else:
             into[k] = v
     return into

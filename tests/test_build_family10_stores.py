@@ -43,6 +43,7 @@ What each group of tests is FOR:
   resumability      an interrupted fetch resumes at the year it lost.
 """
 import datetime as dt
+import fnmatch
 import json
 import os
 import sys
@@ -2050,16 +2051,34 @@ def test_61_gtmba_counts_a_dataset_the_mirror_does_not_carry_at_all(built):
 
 class _FakeCM:
     """Just enough `copernicusmarine` for `_fetch_files`: a listing and a get
-    that writes files. `serve` says how many of the asked-for files arrive."""
+    that writes files. `serve` says how many of the asked-for files arrive.
+
+    The listing HONOURS `filter` (fnmatch `*` against the whole remote path,
+    which is what the toolbox matches) and answers an unfiltered call with the
+    whole listing, because `_empty_year_verdict` asks both questions of the
+    same archive and the difference between the two answers is the thing under
+    test. `full_calls` counts the unfiltered listings so a test can pin that
+    one mission is measured once.
+    """
 
     def __init__(self, listed, serve=None):
         self.listed = listed
         self.serve = serve
         self.out = None
+        self.full_calls = 0
 
-    def get(self, dry_run=False, regex=None, output_directory=None, **k):
+    def _listing(self, filt):
+        """What the archive answers for `filter=filt` (None = unfiltered)."""
+        if filt is None:
+            self.full_calls += 1
+            return list(self.listed)
+        return [n for n in self.listed if fnmatch.fnmatch(n, filt)]
+
+    def get(self, dry_run=False, regex=None, output_directory=None,
+            filter=None, **k):
         if dry_run:
-            return {"files": [{"filename": n} for n in self.listed]}
+            return {"files": [{"filename": n}
+                              for n in self._listing(filter)]}
         names = [n for n in self.listed
                  if regex is None or __import__("re").search(regex, n)]
         if self.serve is not None:
@@ -2071,13 +2090,29 @@ class _FakeCM:
         return {"files": []}
 
 
-def _slatrack_files(ctx, fake, monkeypatch, mid="cmems_m_PT1S_202411"):
+class _FakeCMBlindFilter(_FakeCM):
+    """The archive holds the year and the FILTER cannot see it.
+
+    The measured e1-1994 case's evil twin: `*{year}*` answers nothing because
+    it does not fit the remote layout, while the mission's own unfiltered
+    listing holds files dated inside the window. That is a listing bug, not a
+    gap, and it must stay a refusal.
+    """
+
+    def _listing(self, filt):
+        if filt is None:
+            self.full_calls += 1
+            return list(self.listed)
+        return []
+
+
+def _slatrack_files(ctx, fake, monkeypatch, mid="cmems_m_PT1S_202411",
+                    lo=dt.date(1982, 1, 1), hi=dt.date(1982, 1, 31)):
     monkeypatch.setitem(sys.modules, "copernicusmarine", fake)
     ad = b10.SLATrackAdapter()
     monkeypatch.setattr(ad, "_read_nc",
                         lambda c, p, m: (b10.empty_rows(ad.C), {"kept": 0}))
-    return list(ad._fetch_files(ctx, mid, dt.date(1982, 1, 1),
-                                dt.date(1982, 1, 31)))
+    return list(ad._fetch_files(ctx, mid, lo, hi))
 
 
 def test_62_a_mission_year_that_lists_no_file_is_an_absence_not_an_empty_year(
@@ -2115,6 +2150,108 @@ def test_63_a_batch_that_downloads_fewer_files_than_it_asked_for_refuses(
     ctx.absent = []
     _slatrack_files(ctx, _FakeCM(listed=names), monkeypatch)
     assert ctx.absent == []
+
+
+def test_a_mission_year_gap_the_archive_itself_shows_is_measured_not_refused(
+        tmp_path, monkeypatch):
+    """A STAC WINDOW IS A CLAIM; THE FILE LISTING IS THE MEASUREMENT.
+
+    ERS-1's 35-day product declares 1992-10-23..1995-05-15 and holds NO 1994
+    file — that year flew as the geodetic phase, which is a different dataset
+    id. Refusing the year there refuses a gap that is REAL, so the empty
+    listing is answered by measuring the mission's whole archive: files exist,
+    every one carries a date, none falls in the window. That is a gap, it is
+    counted under its own name, and it never reaches `ctx.absent`.
+    """
+    tmp = str(tmp_path)
+    ctx, _ = _gdp_ctx(tmp)
+    ctx.a.store = "slatrack"
+    fake = _FakeCM(listed=["/remote/1981/track_19811215.nc",
+                           "/remote/1983/track_19830103.nc"])
+    parts = _slatrack_files(ctx, fake, monkeypatch)
+    assert ctx.absent == [], "a MEASURED gap is not an absence"
+    b10.fetch_absence_check(ctx)                 # must not raise
+    assert len(parts) == 1
+    label, rows, counts = parts[0]
+    assert label == "1982 cmems_m_PT1S_202411"
+    assert len(rows["bin"]) == 0 and set(rows) == set(b10.ROW_KEYS)
+    assert counts["mission_year_gap_measured"] == 1
+    g, = counts["gaps_measured"]
+    assert g["mission"] == "cmems_m_PT1S_202411" and g["year"] == 1982
+    assert g["files_total"] == 2
+    assert g["archive_first"] == "1981-12-15"
+    assert g["archive_last"] == "1983-01-03"
+    assert g["stac_window"] == ["1982-01-01", "1982-01-31"]
+    # AND THE MEASUREMENT SURVIVES INTO counts.json. `_merge_counts` used to
+    # OVERWRITE a list, so a year whose last part carried no `gaps_measured`
+    # would have kept the counter and thrown the measurement away.
+    pw = b10.PartWriter(ctx, 1982)
+    pw.add(rows, counts)
+    pw.add(b10.empty_rows(rows["values"].shape[1]), {"kept": 3})
+    pw.add(rows, dict(counts, gaps_measured=[dict(g, year=1983)]))
+    pw.close()
+    led = json.load(open(os.path.join(ctx.year_dir(1982), "counts.json")))
+    assert led["rows"] == 0 and led["parts"] == 0
+    assert led["counts"]["mission_year_gap_measured"] == 2
+    assert [e["year"] for e in led["counts"]["gaps_measured"]] == [1982, 1983]
+
+
+def test_a_filter_that_misses_files_the_archive_holds_is_still_a_refusal(
+        tmp_path, monkeypatch):
+    """The other half of the e1-1994 verdict, and the reason it is a
+    MEASUREMENT rather than a softening: when the unfiltered listing holds
+    files dated inside the mission-year window, `*{year}*` did not fit the
+    remote layout — the exact failure test_62 exists for — and the year is
+    refused, now with the number of files the filter missed."""
+    tmp = str(tmp_path)
+    ctx, _ = _gdp_ctx(tmp)
+    ctx.a.store = "slatrack"
+    fake = _FakeCMBlindFilter(listed=["/remote/1982/track_19820103.nc",
+                                      "/remote/1982/track_19820104.nc"])
+    parts = _slatrack_files(ctx, fake, monkeypatch)
+    assert parts == []
+    assert len(ctx.absent) == 1
+    why = ctx.absent[0]["why"]
+    assert "DOES NOT MATCH THE REMOTE LAYOUT" in why
+    assert "missed 2 file(s)" in why
+    with pytest.raises(SystemExit, match="allow-missing-years"):
+        b10.fetch_absence_check(ctx)
+
+
+def test_an_archive_whose_files_carry_no_date_cannot_measure_a_gap(
+        tmp_path, monkeypatch):
+    """`track_latest.nc` cannot be placed in time, so "no file in 1982" is not
+    something this listing can say. An UNMEASURED empty year stays an
+    absence — the whole point of the refusal."""
+    tmp = str(tmp_path)
+    ctx, _ = _gdp_ctx(tmp)
+    ctx.a.store = "slatrack"
+    parts = _slatrack_files(ctx, _FakeCM(listed=["/remote/track_latest.nc"]),
+                            monkeypatch)
+    assert parts == []
+    assert len(ctx.absent) == 1
+    assert "no valid 8-digit date token" in ctx.absent[0]["why"]
+    assert "CANNOT BE MEASURED" in ctx.absent[0]["why"]
+    with pytest.raises(SystemExit, match="allow-missing-years"):
+        b10.fetch_absence_check(ctx)
+
+
+def test_the_mission_archive_is_listed_once_however_many_years_are_empty(
+        tmp_path, monkeypatch):
+    """The unfiltered listing is the same answer for every year of a mission,
+    and a mission with a decade of daily files is not something to list thirty
+    times. Two empty mission-years, one measurement."""
+    tmp = str(tmp_path)
+    ctx, _ = _gdp_ctx(tmp)
+    ctx.a.store = "slatrack"
+    fake = _FakeCM(listed=["/remote/1981/track_19811215.nc",
+                           "/remote/1985/track_19850103.nc"])
+    parts = _slatrack_files(ctx, fake, monkeypatch,
+                            lo=dt.date(1982, 1, 1), hi=dt.date(1983, 12, 31))
+    assert [p[0] for p in parts] == ["1982 cmems_m_PT1S_202411",
+                                     "1983 cmems_m_PT1S_202411"]
+    assert ctx.absent == []
+    assert fake.full_calls == 1, "the whole archive is measured once per mission"
 
 
 def test_64_the_assembler_refuses_parts_that_no_marker_claims(tmp_path):
