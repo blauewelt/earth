@@ -1,4 +1,4 @@
-# Family 10 — four observation stores and the registry: a self-contained data handover
+# Family 10.1 — four observation stores and the registry: a self-contained data handover
 
 PDF design note: https://blauewelt.github.io/earth/ml/paper/notes/family10.pdf
 
@@ -7,19 +7,28 @@ download, open, validate and search family 10's tier-P observation stores, and
 to read the registry that ties them to the gridded tensors, is on this page;
 nothing below requires reading another document. Where a section says "see
 also", it is optional background. Written 2026-09-13, the day the builder
-landed; updated 2026-09-14, the day all four stores were published.
+landed; the first four stores published 2026-09-14; **rewritten 2026-09-15 for
+family 10.1, which is the version to ingest.**
 
-**Read §9 before you trust a number.** All four stores — `gdp` (surface
-drifters), `gtmba` (the tropical moored arrays), `socat` (ship CO₂) and
-`slatrack` (along-track sea level from 29 altimeter missions) — were built,
-published and then **independently verified on 2026-09-14** by sessions that
-did not build them: **2,122,112,905 observations**, every file re-hashed against
-its own record, and every count, range and per-channel statistic recomputed
-from the arrays rather than read out of the metadata that claims them. Those
-sentences are measurements now, including `slatrack`'s, which was checked by
-streaming all 67 GB rather than downloading it. §9 says what each check
-returned and what it could not do; the full evidence is
-`docs/FAMILY10_VERIFICATION_2026-09-14.md`.
+**What 10.1 is, in one sentence.** The same four stores, the same rows, the
+same nine arrays and the same registry as family 10.0, with **one column
+changed**: the time is now `time_s.npy`, **int32 seconds** since
+1982-01-01T00:00:00Z, in place of 10.0's `time_days.npy`, float32 days. §2.3
+says why that was worth a rebuild, and §2.4 says what a reader has to change.
+
+**Read §9 before you trust a number.** As of 2026-09-15, **three of the four
+10.1 stores are published and verified** — `gdp` (surface drifters, 48,480,798
+rows), `gtmba` (the tropical moored arrays, 1,001,282) and `socat` (ship CO₂,
+41,830,675), **91,312,755 observations**, each one's row count and per-year
+counts recomputed from the new `time_s` column and matching its own ledger
+exactly. The fourth, `slatrack` (along-track sea level from 29 altimeter
+missions, expected 2,030,800,176 rows), is **being assembled as this is
+written and is expected to publish on 2026-09-15 around 17:15 UTC**; §9.1 says
+what to do until it lands. The rows themselves are the ones independently
+verified on 2026-09-14 under 10.0 — every file re-hashed against its own
+record, every count, range and per-channel statistic recomputed from the
+arrays rather than read out of the metadata claiming them — and that evidence
+is `docs/FAMILY10_VERIFICATION_2026-09-14.md`.
 
 Family 8's Argo store has its own self-contained handover and is **part of this
 family unchanged** — §7 says how (optional background:
@@ -43,9 +52,13 @@ byte range); **P**, points, profiles and tracks (columns sorted by five-day bin,
 read by a k-nearest search); and **T**, tiles, which is designed and not built.
 This page is about the four new tier-P stores and the registry.
 
-Terms used below, once. **Pentad / bin** — a five-day period; this project
-counts them from 1982-01-01, so `bin = floor((date − 1982-01-01) / 5 days)`, and
-a bin is **negative** before that date. **CSR** — "compressed sparse row": an
+Terms used below, once. **Epoch** — 1982-01-01T00:00:00 UTC, the instant every
+time in these stores is counted from. **Pentad / bin** — a five-day period;
+this project counts them from the epoch, so in family 10.1
+`bin = floor(time_s / 432000)` — 432,000 being five days in seconds — and a bin
+is **negative** before 1982. **Schema version** — which time column a store
+carries: schema 1 is 10.0's float32 `time_days`, schema 2 is 10.1's int32
+`time_s`; every `store.json` states its own. **CSR** — "compressed sparse row": an
 offsets array saying where each bin's rows start and end in a sorted table.
 **Footprint** — the pair `(log2_fp, log2_dt)`: `log2(footprint_km / 27.83)`, the
 spatial support in units of a 0.25° cell, and `log2(support_days / 5)`, the
@@ -61,13 +74,33 @@ data server that answers a tabular query over HTTP.
 ## 2 · The four stores, and where they are
 
 Hugging Face dataset repository **`chfrank/earth-tensors`**, one directory per
-store under `tensors/family10/`. Public, no token needed, plain HTTPS:
+store under **`tensors/family10_1/`** — note the `_1`, which is the family
+version `10.1` with the dot written as an underscore. Public, no token needed,
+plain HTTPS:
 
 ```
-https://huggingface.co/datasets/chfrank/earth-tensors/resolve/main/tensors/family10/<store>/<file>
+https://huggingface.co/datasets/chfrank/earth-tensors/resolve/main/tensors/family10_1/<store>/<file>
 ```
 
 (`resolve/main/...` answers a 302 redirect to a CDN URL — follow redirects.)
+One file, for example:
+
+```
+curl -L -o store.json \
+  https://huggingface.co/datasets/chfrank/earth-tensors/resolve/main/tensors/family10_1/gdp/store.json
+```
+
+The three Hub prefixes family 10.1 uses, all derived from one constant
+(`ml/family10_store.FAMILY_VERSION`):
+
+| what | where |
+|---|---|
+| the four stores | `tensors/family10_1/<store>/` |
+| the registry | `tensors/family10_1/family10.json` |
+| the `slatrack` build's per-year column parts | `partials/family10_1/slatrack/<year>/` |
+
+The `partials/` prefix is build scaffolding, not data to ingest — §11 explains
+what it is for. A reader wants the first two.
 
 | store | what it measures | C | record | footprint `(log2_fp, log2_dt)` |
 |---|---|---|---|---|
@@ -80,8 +113,8 @@ https://huggingface.co/datasets/chfrank/earth-tensors/resolve/main/tensors/famil
 
 | file | dtype · shape | what |
 |---|---|---|
-| `bin.npy` | int16 [N] | five-day bin, `floor((date − 1982-01-01) / 5 days)`. **May be NEGATIVE**: drifters begin in 1979 and SOCAT in 1957, and those rows are kept, so the store is the whole record and the *loader* clips to whatever axis a tensor has |
-| `time_days.npy` | float32 [N] | days since 1982-01-01 00:00 UTC, fractional, negative before it |
+| `bin.npy` | int16 [N] | five-day bin, `floor_divide(time_s, 432000)` — exact integer arithmetic. **May be NEGATIVE**: drifters begin in 1979 and SOCAT in 1957, and those rows are kept, so the store is the whole record and the *loader* clips to whatever axis a tensor has |
+| `time_s.npy` | int32 [N] | **seconds** since 1982-01-01T00:00:00 UTC, negative before it. int32 spans 1913-12-13T20:45:52Z to 2050-01-19T03:14:07Z, and the builder refuses a row outside that rather than letting it wrap |
 | `lat.npy` | float32 [N] | degrees north |
 | `lon.npy` | float32 [N] | degrees east, in **[−180, 180)** |
 | `values.npy` | float16 [N, C] | the channels of §3, in **raw units**, **NaN = not measured** |
@@ -91,8 +124,11 @@ https://huggingface.co/datasets/chfrank/earth-tensors/resolve/main/tensors/famil
 | `bin_offsets.npy` | int64 [B + 1] | CSR offsets over **this store's own** bin range: the rows of bin `b` are `[off[b − bin_first], off[b − bin_first + 1])`, and `bin_first` is in `store.json` |
 | `store.json` | JSON | the schema, the footprint constants, the QC policy, the provenance (URLs, verification dates, builder commit), the per-year counts, the per-channel measured fraction and value range, and the **sha256 of every file above** |
 
-**Rows are sorted by `(bin, time_days)` ascending.** That order is what makes
-`bin_offsets` valid at all, and every consumer may rely on it.
+**Rows are sorted by `(bin, time_s)` ascending.** That order is what makes
+`bin_offsets` valid at all, and every consumer may rely on it. Under 10.1 the
+sort inside a bin is a real ordering of the measurements: two rows a second
+apart are two distinct timestamps, where 10.0 could only say they were within
+84 seconds of each other.
 
 **`bin_first` is not zero.** Family 8's Argo index runs from bin 0 over 3,143
 entries because Argo starts in 2004, inside the epoch. A family-10 store's index
@@ -102,31 +138,110 @@ consumer that assumes 0 reads the wrong pentad and nothing says so — use
 
 ### 2.2 · The registry
 
-`tensors/family10/family10.json`, written by `ml/build_family10_registry.py`,
+`tensors/family10_1/family10.json`, written by `ml/build_family10_registry.py`,
 lists **every group of the family in one file** — the tier-G channel groups of
 the gridded tensor *by reference to its manifest*, family 8's Argo store, and
 these four. Per group: `tier`, `layout`, `cadence`, `channels` with units, the
-footprint constants, `bin_first`, the files with their sha256, the sources and
-the builder commit. **A consumer dispatches on `tier` and needs nothing else.**
+footprint constants, `bin_first`, its own `schema_version`, the files with
+their sha256, the sources and the builder commit. **A consumer dispatches on
+`tier` and needs nothing else.**
 
-The registry as it stands — regenerated **2026-09-14T22:04:04Z** by the
-`slatrack` build's last step — carries **nine groups and an empty
-`groups_missing`**: four tier-G groups (`g025`, `g100`, `oc025`, `rg100`) at
-recipe `f7l2`, and five tier-P stores (`argo`, `gdp`, `gtmba`, `socat`,
-`slatrack`). That is the family complete for the first time.
+The registry at the top of the file says `family_version` **"10.1"** and
+`schema_version` **2**; each group repeats its own, because they are not all
+the same — family 8's Argo store is a tier-P group at **schema 1** and stays
+that way (§7), while `gdp`, `gtmba` and `socat` are schema 2. A consumer can
+therefore see from the registry alone which groups carry the seconds.
 
-Two properties are load-bearing, and both were exercised before they were
-retired by the world catching up. A group the builder could not read is **not**
+The registry as it stands — regenerated **2026-09-15T11:57:23Z** by the `socat`
+build's last step — carries **eight groups, with `groups_missing: ["slatrack"]`**:
+four tier-G groups (`g025`, `g100`, `oc025`, `rg100`) at recipe `f7l2`, and
+four tier-P stores (`argo`, `gdp`, `gtmba`, `socat`). `slatrack` will join it
+when today's assembly publishes, and the builder's last step regenerates the
+registry, so the file gains a ninth group and an empty `groups_missing` at that
+moment.
+
+Two properties are load-bearing. A group the builder could not read is **not**
 in `groups` and **is** in `groups_missing` — a registry that listed a group it
-could not describe would be worse than a short one; `slatrack` was the group in
-`groups_missing` for most of 2026-09-14 and is in `groups` now. And `tier_g`
-says *which* family-7 manifest it describes: E-079 §2 names family 7.1 (the
-global gridded tensor with ocean colour added), whose build had not published
-when the morning's registry was written, so that copy fell back to `f7l0` (the
-same tensor without ocean colour, three groups) and **stated the fallback in
-`tier_g.fallback_note`** rather than silently describing a different tensor.
-The corrected build published at 19:58Z as recipe `f7l2`, and the registry now
-names it with `fallback_note: null`.
+could not describe would be worse than a short one, which is exactly the state
+`slatrack` is in right now. And `tier_g` says *which* family-7 manifest it
+describes: it names **family 7.2, recipe `f7l2`** — the global gridded tensor
+with ocean colour added as a fourth channel group, built 2026-09-14T19:58:44Z —
+with `fallback_note: null`, and it is **unchanged by 10.1**. Tier G is
+referenced by manifest, not rebuilt: family 10.1 changes the tier-P time column
+and nothing on the gridded side. For ingesting the gridded half, the pointer is
+still `docs/FAMILY7_DATA_HANDOVER.md`. (The `fallback_note` field exists
+because an earlier registry was written while that manifest was still a 404 and
+fell back to `f7l0`, the same tensor without ocean colour — it **said so** in
+that field rather than silently describing a different tensor.)
+
+### 2.3 · 10.1 supersedes 10.0, and the 10.0 directories stay on the Hub
+
+`tensors/family10/` — the four stores published on 2026-09-14 — is still
+there, still readable, and still exactly what the 2026-09-14 verification
+checked. It is kept as history. **Ingest 10.1 instead**, for one reason.
+
+10.0's time column is `time_days.npy`, float32 days since the epoch. A float32
+carries 24 bits of mantissa, so the gap between two representable values grows
+with the magnitude: at the start of the altimeter record (1993, ≈ 4,000 days)
+it is **21 seconds**, and at the end (2024, ≈ 15,700 days) it is **84
+seconds**. That is harmless for a store sampled every six hours or once a day,
+and it was chosen when those were the only stores in view.
+
+`slatrack` samples **once a second**. Measured on the published 10.0 store:
+21 to 84 consecutive along-track samples carried the *identical* timestamp —
+**up to 316 rows to one value**, which at 6.5 km between samples is 550 km of
+one satellite's ground track with a single time on it. Nothing in 10.0 is
+wrong: the rows are in the right order and the bins agree with the column. The
+column simply cannot express a distinction the archive published, so every
+consumer had to be told "use the row order, not the timestamp". A format that
+needs that instruction alongside it is the wrong format.
+
+An integer second is the finest thing any of these four archives reports. It
+is exact everywhere, it costs the same four bytes, and it takes the float
+rounding out of the bin derivation at the same time. Two smaller faults go
+with it:
+
+- **`socat`: 908 rows sat in the wrong pentad.** A timestamp within ~84 s
+  *below* a pentad boundary rounded **up** across it in float32, so the row was
+  filed in the next bin. Measured on the two published stores: 908 of
+  41,830,675 rows move, and 10.1 puts each in the pentad it was measured in.
+  (Row 232,712, for instance, is 356,399,987 s — thirteen seconds before the
+  boundary at 4,125 days — and 10.0 stored it as exactly 4125.0.) No row is
+  added or lost: `N` and the per-year counts are identical.
+- **`socat`: ≤ 3 rows a year read as the wrong calendar year.** The same
+  rounding at midnight on 31 December — three rows late on 2024-12-31 read as
+  2025-01-01 when the year was recomputed from `time_days`. Under 10.1 a year
+  recomputed from `time_s` reproduces `store.json`'s `per_year` block exactly,
+  in every year, for every store.
+
+### 2.4 · What a reader has to change, coming from 10.0
+
+Three things, and nothing else:
+
+1. Read `time_s.npy` (int32) where you read `time_days.npy` (float32).
+2. `bin = floor_divide(time_s, 432000)` where you had `floor(time_days / 5)`.
+   Integer arithmetic, no float anywhere in it.
+3. Point your URLs at `tensors/family10_1/` instead of `tensors/family10/`.
+
+Days, if you want them, are `time_s / 86400.0`. Every value int32 can hold is
+exactly representable in float64, so that is one correctly-rounded division and
+`round(days * 86400)` gives the second back unchanged. A calendar timestamp is
+one line:
+
+```python
+np.datetime64("1982-01-01T00:00:00") + time_s.astype("timedelta64[s]")
+```
+
+Everything else is untouched: the nine arrays, the CSR `bin_offsets`, the
+negative bins before 1982, longitude in [−180, 180), the channels and their
+order and units, the quality-control policy and its `qc_keep_max`, the
+platform-id rule, the footprint constants, and the fact that nothing is
+z-scored or anomalised. `bin_first` and `bin_last` are the same integers per
+store. For `gdp` and `gtmba` the other **eight arrays are byte-identical to
+10.0's** — same sha256, digest for digest; only `socat`'s differ, because the
+908 rows that changed pentad also changed the sort order and therefore every
+row-ordered array (`fp.npy` and `qc.npy` are constant enough down the column
+that they still hash the same).
 
 ## 3 · The channels
 
@@ -245,32 +360,45 @@ put a fabricated number where a broken instrument was.
 ### 4.5 · Every store is asserted before it is trusted
 
 `ml/build_family10_stores.py::check_store` runs on every assembled store and
-again before any publish. It asserts: rows sorted by `(bin, time_days)`; the
-`bin` column equal to `floor(time_days / 5)`; the CSR offsets spanning exactly
-the rows and each bin's slice holding only that bin; `lon` in [−180, 180) and
-`|lat| ≤ 90`; no infinity anywhere in `values`; the footprint columns constant;
-every channel inside its bounds; and a nearest-neighbour search returning
-nothing from the future. Each of those is a property a broken build can have
-while looking completely ordinary from outside, which is the only reason they
-are worth the seconds.
+again before any publish. It asserts: rows sorted by `(bin, time_s)`; the `bin`
+column equal to `floor_divide(time_s, 432000)` on every row; `time_s`
+non-decreasing inside every bin, the seam between two blocks included; every
+`time_s` inside the source window `store.json` declares in `date_range`; the
+CSR offsets spanning exactly the rows and each bin's slice holding only that
+bin; `lon` in [−180, 180) and `|lat| ≤ 90`; no infinity anywhere in `values`;
+the footprint columns constant; every channel inside its bounds; and a
+nearest-neighbour search returning nothing from the future. Each of those is a
+property a broken build can have while looking completely ordinary from
+outside, which is the only reason they are worth the seconds.
 
-One of them is subtle and worth stating. `time_days` is float32 and runs to
-~16,000 days, where it resolves about 0.001 d — so a timestamp a microsecond
-before a pentad boundary can round **up** across it. The builder therefore
-computes `bin` from the float32 value that is actually stored, not from the
-float64 the parser had. Otherwise a row would sit in bin *b* carrying a
-timestamp that reads as bin *b+1*, and the search — which requires
-`dt_days = 5(b+1) − t ≥ 0` — would silently never return it for its own anchor.
+**Three of those checks became exact in 10.1, and one of them became possible.**
+The bin check is now integer against integer rather than a comparison against a
+float floor. The window check is now a comparison of whole seconds. And
+"`time_s` non-decreasing inside every bin" now means something: under 10.0 the
+same assertion could only ever be checked to 84 seconds, and a `slatrack` store
+passed it trivially because equal timestamps are non-decreasing — which is
+precisely the weakness this rebuild removes.
+
+Gone with it is a whole class of fault the 10.0 builder had to guard rather
+than prevent. `time_days` was float32 and ran to ~16,000 days, where it resolves
+about 0.001 d, so a timestamp a moment before a pentad boundary could round
+**up** across it; the builder therefore had to compute `bin` from the float32
+value it was about to *store* rather than from the float64 the parser had, or
+a row would sit in bin *b* carrying a timestamp that read as bin *b+1* and the
+search — which requires `dt_days = 5(b+1) − t ≥ 0` — would silently never
+return it for its own anchor. Under 10.1 there is no float in the derivation at
+all, so there is nothing to guard.
 
 ## 5 · Opening it (numpy only, no dependency on this repository)
 
 ```python
 import json, numpy as np
 
-d = "tensors/family10/gdp"                 # a local copy of the directory
+d = "tensors/family10_1/gdp"               # a local copy of the directory
 meta = json.load(open(f"{d}/store.json"))
+assert meta["schema_version"] == 2         # 10.1: the time column is time_s
 bin_        = np.load(f"{d}/bin.npy",         mmap_mode="r")   # int16  [N]
-time_days   = np.load(f"{d}/time_days.npy",   mmap_mode="r")   # f32    [N]
+time_s      = np.load(f"{d}/time_s.npy",      mmap_mode="r")   # i32    [N]
 lat         = np.load(f"{d}/lat.npy",         mmap_mode="r")
 lon         = np.load(f"{d}/lon.npy",         mmap_mode="r")
 values      = np.load(f"{d}/values.npy",      mmap_mode="r")   # f16    [N, C]
@@ -282,15 +410,39 @@ bin_first   = meta["bin_first"]
 channels    = [c["name"] for c in meta["channels"]]
 
 # every observation in the pentad that contains 2015-01-03
-b  = (np.datetime64("2015-01-03") - np.datetime64("1982-01-01")).astype(int) // 5
+t0 = (np.datetime64("2015-01-03T00:00:00")
+      - np.datetime64("1982-01-01T00:00:00")).astype("int64")   # seconds
+b  = t0 // 432_000                                              # 432000 s = 5 d
 lo, hi = off[b - bin_first], off[b - bin_first + 1]
 print(hi - lo, "observations in bin", b)
+
+# the time of those rows, as calendar timestamps
+when = (np.datetime64("1982-01-01T00:00:00")
+        + np.asarray(time_s[lo:hi]).astype("timedelta64[s]"))
+print(when[0], "→", when[-1])
 ```
+
+Two notes on the arithmetic. `floor_divide` on a negative `time_s` floors
+toward minus infinity, which is what a pre-1982 bin needs — Python's `//` and
+numpy's `floor_divide` both do this, C's integer division does **not**, so a
+port to C or Rust must floor explicitly. And days, where a reader wants them,
+are `time_s / 86400.0` — one correctly-rounded division from which
+`round(days * 86400)` recovers the second exactly, so it is a change of unit
+and not a loss.
 
 **Verify before you use it.** `ml/family10_store.verify_store(dir)` re-hashes
 every file against `store.json`'s own record and raises on any mismatch. A
 truncated `values.npy` still memmaps and still answers a search, with whatever
 its tail happens to hold.
+
+**If you already downloaded a 10.0 store**, it still opens: it carries
+`time_days.npy` (float32 days) instead of `time_s.npy`, and `store.json` says
+`schema_version: 1`. Multiply by 86,400 to put the two in one unit if you must
+— but the precision is **not recovered**, and doing so produces an integer
+column that looks exact and is wrong by up to 84 seconds, which is the single
+outcome this rebuild exists to prevent. Re-fetch from `tensors/family10_1/`
+instead. `ml/family10_store.py` reads both schemas and answers `st.time_s(...)`
+on either, converting a schema-1 store's days on the fly.
 
 ### 5.1 · The reader, and the search
 
@@ -300,8 +452,8 @@ so the layout is defined once.
 ```python
 from family10_store import Store
 
-st  = Store.open("tensors/family10/gdp")                       # a directory
-st  = Store.open("chfrank/earth-tensors:tensors/family10/gdp") # or the Hub
+st  = Store.open("tensors/family10_1/gdp")                       # a directory
+st  = Store.open("chfrank/earth-tensors:tensors/family10_1/gdp") # or the Hub
 tok = st.knearest(36.0, -70.0, bin=2411, k=8,
                   R_max_km=300.0, T_max_days=10.0)
 ```
@@ -322,7 +474,12 @@ batch is never ragged:
 | `platform`, `qc` | (k,) | provenance and the source's grade |
 | `n_R` | scalar | how many observations lay inside `(R_max_km, T_max_days)` — the **local density** feature |
 | `valid` | (k,) bool | False marks a **miss token** (NaN values, `row = −1`) |
-| `n_found`, `row`, `lat`, `lon`, `time_days`, `channels` | | |
+| `n_found`, `row`, `lat`, `lon`, `time_s`, `time_days`, `channels` | | |
+
+`dt_days` is float64 **days** under both schemas — that did not change. The
+provenance fields carry the time twice: `time_s` as float64 seconds and
+`time_days` as float64 days, float64 rather than int32 so that a miss slot can
+be NaN like every other field in the dict.
 
 Three rules, all structural rather than applied afterwards:
 
@@ -349,7 +506,11 @@ token the reader will not return must not inflate the density feature.
 Until 2026-09-14 this section held four guesses derived from each observing
 system's sampling geometry. Three of them have now been measured on the
 published stores, and all three were **too loose by a factor of three to ten**
-at anchors where the store has data. `slatrack` is the one still unmeasured —
+at anchors where the store has data. **The measurement was made on the 10.0
+stores and carries over to 10.1 unchanged**: it is a statement about how far
+apart observations are, the rows are the same rows in the same order, and a
+k-th-neighbour distance in kilometres does not depend on the unit the time
+column is written in. `slatrack` is the one still unmeasured —
 not because it is unbuilt, but because the measurement wants a machine that can
 memory-map 67 GB. The measured numbers:
 
@@ -419,6 +580,15 @@ same rows, the same offsets, the same values — on every anchor it tries. The
 registry lists it as a tier-P group named `argo` with the channel names the
 reader produces, so the two cannot drift.
 
+**Argo is still schema 1, deliberately.** It carries `time_days.npy`, float32
+days, and joins family 10.1 with no rebuild at all. That is sound because Argo
+profiles roughly every ten days: at a resolution of 84 seconds the column can
+still order every measurement the archive publishes, which is the whole thing
+10.1 was built to fix and the one property Argo never lacked. The reader
+converts its days to seconds on the way past, so `st.time_s(...)` answers on it
+like on any other store, and the registry states `schema_version: 1` for that
+group so a consumer can see the difference rather than assume it away.
+
 ## 8 · How to use it in training
 
 ### 8.1 · The unit of data
@@ -452,72 +622,151 @@ stores carry the **whole** record, pre-1982 included; the loader restricts. That
 is why negative bins are kept rather than dropped at build time — dropping
 cannot be undone.
 
-## 9 · What is verified (2026-09-14) and what is pending
+## 9 · What is published and verified (2026-09-15), and what is pending
 
-**All four stores are built, published and independently verified.** The three
-keyless ones were built on 2026-09-14 from builder commit `c5bc2ce` on
-GitHub-hosted runners; `slatrack` followed that night from commit `6d67855`,
-fetched on six hosted lanes and assembled on a keyless box (§11). Each was
-checked the same day by a session that did not build it: every file fetched
-from the Hub and re-hashed against `store.json`'s own record, then every
-structural property and every statistic **recomputed from the arrays** rather
-than read out of the metadata claiming it.
+**Three of the four 10.1 stores are on the Hub and verified; `slatrack` is
+being assembled.** The three keyless ones were rebuilt from source on
+2026-09-15 from builder commit `d7fc30b` on GitHub-hosted runners — `socat`
+landing 10:58Z, `gtmba` 11:10Z, `gdp` 11:56Z — and each was checked before it
+was published and again after: `check_store` over every row (§4.5), then every
+file downloaded back from the Hub and re-hashed against `store.json`'s own
+record, then `N` and the **per-year counts recomputed from the new `time_s`
+column**.
 
-| store | N | live bins / total | overall measured fraction | sha256 | `verify_store` | per-channel statistics |
-|---|---|---|---|---|---|---|
-| `gdp` | 48,480,798 | **3,353 / 3,353 (100 %)** | 0.963865 | **9 / 9 match** | returns 9, no raise | 4 of 4 reproduced exactly |
-| `gtmba` | 1,001,282 | 3,386 / 3,446 (98.3 %) | 0.568374 | **9 / 9 match** | returns 9, no raise | 18 of 18 reproduced exactly |
-| `socat` | 41,830,675 | 3,266 / 4,910 (66.5 %) | 0.923146 | **9 / 9 match** | returns 9, no raise | 4 of 4 reproduced exactly |
-| `slatrack` | **2,030,800,150** | **2,339 / 2,339 (100 %)** | 0.999052 | **9 / 9 match** | not run — 67 GB does not fit the checking sandbox; **streamed instead** and every property it asserts recomputed row by row | 3 of 3 reproduced exactly, means to 17 digits |
+| store | N | live bins / total | measured fraction | per-year from `time_s` | vs 10.0 |
+|---|---|---|---|---|---|
+| `gdp` | 48,480,798 | **3,353 / 3,353 (100 %)** | 0.963865 | 46 of 46 years exact | N and per-year identical |
+| `gtmba` | 1,001,282 | 3,386 / 3,446 (98.3 %) | 0.568374 | 48 of 48 years exact | N and per-year identical |
+| `socat` | 41,830,675 | 3,266 / 4,910 (66.5 %) | 0.923146 | 68 of 68 years exact | N and per-year identical |
+| `slatrack` | *pending (publishing 2026-09-15)* | *pending* | *pending* | *pending* | expected N + 26 (§9.1) |
 
-"Reproduced exactly" means the measured count matched to the row and the
-fraction, minimum, maximum and mean to float precision. Also recomputed and
-passing in all three: N and the bin range, the live-bin count, ascending sort by
-`(bin, time_days)`, the CSR offsets reproduced by `searchsorted`,
-`bin == floor(time_days / 5)` on every row, longitude in [−180, 180), constant
-footprint columns, quality codes within `qc_keep_max`, and per-year counts
-summing to N.
+**That last column is E-079's falsifier and it is not met.** Only the time
+column's precision changed, so no row may be added, dropped or moved between
+years by the rebuild — and none was. Each store's `bin_first`, `bin_last`, `C`,
+channel names and order, footprint constants, `qc_keep_max` and overall
+measured fraction are the same values 10.0 published.
 
-**`slatrack` was checked by STREAMING, and the checks are therefore
-exhaustive.** 67.02 GB against 14 GB of free disk means `Store.open` and
-`verify_store()` are not available, so all nine arrays were read over HTTPS in
-row-aligned lockstep — one thread per file, each hashing its own bytes, one
-consumer recomputing every check on the chunk in flight — in one pass, 837 s at
-80 MB/s. Because it is a pass over every row rather than a sample, "sorted by
-`(bin, time_days)`" means 2,030,800,149 adjacent comparisons and "lon ∈
-[−180, 180)" means 2.03 billion of them. All nine sha256 match; 0 descents in
-`bin`; 0 descents in `time_days` inside a bin; `bin_offsets` reproduced exactly;
-`bin == floor(time_days/5)` on every row; `fp` one pair, (−2, −4); `qc` = 1
-everywhere; every `platform` one of the 29 mission-id hashes; and **the
-per-year counts equal the six fetch lanes' own `done.json` row counts to the
-row, 32 of 32 years** — which is E-079's stated falsifier, not met. The files:
+**Two things did change beside the time column, and both are corrections.**
+`socat`'s 908 misfiled rows moved to the pentad they were measured in (§2.3),
+which is why its CSR offsets and row-ordered arrays differ from 10.0's while
+`N` does not. And `socat`'s ledger now closes: `drop_out_of_range` reads
+**2,160,009** where 10.0 read 2,160,005, so
+`rows_read − drop_out_of_range − drop_no_fco2 = N` exactly (44,018,204 −
+2,160,009 − 27,520 = 41,830,675), where the 10.0 ledger was four short. `gdp`'s
+ledger is unchanged — `drogue_uncertain` 1,416,828, exactly the `drogue`
+channel's NaN count, beside `drop_no_values` 568 — except that one counter is
+spelled `empty_month` where 10.0 spelled it `missing_month`.
 
-- [the `gdp` store on the Hub](https://huggingface.co/datasets/chfrank/earth-tensors/tree/main/tensors/family10/gdp) — surface drifters, 6-hourly, 1.6 GB.
-- [the `gtmba` store on the Hub](https://huggingface.co/datasets/chfrank/earth-tensors/tree/main/tensors/family10/gtmba) — the tropical moored arrays, daily, 63 MB.
-- [the `socat` store on the Hub](https://huggingface.co/datasets/chfrank/earth-tensors/tree/main/tensors/family10/socat) — ship and mooring surface CO₂, 1.37 GB.
-- [the `slatrack` store on the Hub](https://huggingface.co/datasets/chfrank/earth-tensors/tree/main/tensors/family10/slatrack) — along-track sea level, 29 altimeter missions, **67.02 GB**.
-- [the family-10 registry on the Hub](https://huggingface.co/datasets/chfrank/earth-tensors/blob/main/tensors/family10/family10.json) — **nine groups, `groups_missing: []`**, regenerated 2026-09-14T22:04:04Z by the `slatrack` build's last step; tier G is recipe `f7l2` with four groups and no fallback note, and every tier-P entry's N, `bin_first`, file count and sha256 agrees with the `store.json` verified above.
+### 9.1 · The sha256 of every published file
 
-The evidence, number by number, is in
+Take these as the record of what is on the Hub as this was written. A reader
+that re-hashes a download and gets a different digest has a corrupted copy, not
+a newer store — the stores are not rewritten in place.
+
+**`gdp` — surface drifters, 1.70 GB in ten files.**
+
+| file | bytes | sha256 |
+|---|---|---|
+| `bin.npy` | 96,961,724 | `889d05d91d6877fcb7ed06511347568de47048098dfca7f1bffc7988706b009c` |
+| `time_s.npy` | 193,923,320 | `0ea90b287e94963bc23e40e601b70dbcf2d88b7274150aeea5afc675247e100b` |
+| `lat.npy` | 193,923,320 | `da1598d9c89034d3598899ab7954465929473d584af8ea274465ac87aef88ef3` |
+| `lon.npy` | 193,923,320 | `66ea4b18e5bb0b01d6c30e856025d38e818e4ed5bf0a1e77f4914cbf1d5d3aa9` |
+| `values.npy` | 387,846,512 | `0f230f2e5712c3a0723417d94c1d5943befc0d04552e330d0ea90fdc9f042838` |
+| `platform.npy` | 387,846,512 | `ff7690825f4f32b8e359e9bf5dfae4a2c4f285addeccd42c692f7cb4f6cac462` |
+| `qc.npy` | 48,480,926 | `3169df79e7880c6088369d0153c7fb04b93e95e19d4e6017fb376c9471f36cac` |
+| `fp.npy` | 193,923,320 | `318f11b3ed354cbc68bc7a396010beb2af76b9b95302b2338aad5ecbf86054e8` |
+| `bin_offsets.npy` | 26,960 | `f84f5e53f6631055c797003ce329960479fc5f48df9f72f06aef534e2574f6a2` |
+| `store.json` | 7,501 | *the file carrying the nine digests above* |
+
+**`gtmba` — the tropical moored arrays, 63.1 MB in ten files.**
+
+| file | bytes | sha256 |
+|---|---|---|
+| `bin.npy` | 2,002,692 | `92f922d87f371d0bfa3eecd0f8f2d89a4b1f43c6f5db01b2a42814cb09437e88` |
+| `time_s.npy` | 4,005,256 | `e57e5369d5d5c7bc77779b31214abf4c41efd9ecd5f332cb02ea9f3cd5271137` |
+| `lat.npy` | 4,005,256 | `b7c17c6609455c1d57ca498d42acab392da9ad2356e4a48140bf4f670a975188` |
+| `lon.npy` | 4,005,256 | `2e748c084f963f63daf71cabcdc37613eff82232940d470a742f40959f987e54` |
+| `values.npy` | 36,046,280 | `96b89786090b0cfd3448fcf10ea89e91522d1999d7f64b0dfb5e66ad25a56488` |
+| `platform.npy` | 8,010,384 | `c75ea083a1424df177223f446e9ecb2a29e936668ba32b9a384089e2586af630` |
+| `qc.npy` | 1,001,410 | `49e7051022fb84b32c0a15335a1048db0e3811c8ac3f5f561619793313ee2ed1` |
+| `fp.npy` | 4,005,256 | `4c8014d9562a3b7cf64dc61951ab446e37aa39eab94d06c67f295c85dc74c656` |
+| `bin_offsets.npy` | 27,704 | `c7bd546dec03b75aab45f7248aa6eb7184f0e88c3a823ba6b629c8bc4b2c68ac` |
+| `store.json` | 11,969 | *the file carrying the nine digests above* |
+
+**`socat` — ship and mooring surface CO₂, 1.46 GB in ten files.**
+
+| file | bytes | sha256 |
+|---|---|---|
+| `bin.npy` | 83,661,478 | `f50b9ccfee28bc96a92cf4d52d81cb5206d4f448f8f67c651a681876685b7574` |
+| `time_s.npy` | 167,322,828 | `8de56c67e5185722141a70a1e2180cfbb6cb9634d2fbeb2c90b764bbc3a7396d` |
+| `lat.npy` | 167,322,828 | `c79cb63ecf7fb4cfb6f833f61530e95780d4ee271917f285a7468c2d8e6d4a05` |
+| `lon.npy` | 167,322,828 | `fef6f87b37faffed580a9cc9070d733738ebe2007db0408d6abb61d948ad21b1` |
+| `values.npy` | 334,645,528 | `6f72d4d99aa930e7d465eef49e5f402de13c1f7796db7303b43c1fce740308ea` |
+| `platform.npy` | 334,645,528 | `f7c06897acc4624660503a31450c520f346895e201a15706c0b2f1175d80682f` |
+| `qc.npy` | 41,830,803 | `bed0417211c2fca1094e5a492f7433b0be38f5178341ef707264ae5272d5947f` |
+| `fp.npy` | 167,322,828 | `d583a63e591f6acb7ffbce61494c6dfada7fbbc39e70e9a58ff18a892df3ec5a` |
+| `bin_offsets.npy` | 39,416 | `988f7e7fbc37941dd15feb86aa3831d6ca7ed368f6c328fc1b56011fcb6a73d2` |
+| `store.json` | 8,531 | *the file carrying the nine digests above* |
+
+**`slatrack` — along-track sea level: pending (publishing 2026-09-15).**
+
+| file | bytes | sha256 |
+|---|---|---|
+| all nine arrays plus `store.json` | *pending (publishing 2026-09-15)* | *pending (publishing 2026-09-15)* |
+
+**Until that table is filled in, take `slatrack`'s sha256 values and its `N`
+from the published `store.json`, not from this page.** That file is written
+last and carries the digest of every array beside it; `verify_store` (§5) is
+the one-line way to check a download against it. Nothing else about the store
+is uncertain: **its layout is identical to the other three** — the same nine
+arrays, the same dtypes, the same CSR index, `C = 3` with channels `sla`,
+`sla_unfiltered` and `mdt`, footprint (−2.0, −4), `qc = 1` on every row,
+`bin_first` 803.
+
+**Its expected `N` is 2,030,800,176**, which is 10.0's 2,030,800,150 plus
+**26 rows** — and those 26 are a correction, not new data. Each sits at exactly
+`YYYY-01-01T00:00:00`: the archive publishes a timestamp a fraction of a second
+under midnight, 10.0's window test did its comparison in float64 days and put
+the row outside the year it was fetching, and 10.1 rounds the timestamp to a
+whole second, which places it inside. **No row was lost either way** — the 26
+are rows 10.0's per-year lanes declined and 10.1's accept. The figure is not a
+guess: it is the sum of the 32 fetch lanes' own `done.json` row counts on the
+Hub, 32 of 32 years present, checked while writing this.
+
+### 9.2 · What the 2026-09-14 verification established, and why it carries over
+
+The rows in these stores are the rows that were independently verified on
+2026-09-14 under 10.0 by sessions that did not build them. That verification
+re-hashed every file, then recomputed from the arrays — not from the metadata
+claiming them — `N` and the bin range, the live-bin count, the ascending sort,
+the CSR offsets reproduced by `searchsorted`, the bin/time agreement, longitude
+in [−180, 180), constant footprint columns, quality codes within `qc_keep_max`,
+per-year counts summing to `N`, and every per-channel measured fraction,
+minimum, maximum and mean: 4 of 4 channels reproduced exactly for `gdp`, 18 of
+18 for `gtmba`, 4 of 4 for `socat`, 3 of 3 for `slatrack`.
+
+`slatrack` could not be opened at all in that sandbox — 67.02 GB against 14 GB
+of free disk — so it was checked by **streaming**: all nine arrays read over
+HTTPS in row-aligned lockstep, one thread per file hashing its own bytes, one
+consumer recomputing every check on the chunk in flight, in one pass, 837 s at
+80 MB/s. Being a pass over every row rather than a sample, "sorted" meant
+2,030,800,149 adjacent comparisons and "lon ∈ [−180, 180)" meant 2.03 billion
+of them. It also found the fault this rebuild answers: up to 316 consecutive
+rows sharing one `time_days` value.
+
+It carries over because 10.1 changes one column and nothing those checks were
+about. What it does **not** cover is 10.1's own arrays — those were checked by
+`check_store` and by the re-hash on publish, and the numbers in §9.1 are the
+files on the Hub today. The full 10.0 evidence, number by number, is
 `docs/FAMILY10_VERIFICATION_2026-09-14.md`.
 
-**Two stores were rebuilt after that verification, and the verification still
-holds for both.** `socat`'s first build wrote a wrong ledger — the counters in
-`counts` were 59× too large (§10) — so it was rebuilt the same day at
-**08:46Z** from builder commit `0d5860d` with the fix; `gdp`'s first build
-counted 568 drogue-uncertain rows it then dropped (§10), so it was rebuilt from
-the same commit, landing **09:47Z**. In both cases only the ledger changed:
-**all nine array sha256 values in each new `store.json` are byte-identical to
-the ones verified that morning** (`gdp`'s compared digest by digest against
-the verified `store.json` fetched before the publish), so every number in the
-table above is a number about the files on the Hub today. `socat`'s
-`rows_read` now reads 44,018,204 with `drop_out_of_range` 2,160,005 and
-`drop_no_fco2` 27,520; `gdp`'s `drogue_uncertain` reads 1,416,828 — exactly
-the `drogue` channel's NaN count — beside a new `drop_no_values` 568, and
-`rows_read − drop_pos_err − drop_no_values − N` = 0.
+The published directories:
 
-- [the `socat` rebuild](https://github.com/blauewelt/earth/actions/runs/34822844466) — re-streamed the SOCAT v2026 synthesis file with the corrected counter and republished the store, ~17 min, arrays unchanged.
-- [the `gdp` rebuild](https://github.com/blauewelt/earth/actions/runs/34822846450) — re-fetched the 46 years of drifter data from AOML with the corrected counter and republished the store, 69 min, arrays unchanged; its last step rewrote the registry.
+- [the `gdp` store on the Hub](https://huggingface.co/datasets/chfrank/earth-tensors/tree/main/tensors/family10_1/gdp) — surface drifters, 6-hourly, 1.70 GB.
+- [the `gtmba` store on the Hub](https://huggingface.co/datasets/chfrank/earth-tensors/tree/main/tensors/family10_1/gtmba) — the tropical moored arrays, daily, 63.1 MB.
+- [the `socat` store on the Hub](https://huggingface.co/datasets/chfrank/earth-tensors/tree/main/tensors/family10_1/socat) — ship and mooring surface CO₂, 1.46 GB.
+- [the `slatrack` store on the Hub](https://huggingface.co/datasets/chfrank/earth-tensors/tree/main/tensors/family10_1/slatrack) — along-track sea level, 29 altimeter missions; **not published yet**, expected 2026-09-15 around 17:15 UTC at roughly 67 GB.
+- [the family-10 registry on the Hub](https://huggingface.co/datasets/chfrank/earth-tensors/blob/main/tensors/family10_1/family10.json) — `family_version` "10.1", `schema_version` 2, **eight groups with `groups_missing: ["slatrack"]`**, regenerated 2026-09-15T11:57:23Z; tier G is recipe `f7l2` with four groups and no fallback note, and every tier-P entry's N, `bin_first`, file count and sha256 agrees with the `store.json` above.
 
 **Historical context: the access paths, verified against the live archive on
 2026-09-13** — from a sandbox that can reach these hosts, by listing and
@@ -542,23 +791,23 @@ written; the builds above are what they produced.
 `t_1m` and `sst` agreeing to the last digit is the free cross-check of §3.2:
 they come from two different PMEL datasets joined on `(station, day)`.
 
-**WHAT `slatrack` MEASURED, now that it exists.** Everything this page says
-about its N, its live bins, its per-year counts, its size and its sha256 block
-was the contract until 2026-09-14T21:42:24Z; it is a measurement now.
-**2,030,800,150 rows**, C = 3, bins 803..3141 with all 2,339 live,
+**WHAT `slatrack` MEASURED under 10.0, and what still holds.** These are
+measurements on the 10.0 store, taken 2026-09-14T21:42:24Z: **2,030,800,150
+rows** (10.1 expects 26 more, §9.1), C = 3, bins 803..3141 with all 2,339 live,
 1993-01-01 → 2024-12-31, 67.02 GB, 28 of its 29 missions carrying rows, and
 0.999052 of its value slots measured. Three findings a consumer should carry,
 none of them a build error:
 
-- **`time_days` is float32 and the sampling is 1 Hz, so the column is 84×
-  coarser than the data.** Its resolution is 21 s in 1993 and **84.4 s from
-  2015 on** (2⁻¹⁰ d), while the altimeter samples once a second: 28 to 316
-  consecutive rows carry the identical timestamp, which at 6.5 km between
-  samples is up to **550 km of one satellite's track**. `knearest`'s `dt_days`
-  cannot order inside that window. `bin` is exact
-  (`bin == floor(time_days/5)` on every row), so **derive calendar dates from
-  `bin`** — the same rule `socat` already earned in §10, one order of magnitude
-  more consequential here.
+- **The first one is what 10.1 fixes, and it is gone.** Under 10.0 the time
+  column was float32 days against 1 Hz sampling, so it was 84× coarser than the
+  data: 21 s of resolution in 1993 and 84.4 s from 2015 on, with 28 to 316
+  consecutive rows carrying the identical timestamp — at 6.5 km between samples,
+  up to 550 km of one satellite's track with one time on it, inside which
+  `knearest`'s `dt_days` could not order anything. Under 10.1 the column is
+  integer seconds, so each along-track sample carries its own timestamp
+  wherever the archive published distinct seconds, and `dt_days` orders them.
+  **Calendar dates may now be derived from `time_s` directly** — the "derive
+  dates from `bin`, not from the timestamp" rule that 10.0 needed is retired.
 - **January to March 1994 is one satellite.** ERS-1's 35-day repeat stops
   mid-December 1993 and its geodetic phase begins 1994-04-10; DUACS publishes
   no level-3 product for the 3-day ice-phase orbit in between, so those three
@@ -570,11 +819,12 @@ none of them a build error:
   recovering past 900 k a month after 2007-02. Treat GFO-era coverage as
   uneven.
 
-And two provenance strings in `slatrack`'s `store.json` are stale — `verified`
-still says the download path cannot be run from a sandbox, and `sources` names
-the `copernicusmarine subset` call rather than the
+And two provenance strings in `slatrack`'s 10.0 `store.json` were stale —
+`verified` still said the download path cannot be run from a sandbox, and
+`sources` named the `copernicusmarine subset` call rather than the
 `copernicusmarine.get`-on-original-files route that actually ran. Both are
-class constants; neither affects a byte of any array.
+class constants; neither affects a byte of any array. Check the 10.1
+`store.json` when it publishes rather than assuming either way.
 
 **Historical, and left standing because it is why the build looks the way it
 does: as of 2026-09-13 the two Copernicus repository secrets were believed not
@@ -587,32 +837,34 @@ from the **environment only** — never a file, never a command line.
 
 **Smaller notes, all still current:**
 
-- **`gdp`'s ledger is closed since the 09:47Z rebuild.** The store published
-  at 08:05Z carried `counts.drogue_uncertain` 568 higher than the NaN count in
-  the `drogue` channel (§10 explains why and why the arrays are fine); the
-  store on the Hub now reads 1,416,828 and records the 568 as
-  `drop_no_values`. A copy fetched before 09:47Z has the old ledger and the
-  same arrays.
+- **Both ledgers are closed in 10.1.** `gdp` reads `drogue_uncertain`
+  1,416,828 — exactly the `drogue` channel's NaN count — beside
+  `drop_no_values` 568, and `rows_read − drop_pos_err − drop_no_values − N` is
+  zero. `socat` reads `rows_read` 44,018,204, `drop_out_of_range` 2,160,009 and
+  `drop_no_fco2` 27,520, which subtract to `N` exactly. Both were faults in the
+  first 10.0 builds that the rebuilds and then 10.1 closed; §10 keeps the
+  mechanics, because a consumer holding an older copy still needs them.
 - **The `socat` resume granularity is the whole stream, not the year.** The
   synthesis file is sorted by expocode, not by time, so there is no per-year
   request to make and an interrupted fetch re-reads the file from the start.
   Each store's `store.json` states its own `resume_granularity`; the other three
   say `"year"`.
-- **The registry's tier-G half is `f7l2`, four groups, no fallback note —
-  since 22:04Z on 2026-09-14.** Family 7.1 is the global 0.25° gridded tensor
-  with ocean colour added as a fourth channel group, `oc025`. Its manifest was
-  still a 404 when the morning's registry was written, so that copy described
-  `f7l0` — the same tensor without ocean colour, three groups — and **said so in
-  `tier_g.fallback_note`** rather than silently describing a different tensor.
-  The corrected build (recipe `f7l2`, E-077) published at 19:58Z, and the
-  `slatrack` build's last step regenerated the registry from it: `stem`
-  `family7_global025_pentad_l2`, `recipe` `f7l2`, `fallback_note` **null**, and
-  the four tier-G file sha256 values match that manifest digest by digest. The
-  fallback mechanism was exercised and then retired by the tensor arriving,
-  which is the outcome it was written for.
+- **The registry's tier-G half is `f7l2`, four groups, no fallback note, and
+  10.1 did not touch it.** Family 7.2 is the global 0.25° gridded tensor with
+  ocean colour added as a fourth channel group, `oc025`, built
+  2026-09-14T19:58:44Z (recipe `f7l2`, E-077). The registry names it by
+  reference — `stem` `family7_global025_pentad_l2`, `recipe` `f7l2`,
+  `fallback_note` **null** — and the four tier-G file sha256 values match that
+  manifest digest by digest. Family 10.1 changes the tier-P time column and
+  nothing on the gridded side, so a consumer already ingesting tier G has
+  nothing to redo; the pointer for that half is
+  `docs/FAMILY7_DATA_HANDOVER.md`. (The `fallback_note` field exists because an
+  earlier registry was written while that manifest was still a 404 and fell
+  back to `f7l0`, the same tensor without ocean colour — it **said so** in that
+  field rather than silently describing a different tensor.)
 - **`slatrack`'s suggested search radii in §6 are still a guess**, and it is
   now the ONLY store of the four for which that is true — the other three were
-  measured on the published stores the same day. The measurement is not cheap
+  measured on the published stores. The measurement is not cheap
   here: `measure_knn.py` memory-maps a store, and this one is 67 GB, so it wants
   a box with the disk rather than a sandbox. Measure the k-th-neighbour distance
   before fixing them, with `ml/tools/family10_verify/measure_knn.py`. Expect the
@@ -620,9 +872,10 @@ from the **environment only** — never a file, never a command line.
   k = 8 at any anchor the satellite flew over is ~50 km of one pass — the same
   "the k tokens are one platform" property §6 already measured for the other
   three, in its most extreme form.
-- **`time_days` cannot order `slatrack` rows inside 84 seconds** (§10, and §9
-  above). Every consumer of the k-nearest search on this store should know that
-  its `dt_days` ties are not ties in the world.
+- **A 10.0 copy of `slatrack` cannot order its rows inside 84 seconds** (§10,
+  and §9 above). Anyone still holding one should know that its `dt_days` ties
+  are not ties in the world. This is the whole reason 10.1 exists, and it is
+  the one thing re-fetching actually buys.
 
 ## 10 · Known limits and gotchas
 
@@ -646,39 +899,36 @@ from the **environment only** — never a file, never a command line.
 - **The GDP product is interpolated**, not raw fixes: positions and velocities
   are kriged onto 00/06/12/18 UTC. The footprint says "a point, a quarter-day
   sample"; it does not say "an instantaneous measurement".
-- **`slatrack` is 67.02 GB** (measured; the estimate was 50–80 GB) and is the
-  only store that needs credentials AND a
-  large machine — and, as of 2026-09-14, the only one whose build runs on two
-  machines, because no single machine may have both. `ml/CLAUDE.md` §6 forbids
+- **`slatrack` is 67.02 GB** (measured on 10.0; 10.1 adds 26 rows and the
+  column widths are identical, so expect the same figure) and is the only store
+  that needs credentials AND a large machine — the only one whose build runs on
+  two machines, because no single machine may have both. `ml/CLAUDE.md` §6 forbids
   the Copernicus credentials on a rented box, so the fetch may only happen on a
   GitHub-hosted runner; a hosted runner has ~14 GB of disk and a six-hour job
   cap, so the assembly may not happen there. The two halves are joined by the
   Hub (see §11). The other three stores are keyless and fit a hosted runner
   whole. It is also 22× the other three put together, so anything that opens
   "all the tier-P stores" should size for this one alone.
-- **`time_days` is float32, so derive calendar dates from `bin`, not from it.**
-  At the end of the record (t ≈ 15,700 days) float32 spacing is 0.00098 d =
-  **84 seconds**. Measured on the published `socat` store, three rows late on
-  2024-12-31 round up across midnight and read as 2025-01-01 — 3 rows in
-  41.8 M. The five-day `bin` is computed from the stored float32 and is
-  unaffected, which is exactly what §4.5's last paragraph was written to
-  guarantee, so `store.json`'s per-year counts (taken from the source dates) are
-  the correct ones and a year recomputed from `time_days` is the imprecise side.
-- **In `slatrack` that float32 column is COARSER THAN THE SAMPLING, by 84×, and
-  this is the store's single most important gotcha.** The altimeter samples once
-  a second; the column resolves 21 s in 1993 and 84.4 s from 2015 on. Measured
-  on the published store: 28 rows per distinct timestamp in the first bin, 184
-  in bin 2411 (2015-01-03), **316 in the last** — i.e. up to 316 rows, and 21 to
-  84 consecutive samples of any ONE mission, carrying the identical
-  `time_days`. At 6.5 km between samples that is **550 km of track with one
-  time on it**. Consequences: `knearest`'s `dt_days` cannot order inside that
-  window and the tie-break falls entirely to distance; the store is nonetheless
-  correctly sorted (`time_days` is non-decreasing inside every one of the 2,339
-  bins, verified row by row); and `bin == floor(time_days / 5)` holds on all
-  2.03 billion rows, so `bin` remains exact. Nothing is hidden — `store.json`'s
-  `schema` declares float32 and the family-10 contract fixes the dtype — but
-  this is the first store whose time column is coarser than its own sampling
-  interval.
+- **`time_s` is int32, and int32 ends on 2050-01-19T03:14:07Z.** That is 25
+  years of headroom and the builder refuses a row past it rather than letting
+  one wrap into 1913, but it is a real edge: widening the column to int64 —
+  which doubles it — is the change to make when the archives get there. The
+  other end, 1913-12-13T20:45:52Z, is comfortably before SOCAT's 1957.
+- **A `bin` derivation must FLOOR toward minus infinity.** `bin =
+  floor_divide(time_s, 432000)`, and `time_s` is negative before 1982. Python's
+  `//` and numpy's `floor_divide` floor; C, C++, Java, Go and Rust integer
+  division truncates **toward zero**, which for a pre-1982 row gives the bin
+  above the right one. A port must floor explicitly.
+- **The 10.0 time gotchas are gone, and a 10.0 copy still has them.** If you
+  are holding `tensors/family10/` rather than `tensors/family10_1/`: its
+  `time_days` is float32 with 84 s of spacing at the end of the record, so
+  three `socat` rows late on 2024-12-31 read as 2025-01-01 and, in `slatrack`,
+  up to 316 consecutive 1 Hz samples carry one timestamp — 550 km of track with
+  one time on it, inside which `dt_days` cannot order anything. On such a copy,
+  derive calendar dates from `bin` rather than from the timestamp, and treat
+  `store.json`'s per-year counts (taken from the source dates) as the correct
+  side. On a 10.1 store none of that applies: the column is exact seconds, so
+  dates come from `time_s` and the per-year counts recompute from it exactly.
 - **`slatrack`'s per-mission coverage is uneven, and two of the holes are
   real.** January to March 1994 carries TOPEX/Poseidon **alone** (ERS-1's 35-day
   repeat stops mid-December 1993, its geodetic phase starts 1994-04-10, and
@@ -690,30 +940,24 @@ from the **environment only** — never a file, never a command line.
   a build gap — no year was marked in which a listing came back empty or a
   download came back short — but both are thin patches a model should not be
   told are ocean without observations.
-- **`gdp`'s `counts.drogue_uncertain` runs 568 ahead of the NaNs in the
-  `drogue` channel**, in the store published 2026-09-14. The cause is known and
-  the arrays are not affected: those 568 source rows had nothing measured on
-  them at all — no velocity, no temperature, an uncertain drogue — so they were
-  counted and then dropped, and the same 568 is why
-  `rows_read − drop_pos_err − N` does not close. Every array-side identity does
-  close (drogue is exactly three-state, 1 + 0 = the `measured` count, and the
-  claimed mean reproduces). The builder now counts only rows it keeps and
-  records that drop as `drop_no_values`; **the rebuild landed 2026-09-14
-  09:47Z and closed both halves** — `drogue_uncertain` 1,416,828,
-  `drop_no_values` 568, arrays byte-identical (§9). A copy fetched before
-  09:47Z carries the old ledger; its arrays are the same bytes.
-- **`socat`'s counters were inflated 59× in the first build, and are correct in
-  the store on the Hub now.** One pass over the file, its counters copied into
-  every year part and then summed across the 59 years that held rows. The
-  published ledger reads `rows_read` 44,018,204 → 41,830,675 kept (95.0 %)
-  since the **08:46Z rebuild** from builder commit `0d5860d`, whose nine arrays
-  are byte-identical to the verified build (§9). If you hold a copy fetched
-  before that, its `counts` are the inflated ones — divide by 59, or re-fetch.
-- **`slatrack`'s `store.json` carries two stale provenance strings.** Its
-  `verified` field still ends "Neither route can be run from this sandbox … NOT
-  YET MEASURED: the remote path layout of the original files", and its `sources`
-  names the `copernicusmarine subset` call. Both were written before any
-  `slatrack` fetch had succeeded; the build that produced the store ran the
+- **A `counts` ledger you are holding may be an old one; the 10.1 ledgers
+  close.** Three faults were found and fixed in the `counts` block over
+  2026-09-14, all of them ledger-only — no array was ever affected — and the
+  10.1 stores carry the corrected form. In `gdp`, `drogue_uncertain` once ran
+  568 ahead of the NaN count in the `drogue` channel: those 568 source rows had
+  nothing measured on them at all, so they were counted and then dropped, and
+  the builder now records that drop as `drop_no_values`. In `socat`, the
+  counters were once inflated **59×** — one pass over the file, its counters
+  copied into every year part and then summed across the 59 years that held
+  rows — and separately ran four short on `drop_out_of_range`. On a 10.1 store
+  both ledgers subtract to `N` exactly (§9). If a `counts` block you hold does
+  not, you have an early 10.0 copy; re-fetch rather than reasoning from it.
+- **`slatrack`'s 10.0 `store.json` carried two stale provenance strings**, and
+  the 10.1 file should be checked rather than assumed either way. In 10.0 the
+  `verified` field still ended "Neither route can be run from this sandbox …
+  NOT YET MEASURED: the remote path layout of the original files", and
+  `sources` named the `copernicusmarine subset` call. Both were written before
+  any `slatrack` fetch had succeeded; the build that produced the store ran the
   `copernicusmarine.get`-on-original-files route end to end over 32 years. The
   product and the dataset ids are right, the call named is not, and no array is
   affected.
@@ -731,19 +975,34 @@ stages `index | fetch | publish`), read by `ml/family10_store.py`, registered by
 `ml/build_family10_registry.py`, dispatched by
 `.github/workflows/family10-build.yml` (`workflow_dispatch` only), tested by
 `tests/test_build_family10_stores.py`. Every `store.json` carries the builder's
-git commit, the build time, the source URLs and the verification sentence above.
+git commit, the build time, the source URLs and the verification sentence
+above, plus its `family_version` and `schema_version`.
 
-**`slatrack`'s build path is different, and this is what ran on 2026-09-14.**
-It is the one store built on two machines, for the reason in §9: the
-credentials may only live on a GitHub-hosted runner and the 67 GB assembly may
-only happen on a box. The seam is a Hub prefix.
+**Every 10.1 store is rebuilt from the source archive, never converted from a
+10.0 store.** That is deliberate. Multiplying float32 days by 86,400 produces
+an integer column that *looks* exact and is wrong by up to 84 seconds — the
+single outcome this change exists to prevent — and the same trap sits inside
+the build, because the `slatrack` lanes park column parts on the Hub and a
+different machine assembles them, so the two halves of one build could be a
+schema apart. `done.json` records a part's names, bytes and sha256 and nothing
+about the layout inside it, so a 10.0 part would verify perfectly and be
+unusable. Three guards: `ml/family10_parts_hub.py` refuses a `time_days` part
+on push and on pull, the assembler refuses one before either assembler reads
+it, and the fresh `partials/family10_1/` prefix and `ml/cache/family10_1` work
+directory mean a resume cannot find one in the first place.
+
+**`slatrack`'s build path is different.** It is the one store built on two
+machines, for the reason in §9: the credentials may only live on a
+GitHub-hosted runner and the 67 GB assembly may only happen on a box. The seam
+is a Hub prefix. This is what ran for 10.0 on 2026-09-14 and is running again
+for 10.1 today.
 
 1. `.github/workflows/family10-slatrack-fetch.yml` — hosted lanes
    (`runs-on: ubuntu-latest`, hard-coded), six of them over weighted year
    ranges, `schedule:` every six hours as the resume mechanism. Each lane
    fetches ONE YEAR (`--stage index,fetch --start Y-01-01 --end Y-12-31`),
    pushes that year's column parts to
-   `partials/family10/slatrack/<year>/` on the dataset repo with
+   `partials/family10_1/slatrack/<year>/` on the dataset repo with
    `ml/family10_parts_hub.py push`, deletes the local copy and moves on. The
    push writes `done.json` LAST and only after every file has been downloaded
    back with a matching sha256 (`ml/CLAUDE.md` §5.21 — a marker may only
@@ -777,19 +1036,20 @@ credentialed half onto free parallel lanes is where the difference went.
 It writes the same store as the in-RAM `assemble_store` **byte for byte**, in
 three passes over the parts: count rows per bin to get the CSR offsets; scatter
 each part's rows into `offsets[bin] + cursor[bin]` through `open_memmap`, in the
-order `read_parts` yields them; then sort each bin's slice by `time_days` with a
-stable argsort. That is the same permutation `np.lexsort((time_days, bin))`
+order `read_parts` yields them; then sort each bin's slice by `time_s` with a
+stable argsort. That is the same permutation `np.lexsort((time_s, bin))`
 produces, because lexsort is stable and its final tie-break is input order —
 which is what the scatter reproduces.
 `tests/test_build_family10_stores.py::test_the_streaming_assembler_writes_the_same_bytes`
 proves it by hashing both assemblers' output over one synthetic archive doctored
-to hold duplicate `(bin, time_days)` rows across two parts. Peak RAM is one part
+to hold duplicate `(bin, time_s)` rows across two parts. Peak RAM is one part
 plus one bin's slice; a disk preflight computes the store's size from the dtypes
 and refuses before pass 2 if free space is under 1.2× it.
 
-Specification: `ml/plans/E079_family10_point_stores.md`. The design it
-implements: `ml/plans/E078_multi_granularity.md`. The footprint token it
-carries: `ml/plans/E076_family8_nearest_observations.md` §2.6.
+Specification: `ml/plans/E079_family10_point_stores.md`, whose §10.1 is the
+integer-seconds change this page describes. The design it implements:
+`ml/plans/E078_multi_granularity.md`. The footprint token it carries:
+`ml/plans/E076_family8_nearest_observations.md` §2.6.
 
 Data citations, all CC-BY or equivalent — **cite them when you use the data**:
 
