@@ -87,6 +87,20 @@ reverses [E-071 §4](https://blauewelt.github.io/earth/docs.html?f=ml/plans/E071
 exclude the equatorial Kelvin wave — ring-vs-no-ring is the first ablation
 after the three arms.
 
+**Revision 3.1, 16 Sep** (after Chris asked whether time is sunflower-sampled):
+the sunflower's **phase rotates by the golden angle per lag**, so the stacked
+slices interleave in space-time instead of repeating the same bearings at every
+lag; and the per-channel aperture gains a **time axis** — a learned memory τ_c
+per channel, initialised from `FAMILIES.tau_days` (the reach table's own
+decorrelation time) — so WHICH LAGS a channel reads is learned rather than
+typed. Time itself stays dense inside the 30-day window by design: the codec
+owns the last six pentads at full cadence and stage 2 owns the long window, so
+a log-spaced inner time ramp is listed as an ablation, not as the design. The
+handover note for the next agent
+([E-080 handover](https://blauewelt.github.io/earth/docs.html?f=ml/plans/E080_HANDOVER.md))
+and the deck's build scripts (`ml/plans/E080_build/`) are added in the same
+commit.
+
 **Status.** DESIGN ONLY — nothing is implemented, nothing is measured, no run
 is dispatched and no box is rented. Three arms (A0 fixed geometry · A1 learned
 · A2 learned and primed from the climatological current), three seeds, five
