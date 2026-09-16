@@ -1128,6 +1128,21 @@ archive.
   checkpoint mirrors) and the runner registration, dropping a box from ~$0.27/h
   to storage only. `start` can return `resources_unavailable` and queue the
   state change — it may come up minutes later, so check before renting more.
+- **RENT A "VERIFIED" HOST FOR A BIG TRANSFER, AND READ `inet_up` BEFORE YOU
+  RENT.** Measured over one night, 2026-09-15/16, publishing family 10.1's
+  67 GB `slatrack` store. Two hosts the marketplace marks **"deverified"** were
+  lemons at boot and never ran a step — Iceland 51138377 (docker build failed)
+  and Sweden 51139098 (a CDI GPU device error). A third, advertising **332 Mbps
+  up**, pulled and sorted the whole store correctly and then uploaded to the Hub
+  at **~0.3 MB/s**: 15.6 of 67 GB after seven hours, cancelled
+  (family10-build #16, the second `slatrack` assembly attempt). A **verified**
+  Maryland host with 129 GB of RAM and 2 Gbps up did the identical job — pull,
+  streaming sort, checks, publish — in **92 minutes**
+  (#17, E-079 §10.1 `slatrack` assembly). The whole difference was the host, and
+  it cost about $7 for a store that had cost $0.55 the week before. An upload
+  that has already started slow does not recover: cancel and re-rent rather than
+  waiting. `scripts/gpu_box.mjs offers` prints `inet_up`, `inet_down` and
+  `verification` on every listing line for exactly this decision.
 - **Nothing that outlives a job may be stored on a box** (§6).
 
 ### The TPU pool

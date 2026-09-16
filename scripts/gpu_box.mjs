@@ -159,11 +159,19 @@ if (cmd === "offers") {
     const store = (o.storage_cost ?? 0) * DISK / 730;      // $/GB/month -> $/h
     return { o, store, total: (o.dph_base ?? o.dph_total) + store };
   }).sort((a, b) => a.total - b.total);
-  console.log(`(priced at DISK=${DISK}GB; idle = storage only, charged while stopped)`);
+  // `up`/`down` (Mbps) and `verification` are printed because they decide the
+  // job, not the price. 2026-09-15/16, publishing family 10.1's 67GB slatrack
+  // store: two "deverified" hosts were lemons at boot, and one advertising
+  // 332Mbps up sustained ~0.3MB/s to the Hub for seven hours (15.6 of 67GB,
+  // cancelled) while a "verified" host finished the same job in 92 minutes.
+  // A listing that hides these three numbers can only be ranked by price.
+  console.log(`(priced at DISK=${DISK}GB; idle = storage only, charged while stopped; up/down in Mbps)`);
   for (const { o, store, total } of priced.slice(0, 10))
     console.log(`${String(o.id).padEnd(10)} $${total.toFixed(3)}/h  ` +
       `(gpu $${(o.dph_base ?? o.dph_total).toFixed(3)} + idle $${store.toFixed(3)})  ` +
-      `${Math.round(o.cpu_ram / 1000)}GB ram  rel ${(o.reliability2 * 100).toFixed(1)}%  ${o.geolocation ?? ""}`);
+      `${Math.round(o.cpu_ram / 1000)}GB ram  rel ${(o.reliability2 * 100).toFixed(1)}%  ` +
+      `up ${Math.round(o.inet_up ?? 0)}  down ${Math.round(o.inet_down ?? 0)}  ` +
+      `${(o.verification ?? "?").padEnd(11)} ${o.geolocation ?? ""}`);
 } else if (cmd === "create") {
   const token = await registrationToken();
   const r = await vast("PUT", `/asks/${target}/`, {

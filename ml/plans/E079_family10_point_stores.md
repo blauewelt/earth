@@ -175,10 +175,16 @@ each: no change inside the tier's replicate band.
 <a id="10-1-integer-seconds"></a>
 ## 10.1 — integer seconds
 
+**Status: BUILT, PUBLISHED AND VERIFIED 2026-09-15/16.** All four stores are on
+the Hub under `tensors/family10_1/` and the registry is complete again at nine
+groups; the runs and the numbers are the RESULT section at the end of this
+chapter, and two clauses of the falsifier below were measured wrong and are
+annotated where they stand.
+
 Chris, 2026-09-15: family 10's tier-P stores store time as **integer seconds**,
 not float32 days. The rebuilt stores are **family 10.1**. Family 10 — the four
-stores now published under `tensors/family10/` — stays published and untouched
-until 10.1 is built, verified and handed over.
+stores published under `tensors/family10/` — stays published and untouched as
+history.
 
 ### Why
 
@@ -255,12 +261,27 @@ own `schema_version` so a consumer can see which groups have the seconds.
 
 ### The falsifier
 
+*(Stated before the builds ran, on 2026-09-15. The result is §10.1's RESULT
+below; one clause of this section turned out to be wrong and is annotated in
+place rather than rewritten.)*
+
 Only the time column's *precision* changes. No row is added, dropped or moved
 by it: the QC clauses, the bounds, the window and the bin rule are all
-untouched, and the bin of a timestamp is the same integer whether it is derived
-from exact seconds or from the float32 days that timestamp rounded to (the one
-case where they could differ — a row within 84 s of a pentad boundary — was
-already forced to agree by v1's cast-then-bin rule).
+untouched, ~~and the bin of a timestamp is the same integer whether it is
+derived from exact seconds or from the float32 days that timestamp rounded to
+(the one case where they could differ — a row within 84 s of a pentad boundary
+— was already forced to agree by v1's cast-then-bin rule)~~.
+
+> **THAT STRUCK CLAUSE IS WRONG, measured 2026-09-15.** The cast-then-bin rule
+> made v1 *self-consistent* — its `bin` always agreed with its own stored
+> `time_days` — but the value it agreed with had already moved. A timestamp
+> within 84 s below a pentad boundary rounds *up* across it in float32, and
+> then both the column and the bin carry the rounded value, so the bin of the
+> measurement is wrong in exactly the same direction. Differencing the two
+> published `socat` stores' CSR `bin_offsets`: **1,139 bins changed count and
+> 908 rows changed pentad**, `N` unchanged, `gdp` and `gtmba` at zero moved.
+> **10.1's bins are the correct ones.** `slatrack`, at 1 Hz, will have moved
+> far more; that has not been counted.
 
 **So each 10.1 store's `N` and its per-year row counts must equal v1's
 exactly.** A difference is a bug in the rebuild, not an improvement, and it
@@ -282,5 +303,67 @@ is precisely the float32 artefact — 10.1's counts recomputed from `time_s` mus
 match its `per_year` block **exactly**, in every year, for every store.
 
 And the measurement that prompted this: `slatrack`'s largest group of rows
-sharing one timestamp must fall from **316** to **1** wherever the archive
+sharing one timestamp must fall from **316** to ~~**1**~~ wherever the archive
 published distinct seconds.
+
+> **"1" WAS THE WRONG TARGET, and the measured answer is better than it.** One
+> row per timestamp is only reachable if a single satellite is flying. Nine
+> altimeters were in orbit in 2022–24, each sampling once a second, so the
+> physical floor is *one row per mission aloft*, not one row. Measured on the
+> published 10.1 `time_s` column in windows of two million consecutive rows
+> (HTTP range reads, 2026-09-16): **3** in the first two million rows, **6** in
+> two million from the middle of the store, **8** in the last two million, and
+> **9** in a window 95 % of the way through. So the honest statement is
+> **316 → the number of missions in orbit (≤ 9 in the sampled windows)**, and
+> what the change actually buys is that `dt_days` now separates two samples of
+> the *same* mission — which is the ordering a consumer needs.
+
+### RESULT — all four 10.1 stores built, published and verified, 2026-09-15/16
+
+**2,122,112,931 observations** under `tensors/family10_1/`, and the registry
+back to nine groups with `groups_missing: []`. Reader contract:
+[the family-10 data handover](https://blauewelt.github.io/earth/docs.html?f=docs/FAMILY10_DATA_HANDOVER.md).
+Checks, number by number:
+[§10 of the family-10 verification](https://blauewelt.github.io/earth/docs.html?f=docs/FAMILY10_VERIFICATION_2026-09-14.md).
+
+**The three keyless stores**, rebuilt from their own archives on GitHub-hosted
+runners at **$0**, all dispatched together at 2026-09-15 10:41Z from builder
+commit `d7fc30b`:
+
+- [family10-build #12 (E-079 §10.1 · `gdp` rebuilt on integer seconds — 46 years of 6-hourly drifter data re-fetched from the AOML ERDDAP server)](https://github.com/blauewelt/earth/actions/runs/34959255275) — 76 min, store built 11:56Z. N **48,480,798**, bins −211…3141, 3,353 of 3,353 live, measured fraction 0.963865.
+- [family10-build #13 (E-079 §10.1 · `gtmba` rebuilt — the nine PMEL daily datasets re-fetched and re-joined into mooring-days)](https://github.com/blauewelt/earth/actions/runs/34959261348) — 30 min, 11:10Z. N **1,001,282**, bins −304…3141, 3,386 of 3,446 live, 0.568374.
+- [family10-build #14 (E-079 §10.1 · `socat` rebuilt — the 1.4 GB v2026 synthesis file re-streamed and re-parsed)](https://github.com/blauewelt/earth/actions/runs/34959267464) — 19 min, 10:58Z. N **41,830,675**, bins −1768…3141, 3,266 of 4,910 live, 0.923146.
+
+For all three, `N` and every per-year count are identical to v1's, and the
+per-year counts **recomputed from `time_s`** reproduce each store's own
+`per_year` block exactly — 46, 48 and 68 years respectively. v1's `socat` ≤ 3
+rows/year float32 year-boundary artefact is gone, as predicted. What moved is
+`socat`'s 908 rows into the pentad they were measured in (the struck clause
+above), so its CSR offsets and row-ordered arrays differ from v1's while `N`
+does not; `gdp`'s and `gtmba`'s other eight arrays are byte-identical to v1's,
+digest for digest.
+
+**`slatrack`**, the one store that needs credentials to fetch and a large
+machine to assemble, took six free hosted lanes and three assembly attempts:
+
+- [family10-slatrack-fetch run 34959274326 (E-079 §10.1 · six hosted lanes re-fetching all 32 years of along-track sea level into `partials/family10_1/`)](https://github.com/blauewelt/earth/actions/runs/34959274326) — 10:41Z, five lanes green. The 1993–1999 lane refused 1994 on an empty mission-year listing; the ERS-1 35-day dataset genuinely holds no 1994 file (its whole archive is 468 files, 1992-10-23 to 1995-05-15 — that year flew as the separate geodetic-phase dataset), so the refusal was blocking a real gap. Builder fix `caa00d3` makes an empty mission-year listing MEASURE the mission's whole archive and record `mission_year_gap_measured` instead.
+- [family10-slatrack-fetch run 34968675755 (E-079 §10.1 · the 1994 re-fetch under the measured-gap fix)](https://github.com/blauewelt/earth/actions/runs/34968675755) — 12:24Z; 1994 lands with 29,146,039 rows over 29 parts and `gaps_measured` naming the mission.
+- **family10-build #15 (E-079 §10.1 · first `slatrack` assembly attempt)** — a four-minute false start: dispatched `stage=fetch,publish` without `index`.
+- **family10-build #16 (E-079 §10.1 · second `slatrack` assembly attempt)** — pulled and sorted the whole store correctly, then uploaded to the Hub at **~0.3 MB/s**: 15.6 GB of 67 after seven hours. Cancelled 2026-09-16 02:33Z. The host (Vast instance 51124853) had advertised 332 Mbps of uplink.
+- [family10-build #17 (E-079 §10.1 · `slatrack` assembly — 32 Hub year-parts pulled back, streaming sort, publish, registry)](https://github.com/blauewelt/earth/actions/runs/35047822726) — on a **verified** Maryland host (Vast instance 51173541, 129 GB RAM, 2 Gbps up): pull, streaming sort, `check_store` and publish in **92 minutes**, 02:33:31Z → 04:04:54Z, store written 03:22:50Z from builder commit `df788d8`. Its registry step then failed on an HTTP 429 from the Hub's rate limiter; the registry was regenerated and restore-verified from a sandbox at 04:15Z with `ml/build_family10_registry.py --publish`.
+
+`slatrack` reads N **2,030,800,176**, C = 3, bins 803…3141 with all 2,339 live,
+measured fraction 0.999052, 67.02 GB in ten files. Its per-year counts equal
+the 32 lane ledgers to the row and sum to `N`. The **26 rows** it holds over
+v1 are the falsifier's one exception and are a correction: each sits at exactly
+`YYYY-01-01T00:00:00`, one per mission with a sample at the year's first
+second, spread over 20 years at one to three each, with no year losing a row.
+v1's per-year window test compared in float64 days and put a source timestamp a
+fraction of a second under midnight outside the year it was fetching; 10.1
+rounds to a whole second with `np.rint`, which places it inside.
+
+**Cost of the day ≈ $7**, nearly all of it the two assembly attempts plus two
+boxes that never ran a step — Iceland 51138377 (docker build failed) and
+Sweden 51139098 (a CDI GPU device error), both hosts Vast marks "deverified".
+The fleet lesson is in `ml/CLAUDE.md` §7: rent a **verified** host for a large
+transfer, and read the offer's `inet_up` before renting.
