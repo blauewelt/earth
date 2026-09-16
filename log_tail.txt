@@ -1,0 +1,80 @@
+
+
+
+
+
+
+  ...slatrack/slatrack/lat.npy:   6%|▌         |  465MB / 8.12GB            [A[A[A[A[A[A[A[A
+
+
+
+
+
+
+
+
+  ...track/slatrack/values.npy:   9%|▉         | 1.09GB / 12.2GB            [A[A[A[A[A[A[A[A[A
+
+
+
+
+
+
+
+
+
+  ...slatrack/slatrack/lon.npy:   5%|▍         |  401MB / 8.12GB            [A[A[A[A[A[A[A[A[A[A
+
+  ...slatrack/slatrack/bin.npy:  34%|███▍      | 1.37GB / 4.06GB            [A[A
+
+
+  .../slatrack/bin_offsets.npy: 100%|██████████| 18.8kB / 18.8kB            [A[A[A
+
+
+
+  .../slatrack/slatrack/qc.npy: 100%|██████████| 2.03GB / 2.03GB            [A[A[A[A
+
+
+
+
+  ...track/slatrack/time_s.npy:  12%|█▏        |  939MB / 8.12GB            [A[A[A[A[A
+
+
+
+
+
+  ...ack/slatrack/platform.npy:   7%|▋         | 1.18GB / 16.2GB            [A[A[A[A[A[A
+
+
+
+
+
+
+  .../slatrack/slatrack/fp.npy: 100%|█████████▉| 8.12GB / 8.12GB            [A[A[A[A[A[A[A
+
+
+
+
+
+
+
+  ...slatrack/slatrack/lat.npy:   6%|▌         |  465MB / 8.12GB            [A[A[A[A[A[A[A[A
+
+
+
+
+
+
+
+
+  ...track/slatrack/values.npy:   9%|▉         | 1.09GB / 12.2GB            [A[A[A[A[A[A[A[A[A
+
+
+
+
+
+
+
+
+
+  ...slatrack/slatrack/lon.npy:   5%|▍         |  401MB / 8.12GB            [A[A[A[A[A[A[A[A[A[A
