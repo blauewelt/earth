@@ -104,8 +104,10 @@ commit.
 **Slide 21, 16 Sep** (Chris: *"make a one-slide summary of the deck. Leave
 some space to insert a figure with the actual results"*): the whole deck on
 one slide — design, learnable cone, guards, the three-arm experiment and its
-verdict rule on the left; on the right an **empty, dashed-outline panel
-reserved for the results figure** (R1 future-cone loss per lead for A0 / A1 /
+verdict rule, with two pictures redrawn at summary size (the hourglass in
+space-time, and the sunflower stretched into an ellipse and drifting lag by
+lag toward the source) because the standalone file travels without the deck;
+and an **empty, dashed-outline panel reserved for the results figure** (R1 future-cone loss per lead for A0 / A1 /
 A2 at three seeds, R3 drift-vs-upstream, R4 the western-boundary depth check),
 which stays empty until a run has produced those numbers. The same slide is
 also exported on its own as

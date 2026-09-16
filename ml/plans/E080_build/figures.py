@@ -46,6 +46,32 @@ def style(ax):
 
 
 # ---------------------------------------------------------------- figure 1
+# The hourglass SHAPE, shared by figure 1 (slide 3) and the summary redraw
+# (slide 21) so there is one definition of the geometry, not two.
+def _hourglass_shape(ax, W0, S, drift=0.0, lw=1.0):
+    lags = np.arange(0, 6.01, 0.02)
+    # past cone (below): widening downward
+    cx = -drift * lags
+    hw = W0 + S * lags
+    past = np.concatenate([np.column_stack([cx - hw, -lags]),
+                           np.column_stack([(cx + hw)[::-1], -lags[::-1]])])
+    ax.add_patch(Polygon(past, closed=True, facecolor=BLUE, alpha=0.20,
+                         edgecolor=BLUE, lw=lw, zorder=2))
+    # future cone (above): mirrored through the anchor
+    cxf = drift * lags
+    fut = np.concatenate([np.column_stack([cxf - hw, lags]),
+                          np.column_stack([(cxf + hw)[::-1], lags[::-1]])])
+    ax.add_patch(Polygon(fut, closed=True, facecolor="none", edgecolor=ORANGE,
+                         lw=lw, hatch="////", zorder=2))
+    ax.add_patch(Polygon(fut, closed=True, facecolor=ORANGE, alpha=0.10,
+                         edgecolor="none", zorder=1))
+    # waist
+    ax.plot([-W0, W0], [0, 0], color=GOLD, lw=3.6, solid_capstyle="round", zorder=6)
+    ax.plot([0], [0], marker="o", ms=5, mfc=GOLD, mec=BG, mew=1.0, zorder=7)
+    # anchor column
+    ax.axvline(0, color=TEXT, ls=(0, (4, 3)), lw=0.9, alpha=0.75, zorder=5)
+
+
 def hourglass():
     fig = plt.figure(figsize=(7.94, 5.0))
     gs = fig.add_gridspec(1, 2, width_ratios=[2.05, 1.0], left=0.075, right=0.985,
@@ -56,27 +82,7 @@ def hourglass():
     W0, S = 260.0, 455.0          # waist half-width, growth per pentad (km)
 
     def cone(ax, drift=0.0, lw=1.0, labels=True):
-        lags = np.arange(0, 6.01, 0.02)
-        # past cone (below): widening downward
-        cx = -drift * lags
-        hw = W0 + S * lags
-        past = np.concatenate([np.column_stack([cx - hw, -lags]),
-                               np.column_stack([(cx + hw)[::-1], -lags[::-1]])])
-        ax.add_patch(Polygon(past, closed=True, facecolor=BLUE, alpha=0.20,
-                             edgecolor=BLUE, lw=lw, zorder=2))
-        # future cone (above): mirrored through the anchor
-        cxf = drift * lags
-        fut = np.concatenate([np.column_stack([cxf - hw, lags]),
-                              np.column_stack([(cxf + hw)[::-1], lags[::-1]])])
-        ax.add_patch(Polygon(fut, closed=True, facecolor="none", edgecolor=ORANGE,
-                             lw=lw, hatch="////", zorder=2))
-        ax.add_patch(Polygon(fut, closed=True, facecolor=ORANGE, alpha=0.10,
-                             edgecolor="none", zorder=1))
-        # waist
-        ax.plot([-W0, W0], [0, 0], color=GOLD, lw=3.6, solid_capstyle="round", zorder=6)
-        ax.plot([0], [0], marker="o", ms=5, mfc=GOLD, mec=BG, mew=1.0, zorder=7)
-        # anchor column
-        ax.axvline(0, color=TEXT, ls=(0, (4, 3)), lw=0.9, alpha=0.75, zorder=5)
+        _hourglass_shape(ax, W0, S, drift=drift, lw=lw)
 
     # ---- panel A
     ax = axA
@@ -593,9 +599,137 @@ def amoc_cones():
     plt.close(fig)
 
 
+# ------------------------------------------- figure 6: the summary slide's cone
+def summary_cone():
+    """A compact re-arrangement of warped_sunflower() for slide 21.
+
+    Same dots, same phase rotation, same drift-and-grow rule — only the
+    arrangement and the label budget differ, because this one is rendered at
+    3.65 in instead of 10.75 in and travels on its own. Aspect 4.0 / 2.52 =
+    1.587, so it lands exactly 2.30 in tall at that width.
+    """
+    fig = plt.figure(figsize=(4.0, 2.52))
+    gs = fig.add_gridspec(2, 2, height_ratios=[1.0, 1.30],
+                          left=0.015, right=0.985, top=0.885, bottom=0.045,
+                          wspace=0.04, hspace=0.78)
+    ux, uy = sunflower_pts(24)
+    th = np.deg2rad(30.0)
+    R = np.array([[np.cos(th), -np.sin(th)], [np.sin(th), np.cos(th)]])
+
+    # (a) the canonical sunflower on the unit disc
+    ax = fig.add_subplot(gs[0, 0])
+    ax.add_patch(Circle((0, 0), 1.0, facecolor=BLUE, alpha=0.13,
+                        edgecolor=BLUE, lw=1.0))
+    ax.scatter(ux, uy, s=13, c=BLUE, edgecolors=BG, linewidths=0.35, zorder=3)
+    ax.plot([0], [0], marker="o", ms=5, mfc=GOLD, mec=BG, mew=0.7, zorder=4)
+    ax.set_title("(a)  24 points, golden angle", color=TEXT, fontsize=8.5, pad=4)
+    ax.set_xlim(-1.35, 1.35); ax.set_ylim(-1.25, 1.25)
+    ax.set_aspect("equal"); ax.axis("off")
+
+    # (b) rotated by theta and stretched to 2:1
+    ax = fig.add_subplot(gs[0, 1])
+    P = R @ np.vstack([1.30 * ux, 0.65 * uy])
+    ax.add_patch(Ellipse((0, 0), 2 * 1.30, 2 * 0.65, angle=30, facecolor=BLUE,
+                         alpha=0.13, edgecolor=BLUE, lw=1.0))
+    ax.scatter(P[0], P[1], s=13, c=BLUE, edgecolors=BG, linewidths=0.35, zorder=3)
+    ax.plot([0], [0], marker="o", ms=5, mfc=GOLD, mec=BG, mew=0.7, zorder=4)
+    ax.plot([0, 1.30], [0, 0], color=MUTED, lw=0.8, ls=(0, (3, 2)))
+    ax.plot([0, 1.30 * np.cos(th)], [0, 1.30 * np.sin(th)], color=GOLD, lw=1.0)
+    ax.text(0.80, 0.14, "θ", color=GOLD, fontsize=9.5)
+    ax.set_title("(b)  rotated, stretched 2:1", color=TEXT, fontsize=8.5, pad=4)
+    ax.set_xlim(-1.75, 1.75); ax.set_ylim(-1.25, 1.25)
+    ax.set_aspect("equal"); ax.axis("off")
+
+    # the matrix-logarithm caption, centred under the top row
+    fig.text(0.5, 0.505, "S = log Σ = m·I + k·[cos 2θ, sin 2θ; sin 2θ, −cos 2θ]",
+             color=GOLD, fontsize=7.4, ha="center", va="center",
+             family="monospace")
+
+    # (c) the same pattern at three lags, shifted by l*d and grown with l
+    gsc = gs[1, :].subgridspec(1, 2, width_ratios=[2.45, 1.0], wspace=0.02)
+    ax = fig.add_subplot(gsc[0, 0])
+    d = np.array([-1.00, 0.28])              # per-lag drift, toward the source
+    shades = {1: "#79BBD2", 3: BLUE, 6: "#1F6FEB"}
+    for lag in (6, 3, 1):
+        c = d * lag
+        a, b = 0.55 + 0.26 * lag, 0.30 + 0.13 * lag
+        ax.add_patch(Ellipse(c, 2 * a, 2 * b, angle=30, facecolor=shades[lag],
+                             alpha=0.16, edgecolor=shades[lag], lw=1.0, zorder=2))
+        vx, vy = sunflower_pts(24, phase=lag * GOLDEN)   # phase per lag
+        P = R @ np.vstack([a * vx, b * vy])
+        ax.scatter(P[0] + c[0], P[1] + c[1], s=6, c=shades[lag],
+                   edgecolors=BG, linewidths=0.25, zorder=3)
+        ax.text(c[0] + {1: 0.75, 3: -0.25, 6: -0.35}[lag], -1.30,
+                f"ℓ = {lag}", color=shades[lag], fontsize=8.2, ha="center",
+                va="top", fontweight="bold", zorder=4)
+    ax.annotate("", xy=(d[0] * 2.7, d[1] * 2.7), xytext=(0, 0),
+                arrowprops=dict(arrowstyle="-|>", color=GOLD, lw=1.6,
+                                shrinkA=3, shrinkB=1), zorder=5)
+    ax.text(d[0] * 2.7 - 0.35, d[1] * 2.7 + 0.45, "d", color=GOLD, fontsize=10,
+            ha="center", va="center", fontweight="bold", zorder=6)
+    ax.plot([0], [0], marker="o", ms=6, mfc=GOLD, mec=BG, mew=0.8, zorder=6)
+    ax.text(0.30, -0.35, "anchor", color=TEXT, fontsize=8.2, ha="left",
+            va="top", zorder=6)
+    ax.set_title("(c)  the footprint at lags 1, 3, 6", color=TEXT, fontsize=8.5,
+                 pad=3)
+    ax.set_xlim(-8.3, 2.8); ax.set_ylim(-2.1, 3.5)
+    ax.set_aspect("equal"); ax.axis("off")
+
+    axt = fig.add_subplot(gsc[0, 1])
+    axt.axis("off")
+    axt.text(0.0, 1.00, "d — toward\nthe source", color=GOLD, fontsize=8.5,
+             ha="left", va="top", fontweight="bold", transform=axt.transAxes,
+             linespacing=1.3)
+    axt.text(0.0, 0.55, "shifted by ℓ·d,\nwidened by ℓ²·Σ_v,\nphase-rotated\nper lag",
+             color=TEXT, fontsize=7.8, ha="left", va="top",
+             transform=axt.transAxes, linespacing=1.28)
+
+    fig.savefig(f"{OUT}/summary_cone.png", dpi=200)
+    plt.close(fig)
+
+
+# --------------------------------------- figure 7: the summary slide's hourglass
+def summary_hourglass():
+    """Slide 21's hourglass: the same shape as figure 1, one panel, big labels.
+
+    Figure 1 is drawn for a 7.25 in slot and its tick labels are unreadable at
+    the summary's 3.65 in column, so this is a redraw with a label budget for
+    that width — no ticks, axis WORDS only, three large labels. Same figsize
+    and aspect as summary_cone (4.0 x 2.52 = 1.587), so the two pictures and
+    the results panel share one baseline on the slide.
+    """
+    fig = plt.figure(figsize=(4.0, 2.52))
+    ax = fig.add_axes([0.085, 0.115, 0.900, 0.845])
+    _hourglass_shape(ax, 260.0, 455.0, drift=0.0, lw=1.2)
+
+    ax.set_xlim(-5600, 3400)
+    ax.set_ylim(-8.8, 8.8)
+    ax.set_xticks([]); ax.set_yticks([])
+    ax.set_xlabel("space", color=MUTED, fontsize=9.5, labelpad=2)
+    ax.set_ylabel("time:  past → present → future", color=MUTED, fontsize=9,
+                  labelpad=3)
+    style(ax)
+
+    XC = -1100.0                      # the AXES centre, not the cone's
+    ax.text(XC, 7.5, "future cone — targets only, never read", color=ORANGE,
+            fontsize=10, ha="center", va="center", fontweight="bold", zorder=8)
+    ax.text(XC, -7.5, "past cone — input, read", color=BLUE, fontsize=10,
+            ha="center", va="center", fontweight="bold", zorder=8)
+    ax.annotate("waist — several cells;\nthe embedding\nis made here",
+                xy=(-290, 0.0), xytext=(-1400, 0.0), color=GOLD, fontsize=9.5,
+                ha="right", va="center", fontweight="bold", linespacing=1.3,
+                arrowprops=dict(arrowstyle="->", color=GOLD, lw=1.0,
+                                shrinkA=4, shrinkB=2))
+
+    fig.savefig(f"{OUT}/summary_hourglass.png", dpi=200)
+    plt.close(fig)
+
+
 hourglass()
 warped_sunflower()
 channel_apertures_ab()
 channel_apertures_c()
 amoc_cones()
+summary_cone()
+summary_hourglass()
 print("figures written to", OUT)

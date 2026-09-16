@@ -676,53 +676,75 @@ function stepCard(s, x, y, w, h, num, head, body) {
 const SUMMARY_HEADLINE =
   "An hourglass that reads the past through a cone it shapes itself, tested three ways against its own fixed twin";
 
-// a compact label card: tighter padding than labelCard, top-aligned, so four
-// of them stack inside the left half without the bodies touching their borders
+// a compact label card: tighter padding than labelCard, top-aligned, so the
+// column's picture and its text share the height without the body touching
+// the border
 function sumCard(s, x, y, w, h, label, body, size) {
   card(s, x, y, w, h);
   s.addText(stack([
-    [label, { fontSize: 11, bold: true, color: GOLD, fontFace: FS }, 5],
+    [label, { fontSize: 10.5, bold: true, color: GOLD, fontFace: FS }, 5],
     [body, { fontSize: size, color: TXT, fontFace: FS }, 0],
-  ]), { x: x + 0.24, y: y + 0.11, w: w - 0.48, h: h - 0.22, isTextBox: true,
+  ]), { x: x + 0.22, y: y + 0.10, w: w - 0.44, h: h - 0.20, isTextBox: true,
         margin: 0, valign: "top" });
 }
 
-function summaryBody(s) {
-  // ---- left half: the deck in four cards
-  const LX = 0.6, LW = 5.92, FSZ = 9;
-  const cards = [
-    [1.56, 1.16, "The design · slides 3–7",
-     "The present is a **waist** of ~13 cells, not a tip; the past cone reads the last 30 days at every pentad; the **prediction cone** — the past cone mirrored through the anchor, +1…+6 pentads — is sampled the same way and used only as targets. Each example draws one of **four tasks** (0.35 forecast · 0.15 from the waist alone · 0.25 nowcast · 0.25 fill-in), under E-069b's rules: knowable targets only, no copies, every family against its own predict-the-mean bar"],
-    [2.82, 1.68, "The cone the model shapes · slides 8–12",
-     "A fixed 24-point sunflower, phase-rotated by the golden angle per lag, warped by **eight dimensionless numbers per 1° cell and channel group**: a drift **d** toward the source (capped at cone v2's design speed) and two ellipses stored as **matrix logarithms** — no kilometres, no angle to wrap — with Σ(ℓ) = Σ~{0} + ℓ^{2}Σ~{v}. **One direction per flow, one scale and one memory per channel**: s~{c} and τ~{c} inflate or shrink the shared ellipse and set how far back the channel reads, applied as a Gaussian **aperture** over the group's shared per-location tokens — zero extra tokens. Learned **gate-first** (a soft aperture over fixed dots, so the loader never depends on live weights), then **hardened**"],
-    [4.60, 0.92, "The guards · slides 13, 15",
-     "Coarse-10°-plus-1°-residual prior; log-space soft floors; mirror tie; stop-gradient on target positions; evaluation geometry frozen for every arm; the far ring kept and never gated; the aperture never touches the loss weights — so the cone cannot learn to ask easy questions"],
-    [5.62, 1.13, "The experiment · slide 17",
-     // NOTE: at most ONE emphasised run may follow the hyperlink in this
-     // paragraph — with two after it LibreOffice renders the link in the body
-     // colour instead of accent blue (measured; the PPTX markup is identical
-     // to every other link in the deck). Hence "3 seeds each" sits before it.
-     "Pre-registered. **A0** fixed hourglass (control, and the eval geometry for all) · **A1** learned from A0's init · **A2** learned, surface drift primed at −u_clim·Δt. Same 7 M codec, 20 k steps, frozen protocol, **3 seeds each**, on the same tensor ([family 7.2](" + U.f7 + ")); read-outs R1–R5. **Verdict**: A1 beats A0 on R1 at every lead ≤ 3, paired at all seeds, R5 clean → adopted; A2 > A1 ≈ A0 → geometry from climatology; neither → keep A0"],
-  ];
-  cards.forEach(c => sumCard(s, LX, c[0], LW, c[1], c[2], c[3], FSZ));
+// the small gold cap above each column's picture
+function colLabel(s, x, w, text) {
+  s.addText(text.toUpperCase(), {
+    x, y: 1.50, w, h: 0.22, fontSize: 10, bold: true, color: GOLD,
+    fontFace: FS, charSpacing: 1.1, isTextBox: true, margin: 0,
+    valign: "middle",
+  });
+}
 
-  // ---- right half: the reserved panel, empty by design
-  const PX = 6.78, PY = 1.56, PW = 5.95, PH = 4.59;
-  card(s, PX, PY, PW, PH, { fill: "11202F", line: GOLD, lw: 1.5, dash: "dash" });
+function summaryBody(s) {
+  // Three columns, each a picture over its text: this slide also travels on
+  // its own, so its reader has not seen slides 3 and 8.
+  const C1 = 0.60, C2 = 4.45, C3 = 8.30, CW = 3.65, C3W = 4.43;
+  const IY = 1.78, IH = 2.30;            // both pictures are 1.587 : 1
+  const FSZ = 8.5;
+
+  // ---- column 1 · the hourglass
+  colLabel(s, C1, CW, "the hourglass");
+  s.addImage({ path: `${FIG}/summary_hourglass.png`, x: C1, y: IY, w: CW, h: IH });
+  sumCard(s, C1, 4.16, CW, 2.59, "The design · slides 3–7",
+    "The present is a **waist** of ~13 cells, not a single tip; the past cone reads the last 30 days at every pentad; a **prediction cone** — the past cone mirrored through the anchor, +1…+6 pentads — is sampled the same way and used only as targets. Each example draws one of **four tasks**: forecast from waist + past (0.35), from the waist alone (0.15), nowcast the hidden present from the past under five dropout patterns (0.25), fill-in (0.25) — under E-069b's rules: knowable targets only, no copy targets, every loss family scored against its own predict-the-mean bar",
+    9);
+
+  // ---- column 2 · the cone the model shapes
+  colLabel(s, C2, CW, "the cone the model shapes");
+  s.addImage({ path: `${FIG}/summary_cone.png`, x: C2, y: IY, w: CW, h: IH });
+  sumCard(s, C2, 4.16, CW, 2.59, "The cone the model shapes · slides 8–12",
+    "A fixed 24-point sunflower, phase-rotated by the golden angle per lag, warped by **eight dimensionless numbers per 1° cell and channel group**: a drift **d** toward the source (capped at cone v2's design speed) and two ellipses stored as **matrix logarithms** — no kilometres, no angle to wrap — with Σ(ℓ) = Σ~{0} + ℓ^{2}Σ~{v}. **One direction per flow, one scale and one memory per channel**: s~{c} and τ~{c} inflate or shrink the shared ellipse and set how far back the channel reads, applied as a Gaussian **aperture** over the group's shared per-location tokens — zero extra tokens. Learned **gate-first** (a soft aperture over fixed dots, so the loader never depends on live weights), then **hardened** (dot tables re-baked at epoch boundaries)",
+    FSZ);
+
+  // ---- column 3 · the experiment, over the reserved panel
+  colLabel(s, C3, C3W, "the experiment");
+  card(s, C3, IY, C3W, IH, { fill: "11202F", line: GOLD, lw: 1.5, dash: "dash" });
   s.addText("RESULTS — figure to be inserted", {
-    x: PX, y: PY + PH / 2 - 0.55, w: PW, h: 0.45, fontSize: 16, bold: true,
+    x: C3, y: IY + 0.60, w: C3W, h: 0.42, fontSize: 16, bold: true,
     color: MUT, fontFace: FS, align: "center", isTextBox: true, margin: 0,
     valign: "middle",
   });
   s.addText("R1 · future-cone loss per lead, A0 fixed / A1 learned / A2 primed, 3 seeds · R3 · learned drift vs upstream · R4 · the western-boundary depth check", {
-    x: PX + 0.55, y: PY + PH / 2 + 0.02, w: PW - 1.1, h: 0.8, fontSize: 10,
+    x: C3 + 0.40, y: IY + 1.12, w: C3W - 0.80, h: 0.80, fontSize: 10,
     color: MUT, fontFace: FS, align: "center", isTextBox: true, margin: 0,
     valign: "top",
   });
-  s.addText("Reserved for the measured result; stays empty until a run has produced it.", {
-    x: PX, y: 6.28, w: PW, h: 0.34, fontSize: 10, italic: true, color: MUT,
+  s.addText("Reserved for the measured result — empty until a run has produced it.", {
+    x: C3, y: 4.10, w: C3W, h: 0.30, fontSize: 9.5, italic: true, color: MUT,
     fontFace: FS, isTextBox: true, margin: 0, valign: "middle",
   });
+  sumCard(s, C3, 4.42, C3W, 1.05, "The guards · slides 13, 15",
+    "Coarse-10°-plus-1°-residual prior; log-space soft floors; mirror tie; stop-gradient on target positions; evaluation geometry frozen for every arm; the far ring kept and never gated; the aperture never touches the loss weights — so the cone cannot learn to ask easy questions",
+    FSZ);
+  // NOTE: at most ONE emphasised run may follow the hyperlink in this
+  // paragraph — with two after it LibreOffice renders the link in the body
+  // colour instead of accent blue (measured; the PPTX markup is identical to
+  // every other link in the deck). Hence "3 seeds each" sits before it.
+  sumCard(s, C3, 5.53, C3W, 1.22, "The experiment · verdict · slide 17",
+    "**A0** fixed hourglass — the control and everyone's eval geometry · **A1** learned from A0's init · **A2** learned, surface drift primed at −u_clim·Δt. Same 7 M codec, 20 k steps, frozen protocol, **3 seeds each**, one tensor ([family 7.2](" + U.f7 + ")); read-outs R1–R5. **Verdict**: A1 beats A0 on R1 at every lead ≤ 3, paired at all seeds, R5 clean → adopt; A2 > A1 ≈ A0 → geometry from climatology; neither → keep A0",
+    FSZ);
 }
 
 {

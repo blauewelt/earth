@@ -11,7 +11,7 @@ source and is authoritative where they differ.
 - [Slides with speaker notes, PDF](https://blauewelt.github.io/earth/ml/plans/E080_hourglass_cone_deck_with_notes.pdf)
 - [Slides only, PDF](https://blauewelt.github.io/earth/ml/plans/E080_hourglass_cone_deck.pdf)
 - [PowerPoint, notes in the notes pane](https://github.com/blauewelt/earth/raw/main/ml/plans/E080_hourglass_cone_deck.pptx)
-- [The deck on one slide, with an empty panel reserved for the results figure — PDF](https://blauewelt.github.io/earth/ml/plans/E080_hourglass_cone_summary.pdf) (also slide 21 of the deck; the .pptx sits beside it — when E-080's numbers exist, the figure goes into that panel)
+- [The deck on one slide, with an empty panel reserved for the results figure — PDF](https://blauewelt.github.io/earth/ml/plans/E080_hourglass_cone_summary.pdf) (also slide 21 of the deck; it carries its own two summary-sized pictures, `E080_figures/summary_hourglass.png` and `summary_cone.png`; the .pptx sits beside it — when E-080's numbers exist, the figure goes into that panel)
 - [E-080 entry in the experiment log](https://blauewelt.github.io/earth/docs.html?f=ml/EXPERIMENTS.md#e-080)
 - [E-069 · the cone codec as built (what E-080 replaces)](https://blauewelt.github.io/earth/docs.html?f=ml/plans/E069_cone_codec.md)
 - [E-071 · cone v2 (the geometry E-080 builds on)](https://blauewelt.github.io/earth/docs.html?f=ml/plans/E071_cone_v2.md)

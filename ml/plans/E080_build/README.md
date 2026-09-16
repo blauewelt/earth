@@ -26,7 +26,7 @@ Outputs, next to the spec in `ml/plans/`:
 | `E080_hourglass_cone_deck_with_notes.pdf` | slide page + notes page, interleaved (2 × slides) |
 | `E080_hourglass_cone_summary.pptx` | slide 21 on its own — same layout, no slide number, same notes |
 | `E080_hourglass_cone_summary.pdf` | that one slide |
-| `E080_figures/*.png` | the five matplotlib figures, 200 dpi |
+| `E080_figures/*.png` | the seven matplotlib figures, 200 dpi |
 
 Derived files (`content.json`, the intermediate PDF, the 150 dpi slide
 rasters, the QA renders) all land in `build/`, which is disposable.
@@ -53,7 +53,7 @@ rasters, the QA renders) all land in `build/`, which is disposable.
 | file | what it does |
 |---|---|
 | `extract_notes.py` | parses the spec into `build/content.json` — slide titles and the `*Notes.*` text, whitespace collapsed |
-| `figures.py` | all five figures into `../E080_figures/` at 200 dpi, dark background |
+| `figures.py` | all seven figures into `../E080_figures/` at 200 dpi, dark background. Slide 21 has two of its own, `summary_cone` and `summary_hourglass` — compact redraws of `warped_sunflower` and `hourglass_spacetime` with a label budget for a 3.65 in column (no ticks, axis words, a few large labels), both at 4.0 × 2.52 in = 1.587 : 1 so they land 2.30 in tall beside the results panel. `_hourglass_shape` is the one definition of the cone polygons, shared by figure 1 and the redraw |
 | `build_deck.js` | the pptxgenjs deck: house style, layout, the slide body text; also the standalone one-slide summary, whose body is `summaryBody()`, shared with slide 21 |
 | `fix_pptx.py` | post-processes the pptx (see the gotcha below) |
 | `validate.py` | schema check (delegated) + deck checks: slide count, footer, page number, notes verbatim, no emoji |
