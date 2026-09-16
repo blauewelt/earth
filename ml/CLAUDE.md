@@ -1143,6 +1143,19 @@ archive.
   that has already started slow does not recover: cancel and re-rent rather than
   waiting. `scripts/gpu_box.mjs offers` prints `inet_up`, `inet_down` and
   `verification` on every listing line for exactly this decision.
+- **A PARKED BOX'S HOST CAN GO DARK, AND WAITING FOR IT IS THE EXPENSIVE
+  MOVE.** Measured 2026-09-16 on the family 10.2 build (E-081): the box stopped
+  after the 10.1 work (Vast instance 51232297, offer 51008173, a *verified*
+  host) was `start`ed and never came back — `actual_status: offline` for **more
+  than 10 minutes** and, decisively, the machine **absent from the offers
+  list**, which says the host itself has left the marketplace rather than that
+  our instance is slow to boot. That pair is the signal: **destroy it and rent
+  a new verified box.** The replacement (instance 51237466, offer 49553569,
+  Texas, 926 Mbps up, reliability 98.2 %, $0.467/h with 100 GB of disk) was
+  running the build within minutes, which finished in 84 minutes for ≈ $0.70.
+  `start` returning `resources_unavailable` and queueing the state change is
+  the ordinary case above; this is the other one, and the disk a stopped box
+  was keeping is gone with its host either way.
 - **Nothing that outlives a job may be stored on a box** (§6).
 
 ### The TPU pool

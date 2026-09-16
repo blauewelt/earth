@@ -2070,8 +2070,12 @@ fishing cell never masks the layer visibly below it (§2.4). **Absence of effort
 is not absence of fishing**: AIS reception is uneven, carriage rules differ by
 fleet, a transponder can be switched off, and the hover card, the toast and the
 pixel card all say so, because a blank ocean is the most misreadable thing in
-this layer. Until the real index lands the layer degrades to a hint toast
-naming the build command; `data/fishing/fixture/` holds the same schema over a
+this layer. **The store and the grid are BUILT and PUBLISHED** (E-081, run #20,
+2026-09-16: 617,164,038 rows, 0.70 billion apparent fishing hours, the grid's
+sums agreeing with the store's to 2.42e-9), and `data/fishing_index.json` is
+committed, so the layer paints real bytes; where the index is absent it still
+degrades to a hint toast naming the build command, and
+`data/fishing/fixture/` holds the same schema over a
 20×-decimated real 2012 grid, and the tests route the Hub URL to it and answer
 the SLICED bytes with a real 206, which is what makes the offset arithmetic
 tested rather than assumed.

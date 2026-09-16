@@ -9,9 +9,9 @@
 \setlength{\parskip}{2pt}
 \newcommand{\code}[1]{\texttt{#1}}
 
-\title{Family 10.1: the granularity-aware tensor, as built\\
-one registry, three storage tiers, and four observation stores\\
-\large 2.12 billion measurements, each carrying the second it was taken}
+\title{Family 10.2: the granularity-aware tensor, as built\\
+one registry, three storage tiers, and five observation stores\\
+\large 2.74 billion measurements, each carrying the second it was taken}
 \author{blauewelt/earth --- design note}
 \date{16 September 2026}
 
@@ -24,7 +24,7 @@ Nothing is resampled onto a common grid when it is stored: every source keeps
 its own resolution and cadence, and the token a model reads carries the
 measurement's \emph{footprint} --- how much area and how much time it averaged
 --- beside its offset from the place and pentad being asked about. One registry
-file, \code{tensors/family10\_1/family10.json} on the public Hugging Face dataset
+file, \code{tensors/family10\_2/family10.json} on the public Hugging Face dataset
 repository \code{chfrank/earth-tensors}, lists every group of the family and
 says which of three storage tiers it belongs to: \textbf{G}, gridded dense
 fields held at their native grid and read by a byte range (the four channel
@@ -43,8 +43,12 @@ All four were published and then independently verified from the bytes on
 on 2026-09-15/16 with one column changed: the time is \textbf{int32 seconds}
 since the epoch rather than float32 days, because a float32 day resolves 84
 seconds at the end of the record and \code{slatrack} samples once a second.
-That rebuild is family \textbf{10.1}, it is the version to ingest, and
-\S6.4 gives the measurements that justified it and the two the plan got wrong. This note states what the
+That rebuild is family \textbf{10.1}, and
+\S6.4 gives the measurements that justified it and the two the plan got wrong.
+A fifth store followed on 2026-09-16: \textbf{family 10.2} adds \code{fishing}
+--- Global Fishing Watch's AIS-based apparent fishing effort, 617,164,038 rows
+--- and \emph{inherits} the four stores above by reference, rebuilding no byte
+of them; that is \S9, and family 10.2 is the version to ingest. This note states what the
 registry says, what a store is, what each store contains, how the builds ran,
 how to read one, and what the layout still cannot promise. A final section is a
 self-contained handover for an external agent that reads the public dataset and
@@ -837,6 +841,54 @@ selected rows are ever concatenated, so opening the 2.68\,M-profile store costs
 nothing. The test suite asserts the result is \textbf{bit-identical} to the
 family-8 reader's on every anchor it tries.
 
+\section{Family 10.2: the fishing fleet as a fifth tier-P store}
+
+Family \textbf{10.2}, built and published on 2026-09-16 (E-081), adds one store
+and rebuilds nothing. \code{fishing} is Global Fishing Watch's
+\emph{Global AIS-based Apparent Fishing Effort Dataset} v3.0 (Zenodo record
+14982712, licence \textbf{CC BY-NC 4.0}, no credentials), one row per day
+$\times$ 0.1$^\circ$ cell $\times$ vessel for 2012--2024: \textbf{617,164,038
+rows}, $C = 2$ (\code{fishing\_hours}, \code{hours}, both in hours, float16),
+bins $2191\ldots3141$ with all \textbf{951 live}, footprint $(-1.32, -2.32)$ ---
+an 11\,km cell, a daily total --- and $\approx 24.1$\,GB in ten files, the tenth
+being the source's own vessel table published beside the arrays as
+\code{vessels.csv.gz} (773,165 vessel-years). AIS is the Automatic
+Identification System, the collision-avoidance radio every large vessel
+broadcasts; \code{hours} is what that radio was heard for inside the cell, and
+\code{fishing\_hours} is the part of it a neural network classed as fishing ---
+the only channel in this family that is a model output rather than a
+measurement. The whole record holds \textbf{1,985,162,793.77} broadcasting
+hours and \textbf{695,155,362.20} apparent fishing hours, $\approx 0.70$
+billion.
+
+Every one of the thirteen years is reconciled one-for-one against its own
+source zip (\code{days\_expected} $=$ \code{days\_found} $= 4{,}749$;
+\code{rows\_read} $=$ \code{rows\_packed}, with all three drop counters at
+zero), and the builder's assertion $0 \le$ \code{fishing\_hours} $\le$
+\code{hours} $\le 168$\,h never tripped. The ceiling is a week rather than a
+day because \textbf{1.73\,\% of rows} (10,688,165, to 49.6875\,h) legitimately
+exceed 24 hours --- one MMSI broadcast by more than one vessel, the source's own
+first known issue --- and those rows are counted, never dropped. The
+\code{qc} column carries the vessel's \textbf{gear class} as a 16-entry code
+table rather than a quality grade, which is the one place a reader of the other
+four stores is wrong by habit.
+
+The registry \code{tensors/family10\_2/family10.json} lists \textbf{ten groups}
+--- four tier-G groups of family 7.2 and six tier-P stores, \textbf{2,741,955,408
+observations} --- with \code{groups\_missing: []} and an \code{inherits} block
+naming family 10.1: the four inherited entries, \emph{every sha256 included},
+are byte-identical to the 10.1 registry's, and every group now carries its own
+\code{path} so a consumer resolves each store where it actually lives. Beside
+the store, the same rows are summed onto the family-7 0.25$^\circ$ grid one
+frame per month (\code{[156, 721, 1440, 2]} float32 --- the busiest cell-month
+is 595,726 vessel-hours, past float16's 65,504 --- month-major, so one month is
+a single 8,305,920-byte range read) for the web globe only; its sums agree with
+the store's to a worst per-month relative disagreement of
+$\mathbf{2.42\times10^{-9}}$. The build took \textbf{84 minutes} on one rented
+verified box for $\approx$ \$0.70, after a free hosted probe of 2012 alone, and
+it corrected the two numbers the plan had projected: 596\,M rows became
+617,164,038, and $\approx 0.8$ billion fishing hours became 0.70 billion.
+
 \section{Limitations, and what is still open}
 
 \paragraph{The $k$ tokens are usually one platform.} Measured over 600
@@ -931,26 +983,33 @@ something appears to require a write, it is out of scope: report it instead.
 \paragraph{The single entry point.}
 \begin{verbatim}
 https://huggingface.co/datasets/chfrank/earth-tensors/resolve/main/
-    tensors/family10_1/family10.json
+    tensors/family10_2/family10.json
 \end{verbatim}
-Read it first. It lists all nine groups, and for each one the \code{tier}, the
-\code{prefix} under which its files live, and the files themselves with their
-\code{sha256}. Dispatch on \code{tier}: \code{"G"} means a bin-major array you
-read by byte range, \code{"P"} means a tier-P store you read with a $k$-nearest
-search. Everything below is reachable from that file; the tables here are a
-convenience and the registry is the authority. The copy described here is 47,181
-bytes, \code{generated\_utc} 2026-09-16T04:13:38Z, sha256
-\code{abf08f61c226b6f0a85591acbb0cad97}\allowbreak\code{0f98fc085a7c7b1acf0cb0b3648ca90e}.
-Note the prefix: \code{family10\_1}, the family version 10.1 with the dot
-written as an underscore. The 10.0 directories under \code{tensors/family10/}
-are still there and still readable; they are history, and 10.1 is the version to
-ingest.
+Read it first. It lists all \textbf{ten} groups, and for each one the
+\code{tier}, its own \code{path} (under 10.2 the prefix is \emph{per group},
+because the four inherited stores were not moved), and the files themselves
+with their \code{sha256}. Dispatch on \code{tier}: \code{"G"} means a bin-major
+array you read by byte range, \code{"P"} means a tier-P store you read with a
+$k$-nearest search. Resolve every file under that group's own \code{path} and
+never under the family version in the URL you started from --- a request for
+\code{tensors/family10\_2/gdp/} correctly 404s, because that store is still at
+\code{tensors/family10\_1/gdp/} and its sha256 values here are byte-identical to
+the 10.1 registry's. Everything below is reachable from that file; the tables
+here are a convenience and the registry is the authority. The 10.1 registry
+(47,181 bytes, \code{generated\_utc} 2026-09-16T04:13:38Z, sha256
+\code{abf08f61c226b6f0a85591acbb0cad97}\allowbreak\code{0f98fc085a7c7b1acf0cb0b3648ca90e},
+nine groups) is still readable and still correct about the four stores it
+describes; the 10.0 directories under \code{tensors/family10/} are history.
+\textbf{Ingest 10.2.}
 
-\paragraph{The tier-P files.} Base URL, to which \code{<store>/<file>} is appended:
+\paragraph{The tier-P files.} Base URL, to which \code{<store>/<file>} is
+appended --- this is the \code{path} of the four inherited stores, and
+\code{fishing}'s is \code{tensors/family10\_2/fishing}:
 \begin{verbatim}
 https://huggingface.co/datasets/chfrank/earth-tensors/resolve/main/tensors/family10_1/
 \end{verbatim}
-Every store holds the same nine arrays plus \code{store.json}. Each array's
+Every store holds the same nine arrays plus \code{store.json}, and
+\code{fishing} adds a tenth file, \code{vessels.csv.gz}. Each array's
 sha256 is in that store's \code{store.json}; \code{store.json}'s own cannot be,
 so it is given here, measured on the bytes the Hub served on 2026-09-16.
 
@@ -993,6 +1052,21 @@ store & sha256 of \code{store.json} \\
 \bottomrule
 \end{tabular}
 \end{table}
+
+\paragraph{And the fifth store, \code{fishing}.} Its \code{path} is
+\code{tensors/family10\_2/fishing}: the same nine arrays at $N =
+617{,}164{,}038$ and $C = 2$ ($\approx 24.1$\,GB, every byte count again
+$128 + N \times \text{itemsize} \times \text{columns}$), plus
+\code{store.json} and a tenth file, \code{vessels.csv.gz} (19\,MB, the source's
+vessel table, the only way to turn a \code{platform} hash into a flag, gear
+class, length, engine power or tonnage). The four verification checks below
+apply to it unchanged, and it was published \code{verified by restore}. Two
+warnings an agent must carry: its \code{qc} column is the vessel's
+\textbf{gear class}, a 16-entry code table in that store's \code{qc\_codes} and
+\emph{not} a quality grade, so the habit of keeping \code{qc} $\le 2$ discards
+the trawlers; and it is licensed \textbf{CC BY-NC 4.0} --- attribution
+(``Powered by Global Fishing Watch'') required and non-commercial use only ---
+which is the one use restriction in this family.
 
 \paragraph{Verify before you trust.} Four checks, in order of cost.
 \begin{enumerate}\itemsep1pt

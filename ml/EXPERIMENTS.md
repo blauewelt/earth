@@ -44,6 +44,179 @@ low-pass).
 
 ---
 
+<a id="e-081"></a>
+## E-081 · Family 10.2 — the fishing fleet as a fifth tier-P observation store — BUILT, PUBLISHED AND VERIFIED 2026-09-16 (617,164,038 rows, 0.70 billion apparent fishing hours, 84 minutes and ≈ $0.70 on one rented box; the falsifier holds in all five clauses and the two numbers the plan projected were both corrected by measurement)
+
+**E-081 · Build `fishing`, a fifth tier-P observation store for family 10 —
+Global Fishing Watch's AIS-based apparent fishing effort, one row per day ×
+0.1° cell × vessel for 2012–2024 — and write a 10.2 registry that INHERITS the
+four family-10.1 stores by reference instead of rebuilding a byte of them;
+beside the store, sum the same rows onto the family-7 0.25° grid one frame per
+month so the globe can paint them with a single range read (absolute
+description; the plan and the builder landed 2026-09-16, the build ran the same
+evening) · `params` n/a (nothing trains — this is a DATA build) · `stage`
+data-build · `data` `family10_2/fishing` → `tensors/family10_2/` · `arch` n/a ·
+`steps×batch` n/a (no training step of any kind) · `resume` none — the store is
+built from its own archive, and the four 10.1 stores are referenced by `path`
+rather than re-derived**
+
+WHAT IT IS, in sentences that need no other document. **AIS** is the Automatic
+Identification System, the collision-avoidance radio every large vessel
+broadcasts; Global Fishing Watch listens to it, classifies each vessel's
+behaviour with a neural network, and publishes, per day and per 0.1° cell and
+per vessel, the hours that vessel was broadcasting inside the cell and the part
+of those hours the classifier called fishing. **Family 10.2** is family 10.1
+plus that one store: the four 10.1 stores (surface drifters, the tropical
+moored arrays, ship CO₂, altimeter along-track sea level) are inherited by
+reference exactly as tier G inherits family 7.2, and the registry carries an
+`inherits` block plus a `path` per group so a consumer resolves each group
+wherever it actually lives. The hypothesis behind wanting it at all is that the
+fleet is a **distributed sensor** — roughly 10,000 vessels in 2012 and 94,457
+in 2024 go where the fish are, and the fish follow fronts, upwelling and
+productivity — which makes the same table both a read-out target for "predict
+everything" and a weak extra input. That hypothesis is **not** tested here:
+E-078a's ablation with `fishing` tokens in and out is what tests it. This
+entry is the build.
+
+RESULT — **the store is built, published and verified, 2026-09-16.**
+
+TL;DR: it is real, and it is bigger than the plan thought. **617,164,038 rows**
+sit at `tensors/family10_2/fishing/` on the public Hugging Face dataset
+repository `chfrank/earth-tensors`, every one of the thirteen years reconciled
+one-for-one against its own source zip, and the whole record holds
+**1,985,162,793.77 broadcasting hours** of which **695,155,362.20** are
+apparent fishing. The 10.2 registry lists **ten groups and 2,741,955,408 tier-P
+observations**. It took 84 minutes on one rented box for about **$0.70**.
+
+| | measured | the plan said |
+|---|---|---|
+| N (rows) | **617,164,038** | ≈ 596 M projected from the 2012 and 2024 zips — **3.5 % low** |
+| apparent fishing hours | **695,155,362.20** | ≈ 0.8 billion |
+| broadcasting hours | **1,985,162,793.77** | not projected |
+| bins (five-day pentads from 1982-01-01) | 2191 … 3141, **951 of 951 live** | 2012–2024, continuous |
+| monthly grid dtype | **float32** | float16 — the archive does not fit it |
+| store on the Hub | ≈ 24.1 GB (617,164,038 × 39 B + `bin_offsets`) | ≈ 18.5 GB |
+
+THE SOURCE. Global Fishing Watch, *Global AIS-based Apparent Fishing Effort
+Dataset* v3.0 (2025-03-11), **Zenodo record 14982712**, licence **CC BY-NC
+4.0** (non-commercial, attribution required), no credentials. The daily table
+`mmsi-daily-csvs-10-v3-<year>.zip`, 2012–2024, is 13 zips and
+**5,336,047,844 bytes**; the vessel table `fishing-vessels-v3.csv` is
+114,823,860 bytes over **773,165 rows**, md5
+`b5ba27cedd5426c0bcb8e6009e911cf0`, and it is published beside the store as
+`vessels.csv.gz` (19 MB) because it is the only way a consumer turns a platform
+hash back into a flag, a gear class or a length.
+
+THE THREE RUNS, all on `family10-build`, the `workflow_dispatch`-only workflow
+that builds one family-10 store end to end:
+
+- **[#18](https://github.com/blauewelt/earth/actions/runs/35126550455) (E-081 · probe of the `fishing` store's index and fetch stages over 2012 alone, on a GitHub-hosted `ubuntu-latest` runner)** — failed on the archive, not on the code: **every URL of Zenodo record 14982712 answered HTTP 504** from about 17:10Z to about 18:06Z on 2026-09-16. Nothing was spent.
+- **[#19](https://github.com/blauewelt/earth/actions/runs/35132684369) (E-081 · the same 2012-only probe, re-dispatched at 18:09Z once Zenodo recovered)** — green in **3 minutes**: 2012 = **6,257,384 rows in 7 parts**, 97.5 s of fetch, reconciled against the zip's own row count. This is the plan's "probe on a hosted runner first, free" clause, and passing it is what licensed the box.
+- [**#20** (E-081 · the full `fishing` build — `store=fishing stage=all start=2012-01-01 end=2024-12-31` on the rented box `gpu-box-49553569`)](https://github.com/blauewelt/earth/actions/runs/35134413191) — dispatched 18:26Z, success 19:50Z, **84 minutes**. Stage times: index 132.5 s; fetch **4,105.8 s** (streaming assembly, peak resident memory 18.98 GB); grid 328.0 s; publish 398.5 s for 11 items, and the registry step ending `verified by restore` — the publish downloads back what it has just uploaded and re-hashes it before declaring success.
+
+THE BOX, in one sentence and one rule. The Estonia box parked from the 10.1
+work (instance 51232297, offer 51008173, a *verified* host) never came back
+after a `start` — `actual_status: offline` for 13 minutes and the machine
+absent from the offer list — so it was destroyed and a fresh verified box was
+rented (instance 51237466 from offer 49553569, Texas, 926 Mbps up / 925 down,
+reliability 98.2 %, $0.467/h with 100 GB of disk), stopped 19:50Z and destroyed
+19:55Z; the rule that came out of it is in `ml/CLAUDE.md` §7 — a parked box's
+host can go dark, and the answer is to rent, not to wait.
+
+THE STORE. Schema 2 (the tier-P column layout whose time column is `time_s`,
+int32 seconds since 1982-01-01T00:00:00Z), C = 2 — `fishing_hours` and `hours`,
+float16, unit h — footprint (`log2_fp` −1.32, `log2_dt` −2.32), built
+2026-09-16T19:35:41Z from builder commit `e70270a`. Per year, each reconciled
+1/1 against its zip, and `days_expected` = `days_found` = **4,749**, every
+calendar day of the thirteen years:
+
+| year | rows | year | rows | year | rows |
+|---|---|---|---|---|---|
+| 2012 | 6,257,384 | 2017 | 43,858,727 | 2022 | 72,195,082 |
+| 2013 | 19,099,705 | 2018 | 50,882,201 | 2023 | 84,786,933 |
+| 2014 | 23,126,797 | 2019 | 54,201,316 | 2024 | 84,800,259 |
+| 2015 | 26,407,087 | 2020 | 55,991,204 | | |
+| 2016 | 34,864,177 | 2021 | 60,693,166 | **total** | **617,164,038** |
+
+`rows_read` = `rows_packed` = 617,164,038 with `drop_bad_number` 0,
+`drop_no_position` 0 and `drop_out_of_range` 0 — the ledger closes with no
+residual, and the guards are guards rather than filters, which is a statement
+about this source and not a weakening of the policy.
+
+THE FALSIFIER (E-081 §5), clause by clause.
+
+1. **Per-year N equals the archive's own row count — HOLDS for all thirteen years.** A year is marked only when the two agree.
+2. **`fishing_hours_total` is RECORDED, not gated — recorded.** float64 sums over the float16 values: **695,155,362.20** apparent fishing hours and **1,985,162,793.77** broadcasting hours. So the record is ≈ **0.70 billion** fishing hours where the plan projected ≈ 0.8 billion, and Global Fishing Watch's release-note figure of "nearly 370 million hours" is confirmed **not** to be this table's sum — which is exactly why §5 refused to use it as a band.
+3. **`fishing_hours ≤ hours` on every row — HOLDS.** The builder's assertion `0 ≤ fishing_hours ≤ hours ≤ 168` never tripped in 617 million rows, and an independent sandbox range-read of 1,000,000 rows at offset 300,000,000 found the same (maximum `hours` in that window 47.3125, no NaN). The per-channel maximum over the store is **49.6875 h**, the float16 of the measured `max_hours` 49.6755 — above 24 h, as §2 had measured on the 2012 zip *before* the build, which is why the ceiling is a week rather than a day: `hours_over_24h` is **10,688,165 rows (1.73 %)**, one MMSI (Maritime Mobile Service Identity, a vessel's radio call number) broadcast by more than one vessel, the source's own first known issue. `rows_zero_hours` 4,702,031 (0.76 %); `qc_unknown` 17,809 rows, an MMSI with no vessel-table row in that year; no NaN anywhere.
+4. **The monthly grid's sums equal the store's — HOLDS at 2.42e-9.** `grid_sum` reads [695,155,362.31, 1,985,162,793.78] against the store's two totals, worst per-month relative disagreement **2.42e-9**.
+5. **The registry lists the tier-P groups with every 10.1 sha256 unchanged — HOLDS.** `tensors/family10_2/family10.json`, `family_version` **10.2**, **ten groups**: four tier-G groups from family 7.1 (`g025`, `g100`, `oc025`, `rg100`) and six tier-P — `argo` 2,678,439 · `gdp` 48,480,798 · `gtmba` 1,001,282 · `socat` 41,830,675 · `slatrack` 2,030,800,176 · `fishing` 617,164,038 = **2,741,955,408 observations** — with `groups_missing: []` and `inherits: {"10.1": {groups: [gdp, gtmba, socat, slatrack], root: tensors/family10_1, registry: tensors/family10_1/family10.json}}`. The four inherited entries, **every sha256 included, are byte-identical to the 10.1 registry's**. Published `verified by restore`.
+
+THE `qc` COLUMN IS THE GEAR CLASS, NOT A GRADE — the one place a consumer of
+the other four stores will be wrong by habit. 16 classes plus 0 for unknown:
+1 `dredge_fishing`, 2 `drifting_longlines`, 3 `fishing`, 4 `fixed_gear`,
+5 `other_purse_seines`, 6 `other_seines`, 7 `pole_and_line`, 8 `pots_and_traps`,
+9 `purse_seines`, 10 `seiners`, 11 `set_gillnets`, 12 `set_longlines`,
+13 `squid_jigger`, 14 `trawlers`, 15 `trollers`, 16 `tuna_purse_seines`. Over
+the vessel table's 773,165 vessel-years: trawlers 335,979 · fishing 171,310 ·
+set_gillnets 64,659 · set_longlines 45,538 · drifting_longlines 41,544 ·
+fixed_gear 38,021 · other_purse_seines 26,504 · pole_and_line 12,733 ·
+squid_jigger 9,626 · dredge_fishing 9,617 · tuna_purse_seines 6,630 ·
+pots_and_traps 5,294 · purse_seines 2,092 · seiners 1,541 · trollers 1,190 ·
+other_seines 887 — which sums to 773,165 exactly, the table's own row count.
+Vessels per year: 10,447 (2012) · 31,896 · 35,985 · 38,123 · 47,484 · 58,925 ·
+64,898 · 68,538 · 68,128 · 75,153 · 82,681 · 96,450 · **94,457 (2024)**.
+
+THE sha256 OF THE TEN PUBLISHED FILES, as the record of what is on the Hub:
+`bin.npy` `4f075137dd93ae6160671a18cb03e64bfa5c35961489f4a2dc2b9af1816e6c89` ·
+`bin_offsets.npy` `03631d4821c9738f84d90f257aff5e9d14157f3423875680413f8ad1aed60134` ·
+`fp.npy` `bb33a307a73a19af11cb7276c0450fe736cbe63c192196a49b4477090a85b002` ·
+`lat.npy` `d3ed01b6ad8f0c014468ed9748daf21781f13df75d9d3c6db2b09cf217d8bc1a` ·
+`lon.npy` `f0b6003f624f6414eef15485f23de082868d48af589c9171a3a3e1065b7b046a` ·
+`platform.npy` `6e86126e2b3fb6d20d7bd3f4f881246402d95f2ec97ffbd175e0c41835397e21` ·
+`qc.npy` `fb05c17d317564588a76a735d3aabd3265f6a875ec7e2121cca7faf169d485c5` ·
+`time_s.npy` `2a11428a70f29aa27ff186489fbf25191a55200f997f530cd66f5dfeb502fd77` ·
+`values.npy` `4aa2aa70c5a7edf37bb8f5e6ae4f9fb2cbff14982274f1b96bd23e9b7695a9ba` ·
+`vessels.csv.gz` `8892c856cdcc84296f435d48063e03132599c5f2d039016787b6181e98c0697a`.
+
+THE GRID, WHICH IS FOR THE GLOBE AND NOT FOR TRAINING.
+`tensors/family10_2/fishing_grid/fishing_grid_monthly_025.npy`, shape
+[156, 721, 1440, 2], **float32** rather than the planned float16 — measured
+before the build and confirmed by it, the largest 0.25° cell-month is
+**595,726 vessel-hours** against float16's 65,504 ceiling, so the fleet's own
+busiest cells would have become infinities. 1,295,723,648 bytes, 128 of them
+the `.npy` header, one month of both channels a contiguous **8,305,920-byte**
+slab, months 2012-01 … 2024-12, `complete: true`, manifest
+`fishing_grid/grid.json`. `data/fishing_index.json` is written by
+`ml/publish_fishing_index.py` against the published bytes (CORS measured on the
+Hub: HTTP 206, `access-control-allow-origin: *`, final host `us.aws.cdn.hf.co`)
+and committed in `79952cc`, so the "Fishing effort (AIS), 0.25° monthly" globe
+layer goes live with that deploy. Checked from a sandbox at month 2020-01
+(index 96), the slab's own sums are 3,295,177 fishing hours and 11,832,883
+broadcasting hours, equal to the manifest. A model reads the store; the globe
+reads the grid.
+
+COST: **≈ $0.70** — one verified box for 84 minutes at $0.467/h, plus two free
+hosted probes, one of which was eaten by a Zenodo outage. Against the plan's
+"one verified box … ~20 min of parsing plus 5.3 GB down and ~20 GB up".
+
+STILL OPEN, and by design: the second globe layer of E-081 §4, "Loitering
+vessels (last 30 days)", shows its committed fixture until the repository
+secret `GFW_API_TOKEN` exists, after which the daily workflow
+`.github/workflows/refresh-loitering.yml` bakes `data/loitering.json`.
+
+**Deviations from the plan: none, beyond the two numbers the plan asked to have
+measured** — N 596 M → 617,164,038, and ≈ 0.8 → 0.70 billion apparent fishing
+hours.
+
+Spec: [E-081](https://blauewelt.github.io/earth/docs.html?f=ml/plans/E081_family10_2_fishing.md).
+The family it extends: [E-079 §10.1](https://blauewelt.github.io/earth/docs.html?f=ml/EXPERIMENTS.md#e-079).
+Reader contract: [the family-10 data handover](https://blauewelt.github.io/earth/docs.html?f=docs/FAMILY10_DATA_HANDOVER.md).
+Code: `ml/build_family10_stores.py` (the `FishingAdapter`), `ml/family10_store.py`,
+`ml/build_family10_registry.py`, `ml/publish_fishing_index.py`,
+`.github/workflows/family10-build.yml`.
+
+---
+
 <a id="e-080"></a>
 ## E-080 · The cut-off mirrored double cone — stage 1 as an hourglass, with a cone the model shapes itself — DESIGN ONLY, nothing dispatched (written 2026-09-15)
 

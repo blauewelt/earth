@@ -1,4 +1,4 @@
-# Family 10.1 — four observation stores and the registry: a self-contained data handover
+# Family 10.2 — five observation stores and the registry: a self-contained data handover
 
 PDF design note: https://blauewelt.github.io/earth/ml/paper/notes/family10.pdf
 
@@ -7,26 +7,40 @@ download, open, validate and search family 10's tier-P observation stores, and
 to read the registry that ties them to the gridded tensors, is on this page;
 nothing below requires reading another document. Where a section says "see
 also", it is optional background. Written 2026-09-13, the day the builder
-landed; the first four stores published 2026-09-14; **rewritten 2026-09-15 and
-completed 2026-09-16 for family 10.1, which is the version to ingest.**
+landed; the first four stores published 2026-09-14; rewritten 2026-09-15 and
+completed 2026-09-16 for family 10.1; **extended the same evening to family
+10.2, which is the version to ingest.** Everything here is READ-ONLY over the
+public Hugging Face dataset — nothing on this page asks for a token.
 
-**What 10.1 is, in one sentence.** The same four stores, the same rows, the
-same nine arrays and the same registry as family 10.0, with **one column
-changed**: the time is now `time_s.npy`, **int32 seconds** since
-1982-01-01T00:00:00Z, in place of 10.0's `time_days.npy`, float32 days. §2.3
-says why that was worth a rebuild, and §2.4 says what a reader has to change.
+**What 10.2 is, in one sentence.** The four family-10.1 stores **unchanged and
+inherited by reference**, plus a fifth, `fishing` — Global Fishing Watch's
+AIS-based apparent fishing effort, 617,164,038 rows — and a registry at
+`tensors/family10_2/family10.json` in which **every group carries its own
+`path`**, so a consumer resolves each one wherever it actually lives rather
+than assuming a common prefix. Not one 10.1 byte was rebuilt: their sha256
+values in the 10.2 registry are byte-identical to the 10.1 registry's. §2.2a is
+the mechanism, §2.5 the new store.
 
-**Read §9 before you trust a number.** As of 2026-09-16, **all four 10.1
-stores are published and verified** — `gdp` (surface drifters, 48,480,798
-rows), `gtmba` (the tropical moored arrays, 1,001,282), `socat` (ship CO₂,
-41,830,675) and `slatrack` (along-track sea level from 29 altimeter missions,
-2,030,800,176), **2,122,112,931 observations** — and the registry is complete
-again at nine groups with `groups_missing: []`. Each store's row count and
-per-year counts were recomputed from the new `time_s` column and match its own
-ledger exactly. The rows themselves are the ones independently verified on
-2026-09-14 under 10.0 — every file re-hashed against its own record, every
-count, range and per-channel statistic recomputed from the arrays rather than
-read out of the metadata claiming them — and that evidence is
+**What 10.1 was, in one sentence** (it is still what the four inherited stores
+are). The same four stores, the same rows, the same nine arrays and the same
+registry as family 10.0, with **one column changed**: the time is
+`time_s.npy`, **int32 seconds** since 1982-01-01T00:00:00Z, in place of 10.0's
+`time_days.npy`, float32 days. §2.3 says why that was worth a rebuild, and §2.4
+says what a reader has to change coming from 10.0.
+
+**Read §9 before you trust a number.** As of 2026-09-16, **all five stores are
+published and verified** — `gdp` (surface drifters, 48,480,798 rows), `gtmba`
+(the tropical moored arrays, 1,001,282), `socat` (ship CO₂, 41,830,675),
+`slatrack` (along-track sea level from 29 altimeter missions, 2,030,800,176)
+and `fishing` (the fleet, 617,164,038) — and the registry is complete at **ten
+groups** with `groups_missing: []`: four tier-G groups of the gridded tensor
+and six tier-P stores, **2,741,955,408 tier-P observations** with family 8's
+Argo store included. Each store's row count and per-year counts were recomputed
+from its own `time_s` column and match its own ledger exactly. The four
+inherited stores' rows are the ones independently verified on 2026-09-14 under
+10.0 — every file re-hashed against its own record, every count, range and
+per-channel statistic recomputed from the arrays rather than read out of the
+metadata claiming them — and that evidence is
 `docs/FAMILY10_VERIFICATION_2026-09-14.md`, whose §10 adds the 10.1 checks.
 
 Family 8's Argo store has its own self-contained handover and is **part of this
@@ -49,7 +63,7 @@ difference. The family has three **tiers**: **G**, gridded dense (the family-7
 channel groups, one bin-major array per group at its native grid, read by a
 byte range); **P**, points, profiles and tracks (columns sorted by five-day bin,
 read by a k-nearest search); and **T**, tiles, which is designed and not built.
-This page is about the four new tier-P stores and the registry.
+This page is about the five tier-P stores of family 10.2 and the registry.
 
 Terms used below, once. **Epoch** — 1982-01-01T00:00:00 UTC, the instant every
 time in these stores is counted from. **Pentad / bin** — a five-day period;
@@ -59,7 +73,11 @@ is **negative** before 1982. **Schema version** — which time column a store
 carries: schema 1 is 10.0's float32 `time_days`, schema 2 is 10.1's int32
 `time_s`; every `store.json` states its own. **CSR** — "compressed sparse row": an
 offsets array saying where each bin's rows start and end in a sorted table.
-**Footprint** — the pair `(log2_fp, log2_dt)`: `log2(footprint_km / 27.83)`, the
+**AIS** — the Automatic Identification System, the collision-avoidance radio
+every large vessel broadcasts; **MMSI** — Maritime Mobile Service Identity, the
+nine-digit number that radio carries, which identifies a vessel about as well
+as a licence plate identifies a car. **Footprint** — the pair
+`(log2_fp, log2_dt)`: `log2(footprint_km / 27.83)`, the
 spatial support in units of a 0.25° cell, and `log2(support_days / 5)`, the
 temporal support in pentads. **Drogue** — the underwater sail a surface drifter
 tows at 15 m; with it the buoy follows the 15 m current, without it the
@@ -70,15 +88,15 @@ anomaly, the departure of the sea surface from its mean, metres. **MDT** — mea
 dynamic topography, so `adt = sla + mdt` is one addition. **ERDDAP** — a NOAA
 data server that answers a tabular query over HTTP.
 
-## 2 · The four stores, and where they are
+## 2 · The five stores, and where they are
 
-Hugging Face dataset repository **`chfrank/earth-tensors`**, one directory per
-store under **`tensors/family10_1/`** — note the `_1`, which is the family
-version `10.1` with the dot written as an underscore. Public, no token needed,
-plain HTTPS:
+Hugging Face dataset repository **`chfrank/earth-tensors`**. Public, no token
+needed, plain HTTPS. **Under 10.2 the prefix is per group**, because the four
+inherited stores were not moved: the registry gives each group its own `path`
+and that is the only address a consumer should build a URL from.
 
 ```
-https://huggingface.co/datasets/chfrank/earth-tensors/resolve/main/tensors/family10_1/<store>/<file>
+https://huggingface.co/datasets/chfrank/earth-tensors/resolve/main/<path>/<file>
 ```
 
 (`resolve/main/...` answers a 302 redirect to a CDN URL — follow redirects.)
@@ -87,19 +105,25 @@ One file, for example:
 ```
 curl -L -o store.json \
   https://huggingface.co/datasets/chfrank/earth-tensors/resolve/main/tensors/family10_1/gdp/store.json
+curl -L -o store.json \
+  https://huggingface.co/datasets/chfrank/earth-tensors/resolve/main/tensors/family10_2/fishing/store.json
 ```
 
-The three Hub prefixes family 10.1 uses, all derived from one constant
-(`ml/family10_store.FAMILY_VERSION`):
+The Hub prefixes family 10.2 uses, all derived from one constant
+(`ml/family10_store.FAMILY_VERSION`) plus the inherited root the registry
+names:
 
 | what | where |
 |---|---|
-| the four stores | `tensors/family10_1/<store>/` |
-| the registry | `tensors/family10_1/family10.json` |
+| the registry | `tensors/family10_2/family10.json` |
+| the `fishing` store | `tensors/family10_2/fishing/` |
+| the monthly 0.25° fishing grid (for the globe, NOT for training — §2.6) | `tensors/family10_2/fishing_grid/` |
+| the four inherited stores | `tensors/family10_1/<store>/`, unchanged |
+| the 10.1 registry, still readable | `tensors/family10_1/family10.json` |
 | the `slatrack` build's per-year column parts | `partials/family10_1/slatrack/<year>/` |
 
 The `partials/` prefix is build scaffolding, not data to ingest — §11 explains
-what it is for. A reader wants the first two.
+what it is for. A reader wants the registry and the store directories.
 
 | store | what it measures | C | record | footprint `(log2_fp, log2_dt)` |
 |---|---|---|---|---|
@@ -107,6 +131,7 @@ what it is for. A reader wants the first two.
 | `gtmba` | the tropical moored arrays: one row per mooring per day, 18 quantities | 18 | 1977-11 → | (−4, −2.3) — a point, a daily mean |
 | `socat` | ship and mooring surface-water CO₂ fugacity with SST, salinity, pressure | 4 | 1957 → | (−4, −4) — an underway measurement, minutes |
 | `slatrack` | along-track sea-level anomaly, 29 altimeter missions at 1 Hz (≈ 7 km) | 3 | 1993 → | (−2.0, −4) — a 7 km along-track cell |
+| `fishing` | apparent fishing effort from AIS: one row per day × 0.1° cell × vessel, carrying the hours that vessel broadcast inside the cell and the part of them classed as fishing | 2 | 2012-01 → 2024-12 | (−1.32, −2.32) — an 11 km cell, a daily total |
 
 ### 2.1 · The files — nine arrays plus `store.json`, the same in every store
 
@@ -123,6 +148,12 @@ what it is for. A reader wants the first two.
 | `bin_offsets.npy` | int64 [B + 1] | CSR offsets over **this store's own** bin range: the rows of bin `b` are `[off[b − bin_first], off[b − bin_first + 1])`, and `bin_first` is in `store.json` |
 | `store.json` | JSON | the schema, the footprint constants, the QC policy, the provenance (URLs, verification dates, builder commit), the per-year counts, the per-channel measured fraction and value range, and the **sha256 of every file above** |
 
+One store ships a tenth file: `fishing` publishes **`vessels.csv.gz`** beside
+the nine arrays — the source's own vessel table, 19 MB, the only way to turn a
+`platform` hash back into a flag, a gear class, a length, an engine power or a
+tonnage (§2.6). `store.json` carries its sha256 like any other file, and a
+consumer that does not need vessel identity can skip it.
+
 **Rows are sorted by `(bin, time_s)` ascending.** That order is what makes
 `bin_offsets` valid at all, and every consumer may rely on it. Under 10.1 the
 sort inside a bin is a real ordering of the measurements: two rows a second
@@ -137,27 +168,67 @@ consumer that assumes 0 reads the wrong pentad and nothing says so — use
 
 ### 2.2 · The registry
 
-`tensors/family10_1/family10.json`, written by `ml/build_family10_registry.py`,
+`tensors/family10_2/family10.json`, written by `ml/build_family10_registry.py`,
 lists **every group of the family in one file** — the tier-G channel groups of
 the gridded tensor *by reference to its manifest*, family 8's Argo store, and
-these four. Per group: `tier`, `layout`, `cadence`, `channels` with units, the
-footprint constants, `bin_first`, its own `schema_version`, the files with
-their sha256, the sources and the builder commit. **A consumer dispatches on
-`tier` and needs nothing else.**
+these five. Per group: `tier`, `layout`, `cadence`, `channels` with units, the
+footprint constants, `bin_first`, its own `schema_version`, **its own `path`**,
+the files with their sha256, the sources and the builder commit. **A consumer
+dispatches on `tier`, resolves files under `path`, and needs nothing else.**
 
-The registry at the top of the file says `family_version` **"10.1"** and
+The registry at the top of the file says `family_version` **"10.2"** and
 `schema_version` **2**; each group repeats its own, because they are not all
 the same — family 8's Argo store is a tier-P group at **schema 1** and stays
-that way (§7), while `gdp`, `gtmba` and `socat` are schema 2. A consumer can
-therefore see from the registry alone which groups carry the seconds.
+that way (§7), while `gdp`, `gtmba`, `socat`, `slatrack` and `fishing` are
+schema 2. A consumer can therefore see from the registry alone which groups
+carry the seconds.
 
-The registry as it stands — regenerated **2026-09-16T04:13:38Z**, 47,181 bytes,
-sha256 `abf08f61c226b6f0a85591acbb0cad970f98fc085a7c7b1acf0cb0b3648ca90e` —
-carries **nine groups, with `groups_missing: []`**: four tier-G groups (`g025`,
-`g100`, `oc025`, `rg100`) at recipe `f7l2`, and five tier-P stores (`argo`,
-`gdp`, `gtmba`, `socat`, `slatrack`). Every tier-P entry's `N`, `bin_first`,
-`bin_last`, file list and nine sha256 values agree with that store's own
-`store.json`, digest for digest.
+The 10.2 registry carries **ten groups, with `groups_missing: []`**: four
+tier-G groups (`g025`, `g100`, `oc025`, `rg100`) at recipe `f7l2` from family
+7.1, and six tier-P stores —
+
+| tier-P group | N | `path` |
+|---|---|---|
+| `argo` | 2,678,439 | family 8's store, schema 1 (§7) |
+| `gdp` | 48,480,798 | `tensors/family10_1/gdp` |
+| `gtmba` | 1,001,282 | `tensors/family10_1/gtmba` |
+| `socat` | 41,830,675 | `tensors/family10_1/socat` |
+| `slatrack` | 2,030,800,176 | `tensors/family10_1/slatrack` |
+| `fishing` | **617,164,038** | `tensors/family10_2/fishing` |
+| **total** | **2,741,955,408** | |
+
+Every tier-P entry's `N`, `bin_first`, `bin_last`, file list and sha256 values
+agree with that store's own `store.json`, digest for digest. The registry was
+published with `verified by restore` — the publisher downloads back what it has
+just uploaded and re-hashes it before declaring success.
+
+The 10.1 registry (regenerated 2026-09-16T04:13:38Z, 47,181 bytes, sha256
+`abf08f61c226b6f0a85591acbb0cad970f98fc085a7c7b1acf0cb0b3648ca90e`, nine
+groups) is still at `tensors/family10_1/family10.json` and still correct about
+the four stores it describes. **Read the 10.2 one**; it describes the same four
+plus `fishing`.
+
+### 2.2a · `inherits` — how 10.2 says it did not rebuild anything
+
+The 10.2 registry carries, beside `groups`:
+
+```json
+"inherits": {"10.1": {"groups": ["gdp", "gtmba", "socat", "slatrack"],
+                      "root": "tensors/family10_1",
+                      "registry": "tensors/family10_1/family10.json"}}
+```
+
+It means what it says: those four groups are the family-10.1 stores, at the
+family-10.1 prefix, and **their entries in this registry — including every
+sha256 — are byte-identical to the entries in the 10.1 registry**. That was
+checked rather than asserted. Nothing was copied, re-uploaded or re-derived, so
+a consumer already holding the 10.1 four has nothing to re-download and can
+verify that fact by comparing two digests.
+
+The practical rule for a reader: **resolve a group by its own `path`, never by
+the family version in the URL you happened to start from.** A 10.2 consumer
+that assumed `tensors/family10_2/gdp/` would get a 404, correctly — the store
+is where it has always been.
 
 Two properties are load-bearing. A group the builder could not read is **not**
 in `groups` and **is** in `groups_missing` — a registry that listed a group it
@@ -254,6 +325,101 @@ store. For `gdp` and `gtmba` the other **eight arrays are byte-identical to
 row-ordered array (`fp.npy` and `qc.npy` are constant enough down the column
 that they still hash the same).
 
+### 2.5 · `fishing` — the fifth store, and what it is a measurement OF
+
+`tensors/family10_2/fishing/`, schema 2, **617,164,038 rows**, C = 2, bins
+**2191 … 3141 with all 951 live**, 2012-01-01 → 2024-12-31, ≈ 24.1 GB in ten
+files. One row is **one vessel, in one 0.1° cell, on one day**.
+
+The source is **Global Fishing Watch**'s *Global AIS-based Apparent Fishing
+Effort Dataset* v3.0 (2025-03-11), **Zenodo record 14982712**, table
+`mmsi-daily-csvs-10-v3-<year>.zip`, 2012–2024 — 13 zips, 5,336,047,844 bytes,
+served anonymously with no account. Global Fishing Watch listens to AIS, the
+collision-avoidance radio, and runs a neural network over each vessel's track
+to decide which of its hours look like fishing. So the two channels are:
+
+| idx | name | unit | what |
+|---|---|---|---|
+| 0 | `fishing_hours` | h | of the hours below, the part a **classifier** judged to be fishing. A model output, and the store says so |
+| 1 | `hours` | h | the hours that vessel was **broadcasting** inside that cell that day. An observation |
+
+`lat`/`lon` are the cell's **centre** — the source publishes the lower-left
+corner and the builder adds 0.05° — and the longitude is wrapped into
+[−180, 180) *after* the float32 cast, so a value of 179.99999 cannot round up
+to 180.0 and fail the store's own check. `platform` is the hash of the vessel's
+MMSI, so one vessel is one identifier across days. `time_s` is the day at
+00:00:00 UTC: the source is daily, every row of a day carries the same second,
+and the pentad bin is the same `floor_divide(time_s, 432000)` as everywhere
+else.
+
+**`qc` IS THE GEAR CLASS. It is not a quality grade, and this is the one place
+a reader of the other four stores will be wrong by habit.** In `gdp`, `gtmba`,
+`socat` and `slatrack`, `qc` is 0–5 and larger is worse. Here it is a **code
+table**, written into `store.json` as `qc_codes`, and `qc_keep_max` means
+nothing: 0 unknown · 1 `dredge_fishing` · 2 `drifting_longlines` · 3 `fishing`
+· 4 `fixed_gear` · 5 `other_purse_seines` · 6 `other_seines` ·
+7 `pole_and_line` · 8 `pots_and_traps` · 9 `purse_seines` · 10 `seiners` ·
+11 `set_gillnets` · 12 `set_longlines` · 13 `squid_jigger` · 14 `trawlers` ·
+15 `trollers` · 16 `tuna_purse_seines`. A consumer that filters `qc <= 2` on
+this store keeps the longliners and throws away the trawlers. **Read
+`store.json`'s `qc_codes` and dispatch on the store, or ignore the column.**
+`qc = 0` means the MMSI has no row in the vessel table for that year:
+**17,809 rows**, 0.003 %.
+
+**`vessels.csv.gz`, the vessel table**, is published beside the arrays:
+`fishing-vessels-v3.csv` from the same Zenodo record, 114,823,860 bytes over
+**773,165 rows** (md5 `b5ba27cedd5426c0bcb8e6009e911cf0`), gzipped to 19 MB.
+One row per MMSI per year with the flag (`flag_gfw`), the gear class
+(`vessel_class_gfw`), the length, the engine power and the tonnage. It is the
+only way to turn a `platform` hash back into vessel identity. Its gear
+histogram over those 773,165 vessel-years — trawlers 335,979 · fishing 171,310
+· set_gillnets 64,659 · set_longlines 45,538 · drifting_longlines 41,544 ·
+fixed_gear 38,021 · other_purse_seines 26,504 · pole_and_line 12,733 ·
+squid_jigger 9,626 · dredge_fishing 9,617 · tuna_purse_seines 6,630 ·
+pots_and_traps 5,294 · purse_seines 2,092 · seiners 1,541 · trollers 1,190 ·
+other_seines 887 — sums to 773,165 exactly. The fleet in it grows almost
+tenfold: 10,447 vessels in 2012, then 31,896 · 35,985 · 38,123 · 47,484 ·
+58,925 · 64,898 · 68,538 · 68,128 · 75,153 · 82,681 · 96,450, and **94,457 in
+2024**.
+
+**THE LICENCE IS DIFFERENT FROM EVERY OTHER STORE IN THIS FAMILY.** Global
+Fishing Watch publishes this dataset under **CC BY-NC 4.0**: attribution
+required, and **non-commercial use only**. The other four stores are CC-BY or
+equivalent with no such restriction. Carry the attribution — "Powered by Global
+Fishing Watch" — and the citation in §11 wherever the data or anything derived
+from it is shown, and do not put it in a commercial product. `store.json`
+carries the licence string and the recommended citation so a consumer never has
+to find this page.
+
+**What the store does NOT say.** `hours` is *broadcasting* hours, not presence:
+AIS reception is uneven in space and time, carriage rules differ by fleet and
+country, and a transponder can be switched off. **Absence of effort is not
+absence of fishing**, and a model told that a blank cell is an empty ocean has
+been told something false. Two more of the source's own stated known issues:
+2024 is provisional, and one MMSI is not always one vessel (spoofing,
+reflagging, recycling), which is why 10,688,165 rows — **1.73 %** — carry more
+than 24 hours in a day, up to 49.6875 h. Those rows are **counted, not
+dropped**: the builder's ceiling is a sanity bound of 168 h (one week), and a
+misread longitude would still trip it. The gear class is one class per MMSI
+over the whole record, so a vessel that re-rigged is filed under one gear.
+
+### 2.6 · The monthly 0.25° grid is for the globe, NOT for training
+
+Beside the store, `tensors/family10_2/fishing_grid/fishing_grid_monthly_025.npy`
+holds the same rows **summed onto the family-7 0.25° grid, one frame per
+month**: shape [156, 721, 1440, 2] **float32**, 1,295,723,648 bytes, months
+2012-01 … 2024-12, month-major in C order so one month of both channels is a
+single contiguous 8,305,920-byte range read, with the manifest beside it in
+`fishing_grid/grid.json`. It is float32 and not the planned float16 because the
+busiest 0.25° cell-month of 2024 holds **595,726 vessel-hours** against
+float16's 65,504 ceiling.
+
+It exists so the web globe can paint a month without range-reading a point
+store, and its sums equal the store's to a worst per-month relative
+disagreement of **2.42e-9**. **A model should read the store**: the grid has
+already thrown away vessel identity, gear class and the daily cadence, which
+are three of the four reasons the store is interesting.
+
 ## 3 · The channels
 
 Raw units throughout. Nothing is z-scored and nothing is anomalised — the store
@@ -317,6 +483,23 @@ barometer was missing would be making up data. `patm` is NaN there instead.
 archive's `sla_filtered`; both names are in `store.json` so nothing has to be
 guessed. `adt = sla + mdt` is one addition rather than a second product.
 
+### 3.5 · `fishing` — apparent fishing effort (C = 2)
+
+| idx | name | unit | what |
+|---|---|---|---|
+| 0 | `fishing_hours` | h | the part of `hours` a neural network classed as fishing — a **model output**, not a measurement, and the only channel in this family that is one |
+| 1 | `hours` | h | the hours that vessel was broadcasting inside that 0.1° cell that day — the observation |
+
+`0 ≤ fishing_hours ≤ hours` holds on every row and is asserted by the builder.
+The pair is the honest way to read it: `hours` says how long a vessel was
+there, `fishing_hours` says how much of that a classifier thinks was fishing,
+and their ratio is a confidence-free statement about behaviour. Neither is
+NaN anywhere in the store. 4,702,031 rows (0.76 %) carry `hours = 0` — a vessel
+the daily aggregation placed in the cell with no broadcasting time in it — and
+they are kept rather than dropped, because zero hours is a value and dropping
+them would silently change what a cell's row count means. §2.5 has the source,
+the gear-class `qc` warning, the vessel table and the licence.
+
 ## 4 · How the values were made (so you can trust or reject it)
 
 Each store's full policy text is in its own `store.json` under `qc_policy`, in
@@ -352,6 +535,16 @@ the archive look identical from outside.
 - **`slatrack`.** DUACS level 3 is edited upstream and publishes no per-sample
   flag, so every kept row carries `qc = 1` and the store says so rather than
   inventing a grade.
+- **`fishing`.** The source publishes no per-row flag either, and the `qc`
+  column is used for the **gear class** instead (§2.5) — so there is no grade
+  to keep or drop by. The build's guards are therefore guards and not filters,
+  and on this archive not one of them fired: `drop_bad_number` 0,
+  `drop_no_position` 0 and `drop_out_of_range` 0 over 617,164,038 rows, with
+  `rows_read` = `rows_packed` and the ledger closing at zero residual. The one
+  bound that exists is a sanity ceiling of **168 hours** (a week) rather than
+  24, because 1.73 % of rows legitimately exceed a day — one MMSI broadcast by
+  more than one vessel, the source's own first known issue — and those rows are
+  counted into `hours_over_24h` rather than refused.
 
 ### 4.3 · `platform`
 
@@ -364,9 +557,12 @@ out a platform the way it holds out a year.
 ### 4.4 · Physical bounds
 
 `|u|, |v| < 5 m s⁻¹` · `−3 < SST < 45 °C` · `0 < fCO₂ < 2000 µatm` ·
-`|sla| < 3 m` · `0 ≤ sss ≤ 45 PSU` · `|wind| < 120 m s⁻¹` · `−60 < airt < 60 °C`.
-A value outside is set to **NaN and counted** — never clipped. Clipping would
-put a fabricated number where a broken instrument was.
+`|sla| < 3 m` · `0 ≤ sss ≤ 45 PSU` · `|wind| < 120 m s⁻¹` · `−60 < airt < 60 °C`
+· `0 ≤ fishing_hours ≤ hours ≤ 168 h`. A value outside is set to **NaN and
+counted** — never clipped. Clipping would put a fabricated number where a
+broken instrument was. The `fishing` bound is the one that is an assertion
+rather than a mask: the builder refuses the store if it is violated, and over
+617,164,038 rows it never was.
 
 ### 4.5 · Every store is asserted before it is trusted
 
@@ -465,6 +661,7 @@ from family10_store import Store
 
 st  = Store.open("tensors/family10_1/gdp")                       # a directory
 st  = Store.open("chfrank/earth-tensors:tensors/family10_1/gdp") # or the Hub
+st  = Store.open("chfrank/earth-tensors:tensors/family10_2/fishing")  # 10.2's own
 tok = st.knearest(36.0, -70.0, bin=2411, k=8,
                   R_max_km=300.0, T_max_days=10.0)
 ```
@@ -521,9 +718,9 @@ at anchors where the store has data. **The measurement was made on the 10.0
 stores and carries over to 10.1 unchanged**: it is a statement about how far
 apart observations are, the rows are the same rows in the same order, and a
 k-th-neighbour distance in kilometres does not depend on the unit the time
-column is written in. `slatrack` is the one still unmeasured —
-not because it is unbuilt, but because the measurement wants a machine that can
-memory-map 67 GB. The measured numbers:
+column is written in. `slatrack` and `fishing` are the two still unmeasured —
+not because either is unbuilt, but because the measurement memory-maps a store
+and those two are 67 GB and 24 GB. The measured numbers:
 
 | store | k | k-th neighbour distance (median / p90 / p99) | k-th neighbour age (median / p99) | measured (R_max, T_max) covering the 99th percentile ON-TRACK | the old suggestion |
 |---|---|---|---|---|---|
@@ -531,6 +728,7 @@ memory-map 67 GB. The measured numbers:
 | `gtmba` | 4 | **0 km** / 334 km / **334 km** | **2.5 d** / 3.5 d | **≈ 350 km, ≈ 5 d** | 1,500 km, 15 d |
 | `socat` | 8 | **4.5 km** / 46 km / **111 km** | **1.8 d** / 4.9 d | **≈ 150 km**; keep **30 d** for T | 500 km, 30 d |
 | `slatrack` | 16 | *not measured — the store is built and published, but `measure_knn.py` memory-maps it and it is 67 GB* | — | *suggested only:* 200 km, 10 d, one repeat cycle. Expect far smaller: consecutive along-track samples are **6.2–6.5 km** apart (measured), so k = 16 at an anchor the satellite flew over is ~100 km of one pass | 200 km, 10 d |
+| `fishing` | 8 | *not measured — the store is built and published; 617 M rows over 24 GB wants a box* | — | *suggested only:* 100 km, 5 d. The geometry is unusually favourable: the rows are a **0.1° lattice**, so an anchor in a fished region has its eight nearest cells within ~30 km, and the binding question is whether anyone was fishing there at all rather than how far the nearest cell is | — (new in 10.2) |
 
 Read the third column before fixing anything. `gtmba`'s 4th neighbour is at
 0 km at the median because the array is a fixed lattice and the same mooring
@@ -634,6 +832,10 @@ is why negative bins are kept rather than dropped at build time — dropping
 cannot be undone.
 
 ## 9 · What is published and verified (2026-09-16)
+
+**All five stores are on the Hub and verified**, and the registry at
+`tensors/family10_2/family10.json` describes all ten groups. §9 and §9.1 are
+the four inherited 10.1 stores; **§9.3 is `fishing`**.
 
 **All four 10.1 stores are on the Hub and verified.** The three keyless ones
 were rebuilt from source on 2026-09-15 from builder commit `d7fc30b` on
@@ -810,7 +1012,9 @@ The published directories:
 - [the `gtmba` store on the Hub](https://huggingface.co/datasets/chfrank/earth-tensors/tree/main/tensors/family10_1/gtmba) — the tropical moored arrays, daily, 63.1 MB.
 - [the `socat` store on the Hub](https://huggingface.co/datasets/chfrank/earth-tensors/tree/main/tensors/family10_1/socat) — ship and mooring surface CO₂, 1.46 GB.
 - [the `slatrack` store on the Hub](https://huggingface.co/datasets/chfrank/earth-tensors/tree/main/tensors/family10_1/slatrack) — along-track sea level, 29 altimeter missions, 2,030,800,176 rows, 67.02 GB, published 2026-09-16.
-- [the family-10 registry on the Hub](https://huggingface.co/datasets/chfrank/earth-tensors/blob/main/tensors/family10_1/family10.json) — `family_version` "10.1", `schema_version` 2, **nine groups with `groups_missing: []`**, regenerated 2026-09-16T04:13:38Z; tier G is recipe `f7l2` with four groups and no fallback note, and every tier-P entry's N, `bin_first`, file count and sha256 agrees with the `store.json` above.
+- [the `fishing` store on the Hub](https://huggingface.co/datasets/chfrank/earth-tensors/tree/main/tensors/family10_2/fishing) — apparent fishing effort from AIS, daily × 0.1° × vessel, 617,164,038 rows, ≈ 24.1 GB, published 2026-09-16 (§9.3).
+- [the family-10.2 registry on the Hub](https://huggingface.co/datasets/chfrank/earth-tensors/blob/main/tensors/family10_2/family10.json) — `family_version` "10.2", `schema_version` 2, **ten groups with `groups_missing: []`** and an `inherits` block naming family 10.1; tier G is recipe `f7l2` with four groups and no fallback note, every tier-P entry's N, `bin_first`, file count and sha256 agrees with its own `store.json`, and the four inherited entries are byte-identical to the 10.1 registry's. **This is the one to read.**
+- [the family-10.1 registry on the Hub](https://huggingface.co/datasets/chfrank/earth-tensors/blob/main/tensors/family10_1/family10.json) — `family_version` "10.1", `schema_version` 2, nine groups with `groups_missing: []`, regenerated 2026-09-16T04:13:38Z; still correct about the four stores it describes, and superseded by the 10.2 one above.
 
 **Historical context: the access paths, verified against the live archive on
 2026-09-13** — from a sandbox that can reach these hosts, by listing and
@@ -942,6 +1146,92 @@ from the **environment only** — never a file, never a command line.
   are not ties in the world. This is the whole reason 10.1 exists, and it is
   the one thing re-fetching actually buys.
 
+### 9.3 · `fishing` — what was built, and what was checked
+
+Built and published by one run on 2026-09-16 —
+[family10-build #20 (E-081 · the full `fishing` build, `store=fishing stage=all` 2012-01-01 → 2024-12-31, on a rented box)](https://github.com/blauewelt/earth/actions/runs/35134413191),
+dispatched 18:26Z and green at 19:50Z, **84 minutes** for about **$0.70**:
+index 132.5 s, fetch 4,105.8 s (streaming assembly, peak resident memory
+18.98 GB), grid 328.0 s, publish 398.5 s for 11 items, and the registry step
+ending `verified by restore`. A 2012-only probe on a free GitHub-hosted runner
+went first and is what licensed the box; its first attempt (**#18**) died on a
+**Zenodo outage** — HTTP 504 on every URL of record 14982712 from about 17:10Z
+to about 18:06Z — and its re-dispatch ([**#19**](https://github.com/blauewelt/earth/actions/runs/35132684369), 18:09Z) returned 2012's
+6,257,384 rows in three minutes.
+
+`store.json` reads: schema 2, C = 2, `bin_first` **2191**, `bin_last` **3141**,
+**951 bins and every one live**, footprint (−1.32, −2.32), built
+2026-09-16T19:35:41Z from builder commit `e70270a`.
+
+| what | value |
+|---|---|
+| N | **617,164,038** |
+| `rows_read` = `rows_packed` | 617,164,038 — `drop_bad_number` 0, `drop_no_position` 0, `drop_out_of_range` 0 |
+| days | `days_expected` = `days_found` = **4,749**, every day of the thirteen years |
+| `hours_total` | **1,985,162,793.77 h** (float64 sum over the float16 values) |
+| `fishing_hours_total` | **695,155,362.20 h** — ≈ 0.70 billion |
+| `hours_over_24h` | 10,688,165 rows, **1.73 %**; per-channel maximum 49.6875 h, the float16 of the measured `max_hours` 49.6755 |
+| `rows_zero_hours` | 4,702,031 rows, 0.76 % |
+| `qc_unknown` | 17,809 rows — an MMSI with no vessel-table row that year |
+| NaN | none, in either channel |
+| size | ≈ 24.1 GB: 617,164,038 × 39 B over the nine arrays, plus `bin_offsets` (952 × 8 B), plus `vessels.csv.gz` at 19 MB |
+
+**Every year is reconciled one-for-one against its own source zip** — a year is
+marked only when the rows read equal the zip's own row count:
+
+| year | rows | year | rows | year | rows |
+|---|---|---|---|---|---|
+| 2012 | 6,257,384 | 2017 | 43,858,727 | 2022 | 72,195,082 |
+| 2013 | 19,099,705 | 2018 | 50,882,201 | 2023 | 84,786,933 |
+| 2014 | 23,126,797 | 2019 | 54,201,316 | 2024 | 84,800,259 |
+| 2015 | 26,407,087 | 2020 | 55,991,204 | | |
+| 2016 | 34,864,177 | 2021 | 60,693,166 | **total** | **617,164,038** |
+
+**What was checked, and how.** `check_store` ran over every row before the
+publish (§4.5) — the sort, the bin/time agreement, the CSR offsets, the
+longitude range, the footprint columns, the bounds — with the builder's own
+assertion `0 ≤ fishing_hours ≤ hours ≤ 168` never tripping. The publish then
+downloaded every file back and re-hashed it against `store.json`'s record. From
+outside, afterwards, a sandbox **range-read 1,000,000 rows at offset
+300,000,000** and confirmed independently that `fishing_hours ≤ hours`
+everywhere in that window, a maximum `hours` of 47.3125 and no NaN. And the
+monthly grid's sums were compared against the store's totals: worst per-month
+relative disagreement **2.42e-9**.
+
+**The sha256 of every published file.** A reader that re-hashes a download and
+gets a different digest has a corrupted copy, not a newer store — stores are
+not rewritten in place.
+
+| file | sha256 |
+|---|---|
+| `bin.npy` | `4f075137dd93ae6160671a18cb03e64bfa5c35961489f4a2dc2b9af1816e6c89` |
+| `bin_offsets.npy` | `03631d4821c9738f84d90f257aff5e9d14157f3423875680413f8ad1aed60134` |
+| `fp.npy` | `bb33a307a73a19af11cb7276c0450fe736cbe63c192196a49b4477090a85b002` |
+| `lat.npy` | `d3ed01b6ad8f0c014468ed9748daf21781f13df75d9d3c6db2b09cf217d8bc1a` |
+| `lon.npy` | `f0b6003f624f6414eef15485f23de082868d48af589c9171a3a3e1065b7b046a` |
+| `platform.npy` | `6e86126e2b3fb6d20d7bd3f4f881246402d95f2ec97ffbd175e0c41835397e21` |
+| `qc.npy` | `fb05c17d317564588a76a735d3aabd3265f6a875ec7e2121cca7faf169d485c5` |
+| `time_s.npy` | `2a11428a70f29aa27ff186489fbf25191a55200f997f530cd66f5dfeb502fd77` |
+| `values.npy` | `4aa2aa70c5a7edf37bb8f5e6ae4f9fb2cbff14982274f1b96bd23e9b7695a9ba` |
+| `vessels.csv.gz` | `8892c856cdcc84296f435d48063e03132599c5f2d039016787b6181e98c0697a` |
+| `store.json` | *the file carrying the ten digests above* |
+
+**The grid, for completeness** (§2.6 says why a model should not read it):
+`fishing_grid/fishing_grid_monthly_025.npy`, [156, 721, 1440, 2] float32,
+1,295,723,648 bytes with a 128-byte `.npy` header and an 8,305,920-byte slab
+per month, months 2012-01 … 2024-12, `complete: true`, manifest
+`fishing_grid/grid.json`, `grid_sum` [695,155,362.31, 1,985,162,793.78] against
+the store's two totals. Spot-checked from a sandbox at month 2020-01 (index
+96): the slab's own sums are 3,295,177 fishing hours and 11,832,883
+broadcasting hours, equal to the manifest.
+
+**Two numbers the plan projected were corrected by this build**, which is what
+a projection is for: the store was expected to hold ≈ 596 million rows (it
+holds 617,164,038, so the projection was 3.5 % low) and ≈ 0.8 billion apparent
+fishing hours (it holds 0.70 billion). Global Fishing Watch's release-note
+figure of "nearly 370 million hours" is confirmed **not** to be this table's
+sum.
+
 ## 10 · Known limits and gotchas
 
 - **`values` is float16.** About three decimal digits. That is ~0.002 °C at
@@ -1026,6 +1316,34 @@ from the **environment only** — never a file, never a command line.
   `copernicusmarine.get`-on-original-files route end to end over 32 years. The
   product and the dataset ids are right, the call named is not, and no array is
   affected.
+- **`fishing`'s `qc` is the GEAR CLASS, not a quality grade.** Sixteen classes
+  plus 0 for unknown, listed in that store's `qc_codes` (§2.5). `qc_keep_max`
+  is meaningless there, and the habit of filtering `qc <= 2` — right in the
+  other four stores — keeps the longliners and discards the trawlers. Dispatch
+  on the store, or ignore the column.
+- **`fishing` is CC BY-NC 4.0 — non-commercial, attribution required.** It is
+  the only store in this family with a use restriction. Carry "Powered by
+  Global Fishing Watch" and the §11 citation wherever the data or anything
+  derived from it is shown. The other four are CC-BY or equivalent.
+- **`fishing_hours` is a MODEL OUTPUT.** It is a neural network's judgement of
+  which broadcasting hours were fishing, not a measurement of fishing; `hours`
+  is the observation. A consumer that treats the first as ground truth is
+  training on another model's predictions.
+- **Absence of effort is not absence of fishing.** AIS reception is uneven in
+  space and time, carriage rules differ by fleet and country, and a transponder
+  can be switched off. An empty `fishing` cell means nobody was heard, which is
+  not the same as nobody being there — and unlike the other four stores, where
+  a miss is plainly a gap in an observing system, this one's misses are easy to
+  read as a measured zero.
+- **`fishing` rows over 24 hours in a day are real and are kept.** 10,688,165
+  of them, 1.73 %, to 49.6875 h: one MMSI broadcast by more than one vessel,
+  which the source states as its first known issue. The store's ceiling is a
+  168-hour sanity bound, not a day, and the count is in `store.json` as
+  `hours_over_24h`. Also: 2024 is provisional upstream, and the gear class is
+  one class per MMSI over the whole record.
+- **The fishing GRID is not the fishing STORE.** `fishing_grid_monthly_025.npy`
+  exists for the web globe: monthly 0.25° sums, float32, no vessel identity, no
+  gear class, no daily cadence. Training reads the store (§2.6).
 - **The k observations a search returns are usually ONE platform.** Median 1 of
   8 for `gdp` and `socat`, 2 of 4 for `gtmba`, measured on the published stores
   (§6). `slatrack` is not yet measured and will be the extreme case: at 6.5 km
@@ -1035,8 +1353,8 @@ from the **environment only** — never a file, never a command line.
 
 ## 11 · Provenance
 
-Built by `ml/build_family10_stores.py` (`--store gdp|gtmba|socat|slatrack`,
-stages `index | fetch | publish`), read by `ml/family10_store.py`, registered by
+Built by `ml/build_family10_stores.py` (`--store gdp|gtmba|socat|slatrack|fishing`,
+stages `index | fetch | grid | publish`), read by `ml/family10_store.py`, registered by
 `ml/build_family10_registry.py`, dispatched by
 `.github/workflows/family10-build.yml` (`workflow_dispatch` only), tested by
 `tests/test_build_family10_stores.py`. Every `store.json` carries the builder's
@@ -1159,3 +1477,21 @@ Data citations, all CC-BY or equivalent — **cite them when you use the data**:
 - **slatrack** — Copernicus Marine Service product
   `SEALEVEL_GLO_PHY_L3_MY_008_062` (DUACS reprocessed level-3 along-track sea
   level), E.U. Copernicus Marine Service Information.
+- **fishing** — Global Fishing Watch, *Global AIS-based Apparent Fishing Effort
+  Dataset*, version 3.0 (2025-03-11), Zenodo record 14982712. Derived from
+  Kroodsma, D. A. et al., *Tracking the global footprint of fisheries*,
+  Science 359(6378), 904–908, 2018. **Licence CC BY-NC 4.0 — attribution
+  required and NON-COMMERCIAL use only**, the one restriction in this family;
+  the attribution string is "Powered by Global Fishing Watch". The exact
+  citation the source recommends is in that store's `store.json`.
+
+**And a note on family 10.2's own provenance.** The `fishing` store and the
+10.2 registry were built by
+[family10-build #20 (E-081 · the full `fishing` build, `stage=all` 2012–2024, on a rented box)](https://github.com/blauewelt/earth/actions/runs/35134413191)
+on 2026-09-16, in 84 minutes for about $0.70, after two free hosted probes of
+2012 alone ([#18](https://github.com/blauewelt/earth/actions/runs/35126550455), lost to a Zenodo outage; [#19](https://github.com/blauewelt/earth/actions/runs/35132684369), green in three minutes). The
+four family-10.1 stores were **not** touched by it: the registry references
+them at `tensors/family10_1/` through the `inherits` block of §2.2a, and their
+entries are byte-identical to the 10.1 registry's, sha256 for sha256. The
+specification is `ml/plans/E081_family10_2_fishing.md`, whose §6 is the RESULT
+this page's §2.5, §2.6 and §9.3 describe.
