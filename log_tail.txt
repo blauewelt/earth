@@ -1,0 +1,80 @@
+
+  ...hing_grid_monthly_025.npy:  99%|█████████▉| 1.28GB / 1.30GB            [A[A
+
+  ...hing_grid_monthly_025.npy:  99%|█████████▉| 1.28GB / 1.30GB            [A[A
+
+  ...hing_grid_monthly_025.npy:  99%|█████████▉| 1.28GB / 1.30GB            [A[A
+
+  ...hing_grid_monthly_025.npy:  99%|█████████▉| 1.28GB / 1.30GB            [A[A
+
+  ...hing_grid_monthly_025.npy:  99%|█████████▉| 1.28GB / 1.30GB            [A[A
+
+  ...hing_grid_monthly_025.npy:  99%|█████████▉| 1.28GB / 1.30GB            [A[A
+
+  ...hing_grid_monthly_025.npy:  99%|█████████▉| 1.28GB / 1.30GB            [A[A
+
+  ...hing_grid_monthly_025.npy:  99%|█████████▉| 1.28GB / 1.30GB            [A[A
+
+  ...hing_grid_monthly_025.npy:  99%|█████████▉| 1.28GB / 1.30GB            [A[A
+
+  ...hing_grid_monthly_025.npy:  99%|█████████▉| 1.28GB / 1.30GB            [A[A
+
+  ...hing_grid_monthly_025.npy:  99%|█████████▉| 1.28GB / 1.30GB            [A[A
+
+  ...hing_grid_monthly_025.npy:  99%|█████████▉| 1.28GB / 1.30GB            [A[A
+
+  ...hing_grid_monthly_025.npy:  99%|█████████▉| 1.28GB / 1.30GB            [A[A
+
+  ...hing_grid_monthly_025.npy:  99%|█████████▉| 1.28GB / 1.30GB            [A[A
+
+  ...hing_grid_monthly_025.npy:  99%|█████████▉| 1.28GB / 1.30GB            [A[A
+
+  ...hing_grid_monthly_025.npy:  99%|█████████▉| 1.28GB / 1.30GB            [A[A
+
+  ...hing_grid_monthly_025.npy:  99%|█████████▉| 1.28GB / 1.30GB            [A[A
+
+  ...hing_grid_monthly_025.npy:  99%|█████████▉| 1.28GB / 1.30GB            [A[A
+
+  ...hing_grid_monthly_025.npy:  99%|█████████▉| 1.28GB / 1.30GB            [A[A
+
+  ...hing_grid_monthly_025.npy:  99%|█████████▉| 1.28GB / 1.30GB            [A[A
+
+  ...hing_grid_monthly_025.npy:  99%|█████████▉| 1.28GB / 1.30GB            [A[A
+
+  ...hing_grid_monthly_025.npy:  99%|█████████▉| 1.28GB / 1.30GB            [A[A
+
+  ...hing_grid_monthly_025.npy:  99%|█████████▉| 1.28GB / 1.30GB            [A[A
+
+  ...hing_grid_monthly_025.npy:  99%|█████████▉| 1.28GB / 1.30GB            [A[A
+
+  ...hing_grid_monthly_025.npy:  99%|█████████▉| 1.28GB / 1.30GB            [A[A
+
+  ...hing_grid_monthly_025.npy:  99%|█████████▉| 1.28GB / 1.30GB            [A[A
+
+  ...hing_grid_monthly_025.npy:  99%|█████████▉| 1.28GB / 1.30GB            [A[A
+
+  ...hing_grid_monthly_025.npy:  99%|█████████▉| 1.28GB / 1.30GB            [A[A
+
+  ...hing_grid_monthly_025.npy:  99%|█████████▉| 1.28GB / 1.30GB            [A[A
+
+  ...hing_grid_monthly_025.npy:  99%|█████████▉| 1.28GB / 1.30GB            [A[A
+
+  ...hing_grid_monthly_025.npy:  99%|█████████▉| 1.28GB / 1.30GB            [A[A
+
+  ...hing_grid_monthly_025.npy:  99%|█████████▉| 1.28GB / 1.30GB            [A[A
+
+  ...hing_grid_monthly_025.npy:  99%|█████████▉| 1.28GB / 1.30GB            [A[A
+
+  ...hing_grid_monthly_025.npy:  99%|█████████▉| 1.28GB / 1.30GB            [A[A
+
+  ...hing_grid_monthly_025.npy:  99%|█████████▉| 1.28GB / 1.30GB            [A[A
+
+  ...hing_grid_monthly_025.npy:  99%|█████████▉| 1.28GB / 1.30GB            [A[A
+
+  ...hing_grid_monthly_025.npy:  99%|█████████▉| 1.28GB / 1.30GB            [A[AProcessing Files (0 / 1)      :  99%|█████████▉| 1.28GB / 1.30GB, 14.3kB/s  
+New Data Upload               : 100%|██████████| 1.10GB / 1.10GB, 12.3kB/s  
+  ...hing_grid_monthly_025.npy:  99%|█████████▉| 1.28GB / 1.30GB            
+  grid: 2 file(s) verified by restore -> https://huggingface.co/datasets/chfrank/earth-tensors/tree/main/tensors/family10_2/fishing_grid
+wrote /opt/runner/_work/earth/earth/data/fishing_index.json (6.1 kB)
+  publish: 11 file(s) verified by restore -> https://huggingface.co/datasets/chfrank/earth-tensors/tree/main/tensors/family10_2/fishing
+=== stage publish done in 398.5s ===
