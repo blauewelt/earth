@@ -42,8 +42,11 @@ polarisation, sub-metre orthophotos where a country publishes them --- is
 0.01--3 petabytes a year per sensor and can
 never be pixels: it enters as a scene catalogue now and as cached
 local-codec tokens later, per E-078's tier T. Every candidate was checked
-against its producer on 2026-09-16, a licence gate excludes what may not be
-republished, and the note gives the stores, the arithmetic, a three-phase
+against its producer on 2026-09-16; a licence rule sorts each store onto a
+public track (the public Hub repository, readable by anyone) or a private
+track (built and held for this project's own use, never republished), so a
+source's terms decide where it lives and not whether it is used; and the
+note gives the stores, the arithmetic, a three-phase
 ladder (phase A $\approx 0.7$\,TB), the falsifiers, and the decisions left to
 Chris.
 \end{abstract}
@@ -80,7 +83,7 @@ Current; Pacific island gauges see Kelvin waves weeks before Ni\~no-3.4
 moves; high-frequency radar measures the surface current at 6\,km hourly
 where the boundary currents meet the shelf.
 
-\section{The rule, the two domains, and the licence gate}
+\section{The rule, the two domains, and the two tracks}
 
 \paragraph{The rule} is family 1.gf's: an observation with spatial support
 $\le 10$\,km (a point counts) and temporal support $\le 5$ days; a derived
@@ -89,21 +92,43 @@ coarser cadence only where critical, and named as an exception. Read-out
 \emph{targets} are held to the spatial rule and not the temporal one --- an
 annual loss map is what the model is asked to predict, not what it is shown.
 
-\paragraph{The licence gate.} A source whose terms forbid redistribution is
-not built, whatever its value: every store is published on a public Hugging
-Face dataset and read by external agents. The registry's
-\code{licence.redistribution} is \code{yes}, \code{attribution} or \code{no}
-per group, and a \code{no} never reaches the Hub. Refused on this gate after
-checking: \textbf{ISMN} (3,300 soil-moisture stations --- ``re-export or
-transfer of the original data to a third party is prohibited''), \textbf{GRDC}
-(10,000 river gauges --- no internet redistribution; only its CC BY 4.0
-Caravan subset of 5,356 catchments is taken), \textbf{ECA\&D} (25,919
-European stations, non-commercial, no redistribution; GHCN-Daily carries
-most of them under CC0), \textbf{HadISD} (Non-Commercial Government Licence),
-and \textbf{MSWEP} (CC BY-NC). One more source is refused on access rather
-than licence: \textbf{Dynamic World}, Google's 10\,m per-scene land-cover
-classification (CC BY 4.0), exists only inside Earth Engine with no bulk
-copy to build from.
+\paragraph{The two tracks.} A source's licence decides where its store
+lives, not whether it is built. A store whose terms allow redistribution
+(\code{licence.redistribution} of \code{yes} or \code{attribution}) goes on
+the \emph{public track}: the public Hugging Face dataset repository, readable
+by anyone and by every agent that works on this project. A store whose terms
+forbid it (\code{no}) goes on the \emph{private track}: the same nine arrays
+and the same registry entry, held in a private repository that only this
+project's own jobs can read, used for training and evaluation here as a
+single licensee and never republished, forwarded or mirrored. The registry
+field \code{distribution} (\code{public} or \code{private}) records the
+track, and family 1.gf \S4 gives the mechanism: where the private repository
+is, how a rented box reads it for one job, and what may be published from a
+model trained on it. Until 2026-09-16 the design had a licence \emph{gate}
+that refused such sources outright, because every store was assumed to be
+republished; Chris removed the assumption the same day (``we can manage to
+build private datasets, and train on them without re-distributing''), and
+the five sources the gate had refused are re-sorted here. Two are set aside
+for reasons the rule itself gives: \textbf{HadISD} (Non-Commercial Government
+Licence) is a quality-controlled derivative of the hourly reports
+\code{ghcnh} carries raw under CC0, and \textbf{MSWEP} (CC BY-NC) is a
+merged product whose gauges are reachable through \code{ghcnd}. Three become
+private-track stores: \textbf{ISMN} (3,300 soil-moisture stations ---
+``re-export or transfer of the original data to a third party is
+prohibited'') as \code{ismn}; \textbf{GRDC} (10,000 river gauges, no
+internet redistribution) as \code{river\_grdc} beside the public
+\code{river}, whose CC BY 4.0 Caravan subset of 5,356 catchments stays
+public; and \textbf{ECA\&D} (25,919 European stations, non-commercial, no
+redistribution) as \code{ecad}, phase C and only for the series GHCN-Daily
+lacks. The same sorting applies inside a store: \code{tide}'s research-only
+GESLA sources (CMEMS, CV, UZ) and the South African gauges are no longer
+dropped by a filter but written by the same build to a private sibling,
+\code{tide\_private}; and Planet-NICFI's non-commercial tropical basemaps
+join \code{cat\_submetre} on the private track once their new-phase terms
+are read. One source stays out, on access rather than licence:
+\textbf{Dynamic World}, Google's 10\,m per-scene land-cover classification
+(CC BY 4.0), exists only inside Earth Engine, and an export at Sentinel-2's
+scene volume would be a catalogue of a derived product.
 
 \paragraph{Two domains.} \emph{Terrestrial}: the continents, inland water
 and ice sheets. \emph{Coastal}: a band of $\pm 100$\,km around the GSHHG
@@ -156,12 +181,16 @@ store & source; channels ($C$) & points & cadence & record; rows & stored & lice
 \midrule
 \code{ghcnd} & GHCN-Daily v3.34 (NOAA NCEI): TMAX, TMIN, PRCP, SNOW, SNWD ($C = 5$, schema 3) & 132,437 stations, 42,984 active (measured) & daily & 1763 $\to$; $\approx 1.0 \times 10^9$ station-days (3.2\,B element rows) & $\approx 40$\,GB & CC0 & forcing; A \\
 \code{igra} & IGRA v2.2 radiosondes (NCEI): T, dew-point depression, $u$, $v$, height at the 16 mandatory levels ($C = 80$, schema 3) & 2,932 stations, 807 active (measured) & 00 / 12 UTC & 1905 $\to$; 52.3\,M soundings & 10\,GB & US government & forcing, El Ni\~no; A \\
-\code{tide} & GESLA-4 (4.1 download, July 2026) via the UHSLC ERDDAP, 36 sources incl.\ UHSLC Fast Delivery and Research Quality, NOAA CO-OPS: relative sea level ($C = 1$, schema 3) & 6,474 records, 127,623 station-years & $\le$ hourly & 1800s $\to$ 2026; 1.2--1.5 $\times 10^9$ after the licence filter & 40--50\,GB & mixed: CMEMS, CV, UZ research-only; South African gauges need SANHO permission & AMOC, El Ni\~no; A \\
+\code{tide} & GESLA-4 (4.1 download, July 2026) via the UHSLC ERDDAP, 36 sources incl.\ UHSLC Fast Delivery and Research Quality, NOAA CO-OPS: relative sea level ($C = 1$, schema 3) & 6,474 records, 127,623 station-years & $\le$ hourly & 1800s $\to$ 2026; 1.2--1.5 $\times 10^9$ on the public track & 40--50\,GB & mixed; the research-only sources go to \code{tide\_\allowbreak private} & AMOC, El Ni\~no; A \\
+\code{tide\_\allowbreak private} & the GESLA-4 sources with research-only terms (CMEMS, CV, UZ) and, with SANHO's permission, the South African gauges; same schema as \code{tide} & the station-years the public sort removes$^\dagger$ & $\le$ hourly & as \code{tide} & 10--20\,GB$^\dagger$ & research-only: private track & AMOC, El Ni\~no; A (same build) \\
 \code{ndbc} & NDBC buoys and C-MAN stations (NOAA): wind $u$, $v$, gust, wave height, peak and mean period, direction, pressure, air T, SST ($C = 10$) & 1,345 stations, 829 with 2025 data (measured) & hourly, 10-min recently & 1970 $\to$ 2025; 3--5 $\times 10^8$$^\dagger$ & 15--25\,GB & US government & SST, forcing; A (TAO sites excluded: in \code{gtmba}) \\
 \code{gliders} & IOOS Glider DAC (2,540 datasets) + OceanGliders GDAC (1,120 deployments): T, S, O$_2$, chlorophyll at the 16 Roemmich--Gilson pressures ($C = 64$) & $\approx 5 \times 10^6$ profiles$^\dagger$ & profiles every $\approx 3$\,h & 2003 $\to$ & 0.8\,GB & open / CC BY 4.0 & AMOC, SST, carbon; A \\
 \code{flux} & FLUXNET Shuttle (2026-04-30): eddy-covariance towers from AmeriFlux, ICOS, TERN, ChinaFLUX: NEE, GPP, Reco, LE, H, Rn, Ta, VPD, SWC, P ($C = 10$) & 700+ sites, $\approx 6{,}000$ site-years & half-hourly & 1991 $\to$; $\approx 1.05 \times 10^8$ & 5\,GB & CC BY 4.0 (six Tier-2 and Legacy sites excluded) & land carbon read-out; A \\
 \code{fire} & FIRMS active fire (NASA): MODIS C6.1 1\,km (2000-11 $\to$), VIIRS S-NPP / NOAA-20 / NOAA-21 375\,m (2012 $\to$): brightness, FRP, confidence, day/night ($C = 4$) & detections & per overpass & MODIS $1.1 \times 10^8$, VIIRS $\approx 4 \times 10^8$ (2023 measured: 4.66\,M / 21.75\,M) & 20\,GB & NASA open$^\dagger$ & read-out, carbon; A \\
 \code{river} & USGS NWIS daily discharge + GRDC-Caravan ($C = 1$, schema 3) & 24,976 US sites, 8,691 active (measured); 5,356 & daily & 1800s $\to$; $\approx 4 \times 10^8$ & 14\,GB & public domain / CC BY 4.0 & read-out, freshwater; B \\
+\code{river\_\allowbreak grdc} & GRDC daily discharge, the full archive ($C = 1$, schema 3) & $> 10{,}000$ gauges, 160 countries$^\dagger$ & daily & 1800s $\to$; $\approx 1.5 \times 10^8$$^\dagger$ & $\approx 5$\,GB$^\dagger$ & GRDC terms: private track & read-out, freshwater; B \\
+\code{ismn} & ISMN (International Soil Moisture Network, TU Wien): soil moisture and soil temperature in up to five depth slots per station, the station's own depths kept in \code{platforms.json}, NaN where it has no sensor, with the network's quality flags ($C = 10$) & 3,300 stations, 80+ networks & hourly & 1952 $\to$; $\approx 3 \times 10^8$$^\dagger$ & $\approx 15$\,GB$^\dagger$ & ISMN terms: private track & forcing; the in-situ truth for soil moisture; B \\
+\code{ecad} & ECA\&D (KNMI) daily non-blended series --- TX, TN, TG, RR, SS, SD, HU, PP ($C = 8$, schema 3) --- for stations absent from GHCN-Daily only & subset of 25,919 series$^\dagger$ & daily & 1800s $\to$ & $\le 20$\,GB$^\dagger$ & non-commercial, no redistribution: private track & forcing; C \\
 \code{ghcnh} & GHCN-hourly v1 (NCEI), successor of the frozen ISD: T, dew point, pressure, $u$, $v$, precipitation, snow depth, cloud ($C = 8$, schema 3) & 38,870 stations, 10,313 active (measured) & hourly / synoptic & 1700s $\to$; $7.60 \times 10^9$ reports (measured) & 360\,GB & CC0 & forcing; B \\
 \code{hfr} & HFRNet US (6 / 2 / 1\,km) + European HFR Node (22 systems): $u$, $v$ at the cell centre ($C = 2$) & $\approx 12.5$\,k valid 6\,km cells per hour, US & hourly & 2012 $\to$ US, $\approx 2009 \to$ EU; 3.5--5 $\times 10^9$$^\dagger$ & 110--155\,GB & free / CC BY 4.0 & coastal currents, AMOC; B \\
 \code{alticap} & ALTICAP coastal altimetry, Jason-3 20\,Hz, 0--500\,km from coast (AVISO/ODATIS): anomaly, quality ($C = 2$) & along-track, $\approx 350$\,m & $\approx 10$-day repeat & 2016-02 $\to$ 2021-07 only & 3\,GB & CC BY 4.0 & AMOC; B \\
@@ -248,7 +277,7 @@ store & source & scenes & record; native volume & licence & note \\
 \code{cat\_olci} & Sentinel-3 OLCI L2 WFR 300\,m, coastal band; GlobColour OLCI 300\,m L3 (Copernicus \code{009\_103}) as the gridded form, which phase C may also store as a sharded tier-G group over the coastal band (\code{oc300\_coast}, chlorophyll and flags, $\approx 1.6$\,TB) & 457 per day, 150\,GB/day (measured) & 2016-04 $\to$; $\approx 55$\,TB/yr & Copernicus open & coastal tokens \\
 \code{cat\_viirs} & VIIRS I-band L1B 375\,m (VNP02IMG / VJ102IMG, LAADS) & 225--242 granules/day & 2012 / 2018 $\to$; $\approx 15$\,TB/yr per satellite & NASA open & \\
 \code{cat\_ecostress} & ECOSTRESS L2T LSTE 70\,m thermal from the ISS, irregular & 1.37\,M granules in 2024 & 2018-07 $\to$; $\approx 10$\,TB/yr & NASA open & no cadence; catalogued only \\
-\code{cat\_submetre} (E6) & sub-metre and metre-scale orthophotos where a country publishes them openly: USDA NAIP 0.6--1\,m (US, 2--3-yearly, public domain), swisstopo SWISSIMAGE 10\,cm (Switzerland, 3-yearly, open government data); Planet-NICFI 4.77\,m monthly tropical basemaps (non-commercial; programme contract ended 2025-01, basemaps in Earth Engine to 2026-08, new-phase terms unverified) & regional & 2009 / 2017 / 2015 $\to$ & public domain / OGD / non-commercial & regional, multi-year: an exception; no free sub-metre source is global or daily \\
+\code{cat\_submetre} (E6) & sub-metre and metre-scale orthophotos where a country publishes them openly: USDA NAIP 0.6--1\,m (US, 2--3-yearly, public domain), swisstopo SWISSIMAGE 10\,cm (Switzerland, 3-yearly, open government data); Planet-NICFI 4.77\,m monthly tropical basemaps (non-commercial; programme contract ended 2025-01, basemaps in Earth Engine to 2026-08, new-phase terms unverified; private track) & regional & 2009 / 2017 / 2015 $\to$ & public domain / OGD / non-commercial (NICFI: private track) & regional, multi-year: an exception; no free sub-metre source is global or daily \\
 \bottomrule
 \end{tabular}
 \caption{The catalogued imagery. The ten catalogues together are
@@ -300,12 +329,15 @@ read as $n_R = 0$ or a NaN pixel, and the model is told so.
 
 \section{Design decisions}
 
-\paragraph{The licence gate comes before the science.} Four of the best
-land networks cannot be republished, and one consequence is accepted rather
-than patched: the family has no soil-moisture store, because the in-situ
-network forbids re-export and the satellite products are 36\,km footprints
-resampled to a 9\,km grid. Family 7.2's $1^\circ$ NCEP channel stays the
-only one.
+\paragraph{Licence decides where a store lives, not whether it exists.} The
+first draft of this note refused four of the best land networks because
+every store was to be republished, and accepted having no soil-moisture
+store as the price. The two-track rule of \S2 removes the price: a source
+that may not be redistributed is built once, held privately, used here as a
+single licensee, and never leaves. The cost that remains is named in family
+1.gf \S4 --- a private store is invisible to the other agents and to anyone
+reproducing the work --- so a result that depends on one says so, and the
+public track stays the default wherever a licence allows it.
 
 \paragraph{Vertical structure is stored natively, as the LiDAR's own
 profile.} A canopy is a three-dimensional object and imagery cannot see
@@ -371,8 +403,8 @@ Every array's sha256 against \code{store.json}; $N$ from the file sizes;
 CSR index reproduced; for sharded grids, every index entry decompressing to a
 tile of the declared shape and NaN fraction, and per-year frame counts equal
 to the producer's listing; for catalogues, scene counts per day against the
-producer's own catalogue; for \code{tide}, the per-source licence filter's
-removed station-years reported. A day absent upstream is a zero-length frame
+producer's own catalogue; for \code{tide}, the station-years sorted to \code{tide\_private}
+reported. A day absent upstream is a zero-length frame
 with a counter, never a silent gap; a fetch lane refuses an empty listing or
 a short download and records any relaxation in \code{degraded}.
 
@@ -385,7 +417,9 @@ terabyte and is phase C; a thinned version would be derived. The sub-metre
 tier is regional and multi-year by the nature of what is published openly.
 The tile tokens depend on a codec that does not yet exist (E-078c); until it
 does, the tile tier is a catalogue. Dynamic World cannot be built for lack
-of a bulk copy. Nothing here is dispatched on an unmeasured size: the probe
+of a bulk copy. A private-track store can be checked by nobody outside the
+project, so \S7's validation is the only certificate it has, and a published
+result that rests on one names it. Nothing here is dispatched on an unmeasured size: the probe
 of \S9 replaces every estimate first.
 
 \section{Next steps: the ladder}
@@ -396,21 +430,21 @@ of \S9 replaces every estimate first.
 \toprule
 phase & stores & stored & access \\
 \midrule
-A & \code{ghcnd}, \code{igra}, \code{tide}, \code{ndbc}, \code{gliders}, \code{flux}, \code{fire}, \code{lst05} (Terra), \code{snow05} (Terra), nine of the ten \code{cat\_*} catalogues (\code{cat\_palsar} waits for phase B), \code{alerts}, \code{lossyear}, \code{burned500}, \code{cat\_gfm}, \code{static\_fine}, the registry & $\approx 0.7$\,TB & seven need no account at all (\code{ghcnd}, \code{igra}, \code{tide}, \code{ndbc}, \code{gliders}, \code{lossyear}, \code{static\_fine}); \code{flux} and \code{fire}'s NOAA-20/21 archive go through a portal request; the NASA stores and catalogues need an Earthdata login on a hosted runner; the Sentinel catalogues a CDSE account; the Landsat one a USGS login or a requester-pays AWS read; \code{lst05} is assembled on one verified box (\$2--5); under \$10 \\
+A & \code{ghcnd}, \code{igra}, \code{tide} and \code{tide\_private}, \code{ndbc}, \code{gliders}, \code{flux}, \code{fire}, \code{lst05} (Terra), \code{snow05} (Terra), nine of the ten \code{cat\_*} catalogues (\code{cat\_palsar} waits for phase B), \code{alerts}, \code{lossyear}, \code{burned500}, \code{cat\_gfm}, \code{static\_fine}, the registry & $\approx 0.7$\,TB & seven need no account at all (\code{ghcnd}, \code{igra}, \code{tide}, \code{ndbc}, \code{gliders}, \code{lossyear}, \code{static\_fine}); \code{flux} and \code{fire}'s NOAA-20/21 archive go through a portal request; the NASA stores and catalogues need an Earthdata login on a hosted runner; the Sentinel catalogues a CDSE account; the Landsat one a USGS login or a requester-pays AWS read; \code{lst05} is assembled on one verified box (\$2--5); under \$10; \code{tide\_private} is written by the \code{tide} build to the private repository \\
 \addlinespace
-B & \code{gedi}, \code{ghcnh}, \code{hfr}, \code{river}, \code{alticap}, \code{refl05}, \code{ims1k}, \code{chirps05}, \code{cat\_palsar}, the Aqua and VIIRS continuations of \code{lst05} and \code{snow05} & 2.3--2.7\,TB & \$20--30 in box time; the Hugging Face conversation about terabyte repositories first \\
+B & \code{gedi}, \code{ghcnh}, \code{hfr}, \code{river}, \code{river\_grdc}, \code{ismn}, \code{alticap}, \code{refl05}, \code{ims1k}, \code{chirps05}, \code{cat\_palsar}, the Aqua and VIIRS continuations of \code{lst05} and \code{snow05} & 2.3--2.7\,TB & \$20--30 in box time; the Hugging Face conversation about terabyte repositories first; \code{ismn} and \code{river\_grdc} are registered downloads on a hosted runner, published to the private repository \\
 \addlinespace
-C & \code{icesat2}, \code{biomass100}, \code{landcover10}, the tile tokens over E-078c's coastal cells, \code{oc300\_coast} (the 300\,m colour of \code{cat\_olci} stored over the band, $\approx 1.6$\,TB) & $\approx 3$\,TB & after E-078c's verdict \\
+C & \code{icesat2}, \code{biomass100}, \code{landcover10}, \code{ecad}, the tile tokens over E-078c's coastal cells, \code{oc300\_coast} (the 300\,m colour of \code{cat\_olci} stored over the band, $\approx 1.6$\,TB) & $\approx 3$\,TB & after E-078c's verdict \\
 \bottomrule
 \end{tabular}
-\caption{The build ladder. Phase A is the seven point stores ($\approx 140$\,GB), the two Terra fields ($\approx 410$\,GB), the catalogues and targets ($\approx 80$\,GB) and the statics.}
+\caption{The build ladder. Phase A is the eight point stores ($\approx 150$\,GB, one of them private), the two Terra fields ($\approx 410$\,GB), the catalogues and targets ($\approx 80$\,GB) and the statics.}
 \end{table}
 
 \paragraph{The probe.} One month per source through the real adapter on a
 hosted runner: rows per day and distinct platforms; valid fraction and
 compressed bytes per tile; scene counts per day against the producer's
-catalogue; throughput; and for \code{tide} the station-years the licence
-filter removes.
+catalogue; throughput; and for \code{tide} the station-years the licence sort
+sends to \code{tide\_private}.
 
 \paragraph{Two falsifiers.} For the \emph{forcing and coastal} stores,
 family 1.gf's test: at anchors where the store has coverage, its tokens in
@@ -430,8 +464,10 @@ which is the test that the sensor shift was learned rather than memorised.
 
 \begin{enumerate}\itemsep2pt
 \item \textbf{The name}: 1.0.tf as given.
-\item \textbf{The licence gate} and its consequence, no soil-moisture store.
-Pick: yes.
+\item \textbf{The two tracks}: \code{ismn}, \code{river\_grdc}, \code{ecad},
+\code{tide\_private} and NICFI on a private track rather than refused, so the
+soil-moisture store returns. Pick: yes, in the private repository of family
+1.gf \S4.
 \item \textbf{The coastal band}: $\pm 100$\,km. Pick: 100\,km.
 \item \textbf{GEDI in phase B at full footprint resolution} (0.2--0.5\,TB)
 rather than thinned. Pick: full; thinning is derived.
@@ -441,15 +477,15 @@ it. Pick: yes.
 \code{burned500}, \code{cat\_gfm}), cheap and the reason the family exists.
 Pick: yes.
 \item \textbf{Exceptions E4--E6}: CHIRPS as input; PALSAR mosaics and
-regional orthophotos in the catalogue. Pick: admit all three; NICFI only
-once its new-phase terms are read.
+regional orthophotos in the catalogue. Pick: admit all three; NICFI on the
+private track once its new-phase terms are read.
 \item \textbf{Tide gauges}: GESLA-4 filtered per source, else UHSLC's two
 sets. Pick: GESLA filtered.
 \end{enumerate}
 
 \section*{Terms used above, in one line each}
 \footnotesize
-\textbf{Tier G / P / T} family 10's three storage tiers: gridded fields; points, profiles and tracks; tiles of imagery held as a catalogue plus codec tokens. \textbf{STAC} SpatioTemporal Asset Catalog, the standard in which producers list scenes. \textbf{CSR} compressed sparse row --- an offsets array saying where each five-day bin's rows start. \textbf{GSHHG} the Global Self-consistent Hierarchical High-resolution Geography shoreline set. \textbf{GHCNh / GHCN-Daily / ISD} NOAA's hourly and daily station archives and the frozen hourly archive GHCNh replaces. \textbf{IGRA} the Integrated Global Radiosonde Archive. \textbf{GESLA / UHSLC / CO-OPS} the global hourly tide-gauge compilation, the University of Hawaii Sea Level Center, NOAA's tide-gauge service; \textbf{CV, UZ, CMEMS} three GESLA source codes with research-only terms; \textbf{SANHO} the South African Navy Hydrographic Office. \textbf{NDBC / C-MAN} NOAA's buoy centre and its coastal automated stations. \textbf{HFRNet / IOOS} the US high-frequency coastal radar network and the Integrated Ocean Observing System, which also runs the glider data-assembly centre (DAC). \textbf{FLUXNET / AmeriFlux / ICOS} networks of eddy-covariance towers measuring the exchange of CO$_2$, water and heat between land and air; \textbf{NEE / GPP / Reco / LE / H / Rn / VPD / SWC} net ecosystem exchange, gross primary production, ecosystem respiration, latent and sensible heat, net radiation, vapour-pressure deficit, soil water content. \textbf{FIRMS / FRP} NASA's fire-detection service and fire radiative power. \textbf{NWIS} the US Geological Survey's water archive. \textbf{ALTICAP / ODATIS / AVISO} a coastal altimetry product and the French ocean-data services that host it. \textbf{GEDI / ICESat-2 / ATLAS / ATL08} NASA's two spaceborne LiDARs, the ICESat-2 instrument, and its land-and-canopy product; \textbf{RH$n$} the relative height below which $n$\,\% of a LiDAR footprint's returned energy lies --- RH98 is the canopy top. \textbf{CMG} MODIS' Climate Modeling Grid, $0.05^\circ$. \textbf{IMS} the US National Ice Center's daily snow and ice chart. \textbf{CHIRPS} the Climate Hazards infrared precipitation with stations. \textbf{L1B / L2 / L2A / L3 / GRD / SLC / GCOV} calibrated radiances; retrievals; Sentinel-2's surface reflectance; gridded; Sentinel-1's detected and complex radar products; NISAR's geocoded covariance. \textbf{TM / ETM+ / OLI / TIRS} the Landsat 4--5, 7, and 8--9 instruments. \textbf{HLS} Harmonized Landsat Sentinel-2. \textbf{PALSAR / NISAR} JAXA's and NASA--ISRO's L-band radars. \textbf{OLCI WFR / VIIRS / ECOSTRESS} Sentinel-3's ocean-colour product, the JPSS imager, and the ISS thermal imager. \textbf{NAIP / NICFI} the US aerial orthophoto programme and Norway's tropical-forest satellite programme. \textbf{GLAD / RADD / DIST-ALERT} forest-disturbance alert systems from the University of Maryland, Wageningen, and NASA OPERA. \textbf{JRC TMF} the EU Joint Research Centre's tropical moist forest maps. \textbf{MCD64A1} MODIS burned area. \textbf{GFM / DSWx} Copernicus' flood monitoring and OPERA's surface-water maps. \textbf{ESA CCI} ESA's Climate Change Initiative. \textbf{GHSL / WSF} the Global Human Settlement Layer and the World Settlement Footprint. \textbf{CDL / EUCROPMAP / WorldCereal} crop-type maps from the USDA, the JRC and ESA. \textbf{ISMN / ECA\&D / HadISD / MSWEP / GRDC} the soil-moisture network, the European station set, the Met Office hourly station set, a merged precipitation product, and the Global Runoff Data Centre --- refused on licence; \textbf{Caravan} GRDC's CC BY subset. \textbf{GEBCO} the General Bathymetric Chart of the Oceans. \textbf{E-078 / E-078c / E-081} the multi-granularity design, its first coastal tile-codec experiment, and the fishing-effort store. \textbf{AMOC / SST} the Atlantic Meridional Overturning Circulation and sea-surface temperature. \textbf{CC0 / CC BY / CC BY-NC} public-domain dedication, attribution, and non-commercial Creative Commons licences. \textbf{MODIS / VIIRS} the imaging radiometers on Terra and Aqua, and on Suomi-NPP, NOAA-20 and NOAA-21. \textbf{LP DAAC / NSIDC / EOSDIS} NASA's land-processes and snow-and-ice data centres and the system that serves them. \textbf{CDSE} the Copernicus Data Space Ecosystem, ESA's Sentinel archive. \textbf{ERDDAP} a data server that answers tabular queries over HTTP. \textbf{LSTE} land-surface temperature and emissivity. \textbf{GRDH} ground-range-detected high-resolution. \textbf{GLO-30} the Copernicus 30\,m elevation model. \textbf{OGD} open government data. \textbf{TERN / ChinaFLUX} the Australian and Chinese flux-tower networks. \textbf{Dynamic World} Google's 10\,m per-scene land-cover classification, Earth Engine only. \textbf{NaN} not-a-number, the stored value for ``not measured''.
+\textbf{Tier G / P / T} family 10's three storage tiers: gridded fields; points, profiles and tracks; tiles of imagery held as a catalogue plus codec tokens. \textbf{STAC} SpatioTemporal Asset Catalog, the standard in which producers list scenes. \textbf{CSR} compressed sparse row --- an offsets array saying where each five-day bin's rows start. \textbf{GSHHG} the Global Self-consistent Hierarchical High-resolution Geography shoreline set. \textbf{GHCNh / GHCN-Daily / ISD} NOAA's hourly and daily station archives and the frozen hourly archive GHCNh replaces. \textbf{IGRA} the Integrated Global Radiosonde Archive. \textbf{GESLA / UHSLC / CO-OPS} the global hourly tide-gauge compilation, the University of Hawaii Sea Level Center, NOAA's tide-gauge service; \textbf{CV, UZ, CMEMS} three GESLA source codes with research-only terms; \textbf{SANHO} the South African Navy Hydrographic Office. \textbf{NDBC / C-MAN} NOAA's buoy centre and its coastal automated stations. \textbf{HFRNet / IOOS} the US high-frequency coastal radar network and the Integrated Ocean Observing System, which also runs the glider data-assembly centre (DAC). \textbf{FLUXNET / AmeriFlux / ICOS} networks of eddy-covariance towers measuring the exchange of CO$_2$, water and heat between land and air; \textbf{NEE / GPP / Reco / LE / H / Rn / VPD / SWC} net ecosystem exchange, gross primary production, ecosystem respiration, latent and sensible heat, net radiation, vapour-pressure deficit, soil water content. \textbf{FIRMS / FRP} NASA's fire-detection service and fire radiative power. \textbf{NWIS} the US Geological Survey's water archive. \textbf{ALTICAP / ODATIS / AVISO} a coastal altimetry product and the French ocean-data services that host it. \textbf{GEDI / ICESat-2 / ATLAS / ATL08} NASA's two spaceborne LiDARs, the ICESat-2 instrument, and its land-and-canopy product; \textbf{RH$n$} the relative height below which $n$\,\% of a LiDAR footprint's returned energy lies --- RH98 is the canopy top. \textbf{CMG} MODIS' Climate Modeling Grid, $0.05^\circ$. \textbf{IMS} the US National Ice Center's daily snow and ice chart. \textbf{CHIRPS} the Climate Hazards infrared precipitation with stations. \textbf{L1B / L2 / L2A / L3 / GRD / SLC / GCOV} calibrated radiances; retrievals; Sentinel-2's surface reflectance; gridded; Sentinel-1's detected and complex radar products; NISAR's geocoded covariance. \textbf{TM / ETM+ / OLI / TIRS} the Landsat 4--5, 7, and 8--9 instruments. \textbf{HLS} Harmonized Landsat Sentinel-2. \textbf{PALSAR / NISAR} JAXA's and NASA--ISRO's L-band radars. \textbf{OLCI WFR / VIIRS / ECOSTRESS} Sentinel-3's ocean-colour product, the JPSS imager, and the ISS thermal imager. \textbf{NAIP / NICFI} the US aerial orthophoto programme and Norway's tropical-forest satellite programme. \textbf{GLAD / RADD / DIST-ALERT} forest-disturbance alert systems from the University of Maryland, Wageningen, and NASA OPERA. \textbf{JRC TMF} the EU Joint Research Centre's tropical moist forest maps. \textbf{MCD64A1} MODIS burned area. \textbf{GFM / DSWx} Copernicus' flood monitoring and OPERA's surface-water maps. \textbf{ESA CCI} ESA's Climate Change Initiative. \textbf{GHSL / WSF} the Global Human Settlement Layer and the World Settlement Footprint. \textbf{CDL / EUCROPMAP / WorldCereal} crop-type maps from the USDA, the JRC and ESA. \textbf{ISMN / ECA\&D / GRDC} the soil-moisture network, the European station set and the Global Runoff Data Centre --- private-track stores; \textbf{HadISD / MSWEP} the Met Office hourly station set and a merged precipitation product, set aside as derivatives; \textbf{Caravan} GRDC's CC BY subset, public. \textbf{Public / private track} a store anyone may read from the public repository, or one held for this project's own use because its licence forbids redistribution (family 1.gf \S4). \textbf{GEBCO} the General Bathymetric Chart of the Oceans. \textbf{E-078 / E-078c / E-081} the multi-granularity design, its first coastal tile-codec experiment, and the fishing-effort store. \textbf{AMOC / SST} the Atlantic Meridional Overturning Circulation and sea-surface temperature. \textbf{CC0 / CC BY / CC BY-NC} public-domain dedication, attribution, and non-commercial Creative Commons licences. \textbf{MODIS / VIIRS} the imaging radiometers on Terra and Aqua, and on Suomi-NPP, NOAA-20 and NOAA-21. \textbf{LP DAAC / NSIDC / EOSDIS} NASA's land-processes and snow-and-ice data centres and the system that serves them. \textbf{CDSE} the Copernicus Data Space Ecosystem, ESA's Sentinel archive. \textbf{ERDDAP} a data server that answers tabular queries over HTTP. \textbf{LSTE} land-surface temperature and emissivity. \textbf{GRDH} ground-range-detected high-resolution. \textbf{GLO-30} the Copernicus 30\,m elevation model. \textbf{OGD} open government data. \textbf{TERN / ChinaFLUX} the Australian and Chinese flux-tower networks. \textbf{Dynamic World} Google's 10\,m per-scene land-cover classification, Earth Engine only. \textbf{NaN} not-a-number, the stored value for ``not measured''.
 \normalsize
 
 \begin{thebibliography}{9}\small

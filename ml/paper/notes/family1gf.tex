@@ -214,8 +214,9 @@ the same sensors from 1979 with a licence, so Pathfinder is not needed.
 NSIDC \code{AU\_SI6}: holds only 89\,GHz brightness temperatures, no
 concentration, and NASA stopped updating it on 2025-09-01; \code{AU\_SI12} is
 12.5\,km. OSI SAF \code{OSI-408-a}: a 10\,km grid from an 18\,km footprint,
-2016 $\to$, CC BY 4.0 --- the fallback for sea ice if Bremen's terms refuse
-redistribution. NASA OB.DAAC single-sensor 4\,km chlorophyll (MODIS-Aqua,
+2016 $\to$, CC BY 4.0 --- the public-track companion for sea ice; if Bremen's terms
+refuse redistribution, \code{seaice\_asi} is built on the private track and
+OSI SAF beside it publicly. NASA OB.DAAC single-sensor 4\,km chlorophyll (MODIS-Aqua,
 VIIRS, PACE OCI from 2024-03): each is inside OC-CCI's merge except PACE,
 which OC-CCI v6 does not yet include --- a future \code{oc4k} channel, not a
 store. GDP hourly drifters v2.01.1 (197\,M rows, 1987 $\to$ 2022-10): four
@@ -246,9 +247,13 @@ layout where it does not.
 \code{sha256}, per-year counts, QC policy, \code{degraded}). The tier letters stay G, P and T so that a consumer's dispatch is
 unchanged; a fine grid is tier G with \code{layout: "sharded"} (\S4's
 layout) rather than \code{"binmajor"}, and the reader named for tier G
-handles both by reading that field. Five per-group fields are new and all
+handles both by reading that field. Six per-group fields are new and all
 are load-bearing: \code{licence} with a \code{redistribution} value of
-\code{yes}, \code{attribution} or \code{no}; \code{frames\_per\_bin} and
+\code{yes}, \code{attribution} or \code{no} and a \code{derived\_works} value
+of \code{free}, \code{non-commercial} or \code{restricted}, from the
+licence's own clause; \code{distribution}, \code{public} or \code{private},
+the track of \S4's two-track rule, \code{private} whenever redistribution is
+\code{no}; \code{frames\_per\_bin} and
 \code{frame\_seconds} for gridded groups; \code{dtype} per group (float16
 for measured fields, uint8 for classes and for brightness temperature stored
 as K$-160$); and \code{verdict}, empty until \S7's falsifier has run. A
@@ -354,6 +359,40 @@ pulls, assembles by streaming, publishes with restore-verification). Every
 fetch lane refuses a listing that came back empty or a download that came back
 short and records any relaxation in \code{degraded}; there is no
 ``download failed, skip'' path, per Chris's 2026-09-14 rule.
+
+\paragraph{Two tracks: public and private stores.} Not every source that
+passes the rule may be republished, and the families no longer refuse
+those. Chris, 2026-09-16: a dataset that forbids redistribution is used by a
+single party; the Hub was only ever the easiest way to import a dataset and
+hand it to other agents; a private dataset can be built and trained on
+without redistributing it. So a group's \code{distribution} is \code{public}
+--- the public repository \code{chfrank/\allowbreak earth-tensors}, read
+anonymously by anyone, the default wherever the licence allows --- or
+\code{private}: the same arrays, layout and \code{store.json} in a private
+Hugging Face dataset repository (\code{chfrank/\allowbreak earth-tensors-private},
+the pick, because every reader and build script is unchanged; an
+S3-compatible bucket with pre-signed URLs is the alternative if the private
+volume passes a terabyte or the Hub's private-storage pricing bites) that
+only this project's own jobs can read. The public registry lists private
+groups too, with their \code{prefix}, sizes, checks and \code{verdict}, so
+the design is public even where the bytes are not, and a consumer without a
+token skips them by the field rather than by a failed fetch. Four
+consequences. A rented box reads a private store with a fine-grained
+read-only token scoped to that one repository, handed to the job through a
+repository secret and revoked when the job ends --- the one credential a box
+holds beyond the job's own, admissible because it outlives nothing
+(\code{ml/CLAUDE.md} \S6; pre-signed URLs would be the keyless form). A
+private store is processed on a box and never kept on one: pulled for the
+job, deleted by the job's hygiene, never on a stopped box's disk, since the
+host has root. What may leave is the model and the numbers: a trained
+checkpoint, evaluation scores and aggregate statistics may be published where
+the licence's derived-works clause allows (\code{derived\_works} records it;
+a \code{restricted} source confines even the checkpoint to the private
+track), the data never. And a private store is a cost to reproducibility:
+nobody outside the project can check it, so a published result that rests on
+one names it, and a public source is preferred wherever one carries the same
+observations --- which is why every CC0, CC BY and Copernicus source in these
+families is on the public track.
 
 \section{The stores in numbers}
 
@@ -510,8 +549,8 @@ daily frames ($F = 5$); the rule asks for $\le 5$ days and the pentad mean is
 a derived quantity the consumer can form.
 \item \textbf{Sea ice from Bremen ASI} (6.25\,km, 2002 $\to$, terms to be
 confirmed by email before publishing) or OSI SAF \code{OSI-408-a} (10\,km grid,
-CC BY 4.0, 2016 $\to$). Pick: Bremen, with OSI SAF as the fallback if the
-answer is no.
+CC BY 4.0, 2016 $\to$). Pick: Bremen, public if the answer is yes and private if it
+is no, with OSI SAF public beside it either way.
 \item \textbf{SST}: CCI L3C super-collated by our builder at 0.05$^\circ$
 first, ACSPO L3S 0.02$^\circ$ later. Pick: as stated.
 \item \textbf{Exceptions E1--E3}: admit wind at 12.5\,km (phase C), IMERG
@@ -521,12 +560,13 @@ SMAP-style ``9\,km grids from 36\,km footprints'' anywhere in this family.
 \item \textbf{WOD (CC0) or CORA (Copernicus)} for the non-Argo profiles.
 Pick: WOD.
 \item \textbf{The Hub}: write to Hugging Face about a terabyte-scale public
-dataset before phase B. Pick: yes, with phase A's measured sizes in hand.
+dataset before phase B, and open the private repository of \S4 with phase A.
+Pick: yes, with phase A's measured sizes in hand.
 \end{enumerate}
 
 \section*{Terms used above, in one line each}
 \footnotesize
-\textbf{AMOC} the Atlantic Meridional Overturning Circulation, the Atlantic's northward heat-carrying flow, read out as transport at 26.5$^\circ$N (RAPID). \textbf{Tier G / P / T} family 10's three storage tiers: gridded dense fields; points, profiles and tracks; tiles of imagery. \textbf{CSR} compressed sparse row --- an offsets array saying where each five-day bin's rows start. \textbf{zstd} Zstandard, a fast lossless compressor. \textbf{STAC} SpatioTemporal Asset Catalog, the metadata standard producers publish scene listings in. \textbf{L2 / L3 / L3C / L3S / L4} processing levels: retrievals on the instrument's swath; binned onto a grid; collated per sensor; super-collated across sensors; gap-filled analysis (derived). \textbf{Rrs} remote-sensing reflectance, the water-leaving colour per wavelength. \textbf{Kd\_490} the diffuse attenuation of light at 490\,nm, a water-clarity measure. \textbf{OC-CCI} ESA's Ocean Colour Climate Change Initiative merged record (PML, Plymouth). \textbf{CEDA / THREDDS / OPeNDAP} the UK atmospheric data archive, and two protocols for reading subsets of netCDF files over HTTP. \textbf{AVHRR / SLSTR / VIIRS / MODIS} infrared radiometers on NOAA and MetOp, Sentinel-3, JPSS and Terra/Aqua satellites. \textbf{ACSPO} NOAA's SST processing system. \textbf{ASI} the ARTIST sea-ice algorithm using 89\,GHz microwave channels (AMSR-E, AMSR2, AMSR3 radiometers). \textbf{KaRIn} SWOT's Ka-band radar interferometer that measures sea level across two 50\,km swaths. \textbf{GES DISC / PO.DAAC / NCEI / AOML / NDBC / BODC} NASA's, NOAA's and the UK's data centres. \textbf{ICOADS / IMMA1} the ship-and-buoy marine report archive and its record format. \textbf{WOD} the World Ocean Database; its instrument codes: OSD bottle casts, CTD conductivity-temperature-depth profiles, MBT/XBT mechanical and expendable bathythermographs, MRB/DRB moored and drifting buoys, PFL profiling floats (Argo), UOR undulating recorders, APB tagged animals, GLD gliders. \textbf{GLODAP} the Global Ocean Data Analysis Project bottle-data synthesis; \textbf{DIC / TA} dissolved inorganic carbon and total alkalinity; \textbf{CFC} chlorofluorocarbon tracers that date water masses. \textbf{BGC-Argo / Sprof / DOXY / BBP700} biogeochemical Argo floats, their merged profile files, dissolved oxygen, and particle backscatter at 700\,nm. \textbf{GDAC} the Argo global data-assembly centre. \textbf{OceanSITES / TAO} the open-ocean moored-time-series network and the tropical Pacific mooring array (held in family 10.1's \code{gtmba}). \textbf{OCO-2/3 / GOSAT / ACOS} NASA's and Japan's column-CO$_2$ satellites and NASA's retrieval of GOSAT. \textbf{TROPOMI} the trace-gas imager on Sentinel-5P. \textbf{OSI SAF / ASCAT} EUMETSAT's ocean-and-ice facility and the MetOp scatterometer. \textbf{OSTIA / MUR / DUACS / GLORYS} gap-filled SST analyses (Met Office, JPL), the gridded altimetry analysis, and the ocean reanalysis --- all derived. \textbf{DPR / GMI} GPM's precipitation radar and microwave imager. \textbf{CORA} Copernicus' quality-controlled T/S profile collection. \textbf{PACE OCI} NASA's 2024 hyperspectral ocean-colour instrument. \textbf{E-077 / E-079} the experiments that built ocean colour into family 7.1 and family 10's first four stores. \textbf{g025 / g100 / rg100 / oc025} family 7.2's four gridded groups: $0.25^\circ$ ocean surface, $1^\circ$ atmosphere and land, $1^\circ$ monthly interior, $0.25^\circ$ ocean colour.
+\textbf{AMOC} the Atlantic Meridional Overturning Circulation, the Atlantic's northward heat-carrying flow, read out as transport at 26.5$^\circ$N (RAPID). \textbf{Tier G / P / T} family 10's three storage tiers: gridded dense fields; points, profiles and tracks; tiles of imagery. \textbf{CSR} compressed sparse row --- an offsets array saying where each five-day bin's rows start. \textbf{zstd} Zstandard, a fast lossless compressor. \textbf{STAC} SpatioTemporal Asset Catalog, the metadata standard producers publish scene listings in. \textbf{L2 / L3 / L3C / L3S / L4} processing levels: retrievals on the instrument's swath; binned onto a grid; collated per sensor; super-collated across sensors; gap-filled analysis (derived). \textbf{Rrs} remote-sensing reflectance, the water-leaving colour per wavelength. \textbf{Kd\_490} the diffuse attenuation of light at 490\,nm, a water-clarity measure. \textbf{OC-CCI} ESA's Ocean Colour Climate Change Initiative merged record (PML, Plymouth). \textbf{CEDA / THREDDS / OPeNDAP} the UK atmospheric data archive, and two protocols for reading subsets of netCDF files over HTTP. \textbf{AVHRR / SLSTR / VIIRS / MODIS} infrared radiometers on NOAA and MetOp, Sentinel-3, JPSS and Terra/Aqua satellites. \textbf{ACSPO} NOAA's SST processing system. \textbf{ASI} the ARTIST sea-ice algorithm using 89\,GHz microwave channels (AMSR-E, AMSR2, AMSR3 radiometers). \textbf{KaRIn} SWOT's Ka-band radar interferometer that measures sea level across two 50\,km swaths. \textbf{GES DISC / PO.DAAC / NCEI / AOML / NDBC / BODC} NASA's, NOAA's and the UK's data centres. \textbf{ICOADS / IMMA1} the ship-and-buoy marine report archive and its record format. \textbf{WOD} the World Ocean Database; its instrument codes: OSD bottle casts, CTD conductivity-temperature-depth profiles, MBT/XBT mechanical and expendable bathythermographs, MRB/DRB moored and drifting buoys, PFL profiling floats (Argo), UOR undulating recorders, APB tagged animals, GLD gliders. \textbf{GLODAP} the Global Ocean Data Analysis Project bottle-data synthesis; \textbf{DIC / TA} dissolved inorganic carbon and total alkalinity; \textbf{CFC} chlorofluorocarbon tracers that date water masses. \textbf{BGC-Argo / Sprof / DOXY / BBP700} biogeochemical Argo floats, their merged profile files, dissolved oxygen, and particle backscatter at 700\,nm. \textbf{GDAC} the Argo global data-assembly centre. \textbf{OceanSITES / TAO} the open-ocean moored-time-series network and the tropical Pacific mooring array (held in family 10.1's \code{gtmba}). \textbf{OCO-2/3 / GOSAT / ACOS} NASA's and Japan's column-CO$_2$ satellites and NASA's retrieval of GOSAT. \textbf{TROPOMI} the trace-gas imager on Sentinel-5P. \textbf{OSI SAF / ASCAT} EUMETSAT's ocean-and-ice facility and the MetOp scatterometer. \textbf{OSTIA / MUR / DUACS / GLORYS} gap-filled SST analyses (Met Office, JPL), the gridded altimetry analysis, and the ocean reanalysis --- all derived. \textbf{DPR / GMI} GPM's precipitation radar and microwave imager. \textbf{CORA} Copernicus' quality-controlled T/S profile collection. \textbf{PACE OCI} NASA's 2024 hyperspectral ocean-colour instrument. \textbf{Public / private track} a store anyone may read from the public repository, or one held for this project's own use because its licence forbids redistribution (\S4). \textbf{E-077 / E-079} the experiments that built ocean colour into family 7.1 and family 10's first four stores. \textbf{g025 / g100 / rg100 / oc025} family 7.2's four gridded groups: $0.25^\circ$ ocean surface, $1^\circ$ atmosphere and land, $1^\circ$ monthly interior, $0.25^\circ$ ocean colour.
 \normalsize
 
 \begin{thebibliography}{9}\small

@@ -152,13 +152,17 @@ total & $\approx 302{,}000$ & \textbf{576.6} \\
 \paragraph{Licence.} CC BY 4.0, attribution ``The AlphaEarth Foundations
 Satellite Embedding dataset is produced by Google and Google DeepMind''.
 Every store below carries it; \code{licence.redistribution} is
-\code{attribution}.
+\code{attribution} and \code{distribution} is \code{public}. The two-track
+rule of family 1.gf \S4 applies, and nothing in this family needs the
+private track today.
 
 \paragraph{What is not available.} Only version 1 and only annual. Sub-annual
 embeddings (quarterly, monthly, weekly, ``down to a 5-day frequency'') exist
 as Google Maps Platform's Custom Satellite Embeddings, in private preview
 with no public licence; an academic programme offers samples through Earth
-Engine, applications closing 2026-10-15. The model and training code are
+Engine, applications closing 2026-10-15. A granted sample is usable here under the programme's terms as a
+private-track store, \code{aef\_custom} (family 1.gf \S4), never
+republished --- the one place this family would use that track. The model and training code are
 closed: no new sensor (NISAR), no new year on demand, no re-run over a
 chosen period. Reported weaknesses: transfer across regions and years is
 limited (an irrigation study reproduced 0.93--0.95 accuracy locally and
@@ -414,12 +418,12 @@ frontiers first. Pick: yes.
 \item \textbf{Custom Satellite Embeddings}: the academic programme for
 sub-annual embeddings closes 2026-10-15; applying costs a form and would
 make falsifier 3 answerable at five-day cadence on the same model. Pick:
-apply.
+apply; a granted sample becomes the private-track store \code{aef\_custom}.
 \end{enumerate}
 
 \section*{Terms used above, in one line each}
 \footnotesize
-\textbf{AlphaEarth Foundations (AEF)} Google DeepMind's model that turns Sentinel-1, Sentinel-2 and Landsat image sequences into one 64-number description of each 10\,m of land per year, trained to reproduce radar, LiDAR, climate and land-cover targets; \textbf{Satellite Embedding V1} the published output. \textbf{Embedding} a learned vector summarising what was observed. \textbf{Unit-length / $S^{63}$} vectors of length one on a 63-dimensional sphere, so their dot product is a similarity. \textbf{int8 companding} storing a value in one byte on a square-root scale. \textbf{COG / VRT / UTM} cloud-optimised GeoTIFF (readable by byte range), a GDAL virtual-raster wrapper, and the projected map zones the tiles are in. \textbf{Tier G / P} family 10's gridded and point storage tiers. \textbf{Coherence} here, the length of the mean of unit vectors in a cell: 1 if all agree, 0 if they cancel. \textbf{Sentinel-1/2, Landsat} the model's inputs: C-band radar and optical imagery from ESA and optical from NASA/USGS. \textbf{PALSAR-2, GEDI, ERA5-Land, GRACE, GLO-30, NLCD, GBIF} its training targets: L-band radar from JAXA, spaceborne LiDAR, a land climate reanalysis, satellite gravity, an elevation model, the US land-cover map, and species-occurrence records. \textbf{SST} sea-surface temperature. \textbf{NaN} not-a-number, the stored value for ``not measured''. \textbf{CSR} compressed sparse row, the bin index of a point store. \textbf{Earth Engine} Google's hosted geospatial platform, which needs an account. \textbf{S3 / us-west-2 / spot instance} Amazon's object storage, its Oregon region where the mirror lives, and a discounted pre-emptible virtual machine. \textbf{sha256} the file hash every store carries. \textbf{NISAR} the NASA--ISRO L-band radar launched 2025, not among the inputs. \textbf{E-078 / E-078c} the multi-granularity design and its first coastal tile-codec experiment. \textbf{Source Cooperative / AWS Open Data / GCS} the mirror's host, the sponsorship it runs under, and Google Cloud Storage. \textbf{Major-TOM} an open Earth-observation dataset project whose Hugging Face sample of the embeddings serves as a test fixture.
+\textbf{AlphaEarth Foundations (AEF)} Google DeepMind's model that turns Sentinel-1, Sentinel-2 and Landsat image sequences into one 64-number description of each 10\,m of land per year, trained to reproduce radar, LiDAR, climate and land-cover targets; \textbf{Satellite Embedding V1} the published output. \textbf{Embedding} a learned vector summarising what was observed. \textbf{Unit-length / $S^{63}$} vectors of length one on a 63-dimensional sphere, so their dot product is a similarity. \textbf{int8 companding} storing a value in one byte on a square-root scale. \textbf{COG / VRT / UTM} cloud-optimised GeoTIFF (readable by byte range), a GDAL virtual-raster wrapper, and the projected map zones the tiles are in. \textbf{Tier G / P} family 10's gridded and point storage tiers. \textbf{Coherence} here, the length of the mean of unit vectors in a cell: 1 if all agree, 0 if they cancel. \textbf{Sentinel-1/2, Landsat} the model's inputs: C-band radar and optical imagery from ESA and optical from NASA/USGS. \textbf{PALSAR-2, GEDI, ERA5-Land, GRACE, GLO-30, NLCD, GBIF} its training targets: L-band radar from JAXA, spaceborne LiDAR, a land climate reanalysis, satellite gravity, an elevation model, the US land-cover map, and species-occurrence records. \textbf{SST} sea-surface temperature. \textbf{NaN} not-a-number, the stored value for ``not measured''. \textbf{CSR} compressed sparse row, the bin index of a point store. \textbf{Earth Engine} Google's hosted geospatial platform, which needs an account. \textbf{S3 / us-west-2 / spot instance} Amazon's object storage, its Oregon region where the mirror lives, and a discounted pre-emptible virtual machine. \textbf{sha256} the file hash every store carries. \textbf{NISAR} the NASA--ISRO L-band radar launched 2025, not among the inputs. \textbf{E-078 / E-078c} the multi-granularity design and its first coastal tile-codec experiment. \textbf{Source Cooperative / AWS Open Data / GCS} the mirror's host, the sponsorship it runs under, and Google Cloud Storage. \textbf{Major-TOM} an open Earth-observation dataset project whose Hugging Face sample of the embeddings serves as a test fixture. \textbf{Public / private track} a store anyone may read from the public repository, or one held for this project's own use because its licence forbids redistribution (family 1.gf \S4).
 \normalsize
 
 \begin{thebibliography}{9}\small
