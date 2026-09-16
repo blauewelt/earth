@@ -1,0 +1,80 @@
+
+
+
+  .../slatrack/slatrack/fp.npy: 100%|██████████| 8.12GB / 8.12GB            [A[A[A[A[A[A[A[A[A[A
+
+  ...slatrack/slatrack/bin.npy: 100%|█████████▉| 4.06GB / 4.06GB            [A[A
+
+
+  ...slatrack/slatrack/lat.npy: 100%|██████████| 8.12GB / 8.12GB            [A[A[A
+
+
+
+  ...slatrack/slatrack/lon.npy: 100%|██████████| 8.12GB / 8.12GB            [A[A[A[A
+
+
+
+
+  ...ack/slatrack/platform.npy: 100%|██████████| 16.2GB / 16.2GB            [A[A[A[A[A
+
+
+
+
+
+  .../slatrack/slatrack/qc.npy: 100%|██████████| 2.03GB / 2.03GB            [A[A[A[A[A[A
+
+
+
+
+
+
+  .../slatrack/bin_offsets.npy: 100%|██████████| 18.8kB / 18.8kB            [A[A[A[A[A[A[A
+
+
+
+
+
+
+
+  ...track/slatrack/values.npy: 100%|██████████| 12.2GB / 12.2GB            [A[A[A[A[A[A[A[A
+
+
+
+
+
+
+
+
+  ...track/slatrack/time_s.npy: 100%|██████████| 8.12GB / 8.12GB            [A[A[A[A[A[A[A[A[A
+
+
+
+
+
+
+
+
+
+  .../slatrack/slatrack/fp.npy: 100%|██████████| 8.12GB / 8.12GB            [A[A[A[A[A[A[A[A[A[AProcessing Files (8 / 9)      : 100%|█████████▉| 67.0GB / 67.0GB, 15.8MB/s  
+New Data Upload               : 100%|██████████| 2.83GB / 2.83GB, 1.20MB/s  
+  ...slatrack/slatrack/bin.npy: 100%|█████████▉| 4.06GB / 4.06GB            
+  ...slatrack/slatrack/lat.npy: 100%|██████████| 8.12GB / 8.12GB            
+  ...slatrack/slatrack/lon.npy: 100%|██████████| 8.12GB / 8.12GB            
+  ...ack/slatrack/platform.npy: 100%|██████████| 16.2GB / 16.2GB            
+  .../slatrack/slatrack/qc.npy: 100%|██████████| 2.03GB / 2.03GB            
+  .../slatrack/bin_offsets.npy: 100%|██████████| 18.8kB / 18.8kB            
+  ...track/slatrack/values.npy: 100%|██████████| 12.2GB / 12.2GB            
+  ...track/slatrack/time_s.npy: 100%|██████████| 8.12GB / 8.12GB            
+  .../slatrack/slatrack/fp.npy: 100%|██████████| 8.12GB / 8.12GB            
+  [publish slatrack] bin.npy  1/10  1811.7s
+  [publish slatrack] bin_offsets.npy  2/10  1812.2s
+  [publish slatrack] fp.npy  3/10  1825.8s
+  [publish slatrack] lat.npy  4/10  1862.1s
+  [publish slatrack] lon.npy  5/10  1895.4s
+  [publish slatrack] platform.npy  6/10  1927.6s
+  [publish slatrack] qc.npy  7/10  1931.0s
+  [publish slatrack] time_s.npy  8/10  1947.9s
+  [publish slatrack] values.npy  9/10  2010.3s
+  [publish slatrack] store.json  10/10  2011.3s
+  publish: 10 file(s) verified by restore -> https://huggingface.co/datasets/chfrank/earth-tensors/tree/main/tensors/family10_1/slatrack
+=== stage publish done in 2235.5s ===
