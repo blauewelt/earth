@@ -1,0 +1,38 @@
+store     fishing — Global Fishing Watch AIS apparent fishing effort, 0.1° daily by vessel
+axis      2012-01-01 .. 2012-12-31  bins 2191..2264 (epoch 1982-01-01, 5-day bins; negative bins are KEPT)
+channels  C=2: fishing_hours, hours
+footprint log2_fp -1.32, log2_dt -2.32
+source    https://zenodo.org/api/records/14982712 (record 14982712, doi 10.5281/zenodo.14982712, v3.0.0, CC BY-NC 4.0)
+verified  2026-09-16: the Zenodo record listed (13 mmsi zips, 5.34 GB, md5 per file), the 2012 zip downloaded and md5-verified, its 366 day members and 6,257,384 rows parsed, and the 773,165-row vessel table read for its 16 gear classes
+
+=== stage index (fishing) ===
+  [index fishing] start (1 items)  0/1  0.0s
+Traceback (most recent call last):
+  File "/home/runner/work/earth/earth/ml/build_family10_stores.py", line 5428, in <module>
+    sys.exit(main())
+             ^^^^^^
+  File "/home/runner/work/earth/earth/ml/build_family10_stores.py", line 5423, in main
+    run_stages(ctx, parse_stages(a.stage))
+  File "/home/runner/work/earth/earth/ml/build_family10_stores.py", line 4893, in run_stages
+    STAGE_FN[s](ctx)
+  File "/home/runner/work/earth/earth/ml/build_family10_stores.py", line 3563, in stage_index
+    plan = ad.index(ctx)
+           ^^^^^^^^^^^^^
+  File "/home/runner/work/earth/earth/ml/build_family10_stores.py", line 2525, in index
+    rec, files = self._record(ctx)
+                 ^^^^^^^^^^^^^^^^^
+  File "/home/runner/work/earth/earth/ml/build_family10_stores.py", line 2484, in _record
+    raw = fetch_first([ZENODO_API], attempts=ctx.a.attempts)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/work/earth/earth/ml/build_family10_stores.py", line 340, in fetch_first
+    raise IOError(f"{attempts} attempt(s) over {len(urls)} url(s) all failed — "
+OSError: 3 attempt(s) over 1 url(s) all failed — https://zenodo.org/api/records/14982712: OSError: https://zenodo.org/api/records/14982712: HTTP 504 — <html><body><h1>504 Gateway Time-out</h1>
+The server didn't respond in time.
+</body></html>
+ | https://zenodo.org/api/records/14982712: OSError: https://zenodo.org/api/records/14982712: HTTP 504 — <html><body><h1>504 Gateway Time-out</h1>
+The server didn't respond in time.
+</body></html>
+ | https://zenodo.org/api/records/14982712: OSError: https://zenodo.org/api/records/14982712: HTTP 504 — <html><body><h1>504 Gateway Time-out</h1>
+The server didn't respond in time.
+</body></html>
+
