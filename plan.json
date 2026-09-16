@@ -1,0 +1,165 @@
+{
+ "attribution": "Powered by Global Fishing Watch",
+ "bins": [
+  2191,
+  2264
+ ],
+ "builder_git_sha": "e70270a6876216e44caf8a58580ff402157f4753",
+ "built_at": "2026-09-16T18:10:31+00:00",
+ "bytes": 56049115,
+ "channels": [
+  {
+   "max": 168.0,
+   "min": 0.0,
+   "name": "fishing_hours",
+   "unit": "h"
+  },
+  {
+   "max": 168.0,
+   "min": 0.0,
+   "name": "hours",
+   "unit": "h"
+  }
+ ],
+ "citation": "Global Fishing Watch (2025). Global AIS-based Apparent Fishing Effort Dataset, version 3.0 [Data set]. Zenodo. https://doi.org/10.5281/zenodo.14982712",
+ "columns": [
+  "date",
+  "cell_ll_lat",
+  "cell_ll_lon",
+  "mmsi",
+  "hours",
+  "fishing_hours"
+ ],
+ "date_range": [
+  "2012-01-01",
+  "2012-12-31"
+ ],
+ "docs": {
+  "README-fishing-vessels-v3.txt": {
+   "bytes": 10068,
+   "md5": "3c8eb8822bfd459f4fe48135be6e5078",
+   "url": "https://zenodo.org/api/records/14982712/files/README-fishing-vessels-v3.txt/content"
+  },
+  "README-known-issues-v3.txt": {
+   "bytes": 11113,
+   "md5": "cfc37e00ead71adb68849a168f225867",
+   "url": "https://zenodo.org/api/records/14982712/files/README-known-issues-v3.txt/content"
+  },
+  "README-mmsi-v3.txt": {
+   "bytes": 3437,
+   "md5": "f0c95507d4449a3d2edb443bd54c30da",
+   "url": "https://zenodo.org/api/records/14982712/files/README-mmsi-v3.txt/content"
+  },
+  "fishing-vessels-v3.schema.json": {
+   "bytes": 4306,
+   "md5": "6480e047e898c365623a87cf2463f057",
+   "url": "https://zenodo.org/api/records/14982712/files/fishing-vessels-v3.schema.json/content"
+  },
+  "mmsi-daily-v3.schema.json": {
+   "bytes": 1132,
+   "md5": "32523eb3d34b2655d1fc7355a75b08b8",
+   "url": "https://zenodo.org/api/records/14982712/files/mmsi-daily-v3.schema.json/content"
+  }
+ },
+ "doi": "10.5281/zenodo.14982712",
+ "footprint": {
+  "log2_dt": -2.32,
+  "log2_fp": -1.32
+ },
+ "licence": "CC BY-NC 4.0",
+ "licence_url": "https://creativecommons.org/licenses/by-nc/4.0/",
+ "n_columns": 6,
+ "per_year_resume": true,
+ "preflight": {
+  "parsed": false,
+  "why": "a live build would have to download the year's whole zip to read one day; the record's own mmsi-daily-v3.schema.json is checked instead"
+ },
+ "projected": {
+  "need_bytes": 362928272,
+  "note": "measured 2026-09-16: 6,257,384 rows in the 56,049,115-byte 2012 zip. The parts and the store coexist on disk until the build finishes, so `need_bytes` is both.",
+  "parts_bytes": 168949368,
+  "rows_estimated": 6257384,
+  "rows_per_zip_byte": 0.111641,
+  "store_bytes": 193978904,
+  "zip_bytes": 56049115
+ },
+ "qc_policy": "THE `qc` COLUMN OF THIS STORE IS NOT A QUALITY GRADE \u2014 it is the vessel's GEAR CLASS, a categorical channel a consumer may use or ignore, and `qc_codes` in this file is the whole code table (0 = the vessel table carries no row for that MMSI in that year). The source has no per-row flag to grade: it IS the processed product, one row per (day, 0.1\u00b0 cell, MMSI) from Global Fishing Watch's own AIS pipeline and fishing classifier, and the rows it considered bad are not in it. What the builder does assert, per row, is the physics of the two numbers: 0 <= fishing_hours <= hours, and hours <= 168 (--max-hours). A row failing either REFUSES the build rather than being dropped, because both would mean the columns were misread. hours > 24 is NOT a failure and is counted (`hours_over_24h`, `max_hours`): the source states that an MMSI is not always one vessel, so two vessels sharing an identity broadcast up to 48 hours in a cell-day \u2014 measured at 1.6 % of rows in 2012, to 47.56 h. `hours == 0` is a real value (1.1 % of 2012) and is kept: the vessel was in the cell and broadcast nothing measurable. Neither channel is ever NaN.",
+ "record": "https://zenodo.org/api/records/14982712",
+ "released": "2025-03-11",
+ "schema_declared": [
+  "date",
+  "cell_ll_lat",
+  "cell_ll_lon",
+  "mmsi",
+  "hours",
+  "fishing_hours"
+ ],
+ "sources": [
+  "https://zenodo.org/api/records/14982712 (record 14982712, doi 10.5281/zenodo.14982712, v3.0.0, CC BY-NC 4.0)",
+  "https://zenodo.org/api/records/14982712/files/mmsi-daily-csvs-10-v3-<year>.zip/content",
+  "https://zenodo.org/api/records/14982712/files/fishing-vessels-v3.csv/content"
+ ],
+ "store": "fishing",
+ "title": "Global Fishing Watch AIS apparent fishing effort, 0.1\u00b0 daily by vessel",
+ "verified": "2026-09-16: the Zenodo record listed (13 mmsi zips, 5.34 GB, md5 per file), the 2012 zip downloaded and md5-verified, its 366 day members and 6,257,384 rows parsed, and the 773,165-row vessel table read for its 16 gear classes",
+ "version": "3.0.0",
+ "vessels": {
+  "bytes": 114823860,
+  "md5": "b5ba27cedd5426c0bcb8e6009e911cf0",
+  "name": "fishing-vessels-v3.csv",
+  "url": "https://zenodo.org/api/records/14982712/files/fishing-vessels-v3.csv/content"
+ },
+ "vessels_summary": {
+  "bytes": 114823860,
+  "file": "fishing-vessels-v3.csv",
+  "gear_classes_unseen": {},
+  "gear_histogram": {
+   "dredge_fishing": 9617,
+   "drifting_longlines": 41544,
+   "fishing": 171310,
+   "fixed_gear": 38021,
+   "other_purse_seines": 26504,
+   "other_seines": 887,
+   "pole_and_line": 12733,
+   "pots_and_traps": 5294,
+   "purse_seines": 2092,
+   "seiners": 1541,
+   "set_gillnets": 64659,
+   "set_longlines": 45538,
+   "squid_jigger": 9626,
+   "trawlers": 335979,
+   "trollers": 1190,
+   "tuna_purse_seines": 6630
+  },
+  "md5": "b5ba27cedd5426c0bcb8e6009e911cf0",
+  "n_flags": 342,
+  "published_as": "vessels.csv.gz",
+  "rows": 773165,
+  "vessels_per_year": {
+   "2012": 10447,
+   "2013": 31896,
+   "2014": 35985,
+   "2015": 38123,
+   "2016": 47484,
+   "2017": 58925,
+   "2018": 64898,
+   "2019": 68538,
+   "2020": 68128,
+   "2021": 75153,
+   "2022": 82681,
+   "2023": 96450,
+   "2024": 94457
+  }
+ },
+ "years": [
+  2012
+ ],
+ "zips": {
+  "2012": {
+   "bytes": 56049115,
+   "md5": "920f3434b53af9f3423f2087947b595a",
+   "name": "mmsi-daily-csvs-10-v3-2012.zip",
+   "url": "https://zenodo.org/api/records/14982712/files/mmsi-daily-csvs-10-v3-2012.zip/content"
+  }
+ }
+}
