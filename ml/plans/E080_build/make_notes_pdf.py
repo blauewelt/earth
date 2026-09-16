@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""E-080 deck with speaker notes: 40 pages, slide then notes, 16:9, dark."""
+"""E-080 deck with speaker notes: 2 x N pages, slide then notes, 16:9, dark."""
 import glob
 import os
 import re
@@ -33,10 +33,11 @@ for s in prs.slides:
     notes = s.notes_slide.notes_text_frame.text.strip()
     assert title and notes
     slides.append((title, notes))
-assert len(slides) == 20, len(slides)
+N = len(slides)
+assert N, "no slides"
 
 pngs = sorted(glob.glob(f"{BUILD}/slidepage-*.png"))
-assert len(pngs) == 20, pngs
+assert len(pngs) == N, (len(pngs), N)
 
 c = canvas.Canvas(OUT, pagesize=(W, H))
 c.setTitle("The cut-off mirrored double cone — slides with speaker notes")
@@ -53,7 +54,7 @@ for i, ((title, notes), png) in enumerate(zip(slides, pngs), start=1):
     c.rect(0, 0, W, H, stroke=0, fill=1)
     c.setFillColor(BLUE)
     c.setFont("Helvetica-Bold", 10)
-    c.drawString(43, H - 40, f"SPEAKER NOTES  ·  SLIDE {i} OF 20")
+    c.drawString(43, H - 40, f"SPEAKER NOTES  ·  SLIDE {i} OF {N}")
     cx, cy, cw = 43.0, 48.0, W - 86.0
     # the title wraps to a second line when it is too long for one
     tstyle = ParagraphStyle("t", fontName="Times-Bold", fontSize=23,

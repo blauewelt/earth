@@ -11,6 +11,7 @@ source and is authoritative where they differ.
 - [Slides with speaker notes, PDF](https://blauewelt.github.io/earth/ml/plans/E080_hourglass_cone_deck_with_notes.pdf)
 - [Slides only, PDF](https://blauewelt.github.io/earth/ml/plans/E080_hourglass_cone_deck.pdf)
 - [PowerPoint, notes in the notes pane](https://github.com/blauewelt/earth/raw/main/ml/plans/E080_hourglass_cone_deck.pptx)
+- [The deck on one slide, with an empty panel reserved for the results figure — PDF](https://blauewelt.github.io/earth/ml/plans/E080_hourglass_cone_summary.pdf) (also slide 21 of the deck; the .pptx sits beside it — when E-080's numbers exist, the figure goes into that panel)
 - [E-080 entry in the experiment log](https://blauewelt.github.io/earth/docs.html?f=ml/EXPERIMENTS.md#e-080)
 - [E-069 · the cone codec as built (what E-080 replaces)](https://blauewelt.github.io/earth/docs.html?f=ml/plans/E069_cone_codec.md)
 - [E-071 · cone v2 (the geometry E-080 builds on)](https://blauewelt.github.io/earth/docs.html?f=ml/plans/E071_cone_v2.md)
@@ -98,8 +99,8 @@ plain-English sentence; every reference another reader would not know is a
 **clickable link to its definition** on the slide and is explained in the notes;
 markdown links, one per line, in every reply; no choice dialogs — options in prose,
 name the pick, proceed reversibly. After a rebuild: verify every rendered page,
-counts (N slides / N notes / N + 2N pages), then commit the plan, the three deck
-files and the figures in one commit, add a revision note to the E-080 entry in
+counts (N slides / N notes / N + 2N pages, plus the one-page summary export), then commit the plan, the deck
+files, the summary export and the figures in one commit, add a revision note to the E-080 entry in
 `ml/EXPERIMENTS.md`, keep `docs.html`'s DOCS description current, push with
 `node scripts/git_api_push.mjs --branch main --token-file /home/claude/.gh_pat`
 (never force), fast-forward `gh-pages` with `force:false`, and verify the served

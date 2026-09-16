@@ -101,6 +101,18 @@ handover note for the next agent
 and the deck's build scripts (`ml/plans/E080_build/`) are added in the same
 commit.
 
+**Slide 21, 16 Sep** (Chris: *"make a one-slide summary of the deck. Leave
+some space to insert a figure with the actual results"*): the whole deck on
+one slide — design, learnable cone, guards, the three-arm experiment and its
+verdict rule on the left; on the right an **empty, dashed-outline panel
+reserved for the results figure** (R1 future-cone loss per lead for A0 / A1 /
+A2 at three seeds, R3 drift-vs-upstream, R4 the western-boundary depth check),
+which stays empty until a run has produced those numbers. The same slide is
+also exported on its own as
+[E080_hourglass_cone_summary.pdf](https://blauewelt.github.io/earth/ml/plans/E080_hourglass_cone_summary.pdf)
+and
+[E080_hourglass_cone_summary.pptx](https://github.com/blauewelt/earth/raw/main/ml/plans/E080_hourglass_cone_summary.pptx).
+
 **Status.** DESIGN ONLY — nothing is implemented, nothing is measured, no run
 is dispatched and no box is rented. Three arms (A0 fixed geometry · A1 learned
 · A2 learned and primed from the climatological current), three seeds, five

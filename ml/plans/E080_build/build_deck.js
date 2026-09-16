@@ -1,4 +1,5 @@
-// E-080 deck builder — 20 slides (revision 3.1), house style of E-069.
+// E-080 deck builder — 21 slides (revision 3.1), house style of E-069.
+// Also writes a standalone one-slide export of slide 21 (the summary).
 const pptxgen = require("pptxgenjs");
 const fs = require("fs");
 
@@ -9,6 +10,7 @@ const BUILD = process.env.E080_BUILD || path.join(HERE, "build");
 const C = JSON.parse(fs.readFileSync(path.join(BUILD, "content.json"), "utf8"));
 const FIG = process.env.E080_FIG_OUT || path.join(PLANS, "E080_figures");
 const OUT = path.join(PLANS, "E080_hourglass_cone_deck.pptx");
+const OUT_SUMMARY = path.join(PLANS, "E080_hourglass_cone_summary.pptx");
 
 const BG = "0D1117", CARD = "161B22", LINE = "30363D", TXT = "E6EDF3",
       MUT = "7D8590", FOOT = "4A5460", BLUE = "4493F8", GOLD = "E3B341",
@@ -29,6 +31,7 @@ const U = {
   zhu: "https://arxiv.org/abs/2010.04159",
   adam: "https://arxiv.org/abs/1412.6980",
   exps: "https://blauewelt.github.io/earth/docs.html?f=ml/EXPERIMENTS.md#e-069",
+  f7: "https://blauewelt.github.io/earth/docs.html?f=ml/plans/E070_family7_build.md",
 };
 
 const pres = new pptxgen();
@@ -118,10 +121,12 @@ function lines(items, base, gap) { return para(items, base, gap === undefined ? 
 // ---------------------------------------------------------------- primitives
 function card(s, x, y, w, h, opts) {
   opts = opts || {};
+  const line = { color: opts.line || LINE, width: opts.lw || 1 };
+  if (opts.dash) line.dashType = opts.dash;
   s.addShape(pres.ShapeType.roundRect, {
     x, y, w, h, rectRadius: 0.06,
     fill: { color: opts.fill || CARD },
-    line: { color: opts.line || LINE, width: opts.lw || 1 },
+    line,
   });
 }
 
@@ -665,4 +670,94 @@ function stepCard(s, x, y, w, h, num, head, body) {
   ], 10.5);
 }
 
-pres.writeFile({ fileName: OUT }).then(() => console.log("wrote", OUT, "slides:", SLIDE_N));
+// ================================================================ slide 21
+// The body is a function because it is drawn TWICE: here, as the deck's last
+// slide, and again on its own in the standalone one-slide export below.
+const SUMMARY_HEADLINE =
+  "An hourglass that reads the past through a cone it shapes itself, tested three ways against its own fixed twin";
+
+// a compact label card: tighter padding than labelCard, top-aligned, so four
+// of them stack inside the left half without the bodies touching their borders
+function sumCard(s, x, y, w, h, label, body, size) {
+  card(s, x, y, w, h);
+  s.addText(stack([
+    [label, { fontSize: 11, bold: true, color: GOLD, fontFace: FS }, 5],
+    [body, { fontSize: size, color: TXT, fontFace: FS }, 0],
+  ]), { x: x + 0.24, y: y + 0.11, w: w - 0.48, h: h - 0.22, isTextBox: true,
+        margin: 0, valign: "top" });
+}
+
+function summaryBody(s) {
+  // ---- left half: the deck in four cards
+  const LX = 0.6, LW = 5.92, FSZ = 9;
+  const cards = [
+    [1.56, 1.16, "The design · slides 3–7",
+     "The present is a **waist** of ~13 cells, not a tip; the past cone reads the last 30 days at every pentad; the **prediction cone** — the past cone mirrored through the anchor, +1…+6 pentads — is sampled the same way and used only as targets. Each example draws one of **four tasks** (0.35 forecast · 0.15 from the waist alone · 0.25 nowcast · 0.25 fill-in), under E-069b's rules: knowable targets only, no copies, every family against its own predict-the-mean bar"],
+    [2.82, 1.68, "The cone the model shapes · slides 8–12",
+     "A fixed 24-point sunflower, phase-rotated by the golden angle per lag, warped by **eight dimensionless numbers per 1° cell and channel group**: a drift **d** toward the source (capped at cone v2's design speed) and two ellipses stored as **matrix logarithms** — no kilometres, no angle to wrap — with Σ(ℓ) = Σ~{0} + ℓ^{2}Σ~{v}. **One direction per flow, one scale and one memory per channel**: s~{c} and τ~{c} inflate or shrink the shared ellipse and set how far back the channel reads, applied as a Gaussian **aperture** over the group's shared per-location tokens — zero extra tokens. Learned **gate-first** (a soft aperture over fixed dots, so the loader never depends on live weights), then **hardened**"],
+    [4.60, 0.92, "The guards · slides 13, 15",
+     "Coarse-10°-plus-1°-residual prior; log-space soft floors; mirror tie; stop-gradient on target positions; evaluation geometry frozen for every arm; the far ring kept and never gated; the aperture never touches the loss weights — so the cone cannot learn to ask easy questions"],
+    [5.62, 1.13, "The experiment · slide 17",
+     // NOTE: at most ONE emphasised run may follow the hyperlink in this
+     // paragraph — with two after it LibreOffice renders the link in the body
+     // colour instead of accent blue (measured; the PPTX markup is identical
+     // to every other link in the deck). Hence "3 seeds each" sits before it.
+     "Pre-registered. **A0** fixed hourglass (control, and the eval geometry for all) · **A1** learned from A0's init · **A2** learned, surface drift primed at −u_clim·Δt. Same 7 M codec, 20 k steps, frozen protocol, **3 seeds each**, on the same tensor ([family 7.2](" + U.f7 + ")); read-outs R1–R5. **Verdict**: A1 beats A0 on R1 at every lead ≤ 3, paired at all seeds, R5 clean → adopted; A2 > A1 ≈ A0 → geometry from climatology; neither → keep A0"],
+  ];
+  cards.forEach(c => sumCard(s, LX, c[0], LW, c[1], c[2], c[3], FSZ));
+
+  // ---- right half: the reserved panel, empty by design
+  const PX = 6.78, PY = 1.56, PW = 5.95, PH = 4.59;
+  card(s, PX, PY, PW, PH, { fill: "11202F", line: GOLD, lw: 1.5, dash: "dash" });
+  s.addText("RESULTS — figure to be inserted", {
+    x: PX, y: PY + PH / 2 - 0.55, w: PW, h: 0.45, fontSize: 16, bold: true,
+    color: MUT, fontFace: FS, align: "center", isTextBox: true, margin: 0,
+    valign: "middle",
+  });
+  s.addText("R1 · future-cone loss per lead, A0 fixed / A1 learned / A2 primed, 3 seeds · R3 · learned drift vs upstream · R4 · the western-boundary depth check", {
+    x: PX + 0.55, y: PY + PH / 2 + 0.02, w: PW - 1.1, h: 0.8, fontSize: 10,
+    color: MUT, fontFace: FS, align: "center", isTextBox: true, margin: 0,
+    valign: "top",
+  });
+  s.addText("Reserved for the measured result; stays empty until a run has produced it.", {
+    x: PX, y: 6.28, w: PW, h: 0.34, fontSize: 10, italic: true, color: MUT,
+    fontFace: FS, isTextBox: true, margin: 0, valign: "middle",
+  });
+}
+
+{
+  const s = newSlide("The deck on one slide — with room for the result",
+                     SUMMARY_HEADLINE);
+  summaryBody(s);
+}
+
+// ================================================ standalone one-slide export
+// Same layout, same background, same notes — no slide number in the footer.
+const pres2 = new pptxgen();
+pres2.layout = "LAYOUT_WIDE";
+pres2.author = "Deck builder";
+pres2.title = "The cut-off mirrored double cone — one-slide summary";
+{
+  const s = pres2.addSlide();
+  s.background = { color: BG };
+  s.addText("E-080 · THE CUT-OFF MIRRORED DOUBLE CONE · ONE-SLIDE SUMMARY", {
+    x: 0.6, y: 0.30, w: 12.13, h: 0.26, fontSize: 11, bold: true, color: BLUE,
+    fontFace: FS, charSpacing: 1.3, isTextBox: true, margin: 0, valign: "middle",
+  });
+  s.addText(SUMMARY_HEADLINE, {
+    x: 0.6, y: 0.56, w: 12.13, h: 0.84, fontSize: titleSize(SUMMARY_HEADLINE),
+    bold: true, color: TXT, fontFace: FH, isTextBox: true, margin: 0,
+    valign: "middle",
+  });
+  s.addText(FOOTER, {
+    x: 0.6, y: 6.95, w: 12.13, h: 0.3, fontSize: 10, color: FOOT, fontFace: FS,
+    isTextBox: true, margin: 0, valign: "middle",
+  });
+  s.addNotes(notesText(SLIDE_N));
+  summaryBody(s);
+}
+
+pres.writeFile({ fileName: OUT })
+  .then(() => console.log("wrote", OUT, "slides:", SLIDE_N))
+  .then(() => pres2.writeFile({ fileName: OUT_SUMMARY }))
+  .then(() => console.log("wrote", OUT_SUMMARY, "slides: 1"));

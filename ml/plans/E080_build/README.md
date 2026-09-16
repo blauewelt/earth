@@ -21,9 +21,11 @@ Outputs, next to the spec in `ml/plans/`:
 
 | file | what |
 |---|---|
-| `E080_hourglass_cone_deck.pptx` | 20 slides, speaker notes in each slide's notes pane |
+| `E080_hourglass_cone_deck.pptx` | 21 slides, speaker notes in each slide's notes pane |
 | `E080_hourglass_cone_deck.pdf` | the slides only |
 | `E080_hourglass_cone_deck_with_notes.pdf` | slide page + notes page, interleaved (2 × slides) |
+| `E080_hourglass_cone_summary.pptx` | slide 21 on its own — same layout, no slide number, same notes |
+| `E080_hourglass_cone_summary.pdf` | that one slide |
 | `E080_figures/*.png` | the five matplotlib figures, 200 dpi |
 
 Derived files (`content.json`, the intermediate PDF, the 150 dpi slide
@@ -52,7 +54,7 @@ rasters, the QA renders) all land in `build/`, which is disposable.
 |---|---|
 | `extract_notes.py` | parses the spec into `build/content.json` — slide titles and the `*Notes.*` text, whitespace collapsed |
 | `figures.py` | all five figures into `../E080_figures/` at 200 dpi, dark background |
-| `build_deck.js` | the pptxgenjs deck: house style, layout, the slide body text |
+| `build_deck.js` | the pptxgenjs deck: house style, layout, the slide body text; also the standalone one-slide summary, whose body is `summaryBody()`, shared with slide 21 |
 | `fix_pptx.py` | post-processes the pptx (see the gotcha below) |
 | `validate.py` | schema check (delegated) + deck checks: slide count, footer, page number, notes verbatim, no emoji |
 | `make_notes_pdf.py` | the interleaved notes PDF, with reportlab |
@@ -60,7 +62,7 @@ rasters, the QA renders) all land in `build/`, which is disposable.
 
 ## Spec conventions the scripts rely on
 
-- A slide is a section headed `## Slide N · Kicker`. `N` runs 1..20 with no
+- A slide is a section headed `## Slide N · Kicker`. `N` runs 1..21 with no
   gaps; `extract_notes.py` fails loudly otherwise. The kicker becomes the
   small uppercase blue line at the top of the slide.
 - The **first bold paragraph** of the section is the headline — the big
@@ -120,6 +122,13 @@ original definition.
 - **Duplicate `<a:pPr>`.** pptxgenjs writes one per run; LibreOffice honours
   the last, which erases the bullet on any item containing inline bold.
   `fix_pptx.py` keeps only the first per `<a:p>`. Never skip it.
+- **At most ONE emphasised run may follow a hyperlink in the same paragraph.**
+  With two (`**3 seeds each**` *and* `**Verdict**` after the link on slide 21)
+  LibreOffice renders the link in the body colour instead of accent blue,
+  underline and link annotation intact — the PPTX markup is byte-identical to
+  every other link in the deck, so this is a renderer quirk, not a builder bug.
+  Measured on eight variants; the fix is to move the link so only one `**…**`
+  follows it. Check the colour in the render, not in the XML.
 - **Georgia is substituted by LibreOffice** and renders wider than the
   metrics suggest, so titles wrap into figures. `titleSize()`'s constants
   (1300 / 2600) were calibrated from a real render, not from font metrics.
