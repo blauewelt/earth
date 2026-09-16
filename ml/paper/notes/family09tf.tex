@@ -1,0 +1,435 @@
+\documentclass[10pt]{article}
+\usepackage[a4paper,margin=2.4cm]{geometry}
+\usepackage{array}
+\usepackage{booktabs}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage[hidelinks]{hyperref}
+\usepackage{xcolor}
+\usepackage{float}
+\setlength{\parskip}{2pt}
+\newcommand{\code}[1]{\texttt{#1}}
+\newcolumntype{L}[1]{>{\raggedright\arraybackslash}p{#1}}
+
+\title{Family 0.9.tf: land and coast through a published embedding\\
+\large a dataset design note --- Google's AlphaEarth annual 10\,m embeddings in place of the raw imagery}
+\author{blauewelt/earth --- design note}
+\date{16 September 2026}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+Family 0.9.tf is the alternative to family 1.0.tf's image catalogue: instead
+of learning a local codec over petabytes of raw optical, radar and LiDAR
+scenes, it ingests the embedding Google already computed from the same optical and
+radar imagery, trained against the same LiDAR, L-band radar and climate
+sources the catalogue lists --- the AlphaEarth Foundations Satellite
+Embedding, version 1:
+one 64-dimensional unit-length vector per 10\,m pixel per year, 2017--2025,
+for every land surface and shallow water, published under CC BY 4.0, 64\,TB
+a year and 577\,TB in all, readable anonymously from a complete mirror. The
+version number below 1.0 says what it is: a published summary standing in
+for the raw record, the fastest route to ten-metre land information the
+programme can take, bought at the price of an annual cadence (73 times
+coarser than the five-day rule), a closed model that cannot be re-run on new
+sensors or sub-annual periods, and a record that begins in 2017. The note
+says what the embedding is and what it was trained on, how it enters family
+10's token without leaking a year's data into its own anchors, three stores
+at three resolutions that make it usable at 0.2\,TB in the first phase
+rather than 577 (a 1\,km
+pooled field with a coherence channel, raw 10\,m samples at fixed sub-cell
+positions, and 100\,m over regions of interest), the 10\,m original
+referenced by byte range rather than copied, the arithmetic, the one-pass
+build near the data, the falsifiers that decide it against family 1.0.tf's
+own codec, and the decisions left to Chris.
+\end{abstract}
+
+\section{Purpose}
+
+Family 1.0.tf holds the land's raw fine record as a catalogue of scenes, and
+its imagery becomes usable only once a local codec (E-078 \S4) has been
+trained to turn tiles into tokens --- the one compute-bound rung on the
+programme's ladder, and one whose first build is coastal and small
+(E-078c). Google's AlphaEarth Foundations model has already done that job
+at planetary scale: it reads the same optical and C-band radar imagery the
+catalogue lists (Sentinel-2, Sentinel-1, Landsat 8 and 9) and was trained
+to reproduce the rest of it --- L-band radar, spaceborne LiDAR, climate and
+gravity fields, elevation, land-cover labels and geo-linked text --- as
+targets, so those sources shape the embedding without being read when it
+runs; and its annual output is public. Family 0.9.tf takes that output as
+a token source, so that the land side of ``predict everything'' can be
+tested \emph{now}, against the land targets of family 1.0.tf (forest
+disturbance, loss year, biomass, burned area, water extent, crop and land
+cover), and so that the programme can measure whether its own codec is
+needed for land at all.
+
+The number 0.9 is deliberate. It is below 1.0 because the source is not an
+observation but a learned summary of observations; the family is a
+stepping stone, and it is meant to be \emph{compared} with 1.0.tf, not
+merged into it. If AlphaEarth tokens predict the land targets as well as the
+programme's own codec would, the codec is not worth its compute for land at
+annual cadence; if they do not --- because the targets move faster than a
+year, or because the closed model cannot see NISAR, or because 2017 is too
+late --- the comparison says exactly where 1.0.tf's raw record earns its
+cost.
+
+\section{What the embedding is}
+
+Checked against the paper (Brown et al.\ 2025, arXiv 2507.22291, v2
+2025-09-08), the Earth Engine catalogue entry, Google's storage read-me and
+a live listing of both buckets on 2026-09-16.
+
+\paragraph{The model.} An ``embedding field'' model of about 480\,M
+parameters (a 1\,B variant was trained; the released layers come from the
+480\,M one). Its \emph{inputs} are image sequences from Sentinel-2,
+Sentinel-1 C-band radar and Landsat 8 and 9. Its training \emph{targets},
+which the model learns to reconstruct and therefore encodes without reading
+them at run time, are ALOS PALSAR-2 L-band radar, GEDI LiDAR, ERA5-Land
+climate, GRACE gravity, the Copernicus GLO-30 elevation model, NLCD
+land-cover labels, and Wikipedia articles linked to GBIF species
+occurrences --- more than three billion observations in all, over about
+1.1\,\% of the land surface. No sub-metre imagery is used. The model separates a \emph{support period} (the
+timestamps of its inputs) from a \emph{valid period} the output summarises,
+and can summarise, interpolate or extrapolate to a valid period with no
+observations in it; the released product uses a valid period of one calendar
+year, and the exact support window of the released layers is not stated.
+
+\paragraph{The output.} Per 10\,m pixel per year, a 64-dimensional vector
+of unit length --- the vectors lie on the sphere $S^{63}$, spread by a
+batch-uniformity objective --- which the producer describes as linearly
+composable, with the dot product between two years at one pixel as the
+documented change measure (cosine similarity, since the vectors are unit
+length). Coverage is terrestrial surfaces and shallow water; years
+2017--2025 (the 2025 layer was released 2026-03-09; Google commits to annual
+production with a year's notice of change, contingent on Landsat and
+Copernicus continuing).
+
+\paragraph{The files.} Cloud-optimised GeoTIFFs of $8192 \times 8192$ pixels
+with 64 bands, in local UTM projections, 120 zone directories per year,
+about 34,000 tiles a year, 1.9\,GB on average. Values are \textbf{int8}
+with nodata $-128$ and the documented de-quantisation
+\begin{equation}
+x = \Big(\frac{q}{127.5}\Big)^{2}\,\mathrm{sign}(q),
+\end{equation}
+so the encoding is $q \approx \mathrm{round}(127.5\,\mathrm{sign}(x)\sqrt{|x|})$
+--- a square-root companding that spends resolution near zero. The producer
+states the 8-bit form costs negligible accuracy against float32.
+
+\paragraph{Where it lives, measured.} \code{gs://alphaearth\_foundations/}\allowbreak
+\code{satellite\_embedding/v1/annual/<year>/<zone>/}, with index files
+(\code{aef\_index.parquet}, 70\,MB, updated 2026-02-27); the bucket has been
+provider-pays since July 2026, so a copy costs the reader nothing. A
+complete mirror on Source Cooperative (\code{tge-labs/aef}, AWS Open Data,
+\code{s3://us-west-2.opendata.source.coop/tge-labs/aef/v1/annual/}, anonymous
+S3 and HTTPS) has the same tile counts and byte totals as the origin for
+every year, plus one VRT per tile; its read-me warns that the COGs are
+stored bottom-up, so they are read through the VRTs. Earth Engine serves the
+same layers as floats in $[-1, 1]$ (bands \code{A00}--\code{A63}).
+
+\begin{table}[H]
+\centering\footnotesize
+\begin{tabular}{@{}lrr@{}}
+\toprule
+year & tiles & TB \\
+\midrule
+2017 & 33,148 & 64.35 \\
+2018 & 33,291 & 64.15 \\
+2019 & 33,385 & 64.06 \\
+2020 & 33,206 & 63.97 \\
+2021 & 33,281 & 63.91 \\
+2022 & 33,700 & 63.11 \\
+2023 & 34,151 & 63.85 \\
+2024 & 34,149 & 63.90 \\
+2025 & 34,155 & 65.29 \\
+\midrule
+total & $\approx 302{,}000$ & \textbf{576.6} \\
+\bottomrule
+\end{tabular}
+\caption{The published embedding, as listed on 2026-09-16 (origin and mirror agree year by year). About $1.4 \times 10^{12}$ land pixels a year.}
+\end{table}
+
+\paragraph{Licence.} CC BY 4.0, attribution ``The AlphaEarth Foundations
+Satellite Embedding dataset is produced by Google and Google DeepMind''.
+Every store below carries it; \code{licence.redistribution} is
+\code{attribution}.
+
+\paragraph{What is not available.} Only version 1 and only annual. Sub-annual
+embeddings (quarterly, monthly, weekly, ``down to a 5-day frequency'') exist
+as Google Maps Platform's Custom Satellite Embeddings, in private preview
+with no public licence; an academic programme offers samples through Earth
+Engine, applications closing 2026-10-15. The model and training code are
+closed: no new sensor (NISAR), no new year on demand, no re-run over a
+chosen period. Reported weaknesses: transfer across regions and years is
+limited (an irrigation study reproduced 0.93--0.95 accuracy locally and
+about 0.3 when moved to another region), short events are averaged away by
+the annual window, and the model receives no coordinates, so a
+location-dependent task needed far more labels than a coordinate-aware
+baseline.
+
+\section{Grid, time axis and token}
+
+The embedding is a 10\,m raster in UTM; the family's grids are latitude and
+longitude. The stores below resample by \emph{pooling}, never by
+interpolating a single value, and the 10\,m original is referenced, not
+copied (\S4.4), so nothing is resampled at storage time except what is
+declared as a pooled field with its own footprint.
+
+\paragraph{Time.} A year-$Y$ embedding summarises 1 January to 31 December
+of $Y$: $\log_2 f_t = \log_2(365/5) = +6.2$. It is filed under the
+\textbf{first family-10 bin that begins after 31 December $Y$} --- not the
+bin containing that day, because the reader includes the anchor's own bin
+(family 10.1 \S7: candidates are ``at or before the anchor's pentad''), and
+a year-end bin would hand an anchor in the last days of $Y$ its own year's
+summary. With that filing the one-sided rule does the rest: an anchor in
+any bin of year $Y$ sees the embedding of year $Y-1$ and earlier, never
+$Y$'s own. $\Delta t$ is measured from the end of the anchor's bin to
+31 December $Y$, 0 to about 370 days for the most recent usable year. This
+is the strict rule and the pick; the relaxed alternative --- letting an
+anchor in $Y$ read $Y$'s embedding when the target lies after $Y$ --- is a
+leak of up to a year of future imagery into the input and is not offered.
+One caveat the rule cannot close: the producer does not state the support
+window of the released layers, so if year $Y$'s embedding was computed
+from observations extending past 31 December $Y$, even this filing admits
+them; the registry records the assumption.
+
+\paragraph{Footprint.} A raw 10\,m vector carries $\log_2 f_p =
+\log_2(0.01/27.83) = -11.4$; a pooled $1/1200^\circ$ cell (0.093\,km)
+$-8.2$; a pooled $1/120^\circ$ cell (0.93\,km) $-4.9$. All are inside the
+registry's $\pm 12$ clamp.
+
+\paragraph{The token.} The 64 components are the token's value vector with
+$C = 64$ (plus one coherence channel for pooled stores, \S4.1), raw units
+(unit-length components in $[-1, 1]$), mask all-true where the pixel is not
+nodata; source embedding ``AlphaEarth v1''; offsets and footprints as
+everywhere else. Nothing is z-scored: the components are already on a
+sphere, and the loader standardises from training years if it wants to.
+
+\section{The stores}
+
+Three stores at three resolutions, and one reference. Bytes assume int8
+components (the producer's own precision) plus one uint8 coherence channel,
+so a pooled pixel costs 65 bytes and a raw 10\,m vector 64.
+
+\subsection{\code{aef1k} --- the pooled 1\,km field with coherence, tier G sharded}
+
+On a $1/120^\circ$ grid ($\approx 0.93$\,km, $43200 \times 21600$), each
+cell's value is the \textbf{mean of the unit vectors} of its $\approx 100
+\times 100$ valid 10\,m pixels, \textbf{renormalised} to unit length, stored
+as int8 under the producer's companding; and a 65th channel, the
+\textbf{coherence}: the length of the un-normalised mean, in $[0, 1]$, 1
+where the square kilometre is one thing and near 0 where it is many. The
+coherence is what the mean throws away, kept as a number, so that a 1\,km
+token says both ``what'' and ``how uniformly''. One frame per year
+($F = 1$), filed under the bin of 31 December. Land is $\approx 29$\,\% of
+the grid, $\approx 270$\,M valid cells: $270\,\mathrm{M} \times 65 \times
+1.2 \approx 21$\,GB per year, \textbf{$\approx 0.2$\,TB for 2017--2025}
+(0.25\,TB if the high-latitude land the 29\,\% undercounts is included).
+
+\subsection{\code{aef\_dots} --- raw 10\,m vectors at fixed sub-cell positions, tier P}
+
+Pooling loses the fine structure the embedding was made for. \code{aef\_dots}
+keeps sixteen \emph{unpooled} 10\,m vectors per $0.25^\circ$ land cell per
+year at fixed sub-cell positions --- the cone's own sunflower offsets scaled
+into the cell, the same sixteen positions every year so that a position's
+time series is a time series --- as tier-P rows: \code{lat}, \code{lon} of
+the pixel centre, \code{time\_s} = 31 December $Y$, \code{platform} = the
+hashed tile identifier, \code{qc} = 1, \code{values} the 64 components as
+float16 ($C = 64$; int8 would need a schema change and is not worth it at
+this size). About 300\,k land cells $\times$ 9 years $\times$ 16 =
+43\,M rows $\times$ 155 bytes $\approx$ \textbf{7\,GB}. This is the store a
+consumer reads to ask what 10\,m detail adds over the kilometre mean, for
+7\,GB.
+
+\subsection{\code{aef100r} --- 100\,m over regions of interest, tier G sharded}
+
+The same pooling at $1/1200^\circ$ ($\approx 93$\,m) over declared regions:
+first the deforestation frontiers (the Amazon arc, the Congo basin, insular
+Southeast Asia, $\approx 5$\,M\,km$^2$), then the $\pm 100$\,km coastal band
+of family 1.0.tf. Regions: $5 \times 10^8$ cells $\times$ 65 $\times$ 1.2
+$\approx 39$\,GB per year, \textbf{$\approx 0.35$\,TB} for nine years; the
+coastal band (taken as 30\,\% of land, $\approx 8 \times 10^9$ cells at this
+grid) would be $\approx 0.6$\,TB per year, $\approx 5.7$\,TB in all, and is
+phase C. The region list is a registry field, and a
+new region is a new build of that region alone.
+
+\subsection{\code{aef10} --- the original, referenced by byte range}
+
+The 10\,m tiles are not copied. The registry carries a group of layout
+\code{"external-cog"}: the mirror's base URL, the per-tile index
+(\code{aef\_index.parquet}, 70\,MB, re-hosted on the Hub with its sha256),
+the projection per zone, the companding formula, and the bottom-up
+orientation flag. A read is a COG-internal byte range on an anonymous
+bucket, the same operation the family-7 globe layer performs on the Hub,
+and the reader returns raw 10\,m vectors for a cone's dots on demand. This
+is the family's honest position on 577\,TB: it is readable, it is not ours
+to host, and the day the mirror goes away the three copied stores above are
+what remains --- which is why they exist.
+
+\begin{table}[H]
+\centering\setlength{\tabcolsep}{3pt}\footnotesize
+\begin{tabular}{@{}L{1.5cm}L{1.3cm}L{4.6cm}L{2.0cm}L{2.2cm}L{1.6cm}L{0.7cm}@{}}
+\toprule
+store & tier & content & footprint $(\log_2 f_p, \log_2 f_t)$ & rows or cells & stored & phase \\
+\midrule
+\code{aef1k} & G sharded & 64 pooled + 1 coherence, int8/uint8, $1/120^\circ$, one frame per year & $(-4.9, +6.2)$ & 270\,M land cells $\times$ 9 & $\approx 0.2$\,TB & A \\
+\code{aef\_dots} & P & 16 raw 10\,m vectors per $0.25^\circ$ land cell per year, float16 & $(-11.4, +6.2)$ & 43\,M rows & 7\,GB & A \\
+\code{aef100r} & G sharded & pooled 100\,m over regions of interest; the coastal band later & $(-8.2, +6.2)$ & $5 \times 10^8$ cells $\times$ 9 & $\approx 0.35$\,TB (regions); $\approx 5.7$\,TB (band) & B / C \\
+\code{aef10} & external & the mirror's COGs by byte range; index and formula in the registry & $(-11.4, +6.2)$ & $1.4 \times 10^{12}$ px $\times$ 9 & 0 (577\,TB referenced) & A \\
+\bottomrule
+\end{tabular}
+\caption{The four groups of family 0.9.tf.}
+\end{table}
+
+\section{Missing values}
+
+Nodata ($-128$ in the source) is NaN in every store and never a zero
+vector; a pooled cell with fewer than 10\,\% valid pixels is NaN with its
+coherence NaN, and the valid fraction is written to the shard index so a
+consumer can raise the threshold. Water beyond the shallow zone, the poles
+above the product's coverage and the years before 2017 are absent, and
+absent is what the token says ($n_R = 0$).
+
+\section{Design decisions}
+
+\paragraph{Pool by the mean of unit vectors, and keep its length.} The
+producer says the vectors are linearly composable and that the dot product
+is the similarity; the mean of unit vectors is then the natural pooled
+representative, its length the natural measure of agreement. Any other
+pooling (a medoid, a random pixel, a principal direction) discards either
+the ``what'' or the ``how uniform''. The dots store keeps raw samples beside
+the mean so the pooling choice is testable rather than assumed.
+
+\paragraph{Strict availability by year end.} The one rule that must not
+bend: an embedding of year $Y$ is not visible to an anchor inside $Y$. The
+cost is a lag of up to a year on the most recent land state, which is real
+and is the price of an annual product; the alternative is a leak that would
+make every land read-out look better than it is.
+
+\paragraph{Build once, next to the data.} Producing \code{aef1k} and
+\code{aef\_dots} means reading all 577\,TB once. On a rented box at
+2\,Gbps that is 27 days and the transfer risk of the family-10.1
+\code{slatrack} night; on a spot instance in the mirror's own region
+(us-west-2, in-region S3 reads free, anonymous) it is about five days at
+10\,Gbps and \$50--150 of compute, writing year-parts to the Hub as it goes
+with \code{done.json} last, the family-10 lane discipline. Pick: in-region,
+one lane per year, the first year measured before the other eight are
+dispatched.
+
+\paragraph{Reference the original rather than copy it.} 577\,TB is about
+seventy times the largest store any family plans and is CC BY 4.0 on two
+public buckets;
+copying it would cost more than every other family together and add
+nothing. The referenced group is the honest shape: the registry says where
+the bytes are and how to read them, and the copied stores are what the
+programme guarantees.
+
+\paragraph{Why not stop at 1\,km.} A kilometre is the family-7 resolution's
+neighbour, not the point. The dots store (7\,GB) and the regional 100\,m
+store are what let the programme ask whether the land targets need 10\,m
+inputs, at a cost that is a rounding error next to the raw families.
+
+\paragraph{What this family cannot do, said plainly.} It cannot see a
+five-day event, cannot be extended to NISAR or to any sensor Google did not
+train on, cannot go back before 2017, and cannot be re-run over a chosen
+support window; if Google changes or stops the product, the copied stores
+freeze at the last year. Those are the reasons family 1.0.tf exists, and
+the two are compared, not merged.
+
+\section{Validation}
+
+Every store as in family 10.1 (hashes, $N$ from file sizes, bin identity,
+CSR index) and family 1.gf (shards decompressing to declared shapes); plus
+three checks specific to this source, each on every tile read: the
+de-quantised vectors are unit length to within $10^{-2}$ --- the int8
+companding itself perturbs the length by up to $8.5 \times 10^{-3}$, so a
+tighter tolerance would reject correct data, and a wrong companding or a
+wrong orientation breaks it by far more (the encoder must also clip to
+$\pm 127$, since $|x| = 1$ maps to 128); the bottom-up
+orientation is asserted by comparing a tile's corner against the index
+polygon; and the per-year tile count and byte total equal the listing in
+the table above, so a truncated year is refused by name.
+
+\section{Limitations}
+
+Annual, closed, 2017 onwards, terrestrial and shallow water only, and a
+learned summary whose failure modes are the producer's (transfer across
+regions and years, short events averaged out). The support window of the
+released layers is not published, so ``what observations went into year
+$Y$'' is not knowable pixel by pixel. The regional list for \code{aef100r} is
+a choice, and a region not on it has only the 1\,km field and the dots.
+Nothing is dispatched on an unmeasured size: the first year's build
+measures the pooling throughput, the coherence distribution and the dots'
+bytes before the rest.
+
+\section{Next steps: the ladder, the probe and the falsifiers}
+
+\paragraph{Phase A.} \code{aef1k}, \code{aef\_dots}, the \code{aef10}
+reference group and the registry; $\approx 0.2$\,TB; one in-region lane per
+year. \textbf{Phase B.} \code{aef100r} over the deforestation frontiers.
+\textbf{Phase C.} the coastal band at 100\,m, once E-078c's coastal cells
+exist to compare against.
+
+\paragraph{The probe.} One UTM zone of one year (about 280 tiles, 0.5\,TB)
+through the real pooling code: throughput, the valid fraction, the
+coherence histogram, the orientation check, and the bytes of the resulting
+shards --- the numbers that replace this note's before the nine-year build.
+The Hugging Face sample (\code{Major-TOM/Core-AlphaEarth-Embeddings}, 62.5\,k
+grid cells, 2017--2023) is the unit-test fixture.
+
+\paragraph{Three falsifiers, three seeds each.}
+\begin{enumerate}\itemsep2pt
+\item \textbf{Against the programme's own codec.} On the land pixels of
+E-078c's $\approx 300$ coastal cells, tokens from \code{aef\_dots} and
+\code{aef1k} against the local codec's cached tokens, on the \emph{annual}
+land targets in the band (loss year, land cover, biomass) --- not on E-078c's
+own pentad ocean targets, which the embedding does not cover and whose
+cadence it cannot match. If AlphaEarth matches or beats the codec there,
+the codec is not needed for land at annual cadence and E-078c's scope
+narrows to what the embedding cannot see.
+\item \textbf{Against the coarse tensor, on the land targets.} Next year's
+forest alerts, loss year, burned area and water extent (family 1.0.tf's
+target stores) predicted from family 7.2 alone versus family 7.2 plus this
+family's tokens, at the targets' own footprints. Parity means 10\,m
+information does not reach those targets through an annual summary.
+\item \textbf{What the annual cadence costs.} The same targets from this
+family plus family 1.0.tf's daily fields (temperature, reflectance, snow,
+fire) versus this family alone. The gap is the value of the five-day rule on
+land, measured rather than argued, and it is the number that decides how
+much of family 1.0.tf's image tier to build.
+\end{enumerate}
+
+\section{Decisions for Chris}
+
+\begin{enumerate}\itemsep2pt
+\item \textbf{The name}: 0.9.tf as given, the number reading as ``an
+embedding in place of the raw record''. Pick: as given.
+\item \textbf{Strict availability by year end.} Pick: strict.
+\item \textbf{Pooling}: renormalised mean plus coherence. Pick: yes, with
+the dots store as the check.
+\item \textbf{Where to build}: a spot instance in the mirror's region
+rather than a rented box. Pick: in-region.
+\item \textbf{The regional list for 100\,m}: the three deforestation
+frontiers first. Pick: yes.
+\item \textbf{Custom Satellite Embeddings}: the academic programme for
+sub-annual embeddings closes 2026-10-15; applying costs a form and would
+make falsifier 3 answerable at five-day cadence on the same model. Pick:
+apply.
+\end{enumerate}
+
+\section*{Terms used above, in one line each}
+\footnotesize
+\textbf{AlphaEarth Foundations (AEF)} Google DeepMind's model that turns Sentinel-1, Sentinel-2 and Landsat image sequences into one 64-number description of each 10\,m of land per year, trained to reproduce radar, LiDAR, climate and land-cover targets; \textbf{Satellite Embedding V1} the published output. \textbf{Embedding} a learned vector summarising what was observed. \textbf{Unit-length / $S^{63}$} vectors of length one on a 63-dimensional sphere, so their dot product is a similarity. \textbf{int8 companding} storing a value in one byte on a square-root scale. \textbf{COG / VRT / UTM} cloud-optimised GeoTIFF (readable by byte range), a GDAL virtual-raster wrapper, and the projected map zones the tiles are in. \textbf{Tier G / P} family 10's gridded and point storage tiers. \textbf{Coherence} here, the length of the mean of unit vectors in a cell: 1 if all agree, 0 if they cancel. \textbf{Sentinel-1/2, Landsat} the model's inputs: C-band radar and optical imagery from ESA and optical from NASA/USGS. \textbf{PALSAR-2, GEDI, ERA5-Land, GRACE, GLO-30, NLCD, GBIF} its training targets: L-band radar from JAXA, spaceborne LiDAR, a land climate reanalysis, satellite gravity, an elevation model, the US land-cover map, and species-occurrence records. \textbf{SST} sea-surface temperature. \textbf{NaN} not-a-number, the stored value for ``not measured''. \textbf{CSR} compressed sparse row, the bin index of a point store. \textbf{Earth Engine} Google's hosted geospatial platform, which needs an account. \textbf{S3 / us-west-2 / spot instance} Amazon's object storage, its Oregon region where the mirror lives, and a discounted pre-emptible virtual machine. \textbf{sha256} the file hash every store carries. \textbf{NISAR} the NASA--ISRO L-band radar launched 2025, not among the inputs. \textbf{E-078 / E-078c} the multi-granularity design and its first coastal tile-codec experiment. \textbf{Source Cooperative / AWS Open Data / GCS} the mirror's host, the sponsorship it runs under, and Google Cloud Storage. \textbf{Major-TOM} an open Earth-observation dataset project whose Hugging Face sample of the embeddings serves as a test fixture.
+\normalsize
+
+\begin{thebibliography}{9}\small
+\bibitem{aef} Brown, C.\ F.\ et al.\ (2025). AlphaEarth Foundations: an embedding field model for accurate and efficient global mapping from sparse label data. arXiv:2507.22291 (v2, 2025-09-08).
+\bibitem{aefee} Google Earth Engine / Google DeepMind (2026). \code{GOOGLE/SATELLITE\_EMBEDDING/V1/ANNUAL}, years 2017--2025. CC BY 4.0.
+\bibitem{aefgcs} Google (2026). AlphaEarth Foundations Satellite Embeddings on Google Cloud Storage: read-me, index files and de-quantisation. Provider-pays since July 2026.
+\bibitem{aefsc} Taylor Geospatial Engine (2026). \code{tge-labs/aef}, Source Cooperative mirror of Satellite Embedding V1, 2017--2025.
+\bibitem{f1tf} blauewelt/earth (2026). Family 1.0.tf: land and coast at ten kilometres and five days. Design note, 16 September 2026.
+\bibitem{f10} blauewelt/earth (2026). Family 10.1: the granularity-aware tensor, as built. Design note, 16 September 2026.
+\bibitem{e078} blauewelt/earth (2026). E-078: family 10 --- one schema for every granularity. \code{ml/plans/E078\_multi\_granularity.md}.
+\end{thebibliography}
+
+\end{document}

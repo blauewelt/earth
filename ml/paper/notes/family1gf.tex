@@ -256,7 +256,7 @@ sharded group also names its \code{tile\_grid.json} and
 \code{shard\_index.npy}. Family 10.2's registry --- the
 current one, which inherits 10.1's four stores by reference and adds
 \code{fishing} (E-081) --- gains a one-line \code{siblings} list naming this
-file and family 1.tf's, so a consumer that already dispatches on \code{tier}
+file, family 1.0.tf's and family 0.9.tf's, so a consumer that already dispatches on \code{tier}
 discovers both families from the one entry point it knows. Nothing in family
 10.1 or 10.2 is rewritten.
 
@@ -337,7 +337,7 @@ the tier and the layout.
 
 \paragraph{Tier T is not used by this family.} Nothing global at
 $\le 10$\,km is imagery in the tile sense --- the 300\,m ocean-colour and
-Sentinel swaths are coastal or terrestrial and belong to family 1.tf. This
+Sentinel swaths are coastal or terrestrial and belong to family 1.0.tf (and, as a published embedding in place of the raw imagery, family 0.9.tf). This
 departs from E-078 \S3, which placed 300\,m--1\,km radiometry in tier T: a
 \emph{gridded level-3} product at those scales is a raster on one fixed grid
 and fits the sharded tier-G layout, whereas tier T is for swath imagery whose
