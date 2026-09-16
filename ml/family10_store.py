@@ -26,7 +26,7 @@ in no others:
      `bin_first + i`, and `bin_first` is in `store.json`. Family 8's
      `bin_first` is 0 and its index is the familiar 3,143 entries.
 
-WHAT IS IN A FAMILY-10 STORE (`tensors/family10_1/<store>/`, N rows sorted by
+WHAT IS IN A FAMILY-10 STORE (`tensors/family10_<minor>/<store>/`, N rows sorted by
 `(bin, time_s)` ascending):
 
     bin.npy         int16   [N]      five-day bin, floor(time_s / 432000 s);
@@ -64,7 +64,7 @@ TWO SCHEMAS, AND THIS READER OPENS BOTH.
   discovered.
 
 `store.json` says which: `schema_version` 1 or 2, and `family_version` "10.1"
-on a schema-2 store. A schema-1 store is read by converting its days to
+or "10.2" on a schema-2 store. A schema-1 store is read by converting its days to
 seconds on the fly — the precision it never had is NOT recovered, the two
 schemas are only put in one unit — so family 8's Argo store and family 10's
 published stores keep opening unchanged. `dt_days` out of `knearest` is
@@ -81,7 +81,7 @@ THE SEARCH (`knearest`) is family 8's, unchanged in behaviour:
   anchor's own bin is 0 to 5 days old rather than arriving from the future.
 
     from family10_store import Store
-    st = Store.open("ml/cache/family10_1/gdp")          # a directory
+    st = Store.open("ml/cache/family10_2/fishing")       # a directory
     st = Store.open("chfrank/earth-tensors:tensors/family10_1/gdp")  # the Hub
     tok = st.knearest(36.0, -70.0, bin=2411, k=8,
                       R_max_km=300.0, T_max_days=10.0)
@@ -112,13 +112,20 @@ PENTAD_SECONDS = PENTAD_DAYS * SECONDS_PER_DAY            # 432_000
 # below is derived from it, so the family's version is changed in one place
 # and the paths cannot disagree with the schema they carry.
 FAMILY = "family10"
-FAMILY_VERSION = "10.1"
+# 10.2 (E-081) ADDS ONE STORE AND CHANGES NOTHING ELSE. `fishing` — the Global
+# Fishing Watch AIS apparent-fishing-effort table — is built into
+# `tensors/family10_2/fishing/`; the four 10.1 stores are INHERITED BY
+# REFERENCE from `tensors/family10_1/<store>/` and not one byte of them is
+# rebuilt or re-uploaded (`ml/build_family10_registry.py`'s `STORE_ROOTS`).
+# The schema is unchanged — still schema 2, still `time_s` int32 seconds — so
+# a 10.1 store opens under 10.2 with no conversion at all.
+FAMILY_VERSION = "10.2"
 SCHEMA_VERSION = 2
-_VER_SLUG = "family" + FAMILY_VERSION.replace(".", "_")   # family10_1
+_VER_SLUG = "family" + FAMILY_VERSION.replace(".", "_")   # family10_2
 HF_ROOT = f"tensors/{_VER_SLUG}"                          # the stores + registry
 HF_PARTIALS = f"partials/{_VER_SLUG}"                     # the slatrack lanes
 REGISTRY_NAME = "family10.json"
-CACHE_DIRNAME = _VER_SLUG                                 # ml/cache/family10_1
+CACHE_DIRNAME = _VER_SLUG                                 # ml/cache/family10_2
 
 # int32 seconds since 1982-01-01T00:00:00Z. The bounds are the dtype's, stated
 # as dates because that is the form in which anybody will meet them.

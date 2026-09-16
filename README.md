@@ -4,7 +4,7 @@
 
 **Open climate data on a 3D globe — and, eventually, predictions from it.**
 
-`earth` is a prototype for exploring the world's open climate data on an interactive CesiumJS globe, backed by a curated, machine-readable catalog of **248 open climate datasets** across atmosphere, ocean & AMOC, cryosphere, satellite platforms, model projections, greenhouse gases, and impacts.
+`earth` is a prototype for exploring the world's open climate data on an interactive CesiumJS globe, backed by a curated, machine-readable catalog of **276 open climate datasets** across atmosphere, ocean & AMOC, cryosphere, satellite platforms, model projections, greenhouse gases, and impacts.
 
 The long-term goal: layer enough observational and model data onto the globe to drive real prediction pipelines — starting with the question *will the AMOC collapse, and when?*
 
@@ -32,9 +32,10 @@ The long-term goal: layer enough observational and model data onto the globe to 
 - **Active-layer chips** on the globe list what is currently switched on, so any layer can be turned off in one click from any tab — including the dashboards, where the layer list isn't on screen at all.
 - **"Everything we know" (pixel inspector)** — a layer that answers clicks instead of drawing pixels: click anywhere on the globe for one card composing everything the app can know about that point — live weather and a 7-day forecast, CAMS air quality, river discharge, waves and a per-pixel 2050 climate outlook (Open-Meteo family), all fifteen satellite fields probed at the chosen date, why any forest at that point was lost, climate normals, and nearby context (monitoring sites, Argo floats, major emitters, glaciers). Every single value says *when* it was observed — down to the half-hour where the data has it, a day, a month, a year, or a fixed span like 1991–2020 — with its age beside it where an age means anything, because these rows are routinely years apart even when they sit side by side. With it off, a click reads the value of the layer you're viewing; with no layer active, the card opens anyway. It is [docs/PIXEL_STATE.md](docs/PIXEL_STATE.md) made clickable.
 - **Point and inventory layers** — Climate TRACE's top 1,000 facility emitters · the ~3,800-float active Argo fleet · the AMOC monitoring network (RAPID, OSNAP, MOVE, SAMBA, the Florida Current cable, the subpolar "cold blob" region) and reference GHG stations (Mauna Loa, Jungfraujoch, …) as clickable markers with data links · all 274,531 glaciers of the Randolph Glacier Inventory v7, colourable by extent or by their 2000–2020 melt rate from Hugonnet et al. 2021 (240,542 matched; ~78% thinning, and the Karakoram anomaly is visible).
+- **The fishing fleet, in two layers** — [Global Fishing Watch](https://globalfishingwatch.org) reads the world's shipping through **AIS** (the Automatic Identification System, the radio transponder large vessels broadcast their position on) and runs a neural network over the tracks to tell fishing movement from steaming. *Fishing effort (AIS), 0.25° monthly* paints the hours a month that vessels were apparently fishing in each 0.25° cell, 2012–2024 — one month is **one HTTP range read** of a published grid on the Hugging Face Hub, exactly like the global-tensor layer, and the probe reads both channels so the ratio of fishing hours to broadcasting hours separates a fishing ground from a shipping lane. Colour is logarithmic (effort spans four orders of magnitude) while every number stays in vessel-hours. *Loitering vessels (last 30 days)* drops a point on every vessel that drifted at sea at low speed for hours — the signature of transshipment at sea — from a snapshot baked daily by a scheduled workflow, because that API is keyed and the browser never calls a keyed host. It is date-driven and shows **nothing** for a date its rolling window cannot speak for, rather than leaving stale points under a new date. Read the blanks carefully on both: AIS reception is uneven, so an empty cell means nobody was *heard* fishing, not that nobody fished. CC BY-NC 4.0; "Powered by Global Fishing Watch" is in the footer, each layer's credit and its hover card.
 - **Biodiversity layer** — GBIF occurrence-density tiles (3.9 B records, key-free) with a grouped picker: broad taxonomic categories (kingdoms, major animal and plant classes, humans) plus curated climate-indicator species (Atlantic mackerel, emperor penguin, staghorn coral …) whose shifting ranges are a visible fingerprint of warming. See [docs/SPECIES_AND_CLIMATE.md](docs/SPECIES_AND_CLIMATE.md).
 - **Dashboards** — *Temp*: GISTEMP v4 land vs land+ocean warming, 1880–2025, with trends. *Energy*: **Earth's energy imbalance** — the NOAA ocean-heat-content record as both the accumulating-heat ledger and its slope, the imbalance itself over time in W/m² (currently ~+0.7 ocean / ~+0.8 total, +224 ZJ stored since 2005). *AMOC*: the RAPID 26.5°N overturning transport record (2004–2024) with stat tiles and a hoverable chart. *Sea level*: observed global mean sea level 1900–2018 decomposed into its causes (thermal expansion, glaciers, Greenland, Antarctica, land water), with the summed budget tracking the observed line to show *closure*, plus modern satellite altimetry (Frederikse et al. 2020 + NOAA).
-- **Dataset catalog browser** — search and filter all 248 cataloged datasets by domain, AMOC relevance, and globe-readiness, straight from [`data/catalog.json`](data/catalog.json).
+- **Dataset catalog browser** — search and filter all 276 cataloged datasets by domain, AMOC relevance, and globe-readiness, straight from [`data/catalog.json`](data/catalog.json).
 - **Honest about time.** Layers that ignore the date selector (climatologies, night lights, the point and inventory layers) announce it with a warning toast when switched on, rather than leaving the date picker silently inert.
 - **Navigation** — scroll wheel, touch pinch, trackpad pinch (ctrl+wheel) and on-globe buttons; zoom is distance-proportional, and follows the standard convention where spreading fingers apart or scrolling up zooms in. The base globe auto-greys whenever a colormapped data layer is on (so data colours never fight the map's own blues and greens) and returns to colour otherwise — with always-colour/always-grey overrides.
 
@@ -85,7 +86,7 @@ CLAUDE.md               standing instructions + holistic project documentation
 index.html              the app shell
 src/app.js              CesiumJS globe, GIBS layers, grids, points, dashboards, catalog UI
 src/style.css           dark UI theme
-data/catalog.json       248-dataset open climate data catalog (machine-readable)
+data/catalog.json       276-dataset open climate data catalog (machine-readable)
 data/stations.geojson   AMOC arrays + GHG reference stations
 data/rapid_moc.json     RAPID 26.5N AMOC transport series
 data/sealevel.json      sea-level budget (Frederikse 2020) + NOAA altimetry
@@ -97,7 +98,11 @@ data/{gpcp,oisst,eobs,meteoswiss}.json   gridded climatologies (shared grid form
 data/cities.json        Natural Earth place names (the map's reference points)
 data/gazetteer.json     GeoNames cities5000 below them — search + deep-zoom labels
 data/islands.json       4,950 island names — the tier that names ground, not people
+data/loitering.json     last 30 days of Global Fishing Watch loitering events (baked daily)
+data/fishing_index.json how to range-read one month of the 0.25° fishing-effort grid
+data/fishing/fixture/   a 20x-decimated real month grid + its index, for the tests
 scripts/refresh_data.py regenerates every snapshot above (one function per dataset)
+scripts/make_loitering_fixture.py  the committed placeholder loitering snapshot
 scripts/build_primer.py rebuilds docs/PRIMER.pdf (background-knowledge primer)
 scripts/run_tests.sh    sandbox test runner · scripts/test_proxy.py  GIBS/GBIF proxies
 scripts/screenshot.js   regenerates docs/screenshot.png (the image above)
@@ -124,7 +129,7 @@ blocks, and long documents get a contents drawer.
 |---|---|
 | [docs/PRIMER.pdf](docs/PRIMER.pdf) | Background knowledge: GIBS and WMTS, tiling schemes, colormaps, satellite product levels, what a climatology is |
 | [docs/COMBINING_DATASETS.md](docs/COMBINING_DATASETS.md) | Which catalog datasets measure the same quantity, which combinations are scientifically sound (SST ensembles, the sea-level budget, the AMOC state vector, land+ocean blends), and why per-pixel differencing works for SST but not precipitation |
-| [docs/PIXEL_STATE.md](docs/PIXEL_STATE.md) | Which of the 248 sources compose into a holistic per-pixel state vector — state, memory, forcing, flow, future — and the ~25-source minimal composition on a common 0.25° daily grid |
+| [docs/PIXEL_STATE.md](docs/PIXEL_STATE.md) | Which of the 276 sources compose into a holistic per-pixel state vector — state, memory, forcing, flow, future — and the ~25-source minimal composition on a common 0.25° daily grid |
 | [docs/SPECIES_AND_CLIMATE.md](docs/SPECIES_AND_CLIMATE.md) | Why biodiversity occurrence data belongs in a climate app |
 | [ml/paper/notes/family72.pdf](ml/paper/notes/family72.pdf) | Design note for family 7.2 (recipe `f7l2`), the published global input tensor: the grid and five-day bins, all 56 channels with their units and standardisation constants, what changed from family 7 to 7.1 to 7.2, the measured per-channel coverage, the HTTP range-read recipe, the reproducibility result, and an ingestion handover for an external read-only agent |
 | [ml/paper/notes/family10.pdf](ml/paper/notes/family10.pdf) | Design note for family 10, the granularity-aware tensor as it actually shipped: the registry and its three storage tiers, the footprint token, the tier-P store format, the four published observation stores (drifters, tropical moorings, ship CO₂, 29 altimeter missions — 2.12 billion measurements) with their sources, quality-control policies, coverage and verification verdicts, the two-machine build pipeline and its guards, the k-nearest reader, and an ingestion handover for an external read-only agent |

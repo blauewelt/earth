@@ -961,7 +961,7 @@ def test_the_registry_lists_every_store_it_can_read_and_names_the_ones_it_cannot
     r = reg.build_registry(work=work, use_hub=False, include_argo=False)
     names = {g["name"]: g for g in r["groups"]}
     assert {"gdp", "socat"} <= set(names)
-    assert set(r["groups_missing"]) == {"gtmba", "slatrack"}
+    assert set(r["groups_missing"]) == {"gtmba", "slatrack", "fishing"}
     assert r["groups_missing_note"]
     assert r["family"] == "family10"
     assert r["epoch"] == f10.EPOCH and r["pentad_days"] == 5
@@ -1153,10 +1153,15 @@ if __name__ == "__main__":
 
 
 def test_parse_stages_accepts_a_comma_list_in_fixed_order():
-    assert b10.parse_stages("all") == ["index", "fetch", "publish"]
+    # FOUR stages since E-081: `grid` sums the finished store onto the 0.25°
+    # monthly raster the globe reads, and is a no-op for the stores that have
+    # no gridded product — so `all` still means the same thing for every one
+    # of them and the order is still fixed.
+    assert b10.parse_stages("all") == ["index", "fetch", "grid", "publish"]
     assert b10.parse_stages("fetch") == ["fetch"]
     assert b10.parse_stages("fetch,index") == ["index", "fetch"]
     assert b10.parse_stages(" index, fetch ") == ["index", "fetch"]
+    assert b10.parse_stages("publish,grid") == ["grid", "publish"]
     with pytest.raises(SystemExit):
         b10.parse_stages("index,assemble")
     with pytest.raises(SystemExit):
@@ -2419,3 +2424,466 @@ def test_71_the_registry_refuses_to_call_an_unreadable_store_a_missing_one():
                 reg.hub_json("x/y", "a/b.json")
     finally:
         reg.http_json = old
+
+
+# ================================================= 72-83 · fishing (E-081) ==
+# Family 10.2's one new store: Global Fishing Watch's AIS apparent fishing
+# effort, one row per (day, 0.1° cell, vessel). The fixture below is the real
+# archive in miniature — a zip of per-day CSVs with the six-column header, the
+# cell's LOWER-LEFT corner to one decimal, an unquoted integer MMSI, and the
+# vessel table beside them — over a window that CROSSES A YEAR BOUNDARY, so
+# the per-year resume, the per-year gear lookup and the monthly grid all meet
+# more than one year.
+#
+# Each test is one thing a real build can get wrong while looking entirely
+# ordinary: a cell corner stored as if it were a centre, a longitude that
+# rounds to +180 in float32, a gear code read for the wrong year, a zip that
+# arrived short, a grid that does not sum to the store it claims to picture.
+FISH_START, FISH_END = "2012-12-20", "2013-01-10"
+
+
+def _fish(tmp, start=FISH_START, end=FISH_END, stages=("index", "fetch"),
+          **over):
+    """A fishing build from a synthetic archive, end to end, no network."""
+    src = os.path.join(tmp, "src_fishing")
+    work = os.path.join(tmp, "work_fishing")
+    os.makedirs(work, exist_ok=True)
+    truth = b10.make_smoke_sources(src, "fishing", b10.parse_date(start),
+                                   b10.parse_date(end))
+    ns = dict(store="fishing", work=work, source_dir=src, start=start, end=end,
+              stage="all", force=False, attempts=1, qc_keep=2, socat_url="",
+              smoke=True, assemble="auto", parts_from_hub=False,
+              allow_missing_years=False, max_hours=b10.FISHING_HOURS_CEILING,
+              grid_dtype=b10.GRID_DTYPE_DEFAULT, allow_small_disk=False)
+    ns.update(over)
+    ctx = b10.Ctx(__import__("argparse").Namespace(**ns))
+    b10.run_stages(ctx, list(stages))
+    return ctx, truth, src
+
+
+@pytest.fixture(scope="module")
+def fishing(tmp_path_factory):
+    tmp = str(tmp_path_factory.mktemp("fishing"))
+    ctx, truth, src = _fish(tmp)
+    return ctx, truth, src, tmp
+
+
+def test_72_the_fishing_store_matches_the_archive_row_for_row(fishing):
+    """index + fetch against the truth the generator kept.
+
+    `check_smoke` compares every row: the second, the position, the platform,
+    which channels are measured and their values. The row COUNT is checked
+    twice over — against the truth here, and against the archive's own count
+    by the adapter's per-year reconciliation (test 78).
+    """
+    ctx, truth, _src, _tmp = fishing
+    assert b10.check_smoke(ctx, truth).startswith(f"N={len(truth)}")
+    st = f10.Store(ctx.store)
+    meta = json.load(open(os.path.join(ctx.store, "store.json")))
+    assert meta["C"] == 2
+    assert [c["name"] for c in meta["channels"]] == ["fishing_hours", "hours"]
+    assert meta["family_version"] == "10.2"
+    assert meta["schema_version"] == 2
+    # 22 days x 4 rows, split across the two years the window crosses
+    assert st.N == len(truth) == 88
+    assert meta["per_year"] == {"2012": 48, "2013": 40}
+    # E-081 §2: 2012-01-01 falls in bin 2191 (1982-01-01 + 5*2191 = 2011-12-30
+    # opens it), so every bin of the 2012-2024 archive is >= 2191 — the plan's
+    # ">= 2192" is one bin out, and the store takes `bin_first` from the data.
+    assert st.bin_first >= 2191
+    assert st.bin_first == int(f10.bin_of_seconds(st.time_s(0, 1)[0]))
+    # the two channels are never NaN: "nothing was broadcast" is 0, a value
+    v = np.asarray(st["values"], np.float32)
+    assert np.isfinite(v).all()
+    assert meta["values_measured_fraction"] == 1.0
+
+
+def test_73_the_stored_position_is_the_cell_CENTRE_and_folds_at_180(fishing):
+    """ll corner + 0.05, float32, then the fb5d5ab fold.
+
+    The fixture carries a cell at `cell_ll_lon = 179.9` — centre 179.95, the
+    last cell before the dateline — and one at `-180.0`, centre -179.95. A
+    builder that stored the corner would put both a tenth of a degree out and
+    nothing downstream could tell; one that folded in float64 only would let
+    179.95 stay 179.95 and a 179.99 archive round to exactly 180.0 in float32,
+    which `check_store` (rightly) refuses.
+    """
+    ctx, _truth, _src, _tmp = fishing
+    st = f10.Store(ctx.store)
+    lat = np.asarray(st["lat"], np.float64)
+    lon = np.asarray(st["lon"], np.float64)
+    assert np.all((lon >= -180.0) & (lon < 180.0))
+    # every stored coordinate is a cell CENTRE: x.x5 on the 0.1° grid
+    r = np.round(np.abs(lat * 10.0) % 1.0, 6)
+    assert np.all(np.isclose(r, 0.5, atol=1e-3)), np.unique(r)[:5]
+    assert np.isclose(lon.max(), 179.95, atol=1e-4), lon.max()
+    assert np.isclose(lon.min(), -179.95, atol=1e-4), lon.min()
+    assert np.isclose(lat.min(), -65.45, atol=1e-4), lat.min()
+    # and the fold is exact IN float32, where 180.0f - 360 == -180.0f
+    rows = b10._pack([0], [0.0], [179.999999], np.zeros((1, 2)), [1], [1], 2)
+    assert float(rows["lon"][0]) == -180.0
+
+
+def test_74_qc_is_the_gear_class_for_that_vessel_IN_THAT_YEAR(fishing):
+    """`qc` carries the vessel table's gear class, per (MMSI, year), 0 unknown.
+
+    The fixture's third vessel is in the table for 2012 and NOT for 2013 —
+    which is the archive's own shape, since the table is keyed by (MMSI,
+    year) — so the same platform must read its gear in one year and 0 in the
+    other. A lookup keyed on the MMSI alone passes every other test here and
+    fails this one.
+    """
+    ctx, _truth, _src, _tmp = fishing
+    st = f10.Store(ctx.store)
+    meta = json.load(open(os.path.join(ctx.store, "store.json")))
+    codes = meta["qc_codes"]
+    assert codes["0"].startswith("unknown")
+    assert codes[str(b10.FISHING_GEAR_CODE["trawlers"])] == "trawlers"
+    assert set(codes) - {"meaning"} == {str(i) for i in range(0, 17)}
+    assert "GEAR CLASS" in codes["meaning"] and "NOT a quality" in \
+        codes["meaning"]
+    qc = np.asarray(st["qc"], np.int32)
+    plat = np.asarray(st["platform"], np.int64)
+    t = st.time_s()
+    third = b10.platform_hash("224000003")
+    in12 = (plat == third) & (t < b10.seconds_since_epoch(dt.date(2013, 1, 1)))
+    in13 = (plat == third) & (t >= b10.seconds_since_epoch(dt.date(2013, 1, 1)))
+    assert in12.any() and in13.any()
+    assert set(qc[in12]) == {b10.FISHING_GEAR_CODE["squid_jigger"]}
+    assert set(qc[in13]) == {0}, "a year the vessel table does not cover is 0"
+    trawl = plat == b10.platform_hash("416000001")
+    assert set(qc[trawl]) == {b10.FISHING_GEAR_CODE["trawlers"]}
+    # the summaries E-081 deliverable 2 asks store.json to carry
+    assert meta["vessels_per_year"] == {"2012": 3, "2013": 2}
+    assert meta["gear_histogram"]["trawlers"] == 2
+    assert meta["gear_classes_unseen"] == {}
+    assert meta["licence"] == "CC BY-NC 4.0"
+    assert meta["attribution"] == "Powered by Global Fishing Watch"
+    assert meta["source"]["doi"] == "10.5281/zenodo.14982712"
+    assert meta["source"]["version"] == "3.0.0"
+    assert "Global Fishing Watch (2025)" in meta["source"]["citation"]
+
+
+def test_75_the_vessel_table_is_published_beside_the_store(fishing):
+    """`vessels.csv.gz` is in the sha256 block, so it is uploaded and verified.
+
+    E-081 §2: a `platform` column of hashes is a dead end without the table —
+    the hash rule is `platform_hash(str(mmsi))`, so a consumer hashes the
+    table's own MMSI to join back to a flag, a gear class or a length. Being
+    IN the sha256 block is what makes the publish upload it, the restore check
+    verify it, and `family10_store.resolve` bring it down with the store.
+    """
+    import gzip as _gz
+    ctx, _truth, _src, _tmp = fishing
+    meta = json.load(open(os.path.join(ctx.store, "store.json")))
+    assert "vessels.csv.gz" in meta["sha256"]
+    p = os.path.join(ctx.store, "vessels.csv.gz")
+    assert os.path.exists(p)
+    with _gz.open(p, "rt") as fh:
+        head = fh.readline().strip().split(",")
+    assert head == list(b10.FISHING_VESSEL_COLUMNS)
+    assert f10.verify_store(ctx.store) == len(meta["sha256"])
+    # and the join really closes: the table's MMSI hashes to a platform in it
+    plat = set(np.asarray(f10.Store(ctx.store)["platform"], np.int64).tolist())
+    assert b10.platform_hash("416000001") in plat
+
+
+def test_76_fishing_hours_may_not_exceed_hours_and_a_breach_refuses(tmp_path):
+    """E-081 §5's falsifier (3), as a refusal rather than a count.
+
+    0 of 2012's 6,257,384 real rows break it, so a row that does is the
+    COLUMNS having moved — and a builder that dropped such a row would write a
+    store that is quietly short wherever the source changed shape. The same
+    clause catches a negative, and `--max-hours` catches a longitude parsed
+    into the hours field.
+    """
+    tmp = str(tmp_path)
+    ctx, _truth, src = _fish(tmp, stages=("index",))
+    day = os.path.join(src, "fishing", "mmsi-daily-csvs-10-v3-2012",
+                       "mmsi-daily-csvs-10-v3-2012-12-21.csv")
+    good = open(day).read()
+
+    def rewrite(line):
+        with open(day, "w") as fh:
+            fh.write(good.rstrip("\n") + "\n" + line + "\n")
+        # the zip is what the build reads, so it is rebuilt — and re-indexed,
+        # because the md5 in plan.json is of the file the index saw (test 77).
+        import zipfile as _z
+        zp = os.path.join(src, "fishing", "mmsi-daily-csvs-10-v3-2012.zip")
+        d = os.path.dirname(day)
+        with _z.ZipFile(zp, "w", _z.ZIP_DEFLATED) as z:
+            for n in sorted(os.listdir(d)):
+                z.write(os.path.join(d, n), n)
+        ctx.a.force = True
+        b10.run_stages(ctx, ["index"])
+        ctx.a.force = False
+        return ctx
+
+    c = rewrite("2012-12-21,10.0,20.0,416000001,1.5,9.9")
+    with pytest.raises(ValueError, match="EXCEEDS hours"):
+        b10.run_stages(c, ["fetch"])
+    c = rewrite("2012-12-21,10.0,20.0,416000001,-1.0,0.0")
+    with pytest.raises(ValueError, match="non-negative"):
+        b10.run_stages(c, ["fetch"])
+    # a longitude misread into `hours` trips the ceiling
+    c = rewrite("2012-12-21,10.0,20.0,416000001,179.9,0.0")
+    with pytest.raises(ValueError, match="exceeds the ceiling"):
+        b10.run_stages(c, ["fetch"])
+    # and the archive's REAL shape is admitted: 28.5 h in one cell-day is a
+    # shared MMSI, not a fault, and is counted rather than refused
+    c = rewrite("2012-12-21,10.0,20.0,416000001,28.5,1.0")
+    b10.run_stages(c, ["fetch"])
+    meta = json.load(open(os.path.join(c.store, "store.json")))
+    assert meta["counts"]["hours_over_24h"] >= 23
+    assert meta["counts"]["max_hours"] >= 28.5
+
+
+def test_77_a_corrupted_zip_is_refused_by_its_md5_and_the_year_is_unmarked(
+        tmp_path):
+    """The checksum is why the zip is written to disk at all.
+
+    Zenodo publishes an md5 for every file in the record and the index stage
+    writes it into plan.json — for a `--source-dir` build, the md5 of the
+    local archive as the index saw it. A zip that changed after that inflates
+    perfectly up to the damage and then either raises somewhere unrelated or,
+    worse, does not raise at all. So it is an ABSENCE: the year is not marked,
+    the stage refuses, and a resume re-reads that year whole.
+    """
+    tmp = str(tmp_path)
+    ctx, _truth, src = _fish(tmp, stages=("index",))
+    plan = json.load(open(os.path.join(ctx.root, "plan.json")))
+    assert plan["zips"]["2012"]["md5"] and plan["zips"]["2013"]["md5"]
+    zp = os.path.join(src, "fishing", "mmsi-daily-csvs-10-v3-2012.zip")
+    with open(zp, "r+b") as fh:                 # one byte of the payload
+        fh.seek(os.path.getsize(zp) // 2)
+        b = fh.read(1)
+        fh.seek(os.path.getsize(zp) // 2)
+        fh.write(bytes([b[0] ^ 0xFF]))
+    with pytest.raises(SystemExit) as e:
+        b10.run_stages(ctx, ["fetch"])
+    assert "md5" in str(e.value)
+    assert not b10.marked(ctx.root, "parts/2012")
+    assert not b10.marked(ctx.root, "fetch")
+    # 2013 was untouched and IS marked — a refusal must not cost the years
+    # that worked, or a resume would redo the archive every time
+    assert b10.marked(ctx.root, "parts/2013")
+    assert not os.path.exists(os.path.join(ctx.store, "store.json"))
+
+
+def test_78_a_day_missing_from_the_zip_is_an_absence_not_an_empty_ocean(
+        tmp_path):
+    """The day list comes off the CALENDAR, not off the archive's listing.
+
+    A store of point observations has no empty cell to look at: a day whose
+    CSV did not arrive and a day when nobody fished produce the same store. So
+    a short zip is named, the year is not marked, and the row-count
+    reconciliation the year ends with is recorded either way.
+    """
+    tmp = str(tmp_path)
+    ctx, _truth, src = _fish(tmp, stages=("index",))
+    d = os.path.join(src, "fishing", "mmsi-daily-csvs-10-v3-2012")
+    os.remove(os.path.join(d, "mmsi-daily-csvs-10-v3-2012-12-25.csv"))
+    import zipfile as _z
+    zp = os.path.join(src, "fishing", "mmsi-daily-csvs-10-v3-2012.zip")
+    with _z.ZipFile(zp, "w", _z.ZIP_DEFLATED) as z:
+        for n in sorted(os.listdir(d)):
+            z.write(os.path.join(d, n), n)
+    ctx.a.force = True
+    b10.run_stages(ctx, ["index"])          # re-index: the md5 moved with it
+    ctx.a.force = False
+    with pytest.raises(SystemExit) as e:
+        b10.run_stages(ctx, ["fetch"])
+    assert "2012-12-25" in str(e.value)
+    assert not b10.marked(ctx.root, "parts/2012")
+    # --allow-missing-years builds anyway and store.json says what it gave up
+    ctx2 = b10.Ctx(__import__("argparse").Namespace(
+        **{**vars(ctx.a), "allow_missing_years": True, "force": True}))
+    b10.run_stages(ctx2, ["index", "fetch"])
+    meta = json.load(open(os.path.join(ctx2.store, "store.json")))
+    assert any("2012-12-25" in x["why"] for x in
+               meta["degraded"]["inputs_not_read"])
+    # the short year is short IN THE STORE, by exactly the missing day: the
+    # rows that did arrive are kept, and nothing pretends the day was empty.
+    assert meta["per_year"] == {"2012": 44, "2013": 40}
+    # 2012 carries NO counts.json at all — the year was never closed, which is
+    # what makes `parts_preflight` refuse it without the flag — so the merged
+    # ledger is 2013's alone and its own reconciliation balances.
+    assert meta["counts"]["rows_read_year"] == \
+        meta["counts"]["rows_packed_year"] == 40
+    assert meta["counts"]["days_found"] == meta["counts"]["days_expected"] == 10
+
+
+def test_79_the_monthly_grid_sums_to_the_store_it_pictures(fishing):
+    """E-081 §5's falsifier (4), per month and in total.
+
+    The grid is the only thing the globe can read — a browser cannot
+    k-nearest-search a point store — so the one property that makes it a
+    PICTURE OF THIS STORE rather than a plausible raster is that its cells sum
+    to the store's rows, month by month. The builder asserts it while writing;
+    this re-does the arithmetic from the finished file, in float64, off the
+    store's own columns.
+    """
+    ctx, _truth, _src, _tmp = fishing
+    man = b10.stage_grid(ctx)
+    # float32 BY MEASUREMENT, not by preference: E-081 §3 says float16 and the
+    # real 2024 year's busiest 0.25° cell-month is 595,726 vessel-hours
+    # against float16's 65,504 ceiling, so the fleet's own cells would be
+    # +inf. The index publishes the dtype, so the consumer is unaffected.
+    assert man["dtype"] == "float32" == b10.GRID_DTYPE_DEFAULT
+    assert man["months"] == ["2012-12", "2013-01"]
+    assert man["shape"] == [2, 721, 1440, 2]
+    assert man["complete"] is False          # a 2-month window is not 156
+    assert man["rows"] == man["store_N"] == 88
+    g = np.load(os.path.join(ctx.root, "fishing_grid",
+                             "fishing_grid_monthly_025.npy"), mmap_mode="r")
+    assert g.shape == (2, 721, 1440, 2) and g.dtype == np.float32
+    assert np.isfinite(np.asarray(g, np.float64)).all(), \
+        "zero is a value in this grid and NaN is not one of them"
+    st = f10.Store(ctx.store)
+    v = np.asarray(st["values"], np.float64)
+    t = st.time_s()
+    for i, month in enumerate(man["months"]):
+        s0, s1 = b10._month_bounds_s(month)
+        sel = (t >= s0) & (t < s1)
+        want = v[sel].sum(axis=0)
+        got = np.asarray(g[i], np.float64).reshape(-1, 2).sum(axis=0)
+        assert np.allclose(got, want, rtol=1e-3, atol=1e-3), (month, got, want)
+    # and the cell a row lands in is the one the index rule names
+    iy, ix = b10.grid_cell_index([-65.45], [119.75])
+    assert (int(iy[0]), int(ix[0])) == (int((-65.45 + 90) / 0.25),
+                                        int((119.75 + 180) / 0.25))
+    assert float(g[0, iy[0], ix[0], 1]) > 0.0
+    # the dateline cell: centre 179.95 is the LAST column, never column 0
+    iy, ix = b10.grid_cell_index([0.05], [179.95])
+    assert int(ix[0]) == 1439
+
+
+def test_80_the_index_publishes_the_arithmetic_the_browser_must_not_restate(
+        fishing):
+    """`data/fishing_index.json`: header length, shape, dtype, slab, months.
+
+    Root CLAUDE.md §3's family-7 rule, one layer over: `src/app.js` contains
+    none of the offset arithmetic, so every number it needs is measured from
+    the published file and written here. The header length in particular is
+    PARSED, never assumed — a 128-byte guess is right until the day a shape
+    change pushes the dict past the padding.
+    """
+    import importlib
+    pfi = importlib.import_module("publish_fishing_index")
+    ctx, _truth, _src, tmp = fishing
+    gd = os.path.join(ctx.root, "fishing_grid")
+    if not os.path.exists(os.path.join(gd, "grid.json")):
+        b10.stage_grid(ctx)
+    out = os.path.join(tmp, "fishing_index.json")
+    idx = pfi.write_index(os.path.join(gd, "grid.json"),
+                          os.path.join(ctx.store, "store.json"),
+                          out=out, local=True)
+    assert idx["shape"] == [2, 721, 1440, 2]
+    assert idx["dtype"] == "<f4" and idx["itemsize"] == 4
+    assert idx["slab_bytes"] == 721 * 1440 * 2 * 4 == 8305920
+    assert idx["months"] == ["2012-12", "2013-01"]
+    assert idx["chans"] == ["fishing_hours", "hours"]
+    assert idx["units"]["hours"] == "vessel-hours per month"
+    assert idx["grid"]["ny"] == 721 and idx["grid"]["nx"] == 1440
+    assert idx["grid"]["lat0"] == -90.0 and idx["grid"]["lon0"] == -180.0
+    assert idx["grid"]["step"] == 0.25 and idx["grid"]["south_first"] is True
+    assert idx["licence"] == "CC BY-NC 4.0"
+    assert idx["attribution"] == "Powered by Global Fishing Watch"
+    assert idx["store"]["hours_total"] > 0
+    # THE OFFSET ARITHMETIC, done exactly as a browser would, against the
+    # bytes on disk: month i starts at header_len + i * slab_bytes.
+    p = os.path.join(gd, "fishing_grid_monthly_025.npy")
+    assert idx["header_len"] + len(idx["months"]) * idx["slab_bytes"] == \
+        os.path.getsize(p) == idx["bytes"]
+    with open(p, "rb") as fh:
+        fh.seek(idx["header_len"] + 1 * idx["slab_bytes"])
+        blob = fh.read(idx["slab_bytes"])
+    frame = np.frombuffer(blob, idx["dtype"]).reshape(721, 1440, 2)
+    g = np.load(p, mmap_mode="r")
+    assert np.array_equal(np.asarray(frame), np.asarray(g[1]))
+
+
+def test_81_the_grid_refuses_a_cell_that_float16_cannot_hold(tmp_path,
+                                                             monkeypatch):
+    """A cell-month sum past 65,504 h would be stored as +inf.
+
+    Measured 2026-09-16: 2012's largest cell-month is 29,460 hours, so the
+    headroom is real and it is not large — a late year's busiest port cell can
+    approach it. An infinity in the raster is the one failure that looks like
+    a colour, so the grid REFUSES and names `--grid-dtype float32`, which the
+    index publishes so no consumer needs changing.
+    """
+    tmp = str(tmp_path)
+    ctx, _truth, _src = _fish(tmp, grid_dtype="float16")
+    monkeypatch.setattr(b10, "F16_MAX", 1.0)
+    with pytest.raises(SystemExit, match="float16"):
+        b10.stage_grid(ctx)
+    assert not b10.marked(ctx.root, "grid")
+    # float32 is the way through — and it is the DEFAULT, because the real
+    # archive overflows float16 without any monkeypatching at all.
+    ctx.a.grid_dtype = b10.GRID_DTYPE_DEFAULT
+    man = b10.stage_grid(ctx)
+    assert man["dtype"] == "float32"
+    assert b10.marked(ctx.root, "grid")
+
+
+def test_82_the_grid_stage_is_a_no_op_for_a_store_that_has_no_grid(built):
+    """`all` means the same thing for every store.
+
+    E-081 §3 defines a gridded product for `fishing` only, so the stage says
+    so and marks itself rather than refusing — otherwise adding a stage for
+    one store would break the other four's `--stage all`.
+    """
+    ctx, _truth = built["gdp"]
+    assert b10.stage_grid(ctx) is None
+    assert b10.marked(ctx.root, "grid")
+
+
+def test_83_the_registry_inherits_the_10_1_stores_and_adds_only_fishing(
+        tmp_path, monkeypatch):
+    """E-081 §2: five tier-P groups, four of them read from 10.1's prefix.
+
+    The whole point of 10.2 is that nothing is rebuilt, so the registry has to
+    be able to say WHERE each group is — `path` per group, plus an `inherits`
+    block naming what was taken as it stood. The Hub reads are mocked, so this
+    asserts the ROUTING (which prefix each store is asked for) and not the
+    network.
+    """
+    asked = []
+
+    def fake_hub_json(repo, path, timeout=60):
+        asked.append(path)
+        if path.endswith("family10.json") or "family7" in path:
+            return None
+        name = path.split("/")[-2]
+        return {"N": 7, "C": 2, "schema_version": 2, "family_version": "10.1",
+                "channels": [{"name": "a", "unit": "u"}],
+                "bin_first": 2191, "footprint": {"log2_fp": -1.32,
+                                                 "log2_dt": -2.32},
+                "sha256": {"bin.npy": "0" * 64}, "store": name}
+
+    monkeypatch.setattr(reg, "hub_json", fake_hub_json)
+    r = reg.build_registry(work=str(tmp_path), use_hub=True)
+    by = {g["name"]: g for g in r["groups"]}
+    assert r["family_version"] == "10.2"
+    assert set(reg.F10_STORES) == {"gdp", "gtmba", "socat", "slatrack",
+                                   "fishing"}
+    for s in ("gdp", "gtmba", "socat", "slatrack"):
+        assert by[s]["path"] == f"tensors/family10_1/{s}", by[s]["path"]
+        assert by[s]["inherited_from"] == "10.1"
+        assert by[s]["schema_version"] == 2
+        assert f"tensors/family10_1/{s}/store.json" in asked
+    assert by["fishing"]["path"] == "tensors/family10_2/fishing"
+    assert by["fishing"]["inherited_from"] is None
+    assert "tensors/family10_2/fishing/store.json" in asked
+    # nothing was asked for under the NEW root for an inherited store — that
+    # prefix holds nothing, and a registry that pointed at it would be a
+    # promise about bytes nobody uploaded
+    assert not [p for p in asked
+                if p.startswith("tensors/family10_2/")
+                and not p.startswith("tensors/family10_2/fishing/")]
+    inh = r["inherits"]["10.1"]
+    assert inh["root"] == "tensors/family10_1"
+    assert set(inh["groups"]) == {"gdp", "gtmba", "socat", "slatrack"}
+    assert r["inherits"]["8"]["groups"] == ["argo"]
+    assert r["groups_missing"] == []

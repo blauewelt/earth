@@ -6955,3 +6955,390 @@ test("Cones live mode: the source switch leaves the exported anchors untouched",
   await expect(page.locator("#cn-anchor-row")).toBeVisible();
   expect(page.__errors, `page errors: ${page.__errors.join(" | ")}`).toHaveLength(0);
 });
+
+/* ======================= fishing effort (AIS) on the globe — E-081 §4a =====
+ *
+ * The layer paints one MONTH of a 0.25° global grid of Global Fishing Watch's
+ * apparent fishing effort by a single HTTP range read of a `.npy` on the
+ * Hugging Face Hub — the family-7 machinery one rung coarser in time.
+ *
+ * The real grid is gigabytes and its index is not published yet, so these
+ * tests serve `data/fishing/fixture/` — the same schema over a real 2012 grid
+ * decimated 20× so it can live in git. TWO routes make that work, and the
+ * second is the interesting half: `data/fishing_index.json` is answered with
+ * the fixture's index, and the Hub URL is answered with the SLICED bytes and a
+ * real 206, so the offset arithmetic the browser computes is genuinely
+ * exercised rather than hidden behind a whole-file 200. */
+const FISH_DIR = require("path").join(__dirname, "..", "data", "fishing", "fixture");
+
+function fishIndex() {
+  return JSON.parse(require("fs").readFileSync(
+    require("path").join(FISH_DIR, "fishing_index.json"), "utf8"));
+}
+
+async function serveFishing(page, opts = {}) {
+  const fs = require("fs"), path = require("path");
+  const index = fishIndex();
+  await page.route(/\/data\/fishing_index\.json(\?.*)?$/, (route) => {
+    // 404 is the REAL state of the world until the build job publishes, so it
+    // is the default that has to degrade gracefully, not an exotic failure.
+    if (opts.noIndex) return route.fulfill({ status: 404, body: "" });
+    return route.fulfill({ status: 200, contentType: "application/json",
+                           body: JSON.stringify(index) });
+  });
+  await page.route(/resolve\/main\/tensors\/family10_2\/.*\.npy$/, (route) => {
+    if (opts.slabFails) return route.fulfill({ status: 500, body: "" });
+    const name = route.request().url().split("/").pop();
+    const buf = fs.readFileSync(path.join(FISH_DIR, name));
+    const range = route.request().headers()["range"];
+    const m = range && /bytes=(\d+)-(\d+)/.exec(range);
+    if (!m) return route.fulfill({ status: 200, body: buf });
+    const a = Number(m[1]), b = Number(m[2]);
+    page.__fishReads = (page.__fishReads || []).concat([[name, a, b]]);
+    return route.fulfill({
+      status: 206,
+      headers: { "content-range": `bytes ${a}-${b}/${buf.length}`,
+                 "accept-ranges": "bytes",
+                 "content-type": "application/octet-stream" },
+      body: buf.slice(a, b + 1),
+    });
+  });
+  return index;
+}
+
+// The float32 in the file, read the way the page reads it — so the expected
+// value below is the FIXTURE'S OWN BYTES and not a second computation of what
+// they should have been.
+function fishCell(index, row, iy, ix) {
+  const fs = require("fs"), path = require("path");
+  const buf = fs.readFileSync(path.join(FISH_DIR, index.file));
+  const nC = index.chans.length;
+  const o = index.header_len + row * index.slab_bytes +
+            (iy * index.grid.nx + ix) * nC * index.itemsize;
+  return { fishing_hours: buf.readFloatLE(o),
+           hours: buf.readFloatLE(o + index.itemsize) };
+}
+
+// The busiest cell of a month — a cell we know is painted, so the probe is
+// asked about effort rather than about empty ocean.
+function fishBusiest(index, row) {
+  const fs = require("fs"), path = require("path");
+  const buf = fs.readFileSync(path.join(FISH_DIR, index.file));
+  const { ny, nx } = index.grid, nC = index.chans.length;
+  let best = { v: -1, iy: 0, ix: 0 };
+  for (let iy = 0; iy < ny; iy++) {
+    for (let ix = 0; ix < nx; ix++) {
+      const o = index.header_len + row * index.slab_bytes +
+                (iy * nx + ix) * nC * index.itemsize;
+      const v = buf.readFloatLE(o);
+      if (v > best.v) best = { v, iy, ix };
+    }
+  }
+  // POINT-aligned, so the cell's own coordinate is its point, not a corner
+  return { ...best,
+           lat: index.grid.lat0 + index.grid.step * best.iy,
+           lon: index.grid.lon0 + index.grid.step * best.ix };
+}
+
+async function enableFishing(page) {
+  await page.evaluate(() => {
+    const el = document.querySelector('#layer-list input[data-id="fishing"]');
+    el.checked = true;
+    el.dispatchEvent(new Event("change", { bubbles: true }));
+  });
+}
+
+test("fishing effort: one range read paints a month, and the probe reads both channels",
+     async ({ page }) => {
+  test.setTimeout(120000);
+  const index = await serveFishing(page);
+  const toasts = await recordToasts(page);
+
+  // the date selector is this layer's clock, at MONTH granularity
+  await setAppDate(page, "2012-07-14");
+  await enableFishing(page);
+  await expect.poll(() => page.evaluate(() => window.__earth.fishingLayerState().ready),
+                    { timeout: 20000 }).toBe(true);
+
+  const st = await page.evaluate(() => window.__earth.fishingLayerState());
+  expect(st.hasIndex).toBe(true);
+  expect(st.error).toBe(null);
+  expect(st.month).toBe("2012-07");
+  expect(st.clamped).toBe(null);
+  expect(st.row).toBe(index.months.indexOf("2012-07"));
+  expect(st.grid.nx).toBe(index.grid.nx);
+  expect(st.grid.ny).toBe(index.grid.ny);
+  expect(st.grid.wrap).toBe(true);
+  expect(st.grid.month).toBe("2012-07");
+  // a POINT-aligned grid: the cell is the half-step box around its point, so
+  // the west edge is half a step west of −180 and the grid wraps
+  expect(st.grid.west).toBeCloseTo(-180 - index.grid.step / 2, 6);
+  expect(st.grid.south).toBeCloseTo(-90 - index.grid.step / 2, 6);
+  // the colour is logarithmic; the numbers are not
+  expect(st.logScale).toBe(true);
+  expect(st.ramp).toBe("effort");
+
+  // exactly ONE slab was read, and it was that month's slab, by offset
+  const reads = page.__fishReads || [];
+  expect(reads.length).toBe(1);
+  expect(reads[0][1]).toBe(index.header_len + st.row * index.slab_bytes);
+  expect(reads[0][2] - reads[0][1] + 1).toBe(index.slab_bytes);
+  expect(st.slabs).toEqual([String(st.row)]);
+
+  // …and the numbers under a point are the FIXTURE'S OWN BYTES, both channels
+  const hot = fishBusiest(index, st.row);
+  expect(hot.v).toBeGreaterThan(0);          // the month is not empty
+  const cell = fishCell(index, st.row, hot.iy, hot.ix);
+  const got = await page.evaluate(([lon, lat]) => window.__earth.fishingSampleAt(lon, lat),
+                                  [hot.lon, hot.lat]);
+  expect(got.fishing_hours).toBeCloseTo(cell.fishing_hours, 2);
+  expect(got.hours).toBeCloseTo(cell.hours, 2);
+  // the builder's own invariant, visible in what the page actually holds
+  expect(got.hours).toBeGreaterThanOrEqual(got.fishing_hours - 1e-3);
+
+  // the probe prints the painted channel AND the other one, both in hours,
+  // stamped with the MONTH the sum covers (§2.9 · the provenance rule)
+  const probe = await page.evaluate(([lon, lat]) => {
+    const carto = Cesium.Cartographic.fromDegrees(lon, lat);
+    return window.__earth.probeValueAt(carto);
+  }, [hot.lon, hot.lat]);
+  expect(probe).toBeTruthy();
+  expect(probe.title).toContain("Fishing effort");
+  expect(probe.noData).toBeFalsy();
+  expect(probe.value).toBeCloseTo(cell.fishing_hours, 2);
+  expect(probe.units).toContain("hours");
+  expect(probe.extra).toContain("broadcasting on AIS");
+  expect(probe.when.kind).toBe("month");
+  expect(probe.when.t).toBe("2012-07");
+
+  // ZERO IS A MEASUREMENT, not a gap: an empty cell reads as 0 with the
+  // coverage caveat, and is marked passThrough so the blank tile it paints
+  // never masks a layer below it (§2.4).
+  const empty = await page.evaluate(() => {
+    const E = window.__earth;
+    const cfg = E.GIBS_LAYERS.find((l) => l.id === "fishing");
+    const entry = E.state.layers.fishing;
+    // the middle of the Sahara: no ocean, no vessels, a real zero in the grid
+    return E.probeEntryValue(entry, Cesium.Cartographic.fromDegrees(20, 25));
+  });
+  expect(empty.noData).toBeFalsy();
+  expect(empty.value).toBe(0);
+  expect(empty.passThrough).toBe(true);
+  expect(empty.extra).toContain("not evidence that nobody fished");
+
+  // the toast names the month showing and says the day does not matter
+  await expect.poll(toasts).toContain("2012-07");
+  await expect.poll(toasts).toContain("monthly sum");
+
+  // the chip is there, so the layer can be switched off from the globe
+  await expect(page.locator("#active-layers")).toContainText("Fishing effort");
+
+  // the legend says the scale is logarithmic, or the colours claim a linearity
+  // they do not have
+  await expect(page.locator("#legend-panel")).toContainText("log scale");
+  await expect(page.locator("#legend-panel")).toContainText("Fishing effort");
+
+  expect(page.__errors, `page errors: ${page.__errors.join(" | ")}`).toHaveLength(0);
+});
+
+test("fishing effort: the month drives it, and the record's ends clamp with a reason",
+     async ({ page }) => {
+  test.setTimeout(120000);
+  const index = await serveFishing(page);
+  await setAppDate(page, "2012-07-14");
+  await enableFishing(page);
+  await expect.poll(() => page.evaluate(() => window.__earth.fishingLayerState().ready),
+                    { timeout: 20000 }).toBe(true);
+  expect((page.__fishReads || []).length).toBe(1);
+
+  // ANOTHER DAY OF THE SAME MONTH: no request at all — thirty days in
+  // thirty-one change nothing, and a read per keystroke is what this avoids.
+  await setAppDate(page, "2012-07-28");
+  await page.waitForTimeout(400);
+  expect((page.__fishReads || []).length).toBe(1);
+  // `grid.month` is what is PAINTED; `month` is what the date resolves to. The
+  // two are the same here and the distinction is the point of asserting both.
+  expect(await page.evaluate(() => window.__earth.fishingLayerState().grid.month)).toBe("2012-07");
+  expect(await page.evaluate(() => window.__earth.fishingLayerState().month)).toBe("2012-07");
+
+  // A DIFFERENT MONTH: exactly one more read, at that month's offset
+  const toasts = await recordToasts(page);
+  await setAppDate(page, "2012-09-03");
+  await expect.poll(() => page.evaluate(() => window.__earth.fishingLayerState().grid?.month),
+                    { timeout: 20000 }).toBe("2012-09");
+  const reads = page.__fishReads || [];
+  expect(reads.length).toBe(2);
+  expect(reads[1][1]).toBe(index.header_len
+    + index.months.indexOf("2012-09") * index.slab_bytes);
+  // both months are still in the LRU, so scrubbing back costs nothing
+  await setAppDate(page, "2012-07-05");
+  await expect.poll(() => page.evaluate(() => window.__earth.fishingLayerState().grid?.month),
+                    { timeout: 20000 }).toBe("2012-07");
+  expect((page.__fishReads || []).length).toBe(2);
+
+  // BEFORE THE RECORD: clamped up, and the toast says the record starts there
+  // rather than leaving a reader to wonder why the date does nothing.
+  const first = index.months[0], last = index.months[index.months.length - 1];
+  await setAppDate(page, "2005-03-11");
+  await expect.poll(() => page.evaluate(() => window.__earth.fishingLayerState().grid?.month),
+                    { timeout: 20000 }).toBe(first);
+  expect(await page.evaluate(() => window.__earth.fishingLayerState().clamped)).toBe("before");
+  await expect.poll(toasts).toContain(`starts ${first}`);
+
+  // AFTER IT: clamped down, with the archive wording
+  await setAppDate(page, "2026-01-09");
+  await expect.poll(() => page.evaluate(() => window.__earth.fishingLayerState().grid?.month),
+                    { timeout: 20000 }).toBe(last);
+  expect(await page.evaluate(() => window.__earth.fishingLayerState().clamped)).toBe("after");
+  await expect.poll(toasts).toContain(`ends ${last}`);
+
+  // it is DATE-DRIVEN, so it must not claim to be dateless (§4b)
+  expect(await page.evaluate(() => window.__earth.datelessToast("fishing"))).toBeNull();
+
+  expect(page.__errors, `page errors: ${page.__errors.join(" | ")}`).toHaveLength(0);
+});
+
+test("fishing effort degrades to a hint while its index is unpublished", async ({ page }) => {
+  test.setTimeout(120000);
+  /* This is not an exotic failure — it is the state of the world until the
+   * build job publishes, and the layer has to ship complete in it: a chip, a
+   * row, an opacity slider, an untouched globe underneath, and a sentence
+   * saying what is missing and what will fix it. Same bar family 7 was
+   * admitted on (CLAUDE.md §3). */
+  await serveFishing(page, { noIndex: true });
+  const toasts = await recordToasts(page);
+  await enableFishing(page);
+  await expect.poll(toasts, { timeout: 20000 }).toContain("has not been published yet");
+  const st = await page.evaluate(() => window.__earth.fishingLayerState());
+  expect(st.hasIndex).toBe(false);
+  expect(st.unpublished).toBe(true);
+  expect(st.ready).toBe(false);
+  expect(await page.evaluate(() => !!window.__earth.state.layers.fishing?.layer)).toBe(true);
+  await expect(page.locator("#active-layers")).toContainText("Fishing effort");
+  expect(page.__errors, `page errors: ${page.__errors.join(" | ")}`).toHaveLength(0);
+});
+
+/* ===================== loitering vessels — E-081 §4b =======================
+ *
+ * One point per event, from a snapshot baked server-side because the Global
+ * Fishing Watch Events API is keyed and the browser must never call one
+ * (CLAUDE.md §3). The layer is DATE-DRIVEN: it shows the events whose drift
+ * overlaps the selected day, and — this is the half that matters — it shows
+ * NOTHING for a date the snapshot's rolling window cannot speak for. */
+async function enableLoitering(page) {
+  await page.evaluate(() => {
+    const el = document.getElementById("toggle-loitering");
+    el.checked = true;
+    el.dispatchEvent(new Event("change", { bubbles: true }));
+  });
+  await expect.poll(() => page.evaluate(() => window.__earth.loiterLayerState().loaded),
+                    { timeout: 20000 }).toBe(true);
+}
+
+test("loitering vessels: points for a date inside the snapshot, nothing outside it",
+     async ({ page }) => {
+  test.setTimeout(120000);
+  const snap = await page.evaluate(() => fetch("data/loitering.json").then((r) => r.json()));
+  expect(snap.events.length).toBeGreaterThan(10);
+
+  // a date the snapshot CAN speak for: the middle of its window
+  const mid = new Date((Date.parse(`${snap.window.start}T00:00:00Z`)
+                      + Date.parse(`${snap.window.end}T00:00:00Z`)) / 2)
+    .toISOString().slice(0, 10);
+  await setAppDate(page, mid);
+  const toasts = await recordToasts(page);
+  await enableLoitering(page);
+
+  const expected = snap.events.filter((e) => {
+    const a = Date.parse(`${mid}T00:00:00Z`), b = a + 864e5;
+    return Date.parse(e.start) < b && Date.parse(e.end) >= a;
+  }).length;
+  expect(expected).toBeGreaterThan(0);        // the fixture must exercise this
+
+  const st = await page.evaluate(() => window.__earth.loiterLayerState());
+  expect(st.inWindow).toBe(true);
+  expect(st.shown).toBe(expected);
+  expect(st.count).toBe(snap.events.length);
+  // the primitives really are on the globe, not just counted in state
+  expect(await page.evaluate(() => window.__earth.loiterCollection.length)).toBe(expected);
+
+  // the chip, so it can be switched off from the globe (§2.7)
+  await expect(page.locator("#active-layers")).toContainText("Loitering vessels");
+  // a colour scale needs a legend, point layer or not
+  await expect(page.locator("#legend-panel")).toContainText("hours adrift");
+
+  // the placeholder says it is one, rather than passing itself off as real
+  if (snap.fixture) await expect.poll(toasts).toContain("placeholder snapshot");
+
+  // OUTSIDE THE WINDOW: nothing is drawn, and the toast says which window it
+  // has and when it was refreshed. Stale points under a new date would be the
+  // wrong answer rather than a partial one.
+  const outside = new Date(Date.parse(`${snap.window.start}T00:00:00Z`) - 90 * 864e5)
+    .toISOString().slice(0, 10);
+  await setAppDate(page, outside);
+  await expect.poll(() => page.evaluate(() => window.__earth.loiterLayerState().inWindow),
+                    { timeout: 20000 }).toBe(false);
+  expect(await page.evaluate(() => window.__earth.loiterLayerState().shown)).toBe(0);
+  expect(await page.evaluate(() => window.__earth.loiterCollection.length)).toBe(0);
+  await expect.poll(toasts).toContain("the snapshot covers");
+  await expect.poll(toasts).toContain(`showing nothing for ${outside}`);
+
+  // …and coming back inside restores them, so the refusal is a statement about
+  // the date rather than a layer that broke
+  await setAppDate(page, mid);
+  await expect.poll(() => page.evaluate(() => window.__earth.loiterLayerState().shown),
+                    { timeout: 20000 }).toBe(expected);
+
+  // it is DATE-DRIVEN, so it must not claim to be dateless (§4b)
+  expect(await page.evaluate(() => window.__earth.datelessToast("loitering"))).toBeNull();
+
+  expect(page.__errors, `page errors: ${page.__errors.join(" | ")}`).toHaveLength(0);
+});
+
+test("a loitering event answers with its vessel, its drift and a stamp", async ({ page }) => {
+  test.setTimeout(120000);
+  const snap = await page.evaluate(() => fetch("data/loitering.json").then((r) => r.json()));
+  const mid = new Date((Date.parse(`${snap.window.start}T00:00:00Z`)
+                      + Date.parse(`${snap.window.end}T00:00:00Z`)) / 2)
+    .toISOString().slice(0, 10);
+  await setAppDate(page, mid);
+  await enableLoitering(page);
+
+  /* The card is read out of the primitive's own `id`, not by clicking: a pick
+   * on the software-GL stack is exactly the thing CLAUDE.md §4 says not to
+   * drive a test with. What is asserted is the CONTENT the click would show. */
+  const html = await page.evaluate(() => {
+    const col = window.__earth.loiterCollection;
+    return col.get(0).id.html;
+  });
+  const ev = snap.events.find((e) => html.includes(e.mmsi));
+  expect(ev, "the card names an event from the snapshot").toBeTruthy();
+  expect(html).toContain(ev.name);
+  expect(html).toContain(ev.flag);
+  expect(html).toContain(ev.mmsi);
+  expect(html).toContain(String(ev.start).slice(0, 10));   // start → end
+  expect(html).toContain(String(ev.end).slice(0, 10));
+  expect(html).toContain("adrift");                        // hours
+  expect(html).toContain("average speed");
+  expect(html).toContain("from shore");
+  expect(html).toContain("Powered by Global Fishing Watch");
+  // the observation stamp every read-out owes (§2.9): an INSTANT, because an
+  // event happens at a time rather than over a composite period
+  expect(html).toMatch(/px-when/);
+
+  // and the layer really does colour by duration — the longest drift is not
+  // the same colour as the shortest
+  const colours = await page.evaluate(() => {
+    const col = window.__earth.loiterCollection;
+    const out = [];
+    for (let i = 0; i < col.length; i++) {
+      const p = col.get(i);
+      out.push([p.id.ev.hours, `${p.color.red},${p.color.green},${p.color.blue}`]);
+    }
+    return out;
+  });
+  const sorted = [...colours].sort((a, b) => a[0] - b[0]);
+  expect(sorted[0][1]).not.toBe(sorted[sorted.length - 1][1]);
+
+  expect(page.__errors, `page errors: ${page.__errors.join(" | ")}`).toHaveLength(0);
+});

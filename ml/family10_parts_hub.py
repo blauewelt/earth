@@ -21,11 +21,11 @@ nothing but `HF_TOKEN` pulls every year back and assembles
 
 THE LAYOUT, and it is the whole contract:
 
-    partials/family10_1/<store>/<year>/00000.npz   the column parts, as
-    partials/family10_1/<store>/<year>/00001.npz   `PartWriter` wrote them
-    partials/family10_1/<store>/<year>/...
-    partials/family10_1/<store>/<year>/counts.json the year's own ledger
-    partials/family10_1/<store>/<year>/done.json   THE MARKER — written last
+    partials/family10_<minor>/<store>/<year>/00000.npz   the column parts, as
+    partials/family10_<minor>/<store>/<year>/00001.npz   `PartWriter` wrote them
+    partials/family10_<minor>/<store>/<year>/...
+    partials/family10_<minor>/<store>/<year>/counts.json the year's own ledger
+    partials/family10_<minor>/<store>/<year>/done.json   THE MARKER — last
 
 THE PREFIX CARRIES THE FAMILY VERSION, and that is not decoration. Family 10.1
 stores the time as `time_s` (int32 seconds) where family 10 stored `time_days`
@@ -37,6 +37,15 @@ part carrying `time_days` by name (`family10_store.check_part_schema`), because
 a store assembled from one would claim a precision it does not have. The v1
 parts under `partials/family10/` are not inputs to any build and nothing here
 reads them.
+
+THE PREFIX FOLLOWS `FAMILY_VERSION`, WHICH IS NOW "10.2" (E-081) — so this
+module reads and writes `partials/family10_2/`. The slatrack lanes of 10.1
+parked their parts under `partials/family10_1/` and those are NOT visible from
+here, which is correct and deliberate: 10.2 adds the `fishing` store and
+inherits slatrack's finished store from `tensors/family10_1/slatrack/` rather
+than reassembling it. A slatrack build under 10.2 would therefore have to
+re-run its fetch lanes; there is no reason to, and the registry's `inherits`
+block records which version each store came from.
 
 `done.json` is the year's marker and it obeys §5.21: it is uploaded only after
 every part has been uploaded AND DOWNLOADED BACK with a matching sha256. A year
@@ -68,8 +77,8 @@ from build_family7 import (atomic_json, git_sha, hub_add_ops,    # noqa: E402
                            read_json, sha256, utcnow)
 
 # ONE CONSTANT, derived from `family10_store.FAMILY_VERSION` like every other
-# family-10.1 path. Nothing here spells a prefix out.
-HF_PARTIALS = f10.HF_PARTIALS                      # partials/family10_1
+# family-10 path. Nothing here spells a prefix out.
+HF_PARTIALS = f10.HF_PARTIALS                      # partials/family10_2
 DONE = "done.json"
 COUNTS = "counts.json"
 

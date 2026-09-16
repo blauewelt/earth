@@ -20,7 +20,7 @@
 # `partials/family10_1/`; the family-10 stores stay published and untouched
 # until 10.1 is verified. A v1 column part CANNOT be upgraded (the precision
 # was destroyed at the cast) and the builder refuses one by name, which is why
-# the default `work` directory is the FRESH `ml/cache/family10_1`: a resume
+# the default `work` directory is the FRESH `ml/cache/family10_2`: a resume
 # must not pick up v1 parts. The whole specification is
 # ml/plans/E079_family10_point_stores.md, rendered for a phone at
 # https://blauewelt.github.io/earth/docs.html?f=ml/plans/E079_family10_point_stores.md
@@ -40,6 +40,20 @@
 #             request and the fetch stage is a single pass -- see "RESUME"
 #             below, because this is the one store whose resume granularity is
 #             not the year. C = 4.
+#   fishing   Global Fishing Watch's AIS-based apparent fishing effort v3.0,
+#             Zenodo record 14982712, CC BY-NC 4.0, NO credentials: 13 zips of
+#             per-day CSVs (5.34 GB, each <= 0.75 GB, md5-verified against the
+#             record and streamed with zipfile -- never extracted), one row per
+#             (day, 0.1 degree cell, MMSI). C = 2 (fishing_hours, hours) and
+#             `qc` carries the vessel's GEAR CLASS. MEASURED 2026-09-16 on the
+#             real 2012 file: 6,257,384 rows from 56 MB of zip, i.e. 0.1116
+#             rows per zip byte, so the WHOLE ARCHIVE is ~596 M rows =
+#             ~18.5 GB of store plus ~16 GB of per-year parts. A hosted runner
+#             has ~14 GB IN TOTAL and the Preflight below refuses more than
+#             four years there; the whole record goes to a box, or to several
+#             dispatches with the same `work` (the per-year markers make that
+#             exactly as safe). One year of 2012 took 35 s end to end and the
+#             largest year is ~13x that.
 #   slatrack  Copernicus Marine SEALEVEL_GLO_PHY_L3_MY_008_062, 29 altimeter
 #             missions at 1 Hz, 1993 -> . TENS OF GIGABYTES and the only store
 #             that needs CREDENTIALS. C = 3. ITS BUILD IS SPLIT IN TWO AND THIS
@@ -101,23 +115,37 @@
 # the builder as an ENVIRONMENT VARIABLE and never as a command-line argument
 # (argv is world readable on the box, and the box's host has root).
 #
+# THE FISHING GRID AND ITS INDEX. `--stage grid` sums the finished fishing
+# store onto the family-7 0.25 degree grid, one frame per month, month-major
+# so one month of both channels is one 8.3 MB range read (float32: E-081 3
+# budgeted float16, and the archive does not fit it -- the busiest 0.25 degree
+# cell-month of 2024 is 595,726 vessel-hours against float16's 65,504 ceiling,
+# measured 2026-09-16, so those cells would be +inf. data/fishing_index.json
+# publishes the dtype and the slab size, so no consumer hardcodes either)
+# (`tensors/family10_2/fishing_grid/fishing_grid_monthly_025.npy`, E-081 3),
+# asserts the grid's per-month sums against the store's, and the publish stage
+# uploads it, verifies its restore and writes `data/fishing_index.json` from
+# the PUBLISHED bytes -- the header length parsed from a ranged GET and the
+# CORS headers measured on it. That index is in the job's artifact; it is not
+# committed from here.
+#
 # INPUT COUNT: 7. `workflow_dispatch` allows at most 25 and a 26th breaks the
 # WHOLE file -- GitHub refuses to parse it, every dispatch 422s, and the
 # Actions list shows a failed run named after the file path with no jobs
 # (ml/CLAUDE.md 7). Count them before pushing an edit to this file.
 name: Family 10.1 build (tier-P observation stores, integer-second time)
-run-name: family10 ${{ github.event.inputs.store }} ${{ github.event.inputs.stage || 'all' }} -> ${{ github.event.inputs.work || 'ml/cache/family10_1' }}
+run-name: family10 ${{ github.event.inputs.store }} ${{ github.event.inputs.stage || 'all' }} -> ${{ github.event.inputs.work || 'ml/cache/family10_2' }}
 
 on:
   workflow_dispatch:
     inputs:
       store:
-        description: "WHICH STORE: gdp (surface drifters, 6-hourly, 1979->) | gtmba (TAO/TRITON, PIRATA, RAMA moorings, daily, 1977->) | socat (ship and mooring surface CO2, 1957->) | slatrack (along-track sea level, 29 altimeter missions, 1993->; ASSEMBLE ONLY here -- its parts are fetched by family10-slatrack-fetch.yml, so run it on a box with extra_args=--parts-from-hub)"
+        description: "WHICH STORE: gdp (surface drifters, 6-hourly, 1979->) | gtmba (TAO/TRITON, PIRATA, RAMA moorings, daily, 1977->) | socat (ship and mooring surface CO2, 1957->) | slatrack (along-track sea level, 29 altimeter missions, 1993->; ASSEMBLE ONLY here -- its parts are fetched by family10-slatrack-fetch.yml, so run it on a box with extra_args=--parts-from-hub) | fishing (E-081, family 10.2: Global Fishing Watch AIS apparent fishing effort, one row per day x 0.1 degree cell x vessel, 2012-2024, NO credentials -- but ~596 M rows and ~18.5 GB of store for the whole archive, so the full record needs a BOX and a hosted runner takes about four years at a time)"
         required: true
         type: choice
-        options: [gdp, gtmba, socat, slatrack]
+        options: [gdp, gtmba, socat, slatrack, fishing]
       stage:
-        description: "all | index | fetch | publish | a comma list such as index,fetch (a PROBE: fetch a short window, publish nothing). Order is fixed (fetch needs the index's preflight; publish needs the store) -- a single stage is for resuming or re-running one, never for building out of order"
+        description: "all | index | fetch | grid | publish | a comma list such as index,fetch (a PROBE: fetch a short window, publish nothing). Order is fixed (fetch needs the index's preflight; grid and publish need the store) -- a single stage is for resuming or re-running one, never for building out of order. `grid` sums the fishing store onto the 0.25 degree monthly raster the globe reads and is a NO-OP for the other four stores, so `all` means the same thing for every store"
         default: "all"
       start:
         description: "first day, YYYY-MM-DD. Empty = the source's own first year (gdp 1979, gtmba 1977, socat 1957, slatrack 1993). Pre-1982 rows are KEPT, with negative bins"
@@ -129,10 +157,10 @@ on:
         description: "runner label. `ubuntu-latest` fits gdp, gtmba and socat (each streams; the RESULT is <= ~1 GB). slatrack's ASSEMBLY is 50-80 GB and must be sent to a box -- a Vast box's runner NAME is an implicit label, e.g. gpu-box-31299601, whose /opt/earth-cache persists across jobs and makes the resume real. A box NEVER receives the Copernicus credentials (ml/CLAUDE.md 6), so a slatrack build there must pass --parts-from-hub"
         default: "ubuntu-latest"
       work:
-        description: "the build directory. RE-DISPATCH WITH THE SAME VALUE TO RESUME: finished stages and finished years are skipped by their .done markers. A different path is a different build. The default is FRESH for family 10.1 (`ml/cache/family10_1`, not `family10`) so nothing resumes from a v1 part -- those carry `time_days` and are refused rather than upgraded"
-        default: "ml/cache/family10_1"
+        description: "the build directory. RE-DISPATCH WITH THE SAME VALUE TO RESUME: finished stages and finished years are skipped by their .done markers. A different path is a different build. The default follows the family version (`ml/cache/family10_2`): a 10.1 work dir must not be resumed into a 10.2 build, and a v1 (`time_days`) part is refused by name rather than upgraded"
+        default: "ml/cache/family10_2"
       extra_args:
-        description: "extra flags for ml/build_family10_stores.py: --parts-from-hub (HOW SLATRACK IS ASSEMBLED ON A BOX -- stage fetch pulls each year's column parts from partials/family10_1/<store>/<year>/ on the Hub instead of the source archive, so the box needs HF_TOKEN ONLY and no Copernicus credentials; add --allow-missing-years to accept a short store), --assemble streaming|memory|auto (auto streams above 50M rows and always for slatrack), --qc-keep N (worst QC grade kept, default 2), --socat-url URL, --attempts N, --slatrack-fetch files|dataframe (files = the original per-day netCDFs through copernicusmarine.get, the default; dataframe = the ~3.3k samples/s subset route, the fallback), --force, --source-dir DIR, --smoke. Word-split deliberately; leave empty for a real build"
+        description: "extra flags for ml/build_family10_stores.py: --parts-from-hub (HOW SLATRACK IS ASSEMBLED ON A BOX -- stage fetch pulls each year's column parts from partials/family10_1/<store>/<year>/ on the Hub instead of the source archive, so the box needs HF_TOKEN ONLY and no Copernicus credentials; add --allow-missing-years to accept a short store), --assemble streaming|memory|auto (auto streams above 50M rows and always for slatrack), --qc-keep N (worst QC grade kept, default 2), --socat-url URL, --attempts N, --slatrack-fetch files|dataframe (files = the original per-day netCDFs through copernicusmarine.get, the default; dataframe = the ~3.3k samples/s subset route, the fallback), --force, --source-dir DIR, --smoke. FISHING ONLY: --max-hours N (the ceiling a single cell-day-vessel row may carry before the build refuses; default 168 = a week, because an MMSI is not always one vessel and 1.6 % of real rows exceed 24 h), --grid-dtype float16|float32 (float32 is the escape hatch when a cell-month sum passes float16's 65,504-hour ceiling; the index publishes the dtype, so no consumer changes), --allow-small-disk (fetch anyway when the projection does not fit), --index-out PATH. Word-split deliberately; leave empty for a real build"
         default: ""
 
 permissions:
@@ -189,9 +217,11 @@ jobs:
           CMEMS_PASS: ${{ secrets.COPERNICUSMARINE_SERVICE_PASSWORD }}
           STORE: ${{ github.event.inputs.store }}
           STAGE: ${{ github.event.inputs.stage || 'all' }}
-          WORK: ${{ github.event.inputs.work || 'ml/cache/family10_1' }}
+          WORK: ${{ github.event.inputs.work || 'ml/cache/family10_2' }}
           RUNNER_INPUT: ${{ github.event.inputs.runner || 'ubuntu-latest' }}
           EXTRA: ${{ github.event.inputs.extra_args }}
+          START: ${{ github.event.inputs.start }}
+          END: ${{ github.event.inputs.end || '2024-12-31' }}
         run: |
           echo "store=${STORE} stage=${STAGE} work=${WORK} runner=${RUNNER_NAME:-?}"
           fail=0
@@ -275,6 +305,47 @@ jobs:
                            echo "does fit here and is the way to probe." ;;
             esac
           fi
+          # FISHING ON A HOSTED RUNNER IS A DISK QUESTION, and it is decidable
+          # from the inputs alone (ml/CLAUDE.md 0.3, 5.17 -- a DEFINITE answer
+          # may be fatal). MEASURED 2026-09-16 on the real 2012 file: 6,257,384
+          # rows out of 56 MB of zip = 0.1116 rows per zip byte, 31 bytes a
+          # stored row, and the per-year parts coexist with the store while the
+          # build finishes. The whole 2012-2024 archive is 5.34 GB of zip,
+          # ~596 M rows, ~18.5 GB of store and ~16 GB of parts against a hosted
+          # runner's ~14 GB IN TOTAL -- so it does not fit, and discovering
+          # that at 80 % of a fetch costs the whole fetch. Four years is the
+          # most a hosted runner holds with margin; the builder makes the same
+          # refusal from the real zip sizes (--allow-small-disk overrides it
+          # there, and `extra_args` carries that through to here).
+          if [ "${STORE}" = "fishing" ] \
+             && { [ "${RUNNER_INPUT}" = "ubuntu-latest" ] || [ -z "${RUNNER_INPUT}" ]; }; then
+            y0="${START%%-*}"; [ -z "${y0}" ] && y0=2012
+            y1="${END%%-*}";   [ -z "${y1}" ] && y1=2024
+            span=$((y1 - y0 + 1))
+            echo "fishing: ${span} year(s) requested (${y0}..${y1})"
+            case "${EXTRA}" in
+              *--allow-small-disk*) span=0 ;;   # asked for deliberately
+            esac
+            if [ "${span}" -gt 4 ]; then
+              echo "::error::fishing ${y0}..${y1} is ${span} years on a"
+              echo "GitHub-hosted runner. Measured 2026-09-16: 0.1116 rows per"
+              echo "byte of zip and 31 bytes a stored row, so a year averages"
+              echo "~46 M rows / ~1.4 GB of store plus the same again in parts"
+              echo "-- and the whole archive is ~596 M rows / ~18.5 GB against"
+              echo "this runner's ~14 GB of disk. Two ways on:"
+              echo "  (a) dispatch a box (runner: gpu-box-NNNNN), whose"
+              echo "      /opt/earth-cache also makes the resume real; or"
+              echo "  (b) build a SHORTER WINDOW here. The store records its"
+              echo "      own date_range and says what it covers. Splitting"
+              echo "      the archive across dispatches does NOT get the whole"
+              echo "      thing onto a hosted runner: a year's parts do resume,"
+              echo "      but the assembly at the end of every fetch reads the"
+              echo "      whole window at once, so the machine that finishes"
+              echo "      the archive needs room for all of it."
+              echo "Pass --allow-small-disk in extra_args to try anyway."
+              fail=1
+            fi
+          fi
           [ "${fail}" = "1" ] && exit 1
           mkdir -p "${WORK}"
           echo "disk, as the build will see it:"
@@ -352,7 +423,7 @@ jobs:
           GITHUB_TOKEN: ${{ github.token }}
           STORE: ${{ github.event.inputs.store }}
           STAGE: ${{ github.event.inputs.stage || 'all' }}
-          WORK: ${{ github.event.inputs.work || 'ml/cache/family10_1' }}
+          WORK: ${{ github.event.inputs.work || 'ml/cache/family10_2' }}
           START: ${{ github.event.inputs.start }}
           END: ${{ github.event.inputs.end || '2024-12-31' }}
           EXTRA: ${{ github.event.inputs.extra_args }}
@@ -399,7 +470,7 @@ jobs:
         if: ${{ success() && (github.event.inputs.stage == 'publish' || github.event.inputs.stage == 'all' || github.event.inputs.stage == '') }}
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
-          WORK: ${{ github.event.inputs.work || 'ml/cache/family10_1' }}
+          WORK: ${{ github.event.inputs.work || 'ml/cache/family10_2' }}
         run: |
           python3 -u ml/build_family10_registry.py \
               --work "${WORK}" --out "${WORK}/family10.json" --publish
@@ -411,7 +482,7 @@ jobs:
         if: always() && steps.preflight.outcome == 'success'
         env:
           STORE: ${{ github.event.inputs.store }}
-          WORK: ${{ github.event.inputs.work || 'ml/cache/family10_1' }}
+          WORK: ${{ github.event.inputs.work || 'ml/cache/family10_2' }}
         run: |
           out="${RUNNER_TEMP}/family10-story"
           rm -rf "${out}"; mkdir -p "${out}"
@@ -422,6 +493,12 @@ jobs:
           done
           [ -f "${root}/${STORE}/store.json" ] && cp "${root}/${STORE}/store.json" "${out}/" \
             || echo "::warning::no store.json -- the fetch stage did not assemble the store"
+          # The fishing grid's own manifest and the index the globe reads. The
+          # .npy itself is NOT collected and never should be (it goes to the
+          # Hub, verified by restore); these two are a few kB and are the only
+          # way to read the grid's story off a job that died after it.
+          [ -f "${root}/fishing_grid/grid.json" ] && cp "${root}/fishing_grid/grid.json" "${out}/" || true
+          [ -f data/fishing_index.json ] && cp data/fishing_index.json "${out}/" || true
           [ -f "${WORK}/family10.json" ] && cp "${WORK}/family10.json" "${out}/" \
             || echo "no family10.json (the registry step has not run)"
           n=0

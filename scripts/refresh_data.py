@@ -5,6 +5,8 @@ Produces (relative to repo root):
   data/climatetrace.json  - top facility-level emitters (Climate TRACE, CC BY 4.0)
   data/argo.json          - latest Argo float positions (Argo GDAC via Ifremer ERDDAP)
   data/rapid_moc.json     - RAPID 26.5N overturning transport time series (rapid.ac.uk)
+  data/loitering.json     - last 30 days of Global Fishing Watch loitering events
+                            (needs GFW_API_TOKEN in the environment; CC BY-NC 4.0)
 
 Run from the repo root:  python3 scripts/refresh_data.py
 Requires: netCDF4 (pip install netCDF4)
@@ -276,6 +278,163 @@ def glaciers():
     with open(os.path.join(DATA, "glaciers.json"), "w") as f:
         json.dump(payload, f, separators=(",", ":"))
     print(f"  wrote {len(lon)} glaciers ({matched} with dhdt), total {payload['total_area_km2']:,} km2")
+
+
+# --------------------------------------------------------------- loitering ---
+# The Global Fishing Watch Events API is the ONLY source of loitering events —
+# a vessel drifting at sea at low speed for hours, the signature of
+# transshipment at sea and of waiting. It needs a bearer token, which makes it
+# a KEYED host, and the root CLAUDE.md §3 forbids the browser from calling one:
+# a key shipped in a static page is a key everybody has. So the events are
+# baked here instead, and the page reads one small static file.
+#
+# The endpoint was VERIFIED against the live documentation on 2026-09-16
+# (globalfishingwatch.org/our-apis/documentation → API v3 → Events → Get All
+# Events, and Examples → "Get loitering events for a vessel (GET)"), not
+# transcribed from a plan:
+#
+#   GET https://gateway.api.globalfishingwatch.org/v3/events
+#       ?datasets[0]=public-global-loitering-events:latest
+#       &start-date=YYYY-MM-DD        (inclusive, on the event's START)
+#       &end-date=YYYY-MM-DD          (exclusive, on the event's END)
+#       &limit=<n>&offset=<n>
+#   Authorization: Bearer <token>
+#
+# and the response is `{metadata, limit, offset, nextOffset, total, entries:[…]}`
+# with each entry carrying `id`, `type`, `start`, `end`, `position.{lat,lon}`,
+# `distances.{start,end}DistanceFrom{Shore,Port}Km`, `vessel.{id,name,ssvid,flag}`
+# and a `loitering.{totalTimeHours,totalDistanceKm,averageSpeedKnots,
+# averageDistanceFromShoreKm}` block. The licence terms on the same site state
+# the limits this respects: CC BY-NC 4.0, noncommercial, attribution "Powered
+# by Global Fishing Watch" linked to globalfishingwatch.org, and a request
+# ceiling of 50,000 per day / 1,500,000 per month.
+GFW_EVENTS_URL = "https://gateway.api.globalfishingwatch.org/v3/events"
+GFW_LOITERING_DATASET = "public-global-loitering-events:latest"
+GFW_ATTRIBUTION = "Powered by Global Fishing Watch"
+GFW_LICENCE = "CC BY-NC 4.0"
+
+
+def _gfw_page(token, start, end, offset, limit):
+    """One page of loitering events. Raises on anything but 200."""
+    q = urllib.parse.urlencode({
+        "datasets[0]": GFW_LOITERING_DATASET,
+        "start-date": start,
+        "end-date": end,
+        "limit": limit,
+        "offset": offset,
+    })
+    req = urllib.request.Request(f"{GFW_EVENTS_URL}?{q}", headers={
+        **UA,
+        # The token is read from the environment and put ONLY in this header:
+        # never in argv (where the permission classifier and every process
+        # listing can see it) and never written to disk.
+        "Authorization": f"Bearer {token}",
+        "Accept": "application/json",
+    })
+    with urllib.request.urlopen(req, timeout=120) as r:
+        return json.load(r)
+
+
+def loitering(days=30, limit=1000, max_pages=200):
+    """Bake the last `days` of Global Fishing Watch loitering events into
+    data/loitering.json for the globe's "Loitering vessels" layer.
+
+    The token comes from the environment (`GFW_API_TOKEN`) and is never
+    written anywhere. With no token this REFUSES with a message that says what
+    to do, rather than writing a half-empty file or a silently stale one — an
+    empty events list and a missing token are two different states and only one
+    of them is a fact about the ocean."""
+    token = os.environ.get("GFW_API_TOKEN", "").strip()
+    if not token:
+        raise SystemExit(
+            "refresh_data.py loitering: GFW_API_TOKEN is not set.\n"
+            "  The Global Fishing Watch Events API is a keyed host, so this is\n"
+            "  the only place the events can be fetched (the browser must never\n"
+            "  call it — root CLAUDE.md §3). Get a free token at\n"
+            "  https://globalfishingwatch.org/our-apis/tokens and export it:\n"
+            "      export GFW_API_TOKEN=...   # env only; never argv, never a file\n"
+            "  data/loitering.json is left exactly as it is."
+        )
+    now = datetime.now(timezone.utc)
+    start = (now - timedelta(days=days)).strftime("%Y-%m-%d")
+    # `end-date` is EXCLUSIVE, so ask for tomorrow to include everything today.
+    end_excl = (now + timedelta(days=1)).strftime("%Y-%m-%d")
+    end = now.strftime("%Y-%m-%d")
+    print(f"Global Fishing Watch loitering events {start} -> {end} ...")
+
+    entries, offset, total = [], 0, None
+    for page in range(max_pages):
+        js = _gfw_page(token, start, end_excl, offset, limit)
+        batch = js.get("entries") or []
+        if total is None:
+            total = js.get("total")
+            print(f"  API reports {total} events in the window")
+        entries.extend(batch)
+        nxt = js.get("nextOffset")
+        if not batch or nxt is None or nxt <= offset:
+            break
+        offset = nxt
+        time.sleep(0.2)          # politeness; the ceiling is 50,000 requests/day
+    else:
+        print(f"  WARNING: stopped at {max_pages} pages ({len(entries)} events)")
+
+    def num(v, nd):
+        try:
+            f = float(v)
+        except (TypeError, ValueError):
+            return None
+        return round(f, nd)
+
+    out = []
+    for e in entries:
+        pos = e.get("position") or {}
+        lat, lon = num(pos.get("lat"), 4), num(pos.get("lon"), 4)
+        if lat is None or lon is None:
+            continue                       # a point with no position is not a point
+        ves = e.get("vessel") or {}
+        loi = e.get("loitering") or {}
+        dis = e.get("distances") or {}
+        shore = loi.get("averageDistanceFromShoreKm")
+        if shore is None:
+            shore = dis.get("startDistanceFromShoreKm")
+        out.append({
+            "lat": lat, "lon": lon,
+            "start": e.get("start"), "end": e.get("end"),
+            "hours": num(loi.get("totalTimeHours"), 2),
+            # The API computes an AVERAGE speed over the drift; it is labelled
+            # as such in the app rather than as a median, because calling an
+            # average a median would be a small lie the reader cannot check.
+            "speed_kn": num(loi.get("averageSpeedKnots"), 2),
+            "shore_km": num(shore, 1),
+            "name": (ves.get("name") or "").strip()[:60],
+            "flag": (ves.get("flag") or "").strip()[:3],
+            "mmsi": (ves.get("ssvid") or "").strip()[:12],
+        })
+    out.sort(key=lambda r: (r["start"] or "", r["mmsi"]))
+
+    payload = {
+        "id": "loitering",
+        "title": "Loitering vessels (Global Fishing Watch)",
+        "fetched_at": now.strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "window": {"start": start, "end": end},
+        "count": len(out),
+        "api_total": total,
+        "source": GFW_EVENTS_URL,
+        "dataset": GFW_LOITERING_DATASET,
+        "attribution": GFW_ATTRIBUTION,
+        "attribution_url": "https://globalfishingwatch.org",
+        "licence": GFW_LICENCE,
+        "licence_url": "https://creativecommons.org/licenses/by-nc/4.0/",
+        "note": ("A loitering event is a vessel drifting at sea at low speed for "
+                 "hours, derived from AIS by Global Fishing Watch. Rolling "
+                 "30-day window, rebaked daily."),
+        "events": out,
+    }
+    with open(os.path.join(DATA, "loitering.json"), "w") as f:
+        json.dump(payload, f, separators=(",", ":"))
+    print(f"  wrote {len(out)} loitering events "
+          f"({os.path.getsize(os.path.join(DATA, 'loitering.json')) / 1e3:.0f} kB)")
+
 
 def gistemp():
     """GISTEMP v4 global temperature anomaly (NASA GISS): land+ocean and land-only
@@ -2115,7 +2274,8 @@ if __name__ == "__main__":
            "gfs": gfs, "drivers": drivers, "cities": cities, "tides": tides,
            "oisst_monthly": oisst_monthly,
            "oisst_clim": oisst_clim,
-           "gazetteer": gazetteer, "islands": islands, "icon_sources": icon_sources}
+           "gazetteer": gazetteer, "islands": islands, "icon_sources": icon_sources,
+           "loitering": loitering}
     for w in which:
         fns[w]()
     print("done")

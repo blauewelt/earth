@@ -164,6 +164,11 @@ Each entry lists: what the dataset is and its key variables · spatial coverage/
 - **Copernicus Marine Service (CMEMS)** — ~300+ products (physics, biogeochem, ice, waves; obs+reanalysis+forecast); `copernicusmarine` Python toolbox, ARCO Zarr, WMTS tiles. Free registration. [globe] → https://data.marine.copernicus.eu/
 - **NOAA CoastWatch/PolarWatch ERDDAP** — uniform REST access (CSV/NetCDF/JSON/GeoTIFF) to dozens of ocean products; easiest single API to wire in. → https://coastwatch.pfeg.noaa.gov/erddap/
 
+## 2.11 Human activity at sea
+
+- **Global Fishing Watch — AIS apparent fishing effort v3** — where the industrial fishing fleet actually fishes, from ships' AIS transponders: hours a neural network classes as fishing, summed per 0.1° cell per day per vessel, 2012–2024 (2024 provisional), plus a vessel table giving each MMSI its flag, gear class, length and engine power. Anonymous download from Zenodo (13 zips, 5.4 GB). **This app** bins it to a 0.25° monthly grid and reads one month per HTTP range request. Read the blanks carefully: AIS reception is uneven in space and time and a transponder can be switched off, so **absence of effort is not absence of fishing**. CC BY-NC 4.0; "Powered by Global Fishing Watch" required. [globe] → https://doi.org/10.5281/zenodo.14982712
+- **Global Fishing Watch Events API — loitering, encounters, port visits, AIS gaps** — vessel *behaviour* rather than a field: a loitering event is a vessel drifting at sea at low speed for hours, the signature of transshipment at sea. `GET https://gateway.api.globalfishingwatch.org/v3/events?datasets[0]=public-global-loitering-events:latest&start-date=&end-date=&limit=&offset=` with `Authorization: Bearer <token>`; free registration, 50,000 requests/day. **Keyed, so never called from a browser** — this app bakes a rolling 30-day snapshot server-side. CC BY-NC 4.0. [globe] → https://globalfishingwatch.org/our-apis/documentation
+
 ---
 
 # 3. Cryosphere

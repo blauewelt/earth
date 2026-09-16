@@ -419,6 +419,8 @@ A new layer is not done until it has **all** of:
    | Drivers of forest loss (grid) | ✗ | ✗ | categorical AND untimed — one 2001–2025 attribution, and "logging" plus "wildfire" is not a quantity |
    | AMOC eval mask (grid) | ✗ | ✗ | categorical AND untimed — a cell carries the ROLE it plays in an experiment, and an experiment's geometry has no date to average over |
    | Global tensor, family 7 (grid) | ✗ | ✗ | the fields are continuous and would average and difference soundly; the reason is the BYTE COUNT — each frame is one 14.5 MB range read of the archive, so a 12-day window would be three of them per paint and a computed difference doubles whatever the window costs. "What does the model read at this pentad" has no window in it. Its two statics (`sphere`, `elev`) are additionally untimed |
+   | Fishing effort, AIS (grid) | ✗ | ✗ | the cell is ALREADY a monthly SUM of vessel-hours: averaging one over a 12-day window produces a number in no unit at all, and differencing two per pixel differences two sums over different numbers of days unless the window happens to land on a month. The family-7 byte-count argument applies unchanged on top of that — each month is one 8.3 MB range read. The month is the window |
+   | Loitering vessels (points) | ✗ | ✗ | not a raster at all: each event is an interval with a start and an end, and the layer shows the ones whose interval overlaps the selected day. "The average of an event" is not a thing, and a difference of two days' event sets is a list, not a field |
 6. **Catalog consistency** — the dataset exists in `data/catalog.json`; set
    `globe: true` and append "Live globe layer in this app." to its notes.
    **Exception, for layers that are not datasets:** a layer describing our OWN
@@ -2038,6 +2040,64 @@ Hub URL to it and answer with the SLICED bytes and a real 206, which is what
 makes the offset arithmetic tested rather than assumed.
 `docs/FAMILY7_GLOBE.md` explains the whole thing and says how to regenerate the
 index.
+
+**The fishing fleet, in two layers (2026-09-16, E-081 §4).** Chris: *"add what
+you propose to family 10.2 (and build the family). At the same time make sure
+to display the data on blauewelt.org. I'm also curious where the loitering
+ships are — let's add a layer."* Both come from Global Fishing Watch under
+CC BY-NC 4.0, and both carry the attribution the licence names — "Powered by
+Global Fishing Watch", linked, in the footer, in each layer's Cesium credit and
+in its hover card.
+
+**"Fishing effort (AIS), 0.25° monthly"** is the family-7 range-read machinery
+one rung coarser in time: `tensors/family10_2/fishing_grid/fishing_grid_monthly_025.npy`
+on the Hub is month-major in C order, so one month of BOTH channels
+(`fishing_hours`, `hours`) is a single contiguous 8.3 MB slab, addressed from
+`data/fishing_index.json`'s measured `header_len` / `shape` / `dtype` /
+`itemsize` / `slab_bytes` / `months` / grid — the same rule as family 7, so
+`src/app.js` holds no 721, no 1440, no 128 and no 156. The builder measured
+float16 overflow (a busy cell-month runs past the 2048 where float16's integers
+stop being exact) and shipped **float32**, which is why the decoder branches on
+the index's `itemsize` rather than on the plan's sentence. Three decisions
+worth keeping. **The colour is logarithmic and the numbers are not**
+(`logScale`): effort spans four orders of magnitude, so the ramp position is
+`log10(1+v)/log10(1+vmax)` while `values` stays in vessel-hours and every
+read-out — probe, pixel card, legend hover — speaks hours. **Zero is a
+measurement, painted as nothing** (`zeroTransparent`): no vessel broadcast in
+that cell that month is stored as 0, never NaN, so the cell renders transparent
+and the probe still answers "0" — and it answers `passThrough`, so a blank
+fishing cell never masks the layer visibly below it (§2.4). **Absence of effort
+is not absence of fishing**: AIS reception is uneven, carriage rules differ by
+fleet, a transponder can be switched off, and the hover card, the toast and the
+pixel card all say so, because a blank ocean is the most misreadable thing in
+this layer. Until the real index lands the layer degrades to a hint toast
+naming the build command; `data/fishing/fixture/` holds the same schema over a
+20×-decimated real 2012 grid, and the tests route the Hub URL to it and answer
+the SLICED bytes with a real 206, which is what makes the offset arithmetic
+tested rather than assumed.
+
+**"Loitering vessels (last 30 days)"** is the opposite shape: a vessel drifting
+at sea at low speed for hours — the signature of transshipment at sea — comes
+only from the GFW **Events API**, which needs a bearer token and is therefore a
+**keyed host the browser must never call** (§3). Verified against the live
+documentation 2026-09-16 rather than transcribed:
+`GET https://gateway.api.globalfishingwatch.org/v3/events?datasets[0]=public-global-loitering-events:latest&start-date=&end-date=&limit=&offset=`
+with `Authorization: Bearer <token>`; `start-date` is inclusive on the event's
+start, `end-date` exclusive on its end; the response pages on
+`limit`/`offset`/`nextOffset`/`total` and each entry carries `position.{lat,lon}`,
+`start`, `end`, `vessel.{id,name,ssvid,flag}` and
+`loitering.{totalTimeHours,totalDistanceKm,averageSpeedKnots,averageDistanceFromShoreKm}`.
+`scripts/refresh_data.py loitering` reads `GFW_API_TOKEN` from the environment
+— never argv, never disk — pages the last 30 days and bakes `data/loitering.json`;
+`.github/workflows/refresh-loitering.yml` runs it daily on `ubuntu-latest` and
+self-deploys Pages the way `refresh-forecast.yml` does, exiting 0 with an
+`::notice::` and no commit when the secret is unset. **The layer's honesty is
+in what it refuses to draw**: the snapshot covers a rolling 30-day window, so a
+date outside it gets NOTHING and a toast naming the window and its
+`fetched_at`, rather than stale points under a new date. A committed
+placeholder (`fixture: true`, written deterministically by
+`scripts/make_loitering_fixture.py`) keeps the layer reviewable before the
+secret exists and says so in its own toast.
 
 **Data pipeline** (`scripts/refresh_data.py`): one function per snapshot —
 climatetrace, argo, rapid, sealevel, glaciers (RGI7 tars + Hugonnet parquet

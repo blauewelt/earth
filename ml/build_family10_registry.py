@@ -1,11 +1,19 @@
 #!/usr/bin/env python3
 """Family 10's REGISTRY — one file that lists every group of the family.
 
-E-079 §2 ("The registry") and E-078 §3 ("One registry"), made runnable.
-Writes `tensors/family10_1/family10.json`: every group of family 10.1 with its
-`tier`, layout, cadence, channels with units, footprint constants, `bin_first`,
-files with sha256, sources and builder commit. **A consumer dispatches on
-`tier` and needs no other document.**
+E-079 §2 ("The registry"), E-078 §3 ("One registry") and E-081 §2, made
+runnable. Writes `tensors/family10_2/family10.json`: every group of family
+10.2 with its `tier`, layout, cadence, channels with units, footprint
+constants, `bin_first`, its own `path`, files with sha256, sources and builder
+commit. **A consumer dispatches on `tier` and needs no other document.**
+
+FAMILY 10.2 ADDS ONE GROUP AND MOVES NOTHING. `fishing` (E-081) is built under
+`tensors/family10_2/`; the four tier-P stores of 10.1 are listed from
+`tensors/family10_1/<store>/` where they already are, and family 7.1's tier-G
+groups from their own manifest — so a 10.2 registry is written without a byte
+of 10.1 or 7.1 being rebuilt or re-uploaded. `STORE_ROOTS` below is the table
+that says which root each store lives under, every group carries its own
+`path`, and the top-level `inherits` block names what was taken as it stood.
 
 FAMILY 10.1. The registry carries `family_version` "10.1" and
 `schema_version` 2 — the tier-P stores' time column is `time_s`, int32 seconds
@@ -44,7 +52,7 @@ described the wrong tensor would be worse than one that refused.
 
 Run:
   python3 ml/build_family10_registry.py --out /tmp/family10.json
-  python3 ml/build_family10_registry.py --work ml/cache/family10_1 --publish
+  python3 ml/build_family10_registry.py --work ml/cache/family10_2 --publish
   python3 ml/build_family10_registry.py --stores gdp,socat --no-hub   # offline
 """
 import argparse
@@ -62,13 +70,15 @@ import family10_store as f10                                    # noqa: E402
 from build_family7 import (atomic_json, git_sha, hub_repo,       # noqa: E402
                            read_json, sha256, utcnow)
 
-# ONE CONSTANT, in `ml/family10_store.py`: FAMILY_VERSION = "10.1" derives
-# `tensors/family10_1` here and `partials/family10_1` in the parts hub, so the
-# registry cannot end up describing one prefix while the builder writes another.
+# ONE CONSTANT, in `ml/family10_store.py`: FAMILY_VERSION = "10.2" derives
+# `tensors/family10_2` here and `partials/family10_2` in the parts hub, so the
+# registry cannot end up describing one prefix while the builder writes
+# another. What it does NOT derive is where an INHERITED store lives — see
+# `STORE_ROOTS` below.
 FAMILY = f10.FAMILY
 FAMILY_VERSION = f10.FAMILY_VERSION
 SCHEMA_VERSION = f10.SCHEMA_VERSION
-HF_ROOT = f10.HF_ROOT                          # tensors/family10_1
+HF_ROOT = f10.HF_ROOT                          # tensors/family10_2
 REGISTRY_NAME = f10.REGISTRY_NAME              # family10.json
 HUB_REPO_DEFAULT = "chfrank/earth-tensors"
 HUB_BASE = "https://huggingface.co/datasets/{repo}/resolve/main/{path}"
@@ -87,8 +97,31 @@ F7_INDEX = os.path.join(os.path.dirname(HERE), "data", "family7_index.json")
 F8_PREFIX = "tensors/family8_argo_l0"
 F8_NAME = "argo"
 
-# E-079's four new stores, in the plan's own order.
-F10_STORES = ("gdp", "gtmba", "socat", "slatrack")
+# E-079's four stores and E-081's fifth, in the plans' own order.
+F10_STORES = ("gdp", "gtmba", "socat", "slatrack", "fishing")
+
+# WHICH ROOT EACH TIER-P STORE LIVES UNDER — the whole of what family 10.2
+# changes about the registry (E-081 §2). The four stores of E-079 §10.1 stay
+# exactly where they were published, under `tensors/family10_1/`, and are
+# listed from there BY REFERENCE: not one byte of them is rebuilt, re-hashed
+# or re-uploaded, the same way tier G inherits family 7.1's manifest. Only
+# `fishing` is a 10.2 build and only it lives under `tensors/family10_2/`.
+#
+# A store's root is a property of WHERE IT WAS BUILT, so it belongs in a table
+# rather than in a format string over `FAMILY_VERSION`: deriving it would move
+# the four the moment the family's version changed, and the registry would
+# then describe four prefixes that hold nothing.
+INHERITS_VERSION = "10.1"
+INHERITS_ROOT = "tensors/family10_1"
+INHERITED_STORES = ("gdp", "gtmba", "socat", "slatrack")
+STORE_ROOTS = {s: INHERITS_ROOT for s in INHERITED_STORES}
+STORE_ROOTS["fishing"] = HF_ROOT               # tensors/family10_2
+
+
+def store_root(name):
+    """The Hub root a tier-P store is published under. One lookup, one place."""
+    return STORE_ROOTS.get(name, HF_ROOT)
+
 
 # E-076 §2.6 / E-078 §2, per tier-G group. These are the SUPPORT of the
 # measurement, not the grid it is stored on — which is the whole point of the
@@ -235,6 +268,8 @@ def tier_g_groups(repo, use_hub=True, index_path=F7_INDEX):
             "slab_bytes": g.get("slab_bytes"),
             "grid": g.get("grid"),
             "live_bins_only": bool(g.get("live_only")),
+            "path": f"tensors/{stem}",
+            "inherited_from": "7.1",
             "normalisation": "z-scored at build time; `norm` in the group's "
                              "own index entry carries (mean, sd) per channel",
             "repo": repo, "prefix": f"tensors/{stem}",
@@ -281,6 +316,13 @@ def _store_entry(name, meta, repo, prefix, local=None):
     tcol = f10.TIME_COLUMN[sv]
     return {
         "name": name, "tier": "P",
+        # `path` is where this group's files ARE, and it is not derivable from
+        # the registry's own version: family 10.2 lists four groups that live
+        # under `tensors/family10_1/` and are inherited unchanged (E-081 §2).
+        "path": prefix,
+        "family_version": meta.get("family_version"),
+        "inherited_from": (INHERITS_VERSION
+                           if prefix.startswith(INHERITS_ROOT + "/") else None),
         "schema_version": sv,
         "time_column": (
             f"{tcol}.npy — "
@@ -356,18 +398,27 @@ def tier_p_groups(repo, work=None, stores=F10_STORES, use_hub=True,
             out.append(_store_entry(F8_NAME, meta, repo, F8_PREFIX, local))
     for s in stores:
         meta, local = None, None
+        root = store_root(s)
         if work:
+            # The 10.1 stores were built under `ml/cache/family10_1` and 10.2
+            # builds under `ml/cache/family10_2`, so a local copy of an
+            # INHERITED store sits in the sibling directory — checked here so
+            # a box that still holds one does not have to re-read the Hub.
+            sib = os.path.join(os.path.dirname(os.path.abspath(work)),
+                               root.split("/")[-1])
             for cand in (os.path.join(work, s, s, "store.json"),
-                         os.path.join(work, s, "store.json")):
+                         os.path.join(work, s, "store.json"),
+                         os.path.join(sib, s, s, "store.json"),
+                         os.path.join(sib, s, "store.json")):
                 if os.path.exists(cand):
                     meta, local = read_json(cand, None), os.path.dirname(cand)
                     break
         if meta is None and use_hub:
-            meta = hub_json(repo, f"{HF_ROOT}/{s}/store.json")
+            meta = hub_json(repo, f"{root}/{s}/store.json")
         if meta is None:
             missing.append(s)
             continue
-        out.append(_store_entry(s, meta, repo, f"{HF_ROOT}/{s}", local))
+        out.append(_store_entry(s, meta, repo, f"{root}/{s}", local))
     return out, missing
 
 
@@ -417,6 +468,33 @@ def build_registry(repo=HUB_REPO_DEFAULT, work=None, stores=F10_STORES,
                  "with CSR offsets; a read is a k-nearest search",
             "T": "tiles — a catalogue plus a local codec's cached tokens, read "
                  "through the tier-P reader. NOT BUILT (E-078 §6 step 3).",
+        },
+        # WHAT 10.2 DID NOT REBUILD. Family 10.2 adds `fishing` and changes
+        # nothing else: the four tier-P stores of 10.1 and family 7.1's four
+        # tier-G groups are listed from the prefixes that already hold them,
+        # with the sha256 those builds published. A reader can tell an
+        # inherited group from a new one without diffing two registries, and a
+        # future 10.3 extends this block rather than moving any bytes.
+        "inherits": {
+            INHERITS_VERSION: {
+                "root": INHERITS_ROOT,
+                "groups": [g["name"] for g in p
+                           if (g.get("path") or "").startswith(
+                               INHERITS_ROOT + "/")],
+                "registry": f"{INHERITS_ROOT}/{REGISTRY_NAME}",
+                "note": ("built by E-079 §10.1 and unchanged: not one byte "
+                         "was rebuilt, re-hashed or re-uploaded for 10.2. "
+                         "Each group's own `path` says where it is."),
+            },
+            "8": {"root": F8_PREFIX, "groups": [F8_NAME] if include_argo
+                  else [],
+                  "note": "family 8's Argo store, schema 1, joined unchanged"},
+            "7.1": {"root": f"tensors/{g_meta.get('stem')}",
+                    "groups": [x["name"] for x in g],
+                    "note": ("tier G by reference to family 7.1's own "
+                             "manifest — the registry never copies a "
+                             "tensor's metadata, because a copy is the thing "
+                             "that goes stale")},
         },
         "tier_g": g_meta,
         "readers": {

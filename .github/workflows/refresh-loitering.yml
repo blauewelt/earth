@@ -1,0 +1,109 @@
+name: Daily loitering refresh
+
+# Bakes the last 30 days of Global Fishing Watch LOITERING EVENTS — a vessel
+# drifting at sea at low speed for hours, the signature of transshipment at sea
+# — into data/loitering.json every morning, commits it, and redeploys Pages.
+#
+# WHY THIS EXISTS AT ALL: the Events API needs a bearer token, which makes it a
+# KEYED host, and the root CLAUDE.md §3 forbids the browser from calling one.
+# So the events are fetched here, on a hosted runner that can hold a secret,
+# and the page reads one small static file. The endpoint and its parameters
+# were verified against globalfishingwatch.org/our-apis/documentation on
+# 2026-09-16; the API's own terms cap use at 50,000 requests/day, and this run
+# spends a few dozen.
+#
+# Self-contained deploy: a push made with GITHUB_TOKEN does not retrigger the
+# pages workflow (GitHub's recursion guard), so this workflow ships the site
+# itself with the same three deploy steps refresh-forecast.yml uses.
+#
+# `runs-on: ubuntu-latest` is HARD-CODED and must stay that way: this workflow
+# is `schedule`-triggered, and ml/CLAUDE.md §6's one line of defence is that no
+# triggered workflow ever points at the self-hosted GPU runners.
+
+on:
+  schedule:
+    - cron: "10 6 * * *" # 06:10 UTC, after the forecast refresh at 05:30
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+concurrency:
+  group: loitering-refresh
+  cancel-in-progress: false
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # The secret is checked BEFORE anything is fetched or written: a
+      # precondition that depends only on the inputs must be checked while the
+      # inputs are all it has cost you. With no token this is a NOTICE and a
+      # clean exit, not a failure — a red cross every morning on a repo whose
+      # owner has simply not created the secret yet is noise that trains people
+      # to ignore the one that matters. The committed fixture keeps the layer
+      # working meanwhile.
+      - name: Is the token configured?
+        id: gate
+        env:
+          GFW_API_TOKEN: ${{ secrets.GFW_API_TOKEN }}
+        run: |
+          if [ -z "${GFW_API_TOKEN}" ]; then
+            echo "::notice::GFW_API_TOKEN is not set - skipping the loitering refresh."
+            echo "::notice::data/loitering.json keeps its committed placeholder snapshot (fixture: true)."
+            echo "::notice::Add the secret at Settings > Secrets and variables > Actions to go live."
+            echo "have=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "have=true" >> "$GITHUB_OUTPUT"
+          fi
+      - uses: actions/setup-python@v5
+        if: steps.gate.outputs.have == 'true'
+        with:
+          python-version: "3.12"
+      - name: Bake the last 30 days of loitering events
+        if: steps.gate.outputs.have == 'true'
+        env:
+          # The token reaches the script through the ENVIRONMENT only — never
+          # through argv (where a process listing would show it) and never
+          # written to disk.
+          GFW_API_TOKEN: ${{ secrets.GFW_API_TOKEN }}
+        run: python3 scripts/refresh_data.py loitering
+      - uses: actions/setup-node@v4
+        if: steps.gate.outputs.have == 'true'
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+        if: steps.gate.outputs.have == 'true'
+      - name: Validate the bake (loitering data tests, no browser needed)
+        if: steps.gate.outputs.have == 'true'
+        run: npx playwright test tests/data.spec.js -g "loitering"
+      - name: Commit refreshed loitering snapshot
+        id: commit
+        if: steps.gate.outputs.have == 'true'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data/loitering.json
+          if git diff --cached --quiet; then
+            echo "loitering snapshot unchanged - nothing to deploy"
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          else
+            git commit -m "Daily Global Fishing Watch loitering refresh (automated)"
+            git pull --rebase origin main
+            git push origin main
+            git branch -f gh-pages main
+            git push origin gh-pages -f
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+      - uses: actions/configure-pages@v5
+        if: steps.commit.outputs.changed == 'true'
+      - uses: actions/upload-pages-artifact@v3
+        if: steps.commit.outputs.changed == 'true'
+        with:
+          path: .
+      - uses: actions/deploy-pages@v4
+        if: steps.commit.outputs.changed == 'true'

@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>earth — open climate data on a globe</title>
-  <meta name="description" content="A 3D globe for the world's open climate data: NASA GIBS layers, AMOC monitoring network, live data layers, and a 249-dataset open-data catalog." />
+  <meta name="description" content="A 3D globe for the world's open climate data: NASA GIBS layers, AMOC monitoring network, live data layers, and a 276-dataset open-data catalog." />
   <!-- Installable on a phone home screen: manifest + icons, no service worker.
        A worker would be the one thing able to serve last week's JavaScript
        after a deploy, which is the exact failure the ?v= stamps below exist to
@@ -69,7 +69,7 @@
           eighteen satellite layers, the ocean's interior from Argo floats and the GLORYS
           reanalysis, glaciers, biodiversity, facility-level emissions — plus dashboards for
           global temperature, Earth's energy imbalance, the AMOC and sea level, and a searchable
-          catalog of 249 open datasets. Public data only; no keys, no accounts, no server.</p>
+          catalog of 276 open datasets. Public data only; no keys, no accounts, no server.</p>
         <p class="hint">In a hurry? The words in the tagline above are <strong>one-click
           scenes</strong> — "sea ice" puts the daily sea-ice field on the globe, "floats" the
           live Argo fleet, and so on. Each shows exactly one layer (and replaces whatever was
@@ -111,6 +111,14 @@
             names, and 4,950 islands. It flies you there at an altitude where the place is
             actually labelled. It is how you get to a coastline you can name but couldn't
             find; the names themselves keep filling in as you descend.</li>
+          <li><strong>The fishing fleet</strong> — two layers from Global Fishing Watch, built
+            from ships' AIS transponders: <em>Fishing effort</em> paints the hours a month that
+            vessels were apparently fishing in each 0.25° cell (2012–2024, one month per range
+            read of a published grid, logarithmic colour because effort spans four orders of
+            magnitude), and <em>Loitering vessels</em> drops a point on every vessel that drifted
+            at sea for hours in the last 30 days — the signature of transshipment. Both read
+            the blanks carefully: AIS reception is uneven, so an empty cell means nobody was
+            <em>heard</em> fishing, not that nobody fished.</li>
           <li><strong>Forecast</strong> — the two GFS layers (2 m temperature, daily rain) look
             <em>forward</em>: with one switched on, the date selector runs up to 10 days into
             the future. Observation layers can't follow and hold at their latest real
@@ -129,7 +137,7 @@
           anywhere on Earth, drawn on the globe in kilometres, with a <em>Data</em> switch
           that fills it with the real values out of the global training tensor and lets you
           tap any dot to read it ·
-          <em>Catalog</em> — all 249 datasets ·
+          <em>Catalog</em> — all 276 datasets ·
           <em>About</em> — background &amp; further reading.</p>
       </details>
       <div class="control-row">
@@ -341,6 +349,31 @@
           <div><span>Recorded</span>fleet since 2000 · shown: last 10 days</div>
           <div><span>Interval</span>each float profiles every ~10 days</div>
           <div><span>Spatial</span>one point per float (~3,800 active)</div>
+        </div>
+      </div>
+      <!-- Loitering events (E-081 §4b). Baked, never fetched live: the Global
+           Fishing Watch Events API needs a bearer token, and a keyed host is
+           forbidden on the browser's side (CLAUDE.md §3). The snapshot is a
+           rolling 30-day window and the layer refuses to draw anything for a
+           date outside it. -->
+      <div class="layer-item">
+        <div class="layer-head"><input type="checkbox" id="toggle-loitering" title="Show / hide layer"/>
+          <a class="title-link" href="https://globalfishingwatch.org/faqs/what-is-loitering-event/" target="_blank" rel="noopener" title="Open dataset documentation">Loitering vessels (last 30 days)</a></div>
+        <div class="meta"><span id="meta-loitering">Vessels drifting at sea for hours — one point per event, coloured by duration · CC BY-NC 4.0, Powered by Global Fishing Watch</span></div>
+        <div class="layer-tip">
+          <p class="tip-sum">A loitering event is a vessel drifting at sea at low speed for
+            hours: not steaming, not fishing, just waiting. Global Fishing Watch derives them
+            from AIS &mdash; the Automatic Identification System, the radio transponder ships
+            broadcast their position on &mdash; by finding vessels that stay inside a small
+            radius below a speed threshold for long enough. It is the signature of
+            <em>transshipment at sea</em>, where a catch is moved onto a refrigerated carrier
+            so the fishing boat never has to come to port, and of waiting generally. Click or
+            hover a dot for the vessel, its flag and MMSI, and how long it drifted. The
+            snapshot is a rolling 30-day window; outside that window the layer draws nothing
+            and says so, rather than showing you old points under a new date.</p>
+          <div><span>Recorded</span>rolling last 30 days &mdash; rebaked daily; the layer shows events whose drift overlaps the date you pick</div>
+          <div><span>Interval</span>events &mdash; each has its own start and end instant</div>
+          <div><span>Spatial</span>one point per event</div>
         </div>
       </div>
       <div class="layer-item">
@@ -1070,7 +1103,7 @@
     </section>
 
     <section id="panel-catalog" class="panel hidden">
-      <input type="search" id="catalog-search" placeholder="Search 249 datasets…" />
+      <input type="search" id="catalog-search" placeholder="Search 276 datasets…" />
       <div class="control-row filters">
         <select id="catalog-domain"><option value="">All domains</option></select>
       </div>
@@ -1092,7 +1125,7 @@
         forest loss, water storage, energy balance …), the ocean interior from Argo floats and the GLORYS
         reanalysis (currents, mixed-layer depth, subsurface heat), the Randolph glacier inventory
         with melt rates, GBIF biodiversity, Climate TRACE emitters, and the AMOC monitoring
-        network. Behind it: a machine-readable catalog of 249 open climate datasets and dashboards
+        network. Behind it: a machine-readable catalog of 276 open climate datasets and dashboards
         for temperature, the planet's energy imbalance, the AMOC and sea level. The full guide
         lives at the top of the <em>Layers</em> tab.</p>
       <h2>Tips</h2>
@@ -1128,7 +1161,7 @@
            not obvious from the page, and "I reloaded and see no change" is
            indistinguishable from "the change isn't there". This is the sha256
            prefix of src/app.js, the same string as its ?v= stamp. -->
-      <p class="build-line">Build <code id="build-id">de3303d4</code></p>
+      <p class="build-line">Build <code id="build-id">ca369f01</code></p>
     </section>
 
     <footer>
@@ -1141,7 +1174,12 @@
       <a href="https://esa-worldcover.org">© ESA WorldCover project 2021</a> (contains modified Copernicus Sentinel data 2021, processed by the ESA WorldCover consortium; CC&nbsp;BY&nbsp;4.0) ·
       <a href="https://global-surface-water.appspot.com/">Source: EC JRC/Google</a> ·
       <a href="https://cloudless.eox.at">EOxCloudless</a> by EOX IT Services GmbH (contains modified Copernicus Sentinel data; CC&nbsp;BY-NC-SA&nbsp;4.0 for 2018–2025) ·
-      <a href="https://www.geo.admin.ch">© Data: swisstopo</a>
+      <a href="https://www.geo.admin.ch">© Data: swisstopo</a> ·
+      <!-- Required verbatim by the CC BY-NC 4.0 terms the fishing-effort grid
+           and the loitering events are served under: the exact string
+           "Powered by Global Fishing Watch", linked to globalfishingwatch.org.
+           It also rides on each layer's own credit and hover card. -->
+      <a href="https://globalfishingwatch.org">Powered by Global Fishing Watch</a> (CC&nbsp;BY-NC&nbsp;4.0)
     </footer>
   </div>
 
@@ -1184,6 +1222,6 @@
     <div id="toast-host" aria-live="assertive"></div>
   </div>
 
-  <script src="src/app.js?v=de3303d4"></script>
+  <script src="src/app.js?v=ca369f01"></script>
 </body>
 </html>

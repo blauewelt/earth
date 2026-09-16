@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
-"""Family 10's TIER-P STORES — drifters, moorings, ship CO2 and altimeter tracks.
+"""Family 10's TIER-P STORES — drifters, moorings, ship CO2, tracks, the fleet.
 
-E-079 §2-§4, made runnable. One builder, four source adapters, three stages.
+E-079 §2-§4 and E-081, made runnable. One builder, five source adapters, four
+stages.
 `ml/family10_store.py` is the reader; `ml/build_family10_registry.py` writes the
 family registry. Nothing in `ml/build_family7.py`, `ml/build_family8_argo.py`,
 `ml/family8_store.py` or `ml/cone_sampler.py` is touched: family 10 is family
@@ -28,8 +29,14 @@ read all of them:
             temperature, salinity and atmospheric pressure. 1957 ->
   slatrack  Copernicus Marine's reprocessed level-3 along-track sea-level
             anomaly, every altimeter mission at 1 Hz (about 7 km). 1993 ->
+  fishing   Global Fishing Watch's AIS-based apparent fishing effort: one row
+            per (day, 0.1 degree cell, vessel) with the hours that vessel
+            broadcast in the cell and the part of them a neural network
+            classed as fishing, plus the vessel's gear class. 2012 -> 2024
+            (E-081, family 10.2 — the only store of 10.2; the four above are
+            inherited from 10.1 by reference and not one byte is rebuilt).
 
-THREE STAGES, IN FIXED ORDER — `index | fetch | publish` (or `all`):
+FOUR STAGES, IN FIXED ORDER — `index | fetch | grid | publish` (or `all`):
 
   index    LIST the archive before spending anything: ask the service what it
            holds, read one real record, and write the plan of files/years into
@@ -38,10 +45,17 @@ THREE STAGES, IN FIXED ORDER — `index | fetch | publish` (or `all`):
            under `<work>/<store>/parts/<year>/`, and mark each year DONE only
            after its parts are on disk (ml/CLAUDE.md §5.21 — a marker may only
            under-claim). Then assemble the store.
-  publish  upload to `tensors/family10_1/<store>/` on the Hub and DOWNLOAD
+  grid     sum the finished store onto the family-7 0.25 degree grid, one
+           frame per month, month-major so one month is one range read
+           (E-081 §3; float32, because the busiest cell-month of 2024 is
+           595,726 vessel-hours and float16 stops at 65,504 — measured). A NO-OP for the four stores that have no gridded
+           product, so `all` means the same thing for every store.
+  publish  upload to `tensors/family10_2/<store>/` on the Hub and DOWNLOAD
            EVERY FILE BACK to compare sha256. A publish that cannot verify
            fails the job (§0.2 — an upload that returns 200 is not evidence the
-           bytes are retrievable).
+           bytes are retrievable). Where a grid exists it is uploaded and
+           restore-checked too, and `ml/publish_fishing_index.py` writes
+           `data/fishing_index.json` from the published bytes.
 
 FAMILY 10.1 — THE TIME COLUMN IS INTEGER SECONDS (E-079 §10.1). Schema 2
 replaces v1's `time_days` (float32 days since the epoch) with `time_s`, int32
@@ -90,8 +104,16 @@ file ONCE, buckets rows into per-year parts as it goes, flushing every
 end. Resume granularity for `socat` is therefore the whole pass; for the other
 three it is the year. The store.json says so.
 
+FAMILY 10.2 ADDS `fishing` AND CHANGES NOTHING ELSE (E-081). `FAMILY_VERSION`
+is "10.2", so this builder writes and publishes under `tensors/family10_2/`;
+the four stores above stay exactly where 10.1 published them and the registry
+lists them from there (`ml/build_family10_registry.py`'s `STORE_ROOTS`). The
+schema is untouched — still schema 2, still `time_s` int32 seconds.
+
 Run:
   python3 ml/build_family10_stores.py --store gdp --smoke        # synthetic, seconds
+  python3 ml/build_family10_stores.py --store fishing --work W \
+      --start 2012-01-01 --end 2024-12-31 --stage all            # ~18.5 GB: a box
   python3 ml/build_family10_stores.py --store gdp --work /opt/earth-cache/f10 \
       --start 2015-01-01 --end 2015-01-31 --stage index
   python3 ml/build_family10_stores.py --store socat --work ... --stage all
@@ -113,6 +135,7 @@ import time
 import urllib.error
 import urllib.parse
 import urllib.request
+import zipfile
 import zlib
 
 import numpy as np
@@ -153,8 +176,14 @@ SOCKET_TIMEOUT = 120          # per socket operation — a stall detector
 CHUNK = 1 << 22               # 4 MiB reads
 FLUSH_ROWS = 1_000_000        # rows held in memory per year before a part flush
 
-STAGES = ["index", "fetch", "publish"]
-DEPS = {"fetch": ["index"], "publish": ["fetch"]}
+# FOUR STAGES SINCE E-081. `grid` sums the finished store onto the family-7
+# 0.25° monthly grid the globe reads (E-081 §3); it is a no-op for the four
+# stores that have no gridded product, so `all` means the same thing for every
+# store and the order stays fixed. `publish` depends on `fetch` and NOT on
+# `grid`, so re-publishing a store on its own is still one dispatch — but when
+# a grid exists, the publish uploads it and writes its index.
+STAGES = ["index", "fetch", "grid", "publish"]
+DEPS = {"fetch": ["index"], "grid": ["fetch"], "publish": ["fetch"]}
 
 # int16 holds -32768..32767; the axis needs bin -1825 (1957-01-01) to +3141
 # (2024-12-31) today and roughly +6000 by 2100, so int16 is not a constraint —
@@ -396,6 +425,29 @@ class SourceAdapter:
     def fetch_stream(self, ctx):
         """Yield `(year, rows)` over the whole archive. `per_year = False`."""
         raise NotImplementedError
+
+    # -- three optional hooks, all no-ops by default ------------------------
+    def fetch_preflight(self, ctx):
+        """Checked BEFORE the first byte is fetched (ml/CLAUDE.md §0.3).
+
+        A precondition that depends only on the inputs — the projected disk,
+        say — is free here and expensive at hour three.
+        """
+        return None
+
+    def extra_files(self, ctx, dest):
+        """Files this store publishes BESIDE its nine arrays: {name: path}.
+
+        They are written into `dest` and land in store.json's sha256 block, so
+        the publish uploads them, the restore check verifies them and
+        `family10_store.resolve` brings them down with the store. Only
+        `fishing` has one today (`vessels.csv.gz`, E-081 §2).
+        """
+        return {}
+
+    def extra_meta(self, ctx, dest, N, values):
+        """Extra store.json keys. `values` is the (N, C) matrix, memmap or not."""
+        return {}
 
     # -- helpers shared by the adapters ------------------------------------
     def blank(self, n):
@@ -2211,8 +2263,814 @@ class SLATrackAdapter(SourceAdapter):
         return self._rows_from_frame(ctx, frame, mid)
 
 
+# ----------------------------------------------------------------- fishing --
+# E-081 §1. Zenodo record 14982712, Global Fishing Watch's *Global AIS-based
+# Apparent Fishing Effort Dataset* v3.0 (2025-03-11), CC BY-NC 4.0, served
+# anonymously — no account, no token, no rate limit that a 13-file build meets.
+ZENODO_RECORD = "14982712"
+ZENODO_API = f"https://zenodo.org/api/records/{ZENODO_RECORD}"
+ZENODO_FILE = ZENODO_API + "/files/{name}/content"
+FISHING_DOI = "10.5281/zenodo.14982712"
+FISHING_VERSION = "3.0.0"
+FISHING_RELEASED = "2025-03-11"
+FISHING_LICENCE = "CC BY-NC 4.0"
+FISHING_LICENCE_URL = "https://creativecommons.org/licenses/by-nc/4.0/"
+FISHING_CITATION = (
+    "Global Fishing Watch (2025). Global AIS-based Apparent Fishing Effort "
+    "Dataset, version 3.0 [Data set]. Zenodo. "
+    "https://doi.org/10.5281/zenodo.14982712")
+FISHING_ATTRIBUTION = "Powered by Global Fishing Watch"
+FISHING_YEARS = tuple(range(2012, 2025))          # 2012 .. 2024, the 13 zips
+FISHING_ZIP = "mmsi-daily-csvs-10-v3-{year}.zip"
+FISHING_VESSELS = "fishing-vessels-v3.csv"
+FISHING_VESSELS_GZ = "vessels.csv.gz"
+FISHING_SCHEMA_FILE = "mmsi-daily-v3.schema.json"
+FISHING_DOCS = ("README-mmsi-v3.txt", "README-known-issues-v3.txt",
+                "README-fishing-vessels-v3.txt", FISHING_SCHEMA_FILE,
+                "fishing-vessels-v3.schema.json")
+# MEASURED off the 2012 zip, 2026-09-16 (see the adapter's docstring).
+FISHING_COLUMNS = ("date", "cell_ll_lat", "cell_ll_lon", "mmsi", "hours",
+                   "fishing_hours")
+# The vessel table's 22 columns, read off the real file 2026-09-16. The parser
+# needs four of them and asks only for those (a release that ADDS a column must
+# not fail a build); the full list is here so the test fixture meets the same
+# header the box does.
+FISHING_VESSEL_COLUMNS = (
+    "mmsi", "year", "flag_ais", "flag_registry", "flag_gfw",
+    "vessel_class_inferred", "vessel_class_inferred_score",
+    "vessel_class_registry", "vessel_class_gfw",
+    "self_reported_fishing_vessel", "length_m_inferred", "length_m_registry",
+    "length_m_gfw", "engine_power_kw_inferred", "engine_power_kw_registry",
+    "engine_power_kw_gfw", "tonnage_gt_inferred", "tonnage_gt_registry",
+    "tonnage_gt_gfw", "registries_listed", "active_hours", "fishing_hours")
+FISHING_CELL_DEG = 0.1
+FISHING_HALF_CELL = FISHING_CELL_DEG / 2.0        # ll corner -> cell CENTRE
+FISHING_DAY_RE = re.compile(r"(\d{4})-(\d{2})-(\d{2})\.csv$")
+# THE TOLERANCE on the two value assertions. The source prints four decimals,
+# and `fishing_hours == hours` to the last digit is COMMON (2012's maxima are
+# the same row), so the comparison has to admit equality with a margin rather
+# than demand strict inequality.
+FISHING_TOL = 1e-4
+# A DAY IS 24 HOURS AND A CELL-DAY-VESSEL ROW IS NOT BOUNDED BY ONE. Measured
+# over the whole 2012 file (6,257,384 rows): `hours` runs to 47.5633, and
+# 9,773 of the first 60 days' 619,273 rows (1.6 %) exceed 24 — mostly in
+# single cells of the southern North Sea carrying Belgian and Dutch MMSI. That
+# is the source's own first known issue: an MMSI is not always one vessel
+# ("it is not uncommon to see the same MMSI number being used by two or more
+# vessels simultaneously", README-known-issues-v3.txt), so a row is the hours
+# broadcast under one IDENTITY in one cell on one day, and two vessels sharing
+# an identity broadcast up to 48. E-081 §2's `hours <= 24 + 1e-3` assertion is
+# therefore FALSE AGAINST THE ARCHIVE and would refuse the real 2012 file on
+# its second day. What is kept is the assertion's purpose — catch a shifted
+# column or a misparsed field before it reaches the store — at a ceiling the
+# data cannot reach innocently: a week of vessel-hours in one cell-day. A
+# longitude misread as hours (|lon| <= 180) still trips it, and every row
+# above 24 is COUNTED into store.json (`hours_over_24h`, `max_hours`) so the
+# departure is measured rather than hidden. `--max-hours 24.001` restores the
+# plan's literal rule for anyone who wants to see it fire.
+FISHING_HOURS_CEILING = 168.0
+FISHING_HOURS_DAY = 24.001
+# rows per BYTE of zip, measured on 2012: 6,257,384 / 56,049,115. Used only to
+# project the build's disk before it spends an hour fetching (§0.3).
+FISHING_ROWS_PER_ZIP_BYTE = 6_257_384 / 56_049_115
+# The gear classes v3.0's vessel table actually carries — all 16 of them,
+# counted over its 773,165 rows on 2026-09-16, in ALPHABETICAL order so the
+# code of a class is a property of this table and not of how often it happened
+# to occur. 0 is "unknown": an MMSI the vessel table does not carry for that
+# year. The table goes into store.json as `qc_codes`, because a consumer must
+# never have to guess what a 7 in `qc.npy` means.
+FISHING_GEAR = ("dredge_fishing", "drifting_longlines", "fishing",
+                "fixed_gear", "other_purse_seines", "other_seines",
+                "pole_and_line", "pots_and_traps", "purse_seines", "seiners",
+                "set_gillnets", "set_longlines", "squid_jigger", "trawlers",
+                "trollers", "tuna_purse_seines")
+FISHING_GEAR_CODE = {g: i + 1 for i, g in enumerate(FISHING_GEAR)}
+
+
+def md5_file(path, buf=1 << 22):
+    """The md5 of a file — Zenodo's own checksum algorithm, so its `checksum`
+    field (`md5:<hex>`) can be compared against the bytes that arrived."""
+    h = hashlib.md5()
+    with open(path, "rb") as fh:
+        for b in iter(lambda: fh.read(buf), b""):
+            h.update(b)
+    return h.hexdigest()
+
+
+class FishingAdapter(SourceAdapter):
+    """Global Fishing Watch apparent fishing effort — 0.1° cell, day, vessel.
+
+    E-081 §1-§2. One row per (day, 0.1° cell, MMSI): `hours`, the hours that
+    identity was broadcasting inside the cell that day, and `fishing_hours`,
+    the part of them a neural network classed as fishing. The fleet is the
+    only observing system in family 10 that is not an instrument: it is
+    ~10,000 vessels in 2012 and ~95,000 in 2024 reporting where they are, and
+    what they do there is a read-out of fronts, upwelling and productivity.
+
+    THE LAYOUT, MEASURED 2026-09-16 by downloading
+    `mmsi-daily-csvs-10-v3-2012.zip` (56,049,115 B, md5
+    920f3434b53af9f3423f2087947b595a — Zenodo's own) and opening it:
+
+      * the zip holds **one CSV per day**, `mmsi-daily-csvs-10-v3-<YYYY-MM-DD>
+        .csv`, 366 members for 2012 and NOT in date order in the central
+        directory (the first entry is 01-01, the second 08-25), so the members
+        are sorted here and a day is looked up by the date in its basename.
+      * every member carries a HEADER LINE, identical in all 366:
+        `date,cell_ll_lat,cell_ll_lon,mmsi,hours,fishing_hours`.
+      * `mmsi` is an UNQUOTED decimal integer (0 non-numeric in 6,257,384
+        rows); `date` is `YYYY-MM-DD` and equals the member's own date;
+        `cell_ll_lat` / `cell_ll_lon` are the cell's LOWER-LEFT corner to one
+        decimal with trailing zeros stripped (`120`, not `120.0`), running
+        -77.7..82.0 and -180.0..179.9 in 2012; `hours` and `fishing_hours`
+        are plain decimals, `0` where nothing was measured.
+      * 2012: 6,257,384 rows, 366 dates, 10,447 distinct MMSI — which is
+        EXACTLY the 2012 row count of the vessel table, so the two files
+        describe the same fleet.
+      * `fishing_hours <= hours` held on every one of those rows; `hours` did
+        NOT stay under 24 (see FISHING_HOURS_CEILING above); 68,932 rows
+        (1.1 %) carry `hours == 0`, which is a real value and is kept.
+      * a lean parse of the whole year measured **1.6 µs a row** (6.26 M rows
+        in 10.1 s, binning included), i.e. ~17 min of CPU for the projected
+        596 M rows of the whole archive.
+
+    THE VESSEL TABLE, `fishing-vessels-v3.csv` (114,823,860 B, 773,165 rows,
+    measured the same day): one row per (MMSI, YEAR) — never two, checked —
+    with `flag_gfw`, `vessel_class_gfw` (16 classes), length, engine power and
+    tonnage. It is downloaded ONCE in the index stage, md5-verified, kept in
+    the work directory, and published beside the store as `vessels.csv.gz`,
+    because a `platform` column of hashes is otherwise a dead end: the hash
+    rule is `platform_hash(str(mmsi))`, so a consumer hashes the table's own
+    MMSI to join back to a flag, a gear and a length.
+
+    WHAT EACH COLUMN OF THE STORE IS.
+      `time_s`  the day at 00:00:00 UTC. The source is daily; every row of a
+                day carries the same second, and the pentad bin is
+                `floor_divide(time_s, 432000)` like everywhere else.
+      `lat/lon` the cell CENTRE = lower-left + 0.05°, wrapped into [-180, 180)
+                after the float32 cast (`_pack`, the fb5d5ab rule).
+      `values`  (fishing_hours, hours), float16, in HOURS.
+      `platform` platform_hash(mmsi) — the same 60-bit sha1 prefix the other
+                stores use for a string id. An MMSI is numeric and could have
+                been kept as itself; it is hashed because E-081 §2 says so and
+                because an MMSI is an IDENTITY, not a vessel (the source's own
+                known issues: spoofing, reflagging, recycling), so a store
+                that printed it invites a join nobody should make by eye.
+      `qc`      the vessel's GEAR CLASS as a small integer — a categorical
+                channel, not a quality grade (the store's `qc_codes` says so
+                in words). 0 = unknown, i.e. the vessel table has no row for
+                that (MMSI, year).
+      `fp`      log2(11.132 km / 27.83 km) = -1.32 and log2(1 d / 5 d) = -2.32
+                — a 0.1° cell and a day, in E-078 §2's units.
+
+    NO CREDENTIALS, and the whole year is one request: each zip is <= 0.75 GB,
+    downloaded to scratch, md5-verified against the Zenodo record, streamed
+    member by member through `zipfile` + `csv` — NEVER extracted to disk — and
+    deleted before the next year is asked for.
+    """
+
+    store = "fishing"
+    title = ("Global Fishing Watch AIS apparent fishing effort, "
+             "0.1° daily by vessel")
+    channels = (("fishing_hours", "h", 0.0, FISHING_HOURS_CEILING),
+                ("hours", "h", 0.0, FISHING_HOURS_CEILING))
+    # 0.1° of latitude is 11.132 km against the 0.25° cell's 27.83 km.
+    log2_fp = -1.32                      # log2(11.132 / 27.83) = -1.3219
+    log2_dt = -2.32                      # log2(1 d / 5 d) = -2.3219, daily
+    first_year = FISHING_YEARS[0]
+    per_year = True
+    qc_policy = (
+        "THE `qc` COLUMN OF THIS STORE IS NOT A QUALITY GRADE — it is the "
+        "vessel's GEAR CLASS, a categorical channel a consumer may use or "
+        "ignore, and `qc_codes` in this file is the whole code table (0 = the "
+        "vessel table carries no row for that MMSI in that year). The source "
+        "has no per-row flag to grade: it IS the processed product, one row "
+        "per (day, 0.1° cell, MMSI) from Global Fishing Watch's own AIS "
+        "pipeline and fishing classifier, and the rows it considered bad are "
+        "not in it. What the builder does assert, per row, is the physics of "
+        "the two numbers: 0 <= fishing_hours <= hours, and hours <= 168 "
+        "(--max-hours). A row failing either REFUSES the build rather than "
+        "being dropped, because both would mean the columns were misread. "
+        "hours > 24 is NOT a failure and is counted (`hours_over_24h`, "
+        "`max_hours`): the source states that an MMSI is not always one "
+        "vessel, so two vessels sharing an identity broadcast up to 48 hours "
+        "in a cell-day — measured at 1.6 % of rows in 2012, to 47.56 h. "
+        "`hours == 0` is a real value (1.1 % of 2012) and is kept: the "
+        "vessel was in the cell and broadcast nothing measurable. Neither "
+        "channel is ever NaN.")
+    sources = (f"{ZENODO_API} (record {ZENODO_RECORD}, "
+               f"doi {FISHING_DOI}, v{FISHING_VERSION}, {FISHING_LICENCE})",
+               ZENODO_FILE.format(name=FISHING_ZIP.format(year="<year>")),
+               ZENODO_FILE.format(name=FISHING_VESSELS))
+    verified = ("2026-09-16: the Zenodo record listed (13 mmsi zips, 5.34 GB, "
+                "md5 per file), the 2012 zip downloaded and md5-verified, its "
+                "366 day members and 6,257,384 rows parsed, and the 773,165-"
+                "row vessel table read for its 16 gear classes")
+    notes = ("E-081 §1 records the source's own known issues verbatim: 2024 "
+             "is provisional; AIS reception is uneven in space and time, so "
+             "absence of effort is NOT absence of fishing; an MMSI is not "
+             "always one vessel (spoofing, reflagging, recycling); and one "
+             "gear class is assigned per MMSI over the whole record.")
+
+    # -- the plan ----------------------------------------------------------
+    def __init__(self):
+        self._gear = None                # (mmsi * 10000 + year) -> code
+        self._vessel_summary = None
+
+    def years_in(self, ctx):
+        """The archive years this window asks for. 2012..2024 and no others."""
+        return [y for y in ctx.years if y in FISHING_YEARS]
+
+    def _record(self, ctx):
+        raw = fetch_first([ZENODO_API], attempts=ctx.a.attempts)
+        if raw is None:
+            sys.exit(f"{ZENODO_API} did not answer — Zenodo serves this "
+                     f"record anonymously, so a 404 here means the record id "
+                     f"moved and E-081 §1 must be re-verified before a build")
+        rec = json.loads(raw)
+        files = {}
+        for f in rec.get("files") or []:
+            ck = str(f.get("checksum") or "")
+            files[f["key"]] = {"bytes": int(f.get("size") or 0),
+                               "md5": ck.split(":", 1)[-1] if ck else None,
+                               "url": ZENODO_FILE.format(name=f["key"])}
+        return rec, files
+
+    def index(self, ctx):
+        years = self.years_in(ctx)
+        if not years:
+            sys.exit(f"the window {ctx.d_lo}..{ctx.d_hi} contains none of the "
+                     f"archive's years {FISHING_YEARS[0]}..{FISHING_YEARS[-1]} "
+                     f"— there is nothing to build")
+        out = {"record": ZENODO_API, "doi": FISHING_DOI,
+               "version": FISHING_VERSION, "released": FISHING_RELEASED,
+               "licence": FISHING_LICENCE, "licence_url": FISHING_LICENCE_URL,
+               "citation": FISHING_CITATION,
+               "attribution": FISHING_ATTRIBUTION,
+               "columns": list(FISHING_COLUMNS),
+               "n_columns": len(FISHING_COLUMNS),
+               "years": years}
+        if ctx.source_dir:
+            out["source"] = f"file://{os.path.join(ctx.source_dir, 'fishing')}"
+            out["zips"] = {}
+            for y in years:
+                p = self._local_year(ctx, y)
+                rec = {"name": FISHING_ZIP.format(year=y), "local": p}
+                # A LOCAL ZIP IS HASHED HERE so `fetch_year` can check the
+                # bytes it reads against the bytes the plan was written from.
+                if os.path.isfile(p):
+                    rec["md5"] = md5_file(p)
+                    rec["bytes"] = os.path.getsize(p)
+                out["zips"][str(y)] = rec
+        else:
+            rec, files = self._record(ctx)
+            out["title"] = (rec.get("metadata") or {}).get("title")
+            miss = [FISHING_ZIP.format(year=y) for y in years
+                    if FISHING_ZIP.format(year=y) not in files]
+            if FISHING_VESSELS not in files:
+                miss.append(FISHING_VESSELS)
+            if miss:
+                sys.exit(f"the Zenodo record no longer carries {miss} — it "
+                         f"lists {sorted(files)[:6]} … ({len(files)} files). "
+                         f"E-081 §1 must be re-verified before a build.")
+            # THE 13 ZIPS, BY NAME, SIZE AND CHECKSUM, INTO plan.json. This is
+            # what `fetch_year` verifies each download against, so the number
+            # a year is checked by was written down before the year was
+            # fetched rather than read off the file that arrived.
+            out["zips"] = {str(y): dict(files[FISHING_ZIP.format(year=y)],
+                                        name=FISHING_ZIP.format(year=y))
+                           for y in years}
+            out["vessels"] = dict(files[FISHING_VESSELS],
+                                  name=FISHING_VESSELS)
+            out["docs"] = {n: files[n] for n in FISHING_DOCS if n in files}
+            out["bytes"] = sum(v["bytes"] for v in out["zips"].values())
+            # The archive's OWN declaration of the six columns, cheap and
+            # anonymous — the preflight that a hosted build can afford before
+            # it downloads a gigabyte (E-079 §4's "read one real record", in
+            # the form this archive makes available).
+            if FISHING_SCHEMA_FILE in files:
+                sch = json.loads(http_bytes(
+                    files[FISHING_SCHEMA_FILE]["url"]))
+                got = tuple(c["name"] for c in sch)
+                if got != FISHING_COLUMNS:
+                    sys.exit(f"{FISHING_SCHEMA_FILE} declares {got}; this "
+                             f"builder parses {FISHING_COLUMNS}. The table's "
+                             f"layout has changed — E-081 §1 must be "
+                             f"re-verified.")
+                out["schema_declared"] = list(got)
+        # THE VESSEL TABLE IS AN INDEX-STAGE JOB: it is one 0.11 GB file, it
+        # is needed by every year, and its summary belongs in the plan.
+        self.vessel_map(ctx, plan=out)
+        out["vessels_summary"] = self._vessel_summary
+        out["projected"] = self.projection(ctx, out)
+        out["preflight"] = self._preflight_one_day(
+            ctx, years[0], rec=(out.get("zips") or {}).get(str(years[0])))
+        return out
+
+    # -- disk, before an hour is spent on a download -----------------------
+    def projection(self, ctx, plan):
+        """How big this build will be, from the zip sizes and a measured rate.
+
+        E-081 §5 budgeted "a few GB" for the assembled store. It is not: the
+        whole archive is 5.34 GB of zip and 0.1116 rows per zip byte, so
+        ~596 M rows at 31 B a row is **~18.5 GB of store** plus ~16 GB of
+        per-year parts — more than three times a GitHub-hosted runner's whole
+        disk. So the number is computed here, written into plan.json, and
+        `fetch_preflight` refuses a build that cannot land, while the inputs
+        are all it has cost (ml/CLAUDE.md §0.3).
+        """
+        zips = plan.get("zips") or {}
+        nbytes = sum(int(v.get("bytes") or 0) for v in zips.values())
+        rows = int(nbytes * FISHING_ROWS_PER_ZIP_BYTE)
+        row_b = ROW_BYTES_FIXED + 2 * self.C
+        return {
+            "zip_bytes": nbytes,
+            "rows_per_zip_byte": round(FISHING_ROWS_PER_ZIP_BYTE, 6),
+            "rows_estimated": rows,
+            "store_bytes": rows * row_b,
+            # a part carries every column but `fp`, which the assembler
+            # synthesises, and np.savez does not compress.
+            "parts_bytes": rows * (row_b - 4),
+            "need_bytes": rows * (2 * row_b - 4),
+            "note": ("measured 2026-09-16: 6,257,384 rows in the 56,049,115-"
+                     "byte 2012 zip. The parts and the store coexist on disk "
+                     "until the build finishes, so `need_bytes` is both."),
+        }
+
+    def fetch_preflight(self, ctx):
+        plan = read_json(os.path.join(ctx.root, "plan.json"), {})
+        pr = plan.get("projected") or {}
+        need = int(pr.get("need_bytes") or 0)
+        if not need:
+            return
+        free = shutil.disk_usage(ctx.work).free
+        print(f"  disk: this window projects {pr['rows_estimated']:,} row(s), "
+              f"{pr['store_bytes'] / 1e9:.1f} GB of store and "
+              f"{pr['parts_bytes'] / 1e9:.1f} GB of parts "
+              f"({need / 1e9:.1f} GB together); {free / 1e9:.1f} GB free "
+              f"under {ctx.work}")
+        if free >= need * DISK_HEADROOM:
+            return
+        msg = (f"REFUSING to fetch {ctx.adapter.store}: the window "
+               f"{ctx.d_lo}..{ctx.d_hi} projects {need / 1e9:.1f} GB of parts "
+               f"+ store ({DISK_HEADROOM:g}x = "
+               f"{need * DISK_HEADROOM / 1e9:.1f} GB with margin) and "
+               f"{ctx.work} has {free / 1e9:.1f} GB free. A GitHub-hosted "
+               f"runner has ~14 GB in total, which holds roughly four years "
+               f"of this archive; the whole 2012-2024 record is ~18.5 GB of "
+               f"store and needs a box (`runner: <box>` in "
+               f"family10-build.yml, whose /opt/earth-cache also makes the "
+               f"resume real). NOTE THAT SPLITTING IT ACROSS DISPATCHES DOES "
+               f"NOT HELP: a year's parts persist and are skipped on a "
+               f"resume, but the ASSEMBLY at the end of every fetch stage "
+               f"reads every year in the window at once, so the machine that "
+               f"finishes the archive needs room for all of it whatever order "
+               f"the years arrived in. Two ways on: build a SHORTER WINDOW "
+               f"here — the store records its own `date_range` and says what "
+               f"it covers — or pass --allow-small-disk to try anyway.")
+        if getattr(ctx.a, "allow_small_disk", False):
+            print(f"  ::warning::{msg} — --allow-small-disk says try anyway")
+            return
+        sys.exit(msg)
+
+    # -- the vessel table ---------------------------------------------------
+    def _vessels_path(self, ctx):
+        if ctx.source_dir:
+            return os.path.join(ctx.source_dir, "fishing", FISHING_VESSELS)
+        return os.path.join(ctx.scratch, FISHING_VESSELS)
+
+    def vessel_map(self, ctx, plan=None):
+        """MMSI x YEAR -> gear code, from the source's own vessel table.
+
+        Downloaded once (md5-verified), kept in the work directory so a
+        `--stage fetch` on its own does not refetch it, and held as ONE int
+        key per row — `mmsi * 10000 + year` — because 773,165 tuple keys cost
+        four times the memory for the same lookup.
+        """
+        if self._gear is not None:
+            return self._gear
+        p = self._vessels_path(ctx)
+        want = ((plan or {}).get("vessels") or {}).get("md5")
+        if not os.path.exists(p):
+            if ctx.source_dir:
+                sys.exit(f"{p} is missing — a --source-dir build needs the "
+                         f"vessel table beside the year archives")
+            rec_files = None
+            if want is None:
+                _rec, rec_files = self._record(ctx)
+                want = (rec_files.get(FISHING_VESSELS) or {}).get("md5")
+            url = ZENODO_FILE.format(name=FISHING_VESSELS)
+            print(f"  vessels: {url}", flush=True)
+            http_to_file(url, p)
+        got = md5_file(p)
+        if want and got != want:
+            os.remove(p)
+            sys.exit(f"{FISHING_VESSELS}: md5 {got} != the record's {want} — "
+                     f"the download is not the file Zenodo describes. It has "
+                     f"been removed; re-run the index stage.")
+        gear = {}
+        per_year, hist, flags = {}, {}, {}
+        unseen = {}
+        rows = 0
+        with open(p, newline="") as fh:
+            r = csv.DictReader(fh)
+            need = ("mmsi", "year", "vessel_class_gfw", "flag_gfw")
+            missing = [c for c in need if c not in (r.fieldnames or [])]
+            if missing:
+                sys.exit(f"{FISHING_VESSELS} is missing {missing}; its header "
+                         f"reads {r.fieldnames}")
+            for d in r:
+                rows += 1
+                m, y = (d["mmsi"] or "").strip(), (d["year"] or "").strip()
+                if not m.isdigit() or not y.isdigit():
+                    continue
+                cls = (d["vessel_class_gfw"] or "").strip()
+                code = FISHING_GEAR_CODE.get(cls, 0)
+                if cls and code == 0:
+                    unseen[cls] = unseen.get(cls, 0) + 1
+                gear[int(m) * 10000 + int(y)] = code
+                per_year[y] = per_year.get(y, 0) + 1
+                hist[cls or "(blank)"] = hist.get(cls or "(blank)", 0) + 1
+                fl = (d["flag_gfw"] or "").strip()
+                flags[fl] = flags.get(fl, 0) + 1
+        if unseen:
+            # NOT fatal and NOT silent: a release that adds a gear class must
+            # not fail a build, and it must not be absorbed into "unknown"
+            # without anybody being told which class it was.
+            print(f"::warning::{FISHING_VESSELS} carries gear class(es) this "
+                  f"builder has no code for: {sorted(unseen)} — they are "
+                  f"stored as qc 0 (unknown) and counted in store.json's "
+                  f"`gear_classes_unseen`. Add them to FISHING_GEAR (at the "
+                  f"END, so no existing code moves) and rebuild to separate "
+                  f"them.", flush=True)
+        self._gear = gear
+        self._vessel_summary = {
+            "file": FISHING_VESSELS, "md5": got,
+            "bytes": os.path.getsize(p), "rows": rows,
+            "vessels_per_year": {k: per_year[k] for k in sorted(per_year)},
+            "gear_histogram": {k: hist[k] for k in sorted(hist)},
+            "gear_classes_unseen": unseen,
+            "n_flags": len(flags),
+            "published_as": FISHING_VESSELS_GZ,
+        }
+        return self._gear
+
+    # -- the year's archive -------------------------------------------------
+    def _local_year(self, ctx, year):
+        """A --source-dir year: the zip if there is one, else a day directory."""
+        base = os.path.join(ctx.source_dir, "fishing")
+        z = os.path.join(base, FISHING_ZIP.format(year=year))
+        if os.path.exists(z):
+            return z
+        d = os.path.join(base, FISHING_ZIP.format(year=year)[:-4])
+        return d if os.path.isdir(d) else z
+
+    def _members(self, ctx, year, note=True, rec=None):
+        """(source label, zipfile or None, {member -> opener}), NOT extracted.
+
+        A zip member is opened with `ZipFile.open`, which inflates on the fly;
+        nothing is ever written out of the archive, live or local. A
+        `--source-dir` may hold the same day CSVs in a plain DIRECTORY instead
+        (the other layout the tests use) — same names, same header, no zip.
+
+        A ZIP IS md5'd BEFORE IT IS READ, whichever side it came from. Zenodo
+        publishes the checksum of every file in the record and the index stage
+        wrote it into plan.json; a `--source-dir` zip is hashed at index time
+        for the same reason. A short or altered zip inflates perfectly up to
+        the cut and then raises somewhere unrelated, or worse does not raise
+        at all — so it is caught here, before a single row is parsed, and the
+        year is an ABSENCE rather than a quieter ocean.
+        """
+        # `rec` is the plan's entry for this year — its name, url and md5.
+        # The INDEX stage passes the one it has just written, because
+        # plan.json on disk is still the previous run's and checking a fresh
+        # archive against a stale checksum would refuse the very build that is
+        # re-indexing it.
+        if rec is None:
+            plan = read_json(os.path.join(ctx.root, "plan.json"), {})
+            rec = ((plan.get("zips") or {}).get(str(year)) or {})
+        name = rec.get("name") or FISHING_ZIP.format(year=year)
+        if ctx.source_dir:
+            p = self._local_year(ctx, year)
+            if os.path.isdir(p):
+                names = sorted(n for n in os.listdir(p) if n.endswith(".csv"))
+                return (f"file://{p}", None,
+                        {n: (lambda q=os.path.join(p, n): open(q, "rb"))
+                         for n in names})
+            src, dest = f"file://{p}", p
+            if not os.path.exists(dest):
+                if note:
+                    ctx.note_absent(str(year),
+                                    f"{p} does not exist "
+                                    f"(--source-dir {ctx.source_dir})")
+                return None, None, {}
+        else:
+            src = rec.get("url") or ZENODO_FILE.format(name=name)
+            dest = os.path.join(ctx.scratch, name)
+            if not os.path.exists(dest):
+                print(f"  {year}: {src}", flush=True)
+                got = fetch_first([src], dest, attempts=ctx.a.attempts)
+                if got is None:
+                    if note:
+                        ctx.note_absent(str(year),
+                                        f"{src} 404'd — the record no longer "
+                                        f"serves {name}")
+                    return None, None, {}
+        want = rec.get("md5")
+        if want:
+            got = md5_file(dest)
+            if got != want:
+                if not ctx.source_dir:
+                    os.remove(dest)          # never our file to delete locally
+                why = (f"{name}: md5 {got} != the {'Zenodo record' if not ctx.source_dir else 'index stage'}"
+                       f"'s {want} — this is not the file that was indexed"
+                       f"{', and the download has been removed' if not ctx.source_dir else ''}")
+                if note:
+                    ctx.note_absent(str(year), why)
+                    return None, None, {}
+                raise IOError(why)
+            print(f"  {year}: md5 ok ({want[:12]}…, "
+                  f"{os.path.getsize(dest) / 1e9:.2f} GB)", flush=True)
+        else:
+            print(f"::warning::{name} has no md5 in plan.json — this archive "
+                  f"cannot be checked against what the index saw")
+        zf = zipfile.ZipFile(dest)
+        return (src, zf, {n: (lambda q=n: zf.open(q))
+                          for n in sorted(zf.namelist()) if n.endswith(".csv")})
+
+    def _days(self, ctx, year):
+        """The days of `year` this window asks for, as date objects."""
+        lo = max(ctx.d_lo, dt.date(year, 1, 1))
+        hi = min(ctx.d_hi, dt.date(year, 12, 31))
+        out, d = [], lo
+        while d <= hi:
+            out.append(d)
+            d += dt.timedelta(days=1)
+        return out
+
+    def _preflight_one_day(self, ctx, year, rec=None):
+        """Parse ONE real day before the index stage says the plan is good.
+
+        Only where it is free: a `--source-dir` build has the file on disk, and
+        a live build would have to download a whole year's zip to read one day
+        — so there the archive's own schema.json is the preflight (above) and
+        this reports that it was not run.
+        """
+        if not ctx.source_dir:
+            return {"parsed": False,
+                    "why": ("a live build would have to download the year's "
+                            "whole zip to read one day; the record's own "
+                            f"{FISHING_SCHEMA_FILE} is checked instead")}
+        _src, zf, members = self._members(ctx, year, note=False, rec=rec)
+        try:
+            for name in sorted(members):
+                with members[name]() as fh:
+                    rows, counts = self._parse_day(ctx, fh, name, year)
+                return {"parsed": True, "member": name,
+                        "rows": int(len(rows["bin"])), "counts": counts}
+        finally:
+            if zf is not None:
+                zf.close()
+        return {"parsed": False, "why": "the year holds no CSV member"}
+
+    def fetch_year(self, ctx, year):
+        gear = self.vessel_map(ctx)                 # loaded once per process
+        src, zf, members = self._members(ctx, year)
+        if not members:
+            if src is not None:
+                ctx.note_absent(str(year), f"{src} holds no CSV member at all")
+            return
+        by_day = {}
+        for n in members:
+            m = FISHING_DAY_RE.search(os.path.basename(n))
+            if m:
+                by_day[dt.date(*(int(x) for x in m.groups()))] = n
+        days = self._days(ctx, year)
+        missing = [d for d in days if d not in by_day]
+        if missing:
+            # A SHORT ZIP IS AN ABSENCE, NOT AN EMPTY DAY. The day list comes
+            # off the calendar, not off the archive's listing, so a zip that
+            # lost members is visible here rather than as a store with a
+            # quieter ocean in March.
+            ctx.note_absent(
+                f"{year}", f"{src} holds no member for "
+                           f"{', '.join(str(d) for d in missing[:6])}"
+                           f"{' …' if len(missing) > 6 else ''} "
+                           f"({len(missing)} of {len(days)} day(s) in range) "
+                           f"— this year's archive is short, and a day with "
+                           f"no file is indistinguishable from an ocean with "
+                           f"no vessels once it is in the store")
+        total = {"rows_read": 0, "rows_packed": 0}
+        try:
+            for d in days:
+                n = by_day.get(d)
+                if n is None:
+                    continue
+                with members[n]() as fh:
+                    rows, counts = self._parse_day(ctx, fh, n, year, gear)
+                total["rows_read"] += int(counts.get("rows_read", 0))
+                total["rows_packed"] += int(len(rows["bin"]))
+                yield f"{d:%Y-%m-%d}", rows, counts
+        finally:
+            if zf is not None:
+                zf.close()
+            if not ctx.source_dir:
+                p = os.path.join(ctx.scratch, FISHING_ZIP.format(year=year))
+                if os.path.exists(p):
+                    os.remove(p)                    # one zip on disk at a time
+        # THE YEAR'S OWN RECONCILIATION (E-081 deliverable 1): every data row
+        # the archive held for this year either became a store row or was
+        # dropped for a reason with a name. A row that vanished between the
+        # two is a parse fault, and it is an ABSENCE — the year is not marked
+        # and the retry re-reads the whole zip.
+        dropped = total["rows_read"] - total["rows_packed"]
+        counts = {"rows_read_year": total["rows_read"],
+                  "rows_packed_year": total["rows_packed"],
+                  "days_expected": len(days), "days_found":
+                      len([d for d in days if d in by_day])}
+        if dropped < 0:
+            ctx.note_absent(str(year),
+                            f"the parser produced {total['rows_packed']:,} "
+                            f"row(s) from {total['rows_read']:,} source "
+                            f"row(s) — more out than in, which is a parse "
+                            f"fault, not an archive gap")
+        yield f"{year} reconciled", empty_rows(self.C), counts
+
+    def _parse_day(self, ctx, fh, label, year, gear=None):
+        gear = self._gear if gear is None else gear
+        r = csv.reader(io.TextIOWrapper(fh, "utf-8", newline=""))
+        hdr = next(r, None)
+        if hdr is None:
+            ctx.note_absent(f"{year} {label}",
+                            "the day's CSV is empty — not even a header line, "
+                            "so the member did not deliver a day")
+            return empty_rows(self.C), {"empty_file": 1}
+        cols = tuple(h.strip() for h in hdr)
+        if cols != FISHING_COLUMNS:
+            raise ValueError(
+                f"{label}: the header reads {cols}; this builder parses "
+                f"{FISHING_COLUMNS}. E-081 §1 must be re-verified — a column "
+                f"order that has moved would put longitude in `hours`.")
+        max_h = float(getattr(ctx.a, "max_hours", 0) or FISHING_HOURS_CEILING)
+        t_l, lat_l, lon_l, plat_l, qc_l, f_l, h_l = [], [], [], [], [], [], []
+        counts = {"rows_read": 0, "drop_out_of_range": 0, "drop_no_position": 0,
+                  "drop_bad_number": 0, "hours_over_24h": 0, "rows_zero_hours": 0,
+                  "qc_unknown": 0}
+        max_seen = 0.0
+        last_date, t_day = None, None
+        for row in r:
+            counts["rows_read"] += 1
+            try:
+                d, la_s, lo_s, m_s, h_s, f_s = row
+            except ValueError:
+                counts["drop_bad_number"] += 1
+                continue
+            if d != last_date:
+                try:
+                    t_day = seconds_since_epoch(parse_date(d))
+                except (ValueError, TypeError):
+                    counts["drop_out_of_range"] += 1
+                    continue
+                last_date = d
+            if not (ctx.t_lo <= t_day <= ctx.t_hi):
+                counts["drop_out_of_range"] += 1
+                continue
+            try:
+                la = float(la_s) + FISHING_HALF_CELL
+                lo_ = float(lo_s) + FISHING_HALF_CELL
+                h = float(h_s)
+                f = float(f_s)
+            except ValueError:
+                counts["drop_bad_number"] += 1
+                continue
+            if not (abs(la) <= 90.0):
+                counts["drop_no_position"] += 1
+                continue
+            # THE TWO VALUE ASSERTIONS, ON EVERY ROW. Neither can be true of a
+            # correctly parsed row and false of the archive, so a failure is a
+            # column that moved, not a datum to drop.
+            if not (f == f and h == h) or f < -FISHING_TOL or h < -FISHING_TOL:
+                raise ValueError(
+                    f"{label}: hours={h_s!r} fishing_hours={f_s!r} is not a "
+                    f"pair of non-negative numbers (row {row!r})")
+            if f > h + FISHING_TOL:
+                raise ValueError(
+                    f"{label}: fishing_hours {f} EXCEEDS hours {h} (row "
+                    f"{row!r}). The fishing hours are a PART of the broadcast "
+                    f"hours by the source's own definition, and 0 of "
+                    f"6,257,384 rows of 2012 broke it — so this is the "
+                    f"columns having moved, and refusing is the only honest "
+                    f"answer. E-081 §5's falsifier (3).")
+            if h > max_h:
+                raise ValueError(
+                    f"{label}: hours {h} exceeds the ceiling {max_h} (row "
+                    f"{row!r}). A cell-day-identity can exceed 24 h — an MMSI "
+                    f"is not always one vessel — but not a week of them; this "
+                    f"is a misread column. --max-hours changes the ceiling.")
+            if h > FISHING_HOURS_DAY:
+                counts["hours_over_24h"] += 1
+            if h == 0.0:
+                counts["rows_zero_hours"] += 1
+            if h > max_seen:
+                max_seen = h
+            code = gear.get(int(m_s) * 10000 + year, 0) if m_s.isdigit() else 0
+            if code == 0:
+                counts["qc_unknown"] += 1
+            t_l.append(t_day)
+            lat_l.append(la)
+            lon_l.append(lo_)
+            f_l.append(f)
+            h_l.append(h)
+            plat_l.append(platform_hash(m_s.strip()))
+            qc_l.append(code)
+        counts["max_hours"] = max_seen
+        vals = np.empty((len(t_l), self.C), np.float64)
+        if t_l:
+            vals[:, 0] = f_l
+            vals[:, 1] = h_l
+        return _pack(t_l, lat_l, lon_l, vals, plat_l, qc_l, self.C), counts
+
+    # -- what this store publishes beside its columns ----------------------
+    def extra_files(self, ctx, dest):
+        """`vessels.csv.gz` — the vessel table, gzipped, beside the store.
+
+        It goes into store.json's sha256 block like every column, so the
+        publish uploads it, the restore check verifies it, and
+        `family10_store.resolve` brings it down with the store. E-081 §2: it
+        is the only way a consumer turns a platform hash back into a flag, a
+        gear class or a length.
+        """
+        src = self._vessels_path(ctx)
+        if not os.path.exists(src):
+            sys.exit(f"cannot finish the fishing store: {src} is missing, and "
+                     f"E-081 §2 publishes the vessel table beside it. Re-run "
+                     f"the index stage (it downloads and md5-verifies it).")
+        out = os.path.join(dest, FISHING_VESSELS_GZ)
+        with open(src, "rb") as fi, gzip.GzipFile(out, "wb", mtime=0) as fo:
+            shutil.copyfileobj(fi, fo, CHUNK)
+        print(f"  vessels: {os.path.getsize(src) / 1e6:.0f} MB -> "
+              f"{FISHING_VESSELS_GZ} {os.path.getsize(out) / 1e6:.0f} MB")
+        return {FISHING_VESSELS_GZ: out}
+
+    def extra_meta(self, ctx, dest, N, values):
+        """E-081 deliverable 2: the source block, the licence, the code table
+        and the four measured totals.
+
+        The two sums are float64 accumulations over the STORE's float16
+        values, in blocks — so they are the numbers the monthly grid has to
+        reproduce (E-081 §5's falsifier 4), not the numbers the parser saw
+        before the cast.
+        """
+        tot = np.zeros(self.C, np.float64)
+        for lo in range(0, int(N), STAT_CHUNK):
+            blk = np.asarray(values[lo:lo + STAT_CHUNK], np.float64)
+            tot += np.nansum(blk, axis=0)
+        vs = self._vessel_summary or {}
+        return {
+            "source": {
+                "name": "Global Fishing Watch — Global AIS-based Apparent "
+                        "Fishing Effort Dataset",
+                "doi": FISHING_DOI, "version": FISHING_VERSION,
+                "released": FISHING_RELEASED, "record": ZENODO_API,
+                "citation": FISHING_CITATION,
+                "table": "mmsi-daily-csvs-10-v3-<year>.zip — one row per "
+                         "(day, 0.1° cell, MMSI)",
+                "known_issues": self.notes,
+            },
+            "licence": FISHING_LICENCE,
+            "licence_url": FISHING_LICENCE_URL,
+            "attribution": FISHING_ATTRIBUTION,
+            "qc_codes": {
+                "meaning": "the vessel's GEAR CLASS (vessel_class_gfw in the "
+                           "source's vessel table), NOT a quality grade",
+                "0": "unknown — the vessel table has no row for this MMSI in "
+                     "this year",
+                **{str(c): g for g, c in sorted(FISHING_GEAR_CODE.items(),
+                                                key=lambda kv: kv[1])},
+            },
+            "fishing_hours_total": float(tot[0]),
+            "hours_total": float(tot[1]),
+            "totals_note": ("float64 sums over the store's own float16 "
+                            "values, in blocks of "
+                            f"{STAT_CHUNK:,} rows — the numbers the monthly "
+                            "grid must reproduce"),
+            "vessels_per_year": vs.get("vessels_per_year"),
+            "gear_histogram": vs.get("gear_histogram"),
+            "gear_classes_unseen": vs.get("gear_classes_unseen"),
+            "vessel_table": {k: vs.get(k) for k in
+                             ("file", "md5", "bytes", "rows", "published_as")},
+            "grid": {
+                "file": f"{FISHING_GRID_DIR}/{FISHING_GRID_FILE}",
+                "note": ("the monthly 0.25° sum of these rows, written by "
+                         "`--stage grid` and indexed by "
+                         "ml/publish_fishing_index.py into "
+                         "data/fishing_index.json"),
+            },
+        }
+
+
 ADAPTERS = {a.store: a for a in
-            (GDPAdapter, GTMBAAdapter, SOCATAdapter, SLATrackAdapter)}
+            (GDPAdapter, GTMBAAdapter, SOCATAdapter, SLATrackAdapter,
+             FishingAdapter)}
 
 
 # ================================================================== parsing ==
@@ -2582,7 +3440,15 @@ def _merge_counts(into, new):
             for kk, vv in v.items():
                 sub[kk] = sub.get(kk, 0) + vv
         elif isinstance(v, (int, float)):
-            into[k] = into.get(k, 0) + v
+            # A `max_*` COUNTER IS A MAXIMUM, NOT A TALLY. Everything else
+            # here is a count of rows or files and adds up; `max_hours` is the
+            # largest value any row carried, and summing one per day made the
+            # 2012 build report 15,281 hours where the real maximum is 47.56.
+            # The prefix is the rule so a new measurement gets it for free.
+            if k.startswith("max_"):
+                into[k] = max(into[k], v) if k in into else v
+            else:
+                into[k] = into.get(k, 0) + v
         elif isinstance(v, list):
             # A LIST IS A LEDGER OF MEASUREMENTS, so it CONCATENATES. It used
             # to fall into the `else` below and OVERWRITE, which meant the
@@ -2719,6 +3585,7 @@ def stage_index(ctx):
 
 def stage_fetch(ctx):
     ad = ctx.adapter
+    ad.fetch_preflight(ctx)
     if getattr(ctx.a, "parts_from_hub", False):
         # THE KEYLESS HALF of slatrack's build. The credentialed fetch happens
         # on GitHub-HOSTED lanes (ml/CLAUDE.md §6 forbids CMEMS credentials on
@@ -3297,6 +4164,11 @@ def _finish_store(ctx, dest, files, N, off, bin_first, bin_last, n_bins,
     """
     ad = ctx.adapter
     _check_year_ledgers(ctx, per_year)
+    # WHAT THIS STORE PUBLISHES BESIDE ITS COLUMNS, written BEFORE the sha256
+    # block is computed so it is hashed, uploaded and restore-checked exactly
+    # like a column rather than being a file that happens to sit next to one.
+    files = dict(files)
+    files.update(ad.extra_files(ctx, dest) or {})
     per_channel, measured_fraction = _channel_stats(values, ad.channels, N)
     live = int((np.diff(off) > 0).sum())
     plan = read_json(os.path.join(ctx.root, "plan.json"), {})
@@ -3381,6 +4253,7 @@ def _finish_store(ctx, dest, files, N, off, bin_first, bin_last, n_bins,
     }
     if ad.notes:
         meta["notes"] = ad.notes
+    meta.update(ad.extra_meta(ctx, dest, N, values) or {})
     # THE STORE SAYS WHAT IT DID, NOT WHAT IT MEANT TO DO. A build that was
     # allowed past an unreadable input carries the list of them here, in the
     # file every consumer already reads — `store.json`'s `sources` and
@@ -3573,6 +4446,226 @@ def check_store(path, adapter=None, anchor=None, chunk_rows=CHECK_CHUNK_ROWS):
     return st
 
 
+# ============================================================= stage: grid ===
+# E-081 §3. THE GLOBE CANNOT RANGE-READ A POINT STORE, so beside the store the
+# builder writes one gridded product: the store's rows summed onto the
+# family-7 0.25° grid, one frame per month, month-major in C order so that one
+# month of both channels is ONE contiguous range read (721 x 1440 x 2 cells,
+# 8.3 MB at float32 — see F16_MAX below for why it is not the 4.15 MB the plan
+# budgeted at float16). Zero is a real value — no vessel broadcast in that
+# cell that month — and is stored as 0, never NaN.
+#
+# THE GEOMETRY, stated here because `data/fishing_index.json` publishes it and
+# `src/app.js` must contain none of this arithmetic (root CLAUDE.md §3):
+#   latitude index 0 is -90, longitude index 0 is -180, the step is 0.25°, and
+#   a row's CELL CENTRE is binned with
+#       iy = clip(floor((lat + 90) / 0.25), 0, 720)
+#       ix = clip(floor((lon + 180) / 0.25), 0, 1439)
+#   The clips are the poles and the dateline: 721 latitude points cover
+#   [-90, 90] inclusive, so +90 would index 720 either way, and longitude runs
+#   [-180, 180) so 1439 is only reached by a value the store cannot hold.
+FISHING_GRID_DIR = "fishing_grid"
+FISHING_GRID_FILE = "fishing_grid_monthly_025.npy"
+GRID_NY, GRID_NX, GRID_STEP = 721, 1440, 0.25
+GRID_LAT0, GRID_LON0 = -90.0, -180.0
+GRID_MONTH_SPAN = ("2012-01", "2024-12")          # E-081 §3's 156 months
+GRID_ROWS_CHUNK = 8_000_000
+# float16's largest finite value — and the reason THE GRID IS float32.
+#
+# E-081 §3 specifies float16. MEASURED 2026-09-16 by building the real 2012
+# and 2024 years: the largest 0.25° cell-month sum is **29,460 vessel-hours in
+# 2012 and 595,726 in 2024**, against float16's largest finite value of
+# 65,504. So a float16 grid of the real archive would store +inf in the cells
+# where the fleet actually is — the East China Sea, the southern North Sea —
+# and an infinity in a raster looks exactly like a colour. float32 doubles the
+# month slab from 4.15 MB to 8.3 MB, which is still smaller than family 7's
+# 14.5 MB frame, and `data/fishing_index.json` publishes `dtype`, `itemsize`
+# and `slab_bytes`, so a consumer that reads the index needs no change (and
+# gets a NATIVE Float32Array instead of a hand-rolled float16 decode).
+#
+# float16 stays available (`--grid-dtype float16`) because it is right for a
+# narrow window, and the check below fires per month BEFORE that month is
+# written rather than leaving an infinity to be found on the globe.
+F16_MAX = 65504.0
+GRID_DTYPE_DEFAULT = "float32"
+
+
+def month_list(lo, hi, span=GRID_MONTH_SPAN):
+    """Every `YYYY-MM` from `lo` to `hi` inclusive, clipped to the plan's span.
+
+    The FULL build (2012-01-01 .. 2024-12-31) gives E-081 §3's 156 months
+    exactly; a narrower window gives its own months and the index says which,
+    so a partial grid describes itself instead of pretending to be the whole
+    record with zeros in the gaps.
+    """
+    a = max(f"{lo.year:04d}-{lo.month:02d}", span[0])
+    b = min(f"{hi.year:04d}-{hi.month:02d}", span[1])
+    out = []
+    y, m = int(a[:4]), int(a[5:7])
+    while f"{y:04d}-{m:02d}" <= b:
+        out.append(f"{y:04d}-{m:02d}")
+        y, m = (y + (m == 12), m % 12 + 1)
+    return out
+
+
+def _month_bounds_s(stamp):
+    """[start, end) of month `YYYY-MM`, in seconds since the epoch."""
+    y, m = int(stamp[:4]), int(stamp[5:7])
+    lo = seconds_since_epoch(dt.date(y, m, 1))
+    hi = seconds_since_epoch(dt.date(y + (m == 12), m % 12 + 1, 1))
+    return lo, hi
+
+
+def grid_cell_index(lat, lon):
+    """(iy, ix) for cell centres — THE convention, in one place."""
+    iy = np.clip(np.floor((np.asarray(lat, np.float64) - GRID_LAT0) / GRID_STEP)
+                 .astype(np.int64), 0, GRID_NY - 1)
+    ix = np.clip(np.floor((np.asarray(lon, np.float64) - GRID_LON0) / GRID_STEP)
+                 .astype(np.int64), 0, GRID_NX - 1)
+    return iy, ix
+
+
+def stage_grid(ctx):
+    """The monthly 0.25° grid, and the assertion that it sums to the store.
+
+    Runs in the SAME job as the fetch and the publish (E-081 deliverable 3):
+    it reads the finished store's memmaps month by month — the rows of a month
+    are one contiguous range, because the store is sorted by (bin, time_s) and
+    both are monotone in time — accumulates each month in FLOAT64 with
+    `np.bincount`, and writes that month's slab as float16. Nothing larger
+    than one month (16.6 MB of float64) is ever in memory.
+
+    THE ASSERTION (E-081 §5's falsifier 4) is per month AND in total: the
+    float64 sum of the store's own values over the month's rows against the
+    float64 sum of the float16 slab that was written. They differ only by the
+    float16 rounding of each cell, which is 2^-11 relative per cell and
+    therefore the same bound on their total; the test is 1e-3 relative, two
+    orders of margin, and it fires on an off-by-one month or a dropped block
+    rather than on rounding.
+    """
+    ad = ctx.adapter
+    if ad.store != "fishing":
+        print(f"  grid: {ad.store} has no gridded product — nothing to do "
+              f"(E-081 §3 defines one for `fishing` only)")
+        mark(ctx.root, "grid")
+        return None
+    dest = ctx.store
+    meta = read_json(os.path.join(dest, "store.json"), {})
+    if not meta:
+        sys.exit(f"cannot build the grid: {dest}/store.json is missing — the "
+                 f"fetch stage assembles the store the grid sums.")
+    st = f10.Store(dest)
+    months = month_list(ctx.d_lo, ctx.d_hi)
+    dtype = np.dtype(getattr(ctx.a, "grid_dtype", GRID_DTYPE_DEFAULT)
+                     or GRID_DTYPE_DEFAULT)
+    out_dir = os.path.join(ctx.root, FISHING_GRID_DIR)
+    os.makedirs(out_dir, exist_ok=True)
+    out_path = os.path.join(out_dir, FISHING_GRID_FILE)
+    shape = (len(months), GRID_NY, GRID_NX, int(st.C))
+    need = int(np.prod(shape)) * dtype.itemsize
+    free = shutil.disk_usage(out_dir).free
+    print(f"  grid: {len(months)} month(s) {months[0]}..{months[-1]}, shape "
+          f"{list(shape)} {dtype.name}, {need / 1e9:.2f} GB; "
+          f"{free / 1e9:.2f} GB free under {out_dir}")
+    if free < need * DISK_HEADROOM:
+        sys.exit(f"REFUSING to write the grid: it is {need / 1e9:.2f} GB and "
+                 f"{out_dir} has {free / 1e9:.2f} GB free.")
+    ctx.prog.stage_start(f"grid {ad.store}", len(months))
+
+    from numpy.lib.format import open_memmap
+    arr = open_memmap(out_path + ".part", mode="w+", dtype=dtype, shape=shape)
+    t_col = st["time_s"]
+    lat_col, lon_col = st["lat"], st["lon"]
+    v_col = st["values"]
+    per_month, rows_seen = [], 0
+    tot_store = np.zeros(st.C, np.float64)
+    tot_grid = np.zeros(st.C, np.float64)
+    worst = 0.0
+    cells = GRID_NY * GRID_NX
+    for i, stamp in enumerate(months):
+        s0, s1 = _month_bounds_s(stamp)
+        lo = int(np.searchsorted(t_col, s0, side="left"))
+        hi = int(np.searchsorted(t_col, s1, side="left"))
+        acc = np.zeros((cells, st.C), np.float64)
+        want = np.zeros(st.C, np.float64)
+        for a in range(lo, hi, GRID_ROWS_CHUNK):
+            b = min(a + GRID_ROWS_CHUNK, hi)
+            iy, ix = grid_cell_index(lat_col[a:b], lon_col[a:b])
+            flat = iy * GRID_NX + ix
+            v = np.asarray(v_col[a:b], np.float64)
+            for c in range(st.C):
+                col = np.nan_to_num(v[:, c], nan=0.0)
+                acc[:, c] += np.bincount(flat, weights=col, minlength=cells)
+                want[c] += float(col.sum())
+        big = float(acc.max()) if acc.size else 0.0
+        if dtype == np.float16 and big > F16_MAX:
+            arr.flush()
+            del arr
+            sys.exit(
+                f"REFUSING to write {stamp}: its largest cell-month sum is "
+                f"{big:,.0f} h and float16's largest finite value is "
+                f"{F16_MAX:,.0f} — the cell would be stored as +inf. Re-run "
+                f"`--stage grid --grid-dtype float32` (the index publishes "
+                f"the dtype and the slab size, so a consumer that reads "
+                f"data/fishing_index.json needs no change), or narrow the "
+                f"window. Measured 2026-09-16: 2012's largest cell-month is "
+                f"29,460 h, so the headroom is real but not large.")
+        arr[i] = acc.reshape(GRID_NY, GRID_NX, st.C).astype(dtype)
+        got = np.asarray(arr[i], np.float64).reshape(-1, st.C).sum(axis=0)
+        rel = max(abs(g - w) / max(abs(w), 1.0) for g, w in zip(got, want))
+        worst = max(worst, rel)
+        assert rel < 1e-3, (
+            f"{stamp}: the grid sums to {got.tolist()} and the store's rows "
+            f"to {want.tolist()} — relative difference {rel:.3e}, far past "
+            f"float16 rounding. The grid does not describe the store.")
+        tot_store += want
+        tot_grid += got
+        rows_seen += hi - lo
+        per_month.append({"month": stamp, "rows": hi - lo,
+                          "store_sum": want.tolist(), "grid_sum": got.tolist(),
+                          "max_cell": big, "rel": rel})
+        ctx.prog.item(stamp, i + 1, {"rows": hi - lo, "rel": rel})
+    arr.flush()
+    del arr
+    os.replace(out_path + ".part", out_path)
+
+    if rows_seen != st.N:
+        sys.exit(f"the grid saw {rows_seen:,} of the store's {st.N:,} rows — "
+                 f"{st.N - rows_seen:,} row(s) fall outside the months "
+                 f"{months[0]}..{months[-1]} the grid covers, so the picture "
+                 f"would be missing measurements the store has. Widen the "
+                 f"window or rebuild the store to match it.")
+    man = {
+        "store": ad.store, "file": FISHING_GRID_FILE,
+        "prefix": f"{HF_ROOT}/{FISHING_GRID_DIR}",
+        "shape": list(shape), "dtype": dtype.name,
+        "months": months, "n_months": len(months),
+        "month_span": list(GRID_MONTH_SPAN),
+        "complete": months == month_list(parse_date(f"{GRID_MONTH_SPAN[0]}-01"),
+                                         parse_date(f"{GRID_MONTH_SPAN[1]}-28")),
+        "channels": [c["name"] for c in (meta.get("channels") or [])],
+        "grid": {"ny": GRID_NY, "nx": GRID_NX, "step": GRID_STEP,
+                 "lat0": GRID_LAT0, "lon0": GRID_LON0,
+                 "south_first": True, "wrap": True,
+                 "index_rule": ("iy = clip(floor((lat + 90) / 0.25), 0, 720), "
+                                "ix = clip(floor((lon + 180) / 0.25), 0, "
+                                "1439), on the row's CELL CENTRE")},
+        "rows": rows_seen, "store_N": int(st.N),
+        "store_sum": tot_store.tolist(), "grid_sum": tot_grid.tolist(),
+        "worst_month_rel": worst,
+        "per_month": per_month,
+        "bytes": os.path.getsize(out_path), "sha256": sha256(out_path),
+        "builder": "ml/build_family10_stores.py --stage grid",
+        "builder_git_sha": git_sha(), "built_at": utcnow(),
+    }
+    atomic_json(os.path.join(out_dir, "grid.json"), man)
+    mark(ctx.root, "grid")
+    print(f"  grid: {len(months)} month(s), {rows_seen:,} row(s), "
+          f"{os.path.getsize(out_path) / 1e9:.2f} GB, worst month agreement "
+          f"{worst:.2e} -> {out_path}")
+    return man
+
+
 # ========================================================== stage: publish ===
 RESTORE_HEADROOM = 1.1
 
@@ -3692,14 +4785,84 @@ def stage_publish(ctx):
     atomic_json(mp, man)
     hub_upload_with_backoff(api, repo, mp, f"{prefix}/manifest.json",
                             f"family 10 ({ad.store}): manifest")
+    grid = publish_grid(ctx, api, repo, tok)
+    if grid:
+        man["grid"] = grid
+        atomic_json(mp, man)
     mark(ctx.root, "publish")
     print(f"  publish: {len(entries)} file(s) verified by restore -> "
           f"https://huggingface.co/datasets/{repo}/tree/main/{prefix}")
     return man
 
 
+def publish_grid(ctx, api, repo, tok):
+    """Upload the monthly grid, verify its restore, and write its index.
+
+    IN THE SAME JOB AS THE STORE (E-081 deliverable 3): the index measures the
+    `.npy` header length and the CORS headers with a real ranged GET against
+    the URL that was just published, which is a measurement only this machine,
+    at this moment, can make (root CLAUDE.md §3 admits huggingface.co on
+    measured properties, never assumed ones).
+    """
+    out_dir = os.path.join(ctx.root, FISHING_GRID_DIR)
+    src = os.path.join(out_dir, FISHING_GRID_FILE)
+    man_p = os.path.join(out_dir, "grid.json")
+    if not (os.path.exists(src) and os.path.exists(man_p)):
+        if ctx.adapter.store == "fishing":
+            print(f"::warning::no {src} — the `grid` stage has not run, so "
+                  f"the globe layer's monthly raster is not published. Run "
+                  f"`--stage grid,publish`.")
+        return None
+    gm = read_json(man_p, {})
+    if gm.get("sha256") != sha256(src):
+        sys.exit(f"{src} does not match the sha256 in {man_p} — the grid "
+                 f"changed after it was checked. Re-run `--stage grid`.")
+    prefix = f"{HF_ROOT}/{FISHING_GRID_DIR}"
+    names = [FISHING_GRID_FILE, "grid.json"]
+    hub_commit(api, repo,
+               hub_add_ops([(f"{prefix}/{n}", os.path.join(out_dir, n))
+                            for n in names]),
+               f"family 10.2 (fishing): the monthly 0.25° grid")
+    from huggingface_hub import hf_hub_download
+    scratch = os.path.join(ctx.scratch, "verify_grid")
+    for n in names:
+        want = sha256(os.path.join(out_dir, n))
+        shutil.rmtree(scratch, ignore_errors=True)
+        back = hf_hub_download(repo, f"{prefix}/{n}", repo_type="dataset",
+                               token=tok, local_dir=scratch)
+        got = sha256(back)
+        shutil.rmtree(scratch, ignore_errors=True)
+        if got != want:
+            sys.exit(f"RESTORE MISMATCH {n}: uploaded {want}, downloaded "
+                     f"{got} — the grid publish is not trustworthy")
+    print(f"  grid: {len(names)} file(s) verified by restore -> "
+          f"https://huggingface.co/datasets/{repo}/tree/main/{prefix}")
+    index = None
+    try:
+        sys.path.insert(0, HERE)
+        import publish_fishing_index as pfi
+        index = pfi.write_index(
+            grid_manifest=man_p,
+            store_json=os.path.join(ctx.store, "store.json"),
+            repo=repo,
+            out=getattr(ctx.a, "index_out", "") or pfi.INDEX)
+    except SystemExit:
+        raise
+    except Exception as e:                                  # noqa: BLE001
+        # NOT silent (§4.6): the bytes are published and verified, and the
+        # small JSON the browser reads first is what did not get written.
+        print(f"::warning::the grid is published but its index was not "
+              f"written: {type(e).__name__}: {e}. Run `python3 "
+              f"ml/publish_fishing_index.py` to write data/fishing_index.json "
+              f"from the published file.", flush=True)
+    return {"prefix": prefix, "files": names, "shape": gm.get("shape"),
+            "dtype": gm.get("dtype"), "months": gm.get("n_months"),
+            "index_written": bool(index)}
+
+
 # =================================================================== driver ==
-STAGE_FN = {"index": stage_index, "fetch": stage_fetch, "publish": stage_publish}
+STAGE_FN = {"index": stage_index, "fetch": stage_fetch, "grid": stage_grid,
+            "publish": stage_publish}
 
 
 def parse_stages(spec):
@@ -3734,6 +4897,11 @@ def run_stages(ctx, stages):
 # ==================================================================== smoke ==
 SMOKE_START = "1981-12-20"     # deliberately BEFORE the epoch: negative bins
 SMOKE_END = "1982-01-12"
+# ONE STORE CANNOT USE THAT WINDOW: the fishing archive begins in 2012 and the
+# adapter refuses a window with none of its years in it, which is the right
+# answer for a real dispatch and the wrong one for a smoke test. Its window
+# straddles a month boundary and a year boundary is added by the tests.
+SMOKE_WINDOW = {"fishing": ("2012-01-01", "2012-02-05")}
 
 
 def make_smoke_sources(root, store, d_lo, d_hi, seed=20260913):
@@ -3958,9 +5126,86 @@ def make_smoke_sources(root, store, d_lo, d_hi, seed=20260913):
                                   "v": [float(sla[j]), float(slau[j]),
                                         float(mdt[j])],
                                   "platform": platform_hash(mid), "qc": 1})
+    elif store == "fishing":
+        # THE REAL LAYOUT, IN MINIATURE (measured off the 2012 zip, see
+        # FishingAdapter's docstring): one CSV per day inside
+        # `mmsi-daily-csvs-10-v3-<year>.zip`, the six-column header, the cell's
+        # LOWER-LEFT corner to one decimal, an unquoted integer MMSI — plus
+        # the vessel table beside them. Both layouts are written: the zip,
+        # which is what a real build streams, and the same day files in a
+        # directory, which is the other thing `--source-dir` accepts.
+        base = os.path.join(root, "fishing")
+        os.makedirs(base, exist_ok=True)
+        years = sorted({d.year for d in days})
+        fleet = [(416000001, "trawlers"), (416000002, "drifting_longlines"),
+                 (224000003, "squid_jigger")]
+        with open(os.path.join(base, FISHING_VESSELS), "w", newline="") as fh:
+            w = csv.writer(fh)
+            w.writerow(FISHING_VESSEL_COLUMNS)
+            for y in years:
+                for (m, gear) in fleet:
+                    # the third vessel is in the table for the FIRST year only,
+                    # so a later year exercises qc 0 = unknown.
+                    if m == 224000003 and y != years[0]:
+                        continue
+                    row = {"mmsi": str(m), "year": str(y),
+                           "flag_gfw": "CHN" if str(m)[:3] == "412" else "FRA",
+                           "vessel_class_gfw": gear,
+                           "vessel_class_inferred": gear,
+                           "self_reported_fishing_vessel": "true",
+                           "length_m_gfw": "24.5", "active_hours": "1000.0",
+                           "fishing_hours": "400.0"}
+                    w.writerow([row.get(c, "") for c in
+                                FISHING_VESSEL_COLUMNS])
+        for y in years:
+            ydays = [x for x in days if x.year == y]
+            d_dir = os.path.join(base, FISHING_ZIP.format(year=y)[:-4])
+            os.makedirs(d_dir, exist_ok=True)
+            names = []
+            for i, x in enumerate(ydays):
+                # (ll_lat, ll_lon, mmsi, hours, fishing_hours), chosen to
+                # exercise the edges: the dateline either side, equality of
+                # the two channels, a zero-hour row, and a row above 24 h
+                # (which the archive really does carry — an MMSI is not
+                # always one vessel).
+                cells = [(-65.5, 119.7, fleet[0][0], 1.5, 0.0),
+                         (51.3, 3.2, fleet[1][0], 28.5, 12.25),
+                         (0.0, 179.9, fleet[2][0], 4.0, 4.0),
+                         (-0.1, -180.0, fleet[0][0], 0.0, 0.0)]
+                p = os.path.join(d_dir,
+                                 f"mmsi-daily-csvs-10-v3-{x:%Y-%m-%d}.csv")
+                with open(p, "w", newline="") as fh:
+                    w = csv.writer(fh)
+                    w.writerow(FISHING_COLUMNS)
+                    for (la, lo, m, h, f) in cells:
+                        w.writerow([f"{x:%Y-%m-%d}", _g(la), _g(lo), m,
+                                    _g(h), _g(f)])
+                        code = FISHING_GEAR_CODE[
+                            dict(fleet)[m]] if not (
+                                m == 224000003 and y != years[0]) else 0
+                        truth.append({
+                            "t": seconds_since_epoch(x),
+                            "lat": la + FISHING_HALF_CELL,
+                            "lon": float(f10.wrap_lon(lo + FISHING_HALF_CELL)),
+                            "v": [f, h],
+                            "platform": platform_hash(str(m)), "qc": code})
+                names.append(p)
+            with zipfile.ZipFile(os.path.join(
+                    base, FISHING_ZIP.format(year=y)), "w",
+                    zipfile.ZIP_DEFLATED) as z:
+                # NOT in date order, exactly as the real archive's central
+                # directory is not — so the adapter's sort is exercised.
+                for p in sorted(names, key=lambda q: q[::-1]):
+                    z.write(p, os.path.basename(p))
     else:
         raise ValueError(store)
     return truth
+
+
+def _g(x):
+    """A number the way the archive prints it: no trailing zeros (`120`)."""
+    s = f"{float(x):.4f}".rstrip("0").rstrip(".")
+    return s or "0"
 
 
 def check_smoke(ctx, truth):
@@ -4005,7 +5250,9 @@ def check_smoke(ctx, truth):
             f"schema {st.schema_version}")
 
 
-def run_smoke(store, root=None, keep=False, start=SMOKE_START, end=SMOKE_END):
+def run_smoke(store, root=None, keep=False, start="", end=""):
+    start = start or SMOKE_WINDOW.get(store, (SMOKE_START, SMOKE_END))[0]
+    end = end or SMOKE_WINDOW.get(store, (SMOKE_START, SMOKE_END))[1]
     tmp = root or tempfile.mkdtemp(prefix=f"f10smoke_{store}_")
     src = os.path.join(tmp, "src")
     work = os.path.join(tmp, "work")
@@ -4017,7 +5264,9 @@ def run_smoke(store, root=None, keep=False, start=SMOKE_START, end=SMOKE_END):
           f"({len(truth)} truth row(s), {time.time() - t0:.1f}s)")
     ap = argparse.Namespace(store=store, work=work, source_dir=src,
                             start=start, end=end, stage="all", force=False,
-                            attempts=1, qc_keep=2, socat_url="", smoke=True)
+                            attempts=1, qc_keep=2, socat_url="", smoke=True,
+                            max_hours=FISHING_HOURS_CEILING,
+                            grid_dtype=GRID_DTYPE_DEFAULT)
     ctx = Ctx(ap)
     print(f"axis      bins {ctx.b_lo}..{ctx.b_hi} "
           f"({'NEGATIVE bins in range' if ctx.b_lo < 0 else 'all >= 1982'})")
@@ -4037,7 +5286,8 @@ def main():
     ap.add_argument("--store", required=True, choices=sorted(ADAPTERS),
                     help="which source: gdp (surface drifters), gtmba (the "
                          "tropical moored arrays), socat (surface CO2), "
-                         "slatrack (along-track sea level)")
+                         "slatrack (along-track sea level), fishing (the AIS "
+                         "fishing fleet, E-081)")
     ap.add_argument("--work", default=os.path.join(CACHE, f10.CACHE_DIRNAME),
                     help="the build directory: plan.json, per-year parts, the "
                          "store, markers, progress.json. RE-RUN WITH THE SAME "
@@ -4117,6 +5367,38 @@ def main():
                          "answer does not depend on this number; it only "
                          "bounds the peak RAM of the check. Lower it on a "
                          "small box, raise it on a big one.")
+    ap.add_argument("--max-hours", type=float, default=FISHING_HOURS_CEILING,
+                    help="fishing only: the largest `hours` a single (day, "
+                         "0.1° cell, MMSI) row may carry before the build "
+                         f"REFUSES (default {FISHING_HOURS_CEILING:g} = a "
+                         "week). E-081 §2 wrote 24.001; the archive breaks "
+                         "that on 1.6 % of 2012's rows, to 47.56 h, because "
+                         "an MMSI is not always one vessel — so the ceiling "
+                         "is set where a misread column is caught and the "
+                         "data is not. Pass 24.001 to see the plan's rule "
+                         "fire; rows over 24 h are counted either way.")
+    ap.add_argument("--allow-small-disk", action="store_true",
+                    help="fishing only: fetch even though the projected parts "
+                         "+ store do not fit the disk. The projection is in "
+                         "plan.json (`projected`), measured at 0.1116 rows "
+                         "per byte of zip; the whole 2012-2024 archive is "
+                         "~18.5 GB of store and does NOT fit a hosted runner.")
+    ap.add_argument("--grid-dtype", default=GRID_DTYPE_DEFAULT,
+                    choices=("float16", "float32"),
+                    help="the monthly 0.25° grid's dtype. E-081 §3 specifies "
+                         "float16 and the ARCHIVE DOES NOT FIT IT: measured "
+                         "2026-09-16, the largest 0.25° cell-month sum is "
+                         "29,460 vessel-hours in 2012 and 595,726 in 2024, "
+                         "against float16's largest finite value of 65,504 — "
+                         "so the busiest cells would be +inf. float32 is "
+                         "therefore the default (slab 8.3 MB a month, still "
+                         "under family 7's 14.5 MB frame); float16 is right "
+                         "for a narrow window and refuses per month if a cell "
+                         "overflows. data/fishing_index.json publishes the "
+                         "dtype and the slab size either way.")
+    ap.add_argument("--index-out", default="",
+                    help="where the publish stage writes the grid's index "
+                         "(default data/fishing_index.json in this checkout)")
     ap.add_argument("--attempts", type=int, default=3,
                     help="download attempts per file before the year fails. A "
                          "404 or an empty ERDDAP result is not an attempt "

@@ -2210,3 +2210,241 @@ test.describe("cone_geometry.json · the global block (E-070 live cones)", () =>
     })).toBe(true);
   });
 });
+
+/* =========== fishing_index.json + the in-repo fixture (E-081 §3–§4a) ========
+ *
+ * The globe's "Fishing effort (AIS)" layer paints ONE MONTH of a 0.25° global
+ * grid by a single HTTP range read of a `.npy` on the Hugging Face Hub, and
+ * everything it needs to compute that read — header length, shape, dtype,
+ * itemsize, slab size, the month list, the grid geometry, the channel
+ * vocabulary — lives in an index written by `ml/publish_fishing_index.py`.
+ *
+ * The real index is absent until the build job lands, so what is pinned here
+ * is `data/fishing/fixture/fishing_index.json` — the same schema over a real
+ * 2012 grid decimated 20× so it can live in git. Its `.npy` HEADER is parsed
+ * from the real bytes, which is the check that matters: if the index's
+ * `header_len` and `slab_bytes` do not agree with the file, the browser reads
+ * the wrong bytes and paints a plausible-looking wrong map. Exactly the
+ * family-7 argument, one dataset over. */
+test.describe("fishing index + fixture (the effort grid's range-read contract)", () => {
+  const FX = path.join(DATA, "fishing", "fixture");
+  const idx = JSON.parse(fs.readFileSync(path.join(FX, "fishing_index.json"), "utf8"));
+
+  // The .npy header, parsed the way the publisher parses it.
+  function npyHeader(file) {
+    const buf = fs.readFileSync(file);
+    expect(buf.slice(0, 6).toString("latin1")).toBe("\x93NUMPY");
+    const major = buf[6];
+    const n = major === 1 ? buf.readUInt16LE(8) : buf.readUInt32LE(8);
+    const off = major === 1 ? 10 : 12;
+    const txt = buf.slice(off, off + n).toString("latin1");
+    const shape = /'shape':\s*\(([^)]*)\)/.exec(txt)[1]
+      .split(",").map((x) => x.trim()).filter(Boolean).map(Number);
+    const descr = /'descr':\s*'([^']+)'/.exec(txt)[1];
+    const fortran = /'fortran_order':\s*(True|False)/.exec(txt)[1] === "True";
+    return { headerLen: off + n, shape, descr, fortran, bytes: buf.length };
+  }
+
+  test("the index says what a browser needs to address one month", () => {
+    expect(idx._source).toContain("publish_fishing_index.py");
+    expect(idx.fixture).toBe(true);
+    expect(idx.url).toMatch(
+      /^https:\/\/huggingface\.co\/datasets\/chfrank\/earth-tensors\/resolve\/main\/tensors\//);
+    expect(idx.prefix).toBe("tensors/family10_2/fishing_grid");
+    expect(idx.plan).toContain("E081_family10_2_fishing.md");
+    // the two channels, in the order the last axis holds them
+    expect(idx.chans).toEqual(["fishing_hours", "hours"]);
+    for (const c of idx.chans) {
+      expect(idx.labels[c], `${c} label`).toBeTruthy();
+      expect(idx.units[c], `${c} unit`).toBeTruthy();
+    }
+    // the month list IS the time axis: one row per month, in order
+    expect(idx.months).toHaveLength(idx.n_months);
+    expect(idx.n_months).toBe(idx.shape[0]);
+    expect([...idx.months].sort()).toEqual(idx.months);
+    for (const m of idx.months) expect(m).toMatch(/^\d{4}-\d{2}$/);
+    // the licence and the attribution travel WITH the bytes — the layer's
+    // credit line and the footer both owe this string to CC BY-NC 4.0
+    expect(idx.licence).toBe("CC BY-NC 4.0");
+    expect(idx.attribution).toBe("Powered by Global Fishing Watch");
+    expect(idx.source.doi).toBe("10.5281/zenodo.14982712");
+  });
+
+  test("the header, shape, dtype and slab size are the file's own", () => {
+    const h = npyHeader(path.join(FX, idx.file));
+    expect(h.headerLen).toBe(idx.header_len);
+    expect(h.shape).toEqual(idx.shape);
+    expect(h.descr).toBe(idx.dtype);
+    // C order is not a detail: the whole range read assumes month-major.
+    expect(h.fortran).toBe(false);
+    expect(idx.fortran_order).toBe(false);
+    expect(h.bytes).toBe(idx.bytes);
+    // dtype and itemsize agree with each other. E-081 §3 said float16; the
+    // builder MEASURED overflow (a busy cell-month runs past 2048, where
+    // float16's integers stop being exact) and shipped float32 — which is why
+    // the reader branches on the index rather than on the plan.
+    expect(idx.itemsize).toBe(Number(idx.dtype.slice(-1)));
+    expect(idx.dtype).toBe("<f4");
+    expect(idx.itemsize).toBe(4);
+    // offset = header_len + row·slab_bytes, length = slab_bytes — and the
+    // arithmetic has to close on the file size EXACTLY, or the last month is
+    // a short read and every month before it is the wrong bytes.
+    const cells = idx.shape.slice(1).reduce((a, b) => a * b, 1);
+    expect(idx.slab_bytes).toBe(cells * idx.itemsize);
+    expect(idx.header_len + idx.n_months * idx.slab_bytes).toBe(idx.bytes);
+    expect(idx.header_len + idx.shape[0] * idx.slab_bytes).toBe(idx.bytes);
+    // the channel axis is the LAST one, and the grid is the two before it
+    expect(idx.chans).toHaveLength(idx.shape[3]);
+    expect(idx.grid.ny).toBe(idx.shape[1]);
+    expect(idx.grid.nx).toBe(idx.shape[2]);
+  });
+
+  test("the grid is south-first, global and wrapping, at the tensor's own origin", () => {
+    const g = idx.grid;
+    expect(g.south_first).toBe(true);
+    expect(g.wrap).toBe(true);
+    expect(g.lat0).toBe(-90);
+    expect(g.lon0).toBe(-180);
+    // POINT-aligned, like the family-7 grid it is binned onto: (n−1) steps
+    // span the whole axis, so there is one row on each pole and one column on
+    // the dateline. An EDGE-aligned grid would have n steps and no pole row,
+    // and the app's half-step cell box would then be half a cell out
+    // everywhere — a wrong map that looks entirely plausible.
+    expect((g.ny - 1) * g.step).toBeCloseTo(180, 9);
+    expect((g.nx - 1) * g.step).toBeCloseTo(360 - g.step, 9);
+    // the fixture is the published grid DECIMATED, and says so
+    expect(g.stride).toBeGreaterThan(1);
+    expect(g.decimated_from).toEqual([721, 1440]);
+    expect(g.step).toBeCloseTo(0.25 * g.stride, 9);
+  });
+
+  test("zero is a value, the sums close, and the bytes say so", () => {
+    /* The whole layer rests on "0 means no broadcasting fishing vessel", not
+     * "missing" — that is what lets a blank ocean be painted as nothing while
+     * the probe still answers zero. So: no NaN anywhere, nothing negative, and
+     * fishing hours never exceed broadcasting hours (the builder's own
+     * invariant, E-081 §2). Reduced to counts and extremes, never one expect()
+     * per cell (CLAUDE.md §4) — this is 31,968 cells. */
+    const buf = fs.readFileSync(path.join(FX, idx.file));
+    const nC = idx.chans.length;
+    const cells = idx.grid.ny * idx.grid.nx;
+    let nan = 0, neg = 0, overFish = 0, nonzero = 0;
+    let maxF = 0, maxH = 0, sumF = 0, sumH = 0;
+    for (let m = 0; m < idx.n_months; m++) {
+      const base = idx.header_len + m * idx.slab_bytes;
+      for (let p = 0; p < cells; p++) {
+        const o = base + p * nC * idx.itemsize;
+        const f = buf.readFloatLE(o);
+        const h = buf.readFloatLE(o + idx.itemsize);
+        if (!Number.isFinite(f) || !Number.isFinite(h)) { nan++; continue; }
+        if (f < 0 || h < 0) neg++;
+        if (f > h + 1e-3) overFish++;
+        if (f > 0) nonzero++;
+        if (f > maxF) maxF = f;
+        if (h > maxH) maxH = h;
+        sumF += f; sumH += h;
+      }
+    }
+    expect(nan).toBe(0);            // the grid has no missing values at all
+    expect(neg).toBe(0);
+    expect(overFish).toBe(0);       // fishing_hours <= hours, always
+    expect(nonzero).toBeGreaterThan(100);        // a real grid, not an empty one
+    expect(nonzero).toBeLessThan(cells * idx.n_months);   // …and mostly empty ocean
+    // a cell-month runs to hundreds of hours — which is exactly why float16
+    // was not good enough and the index says <f4
+    expect(maxF).toBeGreaterThan(100);
+    expect(maxH).toBeGreaterThanOrEqual(maxF);
+    expect(maxF).toBeLessThan(31 * 24 * 5000);   // vessel-hours, not nonsense
+    // the index's own totals were computed from these bytes
+    expect(sumF).toBeCloseTo(idx.totals.grid_sum[0], 0);
+    expect(sumH).toBeCloseTo(idx.totals.grid_sum[1], 0);
+  });
+});
+
+/* ================= data/loitering.json (E-081 §4b) =========================
+ *
+ * A snapshot of the Global Fishing Watch Events API, baked server-side because
+ * that API is KEYED and the browser must never call one (root CLAUDE.md §3).
+ * What is committed today is the deterministic placeholder
+ * `scripts/make_loitering_fixture.py` writes; the first real run of
+ * `.github/workflows/refresh-loitering.yml` overwrites it with the same
+ * schema, which is why every assertion here is about the SCHEMA and the
+ * internal consistency rather than about the 40 placeholder rows. */
+test.describe("loitering.json", () => {
+  const d = read("loitering.json");
+
+  test("the snapshot says what window it can speak for, and who it is from", () => {
+    expect(d.window.start).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+    expect(d.window.end).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+    expect(d.window.start < d.window.end).toBe(true);
+    // a ROLLING 30-day window, which is what the layer's refusal outside it
+    // is a statement about
+    const days = (Date.parse(`${d.window.end}T00:00:00Z`)
+                - Date.parse(`${d.window.start}T00:00:00Z`)) / 864e5;
+    expect(days).toBeGreaterThan(20);
+    expect(days).toBeLessThanOrEqual(31);
+    expect(d.fetched_at).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/);
+    // the attribution CC BY-NC 4.0 requires, carried with the data rather than
+    // only typed into the page
+    expect(d.attribution).toBe("Powered by Global Fishing Watch");
+    expect(d.licence).toBe("CC BY-NC 4.0");
+    expect(d.attribution_url).toBe("https://globalfishingwatch.org");
+    // the endpoint it came from, so a reader can check the claim
+    expect(d.source).toBe("https://gateway.api.globalfishingwatch.org/v3/events");
+    expect(d.dataset).toBe("public-global-loitering-events:latest");
+    expect(d.count).toBe(d.events.length);
+  });
+
+  test("every event is a placeable interval with a vessel on it", () => {
+    expect(d.events.length).toBeGreaterThan(10);
+    // Reduced to counts (CLAUDE.md §4): one expect() per event would be 40
+    // reporter steps for a fact that is a single predicate.
+    let bad = 0, outside = 0, backwards = 0, longest = 0, fastest = 0;
+    let named = 0, flagged = 0, mmsi = 0;
+    const lo = Date.parse(`${d.window.start}T00:00:00Z`);
+    const hi = Date.parse(`${d.window.end}T00:00:00Z`) + 864e5;
+    for (const e of d.events) {
+      if (!(e.lat >= -90 && e.lat <= 90 && e.lon >= -180 && e.lon <= 180)) bad++;
+      const s = Date.parse(e.start), t = Date.parse(e.end);
+      if (!Number.isFinite(s) || !Number.isFinite(t)) { bad++; continue; }
+      if (t < s) backwards++;
+      // an event in a 30-day snapshot must overlap the 30 days
+      if (t < lo || s > hi) outside++;
+      longest = Math.max(longest, e.hours ?? 0);
+      fastest = Math.max(fastest, e.speed_kn ?? 0);
+      if (e.name) named++;
+      if (e.flag) flagged++;
+      if (e.mmsi) mmsi++;
+    }
+    expect(bad).toBe(0);
+    expect(backwards).toBe(0);
+    expect(outside).toBe(0);
+    // LOITERING is by definition slow and long: a "drift" at 12 knots is a
+    // ship under way and would mean the wrong field had been read.
+    expect(fastest).toBeLessThan(4);
+    expect(longest).toBeGreaterThan(2);
+    expect(longest).toBeLessThan(24 * 31);
+    // the identity fields the card prints
+    expect(named).toBe(d.events.length);
+    expect(flagged).toBe(d.events.length);
+    expect(mmsi).toBe(d.events.length);
+    // sorted by start, as the baker promises — so the file reads in order and
+    // a diff between two refreshes is readable
+    const starts = d.events.map((e) => e.start);
+    expect([...starts].sort()).toEqual(starts);
+  });
+
+  test("a placeholder snapshot SAYS it is one", () => {
+    /* `fixture: true` is not decoration: the layer's toast reads it to tell a
+     * reader these are not real events, and a real refresh must drop the flag.
+     * If this file ever carries real events while still claiming to be a
+     * fixture, the app would disclaim data that is true. */
+    if (d.fixture) {
+      expect(d.fixture_note).toContain("PLACEHOLDER");
+      expect(d.fixture_note).toContain("GFW_API_TOKEN");
+    } else {
+      expect(d.fixture_note).toBeUndefined();
+      expect(d.api_total).toBeGreaterThanOrEqual(0);
+    }
+  });
+});

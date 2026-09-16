@@ -922,6 +922,47 @@ const GIBS_LAYERS = [
     on: false,
   },
   {
+    id: "fishing",
+    /* Global Fishing Watch's apparent fishing effort, summed per 0.25° cell
+     * per month, read the same way the family-7 tensor is read: ONE HTTP range
+     * request of a `.npy` on the Hugging Face Hub per month on screen. See the
+     * block above `GridProvider` for the arithmetic, and E-081 §3–§4 for how
+     * the grid is built. `fishingGrid` is what makes `loadGridMonth` answer
+     * from the Hub instead of from a baked file, exactly as `tensorGrid` does.
+     *
+     * AGGREGATION / DIFFERENCE POSTURE: NEITHER, for two reasons that point
+     * the same way. The value is ALREADY a monthly sum — averaging a month of
+     * vessel-hours over a 12-day window would produce a number in no unit at
+     * all, and differencing two of them per pixel would be differencing two
+     * sums over different numbers of days unless the window happened to align
+     * with a month. And the byte count is family 7's argument unchanged: each
+     * frame is one 8.3 MB range read, so a window would be several of them per
+     * paint and a computed difference doubles whatever the window costs.
+     * (It is not `timed`, so `providersFor` never suppresses it either — the
+     * Aggregate slider simply leaves it alone, like every other grid.)
+     *
+     * `logScale` paints log10(1 + hours) while `values` stays in real hours,
+     * so the COLOUR is logarithmic and every read-out is not: the probe, the
+     * pixel card and the legend's hover all speak vessel-hours. `vmax` is the
+     * ramp's top, not a claim about the data — a cell-month above it
+     * saturates, and the legend says the scale is logarithmic.
+     * `zeroTransparent`: zero is a REAL measurement here (no vessel broadcast
+     * in that cell that month, stored as 0 and never as NaN), so it is painted
+     * as nothing while the probe still reads it as zero.
+     *
+     * The CC BY-NC licence requires the attribution below wherever the data is
+     * shown: the footer carries it, and `creditHtml` puts it in Cesium's own
+     * credit line whenever the layer is on. */
+    grid: true, fishingGrid: true, logScale: true, zeroTransparent: true,
+    ramp: "effort", vmin: 0, vmax: 1000, units: "vessel-hours", maxLevel: 7,
+    creditHtml: '<a href="https://globalfishingwatch.org" target="_blank" ' +
+      'rel="noopener">Powered by Global Fishing Watch</a>',
+    doc: "https://doi.org/10.5281/zenodo.14982712",
+    title: "Fishing effort (AIS), 0.25° monthly",
+    meta: "Hours a month that vessels were apparently fishing in each cell, from their AIS transponders — CC BY-NC 4.0, Powered by Global Fishing Watch",
+    on: false,
+  },
+  {
     id: "nightlights",
     doc: "https://blackmarble.gsfc.nasa.gov/",
     layer: "VIIRS_Black_Marble",
@@ -3302,6 +3343,14 @@ const RAMPS = {
   terrain: [[0, 8, 26, 60], [0.35, 32, 92, 150], [0.5, 64, 148, 186],
             [0.52, 96, 140, 84], [0.68, 150, 138, 78], [0.86, 130, 96, 66],
             [1, 240, 244, 248]],
+  // Viridis, unaltered — the standard perceptually-uniform, colourblind-safe
+  // sequential ramp. Deliberately NOT one of this app's house ramps: fishing
+  // effort is a human activity rather than a physical field, and borrowing
+  // `speed`'s ocean-blue or `sst`'s thermal reds would invite the reader to
+  // compare it with the ocean underneath by colour. Its dark foot is never
+  // painted on an empty cell, because zero effort renders transparent.
+  effort: [[0, 68, 1, 84], [0.25, 59, 82, 139], [0.5, 33, 145, 140],
+           [0.75, 94, 201, 98], [1, 253, 231, 37]],
 };
 
 function rampColor(name, t) {
@@ -3370,31 +3419,47 @@ async function loadGridMonth(cfg) {
   // through `loadGrid`. Everything downstream — the painter, the probe, the
   // pixel card, the legend — is unchanged by that.
   if (cfg.tensorGrid) return tensorGridFor(cfg);
+  // Same arrangement for the fishing grid: a month of it is one range read of
+  // the Hub, not a baked file, and everything downstream is unchanged by that.
+  if (cfg.fishingGrid) return fishingGridFor(cfg);
   const g = await loadGrid(cfg);
   if (g && cfg.monthlyGrid) await ensureGridMonth(cfg, g, resolveGridMonth(g));
   return g;
 }
 
-function sampleGrid(g, lonDeg, latDeg) {
-  if (latDeg < g.south || latDeg >= g.north) return null;
+/* WHICH CELL a point falls in, as a flat index into the grid's value array, or
+ * −1 for "outside this grid". Split out of `sampleGrid` because a grid may
+ * carry MORE THAN ONE array over the same cells — the fishing grid holds two
+ * channels, apparent fishing hours and total broadcasting hours, and the probe
+ * prints both. Reading the second one must land on the cell the first one did,
+ * and the only arrangement in which that cannot drift is one function. */
+function gridCellIndex(g, lonDeg, latDeg) {
+  if (!g || latDeg < g.south || latDeg >= g.north) return -1;
   let ix;
   if (g.wrap) {
-    /* A GLOBAL point-aligned grid (the family-7 tensor) has no east or west
-     * edge: the half cell either side of the dateline is ONE cell, whose point
-     * sits at −180°. Rejecting lon ≥ east there would leave a half-cell seam of
-     * "no data" down the Pacific that is not in the data. Every other grid in
-     * the app is a bounded rectangle and keeps the rejection. */
+    /* A GLOBAL point-aligned grid (the family-7 tensor, the fishing grid) has
+     * no east or west edge: the half cell either side of the dateline is ONE
+     * cell, whose point sits at −180°. Rejecting lon ≥ east there would leave a
+     * half-cell seam of "no data" down the Pacific that is not in the data.
+     * Every other grid in the app is a bounded rectangle and keeps the
+     * rejection. */
     ix = Math.floor((lonDeg - g.west) / g.dlon);
     ix = ((ix % g.nx) + g.nx) % g.nx;
   } else {
-    if (lonDeg < g.west || lonDeg >= g.east) return null;
+    if (lonDeg < g.west || lonDeg >= g.east) return -1;
     ix = Math.floor((lonDeg - g.west) / g.dlon);
   }
   const iy = Math.floor((latDeg - g.south) / g.dlat);
-  if (ix < 0 || ix >= g.nx || iy < 0 || iy >= g.ny) return null;
+  if (ix < 0 || ix >= g.nx || iy < 0 || iy >= g.ny) return -1;
+  return iy * g.nx + ix;
+}
+
+function sampleGrid(g, lonDeg, latDeg) {
+  const i = gridCellIndex(g, lonDeg, latDeg);
+  if (i < 0) return null;
   const vals = gridValues(g);
   if (!vals) return null;                 // month not loaded yet (year file in flight)
-  const v = vals[iy * g.nx + ix];
+  const v = vals[i];
   // A baked grid writes `null` for an empty cell; a tensor slab writes NaN
   // (float16 has one and JSON does not). Both mean "nothing here", and a NaN
   // that reached rampColor would paint the palette's top colour — an unobserved
@@ -4015,6 +4080,398 @@ async function tensorAnnounce(cfg) {
   maybeTensorToast(cfg);
 }
 
+/* ==================== fishing effort (AIS), read by the byte (E-081 §3–§4)
+ *
+ * AIS — the Automatic Identification System, the transponder every large ship
+ * broadcasts its position on — is what this layer is made of. Global Fishing
+ * Watch runs a neural network over those tracks and classifies each vessel's
+ * movement as fishing or not; the hours it calls fishing are "apparent fishing
+ * effort", and the published dataset sums them per 0.1° cell per day per
+ * vessel. E-081 §2 turns that into a point store and §3 bins the same rows
+ * onto the family-7 0.25° grid, one frame per month, 2012-01 → 2024-12.
+ *
+ * THE READ IS THE FAMILY-7 READ, one rung coarser in time. The `.npy` is
+ * month-major in C order — `[month][lat][lon][channel]` — so one month of BOTH
+ * channels is a single contiguous slab and the whole layer is one HTTP range
+ * request per frame:
+ *
+ *     offset = header_len + row * slab_bytes
+ *     length =              slab_bytes        (= ny * nx * C * itemsize)
+ *
+ * 8.3 MB at 0.25°. Not one number of that arithmetic is written here:
+ * `data/fishing_index.json` (written by `ml/publish_fishing_index.py`) carries
+ * `header_len`, `shape`, `dtype`, `itemsize`, `slab_bytes`, the month list,
+ * the grid geometry and the channel vocabulary, measured from the published
+ * file rather than restated — which is why this code has no 721, no 1440, no
+ * 128 and no 156 in it, and why it keeps working when the 2025 months land.
+ *
+ * TWO CHANNELS, BOTH IN HOURS. `fishing_hours` is the part of the month a
+ * neural network classed as fishing; `hours` is the whole time vessels were
+ * broadcasting in that cell. The layer PAINTS the first and the read-outs
+ * print both, because the ratio between them is what says whether a cell is a
+ * fishing ground or a shipping lane.
+ *
+ * ZERO IS A MEASUREMENT. A cell with no broadcasting fishing vessel that month
+ * stores 0, not NaN — the grid has no missing values at all. So zero renders
+ * transparent (an empty ocean must not be painted the palette's foot) and the
+ * probe still reads it as zero rather than as "no data". The two are different
+ * claims and the layer makes both.
+ *
+ * COVERAGE IS NOT EFFORT. AIS reception is uneven in space and time, carriage
+ * requirements differ by country and fleet, and a vessel can switch its
+ * transponder off. Absence of effort here is NOT absence of fishing, and the
+ * hover card says so in those words, because a blank ocean on this layer is
+ * the single most misreadable thing in it.
+ *
+ * huggingface.co is CLAUDE.md §3's second approved live endpoint and this use
+ * clears the same bar family 7 was admitted on: no key, CORS measured with our
+ * own Origin and recorded in the index, a BOUNDED read triggered by enabling
+ * the layer or moving the date rather than by streaming, and a degrade path —
+ * every failure, including an index that has not been published yet, ends in a
+ * hint toast and an empty layer rather than a broken globe. */
+const FISHING_INDEX_URL = "data/fishing_index.json";
+/* Four months of slabs, 33 MB. Smaller than the tensor's eight because nothing
+ * here needs a run of consecutive frames the way the Cones tab's live mode
+ * needs seven pentads at once — this cache exists so the ±1 month steppers and
+ * a scrub back and forth cost no request. */
+const FISHING_LRU_SLABS = 4;
+const FISHING_LRU_BYTES = 48 << 20;
+const fishingState = {
+  index: null, indexPromise: null, error: null, unpublished: false,
+  slabs: new Map(),        // "<row>" -> ArrayBuffer, insertion-ordered
+  bytes: 0,
+  planes: new Map(),       // "<row>" -> grid object (both channels decoded)
+  inflight: new Map(),
+  current: null,
+  currentKey: null,
+  loading: false,
+  seq: 0,
+};
+
+/* The index is NOT in the repo until the build job publishes it, and that is a
+ * state the layer has to survive rather than a bug: `data/fishing/fixture/`
+ * holds the same schema over a 20×-decimated real 2012 grid so the tests (and
+ * anyone reading the code) exercise the production path, and dropping the real
+ * `data/fishing_index.json` in beside it makes the layer live with no code
+ * change at all. A 404 is therefore recorded as `unpublished`, which the toast
+ * tells apart from a fetch that failed for some other reason. */
+function loadFishingIndex() {
+  if (!fishingState.indexPromise) {
+    fishingState.indexPromise = fetch(FISHING_INDEX_URL)
+      .then((r) => {
+        if (r.status === 404) { fishingState.unpublished = true; return null; }
+        return r.ok ? r.json() : null;
+      })
+      .then((j) => (fishingState.index = j))
+      .catch(() => null);
+  }
+  return fishingState.indexPromise;
+}
+
+/* Which ROW of the file a date's month is, and whether the date had to be
+ * clamped to reach it. The months are contiguous, so "floor to the newest
+ * month at or before this date" only ever clamps at the two ends — but it is
+ * written as a floor rather than an index lookup so a gap in a future rebuild
+ * degrades to the previous month instead of to nothing. */
+function fishingMonthRow(idx, dateStr = state.date) {
+  const ms = idx.months || [];
+  if (!ms.length) return null;
+  const want = String(dateStr).slice(0, 7);
+  let row = 0;
+  for (let i = 0; i < ms.length; i++) { if (ms[i] <= want) row = i; else break; }
+  const clamped = want < ms[0] ? "before" : want > ms[ms.length - 1] ? "after" : null;
+  return { row, month: ms[row], clamped, first: ms[0], last: ms[ms.length - 1] };
+}
+
+function fishingEvict() {
+  for (let guard = 0; guard < 64; guard++) {
+    if (fishingState.slabs.size <= FISHING_LRU_SLABS &&
+        fishingState.bytes <= FISHING_LRU_BYTES) return;
+    const victim = fishingState.slabs.keys().next().value;   // insertion order = oldest
+    if (victim === undefined) return;
+    fishingState.bytes -= fishingState.slabs.get(victim).byteLength;
+    fishingState.slabs.delete(victim);
+    fishingState.planes.delete(victim);
+  }
+}
+
+/* One slab = one month, both channels. The ONLY network call in this block. */
+function fishingSlab(idx, row) {
+  const key = String(row);
+  if (fishingState.slabs.has(key)) {
+    const buf = fishingState.slabs.get(key);        // touch: move to the LRU's end
+    fishingState.slabs.delete(key);
+    fishingState.slabs.set(key, buf);
+    return Promise.resolve(buf);
+  }
+  if (fishingState.inflight.has(key)) return fishingState.inflight.get(key);
+  if (row < 0 || row >= idx.shape[0]) return Promise.resolve(null);
+  const off = idx.header_len + row * idx.slab_bytes;
+  const end = off + idx.slab_bytes - 1;
+  const p = fetch(idx.url, { headers: { Range: `bytes=${off}-${end}` } })
+    .then((r) => {
+      // 206 is the contract, exactly as for family 7: a 200 means the host
+      // ignored the Range and is sending the whole file, which is refused
+      // rather than consumed — it is the one request this layer promises never
+      // to make.
+      if (r.status !== 206) throw new Error(`HTTP ${r.status} (expected 206)`);
+      return r.arrayBuffer();
+    })
+    .then((buf) => {
+      if (buf.byteLength !== idx.slab_bytes) {
+        throw new Error(`${buf.byteLength} bytes, expected ${idx.slab_bytes}`);
+      }
+      fishingState.slabs.set(key, buf);
+      fishingState.bytes += buf.byteLength;
+      fishingEvict();
+      return buf;
+    })
+    .finally(() => fishingState.inflight.delete(key));
+  fishingState.inflight.set(key, p);
+  return p;
+}
+
+/* One month's slab as a grid object the app's existing sampler and painter
+ * already understand, with the SECOND channel carried alongside in `hours`.
+ *
+ * The values are NOT z-scored — unlike the tensor, this is a published product
+ * in its own unit, and a vessel-hour is a vessel-hour. The dtype is read from
+ * the index rather than assumed: E-081 §3 specified float16 and the builder
+ * measured overflow (a busy cell-month runs to thousands of hours, and
+ * float16's integers stop being exact at 2048) and went to float32, so the
+ * decoder branches on `itemsize` and would keep working either way.
+ *
+ * The grid is POINT-aligned on the family-7 0.25° grid — 721 rows from −90 to
+ * +90 — so a cell is the half-step box around its point and the columns close
+ * at the dateline, which is why `wrap` is set and why the west edge is half a
+ * step west of −180. The rows run SOUTH-FIRST, the same order `_write_grid`
+ * uses, so there is no flip here; `tests/data.spec.js` pins that against the
+ * fixture's own bytes rather than trusting this sentence. */
+function fishingPlane(idx, row) {
+  const key = String(row);
+  if (fishingState.planes.has(key)) return Promise.resolve(fishingState.planes.get(key));
+  return fishingSlab(idx, row).then((buf) => {
+    if (!buf) return null;
+    const { ny, nx, step, lat0, lon0 } = idx.grid;
+    const chans = idx.chans;
+    const nC = chans.length;
+    const size = idx.itemsize;
+    const dv = new DataView(buf);
+    const read = size === 2 ? (o) => tensorF16(dv.getUint16(o, true))
+                            : (o) => dv.getFloat32(o, true);
+    const fish = new Float32Array(ny * nx);
+    const hours = new Float32Array(ny * nx);
+    const iF = chans.indexOf("fishing_hours"), iH = chans.indexOf("hours");
+    for (let p = 0, o = 0; p < fish.length; p++, o += nC * size) {
+      fish[p] = read(o + iF * size);
+      hours[p] = read(o + iH * size);
+    }
+    const g = {
+      west: lon0 - step / 2, east: lon0 + (nx - 0.5) * step,
+      south: lat0 - step / 2, north: lat0 + (ny - 0.5) * step,
+      dlon: step, dlat: step, nx, ny, wrap: !!idx.grid.wrap,
+      values: fish, hours,
+      units: (idx.units && idx.units.fishing_hours) || "vessel-hours",
+      // `month` is what `whenOfGrid` stamps every read-out with (§2.9): the
+      // month the sum covers, read out of the index's own month list rather
+      // than off the app's date, so a clamped date cannot print the date it
+      // asked for over the month it actually got.
+      month: idx.months[row],
+      fishing: {
+        row,
+        labels: idx.labels || {},
+        units: idx.units || {},
+      },
+    };
+    fishingState.planes.set(key, g);
+    while (fishingState.planes.size > 4) {
+      fishingState.planes.delete(fishingState.planes.keys().next().value);
+    }
+    return g;
+  });
+}
+
+/* The second channel at the cell the first one answered for. */
+function fishingHoursAt(g, lon, lat) {
+  const i = gridCellIndex(g, lon, lat);
+  if (i < 0 || !g.hours) return null;
+  const v = g.hours[i];
+  return Number.isFinite(v) ? v : null;
+}
+
+/* Resolve what the layer should be painting NOW — the current date's month —
+ * fetching the slab if it is not in the LRU. Returns the grid, or null while
+ * it is in flight (the provider then paints nothing and is rebuilt when the
+ * bytes land, exactly as a month-keyed grid is). `seq` supersedes a resolution
+ * nobody is waiting for, the same guard `ensureTensorGrid` carries. */
+async function ensureFishingGrid(cfg, { toast = false } = {}) {
+  const my = ++fishingState.seq;
+  const idx = await loadFishingIndex();
+  if (!idx) {
+    fishingState.error = fishingState.unpublished ? "not published yet" : "no index";
+    fishingState.current = null;
+    fishingState.currentKey = null;
+    if (toast) fishingMissingToast(cfg);
+    return null;
+  }
+  const at = fishingMonthRow(idx, state.date);
+  if (!at) return null;
+  const key = `${at.row}`;
+  if (fishingState.currentKey === key && fishingState.current) return fishingState.current;
+  let g = null;
+  try {
+    fishingState.loading = true;
+    g = await fishingPlane(idx, at.row);
+    fishingState.error = g ? null : `no data for ${at.month}`;
+  } catch (err) {
+    fishingState.error = String((err && err.message) || err);
+    g = null;
+  } finally {
+    fishingState.loading = false;
+  }
+  if (my !== fishingState.seq) return fishingState.current;      // superseded
+  if (!g) {
+    fishingState.current = null;
+    fishingState.currentKey = null;
+    if (toast) fishingMissingToast(cfg);
+    return null;
+  }
+  fishingState.current = g;
+  fishingState.currentKey = key;
+  gridsLoaded.set(cfg.id, g);
+  return g;
+}
+
+/* Synchronous view of the same thing, for the painter: `GridProvider` asks per
+ * TILE and must never issue a request of its own — the fetch is owned by
+ * enable and by the date. */
+function fishingGridFor(cfg) {
+  const idx = fishingState.index;
+  if (!idx) return null;
+  const at = fishingMonthRow(idx, state.date);
+  return at && fishingState.currentKey === `${at.row}` ? fishingState.current : null;
+}
+
+function fishingMissingToast(cfg) {
+  const why = fishingState.unpublished
+    ? `its index <code>data/fishing_index.json</code> has not been published yet — ` +
+      `the 0.25° monthly grid is built and uploaded by ` +
+      `<code>ml/build_family10_stores.py --store fishing</code>, and the layer ` +
+      `goes live the moment that file lands beside this page, with no change here`
+    : `it could not be read${fishingState.error ? ` (${fishingState.error})` : ""}`;
+  showToast(`<strong>${cfg.title}</strong>: ${why}. The grid lives on the ` +
+    `Hugging Face Hub and is fetched one month at a time; the rest of the globe ` +
+    `is unaffected. ` +
+    `<a href="https://blauewelt.github.io/earth/docs.html?f=ml/plans/E081_family10_2_fishing.md" ` +
+    `target="_blank" rel="noopener">what this layer is</a>.`,
+    { key: "fishing-missing", replace: true });
+}
+
+/* Which MONTH is on screen, said out loud on enable and on a month change —
+ * the `maybeMonthlyGridToast` shape, with the archive wording (§4b, and the
+ * three sentences of `maybeArchiveToast`) for a date the record cannot speak
+ * for. The record has a hard start and a hard end and neither will move by
+ * itself, so a clamp is stated as such rather than left to be discovered. */
+function maybeFishingToast(cfg, { replace = false } = {}) {
+  const idx = fishingState.index;
+  if (!idx) return;
+  const at = fishingMonthRow(idx, state.date);
+  if (!at) return;
+  const want = state.date.slice(0, 7);
+  let note;
+  if (at.clamped === "before") {
+    note = ` — the record <strong>starts ${at.first}</strong> and there is no ` +
+      `AIS-based effort before it, so you are seeing ${at.month}, not ${want}`;
+  } else if (at.clamped === "after") {
+    note = ` — its archive <strong>ends ${at.last}</strong> and nothing newer has ` +
+      `been published, so you are seeing ${at.month}, not ${want}. Set the date ` +
+      `on or before ${at.last} to browse the record`;
+  } else {
+    note = ` — set the date's <em>month</em> anywhere in ${at.first} → ${at.last} to browse`;
+  }
+  showToast(`<strong>${cfg.title}</strong> is a <strong>monthly sum</strong>: the ` +
+    `day doesn't matter, but the <strong>month does</strong>. Showing ` +
+    `<strong>${at.month}</strong>${note}. Each month is one range read of the ` +
+    `grid on the Hugging Face Hub.`, { key: "fishing-month", replace });
+}
+
+/* A date move repaints this layer only when it lands in a DIFFERENT month —
+ * thirty days in thirty-one change nothing, and rebuilding the provider for
+ * them would issue an 8.3 MB request per keystroke. Called from
+ * `applyDateMove`, which is already inside `scrubApply`. */
+async function refreshFishingGrids() {
+  const idx = fishingState.index;
+  if (!idx) return;
+  for (const [id, entry] of Object.entries(state.layers)) {
+    if (!entry.layer || !entry.cfg.fishingGrid) continue;
+    const at = fishingMonthRow(idx, state.date);
+    if (!at || entry.fishingMonth === at.month) continue;
+    entry.fishingMonth = at.month;
+    await ensureFishingGrid(entry.cfg);
+    if (!state.layers[id] || !state.layers[id].layer) continue;
+    removeLayer(id);
+    addLayer(entry.cfg);
+    maybeFishingToast(entry.cfg, { replace: true });
+  }
+}
+
+/* Resolve the layer's bytes and, if they arrived AFTER the provider was built,
+ * rebuild it — Cesium caches rendered tiles, so a repaint needs a fresh
+ * provider (the same rule `refreshMonthlyGrids` and `tensorEnsureForLayer`
+ * follow). Terminates: the rebuild calls back in here with the grid already
+ * resolved. */
+async function fishingEnsureForLayer(cfg) {
+  const had = fishingGridFor(cfg);
+  const g = await ensureFishingGrid(cfg);
+  const entry = state.layers[cfg.id];
+  if (!entry || !entry.layer) return g;
+  entry.fishingMonth = g ? g.month : null;
+  if (g && !had) { removeLayer(cfg.id); addLayer(cfg); }
+  else updateLegends();
+  return g;
+}
+
+/* Said on enable: which month is on screen, or why nothing is. */
+async function fishingAnnounce(cfg) {
+  const idx = await loadFishingIndex();
+  if (!idx) { fishingMissingToast(cfg); return; }
+  maybeFishingToast(cfg);
+}
+
+/* What the tests read instead of pixels: which month, how many slabs the LRU
+ * is holding, and the grid's geometry — enough to assert that the bytes
+ * travelled and were decoded, without asserting on a colour. */
+function fishingLayerState() {
+  const cfg = GIBS_LAYERS.find((l) => l.id === "fishing");
+  const idx = fishingState.index;
+  const g = fishingGridFor(cfg);
+  const at = idx ? fishingMonthRow(idx, state.date) : null;
+  return {
+    hasIndex: !!idx,
+    unpublished: fishingState.unpublished,
+    error: fishingState.error,
+    month: at ? at.month : null,
+    row: at ? at.row : null,
+    clamped: at ? at.clamped : null,
+    ready: !!g,
+    slabs: [...fishingState.slabs.keys()],
+    bytes: fishingState.bytes,
+    fixture: !!(idx && idx.fixture),
+    grid: g ? { nx: g.nx, ny: g.ny, dlon: g.dlon, west: g.west, south: g.south,
+                wrap: !!g.wrap, units: g.units, month: g.month } : null,
+    vmin: cfg.vmin, vmax: cfg.vmax, ramp: cfg.ramp, logScale: !!cfg.logScale,
+  };
+}
+
+/* One cell of whatever month the layer is painting, both channels, in hours —
+ * the numbers the probe would print, without a click. */
+function fishingSampleAt(lon, lat) {
+  const cfg = GIBS_LAYERS.find((l) => l.id === "fishing");
+  const g = fishingGridFor(cfg);
+  if (!g) return null;
+  return { fishing_hours: sampleGrid(g, lon, lat), hours: fishingHoursAt(g, lon, lat) };
+}
+
 class GridProvider {
   constructor(cfg) {
     this._cfg = cfg;
@@ -4027,7 +4484,11 @@ class GridProvider {
     this.maximumLevel = cfg.maxLevel || 6;
     this.minimumLevel = 0;
     this.errorEvent = new Cesium.Event();
-    this.credit = new Cesium.Credit(cfg.source || cfg.title);
+    // `creditHtml` where a licence demands a LINKED attribution string on the
+    // page (Global Fishing Watch's CC BY-NC asks for "Powered by Global
+    // Fishing Watch" linked to globalfishingwatch.org); plain text otherwise.
+    this.credit = new Cesium.Credit(cfg.creditHtml || cfg.source || cfg.title,
+                                    !!cfg.creditHtml);
     this.hasAlphaChannel = true;
     this.ready = true;
   }
@@ -4050,6 +4511,19 @@ class GridProvider {
     // would invent an ordering — "logging" is not between "wildfire" and
     // "settlements", it is simply a different thing.
     const pal = this._cfg.classGrid ? gridClassPalette(g) : null;
+    /* A LOG COLOUR SCALE, with the values left alone. Fishing effort spans four
+     * orders of magnitude between a quiet shelf cell and the Yellow Sea, and a
+     * linear ramp over it paints one bright pixel on a black ocean. So the
+     * POSITION on the ramp is log10(1 + v) / log10(1 + vmax) while `values`
+     * stays in the layer's own unit — the probe, the pixel card and the
+     * legend's hover read-out all still speak hours, and only the colour is
+     * logarithmic. `zeroTransparent` is its companion: a zero that is a real
+     * measurement (no vessel broadcast here this month) must render as nothing
+     * rather than as the palette's foot, which would paint the whole ocean. */
+    const logTop = this._cfg.logScale ? Math.log10(1 + Math.max(vmax, 1e-9)) : 0;
+    const rampAt = (v) => this._cfg.logScale
+      ? Math.log10(1 + Math.max(0, v)) / logTop
+      : (v - vmin) / (vmax - vmin);
     const out = ctx.createImageData(W, H);
     const o = out.data;
     for (let j = 0; j < H; j++) {
@@ -4058,7 +4532,8 @@ class GridProvider {
         const lon = west + ((i + 0.5) / W) * (east - west);
         const v = sampleGrid(g, lon, lat);
         if (v == null) continue;
-        const c = pal ? pal.get(v) : rampColor(ramp, (v - vmin) / (vmax - vmin));
+        if (this._cfg.zeroTransparent && !(v > 0)) continue;
+        const c = pal ? pal.get(v) : rampColor(ramp, rampAt(v));
         if (!c) continue;
         const k = (j * W + i) * 4;
         o[k] = c[0]; o[k + 1] = c[1]; o[k + 2] = c[2]; o[k + 3] = 225;
@@ -4212,6 +4687,7 @@ function addLayer(cfg) {
   if (cfg.grid) {
     state.layers[cfg.id] = entry;
     if (cfg.tensorGrid) tensorEnsureForLayer(cfg);
+    if (cfg.fishingGrid) fishingEnsureForLayer(cfg);
     if (cfg.monthlyGrid) {
       // remember which month rendered, so a date change knows when to repaint
       loadGrid(cfg).then((g) => {
@@ -4583,6 +5059,8 @@ function applyDateMove() {
     refreshYearlyLayers();
     refreshMonthlyGrids();
     refreshTensorGrids();     // one 14.5 MB range read per SETTLED date, not per keystroke
+    refreshFishingGrids();    // …and one 8.3 MB read per settled MONTH
+    refreshLoitering();       // …and the events whose drift overlaps the new day
     if (sstEnsembleLayer) updateEnsembleLayer();
   });
   notifyGlobeDate();
@@ -4637,6 +5115,7 @@ function syncDateMax() {
     refreshYearlyLayers();
     refreshMonthlyGrids();
     refreshTensorGrids();
+    refreshFishingGrids();
   }
   // The comparison lives on the same axis: when the axis shortens, a pinned
   // date past the new end has to come back with it, or the comparison would
@@ -4888,6 +5367,7 @@ function pointLayerActive() {
   return (glacierCollection && glacierCollection.show) ||
     (pointLayers.climatetrace && pointLayers.climatetrace.collection.show) ||
     (pointLayers.argo && pointLayers.argo.collection.show) ||
+    (typeof loiterState !== "undefined" && loiterState.on) ||
     !!gbifLayer;
 }
 function glaciersActive() {
@@ -5011,6 +5491,12 @@ function updateLegends() {
     panel.appendChild(tideLegendEl());
     any = true;
   }
+  // A point layer with a colour scale needs a legend as much as a raster does:
+  // without it, "why is that dot yellow" has no answer on the page.
+  if (typeof loiterState !== "undefined" && loiterState.on && loiterState.shown) {
+    panel.appendChild(loiterLegendEl());
+    any = true;
+  }
   for (const e of Object.values(state.layers)) {
     if (!e.layer) continue;
     if (e.isDelta) {
@@ -5089,6 +5575,7 @@ const STATIC_LAYER_CHIPS = [
   ["toggle-sst-ensemble", "SST ensemble"],
   ["toggle-climatetrace", "Facility emissions"],
   ["toggle-argo", "Argo floats"],
+  ["toggle-loitering", "Loitering vessels"],
   ["toggle-stations", "Monitoring stations"],
   ["toggle-glaciers", "Glaciers"],
   ["toggle-tidelive", "Tide (live)"],
@@ -5593,11 +6080,20 @@ function gridLegendEl(cfg) {
   tip.className = "legend-tip hidden";
   const range = document.createElement("div");
   range.className = "legend-range";
-  range.innerHTML = `<span>${cfg.vmin}</span><span>${cfg.units}</span><span>${cfg.vmax}</span>`;
+  /* A log-scaled ramp must SAY so on the bar, and its hover read-out must
+   * invert the same transform the painter applied — otherwise the number under
+   * the cursor is not the number that colour means. `t = log10(1+v)/log10(1+vmax)`
+   * inverts to `v = 10^(t·log10(1+vmax)) − 1`, and the two are written beside
+   * each other here and in `GridProvider` for exactly that reason. */
+  const logTop = cfg.logScale ? Math.log10(1 + Math.max(cfg.vmax, 1e-9)) : 0;
+  const unitLabel = cfg.logScale ? `${cfg.units} · log scale` : cfg.units;
+  const topLabel = cfg.logScale ? `${cfg.vmax}+` : cfg.vmax;
+  range.innerHTML = `<span>${cfg.vmin}</span><span>${unitLabel}</span><span>${topLabel}</span>`;
   canvas.addEventListener("mousemove", (e) => {
     const rect = canvas.getBoundingClientRect();
     const frac = Cesium.Math.clamp((e.clientX - rect.left) / rect.width, 0, 1);
-    const v = cfg.vmin + frac * (cfg.vmax - cfg.vmin);
+    const v = cfg.logScale ? Math.pow(10, frac * logTop) - 1
+                           : cfg.vmin + frac * (cfg.vmax - cfg.vmin);
     tip.textContent = `${fmtVal(v)} ${cfg.units}`.trim();
     tip.style.left = `${Math.min(Math.max(frac * rect.width - 28, 0), rect.width - 80)}px`;
     tip.classList.remove("hidden");
@@ -5788,6 +6284,9 @@ function datelessToast(id) {
     // bin (maybeTensorToast). Only its two STATICS ignore the date, and that
     // toast says so when one is picked.
     if (cfg.tensorGrid) return null;
+    // Month-aware: date-driven, with its own toast naming the month showing
+    // and the archive wording at either end of the record (maybeFishingToast).
+    if (cfg.fishingGrid) return null;
     if (cfg.grid) {
       if (cfg.classGrid) {
         // Each categorical grid is dateless for its OWN reason and must say
@@ -5828,6 +6327,9 @@ function datelessToast(id) {
     climatetrace: null,   // yearly, not dateless — its own toast (climateTraceToast)
     argo: "<strong>Argo floats</strong> shows the fleet's latest positions (last ~10 days), so the " +
       "<strong>date selector doesn't change it</strong>.",
+    loitering: null,   // date-DRIVEN: its own toast names the snapshot's window
+                       // and refuses to show points for a date the snapshot
+                       // cannot speak for (loiteringToast)
     stations: "<strong>Monitoring stations</strong> are fixed sites, so the " +
       "<strong>date selector doesn't change this layer</strong>.",
     glaciers: "<strong>Glaciers (RGI v7)</strong> is a single inventory (~year 2000), so the " +
@@ -6335,6 +6837,26 @@ const LAYER_FACTS = {
          "z-scored; the numbers shown here are multiplied back into their own " +
          "units, and the probe prints the stored σ beside them.",
   },
+  "fishing": {
+    rec: "2012-01 → 2024-12 · the date's MONTH picks the map; 2024 is provisional " +
+         "and may be revised",
+    int: "monthly sums — every vessel-hour in the month added up, so the day of " +
+         "the month does not matter",
+    sp: "0.25° (~28 km), global",
+    sum: "Where the world's industrial fishing fleet actually fishes. Every large " +
+         "vessel broadcasts its position on AIS — the Automatic Identification " +
+         "System, a radio transponder built for collision avoidance — and Global " +
+         "Fishing Watch runs a neural network over those tracks to tell fishing " +
+         "movement from steaming. The hours it classes as fishing are “apparent " +
+         "fishing effort”, summed here per 0.25° cell per month; the probe also " +
+         "reads the total hours vessels were broadcasting there, and the ratio " +
+         "between the two separates a fishing ground from a shipping lane. " +
+         "Read the blanks carefully: AIS reception is uneven in space and time, " +
+         "carriage rules differ by fleet and flag, and a transponder can be " +
+         "switched off — so an empty cell means nobody was heard fishing, " +
+         "not that nobody fished. Colour is logarithmic because effort spans " +
+         "four orders of magnitude. Powered by Global Fishing Watch, CC BY-NC 4.0.",
+  },
   "nightlights": { rec: "a composite of the whole year 2016 (fixed — ignores the date selector)", int: "one composite of a full year", sp: "500 m grid",
     sum: "Human presence seen from orbit at night: a cloud-free annual composite of " +
          "VIIRS low-light imagery (Black Marble). Cities, highways, gas flares and " +
@@ -6412,6 +6934,7 @@ function buildLayerPanel() {
       maybeDatelessToast(id);
       maybeMonthlyGridToast(cfg);
       if (cfg.tensorGrid) tensorAnnounce(cfg);
+      if (cfg.fishingGrid) fishingAnnounce(cfg);
       maybeArchiveToast(cfg);
       maybeAnnualToast(cfg);
       maybeFineToast(cfg);
@@ -6493,6 +7016,8 @@ function buildLayerPanel() {
         refreshTimedLayers({ hold: true }); // date change affects every timed layer
         refreshMonthlyGrids();       // crossing midnight can cross a month
         refreshTensorGrids();        // …and a pentad boundary
+        refreshFishingGrids();       // …and the fishing grid's month
+        refreshLoitering();          // …and which loitering events overlap the day
       });
     } else {
       // Same date, new half-hour: only sub-daily layers see a different TIME,
@@ -6798,6 +7323,247 @@ document.getElementById("toggle-climatetrace").addEventListener("change", (e) =>
 document.getElementById("toggle-argo").addEventListener("change", (e) => {
   if (e.target.checked) { loadPointLayer("argo").then(updateDeltaHint); maybeDatelessToast("argo"); }
   else if (pointLayers.argo) pointLayers.argo.collection.show = false;
+  updateDeltaHint();
+});
+
+/* ================================ loitering vessels (E-081 §4b) ============
+ *
+ * LOITERING is a vessel drifting at sea at low speed for hours: not steaming,
+ * not fishing, just waiting. It is the signature of transshipment at sea — a
+ * catch moved from a fishing boat onto a refrigerated carrier that takes it to
+ * port, so the fishing vessel never has to come in — and of waiting generally.
+ * Global Fishing Watch derives it from the same AIS tracks the effort layer is
+ * built from: a carrier that stays inside a small radius below a speed
+ * threshold for long enough is an event, with a position, a start, an end and
+ * a duration.
+ *
+ * THE BROWSER NEVER CALLS THE API. The Events API needs a bearer token, which
+ * makes it a KEYED host, and CLAUDE.md §3 forbids one on the browser's side —
+ * a key in a static page is a key everyone has. So the events are baked
+ * offline: `scripts/refresh_data.py loitering` reads `GFW_API_TOKEN` from the
+ * environment, pages the last 30 days, and writes `data/loitering.json`;
+ * `.github/workflows/refresh-loitering.yml` runs that daily on a hosted runner
+ * and commits the result. The page reads one small static file, like every
+ * other baked snapshot.
+ *
+ * IT IS DATE-DRIVEN, AND ITS HONESTY IS IN WHAT IT REFUSES TO SHOW. A snapshot
+ * covers a rolling 30-day window, so it can speak for the dates inside that
+ * window and for no others. Ask it for a date outside, and it draws NOTHING
+ * and says which window it has — because points left on screen for a date the
+ * file cannot speak for would be the layer quietly lying about when. Inside
+ * the window, an event shows on every date its interval overlaps.
+ *
+ * `fixture: true` marks the placeholder committed so the layer works before
+ * the secret exists; the toast says so, and the first real workflow run
+ * overwrites the file. */
+const LOITER_FILE = "data/loitering.json";
+const LOITER_HOURS_MAX = 48;      // ramp top; a longer drift saturates
+const loiterState = {
+  data: null, load: null, on: false, collection: null,
+  shown: 0, date: null, inWindow: false, error: null,
+};
+
+function loadLoitering() {
+  if (!loiterState.load) {
+    loiterState.load = fetch(LOITER_FILE)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j) => (loiterState.data = j))
+      .catch(() => { loiterState.error = "could not be read"; return null; });
+  }
+  return loiterState.load;
+}
+
+/* A DAY overlaps an EVENT when the event has begun before the day ends and has
+ * not ended before the day begins. Both ends of the event are instants in UTC
+ * and the selected date is a UTC day, so the comparison is exact rather than
+ * "the same calendar day", which would drop an event that drifted across
+ * midnight — the common case for something that lasts hours. */
+function loiterOverlaps(ev, dateStr) {
+  const a = Date.parse(`${dateStr}T00:00:00Z`);
+  const b = a + 864e5;
+  const s = Date.parse(ev.start), e = Date.parse(ev.end);
+  if (!Number.isFinite(s) || !Number.isFinite(e)) return false;
+  return s < b && e >= a;
+}
+
+/* Is the selected date one the snapshot can speak for at all? The window is a
+ * pair of dates, inclusive, as the baker wrote them. */
+function loiterInWindow(data, dateStr = state.date) {
+  const w = data && data.window;
+  if (!w || !w.start || !w.end) return false;
+  return dateStr >= w.start && dateStr <= w.end;
+}
+
+function loiterColor(hours) {
+  const t = Math.max(0, Math.min(1, (Number(hours) || 0) / LOITER_HOURS_MAX));
+  const c = rampColor("effort", t);
+  return Cesium.Color.fromBytes(c[0], c[1], c[2], 235);
+}
+
+function loiterCardHtml(ev, snap) {
+  const span = `${String(ev.start).replace("T", " ").replace(/Z$/, "")} → ` +
+    `${String(ev.end).replace("T", " ").replace(/Z$/, "")} UTC`;
+  const when = whenAt("instant", String(ev.start).slice(0, 16));
+  const bits = [];
+  if (ev.hours != null) bits.push(`<b>${fmtVal(ev.hours)} h</b> adrift`);
+  if (ev.speed_kn != null) bits.push(`${fmtVal(ev.speed_kn)} kn average speed`);
+  if (ev.shore_km != null) bits.push(`${fmtVal(ev.shore_km)} km from shore`);
+  return `<strong>${esc(ev.name || "unnamed vessel")}</strong><br/>` +
+    `${esc(ev.flag || "flag unknown")} · MMSI ${esc(ev.mmsi || "—")}<br/>` +
+    `${esc(span)} ${whenStamp(when)}<br/>` +
+    `${bits.join(" · ")}<br/>` +
+    `<span class="pick-note">Loitering: drifting at sea at low speed for hours — ` +
+    `the signature of transshipment and of waiting.${snap && snap.fixture
+      ? " <em>Placeholder snapshot — not a real event.</em>" : ""}</span><br/>` +
+    `<a href="https://globalfishingwatch.org" target="_blank" rel="noopener">Powered by Global Fishing Watch ↗</a>`;
+}
+
+/* Rebuild the points for the date on screen. A PointPrimitiveCollection is
+ * cheap to refill (a few dozen events) and rebuilding is what keeps "what is
+ * drawn" and "what the date says" from ever disagreeing — the same argument
+ * the grid providers make for a fresh provider on a month change. */
+function buildLoiterPoints() {
+  if (!loiterState.collection) {
+    loiterState.collection = viewer.scene.primitives.add(new Cesium.PointPrimitiveCollection());
+  }
+  const col = loiterState.collection;
+  col.removeAll();
+  const data = loiterState.data;
+  loiterState.date = state.date;
+  loiterState.inWindow = !!(data && loiterInWindow(data, state.date));
+  if (!data || !loiterState.inWindow) { loiterState.shown = 0; return; }
+  let n = 0;
+  for (const ev of data.events || []) {
+    if (!loiterOverlaps(ev, state.date)) continue;
+    col.add({
+      position: Cesium.Cartesian3.fromDegrees(ev.lon, ev.lat),
+      pixelSize: Math.max(5, Math.min(14, 5 + 9 * Math.sqrt(
+        Math.min(1, (Number(ev.hours) || 0) / LOITER_HOURS_MAX)))),
+      color: loiterColor(ev.hours),
+      outlineColor: Cesium.Color.BLACK.withAlpha(0.6),
+      outlineWidth: 1,
+      id: { kind: "loitering", ev, html: loiterCardHtml(ev, data) },
+    });
+    n++;
+  }
+  loiterState.shown = n;
+  const metaEl = document.getElementById("meta-loitering");
+  if (metaEl && data.window) {
+    metaEl.textContent =
+      `${n} event${n === 1 ? "" : "s"} overlapping ${state.date} · snapshot ` +
+      `${data.window.start} → ${data.window.end}` +
+      `${data.fixture ? " (placeholder)" : ""} · ${data.count ?? (data.events || []).length} in the window`;
+  }
+}
+
+/* Three things a reader has to be told, in the order they matter: this is a
+ * rolling snapshot and here is its window; your date is outside it so nothing
+ * is drawn; and — if the token has not been configured yet — what you ARE
+ * looking at is a placeholder. */
+function loiteringToast() {
+  const data = loiterState.data;
+  if (!data) {
+    showToast(`<strong>Loitering vessels</strong> could not be read` +
+      `${loiterState.error ? ` (${loiterState.error})` : ""} — ` +
+      `<code>data/loitering.json</code> is baked daily by ` +
+      `<code>.github/workflows/refresh-loitering.yml</code> from the Global ` +
+      `Fishing Watch Events API. The rest of the globe is unaffected.`,
+      { key: "loitering", replace: true });
+    return;
+  }
+  const w = data.window || {};
+  if (!loiterInWindow(data, state.date)) {
+    showToast(`<strong>Loitering vessels</strong>: the snapshot covers ` +
+      `<strong>${w.start} → ${w.end}</strong> (refreshed ${String(data.fetched_at || "").slice(0, 10)}), ` +
+      `so it is <strong>showing nothing for ${state.date}</strong>. It is a rolling ` +
+      `30-day window and cannot speak for dates outside it — old points left on ` +
+      `screen would be the wrong answer, not a partial one. Set the date inside ` +
+      `the window to see the events.`, { key: "loitering", replace: true });
+    return;
+  }
+  const fix = data.fixture
+    ? ` This is a <strong>placeholder snapshot</strong> — a realistic stand-in ` +
+      `committed so the layer works before the <code>GFW_API_TOKEN</code> secret ` +
+      `is configured; the first real refresh overwrites it.`
+    : "";
+  showToast(`<strong>Loitering vessels</strong> is <strong>date-driven</strong>: it ` +
+    `shows every event whose drift overlaps the date you pick. Showing ` +
+    `<strong>${loiterState.shown}</strong> of ${data.count ?? (data.events || []).length} ` +
+    `events for <strong>${state.date}</strong>, out of a rolling snapshot covering ` +
+    `${w.start} → ${w.end}.${fix}`, { key: "loitering", replace: true });
+}
+
+function loiterLegendEl() {
+  const div = document.createElement("div");
+  div.className = "legend-item";
+  div.innerHTML = `<div class="legend-title">Loitering — hours adrift</div>`;
+  const wrap = document.createElement("div");
+  wrap.className = "legend-bar-wrap";
+  const canvas = document.createElement("canvas");
+  const W = 268, H = 14, dpr = window.devicePixelRatio || 1;
+  canvas.width = W * dpr; canvas.height = H * dpr;
+  canvas.style.height = H + "px";
+  canvas.className = "legend-bar";
+  const ctx = canvas.getContext("2d");
+  ctx.scale(dpr, dpr);
+  for (let i = 0; i < 120; i++) {
+    const c = rampColor("effort", i / 119);
+    ctx.fillStyle = `rgb(${c[0]},${c[1]},${c[2]})`;
+    ctx.fillRect((i / 120) * W, 0, W / 120 + 1, H);
+  }
+  wrap.appendChild(canvas);
+  div.appendChild(wrap);
+  const range = document.createElement("div");
+  range.className = "legend-range";
+  range.innerHTML = `<span>0</span><span>hours adrift</span><span>${LOITER_HOURS_MAX}+</span>`;
+  div.appendChild(range);
+  return div;
+}
+
+/* The date moved: rebuild if it landed on a different day. Called from
+ * `applyDateMove`, so it is coalesced onto the same paint clock as everything
+ * else the date drives. */
+function refreshLoitering() {
+  if (!loiterState.on || loiterState.date === state.date) return;
+  const had = loiterState.inWindow;
+  buildLoiterPoints();
+  updateLegends();
+  // Say it when the answer CHANGES kind — walking out of the window (or back
+  // into it) is exactly the moment a reader needs the sentence, and repeating
+  // it on every step inside the window would be noise.
+  if (had !== loiterState.inWindow) loiteringToast();
+}
+
+function loiterLayerState() {
+  const d = loiterState.data;
+  return {
+    on: loiterState.on,
+    loaded: !!d,
+    fixture: !!(d && d.fixture),
+    window: d ? d.window : null,
+    count: d ? (d.count ?? (d.events || []).length) : 0,
+    shown: loiterState.shown,
+    inWindow: loiterState.inWindow,
+    date: loiterState.date,
+    attribution: d ? d.attribution : null,
+    licence: d ? d.licence : null,
+  };
+}
+
+document.getElementById("toggle-loitering").addEventListener("change", (e) => {
+  loiterState.on = e.target.checked;
+  if (loiterState.on) {
+    loadLoitering().then(() => {
+      buildLoiterPoints();
+      if (loiterState.collection) loiterState.collection.show = true;
+      updateLegends();
+      updateDeltaHint();
+      loiteringToast();
+    });
+  } else {
+    if (loiterState.collection) loiterState.collection.show = false;
+    updateLegends();
+  }
   updateDeltaHint();
 });
 
@@ -7184,8 +7950,15 @@ async function probeValueAt(carto) {
   let first = null;
   for (const entry of entries) {
     const res = await probeEntryValue(entry, carto);
-    if (!first) first = res;
-    if (res && !res.noData) return kelvinToC(res);
+    /* `passThrough` is a value the top layer HAS but did not PAINT — today only
+     * a fishing cell of exactly zero, which is a real measurement rendered
+     * transparent. §2.4's rule is that a layer which is blank at a point must
+     * never mask the layer visibly below it, and a zero cell is blank; but the
+     * zero is still the honest answer when nothing else can answer at all. So
+     * it is kept as the fallback and the walk continues, and the fallback
+     * prefers a value to a "no data". */
+    if (!first || (first.noData && res && !res.noData)) first = res;
+    if (res && !res.noData && !res.passThrough) return kelvinToC(res);
   }
   return kelvinToC(first);
 }
@@ -7225,6 +7998,23 @@ async function probeEntryValue(entry, carto) {
       return { ...base, value: v,
                extra: `${esc(spec ? spec.label : g.tensor.chan)} · ` +
                       `z = ${fmtVal(z)} as the tensor stores it` };
+    }
+    /* The fishing grid prints BOTH channels, because the ratio between them is
+     * the fact: 400 apparent fishing hours out of 450 broadcasting is a fishing
+     * ground, 20 out of 900 is a shipping lane. Both are sums over the month in
+     * vessel-hours, so the unit is stated once. A cell of exactly zero is a
+     * real measurement (nothing broadcast here that month) and says so rather
+     * than reading "no data" — but it is `passThrough`, because the tile paints
+     * nothing there and a blank layer must not mask what is under it. */
+    if (cfg.fishingGrid && g.fishing) {
+      const h = fishingHoursAt(g, lon, lat);
+      const share = h > 0 ? Math.round(100 * v / h) : null;
+      return { ...base, value: v, passThrough: !(v > 0),
+               extra: v > 0 || h > 0
+                 ? `${fmtVal(h)} h broadcasting on AIS` +
+                   (share == null ? "" : ` · ${share}% of it classed as fishing`)
+                 : `no vessel broadcast here this month — AIS reception is uneven, ` +
+                   `so this is not evidence that nobody fished` };
     }
     return { ...base, value: v };
   }
@@ -7635,8 +8425,25 @@ async function runProbe(x, y, ensure = false) {
 new Cesium.ScreenSpaceEventHandler(viewer.scene.canvas).setInputAction((m) => {
   hideProbe(pixelInspectorEngaged());        // hide immediately while moving
   if (probeDwellTimer) clearTimeout(probeDwellTimer);
-  if (!topColormapLayer() && !tideLive.on) return;
   const x = m.endPosition.x, y = m.endPosition.y;
+  /* A loitering EVENT is a point, not a pixel, so it answers by PICK rather
+   * than by inverting a colour — but on the same dwell clock as the value
+   * probe, because a scene pick on every mouse move is a cost the software-GL
+   * render loop cannot carry. It shows exactly the card a click shows, and
+   * falls through to the ordinary probe when the cursor is not on an event. */
+  if (loiterState.on && loiterState.shown) {
+    probeDwellTimer = setTimeout(() => {
+      const hit = seeThrough(viewer.scene.pick({ x, y }));
+      if (hit?.id?.kind === "loitering") {
+        pickCard.innerHTML = hit.id.html;
+        pickCard.classList.remove("hidden");
+        return;
+      }
+      if (topColormapLayer() || tideLive.on) runProbe(x, y);
+    }, PROBE_DWELL);
+    return;
+  }
+  if (!topColormapLayer() && !tideLive.on) return;
   probeDwellTimer = setTimeout(() => runProbe(x, y), PROBE_DWELL);
 }, Cesium.ScreenSpaceEventType.MOUSE_MOVE);
 // Clicking reads the top layer's value immediately (no dwell wait) — unless
@@ -8275,6 +9082,18 @@ async function showPixelState(carto) {
         .then((g) => (g ? { g, cfg: e.cfg, v: sampleGrid(g, lon, lat) } : null))
         .catch(() => null);
     })()],
+    /* Fishing effort, on the same terms as the tensor above and for the same
+     * reason: it is one 8.3 MB range read, so the card answers with it only
+     * when the layer is already on and the month is therefore already paid
+     * for. Every other row here is a source the card composes unconditionally. */
+    ["fishing effort", (() => {
+      const e = state.layers.fishing;
+      if (!e || !e.layer) return Promise.resolve(null);
+      return loadGridMonth(e.cfg)
+        .then((g) => (g ? { g, cfg: e.cfg, v: sampleGrid(g, lon, lat),
+                            h: fishingHoursAt(g, lon, lat) } : null))
+        .catch(() => null);
+    })()],
   ];
   const values = jobs.map(([, , empty]) => (empty === undefined ? null : empty));
   const done = new Array(jobs.length).fill(false);
@@ -8350,7 +9169,7 @@ async function showPixelState(carto) {
   await new Promise((r) => setTimeout(r, PIXEL_REDRAW_MS + 20));
 
   function drawPixelCard(values, missing, final) {
-    const [rasters, trueAnomRaw, grids, meteo, air, river, marine, climNow, climFut, oceanCol, oceanSurf, stations, trace, argo, driversGrid, tensorHit] = values;
+    const [rasters, trueAnomRaw, grids, meteo, air, river, marine, climNow, climFut, oceanCol, oceanSurf, stations, trace, argo, driversGrid, tensorHit, fishingHit] = values;
     const trueAnom = trueAnomRaw && !trueAnomRaw.none ? trueAnomRaw : null;
     if (pixelCardEl.classList.contains("hidden")) return;   // closed while loading
 
@@ -8557,6 +9376,28 @@ async function showPixelState(carto) {
       sec.push(`<div class="px-sec"><div class="px-sec-title">What the model reads ` +
         `<span class="px-src">family 7</span></div>` +
         pixelRow(spec ? spec.label : "channel", line, whenOfGrid(cfg, g)) + span + `</div>`);
+    }
+
+    /* -- the fishing fleet at this cell (AIS) -------------------------------- */
+    /* Only present while the layer is on — see the job above. Both channels,
+     * because the ratio is the fact, and the caveat with them: a zero is a
+     * measurement of BROADCASTS, not of fishing. */
+    if (fishingHit && fishingHit.v != null) {
+      const { g, cfg, v, h } = fishingHit;
+      const when = whenOfGrid(cfg, g);
+      const share = h > 0 ? `${Math.round(100 * v / h)}%` : "—";
+      sec.push(`<div class="px-sec"><div class="px-sec-title">Fishing fleet ` +
+        `<span class="px-src">Global Fishing Watch (AIS)</span></div>` +
+        pixelRow("Apparent fishing", `${fmtVal(v)} vessel-hours`, when) +
+        pixelRow("Broadcasting on AIS", `${fmtVal(h ?? 0)} vessel-hours`, when) +
+        pixelRow("Share classed as fishing", share, when) +
+        `<div class="px-note">Summed over the month across every vessel in this
+         0.25° cell. AIS &mdash; the Automatic Identification System, the
+         transponder ships broadcast their position on &mdash; is received
+         unevenly in space and time, so <strong>zero here is not evidence that
+         nobody fished</strong>. Powered by
+         <a href="https://globalfishingwatch.org" target="_blank" rel="noopener">Global
+         Fishing Watch</a>.</div></div>`);
     }
 
     /* -- long-term normals (the memory channels) ----------------------------- */
@@ -14436,4 +15277,23 @@ window.__earth = {
   tensorLayerState,
   tensorSampleAt,
   get tensorIndex() { return tensorState.index; },
+  // the fishing-effort layer (E-081 §4a): one month of a 0.25° grid per range
+  // read, addressed entirely from data/fishing_index.json
+  loadFishingIndex,
+  ensureFishingGrid,
+  fishingMonthRow,
+  fishingLayerState,
+  fishingSampleAt,
+  fishingHoursAt,
+  gridCellIndex,
+  get fishingIndex() { return fishingState.index; },
+  // loitering vessels (E-081 §4b): a baked snapshot of a keyed API, drawn as
+  // points for whichever date the snapshot can speak for
+  loadLoitering,
+  loiterOverlaps,
+  loiterInWindow,
+  loiterLayerState,
+  buildLoiterPoints,
+  refreshLoitering,
+  get loiterCollection() { return loiterState.collection; },
 };
