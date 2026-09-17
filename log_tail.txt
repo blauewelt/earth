@@ -1,0 +1,80 @@
+  [+ 137 files]               : 100%|██████████|  762MB /  762MB            [A[A[A[A[A[A[A[A[A[A[A
+
+  ...hcnd/parts/1853/00000.npz: 100%|██████████|  330kB /  330kB            [A[A
+
+
+  ...hcnd/parts/1790/00000.npz: 100%|██████████| 42.2kB / 42.2kB            [A[A[A
+
+
+
+  ...hcnd/parts/1800/00000.npz: 100%|██████████| 42.2kB / 42.2kB            [A[A[A[A
+
+
+
+
+  ...hcnd/parts/1863/00000.npz: 100%|██████████|  930kB /  930kB            [A[A[A[A[A
+
+
+
+
+
+  ...hcnd/parts/1868/00000.npz: 100%|██████████| 1.40MB / 1.40MB            [A[A[A[A[A[A
+
+
+
+
+
+
+  ...hcnd/parts/1807/00000.npz: 100%|██████████| 40.9kB / 40.9kB            [A[A[A[A[A[A[A
+
+
+
+
+
+
+
+  ...hcnd/parts/1816/00000.npz: 100%|██████████| 58.5kB / 58.5kB            [A[A[A[A[A[A[A[A
+
+
+
+
+
+
+
+
+  ...hcnd/parts/1877/00000.npz: 100%|██████████| 4.87MB / 4.87MB            [A[A[A[A[A[A[A[A[A
+
+
+
+
+
+
+
+
+
+  ...hcnd/parts/1852/00000.npz: 100%|██████████|  320kB /  320kB            [A[A[A[A[A[A[A[A[A[A
+
+
+
+
+
+
+
+
+
+
+  [+ 137 files]               : 100%|██████████|  831MB /  831MB            [A[A[A[A[A[A[A[A[A[A[AProcessing Files (147 / 147)  : 100%|██████████|  839MB /  839MB, 74.3MB/s  
+New Data Upload               : 100%|██████████|  832MB /  832MB, 73.6MB/s  
+  ...hcnd/parts/1853/00000.npz: 100%|██████████|  330kB /  330kB            
+  ...hcnd/parts/1790/00000.npz: 100%|██████████| 42.2kB / 42.2kB            
+  ...hcnd/parts/1800/00000.npz: 100%|██████████| 42.2kB / 42.2kB            
+  ...hcnd/parts/1863/00000.npz: 100%|██████████|  930kB /  930kB            
+  ...hcnd/parts/1868/00000.npz: 100%|██████████| 1.40MB / 1.40MB            
+  ...hcnd/parts/1807/00000.npz: 100%|██████████| 40.9kB / 40.9kB            
+  ...hcnd/parts/1816/00000.npz: 100%|██████████| 58.5kB / 58.5kB            
+  ...hcnd/parts/1877/00000.npz: 100%|██████████| 4.87MB / 4.87MB            
+  ...hcnd/parts/1852/00000.npz: 100%|██████████|  320kB /  320kB            
+  [+ 137 files]               : 100%|██████████|  831MB /  831MB            
+  ghcnd: 137 year(s) pushed and verified in 1 part commit(s), done.json written last (0 already present)
+  push-parts: 137 year(s) on the Hub under partials/family1_tf/ghcnd/
+=== stage fetch done in 104.7s ===
