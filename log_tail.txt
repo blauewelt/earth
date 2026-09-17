@@ -1,0 +1,80 @@
+  [+ 46 files]                : 100%|██████████| 2.37GB / 2.37GB            [A[A[A[A[A[A[A[A[A[A[A
+
+  ...oads/parts/2019/00037.npz: 100%|██████████| 51.7MB / 51.7MB            [A[A
+
+
+  ...oads/parts/2018/00045.npz: 100%|██████████| 51.1MB / 51.1MB            [A[A[A
+
+
+
+  ...oads/parts/2019/00006.npz: 100%|██████████| 51.8MB / 51.8MB            [A[A[A[A
+
+
+
+
+  ...oads/parts/2019/00038.npz: 100%|██████████| 52.4MB / 52.4MB            [A[A[A[A[A
+
+
+
+
+
+  ...oads/parts/2019/00012.npz: 100%|██████████| 51.7MB / 51.7MB            [A[A[A[A[A[A
+
+
+
+
+
+
+  ...oads/parts/2019/00021.npz: 100%|██████████| 51.9MB / 51.9MB            [A[A[A[A[A[A[A
+
+
+
+
+
+
+
+  ...oads/parts/2019/00031.npz: 100%|██████████| 52.0MB / 52.0MB            [A[A[A[A[A[A[A[A
+
+
+
+
+
+
+
+
+  ...oads/parts/2019/00039.npz: 100%|██████████| 51.6MB / 51.6MB            [A[A[A[A[A[A[A[A[A
+
+
+
+
+
+
+
+
+
+  ...oads/parts/2019/00040.npz: 100%|██████████| 51.6MB / 51.6MB            [A[A[A[A[A[A[A[A[A[A
+
+
+
+
+
+
+
+
+
+
+  [+ 46 files]                : 100%|██████████| 2.36GB / 2.36GB            [A[A[A[A[A[A[A[A[A[A[AProcessing Files (56 / 56)    : 100%|██████████| 2.83GB / 2.83GB,  215MB/s  
+New Data Upload               : 100%|██████████| 2.73GB / 2.73GB,  208MB/s  
+  ...oads/parts/2019/00037.npz: 100%|██████████| 51.7MB / 51.7MB            
+  ...oads/parts/2018/00045.npz: 100%|██████████| 51.1MB / 51.1MB            
+  ...oads/parts/2019/00006.npz: 100%|██████████| 51.8MB / 51.8MB            
+  ...oads/parts/2019/00038.npz: 100%|██████████| 52.4MB / 52.4MB            
+  ...oads/parts/2019/00012.npz: 100%|██████████| 51.7MB / 51.7MB            
+  ...oads/parts/2019/00021.npz: 100%|██████████| 51.9MB / 51.9MB            
+  ...oads/parts/2019/00031.npz: 100%|██████████| 52.0MB / 52.0MB            
+  ...oads/parts/2019/00039.npz: 100%|██████████| 51.6MB / 51.6MB            
+  ...oads/parts/2019/00040.npz: 100%|██████████| 51.6MB / 51.6MB            
+  [+ 46 files]                : 100%|██████████| 2.36GB / 2.36GB            
+  icoads: 3 year(s) pushed and verified in 2 part commit(s), done.json written last (0 already present)
+  push-parts: 3 year(s) on the Hub under partials/family1_gf/icoads/
+=== stage fetch done in 1021.1s ===
