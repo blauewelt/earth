@@ -44,6 +44,10 @@ back and compares its sha256.
 | `tide` | 1.0.tf | lanes #19 (1800–1989), #32 (1990–2009), #59 (2010–2026); assembly #82 (hosted, `--assemble streaming`, 21 min; #77, #79 and #80 died on the UHSLC record list timing out from runner IPs) | 1,080,914,415 | 35,671,451,441 (35.67 GB) | 1800–2026 (227 years with rows) | 2026-09-17 | GESLA-4 tide gauges, public track; schema 3. The reader's whole-record sample projected ≈ 8.6 × 10⁸ rows and 28 GB, so the store is **26 % more rows** than projected |
 | `bgcargo` | 1.gf | lanes #34 (2002–2012), #35–#54 and #81 (one per year), 2022 / 2025 / 2026 fetched **from the sandbox**; assembly #84 (hosted, 1 min) | 335,231 | 73,467,590 (73.5 MB) | 2002–2026 (25 years with rows) | 2026-09-17 | BGC-Argo synthetic profiles; public; schema 2. The adapter projected ≈ 336 k rows and 80 MB — both hit |
 
+| `oceansites` | 1.gf | lanes #8, #13, #23, #29, #30, #85, #86, #87 (8 windows; #65's 1989–2006 window was cancelled at 4 h 20 m and split); assembly #88 (hosted, `--assemble streaming`, 6 min) | 66,483,202 | 5,518,209,460 (5.52 GB) | 1980–2026 (39 years with rows) | 2026-09-17 | OceanSITES moored time series, tropical arrays excluded; public; schema 2. The adapter's ceiling was ≤ 1.3 × 10⁸ rows and ≤ 11 GB, and the measurement sits under both. The index lists files from 1950, but no year before 1980 holds a kept row |
+| `ghcnd` | 1.0.tf | lanes #7, #15, #24, #56 — **all 264 years parked** (1,143,728,366 rows, 42.32 GB) | — | — | 1763–2026 | **not assembled** | Needs the rented box: 42.3 GB of parts plus ≈ 47 GB of store is past a hosted runner's ≈ 90 GB. Blocked on `/home/claude/.vast_key`, which is absent |
+| `icoads` | 1.gf | lanes #14, #21, #55, #61, #66, #68, #70, #72 — **all 365 years parked** (1,107,951,670 rows, 47.64 GB) | — | — | 1662–2026 | **not assembled** | Same: 47.6 GB of parts plus ≈ 52 GB of store. Blocked on the Vast key |
+
 ## Notes
 
 - **Measured on hosted runners, 2026-09-17.** A GitHub-hosted
