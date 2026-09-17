@@ -1,0 +1,80 @@
+New Data Upload               : 100%|██████████| 47.0MB / 47.0MB, 4.59MB/s  [A
+
+  ...ders/parts/2010/00000.npz: 100%|██████████| 6.48MB / 6.48MB            [A[A
+
+
+  ...ders/parts/2004/00000.npz: 100%|██████████| 2.86MB / 2.86MB            [A[A[A
+
+
+
+  ...ders/parts/2006/00000.npz: 100%|██████████| 6.79MB / 6.79MB            [A[A[A[A
+
+
+
+
+  ...ders/parts/2011/00000.npz: 100%|██████████| 4.94MB / 4.94MB            [A[A[A[A[A
+
+
+
+
+
+  ...ders/parts/2009/00000.npz: 100%|██████████| 3.35MB / 3.35MB            [A[A[A[A[A[A
+
+
+
+
+
+
+  ...ders/parts/2008/00000.npz: 100%|██████████| 8.59MB / 8.59MB            [A[A[A[A[A[A[A
+
+
+
+
+
+
+
+  ...ders/parts/2003/00000.npz: 100%|██████████|  803kB /  803kB            [A[A[A[A[A[A[A[A
+
+
+
+
+
+
+
+
+  ...ders/parts/2005/00000.npz: 100%|██████████| 1.49MB / 1.49MB            [A[A[A[A[A[A[A[A[A
+
+
+
+
+
+
+
+
+
+  ...ders/parts/2007/00000.npz: 100%|██████████| 6.46MB / 6.46MB            [A[A[A[A[A[A[A[A[A[A
+
+
+
+
+
+
+
+
+
+
+  ...ders/parts/2012/00000.npz: 100%|██████████| 5.23MB / 5.23MB            [A[A[A[A[A[A[A[A[A[A[AProcessing Files (10 / 10)    : 100%|██████████| 47.0MB / 47.0MB, 4.56MB/s  
+New Data Upload               : 100%|██████████| 47.0MB / 47.0MB, 4.56MB/s  
+  ...ders/parts/2010/00000.npz: 100%|██████████| 6.48MB / 6.48MB            
+  ...ders/parts/2004/00000.npz: 100%|██████████| 2.86MB / 2.86MB            
+  ...ders/parts/2006/00000.npz: 100%|██████████| 6.79MB / 6.79MB            
+  ...ders/parts/2011/00000.npz: 100%|██████████| 4.94MB / 4.94MB            
+  ...ders/parts/2009/00000.npz: 100%|██████████| 3.35MB / 3.35MB            
+  ...ders/parts/2008/00000.npz: 100%|██████████| 8.59MB / 8.59MB            
+  ...ders/parts/2003/00000.npz: 100%|██████████|  803kB /  803kB            
+  ...ders/parts/2005/00000.npz: 100%|██████████| 1.49MB / 1.49MB            
+  ...ders/parts/2007/00000.npz: 100%|██████████| 6.46MB / 6.46MB            
+  ...ders/parts/2012/00000.npz: 100%|██████████| 5.23MB / 5.23MB            
+  gliders: 10 year(s) pushed and verified in 1 part commit(s), done.json written last (0 already present)
+  push-parts: 10 year(s) on the Hub under partials/family1_tf/gliders/
+=== stage fetch done in 125.0s ===
