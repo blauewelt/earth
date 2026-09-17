@@ -1,0 +1,80 @@
+  [fetch bgcargo] bgcargo 2022  1/1  4698.7s
+  [fetch bgcargo] bgcargo 2022  1/1  4706.5s
+  [fetch bgcargo] bgcargo 2022  1/1  4706.6s
+  [fetch bgcargo] bgcargo 2022  1/1  4744.7s
+  ::warning::bgcargo: 2022 — csiro/5906636_Sprof.nc: listed in the index, https://data-argo.ifremer.fr/dac/csiro/5906636/5906636_Sprof.nc: <urlopen error [Errno 111] Connection refused>
+  [fetch bgcargo] bgcargo 2022  1/1  4767.1s
+  [fetch bgcargo] bgcargo 2022  1/1  4767.1s
+  ::warning::bgcargo: 2022 — incois/2902209_Sprof.nc: listed in the index, https://data-argo.ifremer.fr/dac/incois/2902209/2902209_Sprof.nc: <urlopen error [Errno 111] Connection refused>
+  ::warning::bgcargo: 2022 — incois/2902210_Sprof.nc: listed in the index, https://data-argo.ifremer.fr/dac/incois/2902210/2902210_Sprof.nc: <urlopen error [Errno 111] Connection refused>
+  [fetch bgcargo] bgcargo 2022  1/1  4792.8s
+  ::warning::bgcargo: 2022 — incois/2902215_Sprof.nc: listed in the index, https://data-argo.ifremer.fr/dac/incois/2902215/2902215_Sprof.nc: <urlopen error [Errno 111] Connection refused>
+  ::warning::bgcargo: 2022 — incois/2902216_Sprof.nc: listed in the index, https://data-argo.ifremer.fr/dac/incois/2902216/2902216_Sprof.nc: <urlopen error [Errno 111] Connection refused>
+  [fetch bgcargo] bgcargo 2022  1/1  4845.6s
+  ::warning::bgcargo: 2022 — incois/2902239_Sprof.nc: listed in the index, https://data-argo.ifremer.fr/dac/incois/2902239/2902239_Sprof.nc: <urlopen error [Errno 111] Connection refused>
+  ::warning::bgcargo: 2022 — incois/2902240_Sprof.nc: listed in the index, https://data-argo.ifremer.fr/dac/incois/2902240/2902240_Sprof.nc: <urlopen error [Errno 111] Connection refused>
+  ::warning::bgcargo: 2022 — incois/2902241_Sprof.nc: listed in the index, https://data-argo.ifremer.fr/dac/incois/2902241/2902241_Sprof.nc: <urlopen error [Errno 111] Connection refused>
+  [fetch bgcargo] bgcargo 2022  1/1  4911.0s
+  ::warning::bgcargo: 2022 — incois/2902243_Sprof.nc: listed in the index, https://data-argo.ifremer.fr/dac/incois/2902243/2902243_Sprof.nc: <urlopen error [Errno 111] Connection refused>
+  [fetch bgcargo] bgcargo 2022  1/1  4917.0s
+  [fetch bgcargo] bgcargo 2022  1/1  4917.0s
+  [fetch bgcargo] bgcargo 2022  1/1  4917.1s
+  ::warning::bgcargo: 2022 — incois/2902264_Sprof.nc: listed in the index, https://data-argo.ifremer.fr/dac/incois/2902264/2902264_Sprof.nc: <urlopen error [Errno 111] Connection refused>
+  ::warning::bgcargo: 2022 — incois/2902270_Sprof.nc: listed in the index, https://data-argo.ifremer.fr/dac/incois/2902270/2902270_Sprof.nc: <urlopen error [Errno 111] Connection refused>
+  [fetch bgcargo] bgcargo 2022  1/1  4986.0s
+  [fetch bgcargo] bgcargo 2022  1/1  4986.1s
+  ::warning::bgcargo: 2022 — incois/2902273_Sprof.nc: listed in the index, https://data-argo.ifremer.fr/dac/incois/2902273/2902273_Sprof.nc: <urlopen error [Errno 111] Connection refused>
+  [fetch bgcargo] bgcargo 2022  1/1  4989.7s
+  ::warning::bgcargo: 2022 — incois/2902276_Sprof.nc: listed in the index, https://data-argo.ifremer.fr/dac/incois/2902276/2902276_Sprof.nc: <urlopen error [Errno 111] Connection refused>
+  ::warning::bgcargo: 2022 — incois/2902277_Sprof.nc: listed in the index, https://data-argo.ifremer.fr/dac/incois/2902277/2902277_Sprof.nc: <urlopen error [Errno 111] Connection refused>
+  ::warning::bgcargo: 2022 — incois/2902294_Sprof.nc: listed in the index, https://data-argo.ifremer.fr/dac/incois/2902294/2902294_Sprof.nc: <urlopen error [Errno 111] Connection refused>
+  ::warning::bgcargo: 2022 — incois/2902295_Sprof.nc: listed in the index, https://data-argo.ifremer.fr/dac/incois/2902295/2902295_Sprof.nc: <urlopen error [Errno 111] Connection refused>
+  ::warning::bgcargo: 2022 — incois/2902296_Sprof.nc: listed in the index, https://data-argo.ifremer.fr/dac/incois/2902296/2902296_Sprof.nc: <urlopen error [Errno 111] Connection refused>
+  [fetch bgcargo] bgcargo 2022  1/1  5101.6s
+  [fetch bgcargo] bgcargo 2022  1/1  5101.6s
+  [fetch bgcargo] bgcargo 2022  1/1  5101.6s
+  [fetch bgcargo] bgcargo 2022  1/1  5101.7s
+  [fetch bgcargo] bgcargo 2022  1/1  5112.5s
+  [fetch bgcargo] bgcargo 2022  1/1  5112.6s
+  ::warning::bgcargo: 2022 — jma/2903614_Sprof.nc: listed in the index, https://data-argo.ifremer.fr/dac/jma/2903614/2903614_Sprof.nc: <urlopen error [Errno 111] Connection refused>
+  [fetch bgcargo] bgcargo 2022  1/1  5169.1s
+  [fetch bgcargo] bgcargo 2022  1/1  5169.2s
+  ::warning::bgcargo: 2022 — jma/2903650_Sprof.nc: listed in the index, https://data-argo.ifremer.fr/dac/jma/2903650/2903650_Sprof.nc: <urlopen error [Errno 111] Connection refused>
+  ::warning::bgcargo: 2022 — jma/2903651_Sprof.nc: listed in the index, https://data-argo.ifremer.fr/dac/jma/2903651/2903651_Sprof.nc: <urlopen error [Errno 111] Connection refused>
+  [fetch bgcargo] bgcargo 2022  1/1  5174.3s
+  [fetch bgcargo] bgcargo 2022  1/1  5174.3s
+  [fetch bgcargo] bgcargo 2022  1/1  5179.8s
+  [fetch bgcargo] bgcargo 2022  1/1  5193.6s
+  [fetch bgcargo] bgcargo 2022  1/1  5203.1s
+  ::warning::bgcargo: 2022 — jma/2903666_Sprof.nc: listed in the index, https://data-argo.ifremer.fr/dac/jma/2903666/2903666_Sprof.nc: <urlopen error [Errno 111] Connection refused>
+  [fetch bgcargo] bgcargo 2022  1/1  5242.0s
+  [fetch bgcargo] bgcargo 2022  1/1  5242.0s
+  [fetch bgcargo] bgcargo 2022  1/1  5242.0s
+  ::warning::bgcargo: 2022 — jma/2903700_Sprof.nc: listed in the index, https://data-argo.ifremer.fr/dac/jma/2903700/2903700_Sprof.nc: <urlopen error [Errno 111] Connection refused>
+  [fetch bgcargo] bgcargo 2022  1/1  5254.9s
+  [fetch bgcargo] bgcargo 2022  1/1  5254.9s
+  ::warning::bgcargo: 2022 — jma/7900881_Sprof.nc: listed in the index, https://data-argo.ifremer.fr/dac/jma/7900881/7900881_Sprof.nc: <urlopen error [Errno 111] Connection refused>
+  ::warning::bgcargo: 2022 — meds/4902409_Sprof.nc: listed in the index, https://data-argo.ifremer.fr/dac/meds/4902409/4902409_Sprof.nc: <urlopen error [Errno 111] Connection refused>
+  ::warning::bgcargo: 2022 — meds/4902552_Sprof.nc: listed in the index, https://data-argo.ifremer.fr/dac/meds/4902552/4902552_Sprof.nc: <urlopen error [Errno 111] Connection refused>
+  ::warning::bgcargo: 2022 — meds/4902555_Sprof.nc: listed in the index, https://data-argo.ifremer.fr/dac/meds/4902555/4902555_Sprof.nc: <urlopen error [Errno 111] Connection refused>
+  ::warning::bgcargo: 2022 — meds/4902576_Sprof.nc: listed in the index, https://data-argo.ifremer.fr/dac/meds/4902576/4902576_Sprof.nc: <urlopen error [Errno 111] Connection refused>
+  ::warning::bgcargo: 2022 — meds/4902581_Sprof.nc: listed in the index, https://data-argo.ifremer.fr/dac/meds/4902581/4902581_Sprof.nc: <urlopen error [Errno 111] Connection refused>
+  ::warning::bgcargo: 2022 — meds/4902598_Sprof.nc: listed in the index, https://data-argo.ifremer.fr/dac/meds/4902598/4902598_Sprof.nc: <urlopen error [Errno 111] Connection refused>
+  ::warning::bgcargo: 2022 — meds/4902599_Sprof.nc: listed in the index, https://data-argo.ifremer.fr/dac/meds/4902599/4902599_Sprof.nc: <urlopen error [Errno 111] Connection refused>
+  [fetch bgcargo] bgcargo 2022  1/1  5474.7s
+  ::warning::bgcargo: 2022 — meds/4902623_Sprof.nc: listed in the index, https://data-argo.ifremer.fr/dac/meds/4902623/4902623_Sprof.nc: <urlopen error [Errno 111] Connection refused>
+  [fetch bgcargo] bgcargo 2022  1/1  5488.4s
+  ::warning::bgcargo: 2022 — meds/4902628_Sprof.nc: listed in the index, https://data-argo.ifremer.fr/dac/meds/4902628/4902628_Sprof.nc: <urlopen error [Errno 111] Connection refused>
+  [fetch bgcargo] bgcargo 2022  1/1  5543.8s
+  ::warning::2022: NOT MARKED — 215 input(s) could not be read (2022; 2022; 2022; 2022 …); the 13,139 row(s) that did arrive stay on disk, and the retry clears them and re-fetches the year whole
+stage fetch (bgcargo): 215 input(s) could not be read, and every one of them is a hole nothing downstream can see — a store of point observations has no empty cell to look at, so a month, a dataset-year or a mission-year that did not arrive is indistinguishable from an ocean nobody sampled. REFUSING to mark the stage.
+  2022: aoml/5905974_Sprof.nc: listed in the index, https://data-argo.ifremer.fr/dac/aoml/5905974/5905974_Sprof.nc: <urlopen error [Errno 111] Connection refused>
+  2022: aoml/5905992_Sprof.nc: listed in the index, https://data-argo.ifremer.fr/dac/aoml/5905992/5905992_Sprof.nc: <urlopen error [Errno 111] Connection refused>
+  2022: aoml/5906007_Sprof.nc: listed in the index, https://data-argo.ifremer.fr/dac/aoml/5906007/5906007_Sprof.nc: <urlopen error [Errno 111] Connection refused>
+  2022: aoml/5906018_Sprof.nc: listed in the index, https://data-argo.ifremer.fr/dac/aoml/5906018/5906018_Sprof.nc: <urlopen error [Errno 111] Connection refused>
+  2022: aoml/5906019_Sprof.nc: listed in the index, https://data-argo.ifremer.fr/dac/aoml/5906019/5906019_Sprof.nc: <urlopen error [Errno 111] Connection refused>
+  2022: aoml/5906020_Sprof.nc: listed in the index, https://data-argo.ifremer.fr/dac/aoml/5906020/5906020_Sprof.nc: <urlopen error [Errno 111] Connection refused>
+  2022: aoml/5906030_Sprof.nc: listed in the index, https://data-argo.ifremer.fr/dac/aoml/5906030/5906030_Sprof.nc: <urlopen error [Errno 111] Connection refused>
+  2022: aoml/5906036_Sprof.nc: listed in the index, https://data-argo.ifremer.fr/dac/aoml/5906036/5906036_Sprof.nc: <urlopen error [Errno 111] Connection refused>
+  … and 207 more
+The year(s) [2022] carry no `parts/<year>.done` marker and no counts.json, so nothing will assemble or publish them and a re-run with the SAME --work value retries exactly those — the years that DID land are marked and skipped. Two ways on: (1) fix the source (a moved ERDDAP dataset id, a short mirror, a filter that does not match the remote layout) and re-run; or (2) pass --allow-missing-years if a store with those inputs missing is genuinely what you want.
