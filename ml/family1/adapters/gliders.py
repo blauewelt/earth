@@ -496,8 +496,18 @@ class GlidersAdapter(f10b.SourceAdapter):
             elif n_pr == 1:
                 pax = 0
             else:
-                raise FormatError(f"trajectory {n_tr} x profile {n_pr}: "
-                                  f"neither is 1")
+                # A THIRD LAYOUT (measured 2026-09-17, run #33:
+                # bass-20150827T1909 is 2 x 1053 x obs). Which axis is the
+                # profile is not decidable from the dimensions alone, so the
+                # deployment is SKIPPED BY NAME and counted, not guessed —
+                # and one file no longer ends a lane.
+                counts["deployments_skipped_layout"] = 1
+                counts.setdefault("skipped_layout_ids", []).append(
+                    f"{dsid}: trajectory {n_tr} x profile {n_pr}")
+                sk = counts.setdefault("skipped_why", {})
+                sk["layout_neither_axis_is_1"] = \
+                    sk.get("layout_neither_axis_is_1", 0) + 1
+                return base, {}, counts, None
             counts.setdefault("layouts", {})[
                 "trajectory_1" if pax == 1 else "profile_1"] = 1
             tm = nc.read("time").reshape(-1).astype(np.float64)

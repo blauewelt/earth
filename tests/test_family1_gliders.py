@@ -196,3 +196,34 @@ def test_a_truncated_aggregate_is_refused(tmp_path):
 
 if __name__ == "__main__":
     sys.exit(pytest.main([__file__, "-q"]))
+
+
+def test_a_layout_with_neither_axis_1_is_skipped_by_name(tmp_path,
+                                                          monkeypatch):
+    """Run #33: bass-20150827T1909 is 2 x 1053 x obs. The deployment is
+    skipped and named; the lane goes on."""
+    ad = gliders.GlidersAdapter()
+    src = str(tmp_path / "src")
+    lo, hi = (b10.parse_date(x) for x in ad.smoke_window)
+    gliders.make_smoke_sources(src, lo, hi)
+    real = _nc3.NC3.dim_size
+
+    def dim_size(self, name):
+        if name == "trajectory" and real(self, "profile") != 1:
+            return 2
+        return real(self, name)
+    monkeypatch.setattr(_nc3.NC3, "dim_size", dim_size)
+    ctx = b10.Ctx(ns(tmp_path, src), adapter=ad, layout=b1.layout_for(ad))
+    b10.run_stages(ctx, ["index", "fetch"], stage_fn=b1.STAGE_FN,
+                   deps=b1.DEPS)
+    agg = {}
+    for y in ctx.years:
+        c = json.load(open(os.path.join(ctx.year_dir(y), "counts.json")))
+        b10._merge_counts(agg, c["counts"])
+    assert agg["deployments_skipped_layout"] == 2
+    assert agg["skipped_why"]["layout_neither_axis_is_1"] == 2
+    assert len(agg["skipped_layout_ids"]) == 2
+    # the one-trajectory-per-dive deployment (charlie) is still read
+    rows = sum(json.load(open(os.path.join(ctx.year_dir(y), "counts.json")))
+               ["rows"] for y in ctx.years)
+    assert rows == 32
