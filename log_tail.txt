@@ -1,0 +1,80 @@
+
+
+  ...ily1_tf/tide/tide/lon.npy: 100%|██████████| 4.32GB / 4.32GB            [A[A[A
+
+
+
+  ...ily1_tf/tide/tide/bin.npy: 100%|██████████| 2.16GB / 2.16GB            [A[A[A[A
+
+
+
+
+  ...tide/tide/bin_offsets.npy: 100%|██████████|  133kB /  133kB            [A[A[A[A[A
+
+
+
+
+
+  ...ily1_tf/tide/tide/lat.npy: 100%|██████████| 4.32GB / 4.32GB            [A[A[A[A[A[A
+
+
+
+
+
+
+  ...mily1_tf/tide/tide/fp.npy: 100%|██████████| 4.32GB / 4.32GB            [A[A[A[A[A[A[A
+
+
+
+
+
+
+
+  ...tf/tide/tide/platform.npy: 100%|█████████▉| 8.65GB / 8.65GB            [A[A[A[A[A[A[A[A
+
+
+
+
+
+
+
+
+  ...1_tf/tide/tide/values.npy: 100%|██████████| 2.16GB / 2.16GB            [A[A[A[A[A[A[A[A[A
+
+
+
+
+
+
+
+
+
+  ...mily1_tf/tide/tide/qc.npy: 100%|██████████| 1.08GB / 1.08GB            [A[A[A[A[A[A[A[A[A[AProcessing Files (8 / 9)      : 100%|█████████▉| 35.7GB / 35.7GB, 4.35MB/s  
+New Data Upload               : 100%|██████████| 1.14GB / 1.14GB,  529kB/s  
+  ...1_tf/tide/tide/time_s.npy: 100%|██████████| 8.65GB / 8.65GB            
+  ...ily1_tf/tide/tide/lon.npy: 100%|██████████| 4.32GB / 4.32GB            
+  ...ily1_tf/tide/tide/bin.npy: 100%|██████████| 2.16GB / 2.16GB            
+  ...tide/tide/bin_offsets.npy: 100%|██████████|  133kB /  133kB            
+  ...ily1_tf/tide/tide/lat.npy: 100%|██████████| 4.32GB / 4.32GB            
+  ...mily1_tf/tide/tide/fp.npy: 100%|██████████| 4.32GB / 4.32GB            
+  ...tf/tide/tide/platform.npy: 100%|█████████▉| 8.65GB / 8.65GB            
+  ...1_tf/tide/tide/values.npy: 100%|██████████| 2.16GB / 2.16GB            
+  ...mily1_tf/tide/tide/qc.npy: 100%|██████████| 1.08GB / 1.08GB            
+  [publish tide] bin.npy  1/11  2759.9s
+  [publish tide] bin_offsets.npy  2/11  2760.4s
+  [publish tide] fp.npy  3/11  2781.9s
+  [publish tide] lat.npy  4/11  2800.4s
+  [publish tide] lon.npy  5/11  2817.0s
+  [publish tide] platform.npy  6/11  2861.4s
+  [publish tide] platforms.json  7/11  2861.6s
+  [publish tide] qc.npy  8/11  2867.6s
+  [publish tide] time_s.npy  9/11  2911.2s
+  [publish tide] values.npy  10/11  2922.9s
+  [publish tide] store.json  11/11  2923.1s
+  publish: 11 file(s) verified by restore -> https://huggingface.co/datasets/chfrank/earth-tensors/tree/main/tensors/family1_tf/tide
+=== stage publish done in 2990.4s ===
+
+=== stage check (tide) ===
+  hub: chfrank/earth-tensors with the token from $HF_TOKEN
+  check: tide — 10 file(s) verified, N=1,080,914,415, schema 3, Hub chfrank/earth-tensors:tensors/family1_tf/tide agrees
+=== stage check done in 130.7s ===
