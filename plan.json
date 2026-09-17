@@ -1,0 +1,124 @@
+{
+ "bins": [
+  584,
+  2045
+ ],
+ "builder_git_sha": "9b54479cdda89aedb226d8c26d75196ea556bbca",
+ "built_at": "2026-09-17T15:36:48+00:00",
+ "channels": [
+  {
+   "max": 50.0,
+   "min": -50.0,
+   "name": "sea_level",
+   "unit": "m"
+  }
+ ],
+ "dataset": "https://uhslc.soest.hawaii.edu/erddap global_hourly_gesla",
+ "date_range": [
+  "1990-01-01",
+  "2009-12-31"
+ ],
+ "first_record": {
+  "first_time": "2009-04-22T05:00:00Z",
+  "record": "abercorn_creek_near_savannahga-2198810-usa-usgs",
+  "rows_in_window": 5683
+ },
+ "footprint": {
+  "log2_dt": -6.906890595608519,
+  "log2_fp": -4.0
+ },
+ "per_year_resume": false,
+ "qc_policy": "qc is GESLA's flag1: 0 not assessed, 1 correct, 3 doubtful, 4 wrong; rows worse than --qc-keep (2) are dropped (`qc_dropped`). flag1 2 (interpolated) and 5 (missing), flag2 0 (do not use), the fill value (-99.9999) and values outside [-50, 50] m are dropped and counted \u2014 including, by design, the Great Lakes gauges (74-184 m on IGLD85: lake levels, which float16 would quantise to 6-12 cm), whose records are listed in `records_all_out_of_bounds_ids`; a repeated second keeps the last row.",
+ "records": 6152,
+ "records_bad_lines": 0,
+ "records_this_track": 5614,
+ "requests_per_window": 5614,
+ "sort": {
+  "private": {
+   "by_contributor": {
+    "CMEMS": 514,
+    "CV": 1,
+    "UHSLC_FD": 11,
+    "UHSLC_RQ": 11,
+    "UZ": 1
+   },
+   "records": 538
+  },
+  "public": {
+   "by_contributor": {
+    "BODC": 37,
+    "BOM": 153,
+    "BfG": 2,
+    "CCO": 16,
+    "CDWR": 132,
+    "CM": 13,
+    "CRMS": 340,
+    "DA_IDH": 5,
+    "DA_MM": 3,
+    "DA_SAT": 20,
+    "ESEAS": 5,
+    "GLOSS": 1,
+    "HCT": 17,
+    "IEO": 12,
+    "ISPRA": 39,
+    "JODC_GIAJ": 24,
+    "JODC_JCG": 26,
+    "JODC_JMA": 72,
+    "JODC_PAHB": 69,
+    "MEDS": 846,
+    "MI_C": 25,
+    "MI_R": 9,
+    "NCDEM": 37,
+    "NHS": 17,
+    "NOAA": 1379,
+    "NOC": 6,
+    "NWFWMD": 9,
+    "REFMAR": 107,
+    "RWS": 274,
+    "RWS_HIST": 124,
+    "SFWMD": 43,
+    "SMHI": 7,
+    "TTW": 21,
+    "UHSLC_FD": 286,
+    "UHSLC_RQ": 633,
+    "UNAM": 50,
+    "UNAM_HIST": 35,
+    "USGS": 649,
+    "WSV": 71
+   },
+   "records": 5614
+  }
+ },
+ "sort_rule": "private if agency_id in ('CMEMS', 'CV', 'UZ') or station_country_code == 'ZAF'",
+ "sources": [
+  "https://uhslc.soest.hawaii.edu/erddap/tabledap/global_hourly_gesla.nc (one record per request)",
+  "https://uhslc.soest.hawaii.edu/erddap/tabledap/global_hourly_gesla.csv?record_id%2Cagency_id%2Cstation_name%2Cstation_code%2Cstation_country_code%2Clatitude%2Clongitude&distinct()",
+  "https://uhslc.soest.hawaii.edu/erddap/info/global_hourly_gesla/index.csv"
+ ],
+ "store": "tide",
+ "title": "GESLA-4 tide gauges (public contributors), relative sea level, one row per gauge reading",
+ "track": "public",
+ "verified": "2026-09-17 from the sandbox: gesla.org unreachable (TLS verify fails through the proxy); UHSLC ERDDAP global_hourly_gesla info, the distinct record list (6,152 records, 42 agencies), per-record .nc answers (aberdeen-9441187-usa-noaa, the_battery-8518750-usa-noaa, 17,920,840 B, 895,834 rows), the broken orderBy / time-only queries and the 504 on all-record time queries",
+ "years": [
+  1990,
+  1991,
+  1992,
+  1993,
+  1994,
+  1995,
+  1996,
+  1997,
+  1998,
+  1999,
+  2000,
+  2001,
+  2002,
+  2003,
+  2004,
+  2005,
+  2006,
+  2007,
+  2008,
+  2009
+ ]
+}

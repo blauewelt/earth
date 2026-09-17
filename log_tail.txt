@@ -1,0 +1,80 @@
+  [+ 49 files]                : 100%|██████████| 1.45GB / 1.45GB            [A[A[A[A[A[A[A[A[A[A[A
+
+  ...tide/parts/2008/00000.npz: 100%|██████████| 29.2MB / 29.2MB            [A[A
+
+
+  ...tide/parts/2008/00017.npz: 100%|██████████| 29.8MB / 29.8MB            [A[A[A
+
+
+
+  ...tide/parts/2009/00006.npz: 100%|██████████| 29.1MB / 29.1MB            [A[A[A[A
+
+
+
+
+  ...tide/parts/2008/00004.npz: 100%|██████████| 29.1MB / 29.1MB            [A[A[A[A[A
+
+
+
+
+
+  ...tide/parts/2008/00013.npz: 100%|██████████| 29.0MB / 29.0MB            [A[A[A[A[A[A
+
+
+
+
+
+
+  ...tide/parts/2008/00019.npz: 100%|██████████| 30.3MB / 30.3MB            [A[A[A[A[A[A[A
+
+
+
+
+
+
+
+  ...tide/parts/2008/00012.npz: 100%|██████████| 29.5MB / 29.5MB            [A[A[A[A[A[A[A[A
+
+
+
+
+
+
+
+
+  ...tide/parts/2008/00005.npz: 100%|██████████| 29.1MB / 29.1MB            [A[A[A[A[A[A[A[A[A
+
+
+
+
+
+
+
+
+
+  ...tide/parts/2008/00015.npz: 100%|██████████| 29.2MB / 29.2MB            [A[A[A[A[A[A[A[A[A[A
+
+
+
+
+
+
+
+
+
+
+  [+ 49 files]                : 100%|██████████| 1.45GB / 1.45GB            [A[A[A[A[A[A[A[A[A[A[AProcessing Files (59 / 59)    : 100%|██████████| 1.71GB / 1.71GB,  145MB/s  
+New Data Upload               : 100%|██████████| 1.32GB / 1.32GB,  112MB/s  
+  ...tide/parts/2008/00000.npz: 100%|██████████| 29.2MB / 29.2MB            
+  ...tide/parts/2008/00017.npz: 100%|██████████| 29.8MB / 29.8MB            
+  ...tide/parts/2009/00006.npz: 100%|██████████| 29.1MB / 29.1MB            
+  ...tide/parts/2008/00004.npz: 100%|██████████| 29.1MB / 29.1MB            
+  ...tide/parts/2008/00013.npz: 100%|██████████| 29.0MB / 29.0MB            
+  ...tide/parts/2008/00019.npz: 100%|██████████| 30.3MB / 30.3MB            
+  ...tide/parts/2008/00012.npz: 100%|██████████| 29.5MB / 29.5MB            
+  ...tide/parts/2008/00005.npz: 100%|██████████| 29.1MB / 29.1MB            
+  ...tide/parts/2008/00015.npz: 100%|██████████| 29.2MB / 29.2MB            
+  [+ 49 files]                : 100%|██████████| 1.45GB / 1.45GB            
+  tide: 20 year(s) pushed and verified in 3 part commit(s), done.json written last (0 already present)
+  push-parts: 20 year(s) on the Hub under partials/family1_tf/tide/
+=== stage fetch done in 4903.0s ===
