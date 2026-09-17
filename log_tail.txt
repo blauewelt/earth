@@ -1,0 +1,80 @@
+  [+ 11 files]                : 100%|██████████|  705MB /  705MB            [A[A[A[A[A[A[A[A[A[A[A
+
+  .../wod/parts/1994/00000.npz: 100%|██████████| 49.0MB / 49.0MB            [A[A
+
+
+  .../wod/parts/2008/00000.npz: 100%|██████████|  105MB /  105MB            [A[A[A
+
+
+
+  .../wod/parts/2001/00000.npz: 100%|██████████| 46.7MB / 46.7MB            [A[A[A[A
+
+
+
+
+  .../wod/parts/2002/00000.npz: 100%|██████████| 28.4MB / 28.4MB            [A[A[A[A[A
+
+
+
+
+
+  .../wod/parts/2004/00000.npz: 100%|██████████| 86.6MB / 86.6MB            [A[A[A[A[A[A
+
+
+
+
+
+
+  .../wod/parts/1996/00000.npz: 100%|██████████| 44.8MB / 44.8MB            [A[A[A[A[A[A[A
+
+
+
+
+
+
+
+  .../wod/parts/2000/00000.npz: 100%|██████████| 40.2MB / 40.2MB            [A[A[A[A[A[A[A[A
+
+
+
+
+
+
+
+
+  .../wod/parts/2003/00000.npz: 100%|██████████| 28.2MB / 28.2MB            [A[A[A[A[A[A[A[A[A
+
+
+
+
+
+
+
+
+
+  .../wod/parts/1995/00000.npz: 100%|██████████| 51.7MB / 51.7MB            [A[A[A[A[A[A[A[A[A[A
+
+
+
+
+
+
+
+
+
+
+  [+ 11 files]                : 100%|██████████|  717MB /  717MB            [A[A[A[A[A[A[A[A[A[A[AProcessing Files (21 / 21)    : 100%|██████████| 1.20GB / 1.20GB, 97.6MB/s  
+New Data Upload               : 100%|██████████| 1.20GB / 1.20GB, 97.6MB/s  
+  .../wod/parts/1994/00000.npz: 100%|██████████| 49.0MB / 49.0MB            
+  .../wod/parts/2008/00000.npz: 100%|██████████|  105MB /  105MB            
+  .../wod/parts/2001/00000.npz: 100%|██████████| 46.7MB / 46.7MB            
+  .../wod/parts/2002/00000.npz: 100%|██████████| 28.4MB / 28.4MB            
+  .../wod/parts/2004/00000.npz: 100%|██████████| 86.6MB / 86.6MB            
+  .../wod/parts/1996/00000.npz: 100%|██████████| 44.8MB / 44.8MB            
+  .../wod/parts/2000/00000.npz: 100%|██████████| 40.2MB / 40.2MB            
+  .../wod/parts/2003/00000.npz: 100%|██████████| 28.2MB / 28.2MB            
+  .../wod/parts/1995/00000.npz: 100%|██████████| 51.7MB / 51.7MB            
+  [+ 11 files]                : 100%|██████████|  717MB /  717MB            
+  wod: 21 year(s) pushed and verified in 1 part commit(s), done.json written last (0 already present)
+  push-parts: 21 year(s) on the Hub under partials/family1_gf/wod/
+=== stage fetch done in 1895.6s ===
