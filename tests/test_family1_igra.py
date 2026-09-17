@@ -185,6 +185,9 @@ def test_the_preflight_refuses_a_window_too_large_to_hold(tmp_path):
     ad.MAX_WINDOW_SOUNDINGS = 10
     with pytest.raises(SystemExit, match="lanes"):
         ad.fetch_preflight(ctx)
+    # an assembly that only PULLS parked parts is not refused (run #40)
+    ctx.a.parts_from_hub = True
+    assert ad.fetch_preflight(ctx) is None
 
 
 def test_a_truncated_zip_is_an_absence(tmp_path):

@@ -665,6 +665,11 @@ class IGRAAdapter(f10b.SourceAdapter):
         return int(tot)
 
     def fetch_preflight(self, ctx):
+        if getattr(ctx.a, "parts_from_hub", False):
+            # the guard is about holding a window's rows while STREAMING the
+            # source; a box or hosted assembly only pulls parked year parts
+            # (measured 2026-09-17, run #40 refused the whole-record pull)
+            return
         n = self.projected(ctx)
         if n > self.MAX_WINDOW_SOUNDINGS:
             sys.exit(
