@@ -753,6 +753,26 @@ except Exception as exc:                                         # pragma: no co
         return min(4444.0, max(111.0, 0.3 * 86400.0 * dt_days * (1.0 + k) / 1000.0))
 
 
+# Two themes for this one figure: the deck is dark, and slide 22 also ships as
+# a white-background standalone for printing and for light-theme documents. The
+# DARK entry is the deck's own palette and must not drift — the build asserts
+# that two_scales_3d.png is byte-identical across this refactor. Only the ink
+# and the background change; the three region colours keep their hue, darkened
+# just enough to hold their weight on white (the deck's blue and gold are tuned
+# for a #0D1117 background and go pale on paper).
+THEME_DARK = dict(
+    bg=BG, ink=TEXT, mut=MUTED, blue=BLUE, gold=GOLD, orange=ORANGE,
+    axis=MUTED, rib=0.30, pane=(0.051, 0.067, 0.090, 1.0),
+    grid=(1.0, 1.0, 1.0, 0.06),
+    out="two_scales_3d.png")
+THEME_LIGHT = dict(
+    bg="#FFFFFF", ink="#1A1A19", mut="#5C6066", blue="#1F6FEB", gold="#A5741A",
+    orange="#C4552B",
+    axis="#1A1A19", rib=0.45, pane=(0.988, 0.988, 0.984, 1.0),
+    grid=(0.0, 0.0, 0.0, 0.10),
+    out="two_scales_3d_light.png")
+
+
 _R30 = np.array([[np.cos(np.deg2rad(30.0)), -np.sin(np.deg2rad(30.0))],
                  [np.sin(np.deg2rad(30.0)),  np.cos(np.deg2rad(30.0))]])
 
@@ -774,7 +794,7 @@ def _footprint(k, reach, drift, sign, n_ring=72):
     return (ring[0] + cx, ring[1] + cy), (dots[0] + cx, dots[1] + cy)
 
 
-def _cone3d(ax, lags, reach_of, drift, colour, sign, dot_s, ribs=24,
+def _cone3d(ax, th, lags, reach_of, drift, colour, sign, dot_s, ribs=24,
             face_alpha=0.10, dots=True, lw=1.0):
     """Draw one half of the hourglass as stacked footprints plus rib lines.
 
@@ -795,97 +815,104 @@ def _cone3d(ax, lags, reach_of, drift, colour, sign, dot_s, ribs=24,
                              edgecolor="none"))
         if dots:
             ax.scatter(dx_, dy_, z, s=dot_s, c=colour, depthshade=False,
-                       edgecolors=BG, linewidths=0.25, zorder=4)
+                       edgecolors=th["bg"], linewidths=0.25, zorder=4)
         rings.append((rx, ry, z))
     step = max(1, len(rings[0][0]) // ribs)
     for i in range(0, len(rings[0][0]) - 1, step):
         ax.plot([r[0][i] for r in rings], [r[1][i] for r in rings],
-                [r[2] for r in rings], color=colour, lw=0.5, alpha=0.30,
+                [r[2] for r in rings], color=colour, lw=0.5, alpha=th["rib"],
                 zorder=1)
     return rings
 
 
-def _waist3d(ax, radius, drift_unused=None):
+def _waist3d(ax, th, radius, drift_unused=None):
     t = np.linspace(0, 2 * np.pi, 72)
-    ax.plot(radius * np.cos(t), radius * np.sin(t), zs=0, zdir="z", color=GOLD,
-            lw=1.6, zorder=6)
+    ax.plot(radius * np.cos(t), radius * np.sin(t), zs=0, zdir="z",
+            color=th["gold"], lw=1.6, zorder=6)
     ax.add_collection3d(
         Poly3DCollection([list(zip(radius * np.cos(t), radius * np.sin(t),
                                    np.zeros_like(t)))],
-                         facecolor=GOLD, alpha=0.40, edgecolor="none"))
-    ax.scatter([0], [0], [0], s=14, c=GOLD, depthshade=False, zorder=7)
+                         facecolor=th["gold"], alpha=0.40, edgecolor="none"))
+    ax.scatter([0], [0], [0], s=14, c=th["gold"], depthshade=False, zorder=7)
 
 
-def _style3d(ax, xy_lim, xy_ticks, z_lim, z_ticks, z_ticklabels, xy_ticklabels):
-    pane = (0.051, 0.067, 0.090, 1.0)                      # BG as RGBA
+def _style3d(ax, th, xy_lim, xy_ticks, z_lim, z_ticks, z_ticklabels,
+             xy_ticklabels):
     for axis in (ax.xaxis, ax.yaxis, ax.zaxis):
-        axis.set_pane_color(pane)
-        axis.line.set_color(MUTED)
-        axis._axinfo["grid"]["color"] = (1, 1, 1, 0.06)
+        axis.set_pane_color(th["pane"])
+        axis.line.set_color(th["mut"])
+        axis._axinfo["grid"]["color"] = th["grid"]
     ax.set_xlim(-xy_lim, xy_lim); ax.set_ylim(-xy_lim, xy_lim)
     ax.set_zlim(-z_lim, z_lim)
     ax.set_xticks(xy_ticks); ax.set_yticks(xy_ticks); ax.set_zticks(z_ticks)
-    ax.set_xticklabels(xy_ticklabels, fontsize=8.5, color=MUTED)
-    ax.set_yticklabels(xy_ticklabels, fontsize=8.5, color=MUTED)
-    ax.set_zticklabels(z_ticklabels, fontsize=8.5, color=MUTED)
+    ax.set_xticklabels(xy_ticklabels, fontsize=8.5, color=th["axis"])
+    ax.set_yticklabels(xy_ticklabels, fontsize=8.5, color=th["axis"])
+    ax.set_zticklabels(z_ticklabels, fontsize=8.5, color=th["axis"])
     # a negative pad makes the "−" of a tick label collide with the axis line
     ax.tick_params(axis="both", pad=1.5, length=0)
     # only ONE of the two horizontal axes is named: both are kilometres, and a
     # second "km" at the other bottom corner only crowds the tick numbers.
-    ax.set_xlabel("km", color=MUTED, fontsize=9, labelpad=-6)
+    ax.set_xlabel("km", color=th["axis"], fontsize=9, labelpad=-6)
     ax.set_ylabel("")
-    ax.set_zlabel("time (pentads)", color=MUTED, fontsize=9, labelpad=-2)
+    ax.set_zlabel("time (pentads)", color=th["axis"], fontsize=9, labelpad=-2)
     ax.view_init(elev=22, azim=-55)
     ax.set_box_aspect((1, 1, 1.05))
 
 
-def two_scales_3d():
+def two_scales_3d(th=THEME_DARK):
     """Slide 22: the mirrored double cone in 3-D, at stage 1's and stage 2's
     scale. Same sunflower, same golden-angle phase and same three colours as
-    slides 8 and 21; only the reach and the axis numbers differ."""
-    fig = plt.figure(figsize=(11.0, 4.8))
+    slides 8 and 21; only the reach and the axis numbers differ.
+
+    `th` is one of THEME_DARK (the deck) or THEME_LIGHT (the white-background
+    standalone); it changes the background, the ink and nothing else — the
+    geometry, the labels and their places are one definition for both."""
+    BLUE_, GOLD_, ORANGE_ = th["blue"], th["gold"], th["orange"]
+    INK, MUT_, BG_ = th["ink"], th["mut"], th["bg"]
+    LBOX = dict(facecolor=BG_, edgecolor="none", pad=1.5)   # opaque label patch
+
+    fig = plt.figure(figsize=(11.0, 4.8), facecolor=BG_)
     gs = fig.add_gridspec(1, 2, left=0.005, right=0.995, top=1.03, bottom=0.045,
                           wspace=0.02)
 
     # ------------------------------------------------------------- stage 1
     ax = fig.add_subplot(gs[0, 0], projection="3d")
-    ax.set_facecolor(BG)
+    ax.set_facecolor(BG_)
     L1 = list(range(1, 7))
     D1 = (-27.0, -27.0)                    # ~38 km per pentad, south-west
-    _cone3d(ax, L1, lambda k: reach_km("B", k), D1, BLUE, -1, dot_s=9)
-    _cone3d(ax, L1, lambda k: reach_km("B", k), D1, ORANGE, +1, dot_s=9)
-    _waist3d(ax, 56.0)                     # ~13 cells at 0.25 degrees
+    _cone3d(ax, th, L1, lambda k: reach_km("B", k), D1, BLUE_, -1, dot_s=9)
+    _cone3d(ax, th, L1, lambda k: reach_km("B", k), D1, ORANGE_, +1, dot_s=9)
+    _waist3d(ax, th, 56.0)                 # ~13 cells at 0.25 degrees
     # a few past dots held out by a dropout pattern
     for k, idx in ((3, (1, 9, 17)), (4, (5, 21))):
         _, (dx_, dy_) = _footprint(k, reach_km("B", k), D1, -1)
         ax.scatter([dx_[i] for i in idx], [dy_[i] for i in idx], -k, s=26,
-                   facecolors=BG, edgecolors=BLUE, linewidths=1.0,
+                   facecolors=BG_, edgecolors=BLUE_, linewidths=1.0,
                    depthshade=False, zorder=8)
     # the drift, once
-    ax.plot([0, 6 * D1[0]], [0, 6 * D1[1]], [0, -6], color=GOLD, lw=1.6,
+    ax.plot([0, 6 * D1[0]], [0, 6 * D1[1]], [0, -6], color=GOLD_, lw=1.6,
             zorder=9)
-    _style3d(ax, 1450, [-1000, 1000], 7.6, [-6, 0, 6],
+    _style3d(ax, th, 1450, [-1000, 1000], 7.6, [-6, 0, 6],
              ["−6", "0", "+6"], ["−1,000", "+1,000"])
-    ax.set_title("stage 1 — the codec, raw values", color=TEXT, fontsize=11,
+    ax.set_title("stage 1 — the codec, raw values", color=INK, fontsize=11,
                  fontweight="bold", pad=-2, y=0.97)
-    ax.text2D(0.50, 0.855, "future cone — targets", color=ORANGE, fontsize=9.5,
+    ax.text2D(0.50, 0.855, "future cone — targets", color=ORANGE_, fontsize=9.5,
               fontweight="bold", ha="center", transform=ax.transAxes)
-    ax.text2D(0.50, 0.075, "past cone — input", color=BLUE, fontsize=9.5,
+    ax.text2D(0.50, 0.075, "past cone — input", color=BLUE_, fontsize=9.5,
               fontweight="bold", ha="center", transform=ax.transAxes,
-              bbox=dict(facecolor=BG, edgecolor="none", pad=1.5))
-    ax.text2D(0.035, 0.50, "waist — present\n(≈ 13 cells)", color=GOLD,
+              bbox=LBOX)
+    ax.text2D(0.035, 0.50, "waist — present\n(≈ 13 cells)", color=GOLD_,
               fontsize=9.5, fontweight="bold", ha="left", va="center",
               linespacing=1.3, transform=ax.transAxes)
-    ax.text2D(0.035, 0.255, "d — toward the source", color=GOLD, fontsize=9,
-              ha="left", transform=ax.transAxes,
-              bbox=dict(facecolor=BG, edgecolor="none", pad=1.5))
-    ax.text2D(0.020, 0.800, "hollow dots =\nheld out (dropout)", color=BLUE,
+    ax.text2D(0.035, 0.255, "d — toward the source", color=GOLD_, fontsize=9,
+              ha="left", transform=ax.transAxes, bbox=LBOX)
+    ax.text2D(0.020, 0.800, "hollow dots =\nheld out (dropout)", color=BLUE_,
               fontsize=9, ha="left", va="center", linespacing=1.3,
               transform=ax.transAxes)
 
     # ------------------------------------------------------------- stage 2
     ax = fig.add_subplot(gs[0, 1], projection="3d")
-    ax.set_facecolor(BG)
+    ax.set_facecolor(BG_)
     # lags 7...143 (the spec's stage-2 window), sampled DENSELY where the cone
     # still opens and sparsely above it: reach grows as 129.6*(1+k) km until it
     # meets the 4,444 km cap at lag 33, so a uniform "every dozen lags" spacing
@@ -896,11 +923,13 @@ def two_scales_3d():
     # mouth), not the same km per pentad — at 38 km/pentad a 143-pentad cone
     # would sit 5,400 km off its own anchor and read as a shear, not a cone.
     D2 = (-5.4, -5.4)
-    _cone3d(ax, L2, outer_reach_km, D2, BLUE, -1, dot_s=3.5, face_alpha=0.085)
-    _cone3d(ax, L2, outer_reach_km, D2, ORANGE, +1, dot_s=3.5, face_alpha=0.085)
-    _waist3d(ax, 56.0)
+    _cone3d(ax, th, L2, outer_reach_km, D2, BLUE_, -1, dot_s=3.5,
+            face_alpha=0.085)
+    _cone3d(ax, th, L2, outer_reach_km, D2, ORANGE_, +1, dot_s=3.5,
+            face_alpha=0.085)
+    _waist3d(ax, th, 56.0)
     # where the opening stops: the cap ring, drawn once on each side
-    for sgn, col in ((-1, BLUE), (+1, ORANGE)):
+    for sgn, col in ((-1, BLUE_), (+1, ORANGE_)):
         (rx, ry), _ = _footprint(K_CAP, outer_reach_km(K_CAP), D2, sgn)
         ax.plot(rx, ry, zs=sgn * K_CAP, zdir="z", color=col, lw=1.8,
                 alpha=1.0, zorder=5)
@@ -908,37 +937,37 @@ def two_scales_3d():
     for sgn in (-1, +1):
         for k in (3, 6):
             (rx, ry), _ = _footprint(k, reach_km("B", k), (0.0, 0.0), sgn)
-            ax.plot(rx, ry, zs=sgn * k, zdir="z", color=TEXT, lw=0.8,
+            ax.plot(rx, ry, zs=sgn * k, zdir="z", color=INK, lw=0.8,
                     alpha=0.9, zorder=9)
             ax.add_collection3d(
                 Poly3DCollection([list(zip(rx, ry,
                                            np.full_like(rx, float(sgn * k))))],
-                                 facecolor=BG, alpha=0.85, edgecolor="none"))
-    _style3d(ax, 6300, [-4444, 4444], 178, [-143, 0, 143],
+                                 facecolor=BG_, alpha=0.85, edgecolor="none"))
+    _style3d(ax, th, 6300, [-4444, 4444], 178, [-143, 0, 143],
              ["−143", "0", "+143"], ["−4,444", "+4,444"])
-    ax.set_title("stage 2 — the forecaster, embeddings", color=TEXT,
+    ax.set_title("stage 2 — the forecaster, embeddings", color=INK,
                  fontsize=11, fontweight="bold", pad=-2, y=0.97)
-    ax.text2D(0.50, 0.855, "future cone — targets", color=ORANGE, fontsize=9.5,
+    ax.text2D(0.50, 0.855, "future cone — targets", color=ORANGE_, fontsize=9.5,
               fontweight="bold", ha="center", transform=ax.transAxes)
-    ax.text2D(0.50, 0.075, "past cone — input", color=BLUE, fontsize=9.5,
+    ax.text2D(0.50, 0.075, "past cone — input", color=BLUE_, fontsize=9.5,
               fontweight="bold", ha="center", transform=ax.transAxes,
-              bbox=dict(facecolor=BG, edgecolor="none", pad=1.5))
+              bbox=LBOX)
     ax.annotate("stage 1, to scale —\nthe near field\nthe codec already read",
                 xy=(0.485, 0.487), xytext=(0.005, 0.255), xycoords="axes fraction",
-                textcoords="axes fraction", color=TEXT, fontsize=9, ha="left",
+                textcoords="axes fraction", color=INK, fontsize=9, ha="left",
                 va="center", linespacing=1.3,
-                arrowprops=dict(arrowstyle="-", color=MUTED, lw=0.8,
+                arrowprops=dict(arrowstyle="-", color=MUT_, lw=0.8,
                                 shrinkA=2, shrinkB=2))
     ax.text2D(0.010, 0.800, "reach stops growing at\nthe 4,444 km cap (lag 33)",
-              color=MUTED, fontsize=8.5, ha="left", va="center",
+              color=MUT_, fontsize=8.5, ha="left", va="center",
               linespacing=1.3, transform=ax.transAxes)
-    ax.text2D(0.010, 0.680, "each dot is\nan embedding", color=BLUE, fontsize=9,
+    ax.text2D(0.010, 0.680, "each dot is\nan embedding", color=BLUE_, fontsize=9,
               ha="left", va="center", linespacing=1.3, transform=ax.transAxes)
 
     fig.text(0.5, 0.016, "same shape  ·  ×24 in time  ·  ×5 in space",
-             color=MUTED, fontsize=9.5, ha="center", va="center")
+             color=MUT_, fontsize=9.5, ha="center", va="center")
 
-    fig.savefig(f"{OUT}/two_scales_3d.png", dpi=200)
+    fig.savefig(f"{OUT}/{th['out']}", dpi=200, facecolor=BG_)
     plt.close(fig)
 
 
@@ -949,5 +978,6 @@ channel_apertures_c()
 amoc_cones()
 summary_cone()
 summary_hourglass()
-two_scales_3d()
+two_scales_3d(THEME_DARK)
+two_scales_3d(THEME_LIGHT)
 print("figures written to", OUT)

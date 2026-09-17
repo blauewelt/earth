@@ -301,7 +301,7 @@ heads scored so far predict the next embedding and roll it forward. Exported
 alone as
 [E080_hourglass_two_scales.pdf](https://blauewelt.github.io/earth/ml/plans/E080_hourglass_two_scales.pdf)
 and
-[E080_hourglass_two_scales.pptx](https://github.com/blauewelt/earth/raw/main/ml/plans/E080_hourglass_two_scales.pptx).
+[E080_hourglass_two_scales.pptx](https://github.com/blauewelt/earth/raw/main/ml/plans/E080_hourglass_two_scales.pptx); a white-background twin of the same slide is [E080_hourglass_two_scales_light.pdf](https://blauewelt.github.io/earth/ml/plans/E080_hourglass_two_scales_light.pdf) / [.pptx](https://github.com/blauewelt/earth/raw/main/ml/plans/E080_hourglass_two_scales_light.pptx).
 
 **Status.** DESIGN ONLY — nothing is implemented, nothing is measured, no run
 is dispatched and no box is rented. Three arms (A0 fixed geometry · A1 learned

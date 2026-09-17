@@ -1,5 +1,6 @@
 // E-080 deck builder — 22 slides (revision 3.1), house style of E-069.
-// Also writes standalone one-slide exports of slides 21 and 22.
+// Also writes standalone one-slide exports of slides 21 and 22, and a
+// white-background variant of slide 22.
 const pptxgen = require("pptxgenjs");
 const fs = require("fs");
 
@@ -12,11 +13,30 @@ const FIG = process.env.E080_FIG_OUT || path.join(PLANS, "E080_figures");
 const OUT = path.join(PLANS, "E080_hourglass_cone_deck.pptx");
 const OUT_SUMMARY = path.join(PLANS, "E080_hourglass_cone_summary.pptx");
 const OUT_TWO_SCALES = path.join(PLANS, "E080_hourglass_two_scales.pptx");
+const OUT_TWO_SCALES_LIGHT = path.join(PLANS,
+  "E080_hourglass_two_scales_light.pptx");
 
 const BG = "0D1117", CARD = "161B22", LINE = "30363D", TXT = "E6EDF3",
       MUT = "7D8590", FOOT = "4A5460", BLUE = "4493F8", GOLD = "E3B341",
       ORANGE = "E8734A", RED = "F85149";
 const FS = "Calibri", FH = "Georgia";
+
+// The deck is dark. Slide 22 also ships as a white-background standalone, for
+// printing and for light-theme documents; THEME is what standalone() and
+// twoScalesBody() read, so there is one builder rather than two copies. Only
+// the ink and the background differ — every position is shared. The three
+// region colours keep their hue and are darkened just enough to carry on white.
+const THEME_DARK = {
+  bg: BG, kicker: BLUE, title: TXT, body: TXT, mut: MUT, foot: FOOT,
+  blue: BLUE, gold: GOLD, orange: ORANGE, link: BLUE,
+  fig: "two_scales_3d.png",
+};
+const THEME_LIGHT = {
+  bg: "FFFFFF", kicker: "1F6FEB", title: "0B1F3A", body: "1A1A19",
+  mut: "5C6066", foot: "757D87",   // the deck's FOOT is quiet on black; on white it needs weight
+  blue: "1F6FEB", gold: "A5741A", orange: "C4552B", link: "1F6FEB",
+  fig: "two_scales_3d_light.png",
+};
 const FOOTER = "E-080 · the cut-off mirrored double cone";
 
 // URLs used in the deck body (the spec's own links)
@@ -62,7 +82,11 @@ function subsup(str, base, out) {
 function rt(str, base) {
   base = base || {};
   const accent = base.accent || BLUE;
-  const plain = Object.assign({}, base); delete plain.accent;
+  // link / italic colours are the deck's by default; the light-theme standalone
+  // passes its own, so there is one rt() rather than a themed copy of it
+  const linkCol = base.link || BLUE, italCol = base.ital || GOLD;
+  const plain = Object.assign({}, base);
+  delete plain.accent; delete plain.link; delete plain.ital;
   const out = [];
   const re = /\[[^\]]+\]\([^)]+\)|\*\*[^*]+\*\*|\{\{[^}]+\}\}/g;
   let last = 0, m;
@@ -72,12 +96,12 @@ function rt(str, base) {
     if (tok[0] === "[") {
       const mm = /^\[([^\]]+)\]\(([^)]+)\)$/.exec(tok);
       subsup(mm[1], Object.assign({}, plain, {
-        color: BLUE, underline: { style: "sng" }, hyperlink: { url: mm[2] },
+        color: linkCol, underline: { style: "sng" }, hyperlink: { url: mm[2] },
       }), out);
     } else if (tok[0] === "*") {
       subsup(tok.slice(2, -2), Object.assign({}, plain, { bold: true, color: accent }), out);
     } else {
-      subsup(tok.slice(2, -2), Object.assign({}, plain, { italic: true, color: GOLD }), out);
+      subsup(tok.slice(2, -2), Object.assign({}, plain, { italic: true, color: italCol }), out);
     }
     last = re.lastIndex;
   }
@@ -698,7 +722,7 @@ function colLabel(s, x, w, text) {
   });
 }
 
-function summaryBody(s) {
+function summaryBody(s) {          // (standalone passes a theme; slide 21 is dark only)
   // Three columns, each a picture over its text: this slide also travels on
   // its own, so its reader has not seen slides 3 and 8.
   const C1 = 0.60, C2 = 4.45, C3 = 8.30, CW = 3.65, C3W = 4.43;
@@ -763,27 +787,28 @@ const TWO_SCALES_HEADLINE =
 // The figure is 11.0 × 4.8 in (aspect 2.2917); the width is set from the height
 // the slide can spare (1.44 → 6.35), which leaves the italic line and the
 // legend strip room above the footer, and it is centred on what is left.
-function twoScalesBody(s) {
+function twoScalesBody(s, th) {
+  th = th || THEME_DARK;
   const FW = 11.24, FH_ = FW / 2.2917, FX = (13.333 - FW) / 2, FY = 1.44;
-  s.addImage({ path: `${FIG}/two_scales_3d.png`, x: FX, y: FY, w: FW, h: FH_ });
+  s.addImage({ path: `${FIG}/${th.fig}`, x: FX, y: FY, w: FW, h: FH_ });
 
   s.addText("Stage 2's mirrored future side is the E-080 shape carried up a level — design intent; the stage-2 heads scored so far predict the next embedding and roll it forward.", {
-    x: 0.6, y: 6.41, w: 12.13, h: 0.24, fontSize: 9, italic: true, color: MUT,
+    x: 0.6, y: 6.41, w: 12.13, h: 0.24, fontSize: 9, italic: true, color: th.mut,
     fontFace: FS, isTextBox: true, margin: 0, valign: "middle",
   });
 
   // legend strip: a coloured square + one line of meaning, three times
   const chips = [
-    [0.60, 3.85, BLUE, "**past cone** · input, never a forecast target, sometimes held out"],
-    [4.55, 3.35, GOLD, "**waist** · present — input in T1/T2/T4, predicted in T3"],
-    [8.05, 2.50, ORANGE, "**future cone** · targets only, never input"],
+    [0.60, 3.85, th.blue, "**past cone** · input, never a forecast target, sometimes held out"],
+    [4.55, 3.35, th.gold, "**waist** · present — input in T1/T2/T4, predicted in T3"],
+    [8.05, 2.50, th.orange, "**future cone** · targets only, never input"],
   ];
   chips.forEach(([x, w, col, text]) => {
     s.addShape(pres.ShapeType.rect, {
       x, y: 6.735, w: 0.13, h: 0.13,
       fill: { color: col }, line: { color: col, width: 0.5 },
     });
-    s.addText(rt(text, { fontSize: 9, color: TXT, fontFace: FS, accent: col }), {
+    s.addText(rt(text, { fontSize: 9, color: th.body, fontFace: FS, accent: col }), {
       x: x + 0.20, y: 6.66, w: w - 0.20, h: 0.28, isTextBox: true, margin: 0,
       valign: "middle",
     });
@@ -791,7 +816,7 @@ function twoScalesBody(s) {
   // sources, bottom right — no emphasised run follows either link (the
   // LibreOffice link-colour quirk documented in the README)
   s.addText(rt("[cone.py::outer_spiral](" + U.cone + ")  ·  [E-071 §4.5](" + U.e071 + ")",
-               { fontSize: 8.5, color: MUT, fontFace: FS }), {
+               { fontSize: 8.5, color: th.mut, fontFace: FS, link: th.link }), {
     x: 10.58, y: 6.66, w: 2.15, h: 0.28, isTextBox: true, margin: 0,
     align: "right", valign: "middle",
   });
@@ -805,28 +830,30 @@ function twoScalesBody(s) {
 
 // ================================================ standalone one-slide exports
 // Same layout, same background, same notes — no slide number in the footer.
-function standalone(title, kicker, headline, notesN, body) {
+function standalone(title, kicker, headline, notesN, body, th) {
+  th = th || THEME_DARK;
   const p = new pptxgen();
   p.layout = "LAYOUT_WIDE";
   p.author = "Deck builder";
   p.title = title;
   const s = p.addSlide();
-  s.background = { color: BG };
+  s.background = { color: th.bg };
   s.addText(kicker.toUpperCase(), {
-    x: 0.6, y: 0.30, w: 12.13, h: 0.26, fontSize: 11, bold: true, color: BLUE,
+    x: 0.6, y: 0.30, w: 12.13, h: 0.26, fontSize: 11, bold: true,
+    color: th.kicker,
     fontFace: FS, charSpacing: 1.3, isTextBox: true, margin: 0, valign: "middle",
   });
   s.addText(headline, {
     x: 0.6, y: 0.56, w: 12.13, h: 0.84, fontSize: titleSize(headline),
-    bold: true, color: TXT, fontFace: FH, isTextBox: true, margin: 0,
+    bold: true, color: th.title, fontFace: FH, isTextBox: true, margin: 0,
     valign: "middle",
   });
   s.addText(FOOTER, {
-    x: 0.6, y: 6.95, w: 12.13, h: 0.3, fontSize: 10, color: FOOT, fontFace: FS,
-    isTextBox: true, margin: 0, valign: "middle",
+    x: 0.6, y: 6.95, w: 12.13, h: 0.3, fontSize: 10, color: th.foot,
+    fontFace: FS, isTextBox: true, margin: 0, valign: "middle",
   });
   s.addNotes(notesText(notesN));
-  body(s);
+  body(s, th);
   return p;
 }
 
@@ -840,9 +867,17 @@ const pres3 = standalone(
   "E-080 · the cut-off mirrored double cone · the hourglass at two scales",
   TWO_SCALES_HEADLINE, TWO_SCALES_N, twoScalesBody);
 
+// the same slide on white — for printing and for light-theme documents
+const pres4 = standalone(
+  "The cut-off mirrored double cone — the hourglass at two scales (light)",
+  "E-080 · the cut-off mirrored double cone · the hourglass at two scales",
+  TWO_SCALES_HEADLINE, TWO_SCALES_N, twoScalesBody, THEME_LIGHT);
+
 pres.writeFile({ fileName: OUT })
   .then(() => console.log("wrote", OUT, "slides:", SLIDE_N))
   .then(() => pres2.writeFile({ fileName: OUT_SUMMARY }))
   .then(() => console.log("wrote", OUT_SUMMARY, "slides: 1"))
   .then(() => pres3.writeFile({ fileName: OUT_TWO_SCALES }))
-  .then(() => console.log("wrote", OUT_TWO_SCALES, "slides: 1"));
+  .then(() => console.log("wrote", OUT_TWO_SCALES, "slides: 1"))
+  .then(() => pres4.writeFile({ fileName: OUT_TWO_SCALES_LIGHT }))
+  .then(() => console.log("wrote", OUT_TWO_SCALES_LIGHT, "slides: 1"));
