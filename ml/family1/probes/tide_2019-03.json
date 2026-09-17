@@ -1,0 +1,103 @@
+{
+ "at": "2026-09-17T10:49:57+00:00",
+ "builder_git_sha": "18359e904d9cae7cfadd7a1e8a2b5c4eb8651126",
+ "bytes_fetched": 63932756,
+ "bytes_index": 523891,
+ "bytes_per_row": 26.217,
+ "channels": [
+  "sea_level"
+ ],
+ "counts": {
+  "flag1_interpolated": 4235,
+  "flag2_do_not_use": 193408,
+  "out_of_bounds": {
+   "sea_level": 38597
+  },
+  "qc": {
+   "0": 1314576,
+   "1": 1124001
+  },
+  "records_empty_in_window": 3325,
+  "records_failed": 1,
+  "records_failed_ids": [
+   "galveston_pier_21-775a-usa-uhslc_rq"
+  ],
+  "records_requested": 5614,
+  "records_track": 5614,
+  "records_with_rows": 2288,
+  "rows_duplicate_time": 0,
+  "rows_kept": 2438577,
+  "rows_outside_window": 0,
+  "rows_read": 2674817,
+  "stream_seconds": 16392.6
+ },
+ "counts_scope": "month",
+ "days_with_no_rows": 0,
+ "distinct_platforms": 2288,
+ "distribution": "public",
+ "estimate_rows_per_year": null,
+ "estimate_store_bytes": null,
+ "family": "1tf",
+ "month": "2019-03",
+ "nan_fraction": {
+  "sea_level": 0.0
+ },
+ "note_estimate": null,
+ "out_of_bounds": {
+  "sea_level": 38597
+ },
+ "out_of_bounds_stored": {
+  "sea_level": 0
+ },
+ "platforms": {
+  "entries": 5614,
+  "probe_platforms_without_entry": 0
+ },
+ "qc": {
+  "0": 1314576,
+  "1": 1124001
+ },
+ "rows": 2438577,
+ "rows_outside_month_dropped_by_probe": 0,
+ "rows_per_day": [
+  78286,
+  78134,
+  78219,
+  78100,
+  78146,
+  78226,
+  78273,
+  78474,
+  78132,
+  78109,
+  78298,
+  78366,
+  78130,
+  78405,
+  78290,
+  78325,
+  78359,
+  78512,
+  78622,
+  78759,
+  79020,
+  79321,
+  79436,
+  79247,
+  79160,
+  79273,
+  79236,
+  79348,
+  79506,
+  79514,
+  79351
+ ],
+ "runner": "vm",
+ "schema_version": 3,
+ "source": "https://uhslc.soest.hawaii.edu/erddap/tabledap/global_hourly_gesla.nc (one record per request)",
+ "store": "tide",
+ "stored_bytes_per_row": 33,
+ "time_dtype": "int64",
+ "wall_seconds": 16393.14,
+ "wall_seconds_index": 5.55
+}
