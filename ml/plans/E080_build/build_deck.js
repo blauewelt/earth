@@ -1,5 +1,5 @@
-// E-080 deck builder — 21 slides (revision 3.1), house style of E-069.
-// Also writes a standalone one-slide export of slide 21 (the summary).
+// E-080 deck builder — 22 slides (revision 3.1), house style of E-069.
+// Also writes standalone one-slide exports of slides 21 and 22.
 const pptxgen = require("pptxgenjs");
 const fs = require("fs");
 
@@ -11,6 +11,7 @@ const C = JSON.parse(fs.readFileSync(path.join(BUILD, "content.json"), "utf8"));
 const FIG = process.env.E080_FIG_OUT || path.join(PLANS, "E080_figures");
 const OUT = path.join(PLANS, "E080_hourglass_cone_deck.pptx");
 const OUT_SUMMARY = path.join(PLANS, "E080_hourglass_cone_summary.pptx");
+const OUT_TWO_SCALES = path.join(PLANS, "E080_hourglass_two_scales.pptx");
 
 const BG = "0D1117", CARD = "161B22", LINE = "30363D", TXT = "E6EDF3",
       MUT = "7D8590", FOOT = "4A5460", BLUE = "4493F8", GOLD = "E3B341",
@@ -747,27 +748,75 @@ function summaryBody(s) {
     FSZ);
 }
 
+let SUMMARY_N, TWO_SCALES_N;
 {
   const s = newSlide("The deck on one slide — with room for the result",
                      SUMMARY_HEADLINE);
+  SUMMARY_N = SLIDE_N;               // captured: the standalone reuses these notes
   summaryBody(s);
 }
 
-// ================================================ standalone one-slide export
-// Same layout, same background, same notes — no slide number in the footer.
-const pres2 = new pptxgen();
-pres2.layout = "LAYOUT_WIDE";
-pres2.author = "Deck builder";
-pres2.title = "The cut-off mirrored double cone — one-slide summary";
+// ================================================================ slide 22
+const TWO_SCALES_HEADLINE =
+  "Stage 1 reads raw values through a small hourglass; stage 2 reads stage 1's embeddings through the same shape, twenty times longer and five times wider";
+
+// The figure is 11.0 × 4.6 in (aspect 2.3939), so at w 11.78 it is 4.92 tall
+// and leaves the italic line and the legend strip room above the footer.
+function twoScalesBody(s) {
+  const FX = 0.78, FW = 11.78, FY = 1.46, FH_ = FW / 2.3939;   // ends 6.38
+  s.addImage({ path: `${FIG}/two_scales.png`, x: FX, y: FY, w: FW, h: FH_ });
+
+  s.addText("Stage 2's mirrored future side is the E-080 shape carried up a level — design intent; the stage-2 heads scored so far predict the next embedding and roll it forward.", {
+    x: 0.6, y: 6.41, w: 12.13, h: 0.24, fontSize: 9, italic: true, color: MUT,
+    fontFace: FS, isTextBox: true, margin: 0, valign: "middle",
+  });
+
+  // legend strip: a coloured square + one line of meaning, three times
+  const chips = [
+    [0.60, 3.85, BLUE, "**past cone** · input, never a forecast target, sometimes held out"],
+    [4.55, 3.35, GOLD, "**waist** · present — input in T1/T2/T4, predicted in T3"],
+    [8.05, 2.50, ORANGE, "**future cone** · targets only, never input"],
+  ];
+  chips.forEach(([x, w, col, text]) => {
+    s.addShape(pres.ShapeType.rect, {
+      x, y: 6.735, w: 0.13, h: 0.13,
+      fill: { color: col }, line: { color: col, width: 0.5 },
+    });
+    s.addText(rt(text, { fontSize: 9, color: TXT, fontFace: FS, accent: col }), {
+      x: x + 0.20, y: 6.66, w: w - 0.20, h: 0.28, isTextBox: true, margin: 0,
+      valign: "middle",
+    });
+  });
+  // sources, bottom right — no emphasised run follows either link (the
+  // LibreOffice link-colour quirk documented in the README)
+  s.addText(rt("[cone.py::outer_spiral](" + U.cone + ")  ·  [E-071 §4.5](" + U.e071 + ")",
+               { fontSize: 8.5, color: MUT, fontFace: FS }), {
+    x: 10.58, y: 6.66, w: 2.15, h: 0.28, isTextBox: true, margin: 0,
+    align: "right", valign: "middle",
+  });
+}
+
 {
-  const s = pres2.addSlide();
+  const s = newSlide("The same hourglass at two scales", TWO_SCALES_HEADLINE);
+  TWO_SCALES_N = SLIDE_N;
+  twoScalesBody(s);
+}
+
+// ================================================ standalone one-slide exports
+// Same layout, same background, same notes — no slide number in the footer.
+function standalone(title, kicker, headline, notesN, body) {
+  const p = new pptxgen();
+  p.layout = "LAYOUT_WIDE";
+  p.author = "Deck builder";
+  p.title = title;
+  const s = p.addSlide();
   s.background = { color: BG };
-  s.addText("E-080 · THE CUT-OFF MIRRORED DOUBLE CONE · ONE-SLIDE SUMMARY", {
+  s.addText(kicker.toUpperCase(), {
     x: 0.6, y: 0.30, w: 12.13, h: 0.26, fontSize: 11, bold: true, color: BLUE,
     fontFace: FS, charSpacing: 1.3, isTextBox: true, margin: 0, valign: "middle",
   });
-  s.addText(SUMMARY_HEADLINE, {
-    x: 0.6, y: 0.56, w: 12.13, h: 0.84, fontSize: titleSize(SUMMARY_HEADLINE),
+  s.addText(headline, {
+    x: 0.6, y: 0.56, w: 12.13, h: 0.84, fontSize: titleSize(headline),
     bold: true, color: TXT, fontFace: FH, isTextBox: true, margin: 0,
     valign: "middle",
   });
@@ -775,11 +824,24 @@ pres2.title = "The cut-off mirrored double cone — one-slide summary";
     x: 0.6, y: 6.95, w: 12.13, h: 0.3, fontSize: 10, color: FOOT, fontFace: FS,
     isTextBox: true, margin: 0, valign: "middle",
   });
-  s.addNotes(notesText(SLIDE_N));
-  summaryBody(s);
+  s.addNotes(notesText(notesN));
+  body(s);
+  return p;
 }
+
+const pres2 = standalone(
+  "The cut-off mirrored double cone — one-slide summary",
+  "E-080 · the cut-off mirrored double cone · one-slide summary",
+  SUMMARY_HEADLINE, SUMMARY_N, summaryBody);
+
+const pres3 = standalone(
+  "The cut-off mirrored double cone — the hourglass at two scales",
+  "E-080 · the cut-off mirrored double cone · the hourglass at two scales",
+  TWO_SCALES_HEADLINE, TWO_SCALES_N, twoScalesBody);
 
 pres.writeFile({ fileName: OUT })
   .then(() => console.log("wrote", OUT, "slides:", SLIDE_N))
   .then(() => pres2.writeFile({ fileName: OUT_SUMMARY }))
-  .then(() => console.log("wrote", OUT_SUMMARY, "slides: 1"));
+  .then(() => console.log("wrote", OUT_SUMMARY, "slides: 1"))
+  .then(() => pres3.writeFile({ fileName: OUT_TWO_SCALES }))
+  .then(() => console.log("wrote", OUT_TWO_SCALES, "slides: 1"));

@@ -288,6 +288,21 @@ also exported on its own as
 and
 [E080_hourglass_cone_summary.pptx](https://github.com/blauewelt/earth/raw/main/ml/plans/E080_hourglass_cone_summary.pptx).
 
+**Slide 22, 17 Sep** (Chris: *"a slide with just the mirrored cut-off cone at
+two scales"*): the hourglass drawn twice on shared conventions — stage 1, the
+codec over raw values (lags ±6 pentads, ~900 km at lag 6, the 13-cell waist),
+and stage 2, the forecaster over the codec's embeddings (lags 7…143 pentads to
+the 4,444 km cap of `outer_spiral`, the stage-1 hourglass drawn to scale as the
+cut-out at its centre) — with the three region rules stated once for both:
+past cone input and never a forecast target (sometimes held out, filled back
+in by T4), waist input in T1/T2/T4 and predicted in T3, future cone targets
+only. Stage 2's mirrored future side is marked as design intent: the stage-2
+heads scored so far predict the next embedding and roll it forward. Exported
+alone as
+[E080_hourglass_two_scales.pdf](https://blauewelt.github.io/earth/ml/plans/E080_hourglass_two_scales.pdf)
+and
+[E080_hourglass_two_scales.pptx](https://github.com/blauewelt/earth/raw/main/ml/plans/E080_hourglass_two_scales.pptx).
+
 **Status.** DESIGN ONLY — nothing is implemented, nothing is measured, no run
 is dispatched and no box is rented. Three arms (A0 fixed geometry · A1 learned
 · A2 learned and primed from the climatological current), three seeds, five

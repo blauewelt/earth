@@ -12,6 +12,7 @@ export E080_FIG_OUT="${E080_FIG_OUT:-$E080_PLANS/E080_figures}"
 
 DECK="$E080_PLANS/E080_hourglass_cone_deck"
 SUMMARY="$E080_PLANS/E080_hourglass_cone_summary"
+TWOSC="$E080_PLANS/E080_hourglass_two_scales"
 SOFFICE="/mnt/skills/public/pptx/scripts/office/soffice.py"
 
 # one entry point for the PPTX -> PDF conversion, used by the deck and by the
@@ -42,19 +43,25 @@ python3 "$HERE/fix_pptx.py" "$DECK.pptx"
 rm -f "$DECK.pptx.orig"
 python3 "$HERE/fix_pptx.py" "$SUMMARY.pptx"
 rm -f "$SUMMARY.pptx.orig"
+python3 "$HERE/fix_pptx.py" "$TWOSC.pptx"
+rm -f "$TWOSC.pptx.orig"
 
 echo "== validate"
 python3 "$HERE/validate.py" "$DECK.pptx"
 
 echo "== slides pdf"
 rm -f "$E080_BUILD"/*.pdf "$E080_BUILD"/qa-*.png "$E080_BUILD"/slidepage-*.png \
-      "$E080_BUILD"/summary-*.png
+      "$E080_BUILD"/summary-*.png "$E080_BUILD"/twoscales-*.png
 topdf "$DECK.pptx"
 cp "$E080_BUILD/E080_hourglass_cone_deck.pdf" "$DECK.pdf"
 
 echo "== summary pdf (one slide, standalone)"
 topdf "$SUMMARY.pptx"
 cp "$E080_BUILD/E080_hourglass_cone_summary.pdf" "$SUMMARY.pdf"
+
+echo "== two-scales pdf (one slide, standalone)"
+topdf "$TWOSC.pptx"
+cp "$E080_BUILD/E080_hourglass_two_scales.pdf" "$TWOSC.pdf"
 
 echo "== notes pdf"
 # the notes PDF embeds each slide as a 150 dpi raster, then a dark notes page
@@ -65,10 +72,13 @@ echo "== qa renders (look at every one of these before shipping)"
 pdftoppm -png -r 50 "$DECK.pdf" "$E080_BUILD/qa"
 pdftoppm -png -r 50 "${DECK}_with_notes.pdf" "$E080_BUILD/qa-notes"
 pdftoppm -png -r 100 "$SUMMARY.pdf" "$E080_BUILD/summary"
+pdftoppm -png -r 100 "$TWOSC.pdf" "$E080_BUILD/twoscales"
 
 echo
 echo "slides : $(pdfinfo "$DECK.pdf" | awk '/^Pages/{print $2}') pages  -> $DECK.pdf"
 echo "notes  : $(pdfinfo "${DECK}_with_notes.pdf" | awk '/^Pages/{print $2}') pages  -> ${DECK}_with_notes.pdf"
 echo "summary: $(pdfinfo "$SUMMARY.pdf" | awk '/^Pages/{print $2}') page   -> $SUMMARY.pdf"
+echo "2scales: $(pdfinfo "$TWOSC.pdf" | awk '/^Pages/{print $2}') page   -> $TWOSC.pdf"
 echo "pptx   : $DECK.pptx"
 echo "pptx   : $SUMMARY.pptx"
+echo "pptx   : $TWOSC.pptx"
