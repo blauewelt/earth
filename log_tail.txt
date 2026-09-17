@@ -1,0 +1,80 @@
+  1974: 0 row(s) in 0 part(s) (414.1s)
+  [fetch oceansites] oceansites 1975  26/39  4697.5s
+  1975: 0 row(s) in 0 part(s) (442.0s)
+  [fetch oceansites] oceansites 1976  27/39  4989.3s
+  1976: 0 row(s) in 0 part(s) (291.8s)
+  [fetch oceansites] oceansites 1977  28/39  5379.2s
+  1977: 0 row(s) in 0 part(s) (389.9s)
+  [fetch oceansites] oceansites 1978  29/39  5581.9s
+  1978: 0 row(s) in 0 part(s) (202.7s)
+  [fetch oceansites] oceansites 1979  30/39  5786.7s
+  1979: 0 row(s) in 0 part(s) (204.8s)
+  [fetch oceansites] oceansites 1980  31/39  5796.5s
+  [fetch oceansites] oceansites 1980  31/39  5864.7s
+  1980: 1,804 row(s) in 1 part(s) (78.1s)
+  [fetch oceansites] oceansites 1981  32/39  5897.3s
+  [fetch oceansites] oceansites 1981  32/39  5956.1s
+  1981: 4,981 row(s) in 1 part(s) (91.4s)
+  [fetch oceansites] oceansites 1982  33/39  5963.9s
+  [fetch oceansites] oceansites 1982  33/39  6052.1s
+  1982: 345 row(s) in 1 part(s) (96.0s)
+  [fetch oceansites] oceansites 1983  34/39  6141.9s
+  1983: 0 row(s) in 0 part(s) (89.8s)
+  [fetch oceansites] oceansites 1984  35/39  6238.5s
+  1984: 0 row(s) in 0 part(s) (96.7s)
+  [fetch oceansites] oceansites 1985  36/39  6333.5s
+  1985: 0 row(s) in 0 part(s) (95.0s)
+  [fetch oceansites] oceansites 1986  37/39  6401.5s
+  1986: 0 row(s) in 0 part(s) (68.0s)
+  [fetch oceansites] oceansites 1987  38/39  6487.3s
+  1987: 0 row(s) in 0 part(s) (85.8s)
+  [fetch oceansites] oceansites 1988  39/39  6606.6s
+  1988: 0 row(s) in 0 part(s) (119.3s)
+  hub: chfrank/earth-tensors with the token from $HF_TOKEN
+  oceansites: uploading 42 file(s) of 39 year(s), 0.6 MB -> chfrank/earth-tensors:partials/family1_gf/oceansites/
+Processing Files (0 / 0)      : |          |  0.00B /  0.00B            
+New Data Upload               : |          |  0.00B /  0.00B            [A
+
+  ...ites/parts/1981/00000.npz: 100%|██████████|  395kB /  395kB            [A[A
+
+
+  ...ites/parts/1980/00000.npz: 100%|██████████|  144kB /  144kB            [A[A[A
+
+
+
+  ...ites/parts/1982/00000.npz: 100%|██████████| 29.0kB / 29.0kB            [A[A[A[A
+
+  ...ites/parts/1981/00000.npz: 100%|██████████|  395kB /  395kB            [A[A
+
+
+  ...ites/parts/1980/00000.npz: 100%|██████████|  144kB /  144kB            [A[A[A
+
+
+
+  ...ites/parts/1982/00000.npz: 100%|██████████| 29.0kB / 29.0kB            [A[A[A[AProcessing Files (3 / 3)      : 100%|██████████|  568kB /  568kB,   ???B/s  
+New Data Upload               : 100%|██████████|  568kB /  568kB,   ???B/s  [A
+
+  ...ites/parts/1981/00000.npz: 100%|██████████|  395kB /  395kB            [A[A
+
+
+  ...ites/parts/1980/00000.npz: 100%|██████████|  144kB /  144kB            [A[A[A
+
+
+
+  ...ites/parts/1982/00000.npz: 100%|██████████| 29.0kB / 29.0kB            [A[A[A[A
+
+  ...ites/parts/1981/00000.npz: 100%|██████████|  395kB /  395kB            [A[A
+
+
+  ...ites/parts/1980/00000.npz: 100%|██████████|  144kB /  144kB            [A[A[A
+
+
+
+  ...ites/parts/1982/00000.npz: 100%|██████████| 29.0kB / 29.0kB            [A[A[A[AProcessing Files (3 / 3)      : 100%|██████████|  568kB /  568kB, 55.5kB/s  
+New Data Upload               : 100%|██████████|  568kB /  568kB, 55.5kB/s  
+  ...ites/parts/1981/00000.npz: 100%|██████████|  395kB /  395kB            
+  ...ites/parts/1980/00000.npz: 100%|██████████|  144kB /  144kB            
+  ...ites/parts/1982/00000.npz: 100%|██████████| 29.0kB / 29.0kB            
+  oceansites: 39 year(s) pushed and verified in 1 part commit(s), done.json written last (0 already present)
+  push-parts: 39 year(s) on the Hub under partials/family1_gf/oceansites/
+=== stage fetch done in 6628.4s ===
