@@ -1,0 +1,80 @@
+
+
+
+
+
+
+
+  ...i/s/2025/bin_3199.idx.npy: 100%|██████████| 2.53kB / 2.53kB            [A[A[A[A[A[A[A[A[A
+
+
+
+
+
+
+
+
+
+  ...i/s/2025/bin_3204.idx.npy: 100%|██████████| 2.53kB / 2.53kB            [A[A[A[A[A[A[A[A[A[A
+
+
+
+
+
+
+
+
+
+
+  [+ 145 files]               : 100%|██████████| 63.3MB / 63.3MB            [A[A[A[A[A[A[A[A[A[A[AProcessing Files (155 / 155)  : 100%|██████████| 66.8MB / 66.8MB, 6.05MB/s  
+New Data Upload               : 100%|██████████| 66.8MB / 66.8MB, 6.05MB/s  
+  ...i/s/2026/bin_3254.idx.npy: 100%|██████████| 2.53kB / 2.53kB            
+  ...e_asi/s/2026/bin_3253.zst: 100%|██████████| 1.09MB / 1.09MB            
+  ...e_asi/s/2025/bin_3189.zst: 100%|██████████| 1.24MB / 1.24MB            
+  ...e_asi/s/2025/bin_3205.zst: 100%|██████████| 1.17MB / 1.17MB            
+  ...i/s/2026/bin_3239.idx.npy: 100%|██████████| 2.53kB / 2.53kB            
+  ...i/s/2026/bin_3219.idx.npy: 100%|██████████| 2.53kB / 2.53kB            
+  ...i/s/2026/bin_3243.idx.npy: 100%|██████████| 2.53kB / 2.53kB            
+  ...i/s/2025/bin_3199.idx.npy: 100%|██████████| 2.53kB / 2.53kB            
+  ...i/s/2025/bin_3204.idx.npy: 100%|██████████| 2.53kB / 2.53kB            
+  [+ 145 files]               : 100%|██████████| 63.3MB / 63.3MB            
+  [publish seaice_asi] n  2/4157  60.5s
+  [publish seaice_asi] n/2012  76/4157  63.3s
+  [publish seaice_asi] n/2013  222/4157  67.4s
+  [publish seaice_asi] n/2014  368/4157  71.7s
+  [publish seaice_asi] n/2015  514/4157  76.1s
+  [publish seaice_asi] n/2016  660/4157  80.4s
+  [publish seaice_asi] n/2017  806/4157  85.1s
+  [publish seaice_asi] n/2018  952/4157  91.4s
+  [publish seaice_asi] n/2019  1098/4157  134.7s
+  [publish seaice_asi] n/2020  1244/4157  139.7s
+  [publish seaice_asi] n/2021  1390/4157  144.4s
+  [publish seaice_asi] n/2022  1536/4157  149.6s
+  [publish seaice_asi] n/2023  1682/4157  156.1s
+  [publish seaice_asi] n/2024  1830/4157  160.9s
+  [publish seaice_asi] n/2025  1976/4157  167.2s
+  [publish seaice_asi] n/2026  2078/4157  170.5s
+  [publish seaice_asi] s  2080/4157  171.0s
+  [publish seaice_asi] s/2012  2154/4157  173.8s
+  [publish seaice_asi] s/2013  2300/4157  179.4s
+  [publish seaice_asi] s/2014  2446/4157  184.0s
+  [publish seaice_asi] s/2015  2592/4157  190.1s
+  [publish seaice_asi] s/2016  2738/4157  195.9s
+  [publish seaice_asi] s/2017  2884/4157  294.3s
+  [publish seaice_asi] s/2018  3030/4157  300.1s
+  [publish seaice_asi] s/2019  3176/4157  305.3s
+  [publish seaice_asi] s/2020  3322/4157  311.1s
+  [publish seaice_asi] s/2021  3468/4157  316.5s
+  [publish seaice_asi] s/2022  3614/4157  322.9s
+  [publish seaice_asi] s/2023  3760/4157  329.1s
+  [publish seaice_asi] s/2024  3908/4157  334.1s
+  [publish seaice_asi] s/2025  4054/4157  339.1s
+  [publish seaice_asi] s/2026  4156/4157  342.8s
+  [publish seaice_asi] store.json  4157/4157  342.9s
+  publish: 4157 file(s) verified by restore, 50 tile(s) decompressed, HTTP range {'checked': 0, 'skipped': 'private'} -> https://huggingface.co/datasets/chfrank/earth-tensors-private/tree/main/tensors/family1_gf/seaice_asi
+=== stage publish done in 419.3s ===
+
+=== stage check (seaice_asi) ===
+  hub: chfrank/earth-tensors-private with the token from $HF_TOKEN
+  check: seaice_asi — 4156 file(s) verified, n: 160735 tile(s) decompressed, s: 150366 tile(s) decompressed, Hub chfrank/earth-tensors-private agrees
+=== stage check done in 75.2s ===
