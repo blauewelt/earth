@@ -1,0 +1,131 @@
+{
+ "bins": [
+  1241,
+  3287
+ ],
+ "block_bytes": 16777216,
+ "builder_git_sha": "8e231982080d4205498708d702851a5d52c60637",
+ "built_at": "2026-09-17T17:05:39+00:00",
+ "bytes": 4638104401,
+ "channels": [
+  {
+   "max": 65.0,
+   "min": -90.0,
+   "name": "TMAX",
+   "unit": "degC"
+  },
+  {
+   "max": 65.0,
+   "min": -90.0,
+   "name": "TMIN",
+   "unit": "degC"
+  },
+  {
+   "max": 2000.0,
+   "min": 0.0,
+   "name": "PRCP",
+   "unit": "mm"
+  },
+  {
+   "max": 2000.0,
+   "min": 0.0,
+   "name": "SNOW",
+   "unit": "mm"
+  },
+  {
+   "max": 15000.0,
+   "min": 0.0,
+   "name": "SNWD",
+   "unit": "mm"
+  }
+ ],
+ "dataset": "GHCN-Daily by_year",
+ "date_range": [
+  "1999-01-01",
+  "2026-12-31"
+ ],
+ "first_record": "ASN00009240,19990101,TMAX,300,,,a,",
+ "footprint": {
+  "log2_dt": -2.321928094887362,
+  "log2_fp": -4.0
+ },
+ "listing": {
+  "first": 1763,
+  "last": 2026,
+  "years": 264
+ },
+ "per_year_resume": true,
+ "qc_policy": "qc 0: no used element (TMAX, TMIN, PRCP, SNOW, SNWD) of the station-day carried an NCEI quality flag (QFLAG); qc 1: at least one did, and that element's value is NaN (counted per element in `qflag_blanked`). A value outside its channel's bounds is NaN and counted (`out_of_bounds`); -9999 is NaN and counted (`value_missing`); MFLAG and SFLAG are ignored; a station-day whose five values are all NaN is dropped and counted (`rows_all_blanked`). Unlike family 10, qc 0 means 'passed the producer's QC', not 'not assessed'.",
+ "sources": [
+  "https://www.ncei.noaa.gov/pub/data/ghcn/daily/by_year/YYYY.csv.gz",
+  "https://www.ncei.noaa.gov/pub/data/ghcn/daily/ghcnd-stations.txt",
+  "https://www.ncei.noaa.gov/pub/data/ghcn/daily/by_year/"
+ ],
+ "stations": 132503,
+ "stations_bad_lines": 0,
+ "store": "ghcnd",
+ "title": "GHCN-Daily station observations (NOAA NCEI), one row per station-day",
+ "url": "https://www.ncei.noaa.gov/pub/data/ghcn/daily/by_year/",
+ "verified": "2026-09-17 from the sandbox: by_year listing (264 files, 1763..2026); ghcnd-stations.txt (11,395,086 bytes); the whole 2024.csv.gz (168,280,901 bytes) \u2014 37,106,916 lines, 12,470,777 station-days, 44,668 stations, not sorted by station or strictly by date, 132,171 station-days split across non-adjacent lines",
+ "year_bytes": {
+  "1999": 153980353,
+  "2000": 155891217,
+  "2001": 158156737,
+  "2002": 159762227,
+  "2003": 163353543,
+  "2004": 165863379,
+  "2005": 162733494,
+  "2006": 169049215,
+  "2007": 172008773,
+  "2008": 179613740,
+  "2009": 182700192,
+  "2010": 184402364,
+  "2011": 174933137,
+  "2012": 172377887,
+  "2013": 167025793,
+  "2014": 165321098,
+  "2015": 167840783,
+  "2016": 169224122,
+  "2017": 168903119,
+  "2018": 169154706,
+  "2019": 168035943,
+  "2020": 168853728,
+  "2021": 171812511,
+  "2022": 171957917,
+  "2023": 172261078,
+  "2024": 168280901,
+  "2025": 157799784,
+  "2026": 96806660
+ },
+ "years": [
+  1999,
+  2000,
+  2001,
+  2002,
+  2003,
+  2004,
+  2005,
+  2006,
+  2007,
+  2008,
+  2009,
+  2010,
+  2011,
+  2012,
+  2013,
+  2014,
+  2015,
+  2016,
+  2017,
+  2018,
+  2019,
+  2020,
+  2021,
+  2022,
+  2023,
+  2024,
+  2025,
+  2026
+ ],
+ "years_not_listed": []
+}
