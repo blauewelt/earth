@@ -1,0 +1,637 @@
+{
+ "bins": [
+  2775,
+  2848
+ ],
+ "builder_git_sha": "8e231982080d4205498708d702851a5d52c60637",
+ "built_at": "2026-09-17T16:55:24+00:00",
+ "channels": [
+  {
+   "max": 600.0,
+   "min": 0.0,
+   "name": "DOXY_10",
+   "unit": "umol/kg"
+  },
+  {
+   "max": 600.0,
+   "min": 0.0,
+   "name": "DOXY_30",
+   "unit": "umol/kg"
+  },
+  {
+   "max": 600.0,
+   "min": 0.0,
+   "name": "DOXY_50",
+   "unit": "umol/kg"
+  },
+  {
+   "max": 600.0,
+   "min": 0.0,
+   "name": "DOXY_100",
+   "unit": "umol/kg"
+  },
+  {
+   "max": 600.0,
+   "min": 0.0,
+   "name": "DOXY_150",
+   "unit": "umol/kg"
+  },
+  {
+   "max": 600.0,
+   "min": 0.0,
+   "name": "DOXY_200",
+   "unit": "umol/kg"
+  },
+  {
+   "max": 600.0,
+   "min": 0.0,
+   "name": "DOXY_300",
+   "unit": "umol/kg"
+  },
+  {
+   "max": 600.0,
+   "min": 0.0,
+   "name": "DOXY_400",
+   "unit": "umol/kg"
+  },
+  {
+   "max": 600.0,
+   "min": 0.0,
+   "name": "DOXY_500",
+   "unit": "umol/kg"
+  },
+  {
+   "max": 600.0,
+   "min": 0.0,
+   "name": "DOXY_700",
+   "unit": "umol/kg"
+  },
+  {
+   "max": 600.0,
+   "min": 0.0,
+   "name": "DOXY_900",
+   "unit": "umol/kg"
+  },
+  {
+   "max": 600.0,
+   "min": 0.0,
+   "name": "DOXY_1100",
+   "unit": "umol/kg"
+  },
+  {
+   "max": 600.0,
+   "min": 0.0,
+   "name": "DOXY_1300",
+   "unit": "umol/kg"
+  },
+  {
+   "max": 600.0,
+   "min": 0.0,
+   "name": "DOXY_1500",
+   "unit": "umol/kg"
+  },
+  {
+   "max": 600.0,
+   "min": 0.0,
+   "name": "DOXY_1700",
+   "unit": "umol/kg"
+  },
+  {
+   "max": 600.0,
+   "min": 0.0,
+   "name": "DOXY_1900",
+   "unit": "umol/kg"
+  },
+  {
+   "max": 100.0,
+   "min": -0.5,
+   "name": "CHLA_10",
+   "unit": "mg/m3"
+  },
+  {
+   "max": 100.0,
+   "min": -0.5,
+   "name": "CHLA_30",
+   "unit": "mg/m3"
+  },
+  {
+   "max": 100.0,
+   "min": -0.5,
+   "name": "CHLA_50",
+   "unit": "mg/m3"
+  },
+  {
+   "max": 100.0,
+   "min": -0.5,
+   "name": "CHLA_100",
+   "unit": "mg/m3"
+  },
+  {
+   "max": 100.0,
+   "min": -0.5,
+   "name": "CHLA_150",
+   "unit": "mg/m3"
+  },
+  {
+   "max": 100.0,
+   "min": -0.5,
+   "name": "CHLA_200",
+   "unit": "mg/m3"
+  },
+  {
+   "max": 100.0,
+   "min": -0.5,
+   "name": "CHLA_300",
+   "unit": "mg/m3"
+  },
+  {
+   "max": 100.0,
+   "min": -0.5,
+   "name": "CHLA_400",
+   "unit": "mg/m3"
+  },
+  {
+   "max": 100.0,
+   "min": -0.5,
+   "name": "CHLA_500",
+   "unit": "mg/m3"
+  },
+  {
+   "max": 100.0,
+   "min": -0.5,
+   "name": "CHLA_700",
+   "unit": "mg/m3"
+  },
+  {
+   "max": 100.0,
+   "min": -0.5,
+   "name": "CHLA_900",
+   "unit": "mg/m3"
+  },
+  {
+   "max": 100.0,
+   "min": -0.5,
+   "name": "CHLA_1100",
+   "unit": "mg/m3"
+  },
+  {
+   "max": 100.0,
+   "min": -0.5,
+   "name": "CHLA_1300",
+   "unit": "mg/m3"
+  },
+  {
+   "max": 100.0,
+   "min": -0.5,
+   "name": "CHLA_1500",
+   "unit": "mg/m3"
+  },
+  {
+   "max": 100.0,
+   "min": -0.5,
+   "name": "CHLA_1700",
+   "unit": "mg/m3"
+  },
+  {
+   "max": 100.0,
+   "min": -0.5,
+   "name": "CHLA_1900",
+   "unit": "mg/m3"
+  },
+  {
+   "max": 0.1,
+   "min": -0.001,
+   "name": "BBP700_10",
+   "unit": "1/m"
+  },
+  {
+   "max": 0.1,
+   "min": -0.001,
+   "name": "BBP700_30",
+   "unit": "1/m"
+  },
+  {
+   "max": 0.1,
+   "min": -0.001,
+   "name": "BBP700_50",
+   "unit": "1/m"
+  },
+  {
+   "max": 0.1,
+   "min": -0.001,
+   "name": "BBP700_100",
+   "unit": "1/m"
+  },
+  {
+   "max": 0.1,
+   "min": -0.001,
+   "name": "BBP700_150",
+   "unit": "1/m"
+  },
+  {
+   "max": 0.1,
+   "min": -0.001,
+   "name": "BBP700_200",
+   "unit": "1/m"
+  },
+  {
+   "max": 0.1,
+   "min": -0.001,
+   "name": "BBP700_300",
+   "unit": "1/m"
+  },
+  {
+   "max": 0.1,
+   "min": -0.001,
+   "name": "BBP700_400",
+   "unit": "1/m"
+  },
+  {
+   "max": 0.1,
+   "min": -0.001,
+   "name": "BBP700_500",
+   "unit": "1/m"
+  },
+  {
+   "max": 0.1,
+   "min": -0.001,
+   "name": "BBP700_700",
+   "unit": "1/m"
+  },
+  {
+   "max": 0.1,
+   "min": -0.001,
+   "name": "BBP700_900",
+   "unit": "1/m"
+  },
+  {
+   "max": 0.1,
+   "min": -0.001,
+   "name": "BBP700_1100",
+   "unit": "1/m"
+  },
+  {
+   "max": 0.1,
+   "min": -0.001,
+   "name": "BBP700_1300",
+   "unit": "1/m"
+  },
+  {
+   "max": 0.1,
+   "min": -0.001,
+   "name": "BBP700_1500",
+   "unit": "1/m"
+  },
+  {
+   "max": 0.1,
+   "min": -0.001,
+   "name": "BBP700_1700",
+   "unit": "1/m"
+  },
+  {
+   "max": 0.1,
+   "min": -0.001,
+   "name": "BBP700_1900",
+   "unit": "1/m"
+  },
+  {
+   "max": 60.0,
+   "min": -2.0,
+   "name": "NITRATE_10",
+   "unit": "umol/kg"
+  },
+  {
+   "max": 60.0,
+   "min": -2.0,
+   "name": "NITRATE_30",
+   "unit": "umol/kg"
+  },
+  {
+   "max": 60.0,
+   "min": -2.0,
+   "name": "NITRATE_50",
+   "unit": "umol/kg"
+  },
+  {
+   "max": 60.0,
+   "min": -2.0,
+   "name": "NITRATE_100",
+   "unit": "umol/kg"
+  },
+  {
+   "max": 60.0,
+   "min": -2.0,
+   "name": "NITRATE_150",
+   "unit": "umol/kg"
+  },
+  {
+   "max": 60.0,
+   "min": -2.0,
+   "name": "NITRATE_200",
+   "unit": "umol/kg"
+  },
+  {
+   "max": 60.0,
+   "min": -2.0,
+   "name": "NITRATE_300",
+   "unit": "umol/kg"
+  },
+  {
+   "max": 60.0,
+   "min": -2.0,
+   "name": "NITRATE_400",
+   "unit": "umol/kg"
+  },
+  {
+   "max": 60.0,
+   "min": -2.0,
+   "name": "NITRATE_500",
+   "unit": "umol/kg"
+  },
+  {
+   "max": 60.0,
+   "min": -2.0,
+   "name": "NITRATE_700",
+   "unit": "umol/kg"
+  },
+  {
+   "max": 60.0,
+   "min": -2.0,
+   "name": "NITRATE_900",
+   "unit": "umol/kg"
+  },
+  {
+   "max": 60.0,
+   "min": -2.0,
+   "name": "NITRATE_1100",
+   "unit": "umol/kg"
+  },
+  {
+   "max": 60.0,
+   "min": -2.0,
+   "name": "NITRATE_1300",
+   "unit": "umol/kg"
+  },
+  {
+   "max": 60.0,
+   "min": -2.0,
+   "name": "NITRATE_1500",
+   "unit": "umol/kg"
+  },
+  {
+   "max": 60.0,
+   "min": -2.0,
+   "name": "NITRATE_1700",
+   "unit": "umol/kg"
+  },
+  {
+   "max": 60.0,
+   "min": -2.0,
+   "name": "NITRATE_1900",
+   "unit": "umol/kg"
+  },
+  {
+   "max": 9.5,
+   "min": 6.5,
+   "name": "PH_IN_SITU_TOTAL_10",
+   "unit": "1"
+  },
+  {
+   "max": 9.5,
+   "min": 6.5,
+   "name": "PH_IN_SITU_TOTAL_30",
+   "unit": "1"
+  },
+  {
+   "max": 9.5,
+   "min": 6.5,
+   "name": "PH_IN_SITU_TOTAL_50",
+   "unit": "1"
+  },
+  {
+   "max": 9.5,
+   "min": 6.5,
+   "name": "PH_IN_SITU_TOTAL_100",
+   "unit": "1"
+  },
+  {
+   "max": 9.5,
+   "min": 6.5,
+   "name": "PH_IN_SITU_TOTAL_150",
+   "unit": "1"
+  },
+  {
+   "max": 9.5,
+   "min": 6.5,
+   "name": "PH_IN_SITU_TOTAL_200",
+   "unit": "1"
+  },
+  {
+   "max": 9.5,
+   "min": 6.5,
+   "name": "PH_IN_SITU_TOTAL_300",
+   "unit": "1"
+  },
+  {
+   "max": 9.5,
+   "min": 6.5,
+   "name": "PH_IN_SITU_TOTAL_400",
+   "unit": "1"
+  },
+  {
+   "max": 9.5,
+   "min": 6.5,
+   "name": "PH_IN_SITU_TOTAL_500",
+   "unit": "1"
+  },
+  {
+   "max": 9.5,
+   "min": 6.5,
+   "name": "PH_IN_SITU_TOTAL_700",
+   "unit": "1"
+  },
+  {
+   "max": 9.5,
+   "min": 6.5,
+   "name": "PH_IN_SITU_TOTAL_900",
+   "unit": "1"
+  },
+  {
+   "max": 9.5,
+   "min": 6.5,
+   "name": "PH_IN_SITU_TOTAL_1100",
+   "unit": "1"
+  },
+  {
+   "max": 9.5,
+   "min": 6.5,
+   "name": "PH_IN_SITU_TOTAL_1300",
+   "unit": "1"
+  },
+  {
+   "max": 9.5,
+   "min": 6.5,
+   "name": "PH_IN_SITU_TOTAL_1500",
+   "unit": "1"
+  },
+  {
+   "max": 9.5,
+   "min": 6.5,
+   "name": "PH_IN_SITU_TOTAL_1700",
+   "unit": "1"
+  },
+  {
+   "max": 9.5,
+   "min": 6.5,
+   "name": "PH_IN_SITU_TOTAL_1900",
+   "unit": "1"
+  },
+  {
+   "max": 5000.0,
+   "min": -1.0,
+   "name": "DOWNWELLING_PAR_10",
+   "unit": "umol/m2/s"
+  },
+  {
+   "max": 5000.0,
+   "min": -1.0,
+   "name": "DOWNWELLING_PAR_30",
+   "unit": "umol/m2/s"
+  },
+  {
+   "max": 5000.0,
+   "min": -1.0,
+   "name": "DOWNWELLING_PAR_50",
+   "unit": "umol/m2/s"
+  },
+  {
+   "max": 5000.0,
+   "min": -1.0,
+   "name": "DOWNWELLING_PAR_100",
+   "unit": "umol/m2/s"
+  },
+  {
+   "max": 5000.0,
+   "min": -1.0,
+   "name": "DOWNWELLING_PAR_150",
+   "unit": "umol/m2/s"
+  },
+  {
+   "max": 5000.0,
+   "min": -1.0,
+   "name": "DOWNWELLING_PAR_200",
+   "unit": "umol/m2/s"
+  },
+  {
+   "max": 5000.0,
+   "min": -1.0,
+   "name": "DOWNWELLING_PAR_300",
+   "unit": "umol/m2/s"
+  },
+  {
+   "max": 5000.0,
+   "min": -1.0,
+   "name": "DOWNWELLING_PAR_400",
+   "unit": "umol/m2/s"
+  },
+  {
+   "max": 5000.0,
+   "min": -1.0,
+   "name": "DOWNWELLING_PAR_500",
+   "unit": "umol/m2/s"
+  },
+  {
+   "max": 5000.0,
+   "min": -1.0,
+   "name": "DOWNWELLING_PAR_700",
+   "unit": "umol/m2/s"
+  },
+  {
+   "max": 5000.0,
+   "min": -1.0,
+   "name": "DOWNWELLING_PAR_900",
+   "unit": "umol/m2/s"
+  },
+  {
+   "max": 5000.0,
+   "min": -1.0,
+   "name": "DOWNWELLING_PAR_1100",
+   "unit": "umol/m2/s"
+  },
+  {
+   "max": 5000.0,
+   "min": -1.0,
+   "name": "DOWNWELLING_PAR_1300",
+   "unit": "umol/m2/s"
+  },
+  {
+   "max": 5000.0,
+   "min": -1.0,
+   "name": "DOWNWELLING_PAR_1500",
+   "unit": "umol/m2/s"
+  },
+  {
+   "max": 5000.0,
+   "min": -1.0,
+   "name": "DOWNWELLING_PAR_1700",
+   "unit": "umol/m2/s"
+  },
+  {
+   "max": 5000.0,
+   "min": -1.0,
+   "name": "DOWNWELLING_PAR_1900",
+   "unit": "umol/m2/s"
+  }
+ ],
+ "dataset": "BGC-Argo synthetic profiles (Sprof)",
+ "date_range": [
+  "2020-01-01",
+  "2020-12-31"
+ ],
+ "first_record": {
+  "float": "aoml/5903741",
+  "format": "NETCDF4_CLASSIC",
+  "n_levels": 551,
+  "n_prof": 264,
+  "params": [
+   "DOXY",
+   "PH_IN_SITU_TOTAL"
+  ]
+ },
+ "footprint": {
+  "log2_dt": -6.906890595608519,
+  "log2_fp": -4.0
+ },
+ "index": {
+  "comment_lines": 8,
+  "date_of_update": "20260917162408",
+  "floats": 2964,
+  "rows": 408066,
+  "rows_no_date": 207
+ },
+ "per_year": {
+  "2020": {
+   "floats": 473,
+   "floats_listed": 473,
+   "floats_no_bgc_param": 0,
+   "profiles_in_index": 19812
+  }
+ },
+ "per_year_resume": true,
+ "qc_policy": "Per parameter and profile, PARAMETER_DATA_MODE D/A -> X_ADJUSTED with X_ADJUSTED_QC, R -> X with X_QC (family 8's rule, no fallback); pressure likewise by PRES's mode. Samples with QC in {1,2,5,8} and pressure QC in {1,2,5,8} are interpolated onto the 16 RG levels (build_family8_argo.interp_levels). Profiles need JULD_QC and POSITION_QC in {1,2}. qc bit j = parameter j came from adjusted values. Out-of-bounds level values -> NaN, counted.",
+ "sources": [
+  "https://data-argo.ifremer.fr/dac/<dac>/<wmo>/<wmo>_Sprof.nc",
+  "https://data-argo.ifremer.fr/argo_synthetic-profile_index.txt.gz"
+ ],
+ "store": "bgcargo",
+ "title": "Biogeochemical Argo synthetic profiles (Argo GDAC Sprof): oxygen, chlorophyll, backscatter, nitrate, pH and PAR at the 16 Argo pressures, one row per profile",
+ "url": "https://data-argo.ifremer.fr/argo_synthetic-profile_index.txt.gz",
+ "verified": "2026-09-17 from the sandbox: argo_synthetic-profile_index.txt.gz (8,081,783 B, 408,053 rows, 2,963 floats); eight 2022-05 Sprof files (1.4-48.6 MB): variables, PARAMETER_DATA_MODE alignment, units, QC distributions per parameter and mode",
+ "years": [
+  2020
+ ],
+ "years_listed": [
+  2002,
+  2026
+ ]
+}
