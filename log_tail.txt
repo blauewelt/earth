@@ -1,0 +1,80 @@
+
+
+  ...mily1_tf/igra/igra/fp.npy:  91%|█████████ |  163MB /  179MB            [A[A[A
+
+
+
+  ...igra/igra/bin_offsets.npy: 100%|██████████| 71.1kB / 71.1kB            [A[A[A[A
+
+
+
+
+  ...1_tf/igra/igra/values.npy: 100%|██████████| 7.17GB / 7.17GB            [A[A[A[A[A
+
+
+
+
+
+  ...mily1_tf/igra/igra/qc.npy: 100%|██████████| 44.8MB / 44.8MB            [A[A[A[A[A[A
+
+
+
+
+
+
+  ...1_tf/igra/igra/time_s.npy: 100%|██████████|  359MB /  359MB            [A[A[A[A[A[A[A
+
+
+
+
+
+
+
+  ...tf/igra/igra/platform.npy: 100%|██████████|  359MB /  359MB            [A[A[A[A[A[A[A[A
+
+
+
+
+
+
+
+
+  ...ily1_tf/igra/igra/lon.npy: 100%|██████████|  179MB /  179MB            [A[A[A[A[A[A[A[A[A
+
+
+
+
+
+
+
+
+
+  ...ily1_tf/igra/igra/lat.npy: 100%|██████████|  179MB /  179MB            [A[A[A[A[A[A[A[A[A[AProcessing Files (8 / 9)      : 100%|█████████▉| 8.55GB / 8.57GB,  263MB/s  
+New Data Upload               : 100%|██████████| 8.50GB / 8.50GB,  263MB/s  
+  ...ily1_tf/igra/igra/bin.npy: 100%|██████████| 89.7MB / 89.7MB            
+  ...mily1_tf/igra/igra/fp.npy:  91%|█████████ |  163MB /  179MB            
+  ...igra/igra/bin_offsets.npy: 100%|██████████| 71.1kB / 71.1kB            
+  ...1_tf/igra/igra/values.npy: 100%|██████████| 7.17GB / 7.17GB            
+  ...mily1_tf/igra/igra/qc.npy: 100%|██████████| 44.8MB / 44.8MB            
+  ...1_tf/igra/igra/time_s.npy: 100%|██████████|  359MB /  359MB            
+  ...tf/igra/igra/platform.npy: 100%|██████████|  359MB /  359MB            
+  ...ily1_tf/igra/igra/lon.npy: 100%|██████████|  179MB /  179MB            
+  ...ily1_tf/igra/igra/lat.npy: 100%|██████████|  179MB /  179MB            
+  [publish igra] bin.npy  1/11  38.8s
+  [publish igra] bin_offsets.npy  2/11  39.1s
+  [publish igra] fp.npy  3/11  40.3s
+  [publish igra] lat.npy  4/11  44.7s
+  [publish igra] lon.npy  5/11  50.5s
+  [publish igra] platform.npy  6/11  57.4s
+  [publish igra] platforms.json  7/11  57.6s
+  [publish igra] qc.npy  8/11  58.2s
+  [publish igra] time_s.npy  9/11  61.7s
+  [publish igra] values.npy  10/11  106.3s
+  [publish igra] store.json  11/11  106.5s
+  publish: 11 file(s) verified by restore -> https://huggingface.co/datasets/chfrank/earth-tensors/tree/main/tensors/family1_tf/igra
+=== stage publish done in 198.8s ===
+
+=== stage check (igra) ===
+  hub: chfrank/earth-tensors with the token from $HF_TOKEN
+  check: igra — 10 file(s) verified, N=44,842,766, schema 3, Hub chfrank/earth-tensors:tensors/family1_tf/igra agrees
+=== stage check done in 175.3s ===

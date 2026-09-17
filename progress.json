@@ -1,0 +1,10 @@
+{
+ "at": "2026-09-17T16:24:54+00:00",
+ "done": 11,
+ "elapsed_s": 106.5,
+ "eta_s": 0.0,
+ "item": "store.json",
+ "sha256": "2e82e8318a4a50e8",
+ "stage": "publish igra",
+ "total": 11
+}
