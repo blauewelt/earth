@@ -119,8 +119,10 @@ def _download(repo, path_in_repo, token, dest_dir):
 
 
 # --------------------------------------------------------------- the paths --
-def hub_prefix(store, year=None):
-    p = f"{HF_PARTIALS}/{store}"
+def hub_prefix(store, year=None, partials=None):
+    """`partials/<family>/<store>[/<year>]`. `partials` defaults to family
+    10's prefix; family 1 passes its own (E-082)."""
+    p = f"{partials or HF_PARTIALS}/{store}"
     return p if year is None else f"{p}/{year}"
 
 
@@ -153,7 +155,8 @@ def _by_name(done):
     return {e["name"]: e["sha256"] for e in (done or {}).get("files", [])}
 
 
-def read_done(api, repo, tok, store, year, scratch, listing=None):
+def read_done(api, repo, tok, store, year, scratch, listing=None,
+              partials=None):
     """The year's `done.json` off the Hub, or None if it is NOT THERE.
 
     "Not there" means not there: the repo listing does not carry the path, so
@@ -171,7 +174,7 @@ def read_done(api, repo, tok, store, year, scratch, listing=None):
     With no `listing` in hand there is no way to tell the two apart, so a 404
     is read out of the error text and anything else raises.
     """
-    path = f"{hub_prefix(store, year)}/{DONE}"
+    path = f"{hub_prefix(store, year, partials)}/{DONE}"
     if listing is not None and path not in listing:
         return None
     tmp = os.path.join(scratch, f"done_{year}")
@@ -213,8 +216,13 @@ def _looks_absent(exc):
 
 
 # ==================================================================== push ===
-def push(store, year, work, scratch=None):
+def push(store, year, work, scratch=None, partials=None, hub=None,
+         private=False):
     """Upload one fetched year's parts, verify by restore, THEN mark it done.
+
+    E-082: `partials` (the prefix), `hub` (a callable returning (api, repo,
+    token)) and `private` route a family-1 store; left at None/False they
+    are family 10's module defaults, and the `_hub` seam the tests replace.
 
     Refuses a year the local build has not marked: an unmarked year is a year
     whose fetch did not finish, and pushing it would publish an over-claiming
@@ -246,11 +254,18 @@ def push(store, year, work, scratch=None):
     n_parts = sum(1 for n in names if n.endswith(".npz"))
     total = sum(e["bytes"] for e in entries)
 
-    api, repo, tok = _hub()
-    api.create_repo(repo, repo_type="dataset", exist_ok=True, private=False)
-    prefix = hub_prefix(store, year)
+    api, repo, tok = (hub or _hub)()
+    if bool(private) != str(repo).endswith("-private"):
+        sys.exit(f"push refuses {store} {year}: private={bool(private)} and "
+                 f"the target repository is {repo!r} — a private store's "
+                 f"parts go only to a '-private' repository, and a public "
+                 f"store's never do (E-082). Nothing was uploaded.")
+    api.create_repo(repo, repo_type="dataset", exist_ok=True,
+                    private=bool(private))
+    prefix = hub_prefix(store, year, partials)
 
-    have = read_done(api, repo, tok, store, year, scratch)
+    have = read_done(api, repo, tok, store, year, scratch,
+                     partials=partials)
     if have is not None and _by_name(have) == {e["name"]: e["sha256"]
                                                for e in entries}:
         print(f"  {store} {year}: already on the Hub with matching hashes "
@@ -295,7 +310,8 @@ def push(store, year, work, scratch=None):
 
 
 # ==================================================================== pull ===
-def pull(store, years, work, allow_missing=False, scratch=None):
+def pull(store, years, work, allow_missing=False, scratch=None,
+         partials=None, hub=None, private=False):
     """Bring every requested year's parts down and mark each one locally.
 
     Returns (present, missing). A year already on disk whose marker stands and
@@ -305,11 +321,12 @@ def pull(store, years, work, allow_missing=False, scratch=None):
     root = store_root(work, store)
     os.makedirs(root, exist_ok=True)
     scratch = scratch or os.path.join(root, "src", "hub")
-    api, repo, tok = _hub()
-    listing = _list_files(api, repo, hub_prefix(store))
+    api, repo, tok = (hub or _hub)()
+    listing = _list_files(api, repo, hub_prefix(store, None, partials))
     present, missing, skipped, rows_total = [], [], 0, 0
     for y in years:
-        done = read_done(api, repo, tok, store, y, scratch, listing)
+        done = read_done(api, repo, tok, store, y, scratch, listing,
+                         partials=partials)
         if done is None:
             missing.append(y)
             continue
@@ -328,7 +345,8 @@ def pull(store, years, work, allow_missing=False, scratch=None):
         os.makedirs(tmp, exist_ok=True)
         got = []
         for e in entries:
-            p = _download(repo, f"{hub_prefix(store, y)}/{e['name']}", tok,
+            p = _download(repo,
+                          f"{hub_prefix(store, y, partials)}/{e['name']}", tok,
                           os.path.join(tmp, "dl"))
             h = sha256(p)
             if h != e["sha256"]:
@@ -360,7 +378,7 @@ def pull(store, years, work, allow_missing=False, scratch=None):
           f"{rows_total:,} row(s), {len(missing)} missing")
     if missing:
         msg = (f"{len(missing)} year(s) have no {DONE} under "
-               f"{hub_prefix(store)}/: "
+               f"{hub_prefix(store, None, partials)}/: "
                f"{', '.join(str(y) for y in missing)}")
         if not allow_missing:
             sys.exit(f"pull refuses: {msg}. Those years were never fetched (or "
@@ -383,11 +401,11 @@ def _local_matches(d, entries):
 
 
 # ================================================================== status ===
-def status(store, years=None, scratch=None):
+def status(store, years=None, scratch=None, partials=None, hub=None):
     """Which years are DONE on the Hub, with their rows and bytes."""
-    api, repo, tok = _hub()
-    listing = _list_files(api, repo, hub_prefix(store))
-    pre = hub_prefix(store) + "/"
+    api, repo, tok = (hub or _hub)()
+    listing = _list_files(api, repo, hub_prefix(store, None, partials))
+    pre = hub_prefix(store, None, partials) + "/"
     found = sorted({int(p[len(pre):].split("/")[0])
                     for p in listing
                     if p.endswith("/" + DONE)
@@ -398,7 +416,8 @@ def status(store, years=None, scratch=None):
     scratch = scratch or os.path.join(os.path.abspath("."), ".f10status")
     rows_total = bytes_total = 0
     for y in found:
-        done = read_done(api, repo, tok, store, y, scratch, listing) or {}
+        done = read_done(api, repo, tok, store, y, scratch, listing,
+                         partials=partials) or {}
         r, b = int(done.get("rows", 0)), int(done.get("bytes", 0))
         rows_total += r
         bytes_total += b

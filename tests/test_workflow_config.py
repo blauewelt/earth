@@ -205,7 +205,7 @@ def main():
             f"case 7 FAILED: {fetch_rel}'s completeness gate is not near the "
             f"end of the job; it must run after the fetch loop.")
     n_secret_in_run = 0
-    for rel in (fetch_rel, "family10-build.yml"):
+    for rel in (fetch_rel, "family10-build.yml", "family1-build.yml"):
         p2 = os.path.join(ROOT, ".github", "workflows", rel)
         d2 = yaml.safe_load(open(p2))
         for jname, j2 in (d2.get("jobs") or {}).items():

@@ -63,8 +63,14 @@ TWO SCHEMAS, AND THIS READER OPENS BOTH.
   which is the 2050 limit stated where it can be acted on rather than
   discovered.
 
-`store.json` says which: `schema_version` 1 or 2, and `family_version` "10.1"
-or "10.2" on a schema-2 store. A schema-1 store is read by converting its days to
+  schema 3 (E-082, family 1's long records) is schema 2 with `time_s.npy`
+  as INT64 — GHCN-Daily begins in 1763, far before int32 seconds since 1982
+  can reach. `store.json` then carries `schema_version: 3` and `time_dtype:
+  "int64"`, and the reader checks the column's dtype against both. The bin is
+  still `floor_divide(time_s, 432000)` in int16, which spans 1533 .. 2430.
+
+`store.json` says which: `schema_version` 1, 2 or 3, and `family_version` "10.1"
+or "10.2" on a family-10 schema-2 store. A schema-1 store is read by converting its days to
 seconds on the fly — the precision it never had is NOT recovered, the two
 schemas are only put in one unit — so family 8's Argo store and family 10's
 published stores keep opening unchanged. `dt_days` out of `knearest` is
@@ -156,7 +162,10 @@ CORE_DTYPES = {"bin": "int16", "time_s": "int32",
                "lat": "float32", "lon": "float32"}
 CORE_DTYPES_V1 = {"bin": "int16", "time_days": "float32",
                   "lat": "float32", "lon": "float32"}
-TIME_COLUMN = {1: "time_days", 2: "time_s"}
+TIME_COLUMN = {1: "time_days", 2: "time_s", 3: "time_s"}
+# The time column's dtype per schema — the reader checks the file against it.
+TIME_DTYPE_OF_SCHEMA = {1: "float32", 2: "int32", 3: "int64"}
+SCHEMA_OF_TIME_DTYPE = {"int32": 2, "int64": 3}
 
 # The family-8 layout, recognised so its store opens here with no rebuild.
 FAMILY8_BLOCKS = ("temp", "psal")
@@ -257,8 +266,16 @@ def check_part_schema(path):
     import zipfile
     with zipfile.ZipFile(path) as z:
         names = {n[:-4] for n in z.namelist() if n.endswith(".npy")}
-    if "time_s" in names:
-        return 2
+        if "time_s" in names:
+            # The member's header says its dtype: int32 is schema 2, int64
+            # schema 3 (E-082). Only the header is read.
+            from numpy.lib import format as npf
+            with z.open("time_s.npy") as fh:
+                ver = npf.read_magic(fh)
+                rd = (npf.read_array_header_1_0 if ver == (1, 0)
+                      else npf.read_array_header_2_0)
+                _shape, _fo, dtype = rd(fh)
+            return SCHEMA_OF_TIME_DTYPE.get(np.dtype(dtype).name, 2)
     if "time_days" in names:
         raise ValueError(
             f"{path} is a SCHEMA-1 column part: it carries `time_days` "
@@ -421,7 +438,19 @@ class Store:
         has_s = os.path.exists(os.path.join(self.path, "time_s.npy"))
         has_d = os.path.exists(os.path.join(self.path, "time_days.npy"))
         if has_s:
-            self.schema_version = 2
+            # schema 2 or 3 — the column's own dtype decides (int32 / int64)
+            # and store.json's `time_dtype` must agree with it.
+            col_dt = np.load(os.path.join(self.path, "time_s.npy"),
+                             mmap_mode="r").dtype.name
+            if col_dt not in SCHEMA_OF_TIME_DTYPE:
+                raise ValueError(f"{self.path}/time_s.npy is {col_dt}; a "
+                                 f"store's time_s is int32 or int64")
+            self.schema_version = SCHEMA_OF_TIME_DTYPE[col_dt]
+            said = self.meta.get("time_dtype", "int32")
+            if said != col_dt:
+                raise ValueError(
+                    f"{mp} says time_dtype {said!r} and time_s.npy is "
+                    f"{col_dt} — refusing to guess which one is right")
         elif has_d:
             self.schema_version = 1
         else:
@@ -439,7 +468,7 @@ class Store:
         self.time_column = TIME_COLUMN[self.schema_version]
 
         self._col = {}
-        for name in (CORE_COLUMNS if self.schema_version == 2
+        for name in (CORE_COLUMNS if self.schema_version >= 2
                      else CORE_COLUMNS_V1):
             p = os.path.join(self.path, name + ".npy")
             if not os.path.exists(p):
@@ -559,7 +588,7 @@ class Store:
         """
         hi = self.N if hi is None else hi
         a = self._col[self.time_column][lo:hi]
-        if self.schema_version == 2:
+        if self.schema_version >= 2:
             return np.asarray(a, np.int64)
         return seconds_of_days(a)
 
@@ -571,7 +600,7 @@ class Store:
         """
         hi = self.N if hi is None else hi
         a = self._col[self.time_column][lo:hi]
-        if self.schema_version == 2:
+        if self.schema_version >= 2:
             return np.asarray(a, np.int64) / float(SECONDS_PER_DAY)
         return np.asarray(a, np.float64)
 
@@ -581,7 +610,7 @@ class Store:
         # that wants a block (and on slatrack every caller should) asks
         # `st.time_s(lo, hi)` instead.
         if name == "time_s":
-            return (self._col["time_s"] if self.schema_version == 2
+            return (self._col["time_s"] if self.schema_version >= 2
                     else self.time_s())
         if name == "time_days":
             return (self._col["time_days"] if self.schema_version == 1
@@ -735,7 +764,7 @@ class Store:
         out["lon"][:n] = self._col["lon"][rows]
         out["time_days"][:n] = t[order]
         out["time_s"][:n] = (np.asarray(self._col["time_s"][rows], np.int64)
-                             if self.schema_version == 2
+                             if self.schema_version >= 2
                              else seconds_of_days(
                                  self._col["time_days"][rows]))
         if self._platform is not None:

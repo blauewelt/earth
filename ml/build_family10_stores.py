@@ -110,6 +110,20 @@ the four stores above stay exactly where 10.1 published them and the registry
 lists them from there (`ml/build_family10_registry.py`'s `STORE_ROOTS`). The
 schema is untouched — still schema 2, still `time_s` int32 seconds.
 
+E-082: THE SAME MACHINERY BUILDS FAMILY 1 (1.gf, 1.0.tf, 0.9.tf), BY IMPORT.
+`ml/build_family1_stores.py` hands `Ctx` its own adapter and a `Layout` — the
+Hub prefix (`tensors/family1_tf/`), the parts prefix (`partials/family1_tf/`),
+the cache directory, the repository (`chfrank/earth-tensors` or, for a
+`distribution = "private"` adapter, `chfrank/earth-tensors-private`), the
+family name written into store.json. The default `Layout()` is family 10's,
+spelled from the same constants as before, so nothing a family-10 build writes
+or reads has moved. An adapter may also declare `time_dtype = "int64"`: the
+store is then SCHEMA 3 (`time_s` int64, `store.json` carries `schema_version:
+3` and `time_dtype: "int64"`) and `_pack` no longer refuses a row before 1914
+or after 2050 — the int16 `bin` column is then the limit (1533 .. 2430).
+Family 10's adapters all keep the int32 default, and their stores are schema
+2 exactly as before.
+
 Run:
   python3 ml/build_family10_stores.py --store gdp --smoke        # synthetic, seconds
   python3 ml/build_family10_stores.py --store fishing --work W \
@@ -190,6 +204,105 @@ DEPS = {"fetch": ["index"], "grid": ["fetch"], "publish": ["fetch"]}
 # but the assertion is here because a silently wrapped bin is unfindable later.
 BIN_MIN_INT16, BIN_MAX_INT16 = -32768, 32767
 
+# THE TIME COLUMN'S WIDTH, per adapter (E-082). int32 is schema 2 — every
+# family-10 store; int64 is schema 3, for records that start before 1914
+# (GHCN-Daily from 1763, ICOADS, WOD, tide gauges). Nothing else in a row
+# changes between the two.
+TIME_DTYPES = {"int32": np.int32, "int64": np.int64}
+SCHEMA_OF_TIME_DTYPE = {"int32": 2, "int64": 3}
+INT32_TIME_BEFORE = 1914          # an adapter whose first_year is earlier MUST be int64
+
+
+def time_dtype_name(adapter):
+    """The adapter's `time_dtype`, validated. Family 10's adapters say int32."""
+    name = str(getattr(adapter, "time_dtype", "int32") or "int32")
+    if name not in TIME_DTYPES:
+        raise ValueError(f"{getattr(adapter, 'store', adapter)}: time_dtype "
+                         f"{name!r} is neither 'int32' (schema 2) nor 'int64' "
+                         f"(schema 3)")
+    if name == "int32" and int(getattr(adapter, "first_year", 1982)) \
+            < INT32_TIME_BEFORE:
+        raise ValueError(
+            f"{adapter.store}: first_year {adapter.first_year} is before "
+            f"{INT32_TIME_BEFORE}, and int32 seconds since 1982 begin at "
+            f"{f10.TIME_S_MIN_DATE}. Declare time_dtype = 'int64' (schema 3).")
+    return name
+
+
+class Layout:
+    """WHERE a store is published and WHAT it calls itself (E-082).
+
+    Every default is family 10's, spelled from the constants this module has
+    always used, so `Ctx(a)` with no layout builds, names and publishes a
+    family-10 store exactly as before. `ml/build_family1_stores.py` passes its
+    own: `tensors/family1_tf`, `partials/family1_tf`, `ml/cache/family1_tf`,
+    and an explicit `repo_id` — which is how a private adapter is routed to
+    `chfrank/earth-tensors-private` and nowhere else.
+
+    `repo_id=None` keeps family 10's rule: `<whoami>/earth-tensors` through
+    `build_family7.hub_repo()`. An explicit `repo_id` takes its token from the
+    first of `token_env` that is set, and never from argv.
+    """
+
+    def __init__(self, family=None, family_version=None, hf_root=None,
+                 hf_partials=None, cache_dirname=None, repo_id=None,
+                 private=False, token_env=("HF_TOKEN",),
+                 builder="ml/build_family10_stores.py", label="family 10"):
+        self.family = family or FAMILY
+        self.family_version = family_version or FAMILY_VERSION
+        self.hf_root = hf_root or HF_ROOT
+        self.hf_partials = hf_partials or f10.HF_PARTIALS
+        self.cache_dirname = cache_dirname or f10.CACHE_DIRNAME
+        self.repo_id = repo_id
+        self.private = bool(private)
+        self.token_env = tuple(token_env)
+        self.builder = builder
+        self.label = label
+
+    def prefix(self, store):
+        return f"{self.hf_root}/{store}"
+
+    def token(self):
+        for k in self.token_env:
+            v = os.environ.get(k, "")
+            if v:
+                return k, v
+        return None, ""
+
+    def hub(self):
+        """(api, repo, token). Family 10: `hub_repo()`, unchanged."""
+        if self.repo_id is None:
+            return hub_repo()
+        name, tok = self.token()
+        if not tok:
+            sys.exit(f"no Hugging Face token for {self.repo_id}: none of "
+                     f"{', '.join(self.token_env)} is set in the environment "
+                     f"(never in argv) — see the project doc "
+                     f"claude/huggingface-access.md")
+        from huggingface_hub import HfApi
+        print(f"  hub: {self.repo_id} with the token from ${name}")
+        return HfApi(token=tok), self.repo_id, tok
+
+    def describe(self):
+        return {"family": self.family, "family_version": self.family_version,
+                "hf_root": self.hf_root, "hf_partials": self.hf_partials,
+                "cache_dirname": self.cache_dirname,
+                "repo_id": self.repo_id, "private": self.private,
+                "token_env": list(self.token_env)}
+
+
+# BYTES OFF THE NETWORK, counted where they are read (E-082's probe reports
+# bytes per row, and a number nobody measured is an estimate). The helpers
+# below add to it; `Ctx.bytes_fetched` reads it relative to the context's own
+# baseline, so two contexts in one process do not have to share a counter
+# object. An adapter that reads a LOCAL source (`--source-dir`) calls
+# `ctx.count_bytes(n)` for the bytes the network would have carried.
+NET_BYTES = {"n": 0}
+
+
+def count_bytes(n):
+    NET_BYTES["n"] += int(n)
+
 
 def seconds_since_epoch(d):
     """A date or datetime -> EXACT integer seconds since 1982-01-01T00:00:00Z.
@@ -240,7 +353,9 @@ def http_bytes(url, timeout=SOCKET_TIMEOUT, headers=None):
     req = urllib.request.Request(url, headers={**UA, **(headers or {})})
     try:
         with urllib.request.urlopen(req, timeout=timeout) as r:
-            return r.read()
+            data = r.read()
+        count_bytes(len(data))
+        return data
     except urllib.error.HTTPError as e:
         body = b""
         try:
@@ -288,11 +403,67 @@ def http_to_file(url, path, timeout=SOCKET_TIMEOUT):
             os.remove(part)
         raise
     got = os.path.getsize(part)
+    count_bytes(got)
     if want is not None and got != int(want):
         os.remove(part)
         raise IOError(f"{url}: {got:,} of {int(want):,} bytes — truncated")
     os.replace(part, path)
     return path
+
+
+class CountingStream:
+    """A GET response as a file-like that COUNTS its bytes and REFUSES a short
+    read (E-082).
+
+    For sources that are parsed as they stream — a year of GHCN-Daily is a
+    170 MB gzip that is never written to disk whole. Every byte read is added
+    to `NET_BYTES`. When the stream reaches its end, the byte count is compared
+    with `Content-Length` and a short body RAISES (the 2026-09-14 rule: a short
+    download is a refusal, never a smaller year). A caller that stops reading
+    early on purpose — the probe, which wants one month — just closes it;
+    nothing is claimed about a body nobody finished.
+    """
+
+    def __init__(self, url, timeout=SOCKET_TIMEOUT, headers=None):
+        self.url = url
+        req = urllib.request.Request(url, headers={**UA, **(headers or {})})
+        try:
+            self.r = urllib.request.urlopen(req, timeout=timeout)
+        except urllib.error.HTTPError as e:
+            if e.code == 404:
+                raise _NotFound(url) from None
+            raise IOError(f"{url}: HTTP {e.code}") from None
+        cl = self.r.headers.get("Content-Length")
+        self.want = int(cl) if cl is not None else None
+        self.got = 0
+        self.complete = False
+
+    def read(self, n=-1):
+        b = self.r.read(n) if n is not None and n >= 0 else self.r.read()
+        self.got += len(b)
+        count_bytes(len(b))
+        if not b or (n is None or n < 0):
+            if self.want is not None and self.got != self.want:
+                raise IOError(f"{self.url}: {self.got:,} of {self.want:,} "
+                              f"bytes — truncated")
+            self.complete = True
+        return b
+
+    def readable(self):
+        return True
+
+    def close(self):
+        try:
+            self.r.close()
+        except Exception:                                       # noqa: BLE001
+            pass
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc):
+        self.close()
+        return False
 
 
 def fetch_first(urls, path=None, attempts=3, sleep=5.0, reason=False):
@@ -365,8 +536,9 @@ ROW_DTYPE = {"bin": np.int16, "time_s": np.int32, "lat": np.float32,
              "platform": np.int64, "qc": np.uint8}
 
 
-def empty_rows(C):
+def empty_rows(C, time_dtype="int32"):
     out = {k: np.zeros(0, ROW_DTYPE[k]) for k in ROW_KEYS if k != "values"}
+    out["time_s"] = np.zeros(0, TIME_DTYPES[time_dtype])
     out["values"] = np.zeros((0, C), np.float16)
     return out
 
@@ -394,6 +566,13 @@ class SourceAdapter:
     sources = ()
     verified = ""            # what was checked against the live archive, when
     notes = ""
+    # E-082 (family 1). Family 10's adapters inherit these defaults and are
+    # unchanged by them. `family`, `distribution` and `licence` are NOT
+    # defaulted here: a family-1 adapter must state them, and
+    # `ml/family1/adapters/__init__.py` refuses one that does not.
+    time_dtype = "int32"     # "int32" (schema 2) | "int64" (schema 3)
+    credentials = ()         # env var NAMES the fetch needs; refused at preflight
+    platform_meta = False    # True => `platforms(ctx)` -> platforms.json
 
     # -- derived -----------------------------------------------------------
     @property
@@ -449,9 +628,66 @@ class SourceAdapter:
         """Extra store.json keys. `values` is the (N, C) matrix, memmap or not."""
         return {}
 
+    # -- E-082 hooks (family 1) ----------------------------------------------
+    def fetch_month(self, ctx, year, month):
+        """Yield `(label, rows, counts)` for ONE calendar month — the probe.
+
+        The default runs `fetch_year` (or `fetch_stream`) and keeps only the
+        rows whose `time_s` falls inside the month, so it is always correct and
+        costs the whole year. An adapter whose source is ordered so it can STOP
+        after the month (or can ask the archive for just the month) overrides
+        it. The `counts` the default passes on are the WHOLE year's; the probe
+        records that as `counts_scope: "year"`.
+        """
+        lo, hi = month_bounds_s(year, month)
+        src = (self.fetch_year(ctx, year) if self.per_year else
+               ((str(y), r, c) for y, r, c in self.fetch_stream(ctx)
+                if y is not None and int(y) == int(year)))
+        for label, rows, counts in src:
+            if rows is not None and len(rows["bin"]):
+                t = np.asarray(rows["time_s"], np.int64)
+                keep = (t >= lo) & (t <= hi)
+                rows = {k: v[keep] for k, v in rows.items()}
+            yield label, rows, counts
+
+    fetch_month_scope = "year"   # what the default's counts describe
+
+    def platforms(self, ctx):
+        """{platform_hash: {id, lat, lon, ...}} — only when `platform_meta`."""
+        raise NotImplementedError(
+            f"{self.store}: platform_meta is True and platforms(ctx) is not "
+            f"implemented")
+
+    def pack(self, t, lat, lon, values, platform, qc):
+        """`_pack` with this adapter's C and time dtype filled in."""
+        return _pack(t, lat, lon, values, platform, qc, self.C,
+                     time_dtype=time_dtype_name(self))
+
+    def mask_bounds(self, values):
+        """Values outside `[lo, hi]` -> NaN, IN PLACE; returns the counts.
+
+        The contract's rule 3 (never clipped). The dict it returns is what an
+        adapter puts under `counts["out_of_bounds"]`, keyed by channel name —
+        the probe and store.json read it from there.
+        """
+        lo, hi = self.bounds()
+        v = values
+        with np.errstate(invalid="ignore"):
+            bad = np.isfinite(v) & ((v < lo) | (v > hi))
+        n = bad.sum(axis=0)
+        v[bad] = np.nan
+        return {nm: int(k) for nm, k in zip(self.channel_names, n) if k}
+
     # -- helpers shared by the adapters ------------------------------------
     def blank(self, n):
         return np.full((n, self.C), np.nan, np.float64)
+
+
+def month_bounds_s(year, month):
+    """[first second, last second] of a calendar month, since 1982, inclusive."""
+    d0 = dt.date(int(year), int(month), 1)
+    d1 = dt.date(int(year) + (int(month) == 12), int(month) % 12 + 1, 1)
+    return seconds_since_epoch(d0), seconds_since_epoch(d1) - 1
 
 
 # ------------------------------------------------------------------- gdp ----
@@ -3136,7 +3372,7 @@ def _cf_time_to_seconds(t, units):
     return np.asarray(t, np.float64) * per_unit_s + off
 
 
-def _pack(t, lat, lon, values, platform, qc, C):
+def _pack(t, lat, lon, values, platform, qc, C, time_dtype="int32"):
     """Lists (or arrays) -> the seven store columns, bins computed, lon wrapped.
 
     `t` is SECONDS since 1982-01-01T00:00:00Z — an integer array from the
@@ -3157,10 +3393,16 @@ def _pack(t, lat, lon, values, platform, qc, C):
     THE 2050 LIMIT IS REFUSED HERE, not discovered later. int32 seconds reach
     2050-01-19T03:14:07Z; a row past it would wrap to 1913 and look like an
     ordinary pre-epoch observation.
+
+    `time_dtype="int64"` (E-082, schema 3) lifts that limit — the column can
+    then hold any second the int16 `bin` can index (1533 .. 2430), and the bin
+    range check below is the one that applies. Family 10 never passes it.
     """
+    if time_dtype not in TIME_DTYPES:
+        raise ValueError(f"time_dtype {time_dtype!r} is not int32 or int64")
     n = len(t)
     if n == 0:
-        return empty_rows(C)
+        return empty_rows(C, time_dtype)
     ts = np.asarray(t)
     if ts.dtype.kind == "f":
         if not np.isfinite(ts).all():
@@ -3172,7 +3414,8 @@ def _pack(t, lat, lon, values, platform, qc, C):
         s = np.rint(np.asarray(ts, np.float64)).astype(np.int64)
     else:
         s = ts.astype(np.int64)
-    if s.size and (s.min() < f10.TIME_S_MIN or s.max() > f10.TIME_S_MAX):
+    if time_dtype == "int32" and s.size and (
+            s.min() < f10.TIME_S_MIN or s.max() > f10.TIME_S_MAX):
         raise ValueError(
             f"time_s runs {int(s.min())}..{int(s.max())} s, outside int32 — "
             f"family {FAMILY_VERSION}'s time column spans "
@@ -3197,7 +3440,7 @@ def _pack(t, lat, lon, values, platform, qc, C):
     lo32 = np.where(lo32 >= np.float32(180.0), lo32 - np.float32(360.0), lo32)
     return {
         "bin": b.astype(np.int16),
-        "time_s": s.astype(np.int32),
+        "time_s": s.astype(TIME_DTYPES[time_dtype]),
         "lat": np.asarray(lat, np.float64).astype(np.float32),
         "lon": lo32.astype(np.float32),
         "values": v.astype(np.float16),
@@ -3317,9 +3560,15 @@ def _socat_header_from(chunks):
 class Ctx:
     """Everything every stage needs: the dates, the paths, the progress file."""
 
-    def __init__(self, a):
+    def __init__(self, a, adapter=None, layout=None):
         self.a = a
-        self.adapter = ADAPTERS[a.store]()
+        # E-082: family 1 hands in its own adapter and layout; family 10
+        # passes neither and gets exactly what it always got.
+        self.adapter = adapter if adapter is not None else ADAPTERS[a.store]()
+        self.layout = layout if layout is not None else Layout()
+        self.time_dtype = time_dtype_name(self.adapter)
+        self.schema_version = SCHEMA_OF_TIME_DTYPE[self.time_dtype]
+        self._net0 = NET_BYTES["n"]
         self.work = os.path.abspath(a.work)
         self.root = os.path.join(self.work, a.store)
         os.makedirs(self.root, exist_ok=True)
@@ -3340,6 +3589,12 @@ class Ctx:
         # bin it lands in is the bin of a real observation.
         self.t_lo = seconds_since_epoch(self.d_lo)
         self.t_hi = seconds_since_epoch(self.d_hi) + SECONDS_PER_DAY - 1
+        if self.time_dtype == "int32" and (self.t_lo < f10.TIME_S_MIN
+                                           or self.t_hi > f10.TIME_S_MAX):
+            sys.exit(f"{a.store}: the window {self.d_lo} .. {self.d_hi} leaves "
+                     f"int32 seconds ({f10.TIME_S_MIN_DATE} .. "
+                     f"{f10.TIME_S_MAX_DATE}); this adapter is schema 2. A "
+                     f"record that long needs time_dtype = 'int64'.")
         self.b_lo = int(f10.bin_of_seconds(self.t_lo))
         self.b_hi = int(f10.bin_of_seconds(self.t_hi))
         self.years = list(range(self.d_lo.year, self.d_hi.year + 1))
@@ -3381,6 +3636,21 @@ class Ctx:
     def year_dir(self, year):
         return os.path.join(self.parts, str(year))
 
+    # -- E-082: bytes off the network, for the probe ------------------------
+    @property
+    def bytes_fetched(self):
+        return NET_BYTES["n"] - self._net0
+
+    def reset_bytes(self):
+        self._net0 = NET_BYTES["n"]
+
+    def count_bytes(self, n):
+        """A LOCAL read standing in for a download (`--source-dir`)."""
+        count_bytes(n)
+
+    def hub(self):
+        return self.layout.hub()
+
 
 # ============================================================ part plumbing ==
 class PartWriter:
@@ -3404,6 +3674,19 @@ class PartWriter:
             _merge_counts(self.counts, counts)
         if rows is None or len(rows["bin"]) == 0:
             return
+        want = TIME_DTYPES[self.ctx.time_dtype]
+        if rows["time_s"].dtype != want:
+            # int32 -> int64 is exact, so a schema-3 adapter that packed with
+            # the default dtype is widened here; the other way is a store
+            # that cannot hold its rows, and is refused rather than wrapped.
+            if np.dtype(want).itemsize < rows["time_s"].dtype.itemsize:
+                raise ValueError(
+                    f"{self.ctx.adapter.store}: rows carry time_s as "
+                    f"{rows['time_s'].dtype} and the store is "
+                    f"{self.ctx.time_dtype} — pack with the adapter's own "
+                    f"time_dtype (SourceAdapter.pack)")
+            rows = dict(rows)
+            rows["time_s"] = rows["time_s"].astype(want)
         self.buf.append(rows)
         self.n += len(rows["bin"])
         if sum(len(r["bin"]) for r in self.buf) >= FLUSH_ROWS:
@@ -3583,7 +3866,13 @@ def stage_index(ctx):
     return plan
 
 
-def stage_fetch(ctx):
+def stage_fetch(ctx, assemble_store_after=True):
+    """Fetch per year (or one stream) into parts, then assemble the store.
+
+    `assemble_store_after=False` (E-082, family 1's separate `assemble`
+    stage) stops after the parts and the absence check and marks nothing —
+    the caller marks its own `fetch`. Family 10 always assembles here.
+    """
     ad = ctx.adapter
     ad.fetch_preflight(ctx)
     if getattr(ctx.a, "parts_from_hub", False):
@@ -3598,7 +3887,8 @@ def stage_fetch(ctx):
         ctx.prog.stage_start(f"pull {ad.store} parts", len(ctx.years))
         ph.pull(ad.store, ctx.years, ctx.work,
                 allow_missing=bool(getattr(ctx.a, "allow_missing_years",
-                                           False)))
+                                           False)),
+                **parts_hub_kwargs(ctx))
     elif ad.per_year:
         ctx.prog.stage_start(f"fetch {ad.store}", len(ctx.years))
         for i, y in enumerate(ctx.years, 1):
@@ -3713,11 +4003,26 @@ def stage_fetch(ctx):
                   f"{len(writers)} year(s) in one pass "
                   f"({time.time() - t0:.1f}s)")
     fetch_absence_check(ctx)
+    if not assemble_store_after:
+        return None
     ctx.prog.stage_start(f"{ad.store} store", 1)
     meta = assemble(ctx)
     mark(ctx.root, "fetch")
     ctx.prog.item("store", 1, {"N": meta["N"], "bin_first": meta["bin_first"]})
     return meta
+
+
+def parts_hub_kwargs(ctx):
+    """How `family10_parts_hub` reaches THIS store's parts (E-082).
+
+    Empty for family 10's default layout, so its calls — and the tests that
+    replace the module's `_hub` seam — are exactly what they were.
+    """
+    lay = ctx.layout
+    if lay.hf_partials == f10.HF_PARTIALS and lay.repo_id is None:
+        return {}
+    return {"partials": lay.hf_partials, "hub": lay.hub,
+            "private": lay.private}
 
 
 def fetch_absence_check(ctx):
@@ -3794,6 +4099,12 @@ STREAM_ROWS = 50_000_000      # `--assemble auto` switches above this
 # float32 days were, so 10.1 buys its precision for nothing.
 ROW_BYTES_FIXED = 2 + 4 + 4 + 4 + 8 + 1 + 4
 DISK_HEADROOM = 1.2
+
+
+def row_bytes(C, time_dtype="int32"):
+    """Stored bytes per row: 27 + 2C (schema 2), 31 + 2C (schema 3)."""
+    extra = np.dtype(TIME_DTYPES[time_dtype]).itemsize - 4
+    return ROW_BYTES_FIXED + extra + 2 * int(C)
 
 
 def _channel_stats(values, channels, N, chunk=STAT_CHUNK):
@@ -3898,17 +4209,18 @@ def _scan_bins(ctx):
     return N, per_year, counts
 
 
-def _disk_preflight(dest, N, C, n_bins):
+def _disk_preflight(dest, N, C, n_bins, time_dtype="int32"):
     """Refuse BEFORE pass 2 rather than at 90% of a six-hour write (§5.18).
 
     The size is computable from the dtypes, so it is computed; a check that
     can only guess belongs nowhere near an 80 GB allocation.
     """
-    need = int(N) * (ROW_BYTES_FIXED + 2 * int(C)) + 8 * (int(n_bins) + 1)
+    rb = row_bytes(C, time_dtype)
+    need = int(N) * rb + 8 * (int(n_bins) + 1)
     free = shutil.disk_usage(dest).free
     want = need * DISK_HEADROOM
     print(f"  disk: the store is {need / 1e9:.2f} GB ({N:,} rows x "
-          f"{ROW_BYTES_FIXED + 2 * C} B); {free / 1e9:.2f} GB free under "
+          f"{rb} B); {free / 1e9:.2f} GB free under "
           f"{dest}; {DISK_HEADROOM:g}x margin wants {want / 1e9:.2f} GB")
     if free < want:
         sys.exit(f"REFUSING to assemble: {dest} has {free / 1e9:.2f} GB free "
@@ -3957,10 +4269,11 @@ def assemble_store_streaming(ctx):
     np.cumsum(off, out=off)
     assert off[0] == 0 and off[-1] == N, (off[0], off[-1], N)
 
-    _disk_preflight(dest, N, C, n_bins)
+    _disk_preflight(dest, N, C, n_bins, ctx.time_dtype)
 
     from numpy.lib.format import open_memmap
-    shapes = {"bin": (np.int16, (N,)), "time_s": (np.int32, (N,)),
+    shapes = {"bin": (np.int16, (N,)),
+              "time_s": (TIME_DTYPES[ctx.time_dtype], (N,)),
               "lat": (np.float32, (N,)), "lon": (np.float32, (N,)),
               "values": (np.float16, (N, C)),
               "platform": (np.int64, (N,)), "qc": (np.uint8, (N,)),
@@ -4081,7 +4394,9 @@ def assemble_store(ctx):
     if parts["bin"]:
         cat = {k: np.concatenate(v, axis=0) for k, v in parts.items()}
     else:
-        cat = empty_rows(ad.C)
+        cat = empty_rows(ad.C, ctx.time_dtype)
+    cat["time_s"] = cat["time_s"].astype(TIME_DTYPES[ctx.time_dtype],
+                                         copy=False)
     N = int(len(cat["bin"]))
     # THE DEFINING ORDER: (bin, time_s) ascending. `lexsort` takes its keys
     # last-major, so time is the secondary key. Both keys are INTEGERS now, so
@@ -4169,12 +4484,17 @@ def _finish_store(ctx, dest, files, N, off, bin_first, bin_last, n_bins,
     # like a column rather than being a file that happens to sit next to one.
     files = dict(files)
     files.update(ad.extra_files(ctx, dest) or {})
+    platforms_meta = None
+    if getattr(ad, "platform_meta", False):
+        files["platforms.json"], platforms_meta = write_platforms(ctx, dest)
     per_channel, measured_fraction = _channel_stats(values, ad.channels, N)
     live = int((np.diff(off) > 0).sum())
     plan = read_json(os.path.join(ctx.root, "plan.json"), {})
+    lay = ctx.layout
     meta = {
-        "family": FAMILY, "tier": "P", "store": ad.store, "title": ad.title,
-        "family_version": FAMILY_VERSION,
+        "family": lay.family, "tier": "P", "store": ad.store,
+        "title": ad.title,
+        "family_version": lay.family_version,
         "schema_version": SCHEMA_VERSION,
         "schema_version_note": (
             "schema 2 (family 10.1): the time column is `time_s`, int32 "
@@ -4247,10 +4567,31 @@ def _finish_store(ctx, dest, files, N, off, bin_first, bin_last, n_bins,
                   "credentials_present", "toolbox_importable", "preflight")
                  if k in plan},
         "source_dir": (f"file://{ctx.source_dir}" if ctx.source_dir else None),
-        "builder": "ml/build_family10_stores.py",
+        "builder": lay.builder,
         "builder_git_sha": git_sha(),
         "built_at": utcnow(),
     }
+    if ctx.time_dtype != "int32":
+        # SCHEMA 3 (E-082). Family 10 never takes this branch, so its
+        # store.json keeps exactly the keys it always had.
+        meta["schema_version"] = ctx.schema_version
+        meta["time_dtype"] = ctx.time_dtype
+        meta["schema_version_note"] = (
+            "schema 3 (E-082): `time_s` is int64 SECONDS since "
+            "1982-01-01T00:00:00Z, because this record begins before 1914 "
+            "where int32 seconds end. Everything else is schema 2: bin = "
+            "floor_divide(time_s, 432000) as int16 (negative before 1982, "
+            "and the int16 range 1533 .. 2430 is now the limit). "
+            "`ml/family10_store.py` reads schema 1, 2 and 3.")
+        meta["schema"]["time_s.npy"] = {
+            "dtype": "int64", "shape": [N],
+            "meaning": "seconds since 1982-01-01T00:00:00Z, negative before "
+                       "it (schema 3)"}
+    for k in ("family", "distribution", "licence"):
+        if hasattr(ad, k):
+            meta[k if k != "family" else "family_code"] = getattr(ad, k)
+    if platforms_meta is not None:
+        meta["platforms"] = platforms_meta
     if ad.notes:
         meta["notes"] = ad.notes
     meta.update(ad.extra_meta(ctx, dest, N, values) or {})
@@ -4276,6 +4617,48 @@ def _finish_store(ctx, dest, files, N, off, bin_first, bin_last, n_bins,
     print(f"  store: {N:,} row(s), C={ad.C}, bins {bin_first}..{bin_last} "
           f"({live:,} live) -> {dest}")
     return meta
+
+def write_platforms(ctx, dest):
+    """`platforms.json` beside the arrays, from the adapter's own table.
+
+    Written BEFORE the sha256 block so it is hashed, published and
+    restore-checked like a column (E-082). Keys are the platform hashes as
+    decimal strings, sorted, so the file is deterministic. Returns (path,
+    summary for store.json) — the summary counts entries and how many of the
+    store's own platforms have none, which is measured over the finished
+    `platform.npy` in blocks.
+    """
+    ad = ctx.adapter
+    table = ad.platforms(ctx) or {}
+    if not table:
+        raise ValueError(f"{ad.store}: platform_meta is True and platforms() "
+                         f"returned nothing — refusing to publish an empty "
+                         f"platforms.json")
+    # ONLY THE PLATFORMS THIS STORE HOLDS: the station list covers the whole
+    # archive (132k GHCN-Daily stations) and a short window uses a fraction.
+    seen = set()
+    pp = os.path.join(dest, "platform.npy")
+    col = np.load(pp, mmap_mode="r")
+    for lo in range(0, int(col.shape[0]), CHECK_CHUNK_ROWS):
+        seen.update(np.unique(np.asarray(col[lo:lo + CHECK_CHUNK_ROWS]))
+                    .tolist())
+    del col
+    out = {str(int(k)): table[k] for k in sorted(table, key=int)
+           if int(k) in seen}
+    p = os.path.join(dest, "platforms.json")
+    tmp = p + f".tmp{os.getpid()}"
+    with open(tmp, "w") as fh:
+        json.dump(out, fh, sort_keys=True, separators=(",", ":"))
+    os.replace(tmp, p)
+    have = {int(k) for k in out}
+    missing = sorted(seen - have)
+    if missing:
+        print(f"  ::warning::{ad.store}: {len(missing)} platform(s) in the "
+              f"store have no platforms.json entry")
+    return p, {"file": "platforms.json", "entries": len(out),
+               "source_entries": len(table), "in_store": len(seen),
+               "in_store_without_entry": len(missing)}
+
 
 # ============================================================== assertions ===
 def check_store(path, adapter=None, anchor=None, chunk_rows=CHECK_CHUNK_ROWS):
@@ -4707,7 +5090,8 @@ def stage_publish(ctx):
     """
     ad = ctx.adapter
     dest = ctx.store
-    prefix = f"{HF_ROOT}/{ad.store}"
+    lay = ctx.layout
+    prefix = lay.prefix(ad.store)
     # THE FILE LIST COMES FROM store.json, NOT FROM THE DIRECTORY. A listing
     # publishes whatever is there, and `family10_store.Store` opens `qc.npy`
     # and `fp.npy` through `_optional` — so a store that reached the Hub
@@ -4742,9 +5126,14 @@ def stage_publish(ctx):
     check_store(dest, ad, chunk_rows=ctx.check_chunk)
     # The Hub is reached only after every question that can be answered from
     # the store itself has been (ml/CLAUDE.md §0.3).
+    api, repo, tok = ctx.hub()
+    # THE TWO-TRACK RULE, ASSERTED ON THE REPOSITORY THIS CALL WILL WRITE
+    # (E-082 §1.3) — not on the adapter's intention. It runs after the id is
+    # resolved and before the first request that touches the repository.
+    check_publish_target(ad, lay, repo)
     from huggingface_hub import hf_hub_download
-    api, repo, tok = hub_repo()
-    api.create_repo(repo, repo_type="dataset", exist_ok=True, private=False)
+    api.create_repo(repo, repo_type="dataset", exist_ok=True,
+                    private=lay.private)
     ctx.prog.stage_start(f"publish {ad.store}", len(names))
     entries = []
     scratch = os.path.join(ctx.scratch, "verify")
@@ -4756,7 +5145,7 @@ def stage_publish(ctx):
     hub_commit(api, repo,
                hub_add_ops([(f"{prefix}/{n}", os.path.join(dest, n))
                             for n in names]),
-               f"family 10 ({ad.store}): {len(names)} file(s)")
+               f"{lay.label} ({ad.store}): {len(names)} file(s)")
     for i, n in enumerate(names, 1):
         p = os.path.join(dest, n)
         src = digests[n]
@@ -4772,7 +5161,7 @@ def stage_publish(ctx):
         ctx.prog.item(n, i, {"sha256": src[:16]})
 
     sm = read_json(os.path.join(dest, "store.json"), {})
-    man = {"family": FAMILY, "tier": "P", "store": ad.store,
+    man = {"family": lay.family, "tier": "P", "store": ad.store,
            "repo": repo, "prefix": prefix,
            "N": sm.get("N"), "C": sm.get("C"),
            "channels": sm.get("channels"),
@@ -4784,7 +5173,7 @@ def stage_publish(ctx):
     mp = os.path.join(ctx.root, "manifest.json")
     atomic_json(mp, man)
     hub_upload_with_backoff(api, repo, mp, f"{prefix}/manifest.json",
-                            f"family 10 ({ad.store}): manifest")
+                            f"{lay.label} ({ad.store}): manifest")
     grid = publish_grid(ctx, api, repo, tok)
     if grid:
         man["grid"] = grid
@@ -4793,6 +5182,35 @@ def stage_publish(ctx):
     print(f"  publish: {len(entries)} file(s) verified by restore -> "
           f"https://huggingface.co/datasets/{repo}/tree/main/{prefix}")
     return man
+
+
+PRIVATE_SUFFIX = "-private"
+
+
+def check_publish_target(adapter, layout, repo):
+    """REFUSE a publish whose repository contradicts the adapter's track.
+
+    A `distribution = "private"` adapter may publish only to a repository
+    whose id ends in `-private`, and a layout marked private must agree. A
+    public adapter may not land in the private repository either — that is a
+    routing error, not a safe default, because the registry would then point
+    at bytes nobody can read. Raised, not asserted: `python3 -O` must not be
+    able to delete the one check that keeps licensed data off the public repo.
+    """
+    dist = getattr(adapter, "distribution", "public")
+    private_repo = str(repo).endswith(PRIVATE_SUFFIX)
+    if dist == "private" and not (private_repo and layout.private):
+        raise SystemExit(
+            f"REFUSING to publish {adapter.store}: its distribution is "
+            f"'private' and the target repository is {repo!r} "
+            f"(layout.private={layout.private}). A private store goes to a "
+            f"repository whose id ends in '{PRIVATE_SUFFIX}' and nowhere else; "
+            f"nothing has been uploaded.")
+    if dist != "private" and (private_repo or layout.private):
+        raise SystemExit(
+            f"REFUSING to publish {adapter.store}: its distribution is "
+            f"{dist!r} and the target is the private repository {repo!r}.")
+    return repo
 
 
 def publish_grid(ctx, api, repo, tok):
@@ -4817,7 +5235,7 @@ def publish_grid(ctx, api, repo, tok):
     if gm.get("sha256") != sha256(src):
         sys.exit(f"{src} does not match the sha256 in {man_p} — the grid "
                  f"changed after it was checked. Re-run `--stage grid`.")
-    prefix = f"{HF_ROOT}/{FISHING_GRID_DIR}"
+    prefix = f"{ctx.layout.hf_root}/{FISHING_GRID_DIR}"
     names = [FISHING_GRID_FILE, "grid.json"]
     hub_commit(api, repo,
                hub_add_ops([(f"{prefix}/{n}", os.path.join(out_dir, n))
@@ -4865,23 +5283,26 @@ STAGE_FN = {"index": stage_index, "fetch": stage_fetch, "grid": stage_grid,
             "publish": stage_publish}
 
 
-def parse_stages(spec):
+def parse_stages(spec, stages=None):
     """`all` -> every stage; `fetch` -> [fetch]; `index,fetch` -> both, in the
     fixed stage order whatever order they were typed in. Unknown names refuse
-    before anything runs."""
+    before anything runs. `stages` is the order (family 1 passes its own)."""
+    order = list(stages or STAGES)
     if spec.strip() == "all":
-        return list(STAGES)
+        return list(order)
     want = [x.strip() for x in spec.split(",") if x.strip()]
-    bad = [x for x in want if x not in STAGES]
+    bad = [x for x in want if x not in order]
     if bad or not want:
         sys.exit(f"--stage {spec!r}: unknown stage(s) {bad} — choose from "
-                 f"{STAGES}, `all`, or a comma list of them")
-    return [s for s in STAGES if s in want]
+                 f"{order}, `all`, or a comma list of them")
+    return [s for s in order if s in want]
 
 
-def run_stages(ctx, stages):
+def run_stages(ctx, stages, stage_fn=None, deps=None):
+    stage_fn = STAGE_FN if stage_fn is None else stage_fn
+    deps = DEPS if deps is None else deps
     for s in stages:
-        for dep in DEPS.get(s, []):
+        for dep in deps.get(s, []):
             if not marked(ctx.root, dep):
                 sys.exit(f"stage {s!r} needs {dep!r} first (E-079 §4: stage "
                          f"order is fixed) — {marker(ctx.root, dep)} is missing")
@@ -4890,7 +5311,7 @@ def run_stages(ctx, stages):
             continue
         t0 = time.time()
         print(f"\n=== stage {s} ({ctx.a.store}) ===", flush=True)
-        STAGE_FN[s](ctx)
+        stage_fn[s](ctx)
         print(f"=== stage {s} done in {time.time() - t0:.1f}s ===", flush=True)
 
 
@@ -5250,29 +5671,44 @@ def check_smoke(ctx, truth):
             f"schema {st.schema_version}")
 
 
-def run_smoke(store, root=None, keep=False, start="", end=""):
-    start = start or SMOKE_WINDOW.get(store, (SMOKE_START, SMOKE_END))[0]
-    end = end or SMOKE_WINDOW.get(store, (SMOKE_START, SMOKE_END))[1]
+def run_smoke(store, root=None, keep=False, start="", end="",
+              adapter=None, layout=None, make_sources=None, extra_ns=None,
+              after=None):
+    """Synthetic source -> index + fetch -> `check_smoke`, in seconds.
+
+    E-082: family 1 passes its own `adapter`, `layout` and `make_sources`
+    (the adapter's `smoke_sources(root, d_lo, d_hi)`), and an `after(ctx,
+    truth, src)` that runs the probe on the same synthetic archive. Family 10
+    passes none of them.
+    """
+    win = SMOKE_WINDOW.get(store) or getattr(adapter, "smoke_window", None) \
+        or (SMOKE_START, SMOKE_END)
+    start = start or win[0]
+    end = end or win[1]
     tmp = root or tempfile.mkdtemp(prefix=f"f10smoke_{store}_")
     src = os.path.join(tmp, "src")
     work = os.path.join(tmp, "work")
     os.makedirs(work, exist_ok=True)
     t0 = time.time()
     d_lo, d_hi = parse_date(start), parse_date(end)
-    truth = make_smoke_sources(src, store, d_lo, d_hi)
+    truth = (make_sources or make_smoke_sources)(src, store, d_lo, d_hi)
     print(f"smoke     {store}: sources -> {src} "
           f"({len(truth)} truth row(s), {time.time() - t0:.1f}s)")
-    ap = argparse.Namespace(store=store, work=work, source_dir=src,
-                            start=start, end=end, stage="all", force=False,
-                            attempts=1, qc_keep=2, socat_url="", smoke=True,
-                            max_hours=FISHING_HOURS_CEILING,
-                            grid_dtype=GRID_DTYPE_DEFAULT)
-    ctx = Ctx(ap)
+    ns = dict(store=store, work=work, source_dir=src,
+              start=start, end=end, stage="all", force=False,
+              attempts=1, qc_keep=2, socat_url="", smoke=True,
+              max_hours=FISHING_HOURS_CEILING,
+              grid_dtype=GRID_DTYPE_DEFAULT)
+    ns.update(extra_ns or {})
+    ap = argparse.Namespace(**ns)
+    ctx = Ctx(ap, adapter=adapter, layout=layout)
     print(f"axis      bins {ctx.b_lo}..{ctx.b_hi} "
           f"({'NEGATIVE bins in range' if ctx.b_lo < 0 else 'all >= 1982'})")
     run_stages(ctx, ["index", "fetch"])
     out = check_smoke(ctx, truth)
     print(f"smoke     {store} OK in {time.time() - t0:.1f}s — {out}")
+    if after is not None:
+        after(ctx, truth, src)
     if not keep and root is None:
         shutil.rmtree(tmp, ignore_errors=True)
     return work, truth
