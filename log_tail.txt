@@ -1,0 +1,80 @@
+New Data Upload               : 100%|██████████| 10.6MB / 10.6MB,   ???B/s  [A
+
+  ...argo/parts/2005/00000.npz: 100%|██████████|  195kB /  195kB            [A[A
+
+
+  ...argo/parts/2008/00000.npz: 100%|██████████| 1.34MB / 1.34MB            [A[A[A
+
+
+
+  ...argo/parts/2003/00000.npz: 100%|██████████| 21.1kB / 21.1kB            [A[A[A[A
+
+
+
+
+  ...argo/parts/2004/00000.npz: 100%|██████████| 72.0kB / 72.0kB            [A[A[A[A[A
+
+
+
+
+
+  ...argo/parts/2009/00000.npz: 100%|██████████| 1.42MB / 1.42MB            [A[A[A[A[A[A
+
+
+
+
+
+
+  ...argo/parts/2010/00000.npz: 100%|██████████| 1.59MB / 1.59MB            [A[A[A[A[A[A[A
+
+
+
+
+
+
+
+  ...argo/parts/2002/00000.npz: 100%|██████████| 4.07kB / 4.07kB            [A[A[A[A[A[A[A[A
+
+
+
+
+
+
+
+
+  ...argo/parts/2007/00000.npz: 100%|██████████|  849kB /  849kB            [A[A[A[A[A[A[A[A[A
+
+
+
+
+
+
+
+
+
+  ...argo/parts/2006/00000.npz: 100%|██████████|  600kB /  600kB            [A[A[A[A[A[A[A[A[A[A
+
+
+
+
+
+
+
+
+
+
+  [+ 1 files]                 : 100%|██████████| 4.54MB / 4.54MB            [A[A[A[A[A[A[A[A[A[A[AProcessing Files (11 / 11)    : 100%|██████████| 10.6MB / 10.6MB, 1.04MB/s  
+New Data Upload               : 100%|██████████| 10.6MB / 10.6MB, 1.04MB/s  
+  ...argo/parts/2005/00000.npz: 100%|██████████|  195kB /  195kB            
+  ...argo/parts/2008/00000.npz: 100%|██████████| 1.34MB / 1.34MB            
+  ...argo/parts/2003/00000.npz: 100%|██████████| 21.1kB / 21.1kB            
+  ...argo/parts/2004/00000.npz: 100%|██████████| 72.0kB / 72.0kB            
+  ...argo/parts/2009/00000.npz: 100%|██████████| 1.42MB / 1.42MB            
+  ...argo/parts/2010/00000.npz: 100%|██████████| 1.59MB / 1.59MB            
+  ...argo/parts/2002/00000.npz: 100%|██████████| 4.07kB / 4.07kB            
+  ...argo/parts/2007/00000.npz: 100%|██████████|  849kB /  849kB            
+  ...argo/parts/2006/00000.npz: 100%|██████████|  600kB /  600kB            
+  [+ 1 files]                 : 100%|██████████| 4.54MB / 4.54MB            
+  bgcargo: 11 year(s) pushed and verified in 1 part commit(s), done.json written last (0 already present)
+  push-parts: 11 year(s) on the Hub under partials/family1_gf/bgcargo/
+=== stage fetch done in 7919.8s ===
