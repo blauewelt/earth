@@ -21,94 +21,94 @@ a dataset design note --- what is measured at ten kilometres and five days or fi
 \maketitle
 
 \begin{abstract}
-Family 1.gf is a proposed family of observation stores covering the whole
+Family 1.gf (``gf'' for \emph{global, fine}) is a proposed \emph{family} --- a numbered set of datasets built to one storage design and read by the programme's forecasting model --- of observation \emph{stores} (a store is one dataset, published as a small set of arrays) covering the whole
 globe at a granularity of \textbf{ten kilometres or finer in space and five
-days or finer in time}, built on the storage contract of family 10 (one
-registry, three tiers, one token carrying value, offset and footprint). It
-extends family 10's five point stores --- 10.1's drifters, tropical moorings,
-ship CO$_2$ and 2.03 billion along-track sea-level samples, and 10.2's
-fishing-effort store (E-081, the fleet as a distributed sensor) --- with the fine-scale
+days or finer in time}, built on the storage contract of family 10, the programme's granularity-aware dataset set (one
+registry --- the JSON file that lists every store; three tiers --- gridded fields (G), point measurements (P) and image tiles (T); one token --- the unit the model reads, carrying a value, its offset in space and time from the place being predicted, and its footprint, the area and time span the value averages over). It
+extends family 10's five point stores --- 10.1's (family 10's first build) drifters (free-floating surface buoys), tropical moorings,
+ship CO$_2$ and 2.03 billion along-track sea-level samples (satellite altimeter heights along the ground track), and 10.2's (its second build)
+fishing-effort store (E-081, the experiment that built it: the fishing fleet as a distributed sensor) --- with the fine-scale
 measurements the programme's four prediction goals (El Ni\~no, the ocean
-carbon sink, the AMOC, and sea-surface temperature) can each be argued to
+carbon sink, the AMOC --- the Atlantic Meridional Overturning Circulation, the Atlantic's northward heat-carrying flow --- and sea-surface temperature, SST) can each be argued to
 need: daily 4\,km ocean colour, daily 5\,km and 2\,km sea-surface temperature
 from the instruments rather than the analyses fitted to them, 6\,km sea-ice
-concentration, 2\,km swath sea level from SWOT, 4\,km cloud-top temperature
+concentration, 2\,km swath sea level from SWOT (the Surface Water and Ocean Topography radar satellite, which maps sea level across two 50\,km-wide strips), 4\,km cloud-top temperature
 every 30 minutes, ship reports back to 1662, every non-Argo ocean profile since
 1772, interior carbon bottles, biogeochemical floats, open-ocean moorings, and
-satellite column CO$_2$. Every candidate was checked against its producer on
+satellite column CO$_2$ (the CO$_2$ averaged through the whole depth of the atmosphere). Every candidate was checked against its producer on
 2026-09-16: resolution, cadence, record, access, volume and licence. Three
 things the research settled change the design: no ocean-wind, sea-surface
-salinity or microwave-SST product exists at ten kilometres, so wind is an
+salinity or microwave-SST (sea-surface temperature from microwave radiometers, which see through cloud) product exists at ten kilometres, so wind is an
 \emph{exception} to decide and the other two are out; the daily 4\,km and
 5\,km fields are 10--30\,\% valid and 0.2--1.5\,TB each even compressed, so
 the gridded tier gains a sharded, tiled, compressed layout for grids finer
-than $0.25^\circ$; and several sources have ended or changed recently (Pathfinder SST
-stopped at 2023, IMERG V07 Final at 2025-09, NSIDC's AMSR2 line at 2025-08),
+than $0.25^\circ$; and several sources have ended or changed recently (Pathfinder SST, NOAA's 4\,km infrared record,
+stopped at 2023, IMERG --- NASA's merged satellite precipitation --- in its V07 Final run at 2025-09, and the sea-ice line of NSIDC (the US National Snow and Ice Data Center) from AMSR2 (a Japanese microwave radiometer) at 2025-08),
 so the family is built from the successors. The note gives the ledger, the
 storage design, the per-store row and byte arithmetic, a three-phase build
 ladder (phase A $\approx 0.5$\,TB, eight stores, keyless or hosted-runner
-credentials only), the falsifier that decides whether each store earned its
+credentials only --- hosted runners are GitHub's own build machines), the falsifier (the test that can show a store is not worth keeping) that decides whether each store earned its
 place, and the decisions left to Chris.
 \end{abstract}
 
-\section{Scope: the rule, and what it excludes}
+\section{Scope: which measurements qualify (finer than 10\,km and 5 days), and what that rule leaves out}
 
 \paragraph{The rule.} A source qualifies for family 1.gf if it is a
 \emph{global} (or global-ocean) \textbf{observation} whose spatial support is
 $\le 10$\,km --- a point measurement counts --- and whose temporal support is
 $\le 5$ days (a pentad or finer). A derived product is admitted only where it
 carries raw observations that are otherwise inaccessible (a merge of sensors
-whose individual level-2 files are impractical, a bias-corrected collation
+whose individual level-2 files (per-orbit retrievals on the instrument's own swath) are impractical, a bias-corrected collation
 whose inputs are the observations). Monthly or coarser products enter only
 where something the goals need would otherwise be missing, and each such
 exception is named as one in \S6.
 
-\paragraph{Why this rule, in the programme's own terms.} Family 7.2's grids
+\paragraph{Why this rule, in the programme's own terms.} Family 7.2's (the published global input tensor: every $0.25^\circ$ cell, pole to pole, 1982--2024) grids
 are $0.25^\circ$ and $1^\circ$, five-daily or monthly; family 10.1 added the point
-observations but no fine \emph{fields}. E-078 measured why the grid is the wrong
+observations but no fine \emph{fields}. E-078 (the design study that gave family 10 one schema for every granularity) measured why the grid is the wrong
 contract for fine data --- a coarse value copied into fine cells is one
 measurement presented as many, a fine value averaged into a coarse cell throws
-away what the finer source was bought for --- and E-077's ocean colour is the
+away what the finer source was bought for --- and E-077's (the experiment that added ocean colour to family 7.1) ocean colour is the
 deliberate exception, box-averaged to $0.25^\circ$ to get a channel onto the
 grid quickly. Family 1.gf is the fine half of that ledger, stored at its own
 resolution so the token's footprint fields can say what each value averaged.
 
-\paragraph{What is already held and therefore not repeated.} OISST and its
-sea-ice fraction at $0.25^\circ$ (family 7.2, \code{g025}); NCEP at $1^\circ$
-(\code{g100}); GLORYS-derived interior fields and the Argo monthly climatology
-(\code{rg100}); OC-CCI box-averaged to $0.25^\circ$ (\code{oc025}); Argo core
-profiles (family 8); drifters, tropical moorings, SOCAT and all-mission
+\paragraph{What is already held and therefore not repeated.} OISST (NOAA's daily Optimum Interpolation SST analysis) and its
+sea-ice fraction at $0.25^\circ$ (family 7.2, \code{g025}, its $0.25^\circ$ ocean-surface group); NCEP (the US National Centers for Environmental Prediction reanalysis) at $1^\circ$
+(\code{g100}, family 7.2's $1^\circ$ atmosphere-and-land group); GLORYS-derived (Copernicus' ocean reanalysis) interior fields and the monthly climatology of Argo, the global array of profiling floats
+(\code{rg100}, the $1^\circ$ monthly ocean-interior group); OC-CCI (ESA's merged ocean-colour record) box-averaged to $0.25^\circ$ (\code{oc025}, the $0.25^\circ$ ocean-colour group); Argo core
+profiles (family 8, the Argo temperature and salinity store); drifters, tropical moorings, SOCAT (the Surface Ocean CO$_2$ Atlas of ship measurements) and all-mission
 along-track sea level (family 10.1); and the Global Fishing Watch daily
 0.1$^\circ$ per-vessel fishing effort (family 10.2, E-081 --- 11\,km, so it
 sits just outside this family's rule and stays where it is). Two of those are the coarse form of a
-store below --- \code{oc025} of \code{oc4k}, \code{g025}'s sea ice of
-\code{seaice\_asi} --- and both stay: the fine store is a new group, not a
+store below --- \code{oc025} of \code{oc4k} (this family's daily 4\,km ocean-colour store), \code{g025}'s sea ice of
+\code{seaice\_asi} (this family's daily 6\,km sea-ice store) --- and both stay: the fine store is a new group, not a
 replacement, so a consumer that reads only tier G is unchanged.
 
 \paragraph{Excluded by the rule, after checking the finest product that exists.}
 \begin{itemize}\itemsep1pt
 \item \textbf{Sea-surface salinity.} Every product is $\ge 25$\,km on the grid
-and $\ge 40$\,km in effective resolution (RSS SMAP v6 ``40\,km'', ESA CCI SSS v5.5
-at 25\,km grid / 50\,km stated, SMOS 25\,km grid / 40--50\,km footprint). Out.
+and $\ge 40$\,km in effective resolution (RSS SMAP v6 --- Remote Sensing Systems' salinity from NASA's Soil Moisture Active Passive satellite --- ``40\,km'', ESA CCI SSS v5.5 --- the salinity record of ESA's Climate Change Initiative ---
+at 25\,km grid / 50\,km stated, SMOS --- ESA's Soil Moisture and Ocean Salinity satellite --- 25\,km grid / 40--50\,km footprint). Out.
 \item \textbf{Passive-microwave SST.} AMSR2 is a $0.25^\circ$ grid from a
-$\approx 50$\,km footprint. Out; the infrared L3 products below are the
+$\approx 50$\,km footprint. Out; the infrared L3 products (level 3: measurements binned onto a fixed grid, not gap-filled) below are the
 fine-scale SST.
-\item \textbf{Ocean wind from scatterometers.} The finest gridded product is
-$0.125^\circ$ ($\approx 13.9$\,km, Copernicus \code{WIND\_GLO\_PHY\_L3\_MY\_012\_005});
-the finest swath product is 12.5\,km (EUMETSAT OSI SAF ASCAT L2, CC BY 4.0).
+\item \textbf{Ocean wind from scatterometers} (radars that infer wind from the roughness of the sea surface). The finest gridded product is
+$0.125^\circ$ ($\approx 13.9$\,km, Copernicus --- the EU's Earth-observation programme ---\allowbreak \code{WIND\_GLO\_PHY\_L3\_MY\_012\_005});
+the finest swath product is 12.5\,km (EUMETSAT OSI SAF ASCAT L2: the Ocean and Sea Ice facility of Europe's weather-satellite agency, processing ASCAT, the scatterometer on the MetOp satellites; CC BY 4.0, free with attribution).
 Neither passes. Wind is the one forcing the ocean stores cannot do without,
 so it is carried as \textbf{exception E1} in \S6 rather than dropped silently.
-\item \textbf{Gap-filled analyses}: OSTIA and MUR SST, DUACS gridded sea level,
-GLORYS, SMAP L4 soil moisture, the IMERG family's model-like blending. They
+\item \textbf{Gap-filled analyses}: OSTIA (Met Office) and MUR (NASA JPL) SST, DUACS (the gridded altimetry of CNES and Copernicus) sea level,
+GLORYS, SMAP L4 (level 4: model-assimilated) soil moisture, the IMERG family's model-like blending. They
 are derived; their inputs are what the stores below hold. IMERG is the one
-carried as an exception (E2), because the raw GPM swaths are 40\,TB and cover
+carried as an exception (E2), because the raw swaths of GPM (the Global Precipitation Measurement mission) are 40\,TB and cover
 the globe only every few days.
 \end{itemize}
 
-\section{What fine granularity buys each goal}
+\section{What fine granularity buys each goal --- why El Ni\~no, the carbon sink, the Atlantic overturning and SST need detail finer than 10\,km and 5 days}
 
 The four goals judge every addition (Chris, 2026-09-13). The mechanism per
-goal, so that the falsifier in \S7 has something concrete to test:
+goal, so that the falsifier in \S7 (the keep-or-drop test per store) has something concrete to test:
 
 \begin{table}[h]
 \centering\setlength{\tabcolsep}{4pt}\footnotesize
@@ -118,19 +118,19 @@ goal & what happens at $\le 10$\,km and $\le 5$\,d that a $0.25^\circ$ pentad ca
 \midrule
 El Ni\~no & westerly wind bursts (days, hundreds of km), the convection that
 drives them (cloud tops cooling by tens of kelvin in hours), oceanic Kelvin
-waves as a sea-level ridge crossing the Pacific in two months, tropical
+waves (equatorial waves that carry a bump of sea level eastward) as a sea-level ridge crossing the Pacific in two months, tropical
 instability waves at 1,000\,km wavelength with 10\,km fronts &
-\code{irtb} (cloud-top temperature every 30\,min), \code{swot} and the held
-\code{slatrack}, \code{sst\_cci05}, \code{icoads} (the pre-1979 record of
+\code{irtb} (infrared cloud-top temperature from weather satellites every 30\,min), \code{swot} (SWOT's 2\,km sea-level swaths) and the held
+\code{slatrack} (family 10.1's satellite sea level along the ground track), \code{sst\_cci05} (daily 5\,km satellite SST), \code{icoads} (ship and buoy weather reports: the pre-1979 record of
 Pacific SST and pressure), \code{oc4k} (equatorial upwelling shows in
 chlorophyll first) \\
 \addlinespace
 carbon sink & blooms at 4\,km over days; the biological pump's timing;
-surface $f$CO$_2$ varies at 10\,km scales along a ship track (held in
-\code{socat}); the interior's stored carbon and the atmospheric gradient the
+surface $f$CO$_2$ (the fugacity, or effective partial pressure, of CO$_2$ in seawater) varies at 10\,km scales along a ship track (held in
+\code{socat}, family 10.1's ship CO$_2$ store); the interior's stored carbon and the atmospheric gradient the
 flux works against &
-\code{oc4k}, \code{bgcargo} (oxygen, nitrate, pH at depth), \code{glodap}
-(interior DIC, alkalinity, CFC ages), \code{xco2} (the atmosphere's side of
+\code{oc4k}, \code{bgcargo} (biogeochemical floats: oxygen, nitrate, pH at depth), \code{glodap}
+(ship bottle samples: interior DIC --- dissolved inorganic carbon ---, alkalinity, and ages from CFCs, chlorofluorocarbon tracers), \code{xco2} (satellite column CO$_2$: the atmosphere's side of
 the flux) \\
 \addlinespace
 AMOC & deep convection in the Labrador and Irminger seas is set by the ice
@@ -138,28 +138,28 @@ edge and by heat loss over days; boundary currents are 50--100\,km wide with
 10\,km fronts; the density field that geostrophy reads comes from profiles,
 most of them not Argo before 2005 &
 \code{seaice\_asi} (6\,km ice edge), \code{swot} (2\,km sea level across the
-Gulf Stream and the boundary currents), \code{wod} (the pre-Argo hydrography,
-XBT lines), \code{oceansites} and \code{deep\_arrays} (moored velocity and
-density time series), \code{sst\_cci05} \\
+Gulf Stream and the boundary currents), \code{wod} (the World Ocean Database of ship and instrument profiles: the pre-Argo hydrography,
+XBT --- expendable bathythermograph --- lines), \code{oceansites} (open-ocean moorings) and \code{deep\_arrays} (the instruments of the four AMOC monitoring arrays) --- moored velocity and
+density time series --- and \code{sst\_cci05} \\
 \addlinespace
 SST & fronts are 2--10\,km wide; diurnal warming is an hourly signal that the
-foundation-temperature analyses remove by design; coastal upwelling is a
+foundation-temperature analyses (analyses of the water just below the daily warm layer) remove by design; coastal upwelling is a
 10\,km strip; the analyses the model has seen so far were \emph{fitted} to
 these measurements, and a model that has only seen the fit cannot learn where
 the fit fails &
-\code{sst\_cci05} and \code{sst\_acspo02} (the level-3 measurements), \code{icoads}
-(ship and buoy SST since 1662, the record OISST and ERSST are fitted to),
-\code{swh} (wave-driven mixing) \\
+\code{sst\_cci05} and \code{sst\_acspo02} (daily 2\,km satellite SST; both are level-3 measurements), \code{icoads}
+(ship and buoy SST since 1662, the record OISST and ERSST --- NOAA's Extended Reconstructed SST --- are fitted to),
+\code{swh} (satellite significant wave height: wave-driven mixing) \\
 \bottomrule
 \end{tabular}
 \caption{The mechanism each goal has at fine scale, and the stores that measure it.}
 \end{table}
 
-\section{The ledger}
+\section{The ledger --- every candidate source, checked against its producer}
 
 Every row was checked against the producer on 2026-09-16 (product pages, the
-NASA Common Metadata Repository, live directory and S3 listings, the
-Copernicus Marine STAC). ``Raw'' means level-2 or level-3 measurements binned
+NASA Common Metadata Repository, live directory and S3 (Amazon's cloud object storage) listings, the
+Copernicus Marine STAC --- SpatioTemporal Asset Catalog, the standard in which producers list their files). ``Raw'' means level-2 or level-3 measurements binned
 or collated without gap-filling; ``derived'' means an analysis. Volumes marked
 \emph{native} are the producer's files; \emph{stored} is this note's estimate
 in the layout of \S4, and \S5 gives the arithmetic. A dagger ($\dagger$)
@@ -176,33 +176,33 @@ store & source (producer) & native res. & cadence & record & raw? & access & nat
 store & source (producer) & native res. & cadence & record & raw? & access & native vol. & licence \\
 \midrule
 \endhead
-\code{oc4k} & ESA OC-CCI v6.0 merged L3S, 4\,km geographic $4320\times8640$: \code{chlor\_a}, \code{kd\_490}, Rrs (6 bands), per-sensor \code{nobs} (PML) & $1/24^\circ$ (4.6\,km) & daily; also 5-day, 8-day & 1997-09-04 $\to$ 2026-06-30, quarterly updates & raw L3S & PML THREDDS / FTP, CEDA; no account & daily \code{chlor\_a} 84--99\,MB $\to$ $\approx 1$\,TB; all products 1.7\,GB/day & ESA CCI free and open, cite \\
+\code{oc4k} & \emph{daily 4\,km ocean colour: chlorophyll and water clarity.} ESA OC-CCI v6.0 merged L3S (level 3, super-collated across sensors), 4\,km geographic $4320\times8640$: \code{chlor\_a} (chlorophyll), \code{kd\_490} (light attenuation), Rrs (remote-sensing reflectance, the water-leaving colour; 6 bands), per-sensor \code{nobs} (observation count) (PML, Plymouth Marine Laboratory) & $1/24^\circ$ (4.6\,km) & daily; also 5-day, 8-day & 1997-09-04 $\to$ 2026-06-30, quarterly updates & raw L3S & PML THREDDS / FTP, CEDA (the UK's environmental data archive); no account & daily \code{chlor\_a} 84--99\,MB $\to$ $\approx 1$\,TB; all products 1.7\,GB/day & ESA CCI free and open, cite \\
 \addlinespace
-\code{sst\_\allowbreak cci05} & ESA SST CCI v3.0 L3C per sensor, day and night, AVHRR NOAA-06..19 + MetOp-A/B and SLSTR-A/B; 0.05$^\circ$ $3600\times7200$ (Reading / Met Office) & 0.05$^\circ$ (5.6\,km) & daily, 2 passes & AVHRR 1979-07 $\to$ 2024; SLSTR 2016-06 $\to$ & raw L3C & CEDA HTTPS / OPeNDAP; no account (CDS mirror needs one) & AVHRR L3C 4\,TB in 72.4\,k files; SLSTR 272\,GB & CC BY 4.0 \\
+\code{sst\_\allowbreak cci05} & \emph{daily 5\,km sea-surface temperature, per satellite sensor.} ESA SST CCI v3.0 L3C (level 3, collated per sensor), day and night, AVHRR (the infrared radiometer on NOAA's and Europe's MetOp weather satellites) NOAA-06..19 + MetOp-A/B and SLSTR-A/B (Sentinel-3's radiometer); 0.05$^\circ$ $3600\times7200$ (Reading / Met Office) & 0.05$^\circ$ (5.6\,km) & daily, 2 passes & AVHRR 1979-07 $\to$ 2024; SLSTR 2016-06 $\to$ & raw L3C & CEDA HTTPS / OPeNDAP; no account (the mirror on CDS, the Copernicus Climate Data Store, needs one) & AVHRR L3C 4\,TB in 72.4\,k files; SLSTR 272\,GB & CC BY 4.0 \\
 \addlinespace
-\code{sst\_\allowbreak acspo02} & NOAA ACSPO L3S-LEO daily v2.81, super-collated VIIRS + AVHRR + MODIS, 0.02$^\circ$ $9000\times18000$ (NOAA STAR) & 0.02$^\circ$ (2.2\,km) & daily; AM and PM variants & 2000-02-24 $\to$ present $-2$\,months & raw L3S & PO.DAAC (Earthdata login); CoastWatch ERDDAP without & 408\,MB/day $\to$ 3.9\,TB & NOAA open \\
+\code{sst\_\allowbreak acspo02} & \emph{daily 2\,km sea-surface temperature merged across sensors.} NOAA ACSPO (its SST processing system) L3S-LEO (level 3 super-collated, low-Earth-orbit) daily v2.81, super-collated VIIRS + AVHRR + MODIS (US imaging radiometers), 0.02$^\circ$ $9000\times18000$ (NOAA STAR, its satellite research centre) & 0.02$^\circ$ (2.2\,km) & daily; AM and PM variants & 2000-02-24 $\to$ present $-2$\,months & raw L3S & PO.DAAC (NASA's ocean data centre; Earthdata login, NASA's free account); NOAA CoastWatch's ERDDAP data server without & 408\,MB/day $\to$ 3.9\,TB & NOAA open \\
 \addlinespace
-\code{seaice\_\allowbreak asi} & U.\ Bremen ASI v5.4 sea-ice concentration from AMSR-E / AMSR2 89\,GHz (AMSR3 preliminary from 2026-06); polar-stereographic 6.25\,km ($1792\times1216$ N, $1328\times1264$ S) and 3.125\,km & 6.25 or 3.125\,km & daily & 2002-06-01 $\to$ 2011-10-04; 2012-07 $\to$ 2026-09-15 & raw L3 & HTTPS; no account & 6.25\,km $\approx 1.5$\,MB/day; AMSR2 record 8\,GB (29\,GB at 3.125) & ``free for scientific use'', cite; redistribution terms to confirm \\
+\code{seaice\_\allowbreak asi} & \emph{daily 6\,km sea-ice cover from microwave radiometers.} U.\ Bremen ASI (ARTIST sea-ice algorithm) v5.4 sea-ice concentration from AMSR-E / AMSR2 (Japanese microwave radiometers) 89\,GHz (AMSR3 preliminary from 2026-06); polar-stereographic 6.25\,km ($1792\times1216$ N, $1328\times1264$ S) and 3.125\,km & 6.25 or 3.125\,km & daily & 2002-06-01 $\to$ 2011-10-04; 2012-07 $\to$ 2026-09-15 & raw L3 & HTTPS; no account & 6.25\,km $\approx 1.5$\,MB/day; AMSR2 record 8\,GB (29\,GB at 3.125) & ``free for scientific use'', cite; redistribution terms to confirm \\
 \addlinespace
-\code{swot} & SWOT L2 LR SSH Expert (version D), KaRIn 2\,km grid on two 50\,km swaths; 584 passes (292 orbits) per 20.86-day cycle (JPL / CNES) & 2\,km & per pass & 2023-07-26 $\to$ (cycle 056 on 2026-09-13) & raw L2 & PO.DAAC, Earthdata login, S3 us-west-2 & 32\,MB/pass, 18.8\,GB/cycle $\to$ $\approx 1$\,TB & NASA open \\
+\code{swot} & \emph{2\,km sea-surface height across two wide radar swaths.} SWOT L2 LR SSH (level 2, low-rate sea-surface height) Expert (version D), KaRIn (its Ka-band radar interferometer) 2\,km grid on two 50\,km swaths; 584 passes (292 orbits) per 20.86-day cycle (JPL / CNES) & 2\,km & per pass & 2023-07-26 $\to$ (cycle 056 on 2026-09-13) & raw L2 & PO.DAAC, Earthdata login, S3 us-west-2 & 32\,MB/pass, 18.8\,GB/cycle $\to$ $\approx 1$\,TB & NASA open \\
 \addlinespace
-\code{swh} & ESA CCI Sea State v4 L3 along-track significant wave height, all missions Topex $\to$ Sentinel-6A, 1\,Hz, as Copernicus \code{WAVE\_GLO\_\allowbreak PHY\_SWH\_\allowbreak L3\_MY\_014\_005} (one daily multi-mission file) & $\approx 7$\,km along track & 1\,Hz & 1991-08-03 $\to$ 2023-12-31 & raw L3 & Copernicus Marine (account, as \code{slatrack}) & 12--16\,MB/day $\to$ 150--190\,GB & Copernicus Marine licence \\
+\code{swh} & \emph{wave height along satellite altimeter tracks.} ESA CCI Sea State v4 L3 along-track significant wave height, all missions Topex $\to$ Sentinel-6A (the radar altimeter satellites, 1992 to today), 1\,Hz (one value per second), as Copernicus \code{WAVE\_GLO\_\allowbreak PHY\_SWH\_\allowbreak L3\_MY\_014\_005} (one daily multi-mission file) & $\approx 7$\,km along track & 1\,Hz & 1991-08-03 $\to$ 2023-12-31 & raw L3 & Copernicus Marine (account, as \code{slatrack}) & 12--16\,MB/day $\to$ 150--190\,GB & Copernicus Marine licence \\
 \addlinespace
-\code{irtb} & NCEP/CPC globally merged geostationary infrared brightness temperature, GES DISC \code{GPM\_\allowbreak MERGIR} v1: 4\,km, $9896\times3298$, 60$^\circ$S--60$^\circ$N, int16 & 4\,km & 30\,min (two per hourly file) & 1998-01 $\to$ now ($-24$\,h); 251,616 files, none missing & raw merge & GES DISC HTTPS / OPeNDAP / S3, Earthdata login & $\approx 16$\,MB per half hour $\to$ 6.96\,TB & NASA open \\
+\code{irtb} & \emph{4\,km cloud-top temperature every half hour from weather satellites.} NCEP/CPC (the US Climate Prediction Center) globally merged geostationary infrared brightness temperature, GES DISC (NASA's Earth-science data centre) \code{GPM\_\allowbreak MERGIR} v1: 4\,km, $9896\times3298$, 60$^\circ$S--60$^\circ$N, int16 & 4\,km & 30\,min (two per hourly file) & 1998-01 $\to$ now ($-24$\,h); 251,616 files, none missing & raw merge & GES DISC HTTPS / OPeNDAP / S3, Earthdata login & $\approx 16$\,MB per half hour $\to$ 6.96\,TB & NASA open \\
 \addlinespace
-\code{icoads} & ICOADS Release 3.0 (1662--2014) + R3.0.3 near-real-time (2015 $\to$), IMMA1: SST, air temperature, pressure, wind, humidity, cloud, waves (NOAA NCEI / NCAR) & point & per report & 1662 $\to$ 2026-08 & raw & NCEI HTTPS, no account (NCAR needs one) & 45\,GB + 117\,GB gzip; $\approx 455$\,M reports to 2014$^\dagger$ + $\approx 10^8$/yr & CC BY 4.0 (GDEX) / NOAA open \\
+\code{icoads} & \emph{ship and buoy weather reports since 1662.} ICOADS (the International Comprehensive Ocean-Atmosphere Data Set) Release 3.0 (1662--2014) + R3.0.3 near-real-time (2015 $\to$), IMMA1 (its record format): SST, air temperature, pressure, wind, humidity, cloud, waves (NOAA NCEI, the US national environmental data centre / NCAR, the National Center for Atmospheric Research) & point & per report & 1662 $\to$ 2026-08 & raw & NCEI HTTPS, no account (NCAR needs one) & 45\,GB + 117\,GB gzip; $\approx 455$\,M reports to 2014$^\dagger$ + $\approx 10^8$/yr & CC BY 4.0 (GDEX, NCAR's data exchange) / NOAA open \\
 \addlinespace
-\code{wod} & World Ocean Database 2023 + quarterly updates (Feb 2026): 18.63\,M casts --- OSD 3.26\,M, CTD 1.13\,M, MBT 2.43\,M, XBT 2.36\,M, MRB 1.28\,M, DRB 0.27\,M, PFL 2.75\,M (Argo, excluded here), UOR 0.13\,M, APB 2.06\,M, GLD 2.97\,M; T, S, O$_2$, nutrients, pH, alkalinity, CFCs, chlorophyll (NOAA NCEI) & point profile & per cast & 1772 $\to$ 2026 & raw & NCEI ragged netCDF per instrument-year, no account & 167.5\,GB; 121\,GB without PFL & CC0 \\
+\code{wod} & \emph{every ocean profile except Argo floats' (ships, instruments, animals, gliders).} World Ocean Database 2023 + quarterly updates (Feb 2026): 18.63\,M casts --- OSD (bottle casts) 3.26\,M, CTD (conductivity-temperature-depth) 1.13\,M, MBT (mechanical bathythermograph) 2.43\,M, XBT (expendable) 2.36\,M, MRB (moored buoy) 1.28\,M, DRB (drifting buoy) 0.27\,M, PFL (profiling float: Argo, excluded here) 2.75\,M, UOR (undulating recorder) 0.13\,M, APB (instrumented animal) 2.06\,M, GLD (glider) 2.97\,M; T, S, O$_2$, nutrients, pH, alkalinity, CFCs, chlorophyll (NOAA NCEI) & point profile & per cast & 1772 $\to$ 2026 & raw & NCEI ragged netCDF per instrument-year, no account & 167.5\,GB; 121\,GB without PFL & CC0 (public domain) \\
 \addlinespace
-\code{glodap} & GLODAPv3 (July 2026) bottle data: 1,498,120 samples, 1,181 cruises; DIC 541\,k, alkalinity 501\,k, pH 332\,k, O$_2$ 1.30\,M, nitrate 1.16\,M, CFC-12 411\,k (NCEI OCADS 0315582) & point bottle & per cruise & 1972--2023 & raw, adjusted & NCEI HTTPS, no account & 1.0\,GB CSV & CC BY 4.0 \\
+\code{glodap} & \emph{ship bottle samples of carbon, nutrients and oxygen at depth.} GLODAPv3 (the Global Ocean Data Analysis Project, July 2026) bottle data: 1,498,120 samples, 1,181 cruises; DIC 541\,k, alkalinity 501\,k, pH 332\,k, O$_2$ 1.30\,M, nitrate 1.16\,M, CFC-12 411\,k (NCEI OCADS, its ocean-carbon archive, accession 0315582) & point bottle & per cruise & 1972--2023 & raw, adjusted & NCEI HTTPS, no account & 1.0\,GB CSV & CC BY 4.0 \\
 \addlinespace
-\code{bgcargo} & BGC-Argo synthetic profiles (\code{Sprof}): 2,963 floats, 407,999 profiles; DOXY 392\,k, CHLA 195\,k, BBP700 192\,k, NITRATE 123\,k, pH 102\,k (Argo GDAC) & point profile & $\approx 10$\,d & 2002 $\to$ & raw & GDAC HTTPS/FTP, no account & $\approx 15$\,GB & CC BY 4.0 \\
+\code{bgcargo} & \emph{profiling floats that also measure oxygen, nitrate, pH and chlorophyll.} BGC-Argo (biogeochemical Argo) synthetic profiles (\code{Sprof}, the merged per-float files): 2,963 floats, 407,999 profiles; DOXY (oxygen) 392\,k, CHLA (chlorophyll) 195\,k, BBP700 (particle backscatter at 700\,nm) 192\,k, NITRATE 123\,k, pH 102\,k (Argo GDAC, the global data assembly centre) & point profile & $\approx 10$\,d & 2002 $\to$ & raw & GDAC HTTPS/FTP, no account & $\approx 15$\,GB & CC BY 4.0 \\
 \addlinespace
-\code{oceansites} & OceanSITES GDAC moored time series, the 52 non-TAO sites (TAO's 67 are held in \code{gtmba}); salinity at 103, currents at 44, O$_2$ at 16 sites; hourly or better (NDBC / Ifremer) & point mooring & $\le 1$\,h & 1980s $\to$ (six sites reporting in 2025) & raw & NDBC / Ifremer HTTPS, no account & 26\,GB without the 162\,GB ALOHA cabled observatory & OceanSITES open policy \\
+\code{oceansites} & \emph{fixed open-ocean moorings, hourly or finer.} OceanSITES GDAC moored time series, the 52 non-TAO sites (the 67 of TAO, the tropical Pacific mooring array, are held in \code{gtmba}, family 10.1's tropical-mooring store); salinity at 103, currents at 44, O$_2$ at 16 sites; hourly or better (NDBC, NOAA's buoy centre / Ifremer, France's ocean institute) & point mooring & $\le 1$\,h & 1980s $\to$ (six sites reporting in 2025) & raw & NDBC / Ifremer HTTPS, no account & 26\,GB without the 162\,GB ALOHA cabled observatory (a sea-floor station north of Hawaii) & OceanSITES open policy \\
 \addlinespace
-\code{xco2} & OCO-2 L2 Lite XCO2 v11.2r (+ v11.3r from 2024) and OCO-3 v11r: $<3$\,km$^2$ soundings, 70--120\,k good per day (GES DISC) & $<3$\,km$^2$ & per sounding & 2014-06 $\to$; 2019-08 $\to$ & retrieval & GES DISC, Earthdata login & 231 + 53\,GB; 117\,GB & NASA open \\
+\code{xco2} & \emph{satellite CO$_2$ averaged through the air column.} OCO-2 L2 Lite XCO2 (column-averaged CO$_2$) v11.2r (+ v11.3r from 2024) and OCO-3 v11r (NASA's Orbiting Carbon Observatories): $<3$\,km$^2$ soundings, 70--120\,k good per day (GES DISC) & $<3$\,km$^2$ & per sounding & 2014-06 $\to$; 2019-08 $\to$ & retrieval & GES DISC, Earthdata login & 231 + 53\,GB; 117\,GB & NASA open \\
 \addlinespace
-\code{deep\_\allowbreak arrays} & instrument-level data of RAPID/MOCHA 26.5$^\circ$N (BODC), OSNAP (Duke), SAMBA 34.5$^\circ$S (AOML), MOVE 16$^\circ$N (OceanSITES): T, S, velocity, bottom pressure at instrument depth & point mooring & 15\,min--1\,h$^\dagger$ & 2004 / 2014 / 2009 / 2000 $\to$ & raw & public except RAPID's BODC terms, unverified & $< 10$\,GB each$^\dagger$ & open (RAPID to confirm) \\
+\code{deep\_\allowbreak arrays} & \emph{instrument records of the four Atlantic overturning arrays.} instrument-level data of RAPID/MOCHA 26.5$^\circ$N (BODC, the British Oceanographic Data Centre), OSNAP (the subpolar North Atlantic array; Duke), SAMBA 34.5$^\circ$S (the South Atlantic array; AOML, NOAA's Atlantic laboratory), MOVE 16$^\circ$N (the western tropical Atlantic array; OceanSITES): T, S, velocity, bottom pressure at instrument depth & point mooring & 15\,min--1\,h$^\dagger$ & 2004 / 2014 / 2009 / 2000 $\to$ & raw & public except RAPID's BODC terms, unverified & $< 10$\,GB each$^\dagger$ & open (RAPID to confirm) \\
 \bottomrule
 \caption{The candidates that pass the rule, as checked on 2026-09-16.}
 \label{tab:ledger}
@@ -211,42 +211,42 @@ store & source (producer) & native res. & cadence & record & raw? & access & nat
 \paragraph{Checked and set aside.} AVHRR Pathfinder v5.3 (4\,km, 1981-08 $\to$
 2023-12-31): NCEI marks it ``no longer updated''; the SST CCI L3C record covers
 the same sensors from 1979 with a licence, so Pathfinder is not needed.
-NSIDC \code{AU\_SI6}: holds only 89\,GHz brightness temperatures, no
+NSIDC \code{AU\_SI6} (the AMSR-Unified 6\,km product): holds only 89\,GHz brightness temperatures, no
 concentration, and NASA stopped updating it on 2025-09-01; \code{AU\_SI12} is
-12.5\,km. OSI SAF \code{OSI-408-a}: a 10\,km grid from an 18\,km footprint,
+12.5\,km. OSI SAF \code{OSI-408-a} (its 10\,km sea-ice product): a 10\,km grid from an 18\,km footprint,
 2016 $\to$, CC BY 4.0 --- the public-track companion for sea ice; if Bremen's terms
 refuse redistribution, \code{seaice\_asi} is built on the private track and
-OSI SAF beside it publicly. NASA OB.DAAC single-sensor 4\,km chlorophyll (MODIS-Aqua,
-VIIRS, PACE OCI from 2024-03): each is inside OC-CCI's merge except PACE,
+OSI SAF beside it publicly. NASA OB.DAAC (the ocean-biology data centre) single-sensor 4\,km chlorophyll (MODIS-Aqua,
+VIIRS, PACE OCI --- NASA's hyperspectral ocean-colour instrument --- from 2024-03): each is inside OC-CCI's merge except PACE,
 which OC-CCI v6 does not yet include --- a future \code{oc4k} channel, not a
-store. GDP hourly drifters v2.01.1 (197\,M rows, 1987 $\to$ 2022-10): four
+store. GDP (Global Drifter Program) hourly drifters v2.01.1 (197\,M rows, 1987 $\to$ 2022-10): four
 times the rows of the held 6-hourly store, ends four years earlier, adds a
-diurnal SST decomposition; not now. Copernicus CORA (T/S profiles, 1950 $\to$
+diurnal SST decomposition; not now. Copernicus CORA (its quality-controlled temperature and salinity profile collection; T/S profiles, 1950 $\to$
 2025-06, $\approx 90$\,GB): cleaner delayed-mode QC than WOD but T/S only and
 under the Copernicus licence; WOD is the pick for breadth and CC0, CORA the
-alternative if WOD's QC costs too much in the probe. GPM DPR/GMI level-2
+alternative if WOD's QC (quality control) costs too much in the probe (the one-month test fetch of \S7). GPM DPR/GMI (its precipitation radar and microwave imager) level-2
 swaths (16.5 + 22.6\,TB): the raw precipitation, but the globe is covered only
 every few days at 245\,km swath width, so IMERG is carried instead (E2).
-TROPOMI (NO$_2$, CO, CH$_4$ at $3.5 \times 5.5$\,km, 23 + 8.5 + 2.5\,TB):
+TROPOMI (the trace-gas imager on Sentinel-5P; NO$_2$, CO, CH$_4$ at $3.5 \times 5.5$\,km, 23 + 8.5 + 2.5\,TB):
 passes the rule and serves none of the four goals; a fire and fossil tracer
-for later. GOSAT via ACOS (10.5\,km footprint): just over the line, 6.9\,GB;
+for later. GOSAT (Japan's greenhouse-gas satellite) via ACOS (NASA's retrieval of it) (10.5\,km footprint): just over the line, 6.9\,GB;
 would extend \code{xco2} back to 2009-04 --- an exception worth taking when
 \code{xco2} is built (E3).
 
-\section{Storage: what family 10 already gives, and the one layout it lacks}
+\section{Storage: what the family-10 design already gives, and the one layout it lacks --- compressed tiles for grids finer than $0.25^\circ$}
 
 Family 1.gf reuses family 10.1's contract unchanged where it fits and adds one
 layout where it does not.
 
 \paragraph{The registry.} \code{tensors/\allowbreak family1\_gf/\allowbreak family1gf.json} on
-\code{chfrank/earth-tensors}, schema version 2, the same top-level keys as
-\code{family10.json} (\code{epoch} 1982-01-01, \code{pentad\_days} 5, the
+\code{chfrank/earth-tensors} (the project's public Hugging Face dataset repository, ``the Hub''), schema version 2 (family 10.1's column layout), the same top-level keys as
+\code{family10.json} (\code{epoch} 1982-01-01, \code{pentad\_days} 5 --- a pentad is the five-day bin every time is filed under ---, the
 \code{bin\_rule}, the \code{token\_schema} with \code{log2\_fp} and
-\code{log2\_dt}, per-group \code{tier}, \code{cadence}, \code{C},
+\code{log2\_dt} (the base-2 logarithms of a value's spatial and temporal support, relative to 27.83\,km and 5 days), per-group \code{tier}, \code{cadence}, \code{C},
 \code{channels}, \code{footprint}, \code{layout}, \code{prefix}, files with
-\code{sha256}, per-year counts, QC policy, \code{degraded}). The tier letters stay G, P and T so that a consumer's dispatch is
+\code{sha256} (a checksum), per-year counts, QC policy, \code{degraded} (the list of any check a build had to relax); \code{C} is the number of channels). The tier letters stay G, P and T so that a consumer's dispatch is
 unchanged; a fine grid is tier G with \code{layout: "sharded"} (\S4's
-layout) rather than \code{"binmajor"}, and the reader named for tier G
+layout) rather than \code{"binmajor"} (one array per group ordered by five-day bin), and the reader named for tier G
 handles both by reading that field. Six per-group fields are new and all
 are load-bearing: \code{licence} with a \code{redistribution} value of
 \code{yes}, \code{attribution} or \code{no} and a \code{derived\_works} value
@@ -254,22 +254,22 @@ of \code{free}, \code{non-commercial} or \code{restricted}, from the
 licence's own clause; \code{distribution}, \code{public} or \code{private},
 the track of \S4's two-track rule, \code{private} whenever redistribution is
 \code{no}; \code{frames\_per\_bin} and
-\code{frame\_seconds} for gridded groups; \code{dtype} per group (float16
+\code{frame\_seconds} for gridded groups; \code{dtype} per group (float16, a two-byte number,
 for measured fields, uint8 for classes and for brightness temperature stored
 as K$-160$); and \code{verdict}, empty until \S7's falsifier has run. A
 sharded group also names its \code{tile\_grid.json} and
 \code{shard\_index.npy}. Family 10.2's registry --- the
 current one, which inherits 10.1's four stores by reference and adds
 \code{fishing} (E-081) --- gains a one-line \code{siblings} list naming this
-file, family 1.0.tf's and family 0.9.tf's, so a consumer that already dispatches on \code{tier}
+file, family 1.0.tf's (land and coast at the same scale) and family 0.9.tf's (land and coast through Google's AlphaEarth embedding), so a consumer that already dispatches on \code{tier}
 discovers both families from the one entry point it knows. Nothing in family
 10.1 or 10.2 is rewritten.
 
-\paragraph{Tier P, with one widening.} Every point store below ships the nine arrays of
+\paragraph{Tier P (points, profiles and tracks), with one widening.} Every point store below ships the nine arrays of
 family 10.1 at schema 2 --- \code{bin} int16, \code{time\_s} int32 seconds,
 \code{lat}, \code{lon} float32, \code{values} float16 $[N, C]$ in raw units,
-\code{platform} int64, \code{qc} uint8, \code{fp} float16 $[N, 2]$,
-\code{bin\_offsets} int64 --- sorted by \code{(bin, time\_s)}, negative bins
+\code{platform} int64 (the hashed instrument identity), \code{qc} uint8 (quality code), \code{fp} float16 $[N, 2]$ (the two footprint fields),
+\code{bin\_offsets} int64 (where each bin's rows start) --- sorted by \code{(bin, time\_s)}, negative bins
 before 1982, longitude in $[-180, 180)$ enforced in float32, one row costing
 $27 + 2C$ bytes. Profiles put the vertical axis into $C$ exactly as family 8
 does for Argo: the 16 Roemmich--Gilson pressures per variable (the standard
@@ -279,26 +279,26 @@ reaches back only to 1913-12-13, and \code{icoads} begins in 1662 and
 \code{wod} in 1772. A store whose record starts before 1914 declares
 \textbf{schema 3}, identical except that \code{time\_s} is int64; a row then
 costs $31 + 2C$ bytes, \code{bin} (int16, $\pm 449$ years) is unchanged, and
-\code{ml/family10\_store.py} gains one dtype branch. Stores inside the int32
+\code{ml/family10\_store.py} (the store reader) gains one dtype branch. Stores inside the int32
 range stay at schema 2.
 
-\paragraph{Tier G-fine, the new layout.} Family 7.2's tier G is one bin-major
-\code{.npy} per group, read by one HTTP range of one bin: 14.5\,MB at
+\paragraph{Tier G-fine (gridded fields finer than $0.25^\circ$), the new layout.} Family 7.2's tier G is one bin-major
+\code{.npy} (NumPy array file) per group, read by one HTTP range (a request for one byte span of a file) of one bin: 14.5\,MB at
 $0.25^\circ$ for seven channels. At $0.05^\circ$ one daily frame of one
 channel is 51.8\,MB and a day of \code{sst\_acspo02} is 324\,MB per channel;
-a cone anchored at one point needs a few hundred kilometres of it, and the
+a cone (the set of past measurements the model reads around the place and time it predicts, the \emph{anchor}) anchored at one point needs a few hundred kilometres of it, and the
 daily fields are 10--30\,\% valid, the rest cloud, night or land. A flat
 uncompressed array would cost 5--10 times the bytes it carries and force every
 anchor to read a whole globe. So groups on a grid finer than $0.25^\circ$ use
 a \textbf{sharded, tiled, compressed} layout:
-\begin{itemize}\itemsep1pt
+\begin{itemize}\itemsep1pt\sloppy
 \item One \textbf{shard} per (group, bin): \code{<prefix>/\allowbreak <yyyy>/\allowbreak <bin>.shard}.
 Inside it, $F$ \textbf{frames} per bin (\code{frames\_per\_bin} = 1 for a
 pentad field, 5 for daily, 10 for day/night, 40 for three-hourly, 240 for
 half-hourly), each frame cut into \textbf{tiles} of $256 \times 256$ pixels
 of the group's native grid ($12.8^\circ$ at $0.05^\circ$; $10.7^\circ$ at
 $1/24^\circ$; 1,600\,km on the 6.25\,km polar grid), each tile all $C$
-channels as float16 in raw units, NaN for unobserved, zstd-compressed.
+channels as float16 in raw units, NaN (not-a-number) for unobserved, zstd-compressed (Zstandard, a fast lossless compressor).
 \item One \textbf{index} per group: \code{shard\_index.npy}, int64
 $[n_{\mathrm{bins}}, F, n_{\mathrm{tiles}}, 2]$ of (byte offset, byte length)
 inside the bin's shard, plus \code{tile\_grid.json} (rows, columns, the
@@ -308,7 +308,7 @@ land product, the tropics for sea ice) has length 0 and is never stored. Tiles a
 touches: 20--130\,KB compressed for a tile with 20\,\% valid pixels, measured
 by the probe (\S7) before anything is built. The bin's whole frame is
 \code{n\_tiles} ranges; a cone of 1,400\,km reach touches four to nine tiles at $0.05^\circ$ and up to about 36 at $0.02^\circ$.
-\item The Hub's limits shape this: under 100\,k files per repository and
+\item The limits of the Hub (Hugging Face's dataset hosting) shape this: under 100\,k files per repository and
 10\,k per folder, so shards are per bin (about 3,450 for a group reaching back to 1979) in year
 folders, never per tile; files under 200\,GB, which no shard approaches.
 \end{itemize}
@@ -340,9 +340,9 @@ day and is G-fine, and a cone over the tropics then reads a few tiles instead
 of millions of rows. The probe measures $v$ per source; the registry records
 the tier and the layout.
 
-\paragraph{Tier T is not used by this family.} Nothing global at
+\paragraph{Tier T (image tiles) is not used by this family.} Nothing global at
 $\le 10$\,km is imagery in the tile sense --- the 300\,m ocean-colour and
-Sentinel swaths are coastal or terrestrial and belong to family 1.0.tf (and, as a published embedding in place of the raw imagery, family 0.9.tf). This
+Sentinel (the EU Copernicus satellites) swaths are coastal or terrestrial and belong to family 1.0.tf (and, as a published embedding in place of the raw imagery, family 0.9.tf). This
 departs from E-078 \S3, which placed 300\,m--1\,km radiometry in tier T: a
 \emph{gridded level-3} product at those scales is a raster on one fixed grid
 and fits the sharded tier-G layout, whereas tier T is for swath imagery whose
@@ -351,10 +351,10 @@ candidate that approaches tier-T volume, \code{irtb} at 30 minutes, is handled
 by scope (\S5) rather than by a token cache.
 
 \paragraph{Two-machine builds, unchanged.} Credentials --- Earthdata login,
-Copernicus Marine --- live in repository secrets and reach only hosted runners;
-rented boxes are keyless and assemble from Hub parts, exactly the
-\code{slatrack} pattern (six hosted lanes fetch and push per-year parts with
-\code{done.json} written last after a restore-hash; a keyless verified box
+Copernicus Marine (the free accounts of NASA and of the EU marine service) --- live in repository secrets and reach only hosted runners;
+rented boxes (machines hired by the hour) are keyless and assemble from Hub parts, exactly the
+\code{slatrack} pattern, the way family 10.1 built its 67\,GB sea-level store (six hosted lanes fetch and push per-year parts with
+\code{done.json}, a completion marker, written last after a restore-hash; a keyless verified box
 pulls, assembles by streaming, publishes with restore-verification). Every
 fetch lane refuses a listing that came back empty or a download that came back
 short and records any relaxation in \code{degraded}; there is no
@@ -371,7 +371,7 @@ anonymously by anyone, the default wherever the licence allows --- or
 \code{private}: the same arrays, layout and \code{store.json} in a private
 Hugging Face dataset repository (\code{chfrank/\allowbreak earth-tensors-private},
 the pick, because every reader and build script is unchanged; an
-S3-compatible bucket with pre-signed URLs is the alternative if the private
+S3-compatible bucket with pre-signed URLs (time-limited download links) is the alternative if the private
 volume passes a terabyte or the Hub's private-storage pricing bites) that
 only this project's own jobs can read. The public registry lists private
 groups too, with their \code{prefix}, sizes, checks and \code{verdict}, so
@@ -381,7 +381,7 @@ consequences. A rented box reads a private store with a fine-grained
 read-only token scoped to that one repository, handed to the job through a
 repository secret and revoked when the job ends --- the one credential a box
 holds beyond the job's own, admissible because it outlives nothing
-(\code{ml/CLAUDE.md} \S6; pre-signed URLs would be the keyless form). A
+(\code{ml/CLAUDE.md} \S6, the project's security rules for rented machines; pre-signed URLs would be the keyless form). A
 private store is processed on a box and never kept on one: pulled for the
 job, deleted by the job's hygiene, never on a stopped box's disk, since the
 host has root. What may leave is the model and the numbers: a trained
@@ -391,10 +391,10 @@ a \code{restricted} source confines even the checkpoint to the private
 track), the data never. And a private store is a cost to reproducibility:
 nobody outside the project can check it, so a published result that rests on
 one names it, and a public source is preferred wherever one carries the same
-observations --- which is why every CC0, CC BY and Copernicus source in these
+observations --- which is why every CC0, CC BY (Creative Commons, attribution required) and Copernicus source in these
 families is on the public track.
 
-\section{The stores in numbers}
+\section{The stores in numbers --- rows, bytes and build phase per dataset}
 
 Row counts and stored bytes below are this note's estimates from the verified
 native facts; every one is a hypothesis the one-month probe of \S7 replaces
@@ -410,25 +410,25 @@ $\times v \times 2C \times 1.2$}.
 \toprule
 store & tier & channels ($C$) & footprint $(\log_2 f_p, \log_2 f_t)$ & rows or frames & stored & goals & phase \\
 \midrule
-\code{seaice\_asi} & G-fine & 1: \code{sic} (\%) on two polar grids as two sub-groups N/S & $(-2.15, -2.32)$ & $3.86$\,M px $\times$ 8,700 d; $v \approx 0.4$ of the polar grids & $\approx 30$\,GB & AMOC, SST & A \\
-\code{oc4k} & G-fine & 3: \code{log\_chl}, \code{kd\_490}, \code{nobs}; +6 Rrs bands in phase B & $(-2.58, -2.32)$ & 37.3\,M px $\times$ 10,500 d; $v \approx 0.10$--$0.15$ & 0.3--0.4\,TB ($C = 3$); $\approx 1.1$\,TB with Rrs & carbon, SST, El Ni\~no & A \\
-\code{icoads} & P & 8: \code{sst}, \code{airt}, \code{slp}, \code{wind\_u}, \code{wind\_v}, \code{dewpt}, \code{wave\_h}, \code{cloud} & $(-4, -4)$ & $\approx 1.5$\,B$^\dagger$ (455\,M to 2014 + NRT) & $\approx 75$\,GB & SST, El Ni\~no, AMOC & A \\
-\code{wod} & P & 48: T, S, O$_2$ at the 16 RG pressures; \code{platform} = cast id, instrument in \code{qc} bits & $(-4, -4)$ & 15.9\,M casts (WOD without PFL) & 2\,GB & AMOC, SST & A \\
-\code{glodap} & P & 9: \code{depth}, DIC, TA, pH, O$_2$, NO$_3$, PO$_4$, SiO$_4$, CFC-12 & $(-4, -4)$ & 1.50\,M bottles & 80\,MB & carbon, AMOC & A \\
-\code{bgcargo} & P & 80: DOXY, NITRATE, PH, CHLA, BBP700 at 16 pressures & $(-4, -4)$ & 408\,k profiles & 80\,MB & carbon & A \\
-\code{oceansites} & P & 5: \code{depth}, T, S, u, v; one row per (site, hour, instrument) & $(-4, -6.9)$ & $\approx 10^8$$^\dagger$ & $\approx 4$\,GB & AMOC, El Ni\~no, carbon & A \\
-\code{xco2} & P & 3: \code{xco2}, \code{xco2\_unc}, \code{surface} (land/water) & $(-4, -4)$ & $\approx 400$\,M good soundings (OCO-2) + OCO-3 & $\approx 18$\,GB & carbon & A \\
+\code{seaice\_asi} & G-fine & \emph{sea ice.} 1: \code{sic} (\%) on two polar grids as two sub-groups N/S & $(-2.15, -2.32)$ & $3.86$\,M px $\times$ 8,700 d; $v \approx 0.4$ of the polar grids & $\approx 30$\,GB & AMOC, SST & A \\
+\code{oc4k} & G-fine & \emph{ocean colour.} 3: \code{log\_chl}, \code{kd\_490}, \code{nobs}; +6 Rrs bands in phase B & $(-2.58, -2.32)$ & 37.3\,M px $\times$ 10,500 d; $v \approx 0.10$--$0.15$ & 0.3--0.4\,TB ($C = 3$); $\approx 1.1$\,TB with Rrs & carbon, SST, El Ni\~no & A \\
+\code{icoads} & P & \emph{ship reports.} 8: \code{sst}, \code{airt}, \code{slp}, \code{wind\_u}, \code{wind\_v}, \code{dewpt}, \code{wave\_h}, \code{cloud} & $(-4, -4)$ & $\approx 1.5$\,B$^\dagger$ (455\,M to 2014 + NRT, near-real-time) & $\approx 75$\,GB & SST, El Ni\~no, AMOC & A \\
+\code{wod} & P & \emph{ocean profiles.} 48: T, S, O$_2$ at the 16 RG (Roemmich--Gilson) pressures; \code{platform} = cast id, instrument in \code{qc} bits & $(-4, -4)$ & 15.9\,M casts (WOD without PFL) & 2\,GB & AMOC, SST & A \\
+\code{glodap} & P & \emph{bottle chemistry.} 9: \code{depth}, DIC, TA (total alkalinity), pH, O$_2$, NO$_3$, PO$_4$, SiO$_4$, CFC-12 & $(-4, -4)$ & 1.50\,M bottles & 80\,MB & carbon, AMOC & A \\
+\code{bgcargo} & P & \emph{chemistry floats.} 80: DOXY, NITRATE, PH, CHLA, BBP700 at 16 pressures & $(-4, -4)$ & 408\,k profiles & 80\,MB & carbon & A \\
+\code{oceansites} & P & \emph{moorings.} 5: \code{depth}, T, S, u, v; one row per (site, hour, instrument) & $(-4, -6.9)$ & $\approx 10^8$$^\dagger$ & $\approx 4$\,GB & AMOC, El Ni\~no, carbon & A \\
+\code{xco2} & P & \emph{column CO$_2$.} 3: \code{xco2}, \code{xco2\_unc}, \code{surface} (land/water) & $(-4, -4)$ & $\approx 400$\,M good soundings (OCO-2) + OCO-3 & $\approx 18$\,GB & carbon & A \\
 \addlinespace
-\code{swot} & P & 3: \code{ssha\_karin}, \code{sig0}, \code{quality} & $(-3.80, -4)$ & $\approx 0.5$\,M px/pass $\times$ 584/cycle $\times$ 55 cycles $\approx 16$\,B & $\approx 0.6$\,TB & AMOC, El Ni\~no & B \\
-\code{swh} & P & 3: \code{swh}, \code{swh\_denoised}, \code{swh\_unc} & $(-2.0, -4)$ & $\approx 2$\,B (the \code{slatrack} missions, 1991--2023) & $\approx 70$\,GB & SST (mixing), read-out & B \\
-\code{sst\_cci05} & G-fine & 3: \code{sst}, \code{quality}, \code{dtime}; day and night as 2 frames/day, the builder super-collating sensors by best quality & $(-2.32, -2.32)$ & 25.9\,M px $\times$ 2 $\times$ 16,200 d; $v \approx 0.2$ & $\approx 1.2$\,TB & SST, all & B \\
-\code{irtb} & G-fine & 1: \code{tb} (uint8, K$-160$), 30$^\circ$S--30$^\circ$N, 3-hourly ($F = 40$) & $(-2.80, -7.9)$ & 16.3\,M px $\times$ 8/day $\times$ 10,500 d; $v = 1$, but Tb compresses $\approx 2\times$ & $\approx 0.7$\,TB & El Ni\~no, SST & B \\
-\code{precip01} (E2) & G-fine & 2: \code{precip}, \code{quality} at 0.1$^\circ$, daily & $(-1.32, -2.32)$ & 6.48\,M px $\times$ 10,100 d; $v = 1$, but zeros compress & 0.2--0.3\,TB & El Ni\~no, AMOC & B \\
-\code{deep\_arrays} & P & 6: \code{depth}, T, S, u, v, \code{bpr} & $(-4, -6.9)$ & $10^7$--$10^8$$^\dagger$ & $< 5$\,GB & AMOC & B \\
+\code{swot} & P & \emph{swath sea level.} 3: \code{ssha\_karin}, \code{sig0}, \code{quality} & $(-3.80, -4)$ & $\approx 0.5$\,M px/pass $\times$ 584/cycle $\times$ 55 cycles $\approx 16$\,B & $\approx 0.6$\,TB & AMOC, El Ni\~no & B \\
+\code{swh} & P & \emph{wave height.} 3: \code{swh}, \code{swh\_denoised}, \code{swh\_unc} & $(-2.0, -4)$ & $\approx 2$\,B (the \code{slatrack} missions, 1991--2023) & $\approx 70$\,GB & SST (mixing), read-out & B \\
+\code{sst\_cci05} & G-fine & \emph{5\,km SST.} 3: \code{sst}, \code{quality}, \code{dtime}; day and night as 2 frames/day, the builder super-collating sensors by best quality & $(-2.32, -2.32)$ & 25.9\,M px $\times$ 2 $\times$ 16,200 d; $v \approx 0.2$ & $\approx 1.2$\,TB & SST, all & B \\
+\code{irtb} & G-fine & \emph{cloud-top temperature.} 1: \code{tb} (uint8, K$-160$), 30$^\circ$S--30$^\circ$N, 3-hourly ($F = 40$) & $(-2.80, -7.9)$ & 16.3\,M px $\times$ 8/day $\times$ 10,500 d; $v = 1$, but Tb compresses $\approx 2\times$ & $\approx 0.7$\,TB & El Ni\~no, SST & B \\
+\code{precip01} (E2) & G-fine & \emph{daily satellite rain (IMERG).} 2: \code{precip}, \code{quality} at 0.1$^\circ$, daily & $(-1.32, -2.32)$ & 6.48\,M px $\times$ 10,100 d; $v = 1$, but zeros compress & 0.2--0.3\,TB & El Ni\~no, AMOC & B \\
+\code{deep\_arrays} & P & \emph{overturning arrays.} 6: \code{depth}, T, S, u, v, \code{bpr} & $(-4, -6.9)$ & $10^7$--$10^8$$^\dagger$ & $< 5$\,GB & AMOC & B \\
 \addlinespace
-\code{sst\_acspo02} & G-fine & 2: \code{sst}, \code{quality} at 0.02$^\circ$ & $(-3.64, -2.32)$ & 162\,M px $\times$ 9,700 d; $v \approx 0.3$ & $\approx 2.3$\,TB & SST & C \\
-\code{wind12} (E1) & P & 3: \code{u10}, \code{v10}, \code{quality} at 12.5\,km swath cells & $(-1.15, -4)$ & $\approx 4$\,M cells/day/satellite $\times$ 27 yr $\approx 50$\,B & $\approx 1.7$\,TB (or $\approx 50$\,GB as pentad 0.125$^\circ$ frames) & all & C \\
-\code{irtb} full & G-fine & 60$^\circ$S--60$^\circ$N, half-hourly ($F = 240$) & & 32.6\,M px $\times$ 48 $\times$ 10,500 d & $\approx 8$\,TB & & C \\
+\code{sst\_acspo02} & G-fine & \emph{2\,km SST.} 2: \code{sst}, \code{quality} at 0.02$^\circ$ & $(-3.64, -2.32)$ & 162\,M px $\times$ 9,700 d; $v \approx 0.3$ & $\approx 2.3$\,TB & SST & C \\
+\code{wind12} (E1) & P & \emph{scatterometer wind.} 3: \code{u10}, \code{v10}, \code{quality} at 12.5\,km swath cells & $(-1.15, -4)$ & $\approx 4$\,M cells/day/satellite $\times$ 27 yr $\approx 50$\,B & $\approx 1.7$\,TB (or $\approx 50$\,GB as pentad 0.125$^\circ$ frames) & all & C \\
+\code{irtb} full & G-fine & \emph{cloud-top temperature, whole record:} 60$^\circ$S--60$^\circ$N, half-hourly ($F = 240$) & & 32.6\,M px $\times$ 48 $\times$ 10,500 d & $\approx 8$\,TB & & C \\
 \bottomrule
 \end{tabular}
 \caption{Estimated size of every store in the layout of \S4, and the phase it is proposed for. Phase A totals $\approx 0.5$\,TB; phase B $\approx 3.5$\,TB more; phase C is where the Hub's ``contact us for terabytes'' threshold is certainly crossed.}
@@ -453,14 +453,14 @@ because it reaches 1979 and is CC BY 4.0, and \code{sst\_acspo02} follows for
 the 2\,km detail.
 
 \clearpage
-\section{The exceptions, named}
+\section{The exceptions, named --- three sources admitted although slightly coarser than the rule}
 
 \begin{itemize}\itemsep2pt
 \item \textbf{E1 --- scatterometer wind at 12.5\,km.} Fails the rule by 25\,\%
 and is the only observation of the wind that forces every ocean store here.
 Proposed: admit in phase C as \code{wind12}, a P store of OSI SAF ASCAT L2
-12.5\,km swath cells (CC BY 4.0; Metop-A 2007--2014 CDR, Metop-B 2012 $\to$,
-Metop-C 2019 $\to$) with QuikSCAT (1999--2009) from the Copernicus
+12.5\,km swath cells (CC BY 4.0; Metop-A 2007--2014 CDR --- climate data record ---, Metop-B 2012 $\to$,
+Metop-C 2019 $\to$) with QuikSCAT (NASA's earlier scatterometer, 1999--2009) from the Copernicus
 $0.25^\circ$ line for the earlier years. The pick between the P form (1.7\,TB,
 every cell) and pentad $0.125^\circ$ frames (90\,GB, a mean) is Chris's; this
 note's pick is the P form restricted to 2007 $\to$ first.
@@ -475,11 +475,11 @@ kilometre, 6.9\,GB, and it extends the column-CO$_2$ record from 2014 back to
 2009-04. Admitted into \code{xco2} with \code{platform} distinguishing the
 instrument and \code{fp} carrying its own footprint.
 \item \textbf{Monthly:} nothing. Every goal's monthly quantities (RAPID
-transport, the Ni\~no indices, SeaFlux) are targets or are already held
+transport, the Ni\~no indices --- SST averages over fixed Pacific boxes ---, SeaFlux, a satellite estimate of the air--sea CO$_2$ flux) are targets or are already held
 coarse; no monthly source is critical to this family.
 \end{itemize}
 
-\section{The build ladder, the probe, and the falsifier}
+\section{The build ladder, the probe, and the falsifier --- the order of building, the one-month test fetch, and the test each store must pass to be kept}
 
 \paragraph{Phase A --- eight stores, $\approx 0.5$\,TB, keyless or
 hosted-runner credentials only.} \code{seaice\_asi}, \code{oc4k},
@@ -487,7 +487,7 @@ hosted-runner credentials only.} \code{seaice\_asi}, \code{oc4k},
 \code{xco2}, plus the registry and the \code{siblings} line in family 10.2's.
 Seven of the eight fetch without any account; \code{xco2} needs an Earthdata
 login on a hosted runner; \code{oc4k} is the one G-fine build large enough to
-need a box for assembly. Expected cost, from the 10.1 precedent: the P stores
+need a box for assembly. Expected cost, from the 10.1 precedent (a \emph{verified} box is a rented machine whose host the marketplace has vetted): the P stores
 \$0 on hosted runners; \code{oc4k} one verified box for a few hours, \$2--5;
 the whole phase under \$10 if nothing is re-fetched.
 
@@ -503,7 +503,7 @@ should be asked about a terabyte-scale public repository before this phase
 \code{oc4k}.
 
 \paragraph{The probe, before any build.} For each source, one month
-(January 2015, as E-079 used) fetched on a hosted runner through the real
+(January 2015, as E-079 --- family 10's first data pull --- used) fetched on a hosted runner through the real
 adapter, measuring: rows per day or valid fraction per frame; compressed
 bytes per tile at the chosen tile size; listing completeness against the
 producer's own count; fetch throughput; and for G-fine, the byte length of a
@@ -514,12 +514,12 @@ measured}, and the probe's numbers replace this note's in the registry.
 
 \paragraph{The falsifier per store.} A store earns its place if, at anchors
 where it has coverage, adding its tokens to the cone lowers the held-out
-masked-token loss on the goal's read-out (\S2's mapping: the Ni\~no-3.4
+masked-token loss (the model's error at predicting tokens hidden from it) on the goal's read-out (\S2's mapping: the Ni\~no-3.4 --- the standard El Ni\~no index box in the central Pacific ---
 target for El Ni\~no, the \code{socat}-scored $f$CO$_2$ and \code{oc025}
-colour targets for carbon, the RAPID transport and corridor targets for AMOC,
+colour targets for carbon, the transport measured by RAPID (the 26.5$^\circ$N overturning array) and the corridor targets for AMOC,
 the OISST target for SST) against the same anchors, same seed, without it ---
-three seeds, because a new tier buys its own replication (\code{ml/CLAUDE.md}
-\S3b). Parity means the coarse tensor already carried what the fine store
+three seeds (three independent training runs), because a new tier buys its own replication (\code{ml/CLAUDE.md}
+\S3b, the programme's replication rule). Parity means the coarse tensor already carried what the fine store
 adds at pentad cadence, and the store is then justified only as a fine
 \emph{target} (E-078 \S5), which is a different and cheaper claim. The
 verdicts are written per store into the registry's \code{verdict} field so a
@@ -527,13 +527,13 @@ consumer can see which fine stores the programme found to matter.
 
 \paragraph{Verification, as for 10.1.} Every array's sha256 against
 \code{store.json}; $N$ from file sizes; \code{bin} monotone and equal to
-\code{floor\_divide(time\_s, 432000)}; the CSR index reproduced; and, new for
+\code{floor\_divide(time\_s, 432000)} (432,000 seconds are five days); the CSR (compressed sparse row) index reproduced; and, new for
 G-fine, every shard's index entries decompressing to tiles of the declared
 shape with the declared NaN fraction, and per-year frame counts equal to the
 producer's listing (a day absent upstream is a zero-length frame with a
 counter, never a silent gap).
 
-\section{Decisions for Chris}
+\section{Decisions for Chris --- open choices, each with this note's pick}
 
 Laid out with this note's pick named, all reversible before phase A is
 dispatched.

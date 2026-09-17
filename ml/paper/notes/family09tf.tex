@@ -12,7 +12,7 @@
 \newcolumntype{L}[1]{>{\raggedright\arraybackslash}p{#1}}
 
 \title{Family 0.9.tf: land and coast through a published embedding\\
-\large a dataset design note --- Google's AlphaEarth annual 10\,m embeddings in place of the raw imagery}
+\large a dataset design note --- family 1.0.tf with its raw imagery replaced by Google's AlphaEarth annual 10\,m embeddings}
 \author{blauewelt/earth --- design note}
 \date{16 September 2026}
 
@@ -20,22 +20,40 @@
 \maketitle
 
 \begin{abstract}
-Family 0.9.tf is the alternative to family 1.0.tf's image catalogue: instead
-of learning a local codec over petabytes of raw optical, radar and LiDAR
-scenes, it ingests the embedding Google already computed from the same optical and
-radar imagery, trained against the same LiDAR, L-band radar and climate
-sources the catalogue lists --- the AlphaEarth Foundations Satellite
-Embedding, version 1:
+Family 0.9.tf (``tf'' for \emph{terrestrial, fine}; a \emph{family} is a
+numbered set of datasets built to one storage design and read by the
+programme's forecasting model) is family 1.0.tf --- the land-and-coast
+family of raw fine-scale observations --- with \textbf{one substitution}.
+Family 1.0.tf's tier-T (image-tile) scene catalogue (its ten image-catalogue stores,
+\code{cat\_landsat} to \code{cat\_submetre}: the raw satellite imagery and
+the sub-metre orthophotos, listed for a small learned encoder --- the
+\emph{local codec} --- to turn into tokens) is replaced by four stores of
+the AlphaEarth Satellite Embedding, Google DeepMind's published summary of
+that imagery: \code{aef1k}, \code{aef\_dots}, \code{aef100r} and
+\code{aef10}. Everything else --- the point networks, the LiDAR footprints,
+the daily 0.05$^\circ$ fields, the read-out targets and the statics --- is
+\textbf{inherited from 1.0.tf by reference}, exactly as family 10.2
+inherits family 10.1's stores: the 0.9.tf registry lists them with their
+1.0.tf paths and sha256 checksums, and not one byte is rebuilt. So
+0.9.tf's own build is the four AlphaEarth stores, and the comparison the two
+families exist for --- raw imagery through a learned local codec versus a
+published embedding, everything else held fixed --- is exact.
+
+Instead of learning a local codec over petabytes of raw optical, radar and
+LiDAR (laser-ranging) scenes, the family ingests the embedding Google already
+computed from the same optical and radar imagery, trained against the same
+LiDAR, L-band radar (long-wavelength, about 24\,cm) and climate sources the
+catalogue lists --- the AlphaEarth Foundations Satellite Embedding, version 1:
 one 64-dimensional unit-length vector per 10\,m pixel per year, 2017--2025,
-for every land surface and shallow water, published under CC BY 4.0, 64\,TB
+for every land surface and shallow water, published under CC BY 4.0 (free to use with attribution), 64\,TB
 a year and 577\,TB in all, readable anonymously from a complete mirror. The
 version number below 1.0 says what it is: a published summary standing in
 for the raw record, the fastest route to ten-metre land information the
 programme can take, bought at the price of an annual cadence (73 times
 coarser than the five-day rule), a closed model that cannot be re-run on new
 sensors or sub-annual periods, and a record that begins in 2017. The note
-says what the embedding is and what it was trained on, how it enters family
-10's token without leaking a year's data into its own anchors, three stores
+says what 0.9.tf inherits, what the embedding is and what it was trained on, how it enters family
+10's token (the unit the model reads: a value, its offset in space and time, and its footprint) without leaking a year's data into its own anchors, three stores
 at three resolutions that make it usable at 0.2\,TB in the first phase
 rather than 577 (a 1\,km
 pooled field with a coherence channel, raw 10\,m samples at fixed sub-cell
@@ -45,20 +63,20 @@ build near the data, the falsifiers that decide it against family 1.0.tf's
 own codec, and the decisions left to Chris.
 \end{abstract}
 
-\section{Purpose}
+\section{Purpose --- what this family is for}
 
 Family 1.0.tf holds the land's raw fine record as a catalogue of scenes, and
 its imagery becomes usable only once a local codec (E-078 \S4) has been
 trained to turn tiles into tokens --- the one compute-bound rung on the
 programme's ladder, and one whose first build is coastal and small
-(E-078c). Google's AlphaEarth Foundations model has already done that job
+(E-078c, the first experiment to train that codec, on about 300 coastal cells; E-078 is the programme's multi-granularity design). Google's AlphaEarth Foundations model has already done that job
 at planetary scale: it reads the same optical and C-band radar imagery the
-catalogue lists (Sentinel-2, Sentinel-1, Landsat 8 and 9) and was trained
+catalogue lists (Sentinel-2, Sentinel-1, Landsat 8 and 9 --- the EU's optical and radar satellites and the US optical ones) and was trained
 to reproduce the rest of it --- L-band radar, spaceborne LiDAR, climate and
 gravity fields, elevation, land-cover labels and geo-linked text --- as
 targets, so those sources shape the embedding without being read when it
 runs; and its annual output is public. Family 0.9.tf takes that output as
-a token source, so that the land side of ``predict everything'' can be
+a token source in place of 1.0.tf's image catalogue, keeps every other 1.0.tf store unchanged (\S\ref{sec:inherits}), so that the land side of ``predict everything'' can be
 tested \emph{now}, against the land targets of family 1.0.tf (forest
 disturbance, loss year, biomass, burned area, water extent, crop and land
 cover), and so that the programme can measure whether its own codec is
@@ -67,17 +85,60 @@ needed for land at all.
 The number 0.9 is deliberate. It is below 1.0 because the source is not an
 observation but a learned summary of observations; the family is a
 stepping stone, and it is meant to be \emph{compared} with 1.0.tf, not
-merged into it. If AlphaEarth tokens predict the land targets as well as the
+merged into it; because the two share every other store byte for byte, the comparison isolates the imagery. If AlphaEarth tokens predict the land targets as well as the
 programme's own codec would, the codec is not worth its compute for land at
 annual cadence; if they do not --- because the targets move faster than a
-year, or because the closed model cannot see NISAR, or because 2017 is too
+year, or because the closed model cannot see NISAR (the NASA--ISRO L-band radar satellite launched in 2025), or because 2017 is too
 late --- the comparison says exactly where 1.0.tf's raw record earns its
 cost.
 
-\section{What the embedding is}
+\section{What 0.9.tf inherits from 1.0.tf --- every store except the imagery}
+\label{sec:inherits}
 
-Checked against the paper (Brown et al.\ 2025, arXiv 2507.22291, v2
-2025-09-08), the Earth Engine catalogue entry, Google's storage read-me and
+Family 0.9.tf builds four stores and borrows every other one. It inherits
+family 1.0.tf's stores \emph{by reference}, the way family 10.2 inherits
+family 10.1's: the 0.9.tf registry (\S\ref{sec:stores}) lists each inherited
+store with its 1.0.tf path and the sha256 checksum of every file as 1.0.tf
+published it, and nothing is re-fetched, rebuilt, re-hashed or re-uploaded.
+An inherited store is therefore the same bytes in both families, and a model
+trained on either reads it from the same file. Source, channels, cadence,
+size and licence of each inherited store are in the family 1.0.tf note
+(\S4 there) and are not repeated here.
+
+\begin{table}[H]
+\centering\setlength{\tabcolsep}{3pt}\footnotesize
+\begin{tabular}{@{}L{3.3cm}L{5.4cm}L{5.6cm}L{1.3cm}@{}}
+\toprule
+group (tier) & stores & what they are & 1.0.tf \\
+\midrule
+point networks (P) & \code{ghcnd}, \code{igra}, \code{tide}, \code{tide\_private}$^{*}$, \code{ndbc}, \code{gliders}, \code{flux}, \code{fire}, \code{river}, \code{river\_grdc}$^{*}$, \code{ismn}$^{*}$, \code{ecad}$^{*}$, \code{ghcnh}, \code{hfr}, \code{alticap} & weather stations, radiosonde balloons, tide gauges, buoys, gliders, flux towers, fire detections, river gauges, soil-moisture probes, coastal radar and coastal altimetry & \S4.1 \\
+LiDAR footprints (P) & \code{gedi}, \code{icesat2} & laser measurements of canopy and terrain height from orbit & \S4.2 \\
+daily fields at 0.05$^\circ$ (G sharded) & \code{lst05}, \code{snow05}, \code{refl05}, \code{ims1k}, \code{chirps05} & land-surface temperature, snow cover, surface reflectance, snow-and-ice charts, five-day rainfall & \S4.3 \\
+read-out targets & \code{alerts}, \code{lossyear}, \code{burned500}, \code{cat\_gfm}, \code{biomass100}, \code{landcover10} & forest-clearing alerts and loss years, burned area, flood maps, biomass, land and crop cover & \S4.5 \\
+statics & \code{static\_fine} & elevation and sea-floor depth, land-cover fractions, distance to coast & \S4.6 \\
+\midrule
+\emph{not inherited} --- replaced by \S\ref{sec:stores} here & \code{cat\_landsat}, \code{cat\_hls}, \code{cat\_s2}, \code{cat\_s1}, \code{cat\_nisar}, \code{cat\_palsar}, \code{cat\_olci}, \code{cat\_viirs}, \code{cat\_ecostress}, \code{cat\_submetre}; the tile tokens computed from them; \code{oc300\_coast} & the tier-T image catalogue --- the raw satellite imagery and the sub-metre orthophotos --- and what is derived from it & \S4.4 \\
+\bottomrule
+\end{tabular}
+\caption{Family 1.0.tf's stores as family 0.9.tf uses them. $^{*}$ on 1.0.tf's
+private track: the store's licence forbids republishing, so it stays in the
+private repository and 0.9.tf's registry lists it there with
+\code{distribution: private}.}
+\end{table}
+
+Two boundary cases. \code{cat\_gfm} has a catalogue's prefix because it is
+one, but of flood maps --- a read-out target, not imagery --- so it is
+inherited. The phase-C tile tokens and \code{oc300\_coast} (the 300\,m
+gridded form of \code{cat\_olci}) are made from the imagery and go with it.
+An inherited store appears in 0.9.tf's registry when 1.0.tf publishes it,
+with the same checksums; 0.9.tf never waits on, re-runs or patches a 1.0.tf
+build, and a fix to an inherited store is a new 1.0.tf version that both
+registries then name.
+
+\section{What the embedding is --- Google's AlphaEarth model and its published 64 numbers per 10\,m pixel per year}
+
+Checked against the paper (Brown et al.\ 2025, arXiv --- the open preprint server --- 2507.22291, v2
+2025-09-08), the catalogue entry of Earth Engine (Google's hosted geospatial analysis platform), Google's storage read-me and
 a live listing of both buckets on 2026-09-16.
 
 \paragraph{The model.} An ``embedding field'' model of about 480\,M
@@ -85,10 +146,10 @@ parameters (a 1\,B variant was trained; the released layers come from the
 480\,M one). Its \emph{inputs} are image sequences from Sentinel-2,
 Sentinel-1 C-band radar and Landsat 8 and 9. Its training \emph{targets},
 which the model learns to reconstruct and therefore encodes without reading
-them at run time, are ALOS PALSAR-2 L-band radar, GEDI LiDAR, ERA5-Land
-climate, GRACE gravity, the Copernicus GLO-30 elevation model, NLCD
-land-cover labels, and Wikipedia articles linked to GBIF species
-occurrences --- more than three billion observations in all, over about
+them at run time, are ALOS PALSAR-2 L-band radar (Japan's long-wavelength radar satellite), GEDI LiDAR (laser canopy heights from the Space Station), ERA5-Land
+climate (a land reanalysis from ECMWF, the European weather centre), GRACE gravity (satellites that weigh water through its pull), the Copernicus GLO-30 elevation model (the EU's 30\,m terrain map), NLCD
+land-cover labels (the US National Land Cover Database), and Wikipedia articles linked to species
+occurrences from GBIF (the Global Biodiversity Information Facility) --- more than three billion observations in all, over about
 1.1\,\% of the land surface. No sub-metre imagery is used. The model separates a \emph{support period} (the
 timestamps of its inputs) from a \emph{valid period} the output summarises,
 and can summarise, interpolate or extrapolate to a valid period with no
@@ -105,10 +166,10 @@ length). Coverage is terrestrial surfaces and shallow water; years
 production with a year's notice of change, contingent on Landsat and
 Copernicus continuing).
 
-\paragraph{The files.} Cloud-optimised GeoTIFFs of $8192 \times 8192$ pixels
-with 64 bands, in local UTM projections, 120 zone directories per year,
-about 34,000 tiles a year, 1.9\,GB on average. Values are \textbf{int8}
-with nodata $-128$ and the documented de-quantisation
+\paragraph{The files.} Cloud-optimised GeoTIFFs (COGs: image files that can be read piece by piece over HTTP) of $8192 \times 8192$ pixels
+with 64 bands, in local UTM projections (Universal Transverse Mercator map zones), 120 zone directories per year,
+about 34,000 tiles a year, 1.9\,GB on average. Values are \textbf{int8} (one signed byte each)
+with nodata (the no-data marker) $-128$ and the documented de-quantisation
 \begin{equation}
 x = \Big(\frac{q}{127.5}\Big)^{2}\,\mathrm{sign}(q),
 \end{equation}
@@ -116,16 +177,16 @@ so the encoding is $q \approx \mathrm{round}(127.5\,\mathrm{sign}(x)\sqrt{|x|})$
 --- a square-root companding that spends resolution near zero. The producer
 states the 8-bit form costs negligible accuracy against float32.
 
-\paragraph{Where it lives, measured.} \code{gs://alphaearth\_foundations/}\allowbreak
-\code{satellite\_embedding/v1/annual/<year>/<zone>/}, with index files
-(\code{aef\_index.parquet}, 70\,MB, updated 2026-02-27); the bucket has been
+\sloppy\paragraph{Where it lives, measured.} On Google Cloud Storage, \code{gs://alphaearth\_foundations/}\allowbreak
+\code{satellite\_embedding/}\allowbreak\code{v1/annual/}\allowbreak\code{<year>/<zone>/}, with index files
+(\code{aef\_index.parquet}, a table of every tile, 70\,MB, updated 2026-02-27); the bucket has been
 provider-pays since July 2026, so a copy costs the reader nothing. A
-complete mirror on Source Cooperative (\code{tge-labs/aef}, AWS Open Data,
-\code{s3://us-west-2.opendata.source.coop/tge-labs/aef/v1/annual/}, anonymous
-S3 and HTTPS) has the same tile counts and byte totals as the origin for
-every year, plus one VRT per tile; its read-me warns that the COGs are
+complete mirror on Source Cooperative (a public data host; \code{tge-labs/aef}, under AWS Open Data, Amazon's sponsored open-data programme,
+\code{s3://\allowbreak us-west-2.opendata.source.coop/\allowbreak tge-labs/\allowbreak aef/\allowbreak v1/\allowbreak annual/}, anonymous
+S3 --- Amazon's object-storage protocol --- and HTTPS) has the same tile counts and byte totals as the origin for
+every year, plus one VRT (a small GDAL virtual-raster file that says how to read a tile) per tile; its read-me warns that the COGs are
 stored bottom-up, so they are read through the VRTs. Earth Engine serves the
-same layers as floats in $[-1, 1]$ (bands \code{A00}--\code{A63}).
+same layers as floats in $[-1, 1]$ (bands \code{A00}--\code{A63}).\par\fussy
 
 \begin{table}[H]
 \centering\footnotesize
@@ -151,18 +212,18 @@ total & $\approx 302{,}000$ & \textbf{576.6} \\
 
 \paragraph{Licence.} CC BY 4.0, attribution ``The AlphaEarth Foundations
 Satellite Embedding dataset is produced by Google and Google DeepMind''.
-Every store below carries it; \code{licence.redistribution} is
+Every AlphaEarth store below carries it; \code{licence.redistribution} is
 \code{attribution} and \code{distribution} is \code{public}. The two-track
-rule of family 1.gf \S4 applies, and nothing in this family needs the
-private track today.
+rule of family 1.gf \S4 (public stores in the public repository, stores whose licence forbids republishing in a private one) applies, and none of the four AlphaEarth stores needs the
+private track today; the four private stores 0.9.tf inherits stay on 1.0.tf's private track (\S\ref{sec:inherits}).
 
 \paragraph{What is not available.} Only version 1 and only annual. Sub-annual
 embeddings (quarterly, monthly, weekly, ``down to a 5-day frequency'') exist
 as Google Maps Platform's Custom Satellite Embeddings, in private preview
 with no public licence; an academic programme offers samples through Earth
 Engine, applications closing 2026-10-15. A granted sample is usable here under the programme's terms as a
-private-track store, \code{aef\_custom} (family 1.gf \S4), never
-republished --- the one place this family would use that track. The model and training code are
+private-track store, \code{aef\_custom} (sub-annual embeddings for this project's use only; family 1.gf \S4), never
+republished --- the one place this family's own build would use that track. The model and training code are
 closed: no new sensor (NISAR), no new year on demand, no re-run over a
 chosen period. Reported weaknesses: transfer across regions and years is
 limited (an irrigation study reproduced 0.93--0.95 accuracy locally and
@@ -171,17 +232,17 @@ the annual window, and the model receives no coordinates, so a
 location-dependent task needed far more labels than a coordinate-aware
 baseline.
 
-\section{Grid, time axis and token}
+\section{Grid, time axis and token --- how an annual 10\,m map becomes model input without leaking the future}
 
 The embedding is a 10\,m raster in UTM; the family's grids are latitude and
 longitude. The stores below resample by \emph{pooling}, never by
 interpolating a single value, and the 10\,m original is referenced, not
-copied (\S4.4), so nothing is resampled at storage time except what is
+copied (\S\ref{sec:aef10}), so nothing is resampled at storage time except what is
 declared as a pooled field with its own footprint.
 
 \paragraph{Time.} A year-$Y$ embedding summarises 1 January to 31 December
-of $Y$: $\log_2 f_t = \log_2(365/5) = +6.2$. It is filed under the
-\textbf{first family-10 bin that begins after 31 December $Y$} --- not the
+of $Y$: $\log_2 f_t = \log_2(365/5) = +6.2$ (the time span a value summarises, as a base-2 logarithm in units of five days). It is filed under the
+\textbf{first family-10 bin (five-day time step counted from 1982) that begins after 31 December $Y$} --- not the
 bin containing that day, because the reader includes the anchor's own bin
 (family 10.1 \S7: candidates are ``at or before the anchor's pentad''), and
 a year-end bin would hand an anchor in the last days of $Y$ its own year's
@@ -197,25 +258,52 @@ window of the released layers, so if year $Y$'s embedding was computed
 from observations extending past 31 December $Y$, even this filing admits
 them; the registry records the assumption.
 
-\paragraph{Footprint.} A raw 10\,m vector carries $\log_2 f_p =
+\paragraph{Footprint.} A raw 10\,m vector carries $\log_2 f_p$ (the area a value summarises, as a base-2 logarithm of 27.83\,km) $=
 \log_2(0.01/27.83) = -11.4$; a pooled $1/1200^\circ$ cell (0.093\,km)
 $-8.2$; a pooled $1/120^\circ$ cell (0.93\,km) $-4.9$. All are inside the
 registry's $\pm 12$ clamp.
 
 \paragraph{The token.} The 64 components are the token's value vector with
-$C = 64$ (plus one coherence channel for pooled stores, \S4.1), raw units
+$C = 64$ channels (plus one coherence channel for pooled stores, \S\ref{sec:aef1k}), raw units
 (unit-length components in $[-1, 1]$), mask all-true where the pixel is not
 nodata; source embedding ``AlphaEarth v1''; offsets and footprints as
-everywhere else. Nothing is z-scored: the components are already on a
+everywhere else. Nothing is z-scored (standardised to zero mean and unit variance): the components are already on a
 sphere, and the loader standardises from training years if it wants to.
 
-\section{The stores}
+\section{The stores --- the four AlphaEarth datasets this family builds, and its registry}
+\label{sec:stores}
+
+\paragraph{The registry.} \code{tensors/\allowbreak family09\_tf/\allowbreak family09tf.json}
+on \code{chfrank/earth-tensors} (the project's public Hugging Face dataset
+repository), in the schema of family 1.gf's registry (\S4 of that note): the
+same top-level keys, and a \code{path} per group so a consumer resolves every
+store where it actually lives. It carries an \textbf{\code{inherits} block}
+naming family 1.0.tf's registry, \code{tensors/\allowbreak family1\_tf/\allowbreak family1tf.json}:
+\begin{verbatim}
+"inherits": {
+  "1.0.tf": {
+    "root":     "tensors/family1_tf",
+    "registry": "tensors/family1_tf/family1tf.json",
+    "groups":   ["ghcnd", "igra", "tide", ..., "static_fine"],
+    "note":     "built by family 1.0.tf and unchanged: not one
+                 byte rebuilt, re-hashed or re-uploaded for 0.9.tf"
+  }
+}
+\end{verbatim}
+Each inherited group is listed with its 1.0.tf \code{path} and the
+\code{sha256} of every file exactly as 1.0.tf's registry publishes them ---
+the four private ones with their private-repository path and
+\code{distribution: private} --- so a request under
+\code{tensors/\allowbreak family09\_tf/\allowbreak ghcnd/} correctly fails: that store lives under
+\code{tensors/\allowbreak family1\_tf/\allowbreak ghcnd/}. The four groups below are the only ones
+whose \code{path} is under \code{tensors/\allowbreak family09\_tf/}. Family 10.2's
+registry names this file in its \code{siblings} list (family 1.gf \S4).
 
 Three stores at three resolutions, and one reference. Bytes assume int8
 components (the producer's own precision) plus one uint8 coherence channel,
 so a pooled pixel costs 65 bytes and a raw 10\,m vector 64.
 
-\subsection{\code{aef1k} --- the pooled 1\,km field with coherence, tier G sharded}
+\subsection{\code{aef1k} --- the embedding averaged over each square kilometre, with a number saying how uniform the square is (tier G sharded)}\label{sec:aef1k}
 
 On a $1/120^\circ$ grid ($\approx 0.93$\,km, $43200 \times 21600$), each
 cell's value is the \textbf{mean of the unit vectors} of its $\approx 100
@@ -230,22 +318,22 @@ the grid, $\approx 270$\,M valid cells: $270\,\mathrm{M} \times 65 \times
 1.2 \approx 21$\,GB per year, \textbf{$\approx 0.2$\,TB for 2017--2025}
 (0.25\,TB if the high-latitude land the 29\,\% undercounts is included).
 
-\subsection{\code{aef\_dots} --- raw 10\,m vectors at fixed sub-cell positions, tier P}
+\subsection{\code{aef\_dots} --- sixteen unaveraged 10\,m embedding samples per quarter-degree cell per year (tier P, point rows)}
 
 Pooling loses the fine structure the embedding was made for. \code{aef\_dots}
 keeps sixteen \emph{unpooled} 10\,m vectors per $0.25^\circ$ land cell per
-year at fixed sub-cell positions --- the cone's own sunflower offsets scaled
+year at fixed sub-cell positions --- the cone's own sunflower offsets (the fixed spiral of sample points around the predicted place that the model's input cone uses) scaled
 into the cell, the same sixteen positions every year so that a position's
 time series is a time series --- as tier-P rows: \code{lat}, \code{lon} of
 the pixel centre, \code{time\_s} = 31 December $Y$, \code{platform} = the
 hashed tile identifier, \code{qc} = 1, \code{values} the 64 components as
-float16 ($C = 64$; int8 would need a schema change and is not worth it at
+float16 (two-byte numbers) ($C = 64$; int8 would need a schema change and is not worth it at
 this size). About 300\,k land cells $\times$ 9 years $\times$ 16 =
 43\,M rows $\times$ 155 bytes $\approx$ \textbf{7\,GB}. This is the store a
 consumer reads to ask what 10\,m detail adds over the kilometre mean, for
 7\,GB.
 
-\subsection{\code{aef100r} --- 100\,m over regions of interest, tier G sharded}
+\subsection{\code{aef100r} --- the embedding averaged over 100\,m squares, only in chosen regions, deforestation frontiers first (tier G sharded)}
 
 The same pooling at $1/1200^\circ$ ($\approx 93$\,m) over declared regions:
 first the deforestation frontiers (the Amazon arc, the Congo basin, insular
@@ -257,14 +345,14 @@ grid) would be $\approx 0.6$\,TB per year, $\approx 5.7$\,TB in all, and is
 phase C. The region list is a registry field, and a
 new region is a new build of that region alone.
 
-\subsection{\code{aef10} --- the original, referenced by byte range}
+\subsection{\code{aef10} --- Google's original 10\,m files, read in place by byte range rather than copied}\label{sec:aef10}
 
 The 10\,m tiles are not copied. The registry carries a group of layout
 \code{"external-cog"}: the mirror's base URL, the per-tile index
 (\code{aef\_index.parquet}, 70\,MB, re-hosted on the Hub with its sha256),
 the projection per zone, the companding formula, and the bottom-up
 orientation flag. A read is a COG-internal byte range on an anonymous
-bucket, the same operation the family-7 globe layer performs on the Hub,
+bucket, the same operation the family-7 globe layer (the web globe's view of the global tensor, one byte range per frame) performs on the Hub (Hugging Face),
 and the reader returns raw 10\,m vectors for a cone's dots on demand. This
 is the family's honest position on 577\,TB: it is readable, it is not ours
 to host, and the day the mirror goes away the three copied stores above are
@@ -276,25 +364,39 @@ what remains --- which is why they exist.
 \toprule
 store & tier & content & footprint $(\log_2 f_p, \log_2 f_t)$ & rows or cells & stored & phase \\
 \midrule
-\code{aef1k} & G sharded & 64 pooled + 1 coherence, int8/uint8, $1/120^\circ$, one frame per year & $(-4.9, +6.2)$ & 270\,M land cells $\times$ 9 & $\approx 0.2$\,TB & A \\
-\code{aef\_dots} & P & 16 raw 10\,m vectors per $0.25^\circ$ land cell per year, float16 & $(-11.4, +6.2)$ & 43\,M rows & 7\,GB & A \\
-\code{aef100r} & G sharded & pooled 100\,m over regions of interest; the coastal band later & $(-8.2, +6.2)$ & $5 \times 10^8$ cells $\times$ 9 & $\approx 0.35$\,TB (regions); $\approx 5.7$\,TB (band) & B / C \\
-\code{aef10} & external & the mirror's COGs by byte range; index and formula in the registry & $(-11.4, +6.2)$ & $1.4 \times 10^{12}$ px $\times$ 9 & 0 (577\,TB referenced) & A \\
+\code{aef1k} & G sharded & \emph{the embedding averaged per square kilometre, with its uniformity.} 64 pooled + 1 coherence, int8/uint8, $1/120^\circ$, one frame per year & $(-4.9, +6.2)$ & 270\,M land cells $\times$ 9 & $\approx 0.2$\,TB & A \\
+\code{aef\_dots} & P & \emph{unaveraged 10\,m samples at fixed places.} 16 raw 10\,m vectors per $0.25^\circ$ land cell per year, float16 & $(-11.4, +6.2)$ & 43\,M rows & 7\,GB & A \\
+\code{aef100r} & G sharded & \emph{the embedding averaged per 100\,m square, in chosen regions.} pooled 100\,m over regions of interest; the coastal band later & $(-8.2, +6.2)$ & $5 \times 10^8$ cells $\times$ 9 & $\approx 0.35$\,TB (regions); $\approx 5.7$\,TB (band) & B / C \\
+\code{aef10} & external & \emph{Google's original 10\,m files, read in place.} the mirror's COGs by byte range; index and formula in the registry & $(-11.4, +6.2)$ & $1.4 \times 10^{12}$ px $\times$ 9 & 0 (577\,TB referenced) & A \\
 \bottomrule
 \end{tabular}
-\caption{The four groups of family 0.9.tf.}
+\caption{The four groups family 0.9.tf builds; the groups it inherits from family 1.0.tf are listed in \S\ref{sec:inherits}.}
 \end{table}
 
-\section{Missing values}
+\section{Missing values --- how gaps are recorded}
 
-Nodata ($-128$ in the source) is NaN in every store and never a zero
+Nodata ($-128$ in the source) is NaN (not-a-number) in every store and never a zero
 vector; a pooled cell with fewer than 10\,\% valid pixels is NaN with its
 coherence NaN, and the valid fraction is written to the shard index so a
 consumer can raise the threshold. Water beyond the shallow zone, the poles
 above the product's coverage and the years before 2017 are absent, and
-absent is what the token says ($n_R = 0$).
+absent is what the token says ($n_R = 0$, no readings).
 
-\section{Design decisions}
+\section{Design decisions --- the choices made, and why}
+
+\paragraph{Inherit, do not copy.} The two families differ in one thing,
+the imagery, and the comparison they exist for is exact only if everything
+else is the same bytes. Rebuilding the point networks, the LiDAR, the daily
+fields, the targets and the statics for 0.9.tf would repeat 1.0.tf's phases A
+and B (0.7\,TB and 2.3--2.7\,TB, nearly all of it outside the imagery), would
+draw a second sample from archives that change between fetches, and would
+make every difference between the two families' results partly a difference
+between two builds. Inheriting by reference costs nothing, is the pattern
+family 10.2 already uses for family 10.1's stores, and makes the two
+registries differ in exactly the groups that are the experiment: ten
+catalogue stores on one side, four embedding stores on the other. The price
+is a dependency: an inherited store exists for 0.9.tf once 1.0.tf has
+published it.
 
 \paragraph{Pool by the mean of unit vectors, and keep its length.} The
 producer says the vectors are linearly composable and that the dot product
@@ -313,10 +415,10 @@ make every land read-out look better than it is.
 \paragraph{Build once, next to the data.} Producing \code{aef1k} and
 \code{aef\_dots} means reading all 577\,TB once. On a rented box at
 2\,Gbps that is 27 days and the transfer risk of the family-10.1
-\code{slatrack} night; on a spot instance in the mirror's own region
-(us-west-2, in-region S3 reads free, anonymous) it is about five days at
+\code{slatrack} night (when that 67\,GB sea-level store crawled up from a slow rented host); on a spot instance (a discounted cloud machine the provider can reclaim) in the mirror's own region
+(us-west-2, Amazon's Oregon region; in-region S3 reads free, anonymous) it is about five days at
 10\,Gbps and \$50--150 of compute, writing year-parts to the Hub as it goes
-with \code{done.json} last, the family-10 lane discipline. Pick: in-region,
+with \code{done.json} (the completion marker) last, the family-10 lane discipline. Pick: in-region,
 one lane per year, the first year measured before the other eight are
 dispatched.
 
@@ -340,10 +442,10 @@ support window; if Google changes or stops the product, the copied stores
 freeze at the last year. Those are the reasons family 1.0.tf exists, and
 the two are compared, not merged.
 
-\section{Validation}
+\section{Validation --- the checks every store must pass}
 
 Every store as in family 10.1 (hashes, $N$ from file sizes, bin identity,
-CSR index) and family 1.gf (shards decompressing to declared shapes); plus
+CSR --- compressed-sparse-row --- index) and family 1.gf (shards decompressing to declared shapes); plus
 three checks specific to this source, each on every tile read: the
 de-quantised vectors are unit length to within $10^{-2}$ --- the int8
 companding itself perturbs the length by up to $8.5 \times 10^{-3}$, so a
@@ -352,9 +454,9 @@ wrong orientation breaks it by far more (the encoder must also clip to
 $\pm 127$, since $|x| = 1$ maps to 128); the bottom-up
 orientation is asserted by comparing a tile's corner against the index
 polygon; and the per-year tile count and byte total equal the listing in
-the table above, so a truncated year is refused by name.
+the table in \S3, so a truncated year is refused by name. For the inherited groups one check replaces the build: every file's sha256 in 0.9.tf's registry equals the entry in 1.0.tf's, compared file by file, so an inherited store that drifted is refused by name.
 
-\section{Limitations}
+\section{Limitations --- what this family cannot do}
 
 Annual, closed, 2017 onwards, terrestrial and shallow water only, and a
 learned summary whose failure modes are the producer's (transfer across
@@ -362,26 +464,26 @@ regions and years, short events averaged out). The support window of the
 released layers is not published, so ``what observations went into year
 $Y$'' is not knowable pixel by pixel. The regional list for \code{aef100r} is
 a choice, and a region not on it has only the 1\,km field and the dots.
-Nothing is dispatched on an unmeasured size: the first year's build
+The inherited stores are exactly as good as 1.0.tf's builds, and appear only as 1.0.tf publishes them. Nothing is dispatched on an unmeasured size: the first year's build
 measures the pooling throughput, the coherence distribution and the dots'
 bytes before the rest.
 
-\section{Next steps: the ladder, the probe and the falsifiers}
+\section{Next steps: the ladder, the probe and the falsifiers --- build order, the test run, and the tests that decide what the family is worth}
 
 \paragraph{Phase A.} \code{aef1k}, \code{aef\_dots}, the \code{aef10}
-reference group and the registry; $\approx 0.2$\,TB; one in-region lane per
+reference group and the registry with its \code{inherits} block, which costs no bytes --- each inherited store is listed as 1.0.tf publishes it; $\approx 0.2$\,TB; one in-region lane per
 year. \textbf{Phase B.} \code{aef100r} over the deforestation frontiers.
 \textbf{Phase C.} the coastal band at 100\,m, once E-078c's coastal cells
 exist to compare against.
 
-\paragraph{The probe.} One UTM zone of one year (about 280 tiles, 0.5\,TB)
+\paragraph{The probe (a first test run through the real code).} One UTM zone of one year (about 280 tiles, 0.5\,TB)
 through the real pooling code: throughput, the valid fraction, the
 coherence histogram, the orientation check, and the bytes of the resulting
 shards --- the numbers that replace this note's before the nine-year build.
-The Hugging Face sample (\code{Major-TOM/Core-AlphaEarth-Embeddings}, 62.5\,k
+The Hugging Face sample of Major-TOM, an open Earth-observation dataset project (\code{Major-TOM/Core-AlphaEarth-Embeddings}, 62.5\,k
 grid cells, 2017--2023) is the unit-test fixture.
 
-\paragraph{Three falsifiers, three seeds each.}
+\paragraph{Three falsifiers (tests that can show the family is not worth its cost), three seeds (independent training runs) each.}
 \begin{enumerate}\itemsep2pt
 \item \textbf{Against the programme's own codec.} On the land pixels of
 E-078c's $\approx 300$ coastal cells, tokens from \code{aef\_dots} and
@@ -393,21 +495,26 @@ the codec is not needed for land at annual cadence and E-078c's scope
 narrows to what the embedding cannot see.
 \item \textbf{Against the coarse tensor, on the land targets.} Next year's
 forest alerts, loss year, burned area and water extent (family 1.0.tf's
-target stores) predicted from family 7.2 alone versus family 7.2 plus this
-family's tokens, at the targets' own footprints. Parity means 10\,m
+target stores) predicted from family 7.2 (the global $0.25^\circ$ five-day tensor) alone versus family 7.2 plus this
+family's AlphaEarth tokens, at the targets' own footprints. Parity means 10\,m
 information does not reach those targets through an annual summary.
-\item \textbf{What the annual cadence costs.} The same targets from this
-family plus family 1.0.tf's daily fields (temperature, reflectance, snow,
-fire) versus this family alone. The gap is the value of the five-day rule on
+\item \textbf{What the annual cadence costs.} The same targets from the AlphaEarth
+tokens plus the daily fields this family inherits from 1.0.tf (temperature, reflectance, snow,
+fire) versus the AlphaEarth tokens alone. The gap is the value of the five-day rule on
 land, measured rather than argued, and it is the number that decides how
 much of family 1.0.tf's image tier to build.
 \end{enumerate}
 
-\section{Decisions for Chris}
+\section{Decisions for Chris --- open choices, each with this note's pick}
 
 \begin{enumerate}\itemsep2pt
 \item \textbf{The name}: 0.9.tf as given, the number reading as ``an
 embedding in place of the raw record''. Pick: as given.
+\item \textbf{Inherit by reference}: every family 1.0.tf store except the
+ten image catalogues and what is derived from them is listed in 0.9.tf's
+registry with its 1.0.tf path and sha256, and none is rebuilt, so 0.9.tf's
+own build is the four AlphaEarth stores (\S\ref{sec:inherits}). Pick:
+inherit by reference.
 \item \textbf{Strict availability by year end.} Pick: strict.
 \item \textbf{Pooling}: renormalised mean plus coherence. Pick: yes, with
 the dots store as the check.

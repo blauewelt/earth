@@ -1,0 +1,287 @@
+\documentclass[10pt]{article}
+\usepackage[a4paper,margin=1.5cm]{geometry}
+\usepackage{array}
+\usepackage{booktabs}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage[hidelinks]{hyperref}
+\usepackage{xcolor}
+\usepackage{longtable}
+\setlength{\parskip}{3pt}
+\setlength{\parindent}{0pt}
+\newcommand{\code}[1]{\texttt{#1}}
+\newcolumntype{L}[1]{>{\raggedright\arraybackslash}p{#1}}
+\newcommand{\gl}[2]{\par\hangindent=1em\hangafter=1\textbf{#1} --- #2\par}
+\pagestyle{plain}
+\begin{document}
+{\LARGE\bfseries Family 1.gf in two pages\par}
+\vspace{2pt}{\large the world's ocean and air, measured finer than 10\,km and 5 days\par}
+\vspace{2pt}{\small blauewelt/earth --- two-page summary of the design note, 17 September 2026. A glossary of every term follows the two pages.\par}
+\vspace{4pt}
+
+\textbf{What it is.} Family 1.gf is a proposed set of datasets (``stores'') that gives the programme's
+forecasting model the whole globe's ocean and atmosphere as measured at \textbf{10\,km or finer, every 5 days or
+finer}: ship reports back to 1662, every non-Argo ocean profile since 1772, ship bottle chemistry, chemistry floats,
+open-ocean moorings, and satellite fields kept at their own resolution --- ocean colour, sea-surface temperature
+(SST), sea ice, swath sea level, wave height, cloud-top temperature and column CO$_2$. \textbf{What it is for:} the
+programme's four prediction goals --- El Ni\~no, the ocean carbon sink, the Atlantic overturning circulation
+(AMOC) and SST --- each of which has a mechanism at these scales (wind bursts, fronts, blooms, the ice edge,
+boundary currents); every store must lower the model's error on one of them or be dropped. \textbf{What it is
+not:} not a land dataset (that is family 1.0.tf); not a replacement for the coarser global tensor (family 7.2,
+$0.25^\circ$), which stays unchanged; and not gap-filled analyses --- raw measurements first, a derived product
+only where it carries measurements nothing else does. Three sources slightly coarser than the rule are admitted as
+named exceptions (E1--E3). A source whose licence forbids republishing is used privately and never redistributed.
+
+\vspace{-4pt}
+{\setlength{\tabcolsep}{2pt}\scriptsize
+\begin{longtable}{@{}L{1.65cm}L{2.9cm}L{2.2cm}L{1.7cm}L{1.75cm}L{1.95cm}L{2.75cm}L{1.25cm}L{0.65cm}@{}}
+\toprule
+store & what it is & producer & space & time & record & stored size & track & phase \\
+\midrule
+\endfirsthead
+\toprule
+store & what it is & producer & space & time & record & stored size & track & phase \\
+\midrule
+\endhead
+\code{seaice\_asi} & daily sea-ice cover from microwave radiometers & Univ.\ Bremen (ASI, AMSR-E/AMSR2) & 6.25\,km polar grids (3.125\,km exists) & daily & 2002-06 $\to$ 2011-10; 2012-07 $\to$ now & $\approx 30$\,GB & public if Bremen agrees, else private & A \\
+\code{oc4k} & daily ocean colour: chlorophyll, water clarity, reflectance & ESA OC-CCI v6.0 (PML) & 4.6\,km ($1/24^\circ$) & daily & 1997-09 $\to$ 2026-06 & 0.3--0.4\,TB; $\approx 1.1$\,TB with the 6 Rrs bands (B) & public & A \\
+\code{icoads} & ship and buoy weather reports & NOAA NCEI / NCAR (ICOADS 3.0) & point & per report & 1662 $\to$ 2026-08 & note $\approx 75$\,GB. \textbf{Probe} (2010-07): 2.02\,M reports, 47\,B/row $\Rightarrow$ $\approx 1.37$\,B rows, $\approx 64$\,GB & public & A \\
+\code{wod} & ocean temperature, salinity and oxygen profiles, Argo excluded & NOAA NCEI (WOD 2023) & point profile & per cast & 1772 $\to$ 2026 & note 2\,GB. \textbf{Probe} (2005-03): 40,541 casts, 287\,B/row $\Rightarrow$ $\approx 14.7$\,M casts, $\approx 4.2$\,GB & public & A \\
+\code{glodap} & ship bottle samples of carbon, nutrients and oxygen at depth & GLODAPv3 (NOAA NCEI) & point bottle & per cruise & 1972--2023 & note 80\,MB. \textbf{Probe} (whole archive): 1,460,215 bottles, 53\,B/row, $\approx 77$\,MB & public & A \\
+\code{bgcargo} & floats that also measure oxygen, nitrate, pH, chlorophyll & Argo GDAC (BGC-Argo) & point profile & $\approx 10$ days per float & 2002 $\to$ & note 80\,MB. \textbf{Probe} (2022-05): 1,717 profiles, 219\,B/row $\Rightarrow$ $\approx 74$\,MB (75\,GB download) & public & A \\
+\code{oceansites} & fixed open-ocean moorings & OceanSITES (NDBC copy) & point mooring & hourly or finer & 1980s $\to$ & note $\approx 4$\,GB. \textbf{Probe} (2018-09): 344,798 rows from 17 sites, 83\,B/row (29\,MB a month) & public & A \\
+\code{xco2} & CO$_2$ averaged through the whole air column & NASA OCO-2, OCO-3 (GES DISC); GOSAT via ACOS & $<3$\,km$^2$ sounding & per sounding (70--120\,k a day) & 2014-06 $\to$; OCO-3 2019-08 $\to$ & $\approx 18$\,GB & public & A \\
+\code{swot} & sea-surface height across two 50\,km radar swaths & NASA/CNES SWOT (PO.DAAC) & 2\,km & per pass (20.86-day cycle) & 2023-07 $\to$ & $\approx 0.6$\,TB & public & B \\
+\code{swh} & wave height along altimeter tracks & ESA CCI Sea State (Copernicus Marine) & $\approx 7$\,km along track & 1 per second & 1991-08 $\to$ 2023-12 & $\approx 70$\,GB & public & B \\
+\code{sst\_cci05} & daily SST per satellite sensor, merged by our builder & ESA SST CCI v3.0 (CEDA) & 5.6\,km ($0.05^\circ$) & daily, day and night & 1979-07 $\to$ 2024; SLSTR 2016-06 $\to$ & $\approx 1.2$\,TB & public & B \\
+\code{irtb} & cloud-top temperature from geostationary weather satellites & NOAA CPC (NASA GES DISC) & 4\,km & 30\,min (3-hourly in phase B) & 1998-01 $\to$ now & $\approx 0.7$\,TB tropics 3-hourly; $\approx 8$\,TB full (C) & public & B / C \\
+\code{precip01} (E2) & daily satellite rainfall (IMERG) & NASA/JAXA GPM & 11\,km ($0.1^\circ$) & daily & 10,100 days to 2025-09 (V07 Final); V08 expected & 0.2--0.3\,TB & public & B \\
+\code{deep\_arrays} & instrument records of the four Atlantic overturning arrays & RAPID/MOCHA (BODC), OSNAP (Duke), SAMBA (AOML), MOVE & point mooring & 15\,min--1\,h$^\dagger$ & 2000 / 2004 / 2009 / 2014 $\to$ & $<5$\,GB & public (RAPID terms to confirm) & B \\
+\code{sst\_acspo02} & daily SST merged across sensors & NOAA STAR ACSPO (PO.DAAC, CoastWatch) & 2.2\,km ($0.02^\circ$) & daily (AM and PM) & 2000-02 $\to$ now $-2$ months & $\approx 2.3$\,TB & public & C \\
+\code{wind12} (E1) & ocean wind from scatterometers & EUMETSAT OSI SAF (ASCAT); QuikSCAT & 12.5\,km swath cells & per pass & ASCAT 2007 $\to$; QuikSCAT 1999--2009 & $\approx 1.7$\,TB (or $\approx 50$\,GB as five-day $0.125^\circ$ frames) & public & C \\
+\bottomrule
+\multicolumn{9}{@{}p{17.7cm}@{}}{Sizes are the note's estimates unless marked \textbf{Probe}: a one-month test fetch through the real code (E-082, 17 Sep 2026), giving rows and stored bytes per row, and, where stated, the whole store scaled from it. $^\dagger$ estimate not verifiable at the source. B = bytes. Already held elsewhere and not rebuilt: OISST, NCEP, GLORYS-derived and ocean-colour grids (family 7.2); Argo (family 8); drifters, tropical moorings, ship CO$_2$, along-track sea level (family 10.1); fishing effort (family 10.2).} \\
+\end{longtable}}
+
+\textbf{How it is stored.} One registry, \code{tensors/family1\_gf/family1gf.json} on the project's public Hugging
+Face repository, lists every store with its tier, location, channels, checksums, licence and track. \emph{Point
+stores} (tier P) are nine column arrays sorted by five-day bin, with an index of where each bin starts; a record
+older than 1914 gets a 64-bit time column (schema 3). \emph{Fine grids} (tier G-fine) are one compressed file per
+five-day bin, holding one frame per day (or per three hours), each cut into $256 \times 256$-pixel tiles with an
+index of byte positions, so a read fetches only the few tiles around the place being predicted and an empty tile
+costs nothing. Every value reaches the model as a token carrying its own footprint --- the area and time span it
+averages --- so nothing coarse is copied into fine cells. Private stores use the same format in a private repository
+and are listed in the public registry. Credentials stay on GitHub's build machines; rented machines hold none.
+
+\subsection*{The ladder}
+\begin{tabular}{@{}L{1.2cm}L{16.6cm}@{}}
+\textbf{A} & 8 stores, $\approx 0.5$\,TB, no account or a hosted runner's login, under \$10: \code{seaice\_asi}, \code{oc4k}, \code{icoads}, \code{wod}, \code{glodap}, \code{bgcargo}, \code{oceansites}, \code{xco2}; the registry. Five of the point stores have run their one-month probes. \\
+\textbf{B} & the terabyte stores, $\approx 3.5$\,TB, \$20--40: \code{swot}, \code{sst\_cci05}, \code{irtb} (tropics, 3-hourly), \code{precip01}, \code{swh}, \code{deep\_arrays}, and \code{oc4k}'s six reflectance bands. \\
+\textbf{C} & decisions once A and B have verdicts: \code{sst\_acspo02}, \code{wind12}, the full half-hourly \code{irtb}, PACE colour into \code{oc4k}. \\
+\end{tabular}
+
+\clearpage
+\phantomsection\label{glossary}
+\section*{Glossary}
+Every term, acronym, producer, instrument and code name used in this summary and in the full design note, in alphabetical order.
+\small
+\gl{1.gf channel names}{\code{sst}, \code{airt}, \code{slp}, \code{wind\_u}, \code{wind\_v}, \code{dewpt}, \code{wave\_h}, \code{cloud}: ship-report SST, air temperature, sea-level pressure, east and north wind, dew point, wave height, cloud cover; \code{chlor\_a}, \code{kd\_490}, \code{nobs}, \code{log\_chl}: chlorophyll, light attenuation at 490\,nm, observation count, log-chlorophyll; \code{sic}: sea-ice concentration; \code{ssha\_karin}, \code{sig0}, \code{quality}: SWOT height anomaly, radar backscatter, quality flag; \code{swh}, \code{swh\_denoised}, \code{swh\_unc}: wave height, smoothed, and its uncertainty; \code{dtime}: time offset of a pixel within its pass; \code{tb}: brightness temperature; \code{precip}: precipitation; \code{u10}, \code{v10}: 10\,m wind components; \code{xco2}, \code{xco2\_unc}, \code{surface}: column CO$_2$, its uncertainty, land or water; \code{depth}, \code{bpr}: instrument depth, bottom pressure; DOXY, CHLA, BBP700, NITRATE, PH: float oxygen, chlorophyll, particle backscatter, nitrate, pH.}
+\gl{ACOS}{NASA's retrieval of column CO$_2$ applied to GOSAT's measurements.}
+\gl{ACSPO}{NOAA's Advanced Clear-Sky Processor for Ocean, which turns satellite radiances into SST.}
+\gl{ALOHA}{A cabled sea-floor observatory north of Hawaii; its 162\,GB record is left out of \code{oceansites}.}
+\gl{AlphaEarth Foundations (AEF)}{Google DeepMind's model that turns sequences of satellite images into one 64-number description of each 10\,m of land for each year; its published output is the \emph{Satellite Embedding}.}
+\gl{altimeter, along-track}{A radar satellite that measures sea-surface height straight below it; along-track data are its measurements along that ground line.}
+\gl{AMOC}{The Atlantic Meridional Overturning Circulation: the system of Atlantic currents that carries warm water north near the surface and cold water south at depth, one of the programme's four prediction goals.}
+\gl{AMSR-E, AMSR2, AMSR3}{Japanese microwave radiometers (2002--2011, 2012 on, 2025 on) that see sea ice and SST through cloud; AMSR-Unified is NSIDC's merged product line (\code{AU\_SI6}, \code{AU\_SI12}).}
+\gl{anchor}{The place and time the model is asked to predict; everything it reads is placed relative to it.}
+\gl{annual target}{A yearly map the model is asked to predict (a loss year, a biomass map); it is filed at the end of its year so it is never read as an input from inside that year.}
+\gl{AOML}{NOAA's Atlantic Oceanographic and Meteorological Laboratory, Miami.}
+\gl{Argo, BGC-Argo, \code{Sprof}}{The global array of about 4,000 drifting floats that profile temperature and salinity to 2,000\,m; BGC-Argo floats add chemistry sensors; Sprof files merge each float's variables.}
+\gl{ARTIST, ASI}{The ARTIST Sea Ice algorithm of the University of Bremen, which computes ice concentration from 89\,GHz microwave channels.}
+\gl{ASCAT}{The Advanced Scatterometer on Europe's MetOp satellites.}
+\gl{\code{attribution}, \code{yes}, \code{no} (\code{licence.redistribution})}{Registry values saying whether a licence lets the data be republished freely, with credit, or not at all.}
+\gl{AVHRR}{The Advanced Very High Resolution Radiometer, an infrared imager on NOAA and MetOp weather satellites since 1978.}
+\gl{\code{bgcargo}}{Family 1.gf store of BGC-Argo float profiles of oxygen, nitrate, pH, chlorophyll and backscatter at 16 depths.}
+\gl{\code{bin\_offsets}, CSR}{The index that says where each five-day bin's rows start in a point store (compressed sparse row).}
+\gl{bin (pentad)}{The five-day time step every family uses, counted from 1 January 1982; a bin before 1982 has a negative number.}
+\gl{\code{bin\_rule}, \code{epoch}, \code{pentad\_days}}{Registry fields that fix how a time becomes a bin: the start date 1982-01-01 and the five-day step.}
+\gl{BODC}{The British Oceanographic Data Centre.}
+\gl{box (rented, verified)}{A machine hired by the hour from a marketplace; it holds no credentials, and a verified one runs on a host the marketplace has vetted.}
+\gl{brightness temperature}{The temperature a satellite infers from the radiation it receives; over cloud it is the cloud top's temperature.}
+\gl{B/row (bytes per row)}{Stored size of one row of a point store; a row costs 27 + 2 bytes per channel (31 + 2 per channel with the 64-bit time).}
+\gl{CC0, CC BY, CC BY-NC}{Creative Commons licences: public domain; free with attribution; free with attribution for non-commercial use only.}
+\gl{\code{C} (channels)}{The number of values stored per row or per pixel.}
+\gl{CDR}{Climate data record: a long series processed consistently for climate use.}
+\gl{CDS}{The Copernicus Climate Data Store (account required).}
+\gl{CEDA}{The UK Centre for Environmental Data Analysis, an open archive.}
+\gl{CFCs (CFC-11, CFC-12)}{Chlorofluorocarbons, man-made gases whose dissolved amount dates when water last touched the surface.}
+\gl{checksum (sha256)}{A 64-character fingerprint of a file; if one byte changes, the fingerprint changes.}
+\gl{\code{chfrank/earth-tensors}, \code{chfrank/earth-tensors-private}}{The project's public and private Hugging Face dataset repositories.}
+\gl{climatology}{The long-term average for a place and season --- the simplest forecast a model has to beat.}
+\gl{CNES}{France's space agency.}
+\gl{CoastWatch}{NOAA's programme that serves satellite ocean data.}
+\gl{cone}{The set of past measurements the model reads around the anchor: wider for older times, like a cone in space and time.}
+\gl{Copernicus, Copernicus Marine}{The EU's Earth-observation programme and its marine service (free account required).}
+\gl{CORA}{Copernicus' quality-controlled collection of temperature and salinity profiles.}
+\gl{CPC}{NOAA's Climate Prediction Center.}
+\gl{CSV}{Comma-separated values, a plain-text table format.}
+\gl{DAAC (LP, ORNL, PO, OB)}{NASA's discipline data centres: LP DAAC for land, ORNL DAAC for ecology, PO.DAAC for oceans, OB.DAAC for ocean biology.}
+\gl{DAC, GDAC}{Data assembly centre, and the global one that gathers a network's data (Argo, gliders, OceanSITES).}
+\gl{\code{deep\_arrays}}{Family 1.gf store of instrument records from the four Atlantic overturning arrays.}
+\gl{\code{degraded}}{Registry list of every check a build had to relax, so a relaxation can never be silent.}
+\gl{\code{derived\_works}}{Registry field saying whether a trained model may be published under the source's licence: \code{free}, \code{non-commercial} or \code{restricted}.}
+\gl{DIC, TA (alkalinity)}{Dissolved inorganic carbon and total alkalinity, the two numbers that fix seawater's carbon chemistry.}
+\gl{\code{distribution}}{Registry field naming a store's track, \code{public} or \code{private}.}
+\gl{\code{done.json}}{A marker a build writes last, so an unfinished build can never look finished.}
+\gl{DPR, GMI}{GPM's Dual-frequency Precipitation Radar and its microwave imager.}
+\gl{\code{dtype}; int8, int16, int32, int64, uint8, float16, float32}{The numeric type values are stored in: whole numbers of 1, 2, 4 or 8 bytes (uint8 unsigned), or decimals of 2 or 4 bytes.}
+\gl{DUACS}{The CNES and Copernicus system that turns altimetry into gridded sea-level maps.}
+\gl{Duke}{Duke University, which hosts OSNAP's data.}
+\gl{E-077}{The experiment that added ocean colour to the global tensor (family 7.1).}
+\gl{E-078, E-078c}{The design study that gave family 10 one schema for every granularity, and its first experiment training a local image codec on about 300 coastal cells.}
+\gl{E-079}{Family 10's first data pull, which built the four family-10.1 point stores.}
+\gl{E-081}{The experiment that built family 10.2's fishing-effort store and its globe layer.}
+\gl{E-082}{The build plan for families 1.gf, 1.0.tf and 0.9.tf; its first wave wrote and probed the phase-A point-store adapters.}
+\gl{E1--E6 (exceptions)}{Sources admitted although they break the 10\,km / 5-day rule: E1 scatterometer wind at 12.5\,km, E2 IMERG rain at 11\,km, E3 GOSAT at 10.5\,km, E4 CHIRPS rain, E5 PALSAR yearly mosaics, E6 sub-metre photos.}
+\gl{Earthdata login}{NASA's free user account, needed to download most NASA data.}
+\gl{embedding}{A learned list of numbers summarising what was observed at a place, arranged so that similar places get similar numbers.}
+\gl{ERDDAP}{A data server that answers subset queries over HTTP.}
+\gl{ERSST}{NOAA's Extended Reconstructed SST, a monthly analysis back to 1854.}
+\gl{ESA}{The European Space Agency.}
+\gl{ESA CCI}{ESA's Climate Change Initiative, which builds long consistent climate records from satellites.}
+\gl{EUMETSAT}{Europe's weather-satellite agency.}
+\gl{falsifier}{The test, fixed before building, that can show a store is not worth keeping.}
+\gl{family}{A numbered set of datasets built to one storage design and read by the programme's forecasting model.}
+\gl{family 0.9.tf}{Family 1.0.tf with its raw-imagery catalogue replaced by Google's AlphaEarth embedding, everything else inherited.}
+\gl{family 10, 10.1, 10.2}{The granularity-aware dataset set in which every measurement keeps its own place, time and footprint; 10.1 built four point stores (drifters, tropical moorings, ship CO$_2$, satellite sea level) and 10.2 inherited them and added fishing effort.}
+\gl{\code{family10.json}, \code{family1gf.json}, \code{family1tf.json}, \code{family09tf.json}}{The registry files of families 10, 1.gf, 1.0.tf and 0.9.tf.}
+\gl{family 1.0.tf}{The proposed land-and-coast family at the same scale, built from raw observations and a catalogue of raw imagery (``tf'': terrestrial, fine).}
+\gl{family 1.gf}{The proposed global family of ocean and atmosphere measurements finer than 10\,km and 5 days (``gf'': global, fine).}
+\gl{family 7, 7.1, 7.2}{The published global input tensor: every $0.25^\circ$ cell from pole to pole in five-day steps, 1982--2024; 7.1 added ocean colour and 7.2 is the current version.}
+\gl{family 8}{The programme's store of Argo float temperature and salinity profiles.}
+\gl{\code{fishing}}{Family 10.2's store of apparent fishing effort per vessel from Global Fishing Watch.}
+\gl{footprint; $\log_2 f_p$, $\log_2 f_t$ (\code{log2\_fp}, \code{log2\_dt}, \code{fp})}{The area and time span a value averages over, stored as base-2 logarithms relative to 27.83\,km and 5 days; $-4$ is the label for a point measurement with no area.}
+\gl{forcing}{An input that drives the system being predicted, such as wind over the ocean or rain over land.}
+\gl{foundation temperature}{The temperature of the water just below the layer the sun warms each day.}
+\gl{frame; \code{frames\_per\_bin}, \code{frame\_seconds}, $F$}{One time slice of a gridded field; a five-day bin holds $F$ of them (5 for daily, 40 for three-hourly), each lasting \code{frame\_seconds}.}
+\gl{FTP}{File Transfer Protocol, an old way of serving files.}
+\gl{\code{g025}, \code{g100}, \code{rg100}, \code{oc025}}{Family 7.2's four gridded groups: $0.25^\circ$ ocean surface, $1^\circ$ atmosphere and land, $1^\circ$ monthly ocean interior, $0.25^\circ$ ocean colour.}
+\gl{GDEX}{NCAR's Geoscience Data Exchange archive.}
+\gl{GDP}{NOAA's Global Drifter Program of free-drifting surface buoys.}
+\gl{geostationary}{Orbiting at the Earth's rotation rate, so a satellite watches the same half of the globe continuously.}
+\gl{GES DISC}{NASA's Goddard Earth Sciences data centre, for atmosphere and precipitation data.}
+\gl{GHz}{Gigahertz, the unit of a microwave channel's frequency.}
+\gl{GitHub, hosted runner}{The code-hosting service the project uses; a hosted runner is one of GitHub's own build machines, the only place credentials are used.}
+\gl{\code{glodap}}{Family 1.gf store of GLODAP ship bottle samples.}
+\gl{GLODAP, GLODAPv3}{The Global Ocean Data Analysis Project's quality-controlled synthesis of ship bottle chemistry, version 3 (July 2026).}
+\gl{GLORYS}{Copernicus' global ocean reanalysis.}
+\gl{GOSAT}{Japan's Greenhouse gases Observing SATellite.}
+\gl{GPM, \code{GPM\_MERGIR}}{NASA and JAXA's Global Precipitation Measurement mission; MERGIR is the merged geostationary infrared product served beside it.}
+\gl{\code{gtmba}}{Family 10.1's store of the tropical moored buoy arrays, including TAO.}
+\gl{HTTP, HTTPS, HTTP range}{The web's transfer protocol (HTTPS is the encrypted form); a range request asks for one byte span of a file.}
+\gl{Hub (Hugging Face)}{Hugging Face's dataset hosting, where the project publishes its stores; it limits files per repository and per folder.}
+\gl{\code{icoads}}{Family 1.gf store of ICOADS ship and buoy weather reports since 1662.}
+\gl{ICOADS, IMMA1}{The International Comprehensive Ocean-Atmosphere Data Set of ship and buoy reports since 1662, and its record format.}
+\gl{Ifremer}{France's national ocean research institute.}
+\gl{IMERG}{NASA's merged satellite precipitation estimate (half-hourly and daily, $0.1^\circ$); V07 and V08 are versions, Final the gauge-corrected run.}
+\gl{\code{irtb}}{Family 1.gf store of 4\,km geostationary cloud-top (infrared brightness) temperature.}
+\gl{JAXA}{Japan's space agency.}
+\gl{JPL}{NASA's Jet Propulsion Laboratory.}
+\gl{JSON}{A plain-text format for structured data, used for every registry.}
+\gl{KaRIn}{SWOT's Ka-band Radar Interferometer, which measures height across two 50\,km swaths.}
+\gl{KB, MB, GB, TB, PB}{Kilo-, mega-, giga-, tera- and petabytes: each a thousand times the last.}
+\gl{Kelvin wave}{An equatorial ocean wave that carries a bump of sea level eastward across the Pacific in about two months, a precursor of El Ni\~no.}
+\gl{\code{lat}, \code{lon}, \code{values}, \code{qc}, \code{platform}, \code{time\_s}}{Arrays of a point store: position, the measured values, a quality code, a hashed instrument identity, and the time in seconds since 1982.}
+\gl{\code{layout}, \code{prefix}, \code{path}, \code{cadence}, \code{footprint}, \code{tier}}{Registry fields per group: storage layout, folder, the group's own location, time step, footprint and tier.}
+\gl{LEO}{Low Earth orbit, a few hundred kilometres up; the ACSPO L3S-LEO product merges such satellites.}
+\gl{level 1B, 2, 3, 3C, 3S, 4 (L1B, L2, L3, L3C, L3S, L4)}{Processing stages of satellite data: calibrated signals; measurements on the instrument's own swath; measurements binned onto a grid; binned per sensor; merged across sensors; and gap-filled analyses, which are derived.}
+\gl{masked-token loss}{The model's error when asked to predict tokens hidden from it; lower means the inputs helped.}
+\gl{MetOp}{Europe's polar-orbiting weather satellites (A, B, C).}
+\gl{\code{ml/CLAUDE.md}, \code{ml/family10\_store.py}}{The project's rules for machine-learning work (security, replication), and the code that reads a store.}
+\gl{MOCHA, MOVE, OSNAP, RAPID, SAMBA}{The four Atlantic overturning arrays: RAPID/MOCHA at 26.5$^\circ$N, MOVE at 16$^\circ$N, OSNAP in the subpolar North Atlantic, SAMBA at 34.5$^\circ$S.}
+\gl{MODIS; Terra, Aqua}{The Moderate Resolution Imaging Spectroradiometer on NASA's Terra (1999) and Aqua (2002) satellites, both near the end of their lives.}
+\gl{MUR, OSTIA}{Gap-filled daily SST analyses from NASA JPL and the Met Office.}
+\gl{NaN}{``Not a number'', the stored value for ``not measured''.}
+\gl{NASA}{The US space agency.}
+\gl{NCAR}{The US National Center for Atmospheric Research.}
+\gl{NCEI, OCADS}{NOAA's National Centers for Environmental Information, the US national environmental archive, and its ocean-carbon archive.}
+\gl{NCEP}{The US National Centers for Environmental Prediction, producer of the reanalysis in family 7.2.}
+\gl{NDBC}{NOAA's National Data Buoy Center.}
+\gl{Ni\~no-3.4, Ni\~no indices}{The average SST of fixed boxes in the equatorial Pacific; Ni\~no-3.4 is the standard El Ni\~no index.}
+\gl{NOAA, NOAA STAR}{The US National Oceanic and Atmospheric Administration, and its satellite research centre.}
+\gl{NRT}{Near-real-time: data released within days, before final checks.}
+\gl{NSIDC}{The US National Snow and Ice Data Center.}
+\gl{NumPy, \code{.npy}}{The standard Python array library and its array file format.}
+\gl{O$_2$, NO$_3$, PO$_4$, SiO$_4$, pH}{Dissolved oxygen, nitrate, phosphate and silicate, and the acidity of seawater.}
+\gl{\code{oc4k}}{Family 1.gf store of daily 4\,km OC-CCI ocean colour.}
+\gl{OC-CCI}{ESA's Ocean Colour Climate Change Initiative record, merging several sensors since 1997.}
+\gl{OceanSITES}{The network of open-ocean moored time-series stations.}
+\gl{\code{oceansites}}{Family 1.gf store of OceanSITES open-ocean moorings, tropical arrays excluded.}
+\gl{OCO-2, OCO-3}{NASA's Orbiting Carbon Observatories, which measure column CO$_2$ from a satellite (2014) and from the Space Station (2019).}
+\gl{OISST}{NOAA's daily Optimum Interpolation SST analysis at $0.25^\circ$.}
+\gl{OPeNDAP, THREDDS}{Two server protocols for reading subsets of scientific files over HTTP.}
+\gl{OSI-408-a}{OSI SAF's sea-ice concentration product on a 10\,km grid, computed from an 18\,km footprint.}
+\gl{OSI SAF}{EUMETSAT's Ocean and Sea Ice Satellite Application Facility.}
+\gl{PACE, OCI}{NASA's Plankton, Aerosol, Cloud, ocean Ecosystem satellite (2024) and its hyperspectral Ocean Color Instrument.}
+\gl{Pathfinder}{NOAA's 4\,km AVHRR SST record, 1981--2023, no longer updated.}
+\gl{phase A, B, C}{The three build waves of each family: A cheap and first, B the terabyte stores, C decisions taken after A and B have verdicts.}
+\gl{PML}{Plymouth Marine Laboratory, producer of OC-CCI.}
+\gl{\code{precip01}}{Family 1.gf store of daily $0.1^\circ$ IMERG rainfall (exception E2).}
+\gl{pre-signed URL}{A download link that works for a limited time without an account.}
+\gl{probe}{A one-month (or one-zone) test run of a store's real fetch code, measuring rows, bytes and speed before any full build.}
+\gl{public track, private track}{Where a store lives: the public Hugging Face repository that anyone can read, or a private one used only by this project because the source's licence forbids republishing.}
+\gl{QA, QC (\code{qc})}{Quality assurance and quality control: the producer's flags saying how far a value can be trusted, kept as a channel or in the \code{qc} column.}
+\gl{QuikSCAT}{NASA's scatterometer satellite of 1999--2009.}
+\gl{read-out}{A quantity the model is asked to predict or report, such as the Ni\~no-3.4 index or next year's forest loss.}
+\gl{reanalysis}{A weather or ocean model run over past decades and continually corrected towards observations, giving complete fields that are partly model.}
+\gl{registry}{The JSON file listing every store of a family with its tier, location, channels, checksums and licence; the one file a reader opens first.}
+\gl{RG (Roemmich--Gilson pressures)}{The 16 standard depths (2.5 to 2,000\,dbar) of the Roemmich--Gilson Argo climatology, used as the vertical axis of every profile store.}
+\gl{Rrs}{Remote-sensing reflectance, the colour of light leaving the water at each wavelength.}
+\gl{RSS}{Remote Sensing Systems, a company producing satellite climate records.}
+\gl{S3 (\code{s3://})}{Amazon's object-storage service and its address form; many archives serve files through it.}
+\gl{scatterometer}{A radar that infers wind speed and direction from the roughness of the sea surface.}
+\gl{schema 2, schema 3}{The column layout of a point store: schema 3 widens the time column to 64 bits so records before 1914 fit.}
+\gl{SeaFlux}{A satellite-based estimate of the air--sea CO$_2$ flux.}
+\gl{\code{seaice\_asi}}{Family 1.gf store of daily 6.25\,km sea-ice concentration from Bremen's ASI algorithm.}
+\gl{seed}{One independent training run; three seeds means the same test run three times with different random starts.}
+\gl{Sentinel-1, -2, -3, -5P, -6A (S1A, S1C, S1D, S2A, S2B, S2C)}{The EU Copernicus satellites: C-band radar, 10\,m optical, ocean colour and temperature, trace gases, and sea-level altimetry; the letters are individual satellites of a series.}
+\gl{shard, tile; \code{shard\_index.npy}, \code{tile\_grid.json}, \code{n\_tiles}}{In the G-fine layout, one compressed file per group and bin, cut into $256 \times 256$-pixel tiles; the index gives each tile's byte position and the grid file each tile's corners.}
+\gl{\code{siblings}}{A list in family 10.2's registry naming the registries of families 1.gf, 1.0.tf and 0.9.tf.}
+\gl{\code{slatrack}}{Family 10.1's store of satellite sea level along the ground track, all missions (67\,GB).}
+\gl{SLSTR}{The Sea and Land Surface Temperature Radiometer on Sentinel-3.}
+\gl{SMAP}{NASA's Soil Moisture Active Passive satellite, which also measures sea-surface salinity.}
+\gl{SMOS}{ESA's Soil Moisture and Ocean Salinity satellite.}
+\gl{SOCAT}{The Surface Ocean CO$_2$ Atlas of ship measurements.}
+\gl{\code{socat}}{Family 10.1's store of SOCAT ship CO$_2$ measurements.}
+\gl{SSS}{Sea-surface salinity.}
+\gl{SST}{Sea-surface temperature.}
+\gl{\code{sst\_acspo02}}{Family 1.gf store of daily 2\,km SST merged across sensors by NOAA's ACSPO.}
+\gl{\code{sst\_cci05}}{Family 1.gf store of daily 5\,km SST from ESA's SST CCI, merged across sensors by the family's own builder.}
+\gl{STAC}{SpatioTemporal Asset Catalog, the standard in which producers list their scenes and files.}
+\gl{store}{One dataset of a family, published as a small set of arrays plus a description file.}
+\gl{\code{store.json}}{The description file of a store: its arrays, their checksums, channels and counts.}
+\gl{swath}{The strip of ground a satellite instrument sees on one pass.}
+\gl{\code{swh}}{Family 1.gf store of significant wave height along altimeter tracks.}
+\gl{\code{swot}}{Family 1.gf store of SWOT's 2\,km swath sea-surface height, as point rows.}
+\gl{SWOT; LR, SSH}{The Surface Water and Ocean Topography satellite (2022), which maps sea-surface height (SSH) across two wide swaths; LR is its low-rate ocean product.}
+\gl{TAO}{The tropical Pacific mooring array, held in family 10.1's \code{gtmba}.}
+\gl{tier G-fine (sharded)}{The layout family 1.gf adds for grids finer than $0.25^\circ$: each five-day bin is one compressed file cut into tiles, so a read fetches only the tiles it needs.}
+\gl{tier G, P, T}{Family 10's three storage forms: G, gridded fields read one time step at a time; P, points, profiles and tracks read by nearest-neighbour search; T, image tiles held as a catalogue plus codec tokens.}
+\gl{token}{The unit the model reads: a value, its offset in space and time from the anchor, and its footprint.}
+\gl{\code{token\_schema}}{The registry's definition of the token's fields.}
+\gl{Topex}{The first precision radar altimeter satellite (1992), start of the sea-level record.}
+\gl{TROPOMI}{The trace-gas imager on Sentinel-5P, measuring NO$_2$, CO and CH$_4$ (nitrogen dioxide, carbon monoxide, methane).}
+\gl{T, S, $u$, $v$}{Temperature, salinity, and the east and north components of velocity or wind.}
+\gl{UK, US, EU}{United Kingdom, United States, European Union.}
+\gl{URL}{A web address.}
+\gl{verdict}{Registry field holding a store's falsifier result, empty until the test has run.}
+\gl{VIIRS; S-NPP, NOAA-20, NOAA-21}{The Visible Infrared Imaging Radiometer Suite, MODIS's successor, on the Suomi-NPP (ending 2026-11), NOAA-20 and NOAA-21 satellites; I-band is its 375\,m channel set.}
+\gl{\code{wind12}}{Family 1.gf store of 12.5\,km scatterometer wind cells (exception E1).}
+\gl{\code{WIND\_GLO\_PHY\_L3\_MY\_012\_005}, \code{WAVE\_GLO\_PHY\_SWH\_L3\_MY\_014\_005}, \code{009\_103}}{Copernicus Marine product identifiers: gridded scatterometer wind, along-track wave height, and GlobColour 300\,m ocean colour.}
+\gl{\code{wod}}{Family 1.gf store of World Ocean Database profiles other than Argo.}
+\gl{WOD; OSD, CTD, MBT, XBT, MRB, DRB, PFL, UOR, APB, GLD}{The World Ocean Database, and its instrument classes: bottle casts, conductivity-temperature-depth casts, mechanical and expendable bathythermographs, moored and drifting buoys, profiling floats, undulating recorders, instrumented animals, gliders.}
+\gl{XCO$_2$}{The CO$_2$ concentration averaged through the whole depth of the atmosphere.}
+\gl{\code{xco2}}{Family 1.gf store of OCO-2, OCO-3 (and GOSAT) column-CO$_2$ soundings.}
+\gl{zstd}{Zstandard, a fast lossless compressor.}
+\normalsize
+\end{document}
