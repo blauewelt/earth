@@ -1,0 +1,10 @@
+{
+ "at": "2026-09-17T16:41:01+00:00",
+ "done": 6,
+ "elapsed_s": 910.6,
+ "eta_s": 0.0,
+ "item": "ndbc 2017 rows 0+",
+ "stage": "fetch ndbc",
+ "total": 6,
+ "year_rows": 34462519
+}

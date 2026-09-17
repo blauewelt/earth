@@ -1,0 +1,80 @@
+  [+ 73 files]                : 100%|██████████| 3.23GB / 3.23GB            [A[A[A[A[A[A[A[A[A[A[A
+
+  ...ndbc/parts/2016/00013.npz: 100%|██████████| 43.7MB / 43.7MB            [A[A
+
+
+  ...ndbc/parts/2016/00022.npz: 100%|██████████| 44.3MB / 44.3MB            [A[A[A
+
+
+
+  ...ndbc/parts/2017/00009.npz: 100%|██████████| 43.3MB / 43.3MB            [A[A[A[A
+
+
+
+
+  ...ndbc/parts/2016/00012.npz: 100%|██████████| 43.7MB / 43.7MB            [A[A[A[A[A
+
+
+
+
+
+  ...ndbc/parts/2017/00029.npz: 100%|██████████| 44.0MB / 44.0MB            [A[A[A[A[A[A
+
+
+
+
+
+
+  ...ndbc/parts/2016/00014.npz: 100%|██████████| 46.6MB / 46.6MB            [A[A[A[A[A[A[A
+
+
+
+
+
+
+
+  ...ndbc/parts/2016/00021.npz: 100%|██████████| 43.8MB / 43.8MB            [A[A[A[A[A[A[A[A
+
+
+
+
+
+
+
+
+  ...ndbc/parts/2017/00011.npz: 100%|██████████| 43.6MB / 43.6MB            [A[A[A[A[A[A[A[A[A
+
+
+
+
+
+
+
+
+
+  ...ndbc/parts/2016/00031.npz: 100%|██████████| 24.5MB / 24.5MB            [A[A[A[A[A[A[A[A[A[A
+
+
+
+
+
+
+
+
+
+
+  [+ 73 files]                : 100%|██████████| 3.25GB / 3.25GB            [A[A[A[A[A[A[A[A[A[A[AProcessing Files (83 / 83)    : 100%|██████████| 3.62GB / 3.62GB, 42.6kB/s  
+New Data Upload               : 100%|██████████| 2.89GB / 2.89GB, 34.1kB/s  
+  ...ndbc/parts/2016/00013.npz: 100%|██████████| 43.7MB / 43.7MB            
+  ...ndbc/parts/2016/00022.npz: 100%|██████████| 44.3MB / 44.3MB            
+  ...ndbc/parts/2017/00009.npz: 100%|██████████| 43.3MB / 43.3MB            
+  ...ndbc/parts/2016/00012.npz: 100%|██████████| 43.7MB / 43.7MB            
+  ...ndbc/parts/2017/00029.npz: 100%|██████████| 44.0MB / 44.0MB            
+  ...ndbc/parts/2016/00014.npz: 100%|██████████| 46.6MB / 46.6MB            
+  ...ndbc/parts/2016/00021.npz: 100%|██████████| 43.8MB / 43.8MB            
+  ...ndbc/parts/2017/00011.npz: 100%|██████████| 43.6MB / 43.6MB            
+  ...ndbc/parts/2016/00031.npz: 100%|██████████| 24.5MB / 24.5MB            
+  [+ 73 files]                : 100%|██████████| 3.25GB / 3.25GB            
+  ndbc: 6 year(s) pushed and verified in 2 part commit(s), done.json written last (0 already present)
+  push-parts: 6 year(s) on the Hub under partials/family1_tf/ndbc/
+=== stage fetch done in 1270.2s ===
