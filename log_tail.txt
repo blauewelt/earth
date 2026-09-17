@@ -1,0 +1,51 @@
+store     ndbc — NDBC buoys and C-MAN stations, standard meteorological reports (NOAA), one row per station report
+family    family1_tf (1.0.tf) · public -> chfrank/earth-tensors:tensors/family1_tf/ndbc
+axis      2012-01-01 .. 2017-12-31  bins 2191..2629 · time_s int32 (schema 2)
+channels  C=10: WDIR, WSPD, GST, WVHT, DPD, APD, MWD, PRES, ATMP, WTMP
+work      /home/runner/work/earth/earth/ml/cache/family1_tf
+
+=== stage index (ndbc) ===
+  [index ndbc] start (1 items)  0/1  0.0s
+  [index ndbc] plan.json  1/1  0.7s
+  index: ndbc — 6 year(s), C=10 (WDIR, WSPD, GST, WVHT, DPD, APD, MWD, PRES …), bins 2191..2629
+=== stage index done in 0.8s ===
+
+=== stage fetch (ndbc) ===
+  [fetch ndbc] start (6 items)  0/6  0.0s
+Traceback (most recent call last):
+  File "/home/runner/work/earth/earth/ml/build_family1_stores.py", line 1478, in <module>
+    sys.exit(main())
+             ^^^^^^
+  File "/home/runner/work/earth/earth/ml/build_family1_stores.py", line 1473, in main
+    f10b.run_stages(ctx, stages, stage_fn=stage_fns(ad), deps=DEPS)
+  File "/home/runner/work/earth/earth/ml/build_family10_stores.py", line 5314, in run_stages
+    stage_fn[s](ctx)
+  File "/home/runner/work/earth/earth/ml/build_family1_stores.py", line 264, in stage_fetch
+    f10b.stage_fetch(ctx, assemble_store_after=False)
+  File "/home/runner/work/earth/earth/ml/build_family10_stores.py", line 3912, in stage_fetch
+    for label, rows, counts in ad.fetch_year(ctx, y):
+  File "/home/runner/work/earth/earth/ml/family1/adapters/ndbc.py", line 555, in fetch_year
+    for label, rows, counts in self._year(ctx, year, ctx.t_lo, ctx.t_hi,
+  File "/home/runner/work/earth/earth/ml/family1/adapters/ndbc.py", line 469, in _year
+    for key, t, v, c, err in cm.ordered_map(fn, work, workers):
+  File "/home/runner/work/earth/earth/ml/family1/adapters/_common.py", line 187, in ordered_map
+    yield q.popleft().result()
+          ^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/concurrent/futures/_base.py", line 456, in result
+    return self.__get_result()
+           ^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/concurrent/futures/_base.py", line 401, in __get_result
+    raise self._exception
+  File "/usr/lib/python3.12/concurrent/futures/thread.py", line 58, in run
+    result = self.fn(*self.args, **self.kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/work/earth/earth/ml/family1/adapters/ndbc.py", line 466, in <lambda>
+    fn = (lambda ks: self._station_year(ctx, ks[0], ks[1], year,
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/work/earth/earth/ml/family1/adapters/ndbc.py", line 429, in _station_year
+    t, v = parse_stdmet(text, year, t_lo, t_hi, counts)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/work/earth/earth/ml/family1/adapters/ndbc.py", line 239, in parse_stdmet
+    arr = np.array(toks, dtype=np.float64).reshape(len(body), ncol)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+ValueError: could not convert string to float: 'MM'
