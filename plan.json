@@ -1,0 +1,429 @@
+{
+ "bins": [
+  2629,
+  3067
+ ],
+ "builder_git_sha": "4e23855de77b617c1d7a41ae4d44dfac83a80838",
+ "built_at": "2026-09-17T15:03:38+00:00",
+ "channels": [
+  {
+   "max": 60.0,
+   "min": -80.0,
+   "name": "airt",
+   "unit": "degC"
+  },
+  {
+   "max": 40.0,
+   "min": -3.0,
+   "name": "sst",
+   "unit": "degC"
+  },
+  {
+   "max": 42.0,
+   "min": 0.0,
+   "name": "sss",
+   "unit": "PSU"
+  },
+  {
+   "max": 80.0,
+   "min": -80.0,
+   "name": "wind_u",
+   "unit": "m/s"
+  },
+  {
+   "max": 80.0,
+   "min": -80.0,
+   "name": "wind_v",
+   "unit": "m/s"
+  },
+  {
+   "max": 1090.0,
+   "min": 850.0,
+   "name": "pres",
+   "unit": "hPa"
+  },
+  {
+   "max": 1500.0,
+   "min": -20.0,
+   "name": "sw",
+   "unit": "W/m2"
+  },
+  {
+   "max": 500.0,
+   "min": 0.0,
+   "name": "precip",
+   "unit": "mm/h"
+  },
+  {
+   "max": 40.0,
+   "min": -3.0,
+   "name": "T_10",
+   "unit": "degC"
+  },
+  {
+   "max": 40.0,
+   "min": -3.0,
+   "name": "T_20",
+   "unit": "degC"
+  },
+  {
+   "max": 40.0,
+   "min": -3.0,
+   "name": "T_30",
+   "unit": "degC"
+  },
+  {
+   "max": 40.0,
+   "min": -3.0,
+   "name": "T_50",
+   "unit": "degC"
+  },
+  {
+   "max": 40.0,
+   "min": -3.0,
+   "name": "T_75",
+   "unit": "degC"
+  },
+  {
+   "max": 40.0,
+   "min": -3.0,
+   "name": "T_100",
+   "unit": "degC"
+  },
+  {
+   "max": 40.0,
+   "min": -3.0,
+   "name": "T_150",
+   "unit": "degC"
+  },
+  {
+   "max": 40.0,
+   "min": -3.0,
+   "name": "T_200",
+   "unit": "degC"
+  },
+  {
+   "max": 40.0,
+   "min": -3.0,
+   "name": "T_300",
+   "unit": "degC"
+  },
+  {
+   "max": 40.0,
+   "min": -3.0,
+   "name": "T_500",
+   "unit": "degC"
+  },
+  {
+   "max": 42.0,
+   "min": 0.0,
+   "name": "S_10",
+   "unit": "PSU"
+  },
+  {
+   "max": 42.0,
+   "min": 0.0,
+   "name": "S_20",
+   "unit": "PSU"
+  },
+  {
+   "max": 42.0,
+   "min": 0.0,
+   "name": "S_30",
+   "unit": "PSU"
+  },
+  {
+   "max": 42.0,
+   "min": 0.0,
+   "name": "S_50",
+   "unit": "PSU"
+  },
+  {
+   "max": 42.0,
+   "min": 0.0,
+   "name": "S_75",
+   "unit": "PSU"
+  },
+  {
+   "max": 42.0,
+   "min": 0.0,
+   "name": "S_100",
+   "unit": "PSU"
+  },
+  {
+   "max": 42.0,
+   "min": 0.0,
+   "name": "S_150",
+   "unit": "PSU"
+  },
+  {
+   "max": 42.0,
+   "min": 0.0,
+   "name": "S_200",
+   "unit": "PSU"
+  },
+  {
+   "max": 42.0,
+   "min": 0.0,
+   "name": "S_300",
+   "unit": "PSU"
+  },
+  {
+   "max": 42.0,
+   "min": 0.0,
+   "name": "S_500",
+   "unit": "PSU"
+  }
+ ],
+ "dataset": "OceanSITES GDAC (NDBC)",
+ "date_range": [
+  "2018-01-01",
+  "2023-12-31"
+ ],
+ "first_record": {
+  "attrs": {
+   "array": "None",
+   "data_mode": "D",
+   "id": "OS_NTAS_201212-202003_D_FLTS-1M",
+   "network": "None",
+   "project": "NTAS",
+   "title": "Surface fluxes calculated with Coare 3.0 algorithm from data from surface mooring Northwest Tropical Atlantic Station deployments 12  13  14  15  16  17  18"
+  },
+  "file": "DATA/NTAS/OS_NTAS_201212-202003_D_FLTS-1M.nc",
+  "times": 86
+ },
+ "footprint": {
+  "log2_dt": -6.906890595608519,
+  "log2_fp": -4.0
+ },
+ "index": {
+  "bytes_all": 234526326767,
+  "bytes_usable": 43211152135,
+  "files": 60027,
+  "files_below_500m": 26662,
+  "files_no_channel_params": 4956,
+  "files_not_data_tree": 380,
+  "index_lines": 60032,
+  "index_lines_malformed": 5,
+  "usable": 28029
+ },
+ "per_year": {
+  "2018": {
+   "bytes": 3639960727,
+   "files": 469,
+   "sites": 28
+  },
+  "2019": {
+   "bytes": 3553984353,
+   "files": 477,
+   "sites": 27
+  },
+  "2020": {
+   "bytes": 3323732480,
+   "files": 468,
+   "sites": 26
+  },
+  "2021": {
+   "bytes": 2346274213,
+   "files": 441,
+   "sites": 25
+  },
+  "2022": {
+   "bytes": 2514291385,
+   "files": 298,
+   "sites": 24
+  },
+  "2023": {
+   "bytes": 2929293824,
+   "files": 411,
+   "sites": 20
+  }
+ },
+ "per_year_resume": true,
+ "qc_policy": "OceanSITES <VAR>_QC flags 3/4/9 -> NaN (counted); qc bit 1 = a kept value had no QC (0/fill/absent), bit 2 = a kept value flagged 5/7/8. Per site and channel, sources are ranked finest cadence, then mode D/M/P/R, then name; values inside a better source's span are dropped. Out-of-bounds values -> NaN, counted.",
+ "site_decisions": {
+  "ALOHA": null,
+  "BATS": null,
+  "CCE1": null,
+  "CCE2": null,
+  "CIS": null,
+  "CORC-GIZO": null,
+  "CORC-MISIMA": null,
+  "DYFAMED": null,
+  "E1M3A": null,
+  "E2M3A": null,
+  "EC1": null,
+  "ESTOC": null,
+  "FRAM": null,
+  "I-ORS": null,
+  "IMOS-EAC": null,
+  "IMOS-ITF": null,
+  "JKEO": null,
+  "K276": null,
+  "KEO": null,
+  "LINE-W": null,
+  "LION": null,
+  "LOCO-IRMINGSEA": null,
+  "LOCO-MOZCHANNEL": null,
+  "MBARI": null,
+  "MOVE1": null,
+  "MOVE2": null,
+  "MOVE3": null,
+  "MOVE4": null,
+  "NTAS": null,
+  "P12N23W": "array=PIRATA",
+  "PAP": null,
+  "PAPA": null,
+  "PYLOS": null,
+  "S-ORS": null,
+  "SATS": null,
+  "SOTS": null,
+  "STATION-M": null,
+  "Stratus": null,
+  "T0N110W": "network=TAO",
+  "T0N125W": "network=TAO",
+  "T0N140W": "network=TAO",
+  "T0N155W": "network=TAO",
+  "T0N165E": "network=TAO",
+  "T0N170W": "network=TAO",
+  "T0N180W": "network=TAO",
+  "T0N95W": "network=TAO",
+  "T10N110W": "network=TAO",
+  "T10N165E": "network=TAO",
+  "T10N170W": "network=TAO",
+  "T1N140W": "network=TAO",
+  "T1S140W": "network=TAO",
+  "T2N110W": "network=TAO",
+  "T2N125W": "network=TAO",
+  "T2N140W": "network=TAO",
+  "T2N155W": "network=TAO",
+  "T2N165E": "network=TAO",
+  "T2N170W": "network=TAO",
+  "T2N180W": "network=TAO",
+  "T2N95W": "network=TAO",
+  "T2S110W": "network=TAO",
+  "T2S125W": "network=TAO",
+  "T2S140W": "network=TAO",
+  "T2S155W": "network=TAO",
+  "T2S165E": "network=TAO",
+  "T2S170W": "network=TAO",
+  "T2S180W": "network=TAO",
+  "T2S95W": "network=TAO",
+  "T5N110W": "network=TAO",
+  "T5N125W": "network=TAO",
+  "T5N140W": "network=TAO",
+  "T5N155W": "network=TAO",
+  "T5N165E": "network=TAO",
+  "T5N170W": "network=TAO",
+  "T5N180W": "network=TAO",
+  "T5N95W": "network=TAO",
+  "T5S110W": "network=TAO",
+  "T5S125W": "network=TAO",
+  "T5S140W": "network=TAO",
+  "T5S155W": "network=TAO",
+  "T5S165E": "network=TAO",
+  "T5S170W": "network=TAO",
+  "T5S180W": "network=TAO",
+  "T5S95W": "network=TAO",
+  "T8N110W": "network=TAO",
+  "T8N125W": "network=TAO",
+  "T8N155W": "network=TAO",
+  "T8N165E": "network=TAO",
+  "T8N170W": "network=TAO",
+  "T8N180W": "network=TAO",
+  "T8N95W": "network=TAO",
+  "T8S110W": "network=TAO",
+  "T8S125W": "network=TAO",
+  "T8S155W": "network=TAO",
+  "T8S165E": "network=TAO",
+  "T8S170W": "network=TAO",
+  "T8S180W": "network=TAO",
+  "T8S95W": "network=TAO",
+  "T9N140W": "network=TAO",
+  "TENATSO": null,
+  "W1M3A": null,
+  "WDW": null,
+  "WHOTS": null
+ },
+ "sites": 102,
+ "sites_excluded_gtmba": [
+  "P12N23W",
+  "T0N110W",
+  "T0N125W",
+  "T0N140W",
+  "T0N155W",
+  "T0N165E",
+  "T0N170W",
+  "T0N180W",
+  "T0N95W",
+  "T10N110W",
+  "T10N165E",
+  "T10N170W",
+  "T1N140W",
+  "T1S140W",
+  "T2N110W",
+  "T2N125W",
+  "T2N140W",
+  "T2N155W",
+  "T2N165E",
+  "T2N170W",
+  "T2N180W",
+  "T2N95W",
+  "T2S110W",
+  "T2S125W",
+  "T2S140W",
+  "T2S155W",
+  "T2S165E",
+  "T2S170W",
+  "T2S180W",
+  "T2S95W",
+  "T5N110W",
+  "T5N125W",
+  "T5N140W",
+  "T5N155W",
+  "T5N165E",
+  "T5N170W",
+  "T5N180W",
+  "T5N95W",
+  "T5S110W",
+  "T5S125W",
+  "T5S140W",
+  "T5S155W",
+  "T5S165E",
+  "T5S170W",
+  "T5S180W",
+  "T5S95W",
+  "T8N110W",
+  "T8N125W",
+  "T8N155W",
+  "T8N165E",
+  "T8N170W",
+  "T8N180W",
+  "T8N95W",
+  "T8S110W",
+  "T8S125W",
+  "T8S155W",
+  "T8S165E",
+  "T8S170W",
+  "T8S180W",
+  "T8S95W",
+  "T9N140W"
+ ],
+ "sources": [
+  "https://dods.ndbc.noaa.gov/thredds/fileServer/oceansites/DATA/<SITE>/<file>.nc",
+  "https://dods.ndbc.noaa.gov/thredds/fileServer/oceansites/oceansites_index.txt",
+  "https://dods.ndbc.noaa.gov/thredds/ncml/oceansites/DATA/<SITE>/<file>.nc"
+ ],
+ "store": "oceansites",
+ "title": "OceanSITES moored time series (GDAC at NOAA NDBC), tropical arrays excluded: surface meteorology and T/S at ten depths, one row per site and time",
+ "url": "https://dods.ndbc.noaa.gov/thredds/fileServer/oceansites/oceansites_index.txt",
+ "verified": "2026-09-17 from the sandbox: oceansites_index.txt (20,727,619 B, 60,027 files, 112 DATA sites); the THREDDS catalog (same 112 sites); NcML headers; files of NTAS (M, FLTS-1H), CCE1 MICROCAT, PAPA TEMP-10min, KEO ADCP (NetCDF-4), P12N23W TVSM (PIRATA), T0N110W AIRT (TAO): layouts, units, fills, QC tables, array attributes. Ifremer's GDAC hosts refused from the sandbox.",
+ "years": [
+  2018,
+  2019,
+  2020,
+  2021,
+  2022,
+  2023
+ ]
+}

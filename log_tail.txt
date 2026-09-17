@@ -1,0 +1,80 @@
+family    family1_gf (1.gf) · public -> chfrank/earth-tensors:tensors/family1_gf/oceansites
+axis      2018-01-01 .. 2023-12-31  bins 2629..3067 · time_s int32 (schema 2)
+channels  C=28: airt, sst, sss, wind_u, wind_v, pres, sw, precip, T_10, T_20, T_30, T_50, T_75, T_100, T_150, T_200, T_300, T_500, S_10, S_20, S_30, S_50, S_75, S_100, S_150, S_200, S_300, S_500
+work      /home/runner/work/earth/earth/ml/cache/family1_gf
+
+=== stage index (oceansites) ===
+  [index oceansites] start (1 items)  0/1  0.0s
+  [index oceansites] plan.json  1/1  136.7s
+  index: oceansites — 6 year(s), C=28 (airt, sst, sss, wind_u, wind_v, pres, sw, precip …), bins 2629..3067
+=== stage index done in 136.7s ===
+
+=== stage fetch (oceansites) ===
+  [fetch oceansites] start (6 items)  0/6  0.0s
+  [fetch oceansites] oceansites 2018  1/6  181.3s
+  [fetch oceansites] oceansites 2018  1/6  183.0s
+  [fetch oceansites] oceansites 2018  1/6  199.6s
+  [fetch oceansites] oceansites 2018  1/6  217.4s
+/home/runner/work/earth/earth/ml/family1/adapters/oceansites.py:563: RuntimeWarning: invalid value encountered in cast
+  q = np.asarray(V[qn][(slice(i0, i1),) + take], np.int64)
+Traceback (most recent call last):
+  File "/home/runner/work/earth/earth/ml/build_family1_stores.py", line 1478, in <module>
+    sys.exit(main())
+             ^^^^^^
+  File "/home/runner/work/earth/earth/ml/build_family1_stores.py", line 1473, in main
+    f10b.run_stages(ctx, stages, stage_fn=stage_fns(ad), deps=DEPS)
+  File "/home/runner/work/earth/earth/ml/build_family10_stores.py", line 5314, in run_stages
+    stage_fn[s](ctx)
+  File "/home/runner/work/earth/earth/ml/build_family1_stores.py", line 264, in stage_fetch
+    f10b.stage_fetch(ctx, assemble_store_after=False)
+  File "/home/runner/work/earth/earth/ml/build_family10_stores.py", line 3912, in stage_fetch
+    for label, rows, counts in ad.fetch_year(ctx, y):
+  File "/home/runner/work/earth/earth/ml/family1/adapters/oceansites.py", line 1123, in fetch_year
+    for label, rows, c in self._rows(ctx, ctx.t_lo, ctx.t_hi, year,
+  File "/home/runner/work/earth/earth/ml/family1/adapters/oceansites.py", line 1011, in _rows
+    for f, got, err in cm.ordered_map(get, fl, workers):
+  File "/home/runner/work/earth/earth/ml/family1/adapters/_common.py", line 187, in ordered_map
+    yield q.popleft().result()
+          ^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/concurrent/futures/_base.py", line 449, in result
+    return self.__get_result()
+           ^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/concurrent/futures/_base.py", line 401, in __get_result
+    raise self._exception
+  File "/usr/lib/python3.12/concurrent/futures/thread.py", line 58, in run
+    result = self.fn(*self.args, **self.kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/work/earth/earth/ml/family1/adapters/oceansites.py", line 1002, in get
+    return f, self._fetch(ctx, f), None
+              ^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/work/earth/earth/ml/family1/adapters/oceansites.py", line 979, in _fetch
+    f10b.http_to_file(url, dest)
+  File "/home/runner/work/earth/earth/ml/build_family10_stores.py", line 383, in http_to_file
+    with urllib.request.urlopen(req, timeout=timeout) as r:
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/urllib/request.py", line 215, in urlopen
+    return opener.open(url, data, timeout)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/urllib/request.py", line 515, in open
+    response = self._open(req, data)
+               ^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/urllib/request.py", line 532, in _open
+    result = self._call_chain(self.handle_open, protocol, protocol +
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/urllib/request.py", line 492, in _call_chain
+    result = func(*args)
+             ^^^^^^^^^^^
+  File "/usr/lib/python3.12/urllib/request.py", line 1392, in https_open
+    return self.do_open(http.client.HTTPSConnection, req,
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/urllib/request.py", line 1344, in do_open
+    h.request(req.get_method(), req.selector, req.data, headers,
+  File "/usr/lib/python3.12/http/client.py", line 1365, in request
+    self._send_request(method, url, body, headers, encode_chunked)
+  File "/usr/lib/python3.12/http/client.py", line 1376, in _send_request
+    self.putrequest(method, url, **skips)
+  File "/usr/lib/python3.12/http/client.py", line 1210, in putrequest
+    self._validate_path(url)
+  File "/usr/lib/python3.12/http/client.py", line 1310, in _validate_path
+    raise InvalidURL(f"URL can't contain control characters. {url!r} "
+http.client.InvalidURL: URL can't contain control characters. '/thredds/fileServer/oceansites/DATA/I-ORS/OS_I-ORS_2019_D_atmos_AIRT RELH.nc' (found at least ' ')
