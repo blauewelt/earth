@@ -240,3 +240,29 @@ def test_a_non_numeric_token_drops_its_line_and_is_counted():
     t, _ = ndbc.parse_stdmet("\n".join([head, bad, good]).encode(), 2011,
                              -2**62, 2**62, c)
     assert len(t) == 1 and c["lines_not_numeric"] == 1
+
+
+def test_an_absent_unread_trailing_column_and_mm_values_are_read():
+    """Run #28: 42otph2000 declares TIDE and no line carries it; run #26: a
+    file writes 'MM' for a missing value."""
+    head = "YYYY MM DD hh WD   WSPD GST  WVHT  DPD   APD  MWD  BAR    ATMP  WTMP  DEWP  VIS  TIDE"
+    rows = [f"2000 01 01 {h:02d} 161  3.2  3.9 99.00 99.00 99.00 999 1018.0  17.3  15.9  16.0 99.0"
+            for h in range(24)]
+    c = {}
+    t, v = ndbc.parse_stdmet("\n".join([head] + rows).encode(), 2000,
+                             -2**62, 2**62, c)
+    assert len(t) == 24 and c["lines_unread_trailing_columns_absent"] == 24
+    names = [x[0] for x in ndbc.CHANNELS]
+    assert v[0, names.index("ATMP")] == np.float64(17.3)
+    rows[3] = rows[3].replace(" 17.3 ", "   MM ")
+    c = {}
+    t, v = ndbc.parse_stdmet("\n".join([head] + rows).encode(), 2000,
+                             -2**62, 2**62, c)
+    assert len(t) == 24 and c["values_MM"] == 1
+    assert np.isnan(v[3, names.index("ATMP")])
+    # an MM in a time field makes the line's time invalid, never a crash
+    rows[5] = rows[5].replace("2000 01 01 05", "2000 MM 01 05")
+    c = {}
+    t, _ = ndbc.parse_stdmet("\n".join([head] + rows).encode(), 2000,
+                             -2**62, 2**62, c)
+    assert len(t) == 23 and c["lines_bad_time"] == 1

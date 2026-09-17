@@ -234,22 +234,38 @@ def parse_stdmet(raw, year, t_lo, t_hi, counts):
     counts["lines_header"] = counts.get("lines_header", 0) + \
         (len(lines) - len(body))
     ncol = len(names)
+    col = {n: i for i, n in enumerate(names)}
+    # a line must reach the LAST column the store reads; a trailing column
+    # it does not read may be absent (measured 2026-09-17, run #28:
+    # 42otph2000 declares TIDE and no line carries it)
+    nuse = max([0] + [col[n] for n in need]) + 1
     toks = " ".join(body).split()
     arr = None
-    if len(toks) == ncol * len(body):
+    if len(toks) == ncol * len(body) and "MM" not in toks:
         try:
             arr = np.array(toks, dtype=np.float64).reshape(len(body), ncol)
         except ValueError:
             arr = None          # a token that is not a number: line by line
     if arr is None:
-        good, bad_len, bad_num = [], 0, 0
+        good, bad_len, bad_num, short, mm = [], 0, 0, 0, 0
         for ln in body:
             p = ln.split()
-            if len(p) != ncol:
+            if not nuse <= len(p) <= ncol:
                 bad_len += 1
                 continue
+            if len(p) < ncol:
+                short += 1
+            p = p[:nuse]
             try:
-                good.append([float(x) for x in p])
+                row = []
+                for x in p:
+                    if x == "MM":
+                        # the realtime format's missing marker (run #26)
+                        mm += 1
+                        row.append(np.nan)
+                    else:
+                        row.append(float(x))
+                good.append(row)
             except ValueError:
                 # measured 2026-09-17 (run #22): a value written '02,4'
                 bad_num += 1
@@ -260,19 +276,27 @@ def parse_stdmet(raw, year, t_lo, t_hi, counts):
             bad_len
         counts["lines_not_numeric"] = counts.get("lines_not_numeric", 0) + \
             bad_num
-        if len(body) and len(body) - bad_num - len(good) > 0 and \
-                len(good) + bad_num < 0.99 * len(body):
+        if short:
+            counts["lines_unread_trailing_columns_absent"] = counts.get(
+                "lines_unread_trailing_columns_absent", 0) + short
+        if mm:
+            counts["values_MM"] = counts.get("values_MM", 0) + mm
+        if len(body) and bad_len > 0.01 * len(body):
             raise FormatError(f"{bad_len} of {len(body)} lines do not have "
-                              f"the header's {ncol} columns")
+                              f"the header's {ncol} columns (or the "
+                              f"{nuse} it needs)")
         if bad_num > max(0.01 * len(body), 5):
             raise FormatError(f"{bad_num} of {len(body)} lines carry a value "
                               f"that is not a number")
-        arr = np.array(good, dtype=np.float64).reshape(len(good), ncol)
+        arr = np.array(good, dtype=np.float64).reshape(len(good), nuse)
     col = {n: i for i, n in enumerate(names)}
     n = arr.shape[0]
     counts["lines"] = counts.get("lines", 0) + n
     if n == 0:
         return np.zeros(0, np.int64), np.zeros((0, len(CHANNELS)))
+    tcols = [0, col["MM"], col["DD"], col["hh"]] + \
+        ([col["mm"]] if "mm" in col else [])
+    arr[:, tcols] = np.nan_to_num(arr[:, tcols], nan=-1.0)
     yr = arr[:, 0].astype(np.int64)
     if names[0] == "YY":
         yr = np.where(yr < 100, yr + 1900, yr)
