@@ -1,0 +1,80 @@
+
+  .../wod/parts/2025/00000.npz: 100%|██████████| 39.2MB / 39.2MB            [A[A[A[A[A[A[A[A[A
+
+
+
+
+
+
+
+
+
+  .../wod/parts/2026/00000.npz: 100%|██████████| 3.81MB / 3.81MB            [A[A[A[A[A[A[A[A[A[AProcessing Files (9 / 9)      : 100%|██████████|  651MB /  651MB, 59.2MB/s  
+New Data Upload               : 100%|██████████|  651MB /  651MB, 59.2MB/s  [A
+
+  .../wod/parts/2023/00000.npz: 100%|██████████| 43.5MB / 43.5MB            [A[A
+
+
+  .../wod/parts/2024/00000.npz: 100%|██████████| 42.3MB / 42.3MB            [A[A[A
+
+
+
+  .../wod/parts/2022/00000.npz: 100%|██████████| 60.8MB / 60.8MB            [A[A[A[A
+
+
+
+
+  .../wod/parts/2020/00000.npz: 100%|██████████|  101MB /  101MB            [A[A[A[A[A
+
+
+
+
+
+  .../wod/parts/2018/00000.npz: 100%|██████████|  135MB /  135MB            [A[A[A[A[A[A
+
+
+
+
+
+
+  .../wod/parts/2019/00000.npz: 100%|██████████|  118MB /  118MB            [A[A[A[A[A[A[A
+
+
+
+
+
+
+
+  .../wod/parts/2021/00000.npz: 100%|██████████|  108MB /  108MB            [A[A[A[A[A[A[A[A
+
+
+
+
+
+
+
+
+  .../wod/parts/2025/00000.npz: 100%|██████████| 39.2MB / 39.2MB            [A[A[A[A[A[A[A[A[A
+
+
+
+
+
+
+
+
+
+  .../wod/parts/2026/00000.npz: 100%|██████████| 3.81MB / 3.81MB            [A[A[A[A[A[A[A[A[A[AProcessing Files (9 / 9)      : 100%|██████████|  651MB /  651MB, 58.7MB/s  
+New Data Upload               : 100%|██████████|  651MB /  651MB, 58.7MB/s  
+  .../wod/parts/2023/00000.npz: 100%|██████████| 43.5MB / 43.5MB            
+  .../wod/parts/2024/00000.npz: 100%|██████████| 42.3MB / 42.3MB            
+  .../wod/parts/2022/00000.npz: 100%|██████████| 60.8MB / 60.8MB            
+  .../wod/parts/2020/00000.npz: 100%|██████████|  101MB /  101MB            
+  .../wod/parts/2018/00000.npz: 100%|██████████|  135MB /  135MB            
+  .../wod/parts/2019/00000.npz: 100%|██████████|  118MB /  118MB            
+  .../wod/parts/2021/00000.npz: 100%|██████████|  108MB /  108MB            
+  .../wod/parts/2025/00000.npz: 100%|██████████| 39.2MB / 39.2MB            
+  .../wod/parts/2026/00000.npz: 100%|██████████| 3.81MB / 3.81MB            
+  wod: 9 year(s) pushed and verified in 1 part commit(s), done.json written last (0 already present)
+  push-parts: 9 year(s) on the Hub under partials/family1_gf/wod/
+=== stage fetch done in 1583.2s ===

@@ -1,0 +1,10 @@
+{
+ "at": "2026-09-17T18:02:00+00:00",
+ "done": 9,
+ "elapsed_s": 1568.8,
+ "eta_s": 0.0,
+ "item": "wod 2026",
+ "stage": "fetch wod",
+ "total": 9,
+ "year_rows": 13451
+}
