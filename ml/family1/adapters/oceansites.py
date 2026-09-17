@@ -1026,8 +1026,12 @@ class OceanSITESAdapter(f10b.SourceAdapter):
                 except (FormatError, KeyError, ValueError, IndexError) as e:
                     # the bytes were read and the layout is refused: named
                     # and counted, not an absence (a retry reads the same)
+                    # a COUNT per path (counters merge by addition across
+                    # sites and parts) and the reason in a list ledger
                     rl = counts.setdefault("files_layout_refused", {})
-                    rl[f["path"]] = f"{type(e).__name__}: {e}"[:200]
+                    rl[f["path"]] = rl.get(f["path"], 0) + 1
+                    counts.setdefault("files_layout_refused_why", []).append(
+                        f"{f['path']}: {type(e).__name__}: {e}"[:240])
                     continue
                 finally:
                     if tmp and os.path.exists(path):

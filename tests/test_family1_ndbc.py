@@ -216,3 +216,27 @@ def test_a_whole_gzip_of_an_empty_file_is_zero_rows_not_a_format_error(
     (d / "42008h1981.txt.gz").write_bytes(gzip.compress(b"garbage\n"))
     with pytest.raises(ndbc.FormatError):
         ad._station_year(ctx, "42008", "42008", 1981, -2**62, 2**62)
+
+
+def test_a_non_numeric_token_drops_its_line_and_is_counted():
+    """Run #22: a value written '02,4' raised ValueError for the whole lane."""
+    head = "#YY  MM DD hh mm WDIR WSPD GST  WVHT   DPD   APD MWD   PRES  ATMP  WTMP  DEWP  VIS  TIDE"
+    good = "2011 01 01 00 50 180  5.0  6.0 99.00 99.00 99.00 999 1010.0  10.0  12.0 999.0 99.0 99.00"
+    bad = "2011 01 01 01 50 180  5.0  6.0 99.00 99.00 99.00 999 1010.0  02,4  12.0 999.0 99.0 99.00"
+    lines = [head] + [good.replace(" 00 50", f" {h:02d} 50") for h in range(0, 24)] * 5
+    lines.insert(3, bad)
+    c = {}
+    t, v = ndbc.parse_stdmet("\n".join(lines).encode(), 2011, -2**62,
+                             2**62, c)
+    assert c["lines_not_numeric"] == 1
+    assert len(c["lines_not_numeric_examples"]) == 1
+    assert len(t) == 24                 # the repeats collapse; the bad line is gone
+    # mostly garbage is still refused
+    with pytest.raises(ndbc.FormatError):
+        ndbc.parse_stdmet("\n".join([head] + [bad] * 6 + [good]).encode(),
+                          2011, -2**62, 2**62, {})
+    # one bad value in a SHORT file is dropped, not refused
+    c = {}
+    t, _ = ndbc.parse_stdmet("\n".join([head, bad, good]).encode(), 2011,
+                             -2**62, 2**62, c)
+    assert len(t) == 1 and c["lines_not_numeric"] == 1

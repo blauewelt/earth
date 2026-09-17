@@ -116,6 +116,18 @@ BASE = "https://data.seaice.uni-bremen.de/amsr2/asi_daygrid_swath/"
 VERSION = "5.4"
 HUGHES_A = 6378273.0
 HUGHES_RF = 298.279411123064
+# From 2018-11-02 Bremen's files declare the SAME x/y grid on the WGS 84
+# ellipsoid (EPSG:3413 north / 3976 south) instead of Hughes 1980 (3411 /
+# 3412); the axes are identical to the metre (measured 2026-09-17 on
+# 2018-11-01/02/03, both hemispheres). Reading one label as the other moves a
+# pixel centre by at most 149 m north / 125 m south (median 80 / 70 m) — 2.4 %
+# of the 6.25 km pixel. Both labels are accepted; the store declares Hughes
+# 1980 and counts frames per declared ellipsoid (`frames_by_declared_
+# ellipsoid`) so the relabel is visible, never silent.
+WGS84_A = 6378137.0
+WGS84_RF = 298.257223563
+ELLIPSOIDS = {"hughes1980": (HUGHES_A, HUGHES_RF),
+              "wgs84": (WGS84_A, WGS84_RF)}
 DX = 6250.0
 
 HEMI = {
@@ -323,7 +335,12 @@ class SeaIceASIAdapter(sh.GridAdapter):
     notes = (
         "Reads the netCDF copies (HDF4 originals need pyhdf). Two groups, n "
         "and s. uint8 whole percent, 255 = missing. AMSR-E 2002-06 .. "
-        "2011-10 and the 3.125 km grids are phase B.")
+        "2011-10 and the 3.125 km grids are phase B. From 2018-11-02 the "
+        "source files declare the identical x/y grid on WGS 84 (EPSG:3413 / "
+        "3976) instead of Hughes 1980 (3411 / 3412); reading one label as "
+        "the other moves a pixel centre by <= 149 m (2.4 % of a pixel). The "
+        "store declares Hughes 1980 and counts frames per declared ellipsoid "
+        "(counts.frames_by_declared_ellipsoid).")
     smoke_window = ("2012-12-28", "2013-01-08")
     smoke_probe_month = "2013-01"
 
@@ -442,9 +459,12 @@ class SeaIceASIAdapter(sh.GridAdapter):
                 if got is None:
                     return None, {}, f"{url}: listed, and 404"
                 nbytes = os.path.getsize(path)
+            info = {}
             with NC_LOCK:
-                z = read_nc(path, h)
-            return z, {"files_read": 1, "bytes_files": nbytes}, None
+                z = read_nc(path, h, info)
+            return z, {"files_read": 1, "bytes_files": nbytes,
+                       "frames_by_declared_ellipsoid":
+                           {info.get("ellipsoid", "?"): 1}}, None
         except FormatError as e:
             sys.exit(f"REFUSING seaice_asi: {name}: {e}")
         except (IOError, OSError) as e:
@@ -590,8 +610,10 @@ class SeaIceASIAdapter(sh.GridAdapter):
         return make_smoke_sources(root, d_lo, d_hi, seed)
 
 
-def read_nc(path, h):
-    """One netCDF day -> float32 [H, W] with NaN; the grid is VERIFIED."""
+def read_nc(path, h, info=None):
+    """One netCDF day -> float32 [H, W] with NaN; the grid is VERIFIED.
+
+    `info`, if given, receives {"ellipsoid": "hughes1980" | "wgs84"}."""
     try:
         import netCDF4
     except ImportError:                                     # pragma: no cover
@@ -615,13 +637,25 @@ def read_nc(path, h):
         gm = ds.variables["polar_stereographic"]
         want = {"latitude_of_projection_origin": e["lat0"],
                 "standard_parallel": e["lat_ts"],
-                "straight_vertical_longitude_from_pole": e["lon0"],
-                "semi_major_axis": HUGHES_A,
-                "inverse_flattening": HUGHES_RF}
+                "straight_vertical_longitude_from_pole": e["lon0"]}
+
+        def attr(k):
+            return float(gm.getncattr(k)) if k in gm.ncattrs() else None
+
+        def same(got, v):
+            return got is not None and abs(got - v) <= 1e-6 * max(1.0, abs(v))
         for k, v in want.items():
-            got = float(gm.getncattr(k)) if k in gm.ncattrs() else None
-            if got is None or abs(got - v) > 1e-6 * max(1.0, abs(v)):
-                raise FormatError(f"grid_mapping {k} = {got}, expected {v}")
+            if not same(attr(k), v):
+                raise FormatError(f"grid_mapping {k} = {attr(k)}, expected {v}")
+        a_, rf_ = attr("semi_major_axis"), attr("inverse_flattening")
+        ell = [n for n, (a0, rf0) in ELLIPSOIDS.items()
+               if same(a_, a0) and same(rf_, rf0)]
+        if not ell:
+            raise FormatError(f"grid_mapping semi_major_axis = {a_}, "
+                              f"inverse_flattening = {rf_}: neither Hughes "
+                              f"1980 nor WGS 84")
+        if info is not None:
+            info["ellipsoid"] = ell[0]
         x = np.asarray(ds.variables["x"][:], np.float64)
         y = np.asarray(ds.variables["y"][:], np.float64)
         xc = e["x0"] + (np.arange(e["W"]) + 0.5) * DX

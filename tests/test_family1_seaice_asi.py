@@ -301,3 +301,34 @@ def test_a_file_on_another_grid_is_refused(tmp_path):
 
 if __name__ == "__main__":
     sys.exit(pytest.main([__file__, "-q"]))
+
+
+def test_the_wgs84_relabel_of_the_same_grid_is_read_and_counted(tmp_path):
+    """From 2018-11-02 Bremen declares the identical x/y grid on WGS 84
+    (run #6's refusal). Both labels are read; anything else is refused."""
+    import shutil
+    import netCDF4
+    src, _ = small_archive(str(tmp_path), "2013-01-01", "2013-01-01")
+    p = None
+    for dp, _, ns in os.walk(src):
+        for n in ns:
+            if n.endswith(".nc") and "-n6250-" in n:
+                p = os.path.join(dp, n)
+    assert p
+    info = {}
+    asi.read_nc(p, "n", info)
+    assert info == {"ellipsoid": "hughes1980"}
+    q = str(tmp_path / "wgs.nc")
+    shutil.copyfile(p, q)
+    with netCDF4.Dataset(q, "a") as ds:
+        gm = ds.variables["polar_stereographic"]
+        gm.semi_major_axis = asi.WGS84_A
+        gm.inverse_flattening = asi.WGS84_RF
+    info = {}
+    z = asi.read_nc(q, "n", info)
+    assert info == {"ellipsoid": "wgs84"}
+    assert np.array_equal(z, asi.read_nc(p, "n"), equal_nan=True)
+    with netCDF4.Dataset(q, "a") as ds:
+        ds.variables["polar_stereographic"].semi_major_axis = 6371000.0
+    with pytest.raises(asi.FormatError, match="neither"):
+        asi.read_nc(q, "n")

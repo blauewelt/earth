@@ -292,3 +292,14 @@ def test_a_file_name_with_a_space_is_requested_percent_encoded(tmp_path,
     ad = osa.ADAPTER()
     ad._fetch(ctx, {"path": "DATA/I-ORS/OS_I-ORS_2019_D_atmos_AIRT RELH.nc"})
     assert seen == [osa.FILES + "DATA/I-ORS/OS_I-ORS_2019_D_atmos_AIRT%20RELH.nc"]
+
+
+def test_layout_refusals_merge_across_parts():
+    """Runs #10/#11: files_layout_refused carried a string per path and
+    `_merge_counts` tried to add it to an int."""
+    agg = {}
+    for p in ("a.nc", "a.nc", "b.nc"):
+        b10._merge_counts(agg, {"files_layout_refused": {p: 1},
+                                "files_layout_refused_why": [f"{p}: X"]})
+    assert agg["files_layout_refused"] == {"a.nc": 2, "b.nc": 1}
+    assert len(agg["files_layout_refused_why"]) == 3

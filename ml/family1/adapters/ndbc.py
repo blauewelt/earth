@@ -235,19 +235,38 @@ def parse_stdmet(raw, year, t_lo, t_hi, counts):
         (len(lines) - len(body))
     ncol = len(names)
     toks = " ".join(body).split()
+    arr = None
     if len(toks) == ncol * len(body):
-        arr = np.array(toks, dtype=np.float64).reshape(len(body), ncol)
-    else:
-        good = []
+        try:
+            arr = np.array(toks, dtype=np.float64).reshape(len(body), ncol)
+        except ValueError:
+            arr = None          # a token that is not a number: line by line
+    if arr is None:
+        good, bad_len, bad_num = [], 0, 0
         for ln in body:
             p = ln.split()
-            if len(p) == ncol:
-                good.append(p)
+            if len(p) != ncol:
+                bad_len += 1
+                continue
+            try:
+                good.append([float(x) for x in p])
+            except ValueError:
+                # measured 2026-09-17 (run #22): a value written '02,4'
+                bad_num += 1
+                ex = counts.setdefault("lines_not_numeric_examples", [])
+                if len(ex) < 5:
+                    ex.append(f"{year}: {ln[:80]}")
         counts["lines_bad_length"] = counts.get("lines_bad_length", 0) + \
-            len(body) - len(good)
-        if len(body) and len(good) < 0.99 * len(body):
-            raise FormatError(f"{len(body) - len(good)} of {len(body)} lines "
-                              f"do not have the header's {ncol} columns")
+            bad_len
+        counts["lines_not_numeric"] = counts.get("lines_not_numeric", 0) + \
+            bad_num
+        if len(body) and len(body) - bad_num - len(good) > 0 and \
+                len(good) + bad_num < 0.99 * len(body):
+            raise FormatError(f"{bad_len} of {len(body)} lines do not have "
+                              f"the header's {ncol} columns")
+        if bad_num > max(0.01 * len(body), 5):
+            raise FormatError(f"{bad_num} of {len(body)} lines carry a value "
+                              f"that is not a number")
         arr = np.array(good, dtype=np.float64).reshape(len(good), ncol)
     col = {n: i for i, n in enumerate(names)}
     n = arr.shape[0]
