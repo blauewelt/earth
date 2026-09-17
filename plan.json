@@ -1,0 +1,118 @@
+{
+ "bins": [
+  2995,
+  3214
+ ],
+ "builder_git_sha": "8e231982080d4205498708d702851a5d52c60637",
+ "built_at": "2026-09-17T17:54:49+00:00",
+ "channels": [
+  {
+   "max": 40.0,
+   "min": -3.0,
+   "name": "sst",
+   "unit": "degC"
+  },
+  {
+   "max": 60.0,
+   "min": -80.0,
+   "name": "airt",
+   "unit": "degC"
+  },
+  {
+   "max": 1090.0,
+   "min": 870.0,
+   "name": "slp",
+   "unit": "hPa"
+  },
+  {
+   "max": 80.0,
+   "min": -80.0,
+   "name": "wind_u",
+   "unit": "m/s"
+  },
+  {
+   "max": 80.0,
+   "min": -80.0,
+   "name": "wind_v",
+   "unit": "m/s"
+  },
+  {
+   "max": 40.0,
+   "min": -80.0,
+   "name": "dewpt",
+   "unit": "degC"
+  },
+  {
+   "max": 30.0,
+   "min": 0.0,
+   "name": "wave_h",
+   "unit": "m"
+  },
+  {
+   "max": 8.0,
+   "min": 0.0,
+   "name": "cloud",
+   "unit": "okta"
+  }
+ ],
+ "dataset": "ICOADS IMMA1 (R3.0 final-untrim + NRT final)",
+ "date_range": [
+  "2023-01-01",
+  "2025-12-31"
+ ],
+ "first_record": {
+  "file": "icoads-nrt_r3.0.2_final_d202301_c20230217.dat.gz",
+  "first_line": "2023 1 1   0 8587 17187 1325    114802603                  10264                                             165  155179",
+  "lines_read": 50,
+  "rows_parsed": 50
+ },
+ "footprint": {
+  "log2_dt": -6.906890595608519,
+  "log2_fp": -4.0
+ },
+ "listing": {
+  "bytes_all": 93099860388,
+  "final_untrim_months": 3232,
+  "first": "1662-12",
+  "last": "2026-08",
+  "months": 3372,
+  "months_in_both": [],
+  "nrt_files_superseded": 4,
+  "nrt_final_months": 140
+ },
+ "per_year": {
+  "2023": {
+   "bytes": 4605208794,
+   "months": 12
+  },
+  "2024": {
+   "bytes": 4537608683,
+   "months": 12
+  },
+  "2025": {
+   "bytes": 4370730123,
+   "months": 12
+  }
+ },
+ "per_year_resume": true,
+ "qc_policy": "Per value the IMMA1 NCDC-QC flag (SNC, ANC, PNC, WNC, DNC, ENC, CNC): 7-9 (erroneous) -> NaN and counted (`ncdc_erroneous`). Row qc = worst class among kept values: 0 all flagged 1 (correct), 1 some 2-3 (correctable), 2 some unassessed (flag blank or A), 3 some 4-6 (suspect). Reports dropped and counted: no Icoads attm, no day/hour, no or bad position, ZNC 7-9, DUPS > 2, LZ = 1, no value. Trimming flags not applied. Out-of-bounds values -> NaN, counted.",
+ "releases": [
+  "3.0.2",
+  "3.0.3"
+ ],
+ "sources": [
+  "https://www.ncei.noaa.gov/data/international-comprehensive-ocean-atmosphere/v3/archive/final-untrim/IMMA1_R<rel>_<YYYY>-<MM>.gz",
+  "https://www.ncei.noaa.gov/data/international-comprehensive-ocean-atmosphere/v3/archive/nrt/monthly/icoads-nrt_r<rel>_final_d<YYYYMM>_c<date>.dat.gz",
+  "https://www.ncei.noaa.gov/data/international-comprehensive-ocean-atmosphere/v3/doc/R3.0-imma1_short.pdf"
+ ],
+ "store": "icoads",
+ "title": "ICOADS marine reports (IMMA1, NOAA NCEI): Release 3.0 final-untrim 1662-2014 and the near-real-time final product 2015 onward, one row per report",
+ "url": "https://www.ncei.noaa.gov/data/international-comprehensive-ocean-atmosphere/v3/",
+ "verified": "2026-09-17 from the sandbox: final-untrim/ listing (3,232 monthly files, 1662-12..2014-12, 44.97 GB exact); nrt/monthly/ listing (final product: r3.0.2 131 files incl. 2 re-issued months, r3.0.3 13 files, 13 months in both); R3.0-imma1_short.pdf Tables C0/C1; records of 1662-12, 1880-01, 2010-07 (2,108,040 lines), 2015-01 and 2026-08 (head)",
+ "window_bytes": 13513547600,
+ "years": [
+  2023,
+  2024,
+  2025
+ ]
+}

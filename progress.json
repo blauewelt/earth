@@ -1,0 +1,10 @@
+{
+ "at": "2026-09-17T18:18:03+00:00",
+ "done": 3,
+ "elapsed_s": 1394.6,
+ "eta_s": 0.0,
+ "item": "icoads 2025",
+ "stage": "fetch icoads",
+ "total": 3,
+ "year_rows": 57823943
+}
