@@ -1,0 +1,80 @@
+  [fetch ndbc] ndbc 1972 rows 0+  3/42  0.2s
+  1972: 7,692 row(s) in 1 part(s) (0.1s)
+  [fetch ndbc] ndbc 1973 rows 0+  4/42  0.3s
+  1973: 12,102 row(s) in 1 part(s) (0.1s)
+  [fetch ndbc] ndbc 1974 rows 0+  5/42  0.4s
+  1974: 8,499 row(s) in 1 part(s) (0.1s)
+  [fetch ndbc] ndbc 1975 rows 0+  6/42  0.5s
+  1975: 17,979 row(s) in 1 part(s) (0.1s)
+  [fetch ndbc] ndbc 1976 rows 0+  7/42  0.8s
+  1976: 33,479 row(s) in 1 part(s) (0.2s)
+  [fetch ndbc] ndbc 1977 rows 0+  8/42  1.1s
+  1977: 45,600 row(s) in 1 part(s) (0.3s)
+  [fetch ndbc] ndbc 1978 rows 0+  9/42  1.4s
+  1978: 60,517 row(s) in 1 part(s) (0.4s)
+  [fetch ndbc] ndbc 1979 rows 0+  10/42  2.1s
+  1979: 130,852 row(s) in 1 part(s) (0.7s)
+  [fetch ndbc] ndbc 1980 rows 0+  11/42  3.0s
+  1980: 153,789 row(s) in 1 part(s) (0.8s)
+  [fetch ndbc] ndbc 1981 rows 0+  12/42  4.2s
+  1981: 215,412 row(s) in 1 part(s) (1.3s)
+  [fetch ndbc] ndbc 1982 rows 0+  13/42  5.7s
+  1982: 266,334 row(s) in 1 part(s) (1.5s)
+  [fetch ndbc] ndbc 1983 rows 0+  14/42  7.5s
+  1983: 314,477 row(s) in 1 part(s) (1.8s)
+  [fetch ndbc] ndbc 1984 rows 0+  15/42  10.1s
+  1984: 474,302 row(s) in 1 part(s) (2.7s)
+  [fetch ndbc] ndbc 1985 rows 0+  16/42  13.6s
+  1985: 640,415 row(s) in 1 part(s) (3.5s)
+  [fetch ndbc] ndbc 1986 rows 0+  17/42  17.3s
+  1986: 692,203 row(s) in 1 part(s) (3.7s)
+  [fetch ndbc] ndbc 1987 rows 0+  18/42  21.1s
+  1987: 717,787 row(s) in 1 part(s) (3.8s)
+  [fetch ndbc] ndbc 1988 rows 0+  19/42  25.1s
+  1988: 728,105 row(s) in 1 part(s) (4.0s)
+  [fetch ndbc] ndbc 1989 rows 0+  20/42  29.1s
+  1989: 753,377 row(s) in 1 part(s) (4.0s)
+  [fetch ndbc] ndbc 1990 rows 0+  21/42  33.5s
+  1990: 799,497 row(s) in 1 part(s) (4.4s)
+  [fetch ndbc] ndbc 1991 rows 0+  22/42  37.9s
+  1991: 827,975 row(s) in 1 part(s) (4.5s)
+  [fetch ndbc] ndbc 1992 rows 0+  23/42  45.1s
+  1992: 891,412 row(s) in 1 part(s) (7.2s)
+  [fetch ndbc] ndbc 1993 rows 0+  24/42  53.0s
+  1993: 908,634 row(s) in 1 part(s) (7.9s)
+  [fetch ndbc] ndbc 1994 rows 0+  25/42  61.4s
+  1994: 960,499 row(s) in 1 part(s) (8.5s)
+  [fetch ndbc] ndbc 1995 rows 0+  26/42  70.5s
+  [fetch ndbc] ndbc 1995 rows 1,000,000+  26/42  70.5s
+  [fetch ndbc] ndbc 1995 rows 0+  26/42  70.5s
+  1995: 1,027,378 row(s) in 2 part(s) (9.0s)
+  [fetch ndbc] ndbc 1996 rows 0+  27/42  79.5s
+  [fetch ndbc] ndbc 1996 rows 1,000,000+  27/42  79.5s
+  [fetch ndbc] ndbc 1996 rows 0+  27/42  79.5s
+  1996: 1,020,189 row(s) in 2 part(s) (9.1s)
+  [fetch ndbc] ndbc 1997 rows 0+  28/42  88.4s
+  1997: 944,747 row(s) in 1 part(s) (8.9s)
+  [fetch ndbc] ndbc 1998 rows 0+  29/42  97.1s
+  1998: 954,142 row(s) in 1 part(s) (8.7s)
+  [fetch ndbc] ndbc 1999 rows 0+  30/42  105.6s
+  1999: 952,747 row(s) in 1 part(s) (8.5s)
+Traceback (most recent call last):
+  File "/home/runner/work/earth/earth/ml/build_family1_stores.py", line 1478, in <module>
+    sys.exit(main())
+             ^^^^^^
+  File "/home/runner/work/earth/earth/ml/build_family1_stores.py", line 1473, in main
+    f10b.run_stages(ctx, stages, stage_fn=stage_fns(ad), deps=DEPS)
+  File "/home/runner/work/earth/earth/ml/build_family10_stores.py", line 5314, in run_stages
+    stage_fn[s](ctx)
+  File "/home/runner/work/earth/earth/ml/build_family1_stores.py", line 264, in stage_fetch
+    f10b.stage_fetch(ctx, assemble_store_after=False)
+  File "/home/runner/work/earth/earth/ml/build_family10_stores.py", line 3912, in stage_fetch
+    for label, rows, counts in ad.fetch_year(ctx, y):
+  File "/home/runner/work/earth/earth/ml/family1/adapters/ndbc.py", line 574, in fetch_year
+    for label, rows, counts in self._year(ctx, year, ctx.t_lo, ctx.t_hi,
+  File "/home/runner/work/earth/earth/ml/family1/adapters/ndbc.py", line 474, in _year
+    k, t, v, c, err = self._station_year(ctx, key, lst[key][0], year,
+                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/work/earth/earth/ml/family1/adapters/ndbc.py", line 452, in _station_year
+    raise FormatError(f"{sid}h{year}: {e}") from None
+family1.adapters.ndbc.FormatError: 42otph2000: 1440 of 1440 lines do not have the header's 17 columns
