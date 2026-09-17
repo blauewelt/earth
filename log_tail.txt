@@ -1,0 +1,80 @@
+
+
+  ...ily1_tf/ndbc/ndbc/bin.npy:  95%|█████████▍| 1.19GB / 1.26GB            [A[A[A
+
+
+
+  ...ily1_tf/ndbc/ndbc/lon.npy: 100%|██████████| 2.51GB / 2.51GB            [A[A[A[A
+
+
+
+
+  ...tf/ndbc/ndbc/platform.npy: 100%|██████████| 5.03GB / 5.03GB            [A[A[A[A[A
+
+
+
+
+
+  ...ily1_tf/ndbc/ndbc/lat.npy: 100%|██████████| 2.51GB / 2.51GB            [A[A[A[A[A[A
+
+
+
+
+
+
+  ...1_tf/ndbc/ndbc/time_s.npy: 100%|██████████| 2.51GB / 2.51GB            [A[A[A[A[A[A[A
+
+
+
+
+
+
+
+  ...mily1_tf/ndbc/ndbc/fp.npy:  99%|█████████▉| 2.50GB / 2.51GB            [A[A[A[A[A[A[A[A
+
+
+
+
+
+
+
+
+  ...1_tf/ndbc/ndbc/values.npy: 100%|██████████| 12.6GB / 12.6GB            [A[A[A[A[A[A[A[A[A
+
+
+
+
+
+
+
+
+
+  ...ndbc/ndbc/bin_offsets.npy: 100%|██████████| 32.8kB / 32.8kB            [A[A[A[A[A[A[A[A[A[AProcessing Files (6 / 9)      : 100%|█████████▉| 29.4GB / 29.5GB,  180MB/s  
+New Data Upload               : 100%|██████████| 26.4GB / 26.4GB,  180MB/s  
+  ...mily1_tf/ndbc/ndbc/qc.npy:  97%|█████████▋|  612MB /  628MB            
+  ...ily1_tf/ndbc/ndbc/bin.npy:  95%|█████████▍| 1.19GB / 1.26GB            
+  ...ily1_tf/ndbc/ndbc/lon.npy: 100%|██████████| 2.51GB / 2.51GB            
+  ...tf/ndbc/ndbc/platform.npy: 100%|██████████| 5.03GB / 5.03GB            
+  ...ily1_tf/ndbc/ndbc/lat.npy: 100%|██████████| 2.51GB / 2.51GB            
+  ...1_tf/ndbc/ndbc/time_s.npy: 100%|██████████| 2.51GB / 2.51GB            
+  ...mily1_tf/ndbc/ndbc/fp.npy:  99%|█████████▉| 2.50GB / 2.51GB            
+  ...1_tf/ndbc/ndbc/values.npy: 100%|██████████| 12.6GB / 12.6GB            
+  ...ndbc/ndbc/bin_offsets.npy: 100%|██████████| 32.8kB / 32.8kB            
+  [publish ndbc] bin.npy  1/11  159.3s
+  [publish ndbc] bin_offsets.npy  2/11  160.0s
+  [publish ndbc] fp.npy  3/11  175.0s
+  [publish ndbc] lat.npy  4/11  191.4s
+  [publish ndbc] lon.npy  5/11  207.6s
+  [publish ndbc] platform.npy  6/11  239.8s
+  [publish ndbc] platforms.json  7/11  240.2s
+  [publish ndbc] qc.npy  8/11  245.0s
+  [publish ndbc] time_s.npy  9/11  260.7s
+  [publish ndbc] values.npy  10/11  343.1s
+  [publish ndbc] store.json  11/11  343.5s
+  publish: 11 file(s) verified by restore -> https://huggingface.co/datasets/chfrank/earth-tensors/tree/main/tensors/family1_tf/ndbc
+=== stage publish done in 485.9s ===
+
+=== stage check (ndbc) ===
+  hub: chfrank/earth-tensors with the token from $HF_TOKEN
+  check: ndbc — 10 file(s) verified, N=628,157,329, schema 2, Hub chfrank/earth-tensors:tensors/family1_tf/ndbc agrees
+=== stage check done in 226.8s ===
