@@ -417,6 +417,15 @@ class NDBCAdapter(f10b.SourceAdapter):
                 return key, None, None, counts, (
                     f"{url}: not a whole gzip ({type(e).__name__}: {e}) — a "
                     f"truncated download")
+            if not text.strip():
+                # A WHOLE gzip of an empty file is what NDBC publishes for
+                # some station-years (42008h1980.txt.gz: 35 bytes, 0 bytes
+                # inside, measured 2026-09-17). It is an upstream absence of
+                # rows, not a malformed file: counted, zero rows.
+                counts["files"] = 1
+                counts["files_empty_upstream"] = 1
+                return key, np.zeros(0, np.int64), \
+                    np.zeros((0, len(CHANNELS)), np.float64), counts, None
             t, v = parse_stdmet(text, year, t_lo, t_hi, counts)
             counts["files"] = 1
             return key, t, v, counts, None

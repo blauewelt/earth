@@ -164,6 +164,7 @@ import os
 import re
 import sys
 import time
+import urllib.parse
 import xml.etree.ElementTree as ET
 
 import numpy as np
@@ -970,7 +971,9 @@ class OceanSITESAdapter(f10b.SourceAdapter):
             return p, False
         dest = os.path.join(ctx.scratch, "oceansites",
                             f["path"].replace("/", "__"))
-        url = FILES + f["path"]
+        # the index holds names with spaces ("OS_I-ORS_2019_D_atmos_AIRT
+        # RELH.nc"); the request path must be percent-encoded
+        url = FILES + urllib.parse.quote(f["path"], safe="/")
         err = None
         # NDBC resets connections and cuts bodies short now and then
         # (measured in three probe runs: one file each time); six tries

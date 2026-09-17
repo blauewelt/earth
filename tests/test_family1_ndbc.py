@@ -194,3 +194,25 @@ def test_a_truncated_file_is_an_absence_not_a_short_year(tmp_path):
 
 if __name__ == "__main__":
     sys.exit(pytest.main([__file__, "-q"]))
+
+
+def test_a_whole_gzip_of_an_empty_file_is_zero_rows_not_a_format_error(
+        tmp_path):
+    """NDBC publishes 42008h1980.txt.gz as a valid gzip of 0 bytes (measured
+    2026-09-17, run #17's refusal): zero rows, counted, never an absence."""
+    import gzip
+    import types
+    d = tmp_path / "ndbc" / "stdmet"
+    d.mkdir(parents=True)
+    (d / "42008h1980.txt.gz").write_bytes(gzip.compress(b""))
+    ctx = types.SimpleNamespace(source_dir=str(tmp_path),
+                                count_bytes=lambda n: None)
+    ad = ndbc.NDBCAdapter() if hasattr(ndbc, "NDBCAdapter") else ndbc.ADAPTER()
+    key, t, v, c, err = ad._station_year(ctx, "42008", "42008", 1980,
+                                         -2**62, 2**62)
+    assert err is None and len(t) == 0 and v.shape[0] == 0
+    assert c["files_empty_upstream"] == 1
+    # a file that is not empty and has no header is still refused
+    (d / "42008h1981.txt.gz").write_bytes(gzip.compress(b"garbage\n"))
+    with pytest.raises(ndbc.FormatError):
+        ad._station_year(ctx, "42008", "42008", 1981, -2**62, 2**62)

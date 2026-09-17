@@ -277,3 +277,18 @@ def test_a_missing_file_is_an_absence(tmp_path):
 
 if __name__ == "__main__":
     sys.exit(pytest.main([__file__, "-q"]))
+
+
+def test_a_file_name_with_a_space_is_requested_percent_encoded(tmp_path,
+                                                                monkeypatch):
+    """The index lists 'OS_I-ORS_2019_D_atmos_AIRT RELH.nc' (run #12's
+    InvalidURL); the request path must carry %20, and '/' stays a '/'."""
+    import types
+    seen = []
+    monkeypatch.setattr(b10, "http_to_file",
+                        lambda url, dest, **k: seen.append(url))
+    ctx = types.SimpleNamespace(source_dir="", scratch=str(tmp_path),
+                                a=types.SimpleNamespace(attempts=1))
+    ad = osa.ADAPTER()
+    ad._fetch(ctx, {"path": "DATA/I-ORS/OS_I-ORS_2019_D_atmos_AIRT RELH.nc"})
+    assert seen == [osa.FILES + "DATA/I-ORS/OS_I-ORS_2019_D_atmos_AIRT%20RELH.nc"]
