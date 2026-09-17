@@ -1,0 +1,80 @@
+  ...lodap/glodap/platform.npy: 100%|██████████| 11.7MB / 11.7MB            [A[A
+
+
+  .../glodap/glodap/values.npy: 100%|██████████| 38.0MB / 38.0MB            [A[A[A
+
+
+
+  ...1_gf/glodap/glodap/fp.npy: 100%|██████████| 5.84MB / 5.84MB            [A[A[A[A
+
+
+
+
+  ...ap/glodap/bin_offsets.npy: 100%|██████████| 30.0kB / 30.0kB            [A[A[A[A[A
+
+
+
+
+
+  ..._gf/glodap/glodap/lon.npy: 100%|██████████| 5.84MB / 5.84MB            [A[A[A[A[A[A
+
+
+
+
+
+
+  ..._gf/glodap/glodap/lat.npy: 100%|██████████| 5.84MB / 5.84MB            [A[A[A[A[A[A[A
+
+
+
+
+
+
+
+  .../glodap/glodap/time_s.npy: 100%|██████████| 5.84MB / 5.84MB            [A[A[A[A[A[A[A[A
+
+
+
+
+
+
+
+
+  ..._gf/glodap/glodap/bin.npy: 100%|██████████| 2.92MB / 2.92MB            [A[A[A[A[A[A[A[A[A
+
+
+
+
+
+
+
+
+
+  ...1_gf/glodap/glodap/qc.npy: 100%|██████████| 1.46MB / 1.46MB            [A[A[A[A[A[A[A[A[A[AProcessing Files (9 / 9)      : 100%|██████████| 77.4MB / 77.4MB, 7.33MB/s  
+New Data Upload               : 100%|██████████| 71.9MB / 71.9MB, 6.81MB/s  
+  ...lodap/glodap/platform.npy: 100%|██████████| 11.7MB / 11.7MB            
+  .../glodap/glodap/values.npy: 100%|██████████| 38.0MB / 38.0MB            
+  ...1_gf/glodap/glodap/fp.npy: 100%|██████████| 5.84MB / 5.84MB            
+  ...ap/glodap/bin_offsets.npy: 100%|██████████| 30.0kB / 30.0kB            
+  ..._gf/glodap/glodap/lon.npy: 100%|██████████| 5.84MB / 5.84MB            
+  ..._gf/glodap/glodap/lat.npy: 100%|██████████| 5.84MB / 5.84MB            
+  .../glodap/glodap/time_s.npy: 100%|██████████| 5.84MB / 5.84MB            
+  ..._gf/glodap/glodap/bin.npy: 100%|██████████| 2.92MB / 2.92MB            
+  ...1_gf/glodap/glodap/qc.npy: 100%|██████████| 1.46MB / 1.46MB            
+  [publish glodap] bin.npy  1/10  2.0s
+  [publish glodap] bin_offsets.npy  2/10  2.3s
+  [publish glodap] fp.npy  3/10  2.4s
+  [publish glodap] lat.npy  4/10  2.8s
+  [publish glodap] lon.npy  5/10  3.0s
+  [publish glodap] platform.npy  6/10  3.3s
+  [publish glodap] qc.npy  7/10  3.5s
+  [publish glodap] time_s.npy  8/10  3.8s
+  [publish glodap] values.npy  9/10  4.7s
+  [publish glodap] store.json  10/10  4.8s
+  publish: 10 file(s) verified by restore -> https://huggingface.co/datasets/chfrank/earth-tensors/tree/main/tensors/family1_gf/glodap
+=== stage publish done in 6.3s ===
+
+=== stage check (glodap) ===
+  hub: chfrank/earth-tensors with the token from $HF_TOKEN
+  check: glodap — 9 file(s) verified, N=1,460,215, schema 2, Hub chfrank/earth-tensors:tensors/family1_gf/glodap agrees
+=== stage check done in 0.5s ===

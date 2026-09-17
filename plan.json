@@ -1,0 +1,190 @@
+{
+ "bins": [
+  -731,
+  3287
+ ],
+ "builder_git_sha": "2545edb86899d0781ddf928ed9819a67bd46345e",
+ "built_at": "2026-09-17T14:03:55+00:00",
+ "channels": [
+  {
+   "max": 11000.0,
+   "min": 0.0,
+   "name": "depth",
+   "unit": "m"
+  },
+  {
+   "max": 40.0,
+   "min": -2.5,
+   "name": "temperature",
+   "unit": "degC"
+  },
+  {
+   "max": 42.0,
+   "min": 0.0,
+   "name": "salinity",
+   "unit": "PSS-78"
+  },
+  {
+   "max": 600.0,
+   "min": -2.0,
+   "name": "oxygen",
+   "unit": "umol/kg"
+  },
+  {
+   "max": 60.0,
+   "min": -1.0,
+   "name": "nitrate",
+   "unit": "umol/kg"
+  },
+  {
+   "max": 5.0,
+   "min": -0.25,
+   "name": "phosphate",
+   "unit": "umol/kg"
+  },
+  {
+   "max": 300.0,
+   "min": -1.0,
+   "name": "silicate",
+   "unit": "umol/kg"
+  },
+  {
+   "max": 3000.0,
+   "min": 500.0,
+   "name": "dic",
+   "unit": "umol/kg"
+  },
+  {
+   "max": 3000.0,
+   "min": 500.0,
+   "name": "ta",
+   "unit": "umol/kg"
+  },
+  {
+   "max": 9.5,
+   "min": 6.5,
+   "name": "ph",
+   "unit": "1"
+  },
+  {
+   "max": 15.0,
+   "min": -0.1,
+   "name": "cfc11",
+   "unit": "pmol/kg"
+  },
+  {
+   "max": 10.0,
+   "min": -0.1,
+   "name": "cfc12",
+   "unit": "pmol/kg"
+  },
+  {
+   "max": 20.0,
+   "min": -0.2,
+   "name": "sf6",
+   "unit": "fmol/kg"
+  }
+ ],
+ "columns": 119,
+ "dataset": "GLODAPv3 merged master file",
+ "date_range": [
+  "1972-01-01",
+  "2026-12-31"
+ ],
+ "first_record": {
+  "expocode": "06AQ19840719",
+  "t": 80491560,
+  "values": [
+   9.0,
+   0.4049,
+   33.381,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null,
+   null
+  ]
+ },
+ "footprint": {
+  "log2_dt": -6.906890595608519,
+  "log2_fp": -4.0
+ },
+ "head_counts": {
+  "value_flag0": {},
+  "value_flag_other": {}
+ },
+ "per_year_resume": false,
+ "qc_policy": "A value is kept only with WOCE flag 2 (flag 0 = interpolated or calculated, dropped and counted). qc bit 1: a kept value has GLODAP secondary QC 0; bit 2: time of day missing (placed at 12:00 UTC). Lines without depth or without any kept value are dropped. Out-of-bounds values -> NaN, counted.",
+ "sources": [
+  "https://www.ncei.noaa.gov/data/oceans/ncei/ocads/data/0315582/GLODAPv<ver>_Merged_Master_File.csv",
+  "https://www.ncei.noaa.gov/data/oceans/ncei/ocads/data/0315582/",
+  "https://glodap.info"
+ ],
+ "store": "glodap",
+ "title": "GLODAPv3 merged bottle data (NOAA NCEI OCADS 0315582), one row per bottle sample, depth as channel 0",
+ "url": "https://www.ncei.noaa.gov/data/oceans/ncei/ocads/data/0315582/GLODAPv3_Merged_Master_File.csv",
+ "verified": "2026-09-17 from the sandbox: the accession listing; the whole GLODAPv3 merged CSV (1,029,335,273 B, 1,498,120 lines x 119 fields, 1,181 expocodes, flag/qc distributions, missing hour 177,630, missing depth 29,872); units from the .nc twin's HDF5 header",
+ "version": "3",
+ "years": [
+  1972,
+  1973,
+  1974,
+  1975,
+  1976,
+  1977,
+  1978,
+  1979,
+  1980,
+  1981,
+  1982,
+  1983,
+  1984,
+  1985,
+  1986,
+  1987,
+  1988,
+  1989,
+  1990,
+  1991,
+  1992,
+  1993,
+  1994,
+  1995,
+  1996,
+  1997,
+  1998,
+  1999,
+  2000,
+  2001,
+  2002,
+  2003,
+  2004,
+  2005,
+  2006,
+  2007,
+  2008,
+  2009,
+  2010,
+  2011,
+  2012,
+  2013,
+  2014,
+  2015,
+  2016,
+  2017,
+  2018,
+  2019,
+  2020,
+  2021,
+  2022,
+  2023,
+  2024,
+  2025,
+  2026
+ ]
+}

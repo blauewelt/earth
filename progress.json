@@ -1,0 +1,10 @@
+{
+ "at": "2026-09-17T14:05:58+00:00",
+ "done": 10,
+ "elapsed_s": 4.8,
+ "eta_s": 0.0,
+ "item": "store.json",
+ "sha256": "52f0f8737b5b158b",
+ "stage": "publish glodap",
+ "total": 10
+}
