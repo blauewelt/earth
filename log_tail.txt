@@ -1,0 +1,80 @@
+  [+ 65 files]                : 100%|██████████| 2.98GB / 2.98GB            [A[A[A[A[A[A[A[A[A[A[A
+
+  ...igra/parts/1968/00000.npz: 100%|█████████▉| 89.1MB / 89.2MB            [A[A
+
+
+  ...igra/parts/1905/00000.npz: 100%|██████████| 62.5kB / 62.5kB            [A[A[A
+
+
+
+  ...igra/parts/1929/00000.npz: 100%|██████████| 48.6kB / 48.6kB            [A[A[A[A
+
+
+
+
+  ...igra/parts/1974/00000.npz: 100%|██████████|  166MB /  166MB            [A[A[A[A[A
+
+
+
+
+
+  ...igra/parts/1949/00000.npz: 100%|██████████| 25.6MB / 25.6MB            [A[A[A[A[A[A
+
+
+
+
+
+
+  ...igra/parts/1938/00000.npz: 100%|██████████|  259kB /  259kB            [A[A[A[A[A[A[A
+
+
+
+
+
+
+
+  ...igra/parts/1967/00000.npz: 100%|██████████| 88.1MB / 88.1MB            [A[A[A[A[A[A[A[A
+
+
+
+
+
+
+
+
+  ...igra/parts/1963/00000.npz: 100%|██████████| 78.2MB / 78.2MB            [A[A[A[A[A[A[A[A[A
+
+
+
+
+
+
+
+
+
+  ...igra/parts/1930/00000.npz: 100%|██████████|  121kB /  121kB            [A[A[A[A[A[A[A[A[A[A
+
+
+
+
+
+
+
+
+
+
+  [+ 65 files]                : 100%|██████████| 3.32GB / 3.32GB            [A[A[A[A[A[A[A[A[A[A[AProcessing Files (74 / 75)    : 100%|█████████▉| 3.76GB / 3.76GB,  231MB/s  
+New Data Upload               : 100%|██████████| 3.76GB / 3.76GB,  231MB/s  
+  ...igra/parts/1968/00000.npz: 100%|█████████▉| 89.1MB / 89.2MB            
+  ...igra/parts/1905/00000.npz: 100%|██████████| 62.5kB / 62.5kB            
+  ...igra/parts/1929/00000.npz: 100%|██████████| 48.6kB / 48.6kB            
+  ...igra/parts/1974/00000.npz: 100%|██████████|  166MB /  166MB            
+  ...igra/parts/1949/00000.npz: 100%|██████████| 25.6MB / 25.6MB            
+  ...igra/parts/1938/00000.npz: 100%|██████████|  259kB /  259kB            
+  ...igra/parts/1967/00000.npz: 100%|██████████| 88.1MB / 88.1MB            
+  ...igra/parts/1963/00000.npz: 100%|██████████| 78.2MB / 78.2MB            
+  ...igra/parts/1930/00000.npz: 100%|██████████|  121kB /  121kB            
+  [+ 65 files]                : 100%|██████████| 3.32GB / 3.32GB            
+  igra: 80 year(s) pushed and verified in 1 part commit(s), done.json written last (0 already present)
+  push-parts: 80 year(s) on the Hub under partials/family1_tf/igra/
+=== stage fetch done in 796.8s ===
