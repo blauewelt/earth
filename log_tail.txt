@@ -1,0 +1,80 @@
+
+
+  ...nsites/oceansites/lon.npy: 100%|█████████▉|  265MB /  266MB            [A[A[A
+
+
+
+  ...nsites/oceansites/lat.npy: 100%|█████████▉|  265MB /  266MB            [A[A[A[A
+
+
+
+
+  ...s/oceansites/platform.npy: 100%|█████████▉|  531MB /  532MB            [A[A[A[A[A
+
+
+
+
+
+  ...ansites/oceansites/fp.npy:  94%|█████████▎|  249MB /  266MB            [A[A[A[A[A[A
+
+
+
+
+
+
+  ...ansites/oceansites/qc.npy: 100%|██████████| 66.5MB / 66.5MB            [A[A[A[A[A[A[A
+
+
+
+
+
+
+
+  ...ceansites/bin_offsets.npy: 100%|██████████| 27.0kB / 27.0kB            [A[A[A[A[A[A[A[A
+
+
+
+
+
+
+
+
+  ...tes/oceansites/time_s.npy: 100%|██████████|  266MB /  266MB            [A[A[A[A[A[A[A[A[A
+
+
+
+
+
+
+
+
+
+  ...tes/oceansites/values.npy: 100%|██████████| 3.72GB / 3.72GB            [A[A[A[A[A[A[A[A[A[AProcessing Files (5 / 9)      : 100%|█████████▉| 5.50GB / 5.52GB, 44.3kB/s  
+New Data Upload               : 100%|██████████| 5.37GB / 5.37GB, 43.6kB/s  
+  ...nsites/oceansites/bin.npy: 100%|██████████|  133MB /  133MB            
+  ...nsites/oceansites/lon.npy: 100%|█████████▉|  265MB /  266MB            
+  ...nsites/oceansites/lat.npy: 100%|█████████▉|  265MB /  266MB            
+  ...s/oceansites/platform.npy: 100%|█████████▉|  531MB /  532MB            
+  ...ansites/oceansites/fp.npy:  94%|█████████▎|  249MB /  266MB            
+  ...ansites/oceansites/qc.npy: 100%|██████████| 66.5MB / 66.5MB            
+  ...ceansites/bin_offsets.npy: 100%|██████████| 27.0kB / 27.0kB            
+  ...tes/oceansites/time_s.npy: 100%|██████████|  266MB /  266MB            
+  ...tes/oceansites/values.npy: 100%|██████████| 3.72GB / 3.72GB            
+  [publish oceansites] bin.npy  1/11  143.9s
+  [publish oceansites] bin_offsets.npy  2/11  144.6s
+  [publish oceansites] fp.npy  3/11  147.1s
+  [publish oceansites] lat.npy  4/11  150.6s
+  [publish oceansites] lon.npy  5/11  154.4s
+  [publish oceansites] platform.npy  6/11  159.1s
+  [publish oceansites] platforms.json  7/11  159.5s
+  [publish oceansites] qc.npy  8/11  160.9s
+  [publish oceansites] time_s.npy  9/11  163.7s
+  [publish oceansites] values.npy  10/11  187.0s
+  [publish oceansites] store.json  11/11  187.5s
+  publish: 11 file(s) verified by restore -> https://huggingface.co/datasets/chfrank/earth-tensors/tree/main/tensors/family1_gf/oceansites
+=== stage publish done in 202.7s ===
+
+=== stage check (oceansites) ===
+  hub: chfrank/earth-tensors with the token from $HF_TOKEN
+  check: oceansites — 10 file(s) verified, N=66,483,202, schema 2, Hub chfrank/earth-tensors:tensors/family1_gf/oceansites agrees
+=== stage check done in 18.2s ===
