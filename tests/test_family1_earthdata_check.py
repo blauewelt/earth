@@ -16,6 +16,7 @@ import base64
 import http.server
 import json
 import os
+import socket
 import sys
 import threading
 import urllib.parse
@@ -33,6 +34,65 @@ URS = "https://urs.earthdata.nasa.gov"
 AUTH = (f"{URS}/oauth/authorize?client_id=FtSFfbOeuxDcdf4px-elGw&response_"
         f"type=code&redirect_uri=https://data.lpdaac.earthdatacloud.nasa.gov"
         f"/login&state=%2Flp&app_type=401")
+
+
+@pytest.fixture(autouse=True)
+def _restore_getaddrinfo():
+    """`force_ipv4` patches the module-level socket resolver, so no test may
+    leave it patched for the next one."""
+    real, saved = socket.getaddrinfo, edc._REAL_GETADDRINFO
+    yield
+    socket.getaddrinfo = real
+    edc._REAL_GETADDRINFO = saved
+
+
+def test_ipv4_only_resolution_drops_the_aaaa_answers():
+    """Run #3: LP DAAC and GES DISC answered [Errno 101] Network is
+    unreachable — the runner resolved AAAA and has no IPv6 route."""
+    v4 = ("1.2.3.4", 443)
+    v6 = ("::1", 443, 0, 0)
+    fake = [(socket.AF_INET6, socket.SOCK_STREAM, 6, "", v6),
+            (socket.AF_INET, socket.SOCK_STREAM, 6, "", v4)]
+    seen = {}
+
+    def real(host, port, family=0, type=0, proto=0, flags=0):
+        seen["family"] = family
+        return [r for r in fake if family in (0, r[0])]
+    edc._REAL_GETADDRINFO = real
+    assert edc.ipv4_getaddrinfo("x", 443) == [fake[1]]
+    assert seen["family"] == socket.AF_INET       # asked for A records only
+    assert edc.force_ipv4() is socket.getaddrinfo
+    assert socket.getaddrinfo is edc.ipv4_getaddrinfo
+    edc.force_ipv4(False)
+    assert socket.getaddrinfo is real
+
+
+def test_an_answer_that_skipped_earthdata_login_is_not_a_pass():
+    """Run #3's PO.DAAC: HTTP 200 from CloudFront with via_urs false — the
+    bytes arrived and the ACCOUNT was never checked."""
+    out = edc.require_urs({"verdict": "ok", "definite": False, "via_urs": False,
+                           "status": 200, "final_host": "d123.cloudfront.net"},
+                          "podaac")
+    assert out["verdict"] == "ok_without_login" and out["definite"] is False
+    assert "never" in out["why"] and "podaac" in out["why"]
+    # through URS it stays ok, and a refusal is untouched
+    assert edc.require_urs({"verdict": "ok", "via_urs": True}, "podaac"
+                           )["verdict"] == "ok"
+    assert edc.require_urs({"verdict": "needs_approval", "definite": True,
+                            "via_urs": True}, "podaac"
+                           )["verdict"] == "needs_approval"
+
+
+def test_the_report_records_the_untested_archives_and_the_ipv4_mode():
+    rep = edc.run("u", "p", targets=(
+        ("a", lambda s: {"verdict": "ok", "via_urs": True}),
+        ("b", lambda s: edc.require_urs(
+            {"verdict": "ok", "via_urs": False, "status": 200,
+             "final_host": "cdn"}, "b")),
+    ))
+    assert rep["ok"] == ["a"] and rep["untested"] == ["b"]
+    assert rep["refused"] == [] and rep["ipv4_only"] is True
+    assert socket.getaddrinfo is edc.ipv4_getaddrinfo
 
 
 def test_classify_reads_the_answers_earthdata_gives():

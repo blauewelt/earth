@@ -44,6 +44,7 @@ runner only (`.github/workflows/family1-build.yml`, check_credentials=true).
 import json
 import os
 import re
+import socket
 import sys
 import time
 import urllib.parse
@@ -138,6 +139,29 @@ def classify(status, final_url, body, history=(), content_type=""):
     return {"verdict": "error", "definite": False, "approval_url": approve_url,
             "why": f"HTTP {status} from {host or '?'} — not a verdict about "
                    f"the account"}
+
+
+# ============================================================== IPv4 =====
+# GITHUB'S UBUNTU RUNNERS RESOLVE AAAA RECORDS AND HAVE NO IPv6 ROUTE.
+# Measured 2026-09-17 (family1-build run #3): LP DAAC and GES DISC both came
+# back `[Errno 101] Network is unreachable` with no HTTP status at all, before
+# any login — which reads exactly like an archive refusing the account and is
+# nothing of the kind. urs.earthdata.nasa.gov and disc2.gesdisc.eosdis.nasa.gov
+# publish AAAA records; the runner picks one and the connection never leaves
+# the machine. So every lookup this check makes is restricted to A records.
+_REAL_GETADDRINFO = socket.getaddrinfo
+
+
+def ipv4_getaddrinfo(host, port, family=0, type=0, proto=0, flags=0):
+    """`socket.getaddrinfo` with the IPv6 answers dropped."""
+    res = _REAL_GETADDRINFO(host, port, socket.AF_INET, type, proto, flags)
+    return [r for r in res if r[0] == socket.AF_INET]
+
+
+def force_ipv4(on=True):
+    """Make every socket in this process resolve to IPv4 only (idempotent)."""
+    socket.getaddrinfo = ipv4_getaddrinfo if on else _REAL_GETADDRINFO
+    return socket.getaddrinfo
 
 
 # ============================================================= session ====
@@ -257,22 +281,42 @@ def check_ges_disc(s):
 
 
 def check_podaac(s):
+    """One KB of a PROTECTED PO.DAAC granule, BY GET AND THROUGH URS.
+
+    A HEAD on `archive.podaac.earthdata.nasa.gov/...-protected/...` answered
+    HTTP 200 from CloudFront with `via_urs: false` (run #3, 2026-09-17) — the
+    bytes were never asked for and Earthdata Login was never in the path, so
+    the account was not tested at all. The check therefore GETs the first
+    kilobyte (Earthdata Cloud's last hop is an S3 URL signed FOR GET), and
+    `ok` additionally requires that the request passed through
+    urs.earthdata.nasa.gov: an answer that skipped the login says nothing
+    about these credentials.
+    """
     e = _cmr_first(s, short_name=PODAAC_SHORT)
-    url = _link(e, "data#", lambda h: "podaac" in h and
-                "protected" in h)
+    url = _link(e, "data#", lambda h: "podaac" in h and "protected" in h)
     if not url:
         raise LookupError(f"no protected PO.DAAC link in {e.get('title')}")
-    head = _request(s, "HEAD", url, range_bytes=False)
-    out = {"granule": e.get("title"), "cmr_granule_size_mb":
-           e.get("granule_size"), **head}
-    if head["verdict"] != "ok":
-        # Earthdata Cloud's last hop is an S3 URL SIGNED FOR GET, and Earthdata
-        # Login may not take a HEAD at all: a HEAD that did not end in data is
-        # not yet a verdict. One KB by GET decides, and both are reported.
-        get = _request(s, "GET", url)
-        out["head"] = {k: head[k] for k in ("status", "final_host",
-                                            "verdict", "why")}
-        out.update(get)
+    out = {"granule": e.get("title"),
+           "cmr_granule_size_mb": e.get("granule_size"),
+           **_request(s, "GET", url)}
+    return require_urs(out, "podaac")
+
+
+def require_urs(out, name):
+    """An `ok` that never touched Earthdata Login is NOT a verdict.
+
+    It may mean the archive serves this object anonymously, or that a cached
+    hop answered; either way the credentials were not exercised. Reported as
+    `ok_without_login` — not definite, so it never fails the job, and never
+    counted as a PASS either.
+    """
+    if out.get("verdict") == "ok" and not out.get("via_urs"):
+        out["verdict"] = "ok_without_login"
+        out["definite"] = False
+        out["why"] = (f"HTTP {out.get('status')} from "
+                      f"{out.get('final_host')} WITHOUT passing through "
+                      f"{URS_HOST} — the bytes arrived but this account was "
+                      f"never checked, so {name} is untested")
     return out
 
 
@@ -280,7 +324,9 @@ TARGETS = (("lp_daac", check_lp_daac), ("ges_disc", check_ges_disc),
            ("podaac", check_podaac))
 
 
-def run(user, password, targets=None):
+def run(user, password, targets=None, ipv4=True):
+    if ipv4:
+        force_ipv4()
     s = session(user, password)
     targets = TARGETS if targets is None else targets
     report = {"at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
@@ -297,6 +343,9 @@ def run(user, password, targets=None):
     report["refused"] = sorted(bad)
     report["ok"] = sorted(k for k, v in report["archives"].items()
                           if v.get("verdict") == "ok")
+    report["untested"] = sorted(k for k, v in report["archives"].items()
+                                if v.get("verdict") == "ok_without_login")
+    report["ipv4_only"] = bool(ipv4)
     return report
 
 
@@ -336,6 +385,10 @@ def main(out=None, env=None):
         print(f"::error::definite refusal from {report['refused']} — see the "
               f"approval URL(s) above")
         return 1
+    if report.get("untested"):
+        print(f"::warning::{report['untested']} answered without passing "
+              f"through Earthdata Login — the bytes arrived, the ACCOUNT was "
+              f"not tested")
     errs = [k for k, v in report["archives"].items()
             if v.get("verdict") == "error"]
     if errs:
