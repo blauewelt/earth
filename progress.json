@@ -1,0 +1,10 @@
+{
+ "at": "2026-09-17T21:02:07+00:00",
+ "done": 10,
+ "elapsed_s": 5.7,
+ "eta_s": 0.0,
+ "item": "store.json",
+ "sha256": "7df759c8d319e94e",
+ "stage": "publish bgcargo",
+ "total": 10
+}

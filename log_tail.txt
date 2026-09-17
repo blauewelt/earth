@@ -1,0 +1,80 @@
+  ...gcargo/bgcargo/values.npy: 100%|██████████| 64.4MB / 64.4MB            [A[A
+
+
+  ...f/bgcargo/bgcargo/bin.npy: 100%|██████████|  671kB /  671kB            [A[A[A
+
+
+
+  ...o/bgcargo/bin_offsets.npy: 100%|██████████| 14.2kB / 14.2kB            [A[A[A[A
+
+
+
+
+  ...f/bgcargo/bgcargo/lat.npy: 100%|██████████| 1.34MB / 1.34MB            [A[A[A[A[A
+
+
+
+
+
+  ...gf/bgcargo/bgcargo/fp.npy: 100%|██████████| 1.34MB / 1.34MB            [A[A[A[A[A[A
+
+
+
+
+
+
+  ...gcargo/bgcargo/time_s.npy: 100%|██████████| 1.34MB / 1.34MB            [A[A[A[A[A[A[A
+
+
+
+
+
+
+
+  ...f/bgcargo/bgcargo/lon.npy: 100%|██████████| 1.34MB / 1.34MB            [A[A[A[A[A[A[A[A
+
+
+
+
+
+
+
+
+  ...argo/bgcargo/platform.npy: 100%|██████████| 2.68MB / 2.68MB            [A[A[A[A[A[A[A[A[A
+
+
+
+
+
+
+
+
+
+  ...gf/bgcargo/bgcargo/qc.npy: 100%|██████████|  335kB /  335kB            [A[A[A[A[A[A[A[A[A[AProcessing Files (9 / 9)      : 100%|██████████| 73.4MB / 73.4MB, 6.87MB/s  
+New Data Upload               : 100%|██████████| 72.4MB / 72.4MB, 6.77MB/s  
+  ...gcargo/bgcargo/values.npy: 100%|██████████| 64.4MB / 64.4MB            
+  ...f/bgcargo/bgcargo/bin.npy: 100%|██████████|  671kB /  671kB            
+  ...o/bgcargo/bin_offsets.npy: 100%|██████████| 14.2kB / 14.2kB            
+  ...f/bgcargo/bgcargo/lat.npy: 100%|██████████| 1.34MB / 1.34MB            
+  ...gf/bgcargo/bgcargo/fp.npy: 100%|██████████| 1.34MB / 1.34MB            
+  ...gcargo/bgcargo/time_s.npy: 100%|██████████| 1.34MB / 1.34MB            
+  ...f/bgcargo/bgcargo/lon.npy: 100%|██████████| 1.34MB / 1.34MB            
+  ...argo/bgcargo/platform.npy: 100%|██████████| 2.68MB / 2.68MB            
+  ...gf/bgcargo/bgcargo/qc.npy: 100%|██████████|  335kB /  335kB            
+  [publish bgcargo] bin.npy  1/10  2.5s
+  [publish bgcargo] bin_offsets.npy  2/10  2.8s
+  [publish bgcargo] fp.npy  3/10  3.1s
+  [publish bgcargo] lat.npy  4/10  3.3s
+  [publish bgcargo] lon.npy  5/10  3.5s
+  [publish bgcargo] platform.npy  6/10  3.8s
+  [publish bgcargo] qc.npy  7/10  4.1s
+  [publish bgcargo] time_s.npy  8/10  4.3s
+  [publish bgcargo] values.npy  9/10  5.6s
+  [publish bgcargo] store.json  10/10  5.7s
+  publish: 10 file(s) verified by restore -> https://huggingface.co/datasets/chfrank/earth-tensors/tree/main/tensors/family1_gf/bgcargo
+=== stage publish done in 6.9s ===
+
+=== stage check (bgcargo) ===
+  hub: chfrank/earth-tensors with the token from $HF_TOKEN
+  check: bgcargo — 9 file(s) verified, N=335,231, schema 2, Hub chfrank/earth-tensors:tensors/family1_gf/bgcargo agrees
+=== stage check done in 0.4s ===
