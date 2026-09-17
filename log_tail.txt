@@ -1,0 +1,28 @@
+store     tide — GESLA-4 tide gauges (public contributors), relative sea level, one row per gauge reading
+family    family1_tf (1.0.tf) · public -> chfrank/earth-tensors:tensors/family1_tf/tide
+axis      1800-01-01 .. 2026-12-31  bins -13295..3287 · time_s int64 (schema 3)
+channels  C=1: sea_level
+work      /home/runner/work/earth/earth/ml/cache/family1_tf
+
+=== stage index (tide) ===
+  [index tide] start (1 items)  0/1  0.0s
+Traceback (most recent call last):
+  File "/home/runner/work/earth/earth/ml/build_family1_stores.py", line 1478, in <module>
+    sys.exit(main())
+             ^^^^^^
+  File "/home/runner/work/earth/earth/ml/build_family1_stores.py", line 1473, in main
+    f10b.run_stages(ctx, stages, stage_fn=stage_fns(ad), deps=DEPS)
+  File "/home/runner/work/earth/earth/ml/build_family10_stores.py", line 5314, in run_stages
+    stage_fn[s](ctx)
+  File "/home/runner/work/earth/earth/ml/build_family10_stores.py", line 3846, in stage_index
+    plan = ad.index(ctx)
+           ^^^^^^^^^^^^^
+  File "/home/runner/work/earth/earth/ml/family1/adapters/_gesla.py", line 507, in index
+    recs, bad = self.records(ctx)
+                ^^^^^^^^^^^^^^^^^
+  File "/home/runner/work/earth/earth/ml/family1/adapters/_gesla.py", line 388, in records
+    raw, why = cm.get_bytes(RECORDS_URL, attempts=ctx.a.attempts)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/work/earth/earth/ml/family1/adapters/_common.py", line 112, in get_bytes
+    raise IOError(f"{url}: {type(err).__name__}: {err}")
+OSError: https://uhslc.soest.hawaii.edu/erddap/tabledap/global_hourly_gesla.csv?record_id%2Cagency_id%2Cstation_name%2Cstation_code%2Cstation_country_code%2Clatitude%2Clongitude&distinct(): URLError: <urlopen error timed out>
