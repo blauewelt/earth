@@ -1,0 +1,80 @@
+  [+ 3 files]                 :  98%|█████████▊|  449MB /  459MB            [A[A[A[A[A[A[A[A[A[A[A
+
+  ...ites/parts/2007/00001.npz:  97%|█████████▋|  107MB /  110MB            [A[A
+
+
+  ...ites/parts/2008/00001.npz:  97%|█████████▋|  124MB /  128MB            [A[A[A
+
+
+
+  ...ites/parts/2007/00000.npz:  94%|█████████▍| 77.4MB / 82.2MB            [A[A[A[A
+
+
+
+
+  ...ites/parts/2011/00000.npz:  97%|█████████▋| 98.8MB /  102MB            [A[A[A[A[A
+
+
+
+
+
+  ...ites/parts/2010/00001.npz:  99%|█████████▉|  139MB /  140MB            [A[A[A[A[A[A
+
+
+
+
+
+
+  ...ites/parts/2009/00000.npz:  94%|█████████▍| 87.4MB / 93.2MB            [A[A[A[A[A[A[A
+
+
+
+
+
+
+
+  ...ites/parts/2009/00001.npz:  97%|█████████▋|  106MB /  109MB            [A[A[A[A[A[A[A[A
+
+
+
+
+
+
+
+
+  ...ites/parts/2008/00000.npz:  91%|█████████ | 72.4MB / 79.9MB            [A[A[A[A[A[A[A[A[A
+
+
+
+
+
+
+
+
+
+  ...ites/parts/2010/00000.npz:  94%|█████████▎| 79.4MB / 84.9MB            [A[A[A[A[A[A[A[A[A[A
+
+
+
+
+
+
+
+
+
+
+  [+ 3 files]                 :  98%|█████████▊|  449MB /  459MB            [A[A[A[A[A[A[A[A[A[A[AProcessing Files (2 / 13)     :  97%|█████████▋| 1.34GB / 1.39GB,  155kB/s  
+New Data Upload               : 100%|██████████| 1.20GB / 1.20GB,  139kB/s  
+  ...ites/parts/2007/00001.npz:  97%|█████████▋|  107MB /  110MB            
+  ...ites/parts/2008/00001.npz:  97%|█████████▋|  124MB /  128MB            
+  ...ites/parts/2007/00000.npz:  94%|█████████▍| 77.4MB / 82.2MB            
+  ...ites/parts/2011/00000.npz:  97%|█████████▋| 98.8MB /  102MB            
+  ...ites/parts/2010/00001.npz:  99%|█████████▉|  139MB /  140MB            
+  ...ites/parts/2009/00000.npz:  94%|█████████▍| 87.4MB / 93.2MB            
+  ...ites/parts/2009/00001.npz:  97%|█████████▋|  106MB /  109MB            
+  ...ites/parts/2008/00000.npz:  91%|█████████ | 72.4MB / 79.9MB            
+  ...ites/parts/2010/00000.npz:  94%|█████████▎| 79.4MB / 84.9MB            
+  [+ 3 files]                 :  98%|█████████▊|  449MB /  459MB            
+  oceansites: 6 year(s) pushed and verified in 1 part commit(s), done.json written last (0 already present)
+  push-parts: 6 year(s) on the Hub under partials/family1_gf/oceansites/
+=== stage fetch done in 7215.7s ===
