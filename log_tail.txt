@@ -1,0 +1,80 @@
+
+  ...ites/parts/1999/00000.npz: 100%|█████████▉| 1.02MB / 1.02MB            [A[A[A[A[A
+
+
+
+
+
+  ...ites/parts/2000/00000.npz: 100%|█████████▉| 15.1MB / 15.1MB            [A[A[A[A[A[A
+
+
+
+
+
+
+  ...ites/parts/1998/00000.npz: 100%|█████████▉|  694kB /  694kB            [A[A[A[A[A[A[A
+
+  ...ites/parts/1996/00000.npz: 100%|██████████|  280kB /  280kB            [A[A
+
+
+  ...ites/parts/1995/00000.npz: 100%|██████████|  215kB /  215kB            [A[A[A
+
+
+
+  ...ites/parts/1997/00000.npz: 100%|██████████|  703kB /  703kB            [A[A[A[A
+
+
+
+
+  ...ites/parts/1999/00000.npz: 100%|██████████| 1.02MB / 1.02MB            [A[A[A[A[A
+
+
+
+
+
+  ...ites/parts/2000/00000.npz: 100%|██████████| 15.1MB / 15.1MB            [A[A[A[A[A[A
+
+
+
+
+
+
+  ...ites/parts/1998/00000.npz: 100%|██████████|  694kB /  694kB            [A[A[A[A[A[A[AProcessing Files (6 / 6)      : 100%|██████████| 18.0MB / 18.0MB, 1.75MB/s  
+New Data Upload               : 100%|██████████| 16.8MB / 16.8MB, 1.64MB/s  [A
+
+  ...ites/parts/1996/00000.npz: 100%|██████████|  280kB /  280kB            [A[A
+
+
+  ...ites/parts/1995/00000.npz: 100%|██████████|  215kB /  215kB            [A[A[A
+
+
+
+  ...ites/parts/1997/00000.npz: 100%|██████████|  703kB /  703kB            [A[A[A[A
+
+
+
+
+  ...ites/parts/1999/00000.npz: 100%|██████████| 1.02MB / 1.02MB            [A[A[A[A[A
+
+
+
+
+
+  ...ites/parts/2000/00000.npz: 100%|██████████| 15.1MB / 15.1MB            [A[A[A[A[A[A
+
+
+
+
+
+
+  ...ites/parts/1998/00000.npz: 100%|██████████|  694kB /  694kB            [A[A[A[A[A[A[AProcessing Files (6 / 6)      : 100%|██████████| 18.0MB / 18.0MB, 1.75MB/s  
+New Data Upload               : 100%|██████████| 16.8MB / 16.8MB, 1.63MB/s  
+  ...ites/parts/1996/00000.npz: 100%|██████████|  280kB /  280kB            
+  ...ites/parts/1995/00000.npz: 100%|██████████|  215kB /  215kB            
+  ...ites/parts/1997/00000.npz: 100%|██████████|  703kB /  703kB            
+  ...ites/parts/1999/00000.npz: 100%|██████████| 1.02MB / 1.02MB            
+  ...ites/parts/2000/00000.npz: 100%|██████████| 15.1MB / 15.1MB            
+  ...ites/parts/1998/00000.npz: 100%|██████████|  694kB /  694kB            
+  oceansites: 6 year(s) pushed and verified in 1 part commit(s), done.json written last (0 already present)
+  push-parts: 6 year(s) on the Hub under partials/family1_gf/oceansites/
+=== stage fetch done in 1571.1s ===
