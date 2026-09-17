@@ -317,6 +317,135 @@ def push(store, year, work, scratch=None, partials=None, hub=None,
     return 0
 
 
+# Across YEARS, one commit carries at most this many files or this many bytes.
+# E-082's lanes park hundreds of years (ghcnd 1763->, icoads 1662->) and the
+# early ones are a few kB each, so `push`'s two commits a year would spend the
+# Hub's 256 commits an hour on a single lane.
+MANY_FILES = 400
+MANY_BYTES = 4 * 1024 ** 3
+
+
+def push_many(store, years, work, scratch=None, partials=None, hub=None,
+              private=False, max_files=MANY_FILES, max_bytes=MANY_BYTES):
+    """`push` for a whole lane: every year's parts in as few commits as the
+    batch allows, every file restore-verified, and THEN every year's
+    `done.json` in one final commit (per `max_files`).
+
+    The contract is `push`'s, year for year: an unmarked year is refused
+    before any upload, a year already on the Hub with matching hashes is
+    skipped, and no `done.json` is written unless every file of every year in
+    this call came back with its sha256. A failure anywhere leaves no marker
+    for any year of the call — the lane is re-run, and years whose parts did
+    land are cheap to re-push. Returns the list of years now marked on the Hub.
+    """
+    years = [int(y) for y in years]
+    todo = []
+    for year in years:
+        root = store_root(work, store)
+        d = year_dir(work, store, year)
+        if not marked(root, f"parts/{year}"):
+            sys.exit(f"push refuses {store} {year}: {root}/parts/{year}.done "
+                     f"is missing, so the fetch of that year did not finish. "
+                     f"Refetch it; a marker may only under-claim "
+                     f"(ml/CLAUDE.md §5.21).")
+        names = local_part_files(d)
+        if COUNTS not in names:
+            sys.exit(f"push refuses {store} {year}: no {COUNTS} in {d}")
+        for n in names:
+            if n.endswith(".npz"):
+                try:
+                    f10.check_part_schema(os.path.join(d, n))
+                except ValueError as e:
+                    sys.exit(f"push refuses {store} {year}: {e}")
+        todo.append((year, d, names, _entries(d, names)))
+    if not todo:
+        return []
+    scratch = scratch or os.path.join(store_root(work, store), "src", "hub")
+    api, repo, tok = (hub or _hub)()
+    if bool(private) != str(repo).endswith("-private"):
+        sys.exit(f"push refuses {store}: private={bool(private)} and the "
+                 f"target repository is {repo!r} — a private store's parts go "
+                 f"only to a '-private' repository, and a public store's "
+                 f"never do (E-082). Nothing was uploaded.")
+    api.create_repo(repo, repo_type="dataset", exist_ok=True,
+                    private=bool(private))
+    listing = _list_files(api, repo, hub_prefix(store, None, partials))
+    pending, skipped = [], []
+    for year, d, names, entries in todo:
+        have = read_done(api, repo, tok, store, year, scratch, listing,
+                         partials=partials)
+        if have is not None and _by_name(have) == {e["name"]: e["sha256"]
+                                                   for e in entries}:
+            skipped.append(year)
+            continue
+        pending.append((year, d, names, entries))
+    if skipped:
+        print(f"  {store}: {len(skipped)} year(s) already on the Hub with "
+              f"matching hashes — skipped")
+    # the parts, batched across years
+    files = [(f"{hub_prefix(store, y, partials)}/{e['name']}",
+              os.path.join(d, e["name"]), e["bytes"], y)
+             for y, d, _n, ents in pending for e in ents]
+    total = sum(f[2] for f in files)
+    print(f"  {store}: uploading {len(files)} file(s) of {len(pending)} "
+          f"year(s), {total / 1e6:.1f} MB -> {repo}:"
+          f"{hub_prefix(store, None, partials)}/", flush=True)
+    batch, size, k = [], 0, 0
+
+    def flush():
+        nonlocal batch, size, k
+        if not batch:
+            return
+        k += 1
+        ys = sorted({f[3] for f in batch})
+        _upload(api, repo, [(f[0], f[1]) for f in batch],
+                f"family 1 partials ({store} {ys[0]}-{ys[-1]}): "
+                f"{len(batch)} file(s), batch {k}")
+        batch, size = [], 0
+    for f in files:
+        if batch and (len(batch) >= max_files or size + f[2] > max_bytes):
+            flush()
+        batch.append(f)
+        size += f[2]
+    flush()
+    # restore-verify every file before any marker
+    for (rel, _local, _b, _y), sha in zip(
+            files, [e["sha256"] for _y, _d, _n, ents in pending
+                    for e in ents]):
+        tmp = os.path.join(scratch, "verify")
+        shutil.rmtree(tmp, ignore_errors=True)
+        back = _download(repo, rel, tok, tmp)
+        got = sha256(back)
+        shutil.rmtree(tmp, ignore_errors=True)
+        if got != sha:
+            sys.exit(f"RESTORE MISMATCH {rel}: uploaded {sha}, downloaded "
+                     f"{got} — the push is not trustworthy and no done.json "
+                     f"was written for any year of this call")
+    # THE MARKERS ARE LAST
+    os.makedirs(scratch, exist_ok=True)
+    marks = []
+    for year, d, names, entries in pending:
+        rows = int(read_json(os.path.join(d, COUNTS), {}).get("rows", 0))
+        done = {"store": store, "year": year, "rows": rows,
+                "n_parts": sum(1 for n in names if n.endswith(".npz")),
+                "bytes": sum(e["bytes"] for e in entries), "files": entries,
+                "builder_git_sha": git_sha(), "at": utcnow()}
+        dp = os.path.join(scratch, f"{DONE}.{year}")
+        atomic_json(dp, done)
+        marks.append((f"{hub_prefix(store, year, partials)}/{DONE}", dp))
+    for i in range(0, len(marks), max_files):
+        chunk = marks[i:i + max_files]
+        _upload(api, repo, chunk,
+                f"family 1 partials ({store}): done.json for "
+                f"{len(chunk)} year(s)")
+    for _rel, dp in marks:
+        os.remove(dp)
+    print(f"  {store}: {len(pending)} year(s) pushed and verified in {k} "
+          f"part commit(s), done.json written last "
+          f"({len(skipped)} already present)")
+    return sorted(skipped + [p[0] for p in pending])
+
+
 # ==================================================================== pull ===
 def pull(store, years, work, allow_missing=False, scratch=None,
          partials=None, hub=None, private=False):

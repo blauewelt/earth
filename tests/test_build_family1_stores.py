@@ -388,6 +388,82 @@ def test_a_public_store_is_refused_the_private_repository():
         b10.check_publish_target(ad, lay, "chfrank/earth-tensors-private")
 
 
+def test_distribution_private_overrides_a_public_adapter_and_never_the_reverse(
+        tmp_path, monkeypatch):
+    """--distribution private: a PUBLIC tier-G adapter whose licence answer is
+    pending (seaice_asi) is built, parked and published to the PRIVATE
+    repository only, and its store.json says so; the reverse is refused."""
+    from family1.adapters import seaice_asi as asi
+    from family1.adapters import tide_private
+    # the CLI carries the flag, and the default leaves the adapter alone
+    p = b1.build_parser()
+    assert p.parse_args(["--store", "seaice_asi"]).distribution == ""
+    assert p.parse_args(["--store", "seaice_asi", "--distribution",
+                         "private"]).distribution == "private"
+    assert b1.apply_distribution(asi.SeaIceASIAdapter(), "").distribution \
+        == "public"
+    # the reverse is refused, and so is nonsense
+    with pytest.raises(SystemExit, match="REFUSING --distribution public"):
+        b1.apply_distribution(tide_private.ADAPTER(), "public")
+    with pytest.raises(SystemExit, match="expected"):
+        b1.apply_distribution(asi.SeaIceASIAdapter(), "shared")
+    with pytest.raises(SystemExit, match="REFUSING --distribution public"):
+        b1.main(["--store", "tide_private", "--distribution", "public",
+                 "--work", str(tmp_path / "tp"), "--stage", "index"])
+
+    # a real (synthetic) seaice_asi build under the override
+    src = str(tmp_path / "src")
+    lo, hi = "2012-12-30", "2013-01-01"
+    asi.make_smoke_sources(src, b10.parse_date(lo), b10.parse_date(hi))
+    a = ns(store="seaice_asi", work=str(tmp_path / "work"), source_dir=src,
+           start=lo, end=hi, allow_unconfirmed_licence=False,
+           distribution="private")
+    ctx = b1.make_ctx(a, asi.SeaIceASIAdapter)
+    assert ctx.adapter.distribution == "private"
+    assert asi.SeaIceASIAdapter.distribution == "public"     # class untouched
+    assert ctx.layout.private
+    assert ctx.layout.repo_id == "chfrank/earth-tensors-private"
+    assert ctx.layout.prefix("seaice_asi") == "tensors/family1_gf/seaice_asi"
+    b10.run_stages(ctx, ["index", "fetch", "assemble"],
+                   stage_fn=b1.GRID_STAGE_FN, deps=b1.DEPS)
+    sm = json.load(open(os.path.join(ctx.store, "store.json")))
+    assert sm["distribution"] == "private"
+    assert "licence_pending" in sm["notes"]
+    assert sm["distribution_override"] == {
+        "declared": "public", "used": "private", "note": "licence_pending"}
+    # the licence gate does not refuse a private publish or parts push ...
+    assert b1.licence_gate(ctx) is True
+    # ... the parts go to the private repository only ...
+    fake = FakePartsHub(str(tmp_path / "parts"),
+                        "chfrank/earth-tensors-private")
+    monkeypatch.setattr(ph, "_list_files", fake.list_files)
+    monkeypatch.setattr(ph, "_upload", fake.upload)
+    monkeypatch.setattr(ph, "_download", fake.download)
+    monkeypatch.setattr(ctx.layout, "hub", fake.hub)
+    assert b1.push_parts(ctx) == ctx.years
+    assert os.path.exists(os.path.join(
+        fake.root, "partials/family1_gf/seaice_asi", str(ctx.years[0]),
+        "done.json"))
+    # ... and so does the store; the public repository is refused outright
+    hub = str(tmp_path / "hub")
+    api = _fake_hub(monkeypatch, hub, None)
+    monkeypatch.setattr(ctx, "hub", lambda: (api, "chfrank/earth-tensors",
+                                             "tok"))
+    with pytest.raises(SystemExit, match="REFUSING to publish"):
+        b1.stage_publish_grid(ctx)
+    assert api.calls == []
+    monkeypatch.setattr(ctx, "hub", lambda: (
+        api, "chfrank/earth-tensors-private", "tok"))
+    b1.stage_publish_grid(ctx)
+    assert {c[1] for c in api.calls} == {"chfrank/earth-tensors-private"}
+    assert os.path.exists(os.path.join(
+        hub, "chfrank/earth-tensors-private",
+        "tensors/family1_gf/seaice_asi/store.json"))
+    assert not os.path.exists(os.path.join(hub, "chfrank/earth-tensors"))
+    assert b1.stage_check_grid(ctx)["hub"]["repo"] == \
+        "chfrank/earth-tensors-private"
+
+
 # ============================================================= credentials ==
 def test_credentials_are_refused_before_any_byte(tmp_path, monkeypatch):
     class Keyed(ghcnd.GHCNDAdapter):
@@ -639,6 +715,83 @@ def test_family1_parts_round_trip_under_their_own_prefix(tmp_path,
     b10.run_stages(box, ["fetch", "assemble"], stage_fn=b1.STAGE_FN,
                    deps=b1.DEPS)
     b10.check_smoke(box, truth)
+
+
+def test_push_many_batches_years_and_writes_every_marker_last(tmp_path):
+    ctx, _, _ = ghcnd_ctx(str(tmp_path / "lane"))
+    b10.run_stages(ctx, ["index", "fetch"], stage_fn=b1.STAGE_FN,
+                   deps=b1.DEPS)
+    assert len(ctx.years) >= 2
+    fake = FakePartsHub(str(tmp_path / "hub"), "chfrank/earth-tensors")
+    commits = []
+
+    def upload(api, repo, pairs, message):
+        # at the moment of any PART commit, no done.json may exist yet
+        if "done.json" not in message:
+            assert not any(p.endswith("/done.json") for p in
+                           fake.list_files(api, repo, "partials/x"))
+        commits.append((message, [r for r, _ in pairs]))
+        fake.upload(api, repo, pairs, message)
+    seams = dict(_list_files=fake.list_files, _upload=upload,
+                 _download=fake.download)
+    old = {k: getattr(ph, k) for k in seams}
+    try:
+        for k, v in seams.items():
+            setattr(ph, k, v)
+        n_files = sum(len(ph.local_part_files(ctx.year_dir(y)))
+                      for y in ctx.years)
+        got = ph.push_many("ghcnd", ctx.years, ctx.work, partials="partials/x",
+                           hub=fake.hub, max_files=2)
+        assert got == sorted(ctx.years)
+        parts = [c for c in commits if "done.json" not in c[0]]
+        dones = [c for c in commits if "done.json" in c[0]]
+        assert sum(len(c[1]) for c in parts) == n_files
+        assert all(len(c[1]) <= 2 for c in commits)
+        assert len(parts) == -(-n_files // 2)
+        assert sum(len(c[1]) for c in dones) == len(ctx.years)
+        assert commits.index(dones[0]) > commits.index(parts[-1])
+        for y in ctx.years:
+            done = json.load(open(os.path.join(
+                fake.root, "partials/x/ghcnd", str(y), "done.json")))
+            assert {e["name"] for e in done["files"]} == set(
+                ph.local_part_files(ctx.year_dir(y)))
+        # the whole lane pulls back as family 10's pull reads it
+        present, missing = ph.pull("ghcnd", ctx.years,
+                                   str(tmp_path / "box"),
+                                   partials="partials/x", hub=fake.hub)
+        assert present == ctx.years and missing == []
+        # a re-push finds every year present and commits nothing
+        commits.clear()
+        assert ph.push_many("ghcnd", ctx.years, ctx.work,
+                            partials="partials/x",
+                            hub=fake.hub) == sorted(ctx.years)
+        assert commits == []
+        # a restore mismatch writes NO marker for any year of the call
+        fake2 = FakePartsHub(str(tmp_path / "hub2"), "chfrank/earth-tensors")
+
+        def bad_download(repo, rel, token, dest_dir):
+            p = fake2.download(repo, rel, token, dest_dir)
+            with open(p, "ab") as fh:
+                fh.write(b"x")
+            return p
+        ph._list_files, ph._upload, ph._download = (
+            fake2.list_files, fake2.upload, bad_download)
+        with pytest.raises(SystemExit, match="RESTORE MISMATCH"):
+            ph.push_many("ghcnd", ctx.years, ctx.work, partials="partials/x",
+                         hub=fake2.hub)
+        assert not any(p.endswith("done.json") for p in fake2.list_files(
+            None, None, "partials/x"))
+        # an unmarked year is refused before any upload
+        os.remove(b10.marker(ctx.root, f"parts/{ctx.years[-1]}"))
+        fake3 = FakePartsHub(str(tmp_path / "hub3"), "chfrank/earth-tensors")
+        ph._upload = fake3.upload
+        with pytest.raises(SystemExit, match="did not finish"):
+            ph.push_many("ghcnd", ctx.years, ctx.work, partials="partials/x",
+                         hub=fake3.hub)
+        assert not os.path.exists(fake3.root)
+    finally:
+        for k, v in old.items():
+            setattr(ph, k, v)
 
 
 def test_a_private_stores_parts_are_refused_a_public_repository(tmp_path):

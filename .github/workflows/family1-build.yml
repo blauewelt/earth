@@ -85,8 +85,15 @@ on:
 permissions:
   contents: write
 
+# The group carries the lane's WINDOW (start, end): E-082's big stores fetch
+# on up to a dozen hosted lanes of one store at once, each a disjoint year
+# range writing its own partials/<family>/<store>/<year>/ prefixes, and a group
+# keyed on store + stage alone would queue them one behind another -- and
+# GitHub keeps only ONE pending run per group, cancelling the older pending
+# lane each time a new one is dispatched. Two dispatches with the SAME window
+# still serialise, which is the collision that matters.
 concurrency:
-  group: family1-build-${{ github.event.inputs.store }}-${{ github.event.inputs.stage }}-${{ github.event.inputs.probe_month }}-${{ github.event.inputs.check_credentials }}
+  group: family1-build-${{ github.event.inputs.store }}-${{ github.event.inputs.stage }}-${{ github.event.inputs.start }}-${{ github.event.inputs.end }}-${{ github.event.inputs.probe_month }}-${{ github.event.inputs.check_credentials }}
   cancel-in-progress: false
 
 jobs:

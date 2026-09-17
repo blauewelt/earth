@@ -172,8 +172,50 @@ def needs_source(a, stages):
     return True
 
 
+LICENCE_PENDING_NOTE = (
+    "licence_pending: published to the PRIVATE repository by "
+    "`--distribution private` while the producer's redistribution answer is "
+    "pending; the adapter's own distribution is 'public'. Move it to the "
+    "public repository only once the licence is confirmed.")
+
+
+def apply_distribution(ad, want):
+    """`--distribution` on ONE adapter instance, before its layout is made.
+
+    '' leaves the adapter as declared. 'private' on a PUBLIC adapter routes it
+    to the private repository (parts, store and publish alike) and records
+    `licence_pending` in the store's notes — the safe direction, used while a
+    producer has not answered (E-082: seaice_asi and Bremen). 'public' on a
+    PRIVATE adapter is REFUSED: a licence that forbids redistribution is not
+    something a command-line flag can overrule. The class is never touched, so
+    the registry and every other instance keep the declared track.
+    """
+    want = (want or "").strip()
+    if not want:
+        return ad
+    have = getattr(ad, "distribution", "public")
+    if want not in ("public", "private"):
+        sys.exit(f"--distribution {want!r}: expected 'public' or 'private'")
+    if want == have:
+        return ad
+    if want == "public":
+        sys.exit(f"REFUSING --distribution public for {ad.store}: the adapter "
+                 f"declares distribution {have!r} (licence "
+                 f"{(getattr(ad, 'licence', {}) or {}).get('name')!r}). A "
+                 f"private store never becomes public by a flag; nothing has "
+                 f"been fetched or uploaded.")
+    ad.distribution = "private"
+    notes = getattr(ad, "notes", "") or ""
+    ad.notes = (notes + "\n" if notes else "") + LICENCE_PENDING_NOTE
+    ad.distribution_override = {"declared": have, "used": "private",
+                                "note": "licence_pending"}
+    print(f"::notice::{ad.store}: --distribution private — declared "
+          f"{have!r}, routed to {PRIVATE_REPO} (licence_pending)")
+    return ad
+
+
 def make_ctx(a, adapter_cls):
-    ad = adapter_cls()
+    ad = apply_distribution(adapter_cls(), getattr(a, "distribution", ""))
     ctx = f10b.Ctx(a, adapter=ad, layout=layout_for(ad))
     if is_grid(ad):
         prepare_grid_ctx(ctx)
@@ -230,13 +272,16 @@ def push_parts(ctx):
     licence_gate(ctx, "push parts of")
     kw = f10b.parts_hub_kwargs(ctx)
     kw = {k: v for k, v in kw.items() if k in ("partials", "hub", "private")}
-    pushed = []
     for y in ctx.years:
         if not marked(ctx.root, f"parts/{y}"):
             sys.exit(f"--push-parts: {ctx.adapter.store} {y} is not marked "
                      f"done locally — refusing to push a partial year")
-        ph.push(ctx.adapter.store, y, ctx.work, **kw)
-        pushed.append(y)
+    # ONE batched push for the lane: a lane of 150 early years costs a few
+    # commits instead of 300 against the Hub's 256 an hour (E-082 wave 1).
+    pushed = ph.push_many(ctx.adapter.store, ctx.years, ctx.work, **kw)
+    if sorted(pushed) != sorted(int(y) for y in ctx.years):
+        sys.exit(f"--push-parts: {ctx.adapter.store} pushed {len(pushed)} of "
+                 f"{len(ctx.years)} year(s)")
     print(f"  push-parts: {len(pushed)} year(s) on the Hub under "
           f"{ctx.layout.hf_partials}/{ctx.adapter.store}/")
     return pushed
@@ -646,6 +691,8 @@ def stage_assemble_grid(ctx):
     }
     if ad.notes:
         meta["notes"] = ad.notes
+    if getattr(ad, "distribution_override", None):
+        meta["distribution_override"] = ad.distribution_override
     if ctx.absent or degraded:
         meta["degraded"] = {"allow_missing_years": allow,
                             "inputs_not_read": ctx.absent,
@@ -1361,6 +1408,14 @@ def build_parser():
                     help="publish (or push parts of) a PUBLIC store whose "
                          "licence says redistribution_confirmed = False — "
                          "refused without this flag")
+    ap.add_argument("--distribution", default="",
+                    choices=("", "public", "private"),
+                    help="override the adapter's track for this run: "
+                         "'private' sends a PUBLIC adapter's parts and store "
+                         "to chfrank/earth-tensors-private and notes "
+                         "licence_pending in store.json (a producer that has "
+                         "not answered); 'public' on a private adapter is "
+                         "refused")
     ap.add_argument("--check-credentials", action="store_true",
                     help="no store: one authenticated request to each of LP "
                          "DAAC, GES DISC and PO.DAAC with "
@@ -1397,7 +1452,7 @@ def main(argv=None):
             stage_probe(a, cls, a.probe_month)
         return 0
     stages = f10b.parse_stages(a.stage, STAGES)
-    ad = cls()
+    ad = apply_distribution(cls(), a.distribution)
     lay = layout_for(ad)
     if needs_source(a, stages):
         credentials_preflight(ad)
