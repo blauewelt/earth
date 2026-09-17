@@ -1,0 +1,80 @@
+  ...oads/parts/2001/00002.npz: 100%|██████████| 43.1MB / 43.1MB            [A[A[A[A[A[A[A[A[A[A[A
+
+  ...oads/parts/2001/00006.npz: 100%|██████████| 45.5MB / 45.5MB            [A[A
+
+
+  ...oads/parts/2001/00004.npz: 100%|██████████| 46.6MB / 46.6MB            [A[A[A
+
+
+
+  ...oads/parts/2001/00001.npz: 100%|██████████| 45.9MB / 45.9MB            [A[A[A[A
+
+
+
+
+  ...oads/parts/2001/00003.npz: 100%|██████████| 49.2MB / 49.2MB            [A[A[A[A[A
+
+
+
+
+
+  ...oads/parts/2000/00006.npz: 100%|██████████| 48.5MB / 48.5MB            [A[A[A[A[A[A
+
+
+
+
+
+
+  ...oads/parts/2000/00007.npz: 100%|██████████| 6.58MB / 6.58MB            [A[A[A[A[A[A[A
+
+
+
+
+
+
+
+  ...oads/parts/2001/00000.npz: 100%|██████████| 48.1MB / 48.1MB            [A[A[A[A[A[A[A[A
+
+
+
+
+
+
+
+
+  ...oads/parts/2001/00005.npz: 100%|██████████| 44.1MB / 44.1MB            [A[A[A[A[A[A[A[A[A
+
+
+
+
+
+
+
+
+
+  ...oads/parts/2001/00007.npz: 100%|██████████| 22.0MB / 22.0MB            [A[A[A[A[A[A[A[A[A[A
+
+
+
+
+
+
+
+
+
+
+  ...oads/parts/2001/00002.npz: 100%|██████████| 43.1MB / 43.1MB            [A[A[A[A[A[A[A[A[A[A[AProcessing Files (10 / 10)    : 100%|██████████|  400MB /  400MB, 5.86kB/s  
+New Data Upload               : 100%|██████████|  400MB /  400MB, 5.86kB/s  
+  ...oads/parts/2001/00006.npz: 100%|██████████| 45.5MB / 45.5MB            
+  ...oads/parts/2001/00004.npz: 100%|██████████| 46.6MB / 46.6MB            
+  ...oads/parts/2001/00001.npz: 100%|██████████| 45.9MB / 45.9MB            
+  ...oads/parts/2001/00003.npz: 100%|██████████| 49.2MB / 49.2MB            
+  ...oads/parts/2000/00006.npz: 100%|██████████| 48.5MB / 48.5MB            
+  ...oads/parts/2000/00007.npz: 100%|██████████| 6.58MB / 6.58MB            
+  ...oads/parts/2001/00000.npz: 100%|██████████| 48.1MB / 48.1MB            
+  ...oads/parts/2001/00005.npz: 100%|██████████| 44.1MB / 44.1MB            
+  ...oads/parts/2001/00007.npz: 100%|██████████| 22.0MB / 22.0MB            
+  ...oads/parts/2001/00002.npz: 100%|██████████| 43.1MB / 43.1MB            
+  icoads: 22 year(s) pushed and verified in 2 part commit(s), done.json written last (0 already present)
+  push-parts: 22 year(s) on the Hub under partials/family1_gf/icoads/
+=== stage fetch done in 1717.1s ===
