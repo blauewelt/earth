@@ -760,11 +760,12 @@ let SUMMARY_N, TWO_SCALES_N;
 const TWO_SCALES_HEADLINE =
   "Stage 1 reads raw values through a small hourglass; stage 2 reads stage 1's embeddings through the same shape, twenty times longer and five times wider";
 
-// The figure is 11.0 × 4.6 in (aspect 2.3939), so at w 11.78 it is 4.92 tall
-// and leaves the italic line and the legend strip room above the footer.
+// The figure is 11.0 × 4.8 in (aspect 2.2917); the width is set from the height
+// the slide can spare (1.44 → 6.35), which leaves the italic line and the
+// legend strip room above the footer, and it is centred on what is left.
 function twoScalesBody(s) {
-  const FX = 0.78, FW = 11.78, FY = 1.46, FH_ = FW / 2.3939;   // ends 6.38
-  s.addImage({ path: `${FIG}/two_scales.png`, x: FX, y: FY, w: FW, h: FH_ });
+  const FW = 11.24, FH_ = FW / 2.2917, FX = (13.333 - FW) / 2, FY = 1.44;
+  s.addImage({ path: `${FIG}/two_scales_3d.png`, x: FX, y: FY, w: FW, h: FH_ });
 
   s.addText("Stage 2's mirrored future side is the E-080 shape carried up a level — design intent; the stage-2 heads scored so far predict the next embedding and roll it forward.", {
     x: 0.6, y: 6.41, w: 12.13, h: 0.24, fontSize: 9, italic: true, color: MUT,

@@ -9,6 +9,7 @@ from matplotlib.patches import Polygon, Ellipse, Circle, FancyArrow, Rectangle
 from matplotlib.colors import LinearSegmentedColormap
 from matplotlib.lines import Line2D
 from matplotlib.path import Path as MplPath
+from mpl_toolkits.mplot3d.art3d import Poly3DCollection
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 OUT = os.environ.get(
@@ -732,17 +733,18 @@ def summary_hourglass():
     plt.close(fig)
 
 
-# ------------------------------------------ figure 8: the same shape, two scales
+# --------------------------------- figure 8: the same shape at two scales, in 3-D
 # Stage 2's reach comes from ml/cone.py itself (pure numpy) rather than a second
 # copy of the formula; the fallback exists only so this file still runs outside
 # the repo, and it says so rather than pretending it imported.
 try:
     import sys
     sys.path.insert(0, os.path.dirname(os.path.dirname(HERE)))   # .../ml
-    from cone import outer_reach_km, reach_km                     # noqa: E402
-except Exception as exc:                                          # pragma: no cover
+    from cone import outer_reach_km, reach_km, ASPECT            # noqa: E402
+except Exception as exc:                                         # pragma: no cover
     print(f"WARNING: ml/cone.py not importable ({exc}); using a local copy "
-          "of reach_km / outer_reach_km for two_scales()")
+          "of reach_km / outer_reach_km / ASPECT for two_scales_3d()")
+    ASPECT = 0.71
 
     def reach_km(family, lag, dt_days=5.0):
         return 0.3 * 86400.0 * dt_days * (1.0 + lag) / 1000.0
@@ -751,113 +753,192 @@ except Exception as exc:                                          # pragma: no c
         return min(4444.0, max(111.0, 0.3 * 86400.0 * dt_days * (1.0 + k) / 1000.0))
 
 
-def two_scales():
-    """Slide 22: the hourglass at stage 1's scale and at stage 2's, side by side.
+_R30 = np.array([[np.cos(np.deg2rad(30.0)), -np.sin(np.deg2rad(30.0))],
+                 [np.sin(np.deg2rad(30.0)),  np.cos(np.deg2rad(30.0))]])
 
-    Both panels are drawn by `_hourglass_shape`, so the cone polygons, colours
-    and the waist bar are the SAME code as slide 3 and slide 21; only the reach
-    differs — family B's 129.6 km*(1+l) on the left, `cone.outer_reach_km` (the
-    same growth, floored at 111 km and capped at 4,444) on the right.
+
+def _footprint(k, reach, drift, sign, n_ring=72):
+    """One lag's footprint: the ellipse outline and the 24 sunflower dots.
+
+    `sign` is −1 for the past (below the present) and +1 for the future, which
+    is the point mirror: centre −l*d against the past's +l*d, same ellipse.
+    The dots are the deck's own sunflower, phase-rotated by the golden angle
+    per lag exactly as warped_sunflower draws them.
     """
-    fig = plt.figure(figsize=(11.0, 4.6))
-    gs = fig.add_gridspec(1, 2, left=0.055, right=0.985, top=0.885, bottom=0.115,
-                          wspace=0.30)
+    a, b = reach, reach * ASPECT
+    cx, cy = (-sign * k * drift[0], -sign * k * drift[1])
+    t = np.linspace(0, 2 * np.pi, n_ring)
+    ring = _R30 @ np.vstack([a * np.cos(t), b * np.sin(t)])
+    ux, uy = sunflower_pts(24, phase=k * GOLDEN)
+    dots = _R30 @ np.vstack([a * ux, b * uy])
+    return (ring[0] + cx, ring[1] + cy), (dots[0] + cx, dots[1] + cy)
 
-    S1_LAGS = 6
-    S1_REACH = reach_km("B", S1_LAGS)          # 907.2 km at lag 6
-    W1 = reach_km("B", 0)                      # 129.6 km at the waist
 
-    # ---------------------------------------------------------------- stage 1
-    ax = fig.add_subplot(gs[0, 0])
-    _hourglass_shape(ax, W1, W1, lw=1.2)       # hw = 129.6*(1+l), family B
-    ax.set_xlim(-1100, 1100)
-    ax.set_ylim(-8.6, 8.6)
-    ax.set_xticks([-1000, 0, 1000])
-    ax.set_xticklabels(["−1,000", "0", "+1,000"])
-    ax.set_yticks([-6, -3, 0, 3, 6])
-    ax.set_yticklabels(["−6", "−3", "0", "+3", "+6"])
-    ax.tick_params(length=0, labelsize=8.5)
-    ax.set_xlabel("space (km)", color=MUTED, fontsize=9)
-    ax.set_ylabel("time (pentads)", color=MUTED, fontsize=9)
-    style(ax)
+def _cone3d(ax, lags, reach_of, drift, colour, sign, dot_s, ribs=24,
+            face_alpha=0.10, dots=True, lw=1.0):
+    """Draw one half of the hourglass as stacked footprints plus rib lines.
+
+    The surface is a FAN OF LINES rather than plot_surface: mplot3d sorts whole
+    artists, so a translucent surface crossing the dots renders in the wrong
+    order at some azimuths, while thin lines read correctly at every one.
+    """
+    rings = []
+    for k in lags:
+        r = reach_of(k)
+        (rx, ry), (dx_, dy_) = _footprint(k, r, drift, sign)
+        z = sign * k
+        ax.plot(rx, ry, zs=z, zdir="z", color=colour, lw=lw, alpha=0.85,
+                zorder=2)
+        ax.add_collection3d(
+            Poly3DCollection([list(zip(rx, ry, np.full_like(rx, float(z))))],
+                             facecolor=colour, alpha=face_alpha,
+                             edgecolor="none"))
+        if dots:
+            ax.scatter(dx_, dy_, z, s=dot_s, c=colour, depthshade=False,
+                       edgecolors=BG, linewidths=0.25, zorder=4)
+        rings.append((rx, ry, z))
+    step = max(1, len(rings[0][0]) // ribs)
+    for i in range(0, len(rings[0][0]) - 1, step):
+        ax.plot([r[0][i] for r in rings], [r[1][i] for r in rings],
+                [r[2] for r in rings], color=colour, lw=0.5, alpha=0.30,
+                zorder=1)
+    return rings
+
+
+def _waist3d(ax, radius, drift_unused=None):
+    t = np.linspace(0, 2 * np.pi, 72)
+    ax.plot(radius * np.cos(t), radius * np.sin(t), zs=0, zdir="z", color=GOLD,
+            lw=1.6, zorder=6)
+    ax.add_collection3d(
+        Poly3DCollection([list(zip(radius * np.cos(t), radius * np.sin(t),
+                                   np.zeros_like(t)))],
+                         facecolor=GOLD, alpha=0.40, edgecolor="none"))
+    ax.scatter([0], [0], [0], s=14, c=GOLD, depthshade=False, zorder=7)
+
+
+def _style3d(ax, xy_lim, xy_ticks, z_lim, z_ticks, z_ticklabels, xy_ticklabels):
+    pane = (0.051, 0.067, 0.090, 1.0)                      # BG as RGBA
+    for axis in (ax.xaxis, ax.yaxis, ax.zaxis):
+        axis.set_pane_color(pane)
+        axis.line.set_color(MUTED)
+        axis._axinfo["grid"]["color"] = (1, 1, 1, 0.06)
+    ax.set_xlim(-xy_lim, xy_lim); ax.set_ylim(-xy_lim, xy_lim)
+    ax.set_zlim(-z_lim, z_lim)
+    ax.set_xticks(xy_ticks); ax.set_yticks(xy_ticks); ax.set_zticks(z_ticks)
+    ax.set_xticklabels(xy_ticklabels, fontsize=8.5, color=MUTED)
+    ax.set_yticklabels(xy_ticklabels, fontsize=8.5, color=MUTED)
+    ax.set_zticklabels(z_ticklabels, fontsize=8.5, color=MUTED)
+    # a negative pad makes the "−" of a tick label collide with the axis line
+    ax.tick_params(axis="both", pad=1.5, length=0)
+    # only ONE of the two horizontal axes is named: both are kilometres, and a
+    # second "km" at the other bottom corner only crowds the tick numbers.
+    ax.set_xlabel("km", color=MUTED, fontsize=9, labelpad=-6)
+    ax.set_ylabel("")
+    ax.set_zlabel("time (pentads)", color=MUTED, fontsize=9, labelpad=-2)
+    ax.view_init(elev=22, azim=-55)
+    ax.set_box_aspect((1, 1, 1.05))
+
+
+def two_scales_3d():
+    """Slide 22: the mirrored double cone in 3-D, at stage 1's and stage 2's
+    scale. Same sunflower, same golden-angle phase and same three colours as
+    slides 8 and 21; only the reach and the axis numbers differ."""
+    fig = plt.figure(figsize=(11.0, 4.8))
+    gs = fig.add_gridspec(1, 2, left=0.005, right=0.995, top=1.03, bottom=0.045,
+                          wspace=0.02)
+
+    # ------------------------------------------------------------- stage 1
+    ax = fig.add_subplot(gs[0, 0], projection="3d")
+    ax.set_facecolor(BG)
+    L1 = list(range(1, 7))
+    D1 = (-27.0, -27.0)                    # ~38 km per pentad, south-west
+    _cone3d(ax, L1, lambda k: reach_km("B", k), D1, BLUE, -1, dot_s=9)
+    _cone3d(ax, L1, lambda k: reach_km("B", k), D1, ORANGE, +1, dot_s=9)
+    _waist3d(ax, 56.0)                     # ~13 cells at 0.25 degrees
+    # a few past dots held out by a dropout pattern
+    for k, idx in ((3, (1, 9, 17)), (4, (5, 21))):
+        _, (dx_, dy_) = _footprint(k, reach_km("B", k), D1, -1)
+        ax.scatter([dx_[i] for i in idx], [dy_[i] for i in idx], -k, s=26,
+                   facecolors=BG, edgecolors=BLUE, linewidths=1.0,
+                   depthshade=False, zorder=8)
+    # the drift, once
+    ax.plot([0, 6 * D1[0]], [0, 6 * D1[1]], [0, -6], color=GOLD, lw=1.6,
+            zorder=9)
+    _style3d(ax, 1450, [-1000, 1000], 7.6, [-6, 0, 6],
+             ["−6", "0", "+6"], ["−1,000", "+1,000"])
     ax.set_title("stage 1 — the codec, raw values", color=TEXT, fontsize=11,
-                 pad=7, fontweight="bold")
+                 fontweight="bold", pad=-2, y=0.97)
+    ax.text2D(0.50, 0.855, "future cone — targets", color=ORANGE, fontsize=9.5,
+              fontweight="bold", ha="center", transform=ax.transAxes)
+    ax.text2D(0.50, 0.075, "past cone — input", color=BLUE, fontsize=9.5,
+              fontweight="bold", ha="center", transform=ax.transAxes,
+              bbox=dict(facecolor=BG, edgecolor="none", pad=1.5))
+    ax.text2D(0.035, 0.50, "waist — present\n(≈ 13 cells)", color=GOLD,
+              fontsize=9.5, fontweight="bold", ha="left", va="center",
+              linespacing=1.3, transform=ax.transAxes)
+    ax.text2D(0.035, 0.255, "d — toward the source", color=GOLD, fontsize=9,
+              ha="left", transform=ax.transAxes,
+              bbox=dict(facecolor=BG, edgecolor="none", pad=1.5))
+    ax.text2D(0.020, 0.800, "hollow dots =\nheld out (dropout)", color=BLUE,
+              fontsize=9, ha="left", va="center", linespacing=1.3,
+              transform=ax.transAxes)
 
-    held = [(2, -350), (3, 150), (4, -620), (5, 430), (3, -180)]   # (lag, km)
-    ax.scatter([x for _, x in held], [-lag for lag, _ in held], s=34,
-               facecolors=BG, edgecolors=BLUE, linewidths=1.1, zorder=6)
-    ax.annotate("held out (dropout)", xy=(-620, -4.0), xytext=(-1040, -6.1),
-                color=BLUE, fontsize=8.8, ha="left", va="center",
-                arrowprops=dict(arrowstyle="->", color=BLUE, lw=0.8,
-                                shrinkA=3, shrinkB=4), zorder=8)
-    ax.text(0, 7.7, "future cone — targets", color=ORANGE, fontsize=9.5,
-            ha="center", va="center", fontweight="bold", zorder=8)
-    ax.text(0, -7.8, "past cone — input", color=BLUE, fontsize=9.5,
-            ha="center", va="center", fontweight="bold", zorder=8)
-    ax.annotate("waist — present", xy=(-W1 - 20, 0.0), xytext=(-330, 2.6),
-                color=GOLD, fontsize=9.5, ha="right", va="center",
-                fontweight="bold",
-                arrowprops=dict(arrowstyle="->", color=GOLD, lw=0.9,
-                                shrinkA=3, shrinkB=3), zorder=8)
+    # ------------------------------------------------------------- stage 2
+    ax = fig.add_subplot(gs[0, 1], projection="3d")
+    ax.set_facecolor(BG)
+    # lags 7...143 (the spec's stage-2 window), sampled DENSELY where the cone
+    # still opens and sparsely above it: reach grows as 129.6*(1+k) km until it
+    # meets the 4,444 km cap at lag 33, so a uniform "every dozen lags" spacing
+    # spends nine of eleven rings on the straight part and the taper vanishes.
+    L2 = [7, 12, 18, 24, 33, 72, 143]
+    K_CAP = 33                                   # 129.6*(1+33) = 4,406 ~ cap
+    # the lean is the same FRACTION of the reach as at stage 1 (~25% at the
+    # mouth), not the same km per pentad — at 38 km/pentad a 143-pentad cone
+    # would sit 5,400 km off its own anchor and read as a shear, not a cone.
+    D2 = (-5.4, -5.4)
+    _cone3d(ax, L2, outer_reach_km, D2, BLUE, -1, dot_s=3.5, face_alpha=0.085)
+    _cone3d(ax, L2, outer_reach_km, D2, ORANGE, +1, dot_s=3.5, face_alpha=0.085)
+    _waist3d(ax, 56.0)
+    # where the opening stops: the cap ring, drawn once on each side
+    for sgn, col in ((-1, BLUE), (+1, ORANGE)):
+        (rx, ry), _ = _footprint(K_CAP, outer_reach_km(K_CAP), D2, sgn)
+        ax.plot(rx, ry, zs=sgn * K_CAP, zdir="z", color=col, lw=1.8,
+                alpha=1.0, zorder=5)
+    # stage 1's whole double cone, to scale, at the centre
+    for sgn in (-1, +1):
+        for k in (3, 6):
+            (rx, ry), _ = _footprint(k, reach_km("B", k), (0.0, 0.0), sgn)
+            ax.plot(rx, ry, zs=sgn * k, zdir="z", color=TEXT, lw=0.8,
+                    alpha=0.9, zorder=9)
+            ax.add_collection3d(
+                Poly3DCollection([list(zip(rx, ry,
+                                           np.full_like(rx, float(sgn * k))))],
+                                 facecolor=BG, alpha=0.85, edgecolor="none"))
+    _style3d(ax, 6300, [-4444, 4444], 178, [-143, 0, 143],
+             ["−143", "0", "+143"], ["−4,444", "+4,444"])
+    ax.set_title("stage 2 — the forecaster, embeddings", color=TEXT,
+                 fontsize=11, fontweight="bold", pad=-2, y=0.97)
+    ax.text2D(0.50, 0.855, "future cone — targets", color=ORANGE, fontsize=9.5,
+              fontweight="bold", ha="center", transform=ax.transAxes)
+    ax.text2D(0.50, 0.075, "past cone — input", color=BLUE, fontsize=9.5,
+              fontweight="bold", ha="center", transform=ax.transAxes,
+              bbox=dict(facecolor=BG, edgecolor="none", pad=1.5))
+    ax.annotate("stage 1, to scale —\nthe near field\nthe codec already read",
+                xy=(0.485, 0.487), xytext=(0.005, 0.255), xycoords="axes fraction",
+                textcoords="axes fraction", color=TEXT, fontsize=9, ha="left",
+                va="center", linespacing=1.3,
+                arrowprops=dict(arrowstyle="-", color=MUTED, lw=0.8,
+                                shrinkA=2, shrinkB=2))
+    ax.text2D(0.010, 0.800, "reach stops growing at\nthe 4,444 km cap (lag 33)",
+              color=MUTED, fontsize=8.5, ha="left", va="center",
+              linespacing=1.3, transform=ax.transAxes)
+    ax.text2D(0.010, 0.680, "each dot is\nan embedding", color=BLUE, fontsize=9,
+              ha="left", va="center", linespacing=1.3, transform=ax.transAxes)
 
-    # ---------------------------------------------------------------- stage 2
-    ax = fig.add_subplot(gs[0, 1])
-    K = 143
-    lags2 = np.arange(0.0, K + 0.001, 0.25)
-    hw2 = np.array([outer_reach_km(k) for k in lags2])
-    _hourglass_shape(ax, 0.0, 0.0, lw=1.2, lags=lags2, hw=hw2, waist=260.0)
-    ax.set_xlim(-5000, 5000)
-    ax.set_ylim(-205, 205)
-    ax.set_xticks([-4444, 0, 4444])
-    ax.set_xticklabels(["−4,444", "0", "+4,444"])
-    ax.set_yticks([-143, -72, 0, 72, 143])
-    ax.set_yticklabels(["−143", "−72", "0", "+72", "+143"])
-    ax.tick_params(length=0, labelsize=8.5)
-    ax.set_xlabel("space (km)", color=MUTED, fontsize=9)
-    ax.set_ylabel("time (pentads)", color=MUTED, fontsize=9)
-    style(ax)
-    ax.set_title("stage 2 — the forecaster, embeddings", color=TEXT, fontsize=11,
-                 pad=7, fontweight="bold")
+    fig.text(0.5, 0.016, "same shape  ·  ×24 in time  ·  ×5 in space",
+             color=MUTED, fontsize=9.5, ha="center", va="center")
 
-    # a handful of embeddings in the past cone
-    rng = np.random.default_rng(7)
-    ey = -rng.uniform(12, 132, 9)
-    ex = rng.uniform(-0.82, 0.82, 9) * np.array([outer_reach_km(-y) for y in ey])
-    ax.scatter(ex, ey, s=13, c=BLUE, edgecolors=BG, linewidths=0.35, zorder=6)
-    ax.text(-4750, -168, "each dot is an embedding", color=TEXT, fontsize=8.8,
-            ha="left", va="center", zorder=8)
-
-    # the stage-1 hourglass, to scale, cut out of the middle
-    l1 = np.arange(0, S1_LAGS + 0.001, 0.05)
-    h1 = W1 * (1.0 + l1)
-    cut = np.concatenate([np.column_stack([-h1, -l1]),
-                          np.column_stack([h1[::-1], -l1[::-1]]),
-                          np.column_stack([h1, l1]),
-                          np.column_stack([-h1[::-1], l1[::-1]])])
-    ax.add_patch(Polygon(cut, closed=True, facecolor=BG, edgecolor=TEXT,
-                         lw=0.9, zorder=7))
-    ax.annotate("stage 1, to scale — the near field the codec read;\n"
-                "stage 2's spiral starts outside it",
-                xy=(-S1_REACH - 40, -3.5), xytext=(-4800, -62), color=TEXT,
-                fontsize=8.8, ha="left", va="center", linespacing=1.35,
-                arrowprops=dict(arrowstyle="->", color=TEXT, lw=0.8,
-                                shrinkA=4, shrinkB=3), zorder=9)
-
-    ax.text(0, 185, "future cone — targets", color=ORANGE, fontsize=9.5,
-            ha="center", va="center", fontweight="bold", zorder=8)
-    ax.text(0, -187, "past cone — input", color=BLUE, fontsize=9.5,
-            ha="center", va="center", fontweight="bold", zorder=8)
-    ax.annotate("waist — present", xy=(-330, 1.0), xytext=(-4800, 22),
-                color=GOLD, fontsize=9.5, ha="left", va="center",
-                fontweight="bold",
-                arrowprops=dict(arrowstyle="->", color=GOLD, lw=0.9,
-                                shrinkA=3, shrinkB=3), zorder=8)
-
-    # the factor, between the panels
-    fig.text(0.487, 0.50, "same shape  ·  ×24 in time  ·  ×5 in space",
-             color=MUTED, fontsize=9, ha="center", va="center", rotation=90)
-
-    fig.savefig(f"{OUT}/two_scales.png", dpi=200)
+    fig.savefig(f"{OUT}/two_scales_3d.png", dpi=200)
     plt.close(fig)
 
 
@@ -868,5 +949,5 @@ channel_apertures_c()
 amoc_cones()
 summary_cone()
 summary_hourglass()
-two_scales()
+two_scales_3d()
 print("figures written to", OUT)
