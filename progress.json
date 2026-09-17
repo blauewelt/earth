@@ -1,0 +1,10 @@
+{
+ "at": "2026-09-17T16:52:12+00:00",
+ "done": 5,
+ "elapsed_s": 4989.1,
+ "eta_s": 0.0,
+ "item": "oceansites 2017",
+ "stage": "fetch oceansites",
+ "total": 5,
+ "year_rows": 3939194
+}
