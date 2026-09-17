@@ -1,0 +1,49 @@
+store     oceansites — OceanSITES moored time series (GDAC at NOAA NDBC), tropical arrays excluded: surface meteorology and T/S at ten depths, one row per site and time
+family    family1_gf (1.gf) · public -> chfrank/earth-tensors:tensors/family1_gf/oceansites
+axis      2007-01-01 .. 2012-12-31  bins 1826..2264 · time_s int32 (schema 2)
+channels  C=28: airt, sst, sss, wind_u, wind_v, pres, sw, precip, T_10, T_20, T_30, T_50, T_75, T_100, T_150, T_200, T_300, T_500, S_10, S_20, S_30, S_50, S_75, S_100, S_150, S_200, S_300, S_500
+work      /home/runner/work/earth/earth/ml/cache/family1_gf
+
+=== stage index (oceansites) ===
+  [index oceansites] start (1 items)  0/1  0.0s
+  [index oceansites] plan.json  1/1  63.0s
+  index: oceansites — 6 year(s), C=28 (airt, sst, sss, wind_u, wind_v, pres, sw, precip …), bins 1826..2264
+=== stage index done in 63.0s ===
+
+=== stage fetch (oceansites) ===
+  [fetch oceansites] start (6 items)  0/6  0.0s
+  [fetch oceansites] oceansites 2007  1/6  203.1s
+  [fetch oceansites] oceansites 2007  1/6  212.6s
+  [fetch oceansites] oceansites 2007  1/6  213.1s
+  [fetch oceansites] oceansites 2007  1/6  247.1s
+  [fetch oceansites] oceansites 2007  1/6  249.4s
+  [fetch oceansites] oceansites 2007  1/6  277.2s
+  [fetch oceansites] oceansites 2007  1/6  387.7s
+  [fetch oceansites] oceansites 2007  1/6  390.2s
+  [fetch oceansites] oceansites 2007  1/6  432.7s
+  [fetch oceansites] oceansites 2007  1/6  471.1s
+  [fetch oceansites] oceansites 2007  1/6  479.2s
+  [fetch oceansites] oceansites 2007  1/6  486.7s
+  [fetch oceansites] oceansites 2007  1/6  490.8s
+  [fetch oceansites] oceansites 2007  1/6  511.1s
+  [fetch oceansites] oceansites 2007  1/6  512.5s
+  [fetch oceansites] oceansites 2007  1/6  513.0s
+  [fetch oceansites] oceansites 2007  1/6  574.0s
+Traceback (most recent call last):
+  File "/home/runner/work/earth/earth/ml/build_family1_stores.py", line 1478, in <module>
+    sys.exit(main())
+             ^^^^^^
+  File "/home/runner/work/earth/earth/ml/build_family1_stores.py", line 1473, in main
+    f10b.run_stages(ctx, stages, stage_fn=stage_fns(ad), deps=DEPS)
+  File "/home/runner/work/earth/earth/ml/build_family10_stores.py", line 5314, in run_stages
+    stage_fn[s](ctx)
+  File "/home/runner/work/earth/earth/ml/build_family1_stores.py", line 264, in stage_fetch
+    f10b.stage_fetch(ctx, assemble_store_after=False)
+  File "/home/runner/work/earth/earth/ml/build_family10_stores.py", line 3912, in stage_fetch
+    for label, rows, counts in ad.fetch_year(ctx, y):
+  File "/home/runner/work/earth/earth/ml/family1/adapters/oceansites.py", line 1126, in fetch_year
+    f10b._merge_counts(agg, c)
+  File "/home/runner/work/earth/earth/ml/build_family10_stores.py", line 3724, in _merge_counts
+    sub[kk] = sub.get(kk, 0) + vv
+              ~~~~~~~~~~~~~~~^~~~
+TypeError: unsupported operand type(s) for +: 'int' and 'str'
