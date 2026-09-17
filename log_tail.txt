@@ -1,0 +1,80 @@
+
+
+  ...ivate/tide_private/fp.npy:  98%|█████████▊|  701MB /  717MB            [A[A[A
+
+
+
+  ...vate/tide_private/lat.npy: 100%|█████████▉|  717MB /  717MB            [A[A[A[A
+
+
+
+
+  ...tide_private/platform.npy: 100%|█████████▉| 1.43GB / 1.43GB            [A[A[A[A[A
+
+
+
+
+
+  ...vate/tide_private/bin.npy: 100%|██████████|  359MB /  359MB            [A[A[A[A[A[A
+
+
+
+
+
+
+  ...ivate/tide_private/qc.npy:  91%|█████████ |  163MB /  179MB            [A[A[A[A[A[A[A
+
+
+
+
+
+
+
+  ...e/tide_private/time_s.npy: 100%|██████████| 1.43GB / 1.43GB            [A[A[A[A[A[A[A[A
+
+
+
+
+
+
+
+
+  ...e/tide_private/values.npy: 100%|██████████|  359MB /  359MB            [A[A[A[A[A[A[A[A[A
+
+
+
+
+
+
+
+
+
+  ...e_private/bin_offsets.npy: 100%|██████████|  120kB /  120kB            [A[A[A[A[A[A[A[A[A[AProcessing Files (4 / 9)      :  99%|█████████▉| 5.88GB / 5.92GB,  356MB/s  
+New Data Upload               : 100%|██████████| 5.28GB / 5.28GB,  326MB/s  
+  ...vate/tide_private/lon.npy: 100%|█████████▉|  717MB /  717MB            
+  ...ivate/tide_private/fp.npy:  98%|█████████▊|  701MB /  717MB            
+  ...vate/tide_private/lat.npy: 100%|█████████▉|  717MB /  717MB            
+  ...tide_private/platform.npy: 100%|█████████▉| 1.43GB / 1.43GB            
+  ...vate/tide_private/bin.npy: 100%|██████████|  359MB /  359MB            
+  ...ivate/tide_private/qc.npy:  91%|█████████ |  163MB /  179MB            
+  ...e/tide_private/time_s.npy: 100%|██████████| 1.43GB / 1.43GB            
+  ...e/tide_private/values.npy: 100%|██████████|  359MB /  359MB            
+  ...e_private/bin_offsets.npy: 100%|██████████|  120kB /  120kB            
+  [publish tide_private] bin.npy  1/11  16.0s
+  [publish tide_private] bin_offsets.npy  2/11  16.7s
+  [publish tide_private] fp.npy  3/11  19.4s
+  [publish tide_private] lat.npy  4/11  22.7s
+  [publish tide_private] lon.npy  5/11  25.9s
+  [publish tide_private] platform.npy  6/11  31.8s
+  [publish tide_private] platforms.json  7/11  32.0s
+  [publish tide_private] qc.npy  8/11  33.3s
+  [publish tide_private] time_s.npy  9/11  38.9s
+  [publish tide_private] values.npy  10/11  42.2s
+  [publish tide_private] store.json  11/11  42.4s
+  publish: 11 file(s) verified by restore -> https://huggingface.co/datasets/chfrank/earth-tensors-private/tree/main/tensors/family1_tf/tide_private
+=== stage publish done in 48.9s ===
+
+=== stage check (tide_private) ===
+  hub: chfrank/earth-tensors-private with the token from $HF_TOKEN
+  check: tide_private — 10 file(s) verified, N=179,314,808, schema 3, Hub chfrank/earth-tensors-private:tensors/family1_tf/tide_private agrees
+=== stage check done in 10.7s ===
