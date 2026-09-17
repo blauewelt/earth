@@ -1,0 +1,67 @@
+store     ndbc — NDBC buoys and C-MAN stations, standard meteorological reports (NOAA), one row per station report
+family    family1_tf (1.0.tf) · public -> chfrank/earth-tensors:tensors/family1_tf/ndbc
+axis      1970-01-01 .. 2011-12-31  bins -877..2191 · time_s int32 (schema 2)
+channels  C=10: WDIR, WSPD, GST, WVHT, DPD, APD, MWD, PRES, ATMP, WTMP
+work      /home/runner/work/earth/earth/ml/cache/family1_tf
+
+=== stage index (ndbc) ===
+  [index ndbc] start (1 items)  0/1  0.0s
+  [index ndbc] plan.json  1/1  3.2s
+  index: ndbc — 42 year(s), C=10 (WDIR, WSPD, GST, WVHT, DPD, APD, MWD, PRES …), bins -877..2191
+=== stage index done in 3.2s ===
+
+=== stage fetch (ndbc) ===
+  [fetch ndbc] start (42 items)  0/42  0.0s
+  [fetch ndbc] ndbc 1970 rows 0+  1/42  0.1s
+  1970: 4,611 row(s) in 1 part(s) (0.1s)
+  [fetch ndbc] ndbc 1971 rows 0+  2/42  0.3s
+  1971: 7,005 row(s) in 1 part(s) (0.2s)
+  [fetch ndbc] ndbc 1972 rows 0+  3/42  0.5s
+  1972: 7,692 row(s) in 1 part(s) (0.3s)
+  [fetch ndbc] ndbc 1973 rows 0+  4/42  1.0s
+  1973: 12,102 row(s) in 1 part(s) (0.5s)
+  [fetch ndbc] ndbc 1974 rows 0+  5/42  1.4s
+  1974: 8,499 row(s) in 1 part(s) (0.4s)
+  [fetch ndbc] ndbc 1975 rows 0+  6/42  17.2s
+  1975: 17,979 row(s) in 1 part(s) (15.8s)
+  [fetch ndbc] ndbc 1976 rows 0+  7/42  18.0s
+  1976: 33,479 row(s) in 1 part(s) (0.9s)
+  [fetch ndbc] ndbc 1977 rows 0+  8/42  19.0s
+  1977: 45,600 row(s) in 1 part(s) (1.0s)
+  [fetch ndbc] ndbc 1978 rows 0+  9/42  142.9s
+  1978: 60,517 row(s) in 1 part(s) (123.9s)
+  [fetch ndbc] ndbc 1979 rows 0+  10/42  144.5s
+  1979: 130,852 row(s) in 1 part(s) (1.6s)
+Traceback (most recent call last):
+  File "/home/runner/work/earth/earth/ml/build_family1_stores.py", line 1478, in <module>
+    sys.exit(main())
+             ^^^^^^
+  File "/home/runner/work/earth/earth/ml/build_family1_stores.py", line 1473, in main
+    f10b.run_stages(ctx, stages, stage_fn=stage_fns(ad), deps=DEPS)
+  File "/home/runner/work/earth/earth/ml/build_family10_stores.py", line 5314, in run_stages
+    stage_fn[s](ctx)
+  File "/home/runner/work/earth/earth/ml/build_family1_stores.py", line 264, in stage_fetch
+    f10b.stage_fetch(ctx, assemble_store_after=False)
+  File "/home/runner/work/earth/earth/ml/build_family10_stores.py", line 3912, in stage_fetch
+    for label, rows, counts in ad.fetch_year(ctx, y):
+  File "/home/runner/work/earth/earth/ml/family1/adapters/ndbc.py", line 546, in fetch_year
+    for label, rows, counts in self._year(ctx, year, ctx.t_lo, ctx.t_hi,
+  File "/home/runner/work/earth/earth/ml/family1/adapters/ndbc.py", line 460, in _year
+    for key, t, v, c, err in cm.ordered_map(fn, work, workers):
+  File "/home/runner/work/earth/earth/ml/family1/adapters/_common.py", line 187, in ordered_map
+    yield q.popleft().result()
+          ^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/concurrent/futures/_base.py", line 449, in result
+    return self.__get_result()
+           ^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/concurrent/futures/_base.py", line 401, in __get_result
+    raise self._exception
+  File "/usr/lib/python3.12/concurrent/futures/thread.py", line 58, in run
+    result = self.fn(*self.args, **self.kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/work/earth/earth/ml/family1/adapters/ndbc.py", line 457, in <lambda>
+    fn = (lambda ks: self._station_year(ctx, ks[0], ks[1], year,
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/work/earth/earth/ml/family1/adapters/ndbc.py", line 424, in _station_year
+    raise FormatError(f"{sid}h{year}: {e}") from None
+family1.adapters.ndbc.FormatError: 42008h1980: an empty stdmet file
