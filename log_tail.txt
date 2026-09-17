@@ -1,0 +1,47 @@
+store     gliders — Ocean glider profiles (IOOS Glider DAC): T, S, O2, chlorophyll at the 16 Roemmich-Gilson pressures, one row per profile
+family    family1_tf (1.0.tf) · public -> chfrank/earth-tensors:tensors/family1_tf/gliders
+axis      2013-01-01 .. 2015-12-31  bins 2264..2483 · time_s int32 (schema 2)
+channels  C=64: T_10, T_30, T_50, T_100, T_150, T_200, T_300, T_400, T_500, T_700, T_900, T_1100, T_1300, T_1500, T_1700, T_1900, S_10, S_30, S_50, S_100, S_150, S_200, S_300, S_400, S_500, S_700, S_900, S_1100, S_1300, S_1500, S_1700, S_1900, O2_10, O2_30, O2_50, O2_100, O2_150, O2_200, O2_300, O2_400, O2_500, O2_700, O2_900, O2_1100, O2_1300, O2_1500, O2_1700, O2_1900, CHL_10, CHL_30, CHL_50, CHL_100, CHL_150, CHL_200, CHL_300, CHL_400, CHL_500, CHL_700, CHL_900, CHL_1100, CHL_1300, CHL_1500, CHL_1700, CHL_1900
+work      /home/runner/work/earth/earth/ml/cache/family1_tf
+
+=== stage index (gliders) ===
+  [index gliders] start (1 items)  0/1  0.0s
+  [index gliders] plan.json  1/1  6.1s
+  index: gliders — 3 year(s), C=64 (T_10, T_30, T_50, T_100, T_150, T_200, T_300, T_400 …), bins 2264..2483
+=== stage index done in 6.1s ===
+
+=== stage fetch (gliders) ===
+  [fetch gliders (one stream)] start  0/0  0.0s
+Traceback (most recent call last):
+  File "/home/runner/work/earth/earth/ml/build_family1_stores.py", line 1478, in <module>
+    sys.exit(main())
+             ^^^^^^
+  File "/home/runner/work/earth/earth/ml/build_family1_stores.py", line 1473, in main
+    f10b.run_stages(ctx, stages, stage_fn=stage_fns(ad), deps=DEPS)
+  File "/home/runner/work/earth/earth/ml/build_family10_stores.py", line 5314, in run_stages
+    stage_fn[s](ctx)
+  File "/home/runner/work/earth/earth/ml/build_family1_stores.py", line 264, in stage_fetch
+    f10b.stage_fetch(ctx, assemble_store_after=False)
+  File "/home/runner/work/earth/earth/ml/build_family10_stores.py", line 3953, in stage_fetch
+    for year, rows, counts in ad.fetch_stream(ctx):
+  File "/home/runner/work/earth/earth/ml/family1/adapters/gliders.py", line 687, in fetch_stream
+    yield from self._stream(ctx, ctx.t_lo, ctx.t_hi, str(ctx.d_lo.year))
+  File "/home/runner/work/earth/earth/ml/family1/adapters/gliders.py", line 641, in _stream
+    for i, (base, by_year, c, err) in enumerate(
+  File "/home/runner/work/earth/earth/ml/family1/adapters/_common.py", line 187, in ordered_map
+    yield q.popleft().result()
+          ^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/concurrent/futures/_base.py", line 449, in result
+    return self.__get_result()
+           ^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/concurrent/futures/_base.py", line 401, in __get_result
+    raise self._exception
+  File "/usr/lib/python3.12/concurrent/futures/thread.py", line 58, in run
+    result = self.fn(*self.args, **self.kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/work/earth/earth/ml/family1/adapters/gliders.py", line 640, in <lambda>
+    fn = (lambda it: self._deployment(ctx, it, t_lo, t_hi))
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/work/earth/earth/ml/family1/adapters/gliders.py", line 614, in _deployment
+    raise FormatError(f"{dsid}: {e}") from None
+family1.adapters.gliders.FormatError: bass-20150827T1909: trajectory 2 x profile 1053: neither is 1
