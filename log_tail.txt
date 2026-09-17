@@ -1,0 +1,80 @@
+  1970: 4,611 row(s) in 1 part(s) (0.1s)
+  [fetch ndbc] ndbc 1971 rows 0+  2/42  0.2s
+  1971: 7,005 row(s) in 1 part(s) (0.1s)
+  [fetch ndbc] ndbc 1972 rows 0+  3/42  0.2s
+  1972: 7,692 row(s) in 1 part(s) (0.1s)
+  [fetch ndbc] ndbc 1973 rows 0+  4/42  0.5s
+  1973: 12,102 row(s) in 1 part(s) (0.2s)
+  [fetch ndbc] ndbc 1974 rows 0+  5/42  0.7s
+  1974: 8,499 row(s) in 1 part(s) (0.2s)
+  [fetch ndbc] ndbc 1975 rows 0+  6/42  0.9s
+  1975: 17,979 row(s) in 1 part(s) (0.3s)
+  [fetch ndbc] ndbc 1976 rows 0+  7/42  1.2s
+  1976: 33,479 row(s) in 1 part(s) (0.3s)
+  [fetch ndbc] ndbc 1977 rows 0+  8/42  1.7s
+  1977: 45,600 row(s) in 1 part(s) (0.4s)
+  [fetch ndbc] ndbc 1978 rows 0+  9/42  2.1s
+  1978: 60,517 row(s) in 1 part(s) (0.4s)
+  [fetch ndbc] ndbc 1979 rows 0+  10/42  2.7s
+  1979: 130,852 row(s) in 1 part(s) (0.7s)
+  [fetch ndbc] ndbc 1980 rows 0+  11/42  3.8s
+  1980: 153,789 row(s) in 1 part(s) (1.1s)
+  [fetch ndbc] ndbc 1981 rows 0+  12/42  6.2s
+  1981: 215,412 row(s) in 1 part(s) (2.3s)
+  [fetch ndbc] ndbc 1982 rows 0+  13/42  8.9s
+  1982: 266,334 row(s) in 1 part(s) (2.8s)
+  [fetch ndbc] ndbc 1983 rows 0+  14/42  12.8s
+  1983: 314,477 row(s) in 1 part(s) (3.9s)
+  [fetch ndbc] ndbc 1984 rows 0+  15/42  17.5s
+  1984: 474,302 row(s) in 1 part(s) (4.8s)
+  [fetch ndbc] ndbc 1985 rows 0+  16/42  23.0s
+  1985: 640,415 row(s) in 1 part(s) (5.4s)
+  [fetch ndbc] ndbc 1986 rows 0+  17/42  29.5s
+  1986: 692,203 row(s) in 1 part(s) (6.6s)
+  [fetch ndbc] ndbc 1987 rows 0+  18/42  35.6s
+  1987: 717,787 row(s) in 1 part(s) (6.0s)
+  [fetch ndbc] ndbc 1988 rows 0+  19/42  41.7s
+  1988: 728,105 row(s) in 1 part(s) (6.2s)
+  [fetch ndbc] ndbc 1989 rows 0+  20/42  48.2s
+  1989: 753,377 row(s) in 1 part(s) (6.4s)
+  [fetch ndbc] ndbc 1990 rows 0+  21/42  55.6s
+  1990: 799,497 row(s) in 1 part(s) (7.4s)
+  [fetch ndbc] ndbc 1991 rows 0+  22/42  63.5s
+  1991: 827,975 row(s) in 1 part(s) (7.9s)
+Traceback (most recent call last):
+  File "/home/runner/work/earth/earth/ml/build_family1_stores.py", line 1478, in <module>
+    sys.exit(main())
+             ^^^^^^
+  File "/home/runner/work/earth/earth/ml/build_family1_stores.py", line 1473, in main
+    f10b.run_stages(ctx, stages, stage_fn=stage_fns(ad), deps=DEPS)
+  File "/home/runner/work/earth/earth/ml/build_family10_stores.py", line 5314, in run_stages
+    stage_fn[s](ctx)
+  File "/home/runner/work/earth/earth/ml/build_family1_stores.py", line 264, in stage_fetch
+    f10b.stage_fetch(ctx, assemble_store_after=False)
+  File "/home/runner/work/earth/earth/ml/build_family10_stores.py", line 3912, in stage_fetch
+    for label, rows, counts in ad.fetch_year(ctx, y):
+  File "/home/runner/work/earth/earth/ml/family1/adapters/ndbc.py", line 555, in fetch_year
+    for label, rows, counts in self._year(ctx, year, ctx.t_lo, ctx.t_hi,
+  File "/home/runner/work/earth/earth/ml/family1/adapters/ndbc.py", line 469, in _year
+    for key, t, v, c, err in cm.ordered_map(fn, work, workers):
+  File "/home/runner/work/earth/earth/ml/family1/adapters/_common.py", line 187, in ordered_map
+    yield q.popleft().result()
+          ^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/concurrent/futures/_base.py", line 456, in result
+    return self.__get_result()
+           ^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/concurrent/futures/_base.py", line 401, in __get_result
+    raise self._exception
+  File "/usr/lib/python3.12/concurrent/futures/thread.py", line 58, in run
+    result = self.fn(*self.args, **self.kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/work/earth/earth/ml/family1/adapters/ndbc.py", line 466, in <lambda>
+    fn = (lambda ks: self._station_year(ctx, ks[0], ks[1], year,
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/work/earth/earth/ml/family1/adapters/ndbc.py", line 429, in _station_year
+    t, v = parse_stdmet(text, year, t_lo, t_hi, counts)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/work/earth/earth/ml/family1/adapters/ndbc.py", line 239, in parse_stdmet
+    arr = np.array(toks, dtype=np.float64).reshape(len(body), ncol)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+ValueError: could not convert string to float: '02,4'
