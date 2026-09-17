@@ -1,0 +1,80 @@
+  [fetch oceansites] oceansites 1996  8/18  2909.8s
+  [fetch oceansites] oceansites 1996  8/18  3015.3s
+  1996: 3,528 row(s) in 1 part(s) (454.5s)
+  [fetch oceansites] oceansites 1997  9/18  3297.8s
+  [fetch oceansites] oceansites 1997  9/18  3332.8s
+  [fetch oceansites] oceansites 1997  9/18  3360.9s
+  [fetch oceansites] oceansites 1997  9/18  3456.0s
+  1997: 8,874 row(s) in 1 part(s) (440.7s)
+  [fetch oceansites] oceansites 1998  10/18  3911.7s
+  [fetch oceansites] oceansites 1998  10/18  4041.1s
+  1998: 8,760 row(s) in 1 part(s) (585.1s)
+  [fetch oceansites] oceansites 1999  11/18  4399.1s
+  [fetch oceansites] oceansites 1999  11/18  4410.0s
+  [fetch oceansites] oceansites 1999  11/18  4525.7s
+  1999: 12,840 row(s) in 1 part(s) (484.6s)
+  [fetch oceansites] oceansites 2000  12/18  4911.9s
+  [fetch oceansites] oceansites 2000  12/18  4915.2s
+  [fetch oceansites] oceansites 2000  12/18  5188.2s
+  [fetch oceansites] oceansites 2000  12/18  5190.0s
+  2000: 191,118 row(s) in 1 part(s) (664.3s)
+  [fetch oceansites] oceansites 2001  13/18  5655.9s
+  [fetch oceansites] oceansites 2001  13/18  5659.4s
+  [fetch oceansites] oceansites 2001  13/18  5836.4s
+  [fetch oceansites] oceansites 2001  13/18  5948.8s
+  [fetch oceansites] oceansites 2001  13/18  5951.5s
+  2001: 1,182,397 row(s) in 1 part(s) (761.5s)
+  [fetch oceansites] oceansites 2002  14/18  6361.0s
+  [fetch oceansites] oceansites 2002  14/18  6415.7s
+  [fetch oceansites] oceansites 2002  14/18  6492.9s
+  [fetch oceansites] oceansites 2002  14/18  6497.3s
+  [fetch oceansites] oceansites 2002  14/18  6633.8s
+  [fetch oceansites] oceansites 2002  14/18  6695.5s
+  [fetch oceansites] oceansites 2002  14/18  6727.5s
+  [fetch oceansites] oceansites 2002  14/18  6731.7s
+  [fetch oceansites] oceansites 2002  14/18  6782.8s
+  [fetch oceansites] oceansites 2002  14/18  6785.1s
+  2002: 1,261,972 row(s) in 1 part(s) (833.6s)
+  [fetch oceansites] oceansites 2003  15/18  7128.8s
+  [fetch oceansites] oceansites 2003  15/18  7177.2s
+  [fetch oceansites] oceansites 2003  15/18  7254.9s
+  [fetch oceansites] oceansites 2003  15/18  7350.2s
+  [fetch oceansites] oceansites 2003  15/18  7400.1s
+  [fetch oceansites] oceansites 2003  15/18  7472.2s
+  [fetch oceansites] oceansites 2003  15/18  7511.1s
+  [fetch oceansites] oceansites 2003  15/18  7519.7s
+  [fetch oceansites] oceansites 2003  15/18  7566.5s
+  [fetch oceansites] oceansites 2003  15/18  7568.7s
+  2003: 1,261,599 row(s) in 1 part(s) (783.6s)
+  [fetch oceansites] oceansites 2004  16/18  8149.1s
+  [fetch oceansites] oceansites 2004  16/18  8164.2s
+  [fetch oceansites] oceansites 2004  16/18  8192.6s
+  [fetch oceansites] oceansites 2004  16/18  8261.2s
+  [fetch oceansites] oceansites 2004  16/18  8353.4s
+  [fetch oceansites] oceansites 2004  16/18  8368.0s
+  [fetch oceansites] oceansites 2004  16/18  8490.9s
+  [fetch oceansites] oceansites 2004  16/18  8517.7s
+  [fetch oceansites] oceansites 2004  16/18  8544.6s
+  [fetch oceansites] oceansites 2004  16/18  8567.4s
+  [fetch oceansites] oceansites 2004  16/18  8580.3s
+  [fetch oceansites] oceansites 2004  16/18  8619.8s
+  [fetch oceansites] oceansites 2004  16/18  8623.4s
+  [fetch oceansites] oceansites 2004  16/18  8691.1s
+Traceback (most recent call last):
+  File "/home/runner/work/earth/earth/ml/build_family1_stores.py", line 1478, in <module>
+    sys.exit(main())
+             ^^^^^^
+  File "/home/runner/work/earth/earth/ml/build_family1_stores.py", line 1473, in main
+    f10b.run_stages(ctx, stages, stage_fn=stage_fns(ad), deps=DEPS)
+  File "/home/runner/work/earth/earth/ml/build_family10_stores.py", line 5314, in run_stages
+    stage_fn[s](ctx)
+  File "/home/runner/work/earth/earth/ml/build_family1_stores.py", line 264, in stage_fetch
+    f10b.stage_fetch(ctx, assemble_store_after=False)
+  File "/home/runner/work/earth/earth/ml/build_family10_stores.py", line 3912, in stage_fetch
+    for label, rows, counts in ad.fetch_year(ctx, y):
+  File "/home/runner/work/earth/earth/ml/family1/adapters/oceansites.py", line 1126, in fetch_year
+    f10b._merge_counts(agg, c)
+  File "/home/runner/work/earth/earth/ml/build_family10_stores.py", line 3724, in _merge_counts
+    sub[kk] = sub.get(kk, 0) + vv
+              ~~~~~~~~~~~~~~~^~~~
+TypeError: unsupported operand type(s) for +: 'int' and 'str'
