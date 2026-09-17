@@ -1,0 +1,482 @@
+{
+ "bins": [
+  2629,
+  2775
+ ],
+ "builder_git_sha": "8e231982080d4205498708d702851a5d52c60637",
+ "built_at": "2026-09-17T17:36:55+00:00",
+ "channels": [
+  {
+   "max": 40.0,
+   "min": -3.0,
+   "name": "T_10",
+   "unit": "degC"
+  },
+  {
+   "max": 40.0,
+   "min": -3.0,
+   "name": "T_30",
+   "unit": "degC"
+  },
+  {
+   "max": 40.0,
+   "min": -3.0,
+   "name": "T_50",
+   "unit": "degC"
+  },
+  {
+   "max": 40.0,
+   "min": -3.0,
+   "name": "T_100",
+   "unit": "degC"
+  },
+  {
+   "max": 40.0,
+   "min": -3.0,
+   "name": "T_150",
+   "unit": "degC"
+  },
+  {
+   "max": 40.0,
+   "min": -3.0,
+   "name": "T_200",
+   "unit": "degC"
+  },
+  {
+   "max": 40.0,
+   "min": -3.0,
+   "name": "T_300",
+   "unit": "degC"
+  },
+  {
+   "max": 40.0,
+   "min": -3.0,
+   "name": "T_400",
+   "unit": "degC"
+  },
+  {
+   "max": 40.0,
+   "min": -3.0,
+   "name": "T_500",
+   "unit": "degC"
+  },
+  {
+   "max": 40.0,
+   "min": -3.0,
+   "name": "T_700",
+   "unit": "degC"
+  },
+  {
+   "max": 40.0,
+   "min": -3.0,
+   "name": "T_900",
+   "unit": "degC"
+  },
+  {
+   "max": 40.0,
+   "min": -3.0,
+   "name": "T_1100",
+   "unit": "degC"
+  },
+  {
+   "max": 40.0,
+   "min": -3.0,
+   "name": "T_1300",
+   "unit": "degC"
+  },
+  {
+   "max": 40.0,
+   "min": -3.0,
+   "name": "T_1500",
+   "unit": "degC"
+  },
+  {
+   "max": 40.0,
+   "min": -3.0,
+   "name": "T_1700",
+   "unit": "degC"
+  },
+  {
+   "max": 40.0,
+   "min": -3.0,
+   "name": "T_1900",
+   "unit": "degC"
+  },
+  {
+   "max": 42.0,
+   "min": 0.0,
+   "name": "S_10",
+   "unit": "PSU"
+  },
+  {
+   "max": 42.0,
+   "min": 0.0,
+   "name": "S_30",
+   "unit": "PSU"
+  },
+  {
+   "max": 42.0,
+   "min": 0.0,
+   "name": "S_50",
+   "unit": "PSU"
+  },
+  {
+   "max": 42.0,
+   "min": 0.0,
+   "name": "S_100",
+   "unit": "PSU"
+  },
+  {
+   "max": 42.0,
+   "min": 0.0,
+   "name": "S_150",
+   "unit": "PSU"
+  },
+  {
+   "max": 42.0,
+   "min": 0.0,
+   "name": "S_200",
+   "unit": "PSU"
+  },
+  {
+   "max": 42.0,
+   "min": 0.0,
+   "name": "S_300",
+   "unit": "PSU"
+  },
+  {
+   "max": 42.0,
+   "min": 0.0,
+   "name": "S_400",
+   "unit": "PSU"
+  },
+  {
+   "max": 42.0,
+   "min": 0.0,
+   "name": "S_500",
+   "unit": "PSU"
+  },
+  {
+   "max": 42.0,
+   "min": 0.0,
+   "name": "S_700",
+   "unit": "PSU"
+  },
+  {
+   "max": 42.0,
+   "min": 0.0,
+   "name": "S_900",
+   "unit": "PSU"
+  },
+  {
+   "max": 42.0,
+   "min": 0.0,
+   "name": "S_1100",
+   "unit": "PSU"
+  },
+  {
+   "max": 42.0,
+   "min": 0.0,
+   "name": "S_1300",
+   "unit": "PSU"
+  },
+  {
+   "max": 42.0,
+   "min": 0.0,
+   "name": "S_1500",
+   "unit": "PSU"
+  },
+  {
+   "max": 42.0,
+   "min": 0.0,
+   "name": "S_1700",
+   "unit": "PSU"
+  },
+  {
+   "max": 42.0,
+   "min": 0.0,
+   "name": "S_1900",
+   "unit": "PSU"
+  },
+  {
+   "max": 600.0,
+   "min": 0.0,
+   "name": "O2_10",
+   "unit": "umol/kg"
+  },
+  {
+   "max": 600.0,
+   "min": 0.0,
+   "name": "O2_30",
+   "unit": "umol/kg"
+  },
+  {
+   "max": 600.0,
+   "min": 0.0,
+   "name": "O2_50",
+   "unit": "umol/kg"
+  },
+  {
+   "max": 600.0,
+   "min": 0.0,
+   "name": "O2_100",
+   "unit": "umol/kg"
+  },
+  {
+   "max": 600.0,
+   "min": 0.0,
+   "name": "O2_150",
+   "unit": "umol/kg"
+  },
+  {
+   "max": 600.0,
+   "min": 0.0,
+   "name": "O2_200",
+   "unit": "umol/kg"
+  },
+  {
+   "max": 600.0,
+   "min": 0.0,
+   "name": "O2_300",
+   "unit": "umol/kg"
+  },
+  {
+   "max": 600.0,
+   "min": 0.0,
+   "name": "O2_400",
+   "unit": "umol/kg"
+  },
+  {
+   "max": 600.0,
+   "min": 0.0,
+   "name": "O2_500",
+   "unit": "umol/kg"
+  },
+  {
+   "max": 600.0,
+   "min": 0.0,
+   "name": "O2_700",
+   "unit": "umol/kg"
+  },
+  {
+   "max": 600.0,
+   "min": 0.0,
+   "name": "O2_900",
+   "unit": "umol/kg"
+  },
+  {
+   "max": 600.0,
+   "min": 0.0,
+   "name": "O2_1100",
+   "unit": "umol/kg"
+  },
+  {
+   "max": 600.0,
+   "min": 0.0,
+   "name": "O2_1300",
+   "unit": "umol/kg"
+  },
+  {
+   "max": 600.0,
+   "min": 0.0,
+   "name": "O2_1500",
+   "unit": "umol/kg"
+  },
+  {
+   "max": 600.0,
+   "min": 0.0,
+   "name": "O2_1700",
+   "unit": "umol/kg"
+  },
+  {
+   "max": 600.0,
+   "min": 0.0,
+   "name": "O2_1900",
+   "unit": "umol/kg"
+  },
+  {
+   "max": 100.0,
+   "min": -0.5,
+   "name": "CHL_10",
+   "unit": "mg/m3"
+  },
+  {
+   "max": 100.0,
+   "min": -0.5,
+   "name": "CHL_30",
+   "unit": "mg/m3"
+  },
+  {
+   "max": 100.0,
+   "min": -0.5,
+   "name": "CHL_50",
+   "unit": "mg/m3"
+  },
+  {
+   "max": 100.0,
+   "min": -0.5,
+   "name": "CHL_100",
+   "unit": "mg/m3"
+  },
+  {
+   "max": 100.0,
+   "min": -0.5,
+   "name": "CHL_150",
+   "unit": "mg/m3"
+  },
+  {
+   "max": 100.0,
+   "min": -0.5,
+   "name": "CHL_200",
+   "unit": "mg/m3"
+  },
+  {
+   "max": 100.0,
+   "min": -0.5,
+   "name": "CHL_300",
+   "unit": "mg/m3"
+  },
+  {
+   "max": 100.0,
+   "min": -0.5,
+   "name": "CHL_400",
+   "unit": "mg/m3"
+  },
+  {
+   "max": 100.0,
+   "min": -0.5,
+   "name": "CHL_500",
+   "unit": "mg/m3"
+  },
+  {
+   "max": 100.0,
+   "min": -0.5,
+   "name": "CHL_700",
+   "unit": "mg/m3"
+  },
+  {
+   "max": 100.0,
+   "min": -0.5,
+   "name": "CHL_900",
+   "unit": "mg/m3"
+  },
+  {
+   "max": 100.0,
+   "min": -0.5,
+   "name": "CHL_1100",
+   "unit": "mg/m3"
+  },
+  {
+   "max": 100.0,
+   "min": -0.5,
+   "name": "CHL_1300",
+   "unit": "mg/m3"
+  },
+  {
+   "max": 100.0,
+   "min": -0.5,
+   "name": "CHL_1500",
+   "unit": "mg/m3"
+  },
+  {
+   "max": 100.0,
+   "min": -0.5,
+   "name": "CHL_1700",
+   "unit": "mg/m3"
+  },
+  {
+   "max": 100.0,
+   "min": -0.5,
+   "name": "CHL_1900",
+   "unit": "mg/m3"
+  }
+ ],
+ "dataset": "https://gliders.ioos.us/erddap allDatasets + https://gliders.ioos.us/thredds deployments",
+ "datasets": 2541,
+ "date_range": [
+  "2018-01-01",
+  "2019-12-31"
+ ],
+ "delayed_datasets": 868,
+ "first_record": {
+  "bytes": 9504000,
+  "dataset": "Nemesis-20171115T0000",
+  "dims": {
+   "obs": 342,
+   "profile": 214,
+   "trajectory": 1,
+   "trajectory_strlen": 21,
+   "wmo_id_strlen": 9
+  },
+  "file": "deployments/mbari/Nemesis-20171115T0000/Nemesis-20171115T0000.nc3.nc",
+  "header_bytes": 48740
+ },
+ "footprint": {
+  "log2_dt": -6.906890595608519,
+  "log2_fp": -4.0
+ },
+ "levels_dbar": [
+  10.0,
+  30.0,
+  50.0,
+  100.0,
+  150.0,
+  200.0,
+  300.0,
+  400.0,
+  500.0,
+  700.0,
+  900.0,
+  1100.0,
+  1300.0,
+  1500.0,
+  1700.0,
+  1900.0
+ ],
+ "per_year_resume": false,
+ "qc_policy": "qc 1: the file carries QARTOD primary flags for temperature or salinity, and samples flagged 3/4/9 were removed before interpolation (`qartod_removed`); qc 0: no such flags (not assessed). A level value outside its channel's bounds is NaN and counted; a profile with no level value is dropped.",
+ "sources": [
+  "https://gliders.ioos.us/thredds/fileServer/deployments/<user>/<id>/<id>.nc3.nc",
+  "https://gliders.ioos.us/erddap/tabledap/allDatasets.csv?datasetID%2Cinstitution%2CminTime%2CmaxTime%2CminLatitude%2CmaxLatitude%2CminLongitude%2CmaxLongitude%2Ccdm_data_type",
+  "https://gliders.ioos.us/erddap/info/<id>/index.csv",
+  "https://gliders.ioos.us/thredds/catalog/deployments/catalog.xml"
+ ],
+ "store": "gliders",
+ "thredds_deployment_dirs": 3065,
+ "thredds_dirs_not_in_erddap": 524,
+ "title": "Ocean glider profiles (IOOS Glider DAC): T, S, O2, chlorophyll at the 16 Roemmich-Gilson pressures, one row per profile",
+ "verified": "2026-09-17 from the sandbox: allDatasets (2,541 TrajectoryProfile datasets, 868 -delayed); ERDDAP info for 15 datasets; the THREDDS tree (57 users, 3,064 deployment dirs); angus-20200319T0000.nc3.nc whole (104,213,412 B, 90 MB/s, Accept-Ranges) read bit-identically by _nc3 and netCDF4; tabledap throughput 244 kB/s (not used)",
+ "window_bytes_listed_approx": 168290843974,
+ "window_deployments": 287,
+ "window_plan": {
+  "datasets_listed": 2541,
+  "delayed_used": 84,
+  "deployments_in_window": 304,
+  "deployments_without_file": 17,
+  "deployments_without_file_ids": [
+   "amlr01-20181216T0641",
+   "amlr01-20191206T0452",
+   "amlr02-20181211T1233",
+   "amlr02-20191206T1236",
+   "amlr03-20191206T0529",
+   "bios_anna-20190606T1553",
+   "bios_minnie-20180312T1540",
+   "cp_339-20181030T2158",
+   "cp_340-20190205T0824",
+   "cp_380-20191212T2231",
+   "dfo-eva035-20190613T1750",
+   "dfo-mike579-20190612T0033",
+   "dfo-walle652-20190718T2201",
+   "dfo-walle652-20191205T1456",
+   "osu592-20180507T1733",
+   "osu592-20190908T1451",
+   "ru28-20191025T1640"
+  ],
+  "realtime_used": 203,
+  "realtime_used_delayed_missing": 11
+ },
+ "years": [
+  2018,
+  2019
+ ]
+}

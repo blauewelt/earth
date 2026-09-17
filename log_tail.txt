@@ -1,0 +1,80 @@
+
+=== stage fetch (gliders) ===
+  [fetch gliders (one stream)] start  0/0  0.0s
+  [fetch gliders (one stream)] gliders deployments 50/287  140.0s
+  [fetch gliders (one stream)] gliders deployments 100/287  799.3s
+  [fetch gliders (one stream)] gliders deployments 150/287  1092.7s
+  [fetch gliders (one stream)] gliders deployments 200/287  1242.7s
+  [fetch gliders (one stream)] gliders deployments 250/287  1322.2s
+  gliders: 412,454 row(s) over 2 year(s) in one pass (1384.0s)
+  hub: chfrank/earth-tensors with the token from $HF_TOKEN
+  gliders: uploading 4 file(s) of 2 year(s), 62.3 MB -> chfrank/earth-tensors:partials/family1_tf/gliders/
+Processing Files (0 / 0)      : |          |  0.00B /  0.00B            
+New Data Upload               : |          |  0.00B /  0.00B            [A
+
+  ...ders/parts/2019/00000.npz:   4%|▍         | 1.15MB / 28.0MB            [A[A
+
+
+  ...ders/parts/2018/00000.npz:   4%|▍         | 1.41MB / 34.3MB            [A[A[A
+
+  ...ders/parts/2019/00000.npz:   4%|▍         | 1.15MB / 28.0MB            [A[A
+
+
+  ...ders/parts/2018/00000.npz:   4%|▍         | 1.41MB / 34.3MB            [A[A[AProcessing Files (0 / 2)      :   4%|▍         | 2.55MB / 62.3MB,  252kB/s  
+New Data Upload               :   4%|▍         | 2.55MB / 62.3MB,  252kB/s  [A
+
+  ...ders/parts/2019/00000.npz:   4%|▍         | 1.15MB / 28.0MB            [A[A
+
+
+  ...ders/parts/2018/00000.npz:   4%|▍         | 1.41MB / 34.3MB            [A[A[A
+
+  ...ders/parts/2019/00000.npz:  16%|█▋        | 4.59MB / 28.0MB            [A[A
+
+
+  ...ders/parts/2018/00000.npz:  16%|█▋        | 5.62MB / 34.3MB            [A[A[AProcessing Files (0 / 2)      :  16%|█▋        | 10.2MB / 62.3MB, 1.00MB/s  
+New Data Upload               :  16%|█▋        | 10.2MB / 62.3MB, 1.00MB/s  [A
+
+  ...ders/parts/2019/00000.npz:  37%|███▋      | 10.3MB / 28.0MB            [A[A
+
+
+  ...ders/parts/2018/00000.npz:  37%|███▋      | 12.7MB / 34.3MB            [A[A[AProcessing Files (0 / 2)      :  37%|███▋      | 23.0MB / 62.3MB, 2.24MB/s  
+New Data Upload               :  37%|███▋      | 23.0MB / 62.3MB, 2.24MB/s  [A
+
+  ...ders/parts/2019/00000.npz:  74%|███████▍  | 20.7MB / 28.0MB            [A[A
+
+
+  ...ders/parts/2018/00000.npz:  74%|███████▍  | 25.3MB / 34.3MB            [A[A[AProcessing Files (0 / 2)      :  74%|███████▍  | 46.0MB / 62.3MB, 4.46MB/s  
+New Data Upload               :  74%|███████▍  | 46.0MB / 62.3MB, 4.46MB/s  [A
+
+  ...ders/parts/2019/00000.npz: 100%|█████████▉| 28.0MB / 28.0MB            [A[A
+
+
+  ...ders/parts/2018/00000.npz: 100%|█████████▉| 34.3MB / 34.3MB            [A[A[AProcessing Files (0 / 2)      : 100%|█████████▉| 62.3MB / 62.3MB, 6.01MB/s  
+New Data Upload               : 100%|█████████▉| 62.3MB / 62.3MB, 6.01MB/s  [A
+
+  ...ders/parts/2019/00000.npz: 100%|█████████▉| 28.0MB / 28.0MB            [A[A
+
+
+  ...ders/parts/2018/00000.npz: 100%|█████████▉| 34.3MB / 34.3MB            [A[A[A
+
+  ...ders/parts/2019/00000.npz: 100%|██████████| 28.0MB / 28.0MB            [A[A
+
+
+  ...ders/parts/2018/00000.npz: 100%|██████████| 34.3MB / 34.3MB            [A[A[AProcessing Files (2 / 2)      : 100%|██████████| 62.3MB / 62.3MB, 5.89MB/s  
+New Data Upload               : 100%|██████████| 62.3MB / 62.3MB, 5.89MB/s  [A
+
+  ...ders/parts/2019/00000.npz: 100%|██████████| 28.0MB / 28.0MB            [A[A
+
+
+  ...ders/parts/2018/00000.npz: 100%|██████████| 34.3MB / 34.3MB            [A[A[A
+
+  ...ders/parts/2019/00000.npz: 100%|██████████| 28.0MB / 28.0MB            [A[A
+
+
+  ...ders/parts/2018/00000.npz: 100%|██████████| 34.3MB / 34.3MB            [A[A[AProcessing Files (2 / 2)      : 100%|██████████| 62.3MB / 62.3MB, 5.82MB/s  
+New Data Upload               : 100%|██████████| 62.3MB / 62.3MB, 5.82MB/s  
+  ...ders/parts/2019/00000.npz: 100%|██████████| 28.0MB / 28.0MB            
+  ...ders/parts/2018/00000.npz: 100%|██████████| 34.3MB / 34.3MB            
+  gliders: 2 year(s) pushed and verified in 1 part commit(s), done.json written last (0 already present)
+  push-parts: 2 year(s) on the Hub under partials/family1_tf/gliders/
+=== stage fetch done in 1395.9s ===
