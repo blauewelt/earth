@@ -49,7 +49,7 @@
 # a pull_request / schedule trigger here would hand that box to anyone who
 # opens a PR (ml/CLAUDE.md 6). 8 inputs of the 25 GitHub allows.
 name: Family 1 build (tier-P observation stores, E-082)
-run-name: family1 ${{ github.event.inputs.check_credentials == 'true' && 'check-credentials' || github.event.inputs.store }} ${{ github.event.inputs.check_credentials != 'true' && (github.event.inputs.stage || 'all') || '' }} ${{ github.event.inputs.probe_month }}
+run-name: family1 ${{ github.event.inputs.check_credentials == 'true' && 'check-credentials' || github.event.inputs.store }} ${{ github.event.inputs.check_credentials != 'true' && (github.event.inputs.stage || 'all') || '' }} ${{ github.event.inputs.check_credentials != 'true' && github.event.inputs.stage != 'probe' && format('{0}..{1}', github.event.inputs.start || 'first', github.event.inputs.end || '2024-12-31') || '' }} ${{ github.event.inputs.probe_month }} ${{ github.event.inputs.runner != 'ubuntu-latest' && github.event.inputs.runner || '' }}
 
 on:
   workflow_dispatch:
