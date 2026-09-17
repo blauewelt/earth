@@ -1,0 +1,80 @@
+ "distinct_platforms": 37085,
+ "channels": [
+  "TMAX",
+  "TMIN",
+  "PRCP",
+  "SNOW",
+  "SNWD"
+ ],
+ "nan_fraction": {
+  "TMAX": 0.584444,
+  "TMIN": 0.589301,
+  "PRCP": 0.085614,
+  "SNOW": 0.657956,
+  "SNWD": 0.781092
+ },
+ "out_of_bounds": {
+  "TMAX": 0,
+  "TMIN": 0,
+  "PRCP": 0,
+  "SNOW": 0,
+  "SNWD": 0
+ },
+ "out_of_bounds_stored": {
+  "TMAX": 0,
+  "TMIN": 0,
+  "PRCP": 0,
+  "SNOW": 0,
+  "SNWD": 0
+ },
+ "rows_outside_month_dropped_by_probe": 0,
+ "qc": {
+  "0": 968768,
+  "1": 1166
+ },
+ "counts": {
+  "lines": 18723720,
+  "lines_other_element": 4529901,
+  "lines_bad_date": 0,
+  "probe_stopped_early": 1,
+  "lines_station_unknown": 0,
+  "element_lines_duplicated": 0,
+  "station_days_split": 0,
+  "value_missing": {},
+  "qflag_blanked": {
+   "TMAX": 389,
+   "TMIN": 476,
+   "PRCP": 1126,
+   "SNOW": 22,
+   "SNWD": 33
+  },
+  "out_of_bounds": {},
+  "rows_all_blanked": 598,
+  "rows_outside_window": 0,
+  "station_days": 969934,
+  "qc": {
+   "0": 968768,
+   "1": 1166
+  }
+ },
+ "counts_scope": "month",
+ "bytes_fetched": 87031808,
+ "bytes_index": 11498976,
+ "wall_seconds": 6.88,
+ "wall_seconds_index": 1.15,
+ "bytes_per_row": 89.73,
+ "stored_bytes_per_row": 41,
+ "time_dtype": "int64",
+ "schema_version": 3,
+ "platforms": {
+  "entries": 132501,
+  "probe_platforms_without_entry": 0
+ },
+ "estimate_rows_per_year": null,
+ "estimate_store_bytes": null,
+ "note_estimate": null,
+ "runner": "GitHub Actions 1000005070",
+ "builder_git_sha": "18359e904d9cae7cfadd7a1e8a2b5c4eb8651126",
+ "at": "2026-09-17T05:03:51+00:00"
+}
+probe -> /home/runner/work/earth/earth/ml/cache/family1_tf/probe/ghcnd/2015-06.json
