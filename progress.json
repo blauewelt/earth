@@ -1,0 +1,10 @@
+{
+ "at": "2026-09-17T15:53:44+00:00",
+ "done": 10,
+ "elapsed_s": 3864.3,
+ "eta_s": 5796.5,
+ "item": "bgcargo 2011",
+ "stage": "fetch bgcargo",
+ "total": 25,
+ "year_rows": 4787
+}
