@@ -1,0 +1,61 @@
+store     oceansites — OceanSITES moored time series (GDAC at NOAA NDBC), tropical arrays excluded: surface meteorology and T/S at ten depths, one row per site and time
+family    family1_gf (1.gf) · public -> chfrank/earth-tensors:tensors/family1_gf/oceansites
+axis      1989-01-01 .. 2006-12-31  bins 511..1826 · time_s int32 (schema 2)
+channels  C=28: airt, sst, sss, wind_u, wind_v, pres, sw, precip, T_10, T_20, T_30, T_50, T_75, T_100, T_150, T_200, T_300, T_500, S_10, S_20, S_30, S_50, S_75, S_100, S_150, S_200, S_300, S_500
+work      /home/runner/work/earth/earth/ml/cache/family1_gf
+
+=== stage index (oceansites) ===
+  [index oceansites] start (1 items)  0/1  0.0s
+  [index oceansites] plan.json  1/1  125.1s
+  index: oceansites — 18 year(s), C=28 (airt, sst, sss, wind_u, wind_v, pres, sw, precip …), bins 511..1826
+=== stage index done in 125.1s ===
+
+=== stage fetch (oceansites) ===
+  [fetch oceansites] start (18 items)  0/18  0.0s
+  [fetch oceansites] oceansites 1989  1/18  306.5s
+  1989: 0 row(s) in 0 part(s) (306.5s)
+  [fetch oceansites] oceansites 1990  2/18  543.2s
+  [fetch oceansites] oceansites 1990  2/18  625.5s
+  1990: 1,164 row(s) in 1 part(s) (319.0s)
+  [fetch oceansites] oceansites 1991  3/18  975.6s
+  [fetch oceansites] oceansites 1991  3/18  1072.9s
+  1991: 4,380 row(s) in 1 part(s) (447.4s)
+  [fetch oceansites] oceansites 1992  4/18  1435.9s
+  [fetch oceansites] oceansites 1992  4/18  1514.1s
+  1992: 648 row(s) in 1 part(s) (441.1s)
+  [fetch oceansites] oceansites 1993  5/18  1891.8s
+  [fetch oceansites] oceansites 1993  5/18  1978.0s
+  1993: 188 row(s) in 1 part(s) (463.9s)
+  [fetch oceansites] oceansites 1994  6/18  2553.7s
+  1994: 0 row(s) in 0 part(s) (575.7s)
+  [fetch oceansites] oceansites 1995  7/18  2888.0s
+  [fetch oceansites] oceansites 1995  7/18  2911.8s
+  [fetch oceansites] oceansites 1995  7/18  3021.1s
+  1995: 2,705 row(s) in 1 part(s) (467.5s)
+  [fetch oceansites] oceansites 1996  8/18  3953.9s
+  [fetch oceansites] oceansites 1996  8/18  4013.0s
+  [fetch oceansites] oceansites 1996  8/18  4229.9s
+  1996: 3,528 row(s) in 1 part(s) (1208.8s)
+  [fetch oceansites] oceansites 1997  9/18  5673.3s
+  [fetch oceansites] oceansites 1997  9/18  5831.1s
+  [fetch oceansites] oceansites 1997  9/18  5868.3s
+  [fetch oceansites] oceansites 1997  9/18  6014.3s
+  1997: 8,874 row(s) in 1 part(s) (1784.3s)
+  [fetch oceansites] oceansites 1998  10/18  7880.1s
+  [fetch oceansites] oceansites 1998  10/18  8054.6s
+  1998: 8,760 row(s) in 1 part(s) (2040.3s)
+  [fetch oceansites] oceansites 1999  11/18  9849.4s
+  [fetch oceansites] oceansites 1999  11/18  9850.7s
+  [fetch oceansites] oceansites 1999  11/18  10063.6s
+  1999: 12,840 row(s) in 1 part(s) (2009.0s)
+  [fetch oceansites] oceansites 2000  12/18  12046.1s
+  [fetch oceansites] oceansites 2000  12/18  12047.3s
+  [fetch oceansites] oceansites 2000  12/18  12435.9s
+  [fetch oceansites] oceansites 2000  12/18  12472.7s
+  2000: 191,118 row(s) in 1 part(s) (2409.1s)
+  [fetch oceansites] oceansites 2001  13/18  14749.8s
+  [fetch oceansites] oceansites 2001  13/18  14751.2s
+  [fetch oceansites] oceansites 2001  13/18  15102.2s
+  [fetch oceansites] oceansites 2001  13/18  15246.2s
+  [fetch oceansites] oceansites 2001  13/18  15283.0s
+  2001: 1,182,397 row(s) in 1 part(s) (2810.3s)
