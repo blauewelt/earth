@@ -1,0 +1,80 @@
+  ...amily1_gf/wod/wod/lon.npy: 100%|██████████| 61.1MB / 61.1MB            [A[A
+
+
+  ...f/wod/wod/bin_offsets.npy: 100%|██████████|  148kB /  148kB            [A[A[A
+
+
+
+  ...amily1_gf/wod/wod/bin.npy: 100%|██████████| 30.6MB / 30.6MB            [A[A[A[A
+
+
+
+
+  ...family1_gf/wod/wod/qc.npy: 100%|██████████| 15.3MB / 15.3MB            [A[A[A[A[A
+
+
+
+
+
+  ...ly1_gf/wod/wod/values.npy: 100%|██████████| 3.91GB / 3.91GB            [A[A[A[A[A[A
+
+
+
+
+
+
+  ...amily1_gf/wod/wod/lat.npy: 100%|██████████| 61.1MB / 61.1MB            [A[A[A[A[A[A[A
+
+
+
+
+
+
+
+  ...1_gf/wod/wod/platform.npy: 100%|██████████|  122MB /  122MB            [A[A[A[A[A[A[A[A
+
+
+
+
+
+
+
+
+  ...ly1_gf/wod/wod/time_s.npy: 100%|██████████|  122MB /  122MB            [A[A[A[A[A[A[A[A[A
+
+
+
+
+
+
+
+
+
+  ...family1_gf/wod/wod/fp.npy: 100%|██████████| 61.1MB / 61.1MB            [A[A[A[A[A[A[A[A[A[AProcessing Files (9 / 9)      : 100%|██████████| 4.39GB / 4.39GB, 4.31kB/s  
+New Data Upload               : 100%|██████████| 4.37GB / 4.37GB, 4.28kB/s  
+  ...amily1_gf/wod/wod/lon.npy: 100%|██████████| 61.1MB / 61.1MB            
+  ...f/wod/wod/bin_offsets.npy: 100%|██████████|  148kB /  148kB            
+  ...amily1_gf/wod/wod/bin.npy: 100%|██████████| 30.6MB / 30.6MB            
+  ...family1_gf/wod/wod/qc.npy: 100%|██████████| 15.3MB / 15.3MB            
+  ...ly1_gf/wod/wod/values.npy: 100%|██████████| 3.91GB / 3.91GB            
+  ...amily1_gf/wod/wod/lat.npy: 100%|██████████| 61.1MB / 61.1MB            
+  ...1_gf/wod/wod/platform.npy: 100%|██████████|  122MB /  122MB            
+  ...ly1_gf/wod/wod/time_s.npy: 100%|██████████|  122MB /  122MB            
+  ...family1_gf/wod/wod/fp.npy: 100%|██████████| 61.1MB / 61.1MB            
+  [publish wod] bin.npy  1/10  179.5s
+  [publish wod] bin_offsets.npy  2/10  179.8s
+  [publish wod] fp.npy  3/10  180.2s
+  [publish wod] lat.npy  4/10  182.1s
+  [publish wod] lon.npy  5/10  187.2s
+  [publish wod] platform.npy  6/10  191.0s
+  [publish wod] qc.npy  7/10  192.0s
+  [publish wod] time_s.npy  8/10  193.4s
+  [publish wod] values.npy  9/10  207.8s
+  [publish wod] store.json  10/10  208.0s
+  publish: 10 file(s) verified by restore -> https://huggingface.co/datasets/chfrank/earth-tensors/tree/main/tensors/family1_gf/wod
+=== stage publish done in 334.8s ===
+
+=== stage check (wod) ===
+  hub: chfrank/earth-tensors with the token from $HF_TOKEN
+  check: wod — 9 file(s) verified, N=15,281,373, schema 3, Hub chfrank/earth-tensors:tensors/family1_gf/wod agrees
+=== stage check done in 135.5s ===

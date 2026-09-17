@@ -1,0 +1,2555 @@
+{
+ "bins": [
+  -15341,
+  3287
+ ],
+ "builder_git_sha": "8e231982080d4205498708d702851a5d52c60637",
+ "built_at": "2026-09-17T18:24:46+00:00",
+ "channels": [
+  {
+   "max": 40.0,
+   "min": -2.5,
+   "name": "T_10",
+   "unit": "degC"
+  },
+  {
+   "max": 40.0,
+   "min": -2.5,
+   "name": "T_30",
+   "unit": "degC"
+  },
+  {
+   "max": 40.0,
+   "min": -2.5,
+   "name": "T_50",
+   "unit": "degC"
+  },
+  {
+   "max": 40.0,
+   "min": -2.5,
+   "name": "T_100",
+   "unit": "degC"
+  },
+  {
+   "max": 40.0,
+   "min": -2.5,
+   "name": "T_150",
+   "unit": "degC"
+  },
+  {
+   "max": 40.0,
+   "min": -2.5,
+   "name": "T_200",
+   "unit": "degC"
+  },
+  {
+   "max": 40.0,
+   "min": -2.5,
+   "name": "T_300",
+   "unit": "degC"
+  },
+  {
+   "max": 40.0,
+   "min": -2.5,
+   "name": "T_400",
+   "unit": "degC"
+  },
+  {
+   "max": 40.0,
+   "min": -2.5,
+   "name": "T_500",
+   "unit": "degC"
+  },
+  {
+   "max": 40.0,
+   "min": -2.5,
+   "name": "T_700",
+   "unit": "degC"
+  },
+  {
+   "max": 40.0,
+   "min": -2.5,
+   "name": "T_900",
+   "unit": "degC"
+  },
+  {
+   "max": 40.0,
+   "min": -2.5,
+   "name": "T_1100",
+   "unit": "degC"
+  },
+  {
+   "max": 40.0,
+   "min": -2.5,
+   "name": "T_1300",
+   "unit": "degC"
+  },
+  {
+   "max": 40.0,
+   "min": -2.5,
+   "name": "T_1500",
+   "unit": "degC"
+  },
+  {
+   "max": 40.0,
+   "min": -2.5,
+   "name": "T_1700",
+   "unit": "degC"
+  },
+  {
+   "max": 40.0,
+   "min": -2.5,
+   "name": "T_1900",
+   "unit": "degC"
+  },
+  {
+   "max": 42.0,
+   "min": 0.0,
+   "name": "S_10",
+   "unit": "PSU"
+  },
+  {
+   "max": 42.0,
+   "min": 0.0,
+   "name": "S_30",
+   "unit": "PSU"
+  },
+  {
+   "max": 42.0,
+   "min": 0.0,
+   "name": "S_50",
+   "unit": "PSU"
+  },
+  {
+   "max": 42.0,
+   "min": 0.0,
+   "name": "S_100",
+   "unit": "PSU"
+  },
+  {
+   "max": 42.0,
+   "min": 0.0,
+   "name": "S_150",
+   "unit": "PSU"
+  },
+  {
+   "max": 42.0,
+   "min": 0.0,
+   "name": "S_200",
+   "unit": "PSU"
+  },
+  {
+   "max": 42.0,
+   "min": 0.0,
+   "name": "S_300",
+   "unit": "PSU"
+  },
+  {
+   "max": 42.0,
+   "min": 0.0,
+   "name": "S_400",
+   "unit": "PSU"
+  },
+  {
+   "max": 42.0,
+   "min": 0.0,
+   "name": "S_500",
+   "unit": "PSU"
+  },
+  {
+   "max": 42.0,
+   "min": 0.0,
+   "name": "S_700",
+   "unit": "PSU"
+  },
+  {
+   "max": 42.0,
+   "min": 0.0,
+   "name": "S_900",
+   "unit": "PSU"
+  },
+  {
+   "max": 42.0,
+   "min": 0.0,
+   "name": "S_1100",
+   "unit": "PSU"
+  },
+  {
+   "max": 42.0,
+   "min": 0.0,
+   "name": "S_1300",
+   "unit": "PSU"
+  },
+  {
+   "max": 42.0,
+   "min": 0.0,
+   "name": "S_1500",
+   "unit": "PSU"
+  },
+  {
+   "max": 42.0,
+   "min": 0.0,
+   "name": "S_1700",
+   "unit": "PSU"
+  },
+  {
+   "max": 42.0,
+   "min": 0.0,
+   "name": "S_1900",
+   "unit": "PSU"
+  },
+  {
+   "max": 600.0,
+   "min": 0.0,
+   "name": "O2_10",
+   "unit": "umol/kg"
+  },
+  {
+   "max": 600.0,
+   "min": 0.0,
+   "name": "O2_30",
+   "unit": "umol/kg"
+  },
+  {
+   "max": 600.0,
+   "min": 0.0,
+   "name": "O2_50",
+   "unit": "umol/kg"
+  },
+  {
+   "max": 600.0,
+   "min": 0.0,
+   "name": "O2_100",
+   "unit": "umol/kg"
+  },
+  {
+   "max": 600.0,
+   "min": 0.0,
+   "name": "O2_150",
+   "unit": "umol/kg"
+  },
+  {
+   "max": 600.0,
+   "min": 0.0,
+   "name": "O2_200",
+   "unit": "umol/kg"
+  },
+  {
+   "max": 600.0,
+   "min": 0.0,
+   "name": "O2_300",
+   "unit": "umol/kg"
+  },
+  {
+   "max": 600.0,
+   "min": 0.0,
+   "name": "O2_400",
+   "unit": "umol/kg"
+  },
+  {
+   "max": 600.0,
+   "min": 0.0,
+   "name": "O2_500",
+   "unit": "umol/kg"
+  },
+  {
+   "max": 600.0,
+   "min": 0.0,
+   "name": "O2_700",
+   "unit": "umol/kg"
+  },
+  {
+   "max": 600.0,
+   "min": 0.0,
+   "name": "O2_900",
+   "unit": "umol/kg"
+  },
+  {
+   "max": 600.0,
+   "min": 0.0,
+   "name": "O2_1100",
+   "unit": "umol/kg"
+  },
+  {
+   "max": 600.0,
+   "min": 0.0,
+   "name": "O2_1300",
+   "unit": "umol/kg"
+  },
+  {
+   "max": 600.0,
+   "min": 0.0,
+   "name": "O2_1500",
+   "unit": "umol/kg"
+  },
+  {
+   "max": 600.0,
+   "min": 0.0,
+   "name": "O2_1700",
+   "unit": "umol/kg"
+  },
+  {
+   "max": 600.0,
+   "min": 0.0,
+   "name": "O2_1900",
+   "unit": "umol/kg"
+  },
+  {
+   "max": 60.0,
+   "min": 0.0,
+   "name": "NO3_10",
+   "unit": "umol/kg"
+  },
+  {
+   "max": 60.0,
+   "min": 0.0,
+   "name": "NO3_30",
+   "unit": "umol/kg"
+  },
+  {
+   "max": 60.0,
+   "min": 0.0,
+   "name": "NO3_50",
+   "unit": "umol/kg"
+  },
+  {
+   "max": 60.0,
+   "min": 0.0,
+   "name": "NO3_100",
+   "unit": "umol/kg"
+  },
+  {
+   "max": 60.0,
+   "min": 0.0,
+   "name": "NO3_150",
+   "unit": "umol/kg"
+  },
+  {
+   "max": 60.0,
+   "min": 0.0,
+   "name": "NO3_200",
+   "unit": "umol/kg"
+  },
+  {
+   "max": 60.0,
+   "min": 0.0,
+   "name": "NO3_300",
+   "unit": "umol/kg"
+  },
+  {
+   "max": 60.0,
+   "min": 0.0,
+   "name": "NO3_400",
+   "unit": "umol/kg"
+  },
+  {
+   "max": 60.0,
+   "min": 0.0,
+   "name": "NO3_500",
+   "unit": "umol/kg"
+  },
+  {
+   "max": 60.0,
+   "min": 0.0,
+   "name": "NO3_700",
+   "unit": "umol/kg"
+  },
+  {
+   "max": 60.0,
+   "min": 0.0,
+   "name": "NO3_900",
+   "unit": "umol/kg"
+  },
+  {
+   "max": 60.0,
+   "min": 0.0,
+   "name": "NO3_1100",
+   "unit": "umol/kg"
+  },
+  {
+   "max": 60.0,
+   "min": 0.0,
+   "name": "NO3_1300",
+   "unit": "umol/kg"
+  },
+  {
+   "max": 60.0,
+   "min": 0.0,
+   "name": "NO3_1500",
+   "unit": "umol/kg"
+  },
+  {
+   "max": 60.0,
+   "min": 0.0,
+   "name": "NO3_1700",
+   "unit": "umol/kg"
+  },
+  {
+   "max": 60.0,
+   "min": 0.0,
+   "name": "NO3_1900",
+   "unit": "umol/kg"
+  },
+  {
+   "max": 5.0,
+   "min": 0.0,
+   "name": "PO4_10",
+   "unit": "umol/kg"
+  },
+  {
+   "max": 5.0,
+   "min": 0.0,
+   "name": "PO4_30",
+   "unit": "umol/kg"
+  },
+  {
+   "max": 5.0,
+   "min": 0.0,
+   "name": "PO4_50",
+   "unit": "umol/kg"
+  },
+  {
+   "max": 5.0,
+   "min": 0.0,
+   "name": "PO4_100",
+   "unit": "umol/kg"
+  },
+  {
+   "max": 5.0,
+   "min": 0.0,
+   "name": "PO4_150",
+   "unit": "umol/kg"
+  },
+  {
+   "max": 5.0,
+   "min": 0.0,
+   "name": "PO4_200",
+   "unit": "umol/kg"
+  },
+  {
+   "max": 5.0,
+   "min": 0.0,
+   "name": "PO4_300",
+   "unit": "umol/kg"
+  },
+  {
+   "max": 5.0,
+   "min": 0.0,
+   "name": "PO4_400",
+   "unit": "umol/kg"
+  },
+  {
+   "max": 5.0,
+   "min": 0.0,
+   "name": "PO4_500",
+   "unit": "umol/kg"
+  },
+  {
+   "max": 5.0,
+   "min": 0.0,
+   "name": "PO4_700",
+   "unit": "umol/kg"
+  },
+  {
+   "max": 5.0,
+   "min": 0.0,
+   "name": "PO4_900",
+   "unit": "umol/kg"
+  },
+  {
+   "max": 5.0,
+   "min": 0.0,
+   "name": "PO4_1100",
+   "unit": "umol/kg"
+  },
+  {
+   "max": 5.0,
+   "min": 0.0,
+   "name": "PO4_1300",
+   "unit": "umol/kg"
+  },
+  {
+   "max": 5.0,
+   "min": 0.0,
+   "name": "PO4_1500",
+   "unit": "umol/kg"
+  },
+  {
+   "max": 5.0,
+   "min": 0.0,
+   "name": "PO4_1700",
+   "unit": "umol/kg"
+  },
+  {
+   "max": 5.0,
+   "min": 0.0,
+   "name": "PO4_1900",
+   "unit": "umol/kg"
+  },
+  {
+   "max": 300.0,
+   "min": 0.0,
+   "name": "SIO4_10",
+   "unit": "umol/kg"
+  },
+  {
+   "max": 300.0,
+   "min": 0.0,
+   "name": "SIO4_30",
+   "unit": "umol/kg"
+  },
+  {
+   "max": 300.0,
+   "min": 0.0,
+   "name": "SIO4_50",
+   "unit": "umol/kg"
+  },
+  {
+   "max": 300.0,
+   "min": 0.0,
+   "name": "SIO4_100",
+   "unit": "umol/kg"
+  },
+  {
+   "max": 300.0,
+   "min": 0.0,
+   "name": "SIO4_150",
+   "unit": "umol/kg"
+  },
+  {
+   "max": 300.0,
+   "min": 0.0,
+   "name": "SIO4_200",
+   "unit": "umol/kg"
+  },
+  {
+   "max": 300.0,
+   "min": 0.0,
+   "name": "SIO4_300",
+   "unit": "umol/kg"
+  },
+  {
+   "max": 300.0,
+   "min": 0.0,
+   "name": "SIO4_400",
+   "unit": "umol/kg"
+  },
+  {
+   "max": 300.0,
+   "min": 0.0,
+   "name": "SIO4_500",
+   "unit": "umol/kg"
+  },
+  {
+   "max": 300.0,
+   "min": 0.0,
+   "name": "SIO4_700",
+   "unit": "umol/kg"
+  },
+  {
+   "max": 300.0,
+   "min": 0.0,
+   "name": "SIO4_900",
+   "unit": "umol/kg"
+  },
+  {
+   "max": 300.0,
+   "min": 0.0,
+   "name": "SIO4_1100",
+   "unit": "umol/kg"
+  },
+  {
+   "max": 300.0,
+   "min": 0.0,
+   "name": "SIO4_1300",
+   "unit": "umol/kg"
+  },
+  {
+   "max": 300.0,
+   "min": 0.0,
+   "name": "SIO4_1500",
+   "unit": "umol/kg"
+  },
+  {
+   "max": 300.0,
+   "min": 0.0,
+   "name": "SIO4_1700",
+   "unit": "umol/kg"
+  },
+  {
+   "max": 300.0,
+   "min": 0.0,
+   "name": "SIO4_1900",
+   "unit": "umol/kg"
+  },
+  {
+   "max": 9.0,
+   "min": 6.5,
+   "name": "PH_10",
+   "unit": "1"
+  },
+  {
+   "max": 9.0,
+   "min": 6.5,
+   "name": "PH_30",
+   "unit": "1"
+  },
+  {
+   "max": 9.0,
+   "min": 6.5,
+   "name": "PH_50",
+   "unit": "1"
+  },
+  {
+   "max": 9.0,
+   "min": 6.5,
+   "name": "PH_100",
+   "unit": "1"
+  },
+  {
+   "max": 9.0,
+   "min": 6.5,
+   "name": "PH_150",
+   "unit": "1"
+  },
+  {
+   "max": 9.0,
+   "min": 6.5,
+   "name": "PH_200",
+   "unit": "1"
+  },
+  {
+   "max": 9.0,
+   "min": 6.5,
+   "name": "PH_300",
+   "unit": "1"
+  },
+  {
+   "max": 9.0,
+   "min": 6.5,
+   "name": "PH_400",
+   "unit": "1"
+  },
+  {
+   "max": 9.0,
+   "min": 6.5,
+   "name": "PH_500",
+   "unit": "1"
+  },
+  {
+   "max": 9.0,
+   "min": 6.5,
+   "name": "PH_700",
+   "unit": "1"
+  },
+  {
+   "max": 9.0,
+   "min": 6.5,
+   "name": "PH_900",
+   "unit": "1"
+  },
+  {
+   "max": 9.0,
+   "min": 6.5,
+   "name": "PH_1100",
+   "unit": "1"
+  },
+  {
+   "max": 9.0,
+   "min": 6.5,
+   "name": "PH_1300",
+   "unit": "1"
+  },
+  {
+   "max": 9.0,
+   "min": 6.5,
+   "name": "PH_1500",
+   "unit": "1"
+  },
+  {
+   "max": 9.0,
+   "min": 6.5,
+   "name": "PH_1700",
+   "unit": "1"
+  },
+  {
+   "max": 9.0,
+   "min": 6.5,
+   "name": "PH_1900",
+   "unit": "1"
+  },
+  {
+   "max": 100.0,
+   "min": 0.0,
+   "name": "CHL_10",
+   "unit": "mg/m3"
+  },
+  {
+   "max": 100.0,
+   "min": 0.0,
+   "name": "CHL_30",
+   "unit": "mg/m3"
+  },
+  {
+   "max": 100.0,
+   "min": 0.0,
+   "name": "CHL_50",
+   "unit": "mg/m3"
+  },
+  {
+   "max": 100.0,
+   "min": 0.0,
+   "name": "CHL_100",
+   "unit": "mg/m3"
+  },
+  {
+   "max": 100.0,
+   "min": 0.0,
+   "name": "CHL_150",
+   "unit": "mg/m3"
+  },
+  {
+   "max": 100.0,
+   "min": 0.0,
+   "name": "CHL_200",
+   "unit": "mg/m3"
+  },
+  {
+   "max": 100.0,
+   "min": 0.0,
+   "name": "CHL_300",
+   "unit": "mg/m3"
+  },
+  {
+   "max": 100.0,
+   "min": 0.0,
+   "name": "CHL_400",
+   "unit": "mg/m3"
+  },
+  {
+   "max": 100.0,
+   "min": 0.0,
+   "name": "CHL_500",
+   "unit": "mg/m3"
+  },
+  {
+   "max": 100.0,
+   "min": 0.0,
+   "name": "CHL_700",
+   "unit": "mg/m3"
+  },
+  {
+   "max": 100.0,
+   "min": 0.0,
+   "name": "CHL_900",
+   "unit": "mg/m3"
+  },
+  {
+   "max": 100.0,
+   "min": 0.0,
+   "name": "CHL_1100",
+   "unit": "mg/m3"
+  },
+  {
+   "max": 100.0,
+   "min": 0.0,
+   "name": "CHL_1300",
+   "unit": "mg/m3"
+  },
+  {
+   "max": 100.0,
+   "min": 0.0,
+   "name": "CHL_1500",
+   "unit": "mg/m3"
+  },
+  {
+   "max": 100.0,
+   "min": 0.0,
+   "name": "CHL_1700",
+   "unit": "mg/m3"
+  },
+  {
+   "max": 100.0,
+   "min": 0.0,
+   "name": "CHL_1900",
+   "unit": "mg/m3"
+  }
+ ],
+ "dataset": "World Ocean Database (ragged netCDF)",
+ "date_range": [
+  "1772-01-01",
+  "2026-12-31"
+ ],
+ "directories": {
+  "1800": {
+   "bytes_approx": 286000000,
+   "excluded_pfl": [],
+   "files": [
+    "wod_osd_1800.nc"
+   ],
+   "unknown_instrument": []
+  },
+  "1900": {
+   "bytes_approx": 20000000,
+   "excluded_pfl": [],
+   "files": [
+    "wod_osd_1900.nc"
+   ],
+   "unknown_instrument": []
+  },
+  "1901": {
+   "bytes_approx": 22000000,
+   "excluded_pfl": [],
+   "files": [
+    "wod_osd_1901.nc"
+   ],
+   "unknown_instrument": []
+  },
+  "1902": {
+   "bytes_approx": 21000000,
+   "excluded_pfl": [],
+   "files": [
+    "wod_osd_1902.nc"
+   ],
+   "unknown_instrument": []
+  },
+  "1903": {
+   "bytes_approx": 24025000,
+   "excluded_pfl": [],
+   "files": [
+    "wod_osd_1903.nc",
+    "wod_mbt_1903.nc"
+   ],
+   "unknown_instrument": []
+  },
+  "1904": {
+   "bytes_approx": 25000000,
+   "excluded_pfl": [],
+   "files": [
+    "wod_osd_1904.nc"
+   ],
+   "unknown_instrument": []
+  },
+  "1905": {
+   "bytes_approx": 27031000,
+   "excluded_pfl": [],
+   "files": [
+    "wod_osd_1905.nc",
+    "wod_mbt_1905.nc"
+   ],
+   "unknown_instrument": []
+  },
+  "1906": {
+   "bytes_approx": 21030000,
+   "excluded_pfl": [],
+   "files": [
+    "wod_osd_1906.nc",
+    "wod_mbt_1906.nc"
+   ],
+   "unknown_instrument": []
+  },
+  "1907": {
+   "bytes_approx": 21029000,
+   "excluded_pfl": [],
+   "files": [
+    "wod_osd_1907.nc",
+    "wod_mbt_1907.nc"
+   ],
+   "unknown_instrument": []
+  },
+  "1908": {
+   "bytes_approx": 17066000,
+   "excluded_pfl": [],
+   "files": [
+    "wod_osd_1908.nc",
+    "wod_mbt_1908.nc"
+   ],
+   "unknown_instrument": []
+  },
+  "1909": {
+   "bytes_approx": 20055000,
+   "excluded_pfl": [],
+   "files": [
+    "wod_osd_1909.nc",
+    "wod_mbt_1909.nc"
+   ],
+   "unknown_instrument": []
+  },
+  "1910": {
+   "bytes_approx": 22054000,
+   "excluded_pfl": [],
+   "files": [
+    "wod_osd_1910.nc",
+    "wod_mbt_1910.nc"
+   ],
+   "unknown_instrument": []
+  },
+  "1911": {
+   "bytes_approx": 26085000,
+   "excluded_pfl": [],
+   "files": [
+    "wod_osd_1911.nc",
+    "wod_mbt_1911.nc"
+   ],
+   "unknown_instrument": []
+  },
+  "1912": {
+   "bytes_approx": 23049000,
+   "excluded_pfl": [],
+   "files": [
+    "wod_osd_1912.nc",
+    "wod_mbt_1912.nc"
+   ],
+   "unknown_instrument": []
+  },
+  "1913": {
+   "bytes_approx": 27048000,
+   "excluded_pfl": [],
+   "files": [
+    "wod_osd_1913.nc",
+    "wod_mbt_1913.nc"
+   ],
+   "unknown_instrument": []
+  },
+  "1914": {
+   "bytes_approx": 24025000,
+   "excluded_pfl": [],
+   "files": [
+    "wod_osd_1914.nc",
+    "wod_mbt_1914.nc"
+   ],
+   "unknown_instrument": []
+  },
+  "1915": {
+   "bytes_approx": 7925000,
+   "excluded_pfl": [],
+   "files": [
+    "wod_osd_1915.nc",
+    "wod_mbt_1915.nc"
+   ],
+   "unknown_instrument": []
+  },
+  "1916": {
+   "bytes_approx": 3400000,
+   "excluded_pfl": [],
+   "files": [
+    "wod_osd_1916.nc"
+   ],
+   "unknown_instrument": []
+  },
+  "1917": {
+   "bytes_approx": 3325000,
+   "excluded_pfl": [],
+   "files": [
+    "wod_osd_1917.nc",
+    "wod_mbt_1917.nc"
+   ],
+   "unknown_instrument": []
+  },
+  "1918": {
+   "bytes_approx": 4000000,
+   "excluded_pfl": [],
+   "files": [
+    "wod_osd_1918.nc"
+   ],
+   "unknown_instrument": []
+  },
+  "1919": {
+   "bytes_approx": 11000000,
+   "excluded_pfl": [],
+   "files": [
+    "wod_osd_1919.nc"
+   ],
+   "unknown_instrument": []
+  },
+  "1920": {
+   "bytes_approx": 16000000,
+   "excluded_pfl": [],
+   "files": [
+    "wod_osd_1920.nc"
+   ],
+   "unknown_instrument": []
+  },
+  "1921": {
+   "bytes_approx": 27000000,
+   "excluded_pfl": [],
+   "files": [
+    "wod_osd_1921.nc"
+   ],
+   "unknown_instrument": []
+  },
+  "1922": {
+   "bytes_approx": 23000000,
+   "excluded_pfl": [],
+   "files": [
+    "wod_osd_1922.nc"
+   ],
+   "unknown_instrument": []
+  },
+  "1923": {
+   "bytes_approx": 9900000,
+   "excluded_pfl": [],
+   "files": [
+    "wod_osd_1923.nc"
+   ],
+   "unknown_instrument": []
+  },
+  "1924": {
+   "bytes_approx": 16025000,
+   "excluded_pfl": [],
+   "files": [
+    "wod_osd_1924.nc",
+    "wod_mbt_1924.nc"
+   ],
+   "unknown_instrument": []
+  },
+  "1925": {
+   "bytes_approx": 19031000,
+   "excluded_pfl": [],
+   "files": [
+    "wod_osd_1925.nc",
+    "wod_mbt_1925.nc"
+   ],
+   "unknown_instrument": []
+  },
+  "1926": {
+   "bytes_approx": 23026000,
+   "excluded_pfl": [],
+   "files": [
+    "wod_osd_1926.nc",
+    "wod_mbt_1926.nc"
+   ],
+   "unknown_instrument": []
+  },
+  "1927": {
+   "bytes_approx": 28025000,
+   "excluded_pfl": [],
+   "files": [
+    "wod_osd_1927.nc",
+    "wod_mbt_1927.nc"
+   ],
+   "unknown_instrument": []
+  },
+  "1928": {
+   "bytes_approx": 25025000,
+   "excluded_pfl": [],
+   "files": [
+    "wod_osd_1928.nc",
+    "wod_mbt_1928.nc"
+   ],
+   "unknown_instrument": []
+  },
+  "1929": {
+   "bytes_approx": 26026000,
+   "excluded_pfl": [],
+   "files": [
+    "wod_osd_1929.nc",
+    "wod_mbt_1929.nc"
+   ],
+   "unknown_instrument": []
+  },
+  "1930": {
+   "bytes_approx": 35000000,
+   "excluded_pfl": [],
+   "files": [
+    "wod_osd_1930.nc"
+   ],
+   "unknown_instrument": []
+  },
+  "1931": {
+   "bytes_approx": 40028000,
+   "excluded_pfl": [],
+   "files": [
+    "wod_osd_1931.nc",
+    "wod_mbt_1931.nc"
+   ],
+   "unknown_instrument": []
+  },
+  "1932": {
+   "bytes_approx": 64031000,
+   "excluded_pfl": [],
+   "files": [
+    "wod_osd_1932.nc",
+    "wod_mbt_1932.nc"
+   ],
+   "unknown_instrument": []
+  },
+  "1933": {
+   "bytes_approx": 50035000,
+   "excluded_pfl": [],
+   "files": [
+    "wod_osd_1933.nc",
+    "wod_mbt_1933.nc"
+   ],
+   "unknown_instrument": []
+  },
+  "1934": {
+   "bytes_approx": 68043000,
+   "excluded_pfl": [],
+   "files": [
+    "wod_osd_1934.nc",
+    "wod_mbt_1934.nc"
+   ],
+   "unknown_instrument": []
+  },
+  "1935": {
+   "bytes_approx": 73045000,
+   "excluded_pfl": [],
+   "files": [
+    "wod_osd_1935.nc",
+    "wod_mbt_1935.nc"
+   ],
+   "unknown_instrument": []
+  },
+  "1936": {
+   "bytes_approx": 68041000,
+   "excluded_pfl": [],
+   "files": [
+    "wod_osd_1936.nc",
+    "wod_mbt_1936.nc"
+   ],
+   "unknown_instrument": []
+  },
+  "1937": {
+   "bytes_approx": 57092000,
+   "excluded_pfl": [],
+   "files": [
+    "wod_osd_1937.nc",
+    "wod_mbt_1937.nc"
+   ],
+   "unknown_instrument": []
+  },
+  "1938": {
+   "bytes_approx": 65083000,
+   "excluded_pfl": [],
+   "files": [
+    "wod_osd_1938.nc",
+    "wod_mbt_1938.nc"
+   ],
+   "unknown_instrument": []
+  },
+  "1939": {
+   "bytes_approx": 65075000,
+   "excluded_pfl": [],
+   "files": [
+    "wod_osd_1939.nc",
+    "wod_mbt_1939.nc"
+   ],
+   "unknown_instrument": []
+  },
+  "1940": {
+   "bytes_approx": 46144000,
+   "excluded_pfl": [],
+   "files": [
+    "wod_osd_1940.nc",
+    "wod_mbt_1940.nc"
+   ],
+   "unknown_instrument": []
+  },
+  "1941": {
+   "bytes_approx": 62000000,
+   "excluded_pfl": [],
+   "files": [
+    "wod_osd_1941.nc",
+    "wod_mbt_1941.nc"
+   ],
+   "unknown_instrument": []
+  },
+  "1942": {
+   "bytes_approx": 47000000,
+   "excluded_pfl": [],
+   "files": [
+    "wod_osd_1942.nc",
+    "wod_mbt_1942.nc"
+   ],
+   "unknown_instrument": []
+  },
+  "1943": {
+   "bytes_approx": 72000000,
+   "excluded_pfl": [],
+   "files": [
+    "wod_osd_1943.nc",
+    "wod_mbt_1943.nc"
+   ],
+   "unknown_instrument": []
+  },
+  "1944": {
+   "bytes_approx": 129000000,
+   "excluded_pfl": [],
+   "files": [
+    "wod_osd_1944.nc",
+    "wod_mbt_1944.nc"
+   ],
+   "unknown_instrument": []
+  },
+  "1945": {
+   "bytes_approx": 138000000,
+   "excluded_pfl": [],
+   "files": [
+    "wod_osd_1945.nc",
+    "wod_mbt_1945.nc"
+   ],
+   "unknown_instrument": []
+  },
+  "1946": {
+   "bytes_approx": 102000000,
+   "excluded_pfl": [],
+   "files": [
+    "wod_osd_1946.nc",
+    "wod_mbt_1946.nc"
+   ],
+   "unknown_instrument": []
+  },
+  "1947": {
+   "bytes_approx": 129000000,
+   "excluded_pfl": [],
+   "files": [
+    "wod_osd_1947.nc",
+    "wod_mbt_1947.nc"
+   ],
+   "unknown_instrument": []
+  },
+  "1948": {
+   "bytes_approx": 152000000,
+   "excluded_pfl": [],
+   "files": [
+    "wod_osd_1948.nc",
+    "wod_mbt_1948.nc"
+   ],
+   "unknown_instrument": []
+  },
+  "1949": {
+   "bytes_approx": 191000000,
+   "excluded_pfl": [],
+   "files": [
+    "wod_osd_1949.nc",
+    "wod_mbt_1949.nc"
+   ],
+   "unknown_instrument": []
+  },
+  "1950": {
+   "bytes_approx": 265000000,
+   "excluded_pfl": [],
+   "files": [
+    "wod_osd_1950.nc",
+    "wod_mbt_1950.nc"
+   ],
+   "unknown_instrument": []
+  },
+  "1951": {
+   "bytes_approx": 307000000,
+   "excluded_pfl": [],
+   "files": [
+    "wod_osd_1951.nc",
+    "wod_mbt_1951.nc"
+   ],
+   "unknown_instrument": []
+  },
+  "1952": {
+   "bytes_approx": 379028000,
+   "excluded_pfl": [],
+   "files": [
+    "wod_osd_1952.nc",
+    "wod_mbt_1952.nc",
+    "wod_xbt_1952.nc"
+   ],
+   "unknown_instrument": []
+  },
+  "1953": {
+   "bytes_approx": 362000000,
+   "excluded_pfl": [],
+   "files": [
+    "wod_osd_1953.nc",
+    "wod_mbt_1953.nc"
+   ],
+   "unknown_instrument": []
+  },
+  "1954": {
+   "bytes_approx": 375030000,
+   "excluded_pfl": [],
+   "files": [
+    "wod_osd_1954.nc",
+    "wod_mbt_1954.nc",
+    "wod_xbt_1954.nc"
+   ],
+   "unknown_instrument": []
+  },
+  "1955": {
+   "bytes_approx": 336000000,
+   "excluded_pfl": [],
+   "files": [
+    "wod_osd_1955.nc",
+    "wod_mbt_1955.nc"
+   ],
+   "unknown_instrument": []
+  },
+  "1956": {
+   "bytes_approx": 351000000,
+   "excluded_pfl": [
+    "wod_pfl_1956.nc"
+   ],
+   "files": [
+    "wod_osd_1956.nc",
+    "wod_mbt_1956.nc"
+   ],
+   "unknown_instrument": []
+  },
+  "1957": {
+   "bytes_approx": 415000000,
+   "excluded_pfl": [],
+   "files": [
+    "wod_osd_1957.nc",
+    "wod_mbt_1957.nc"
+   ],
+   "unknown_instrument": []
+  },
+  "1958": {
+   "bytes_approx": 544000000,
+   "excluded_pfl": [],
+   "files": [
+    "wod_osd_1958.nc",
+    "wod_mbt_1958.nc"
+   ],
+   "unknown_instrument": []
+  },
+  "1959": {
+   "bytes_approx": 497000000,
+   "excluded_pfl": [],
+   "files": [
+    "wod_osd_1959.nc",
+    "wod_mbt_1959.nc"
+   ],
+   "unknown_instrument": []
+  },
+  "1960": {
+   "bytes_approx": 499039000,
+   "excluded_pfl": [],
+   "files": [
+    "wod_osd_1960.nc",
+    "wod_mbt_1960.nc",
+    "wod_xbt_1960.nc"
+   ],
+   "unknown_instrument": []
+  },
+  "1961": {
+   "bytes_approx": 592311000,
+   "excluded_pfl": [],
+   "files": [
+    "wod_osd_1961.nc",
+    "wod_ctd_1961.nc",
+    "wod_mbt_1961.nc",
+    "wod_xbt_1961.nc"
+   ],
+   "unknown_instrument": []
+  },
+  "1962": {
+   "bytes_approx": 606145000,
+   "excluded_pfl": [],
+   "files": [
+    "wod_osd_1962.nc",
+    "wod_ctd_1962.nc",
+    "wod_mbt_1962.nc",
+    "wod_xbt_1962.nc"
+   ],
+   "unknown_instrument": []
+  },
+  "1963": {
+   "bytes_approx": 782263000,
+   "excluded_pfl": [],
+   "files": [
+    "wod_osd_1963.nc",
+    "wod_ctd_1963.nc",
+    "wod_mbt_1963.nc",
+    "wod_xbt_1963.nc"
+   ],
+   "unknown_instrument": []
+  },
+  "1964": {
+   "bytes_approx": 831225000,
+   "excluded_pfl": [],
+   "files": [
+    "wod_osd_1964.nc",
+    "wod_ctd_1964.nc",
+    "wod_mbt_1964.nc",
+    "wod_xbt_1964.nc"
+   ],
+   "unknown_instrument": []
+  },
+  "1965": {
+   "bytes_approx": 873070000,
+   "excluded_pfl": [],
+   "files": [
+    "wod_osd_1965.nc",
+    "wod_mbt_1965.nc",
+    "wod_xbt_1965.nc"
+   ],
+   "unknown_instrument": []
+  },
+  "1966": {
+   "bytes_approx": 894544000,
+   "excluded_pfl": [],
+   "files": [
+    "wod_osd_1966.nc",
+    "wod_ctd_1966.nc",
+    "wod_mbt_1966.nc",
+    "wod_xbt_1966.nc"
+   ],
+   "unknown_instrument": []
+  },
+  "1967": {
+   "bytes_approx": 937000000,
+   "excluded_pfl": [],
+   "files": [
+    "wod_osd_1967.nc",
+    "wod_ctd_1967.nc",
+    "wod_mbt_1967.nc",
+    "wod_xbt_1967.nc"
+   ],
+   "unknown_instrument": []
+  },
+  "1968": {
+   "bytes_approx": 821400000,
+   "excluded_pfl": [],
+   "files": [
+    "wod_osd_1968.nc",
+    "wod_ctd_1968.nc",
+    "wod_mbt_1968.nc",
+    "wod_xbt_1968.nc"
+   ],
+   "unknown_instrument": []
+  },
+  "1969": {
+   "bytes_approx": 910000000,
+   "excluded_pfl": [],
+   "files": [
+    "wod_osd_1969.nc",
+    "wod_ctd_1969.nc",
+    "wod_mbt_1969.nc",
+    "wod_xbt_1969.nc"
+   ],
+   "unknown_instrument": []
+  },
+  "1970": {
+   "bytes_approx": 800200000,
+   "excluded_pfl": [],
+   "files": [
+    "wod_osd_1970.nc",
+    "wod_ctd_1970.nc",
+    "wod_mbt_1970.nc",
+    "wod_xbt_1970.nc"
+   ],
+   "unknown_instrument": []
+  },
+  "1971": {
+   "bytes_approx": 876000000,
+   "excluded_pfl": [],
+   "files": [
+    "wod_osd_1971.nc",
+    "wod_ctd_1971.nc",
+    "wod_mbt_1971.nc",
+    "wod_xbt_1971.nc"
+   ],
+   "unknown_instrument": []
+  },
+  "1972": {
+   "bytes_approx": 1011000000,
+   "excluded_pfl": [],
+   "files": [
+    "wod_osd_1972.nc",
+    "wod_ctd_1972.nc",
+    "wod_mbt_1972.nc",
+    "wod_xbt_1972.nc"
+   ],
+   "unknown_instrument": []
+  },
+  "1973": {
+   "bytes_approx": 1022000000,
+   "excluded_pfl": [],
+   "files": [
+    "wod_osd_1973.nc",
+    "wod_ctd_1973.nc",
+    "wod_mbt_1973.nc",
+    "wod_xbt_1973.nc"
+   ],
+   "unknown_instrument": []
+  },
+  "1974": {
+   "bytes_approx": 948000000,
+   "excluded_pfl": [],
+   "files": [
+    "wod_osd_1974.nc",
+    "wod_ctd_1974.nc",
+    "wod_mbt_1974.nc",
+    "wod_xbt_1974.nc"
+   ],
+   "unknown_instrument": []
+  },
+  "1975": {
+   "bytes_approx": 841000000,
+   "excluded_pfl": [],
+   "files": [
+    "wod_osd_1975.nc",
+    "wod_ctd_1975.nc",
+    "wod_mbt_1975.nc",
+    "wod_xbt_1975.nc"
+   ],
+   "unknown_instrument": []
+  },
+  "1976": {
+   "bytes_approx": 887032000,
+   "excluded_pfl": [],
+   "files": [
+    "wod_osd_1976.nc",
+    "wod_ctd_1976.nc",
+    "wod_mbt_1976.nc",
+    "wod_xbt_1976.nc",
+    "wod_uor_1976.nc"
+   ],
+   "unknown_instrument": []
+  },
+  "1977": {
+   "bytes_approx": 956238000,
+   "excluded_pfl": [],
+   "files": [
+    "wod_osd_1977.nc",
+    "wod_ctd_1977.nc",
+    "wod_mbt_1977.nc",
+    "wod_xbt_1977.nc",
+    "wod_mrb_1977.nc"
+   ],
+   "unknown_instrument": []
+  },
+  "1978": {
+   "bytes_approx": 1112316000,
+   "excluded_pfl": [],
+   "files": [
+    "wod_osd_1978.nc",
+    "wod_ctd_1978.nc",
+    "wod_mbt_1978.nc",
+    "wod_xbt_1978.nc",
+    "wod_mrb_1978.nc"
+   ],
+   "unknown_instrument": []
+  },
+  "1979": {
+   "bytes_approx": 1112400000,
+   "excluded_pfl": [],
+   "files": [
+    "wod_osd_1979.nc",
+    "wod_ctd_1979.nc",
+    "wod_mbt_1979.nc",
+    "wod_xbt_1979.nc",
+    "wod_mrb_1979.nc"
+   ],
+   "unknown_instrument": []
+  },
+  "1980": {
+   "bytes_approx": 1030200000,
+   "excluded_pfl": [],
+   "files": [
+    "wod_osd_1980.nc",
+    "wod_ctd_1980.nc",
+    "wod_mbt_1980.nc",
+    "wod_xbt_1980.nc",
+    "wod_mrb_1980.nc"
+   ],
+   "unknown_instrument": []
+  },
+  "1981": {
+   "bytes_approx": 1113100000,
+   "excluded_pfl": [],
+   "files": [
+    "wod_osd_1981.nc",
+    "wod_ctd_1981.nc",
+    "wod_mbt_1981.nc",
+    "wod_xbt_1981.nc",
+    "wod_mrb_1981.nc"
+   ],
+   "unknown_instrument": []
+  },
+  "1982": {
+   "bytes_approx": 1004836000,
+   "excluded_pfl": [],
+   "files": [
+    "wod_osd_1982.nc",
+    "wod_ctd_1982.nc",
+    "wod_mbt_1982.nc",
+    "wod_xbt_1982.nc",
+    "wod_mrb_1982.nc",
+    "wod_uor_1982.nc"
+   ],
+   "unknown_instrument": []
+  },
+  "1983": {
+   "bytes_approx": 1126440000,
+   "excluded_pfl": [],
+   "files": [
+    "wod_osd_1983.nc",
+    "wod_ctd_1983.nc",
+    "wod_mbt_1983.nc",
+    "wod_xbt_1983.nc",
+    "wod_mrb_1983.nc",
+    "wod_uor_1983.nc"
+   ],
+   "unknown_instrument": []
+  },
+  "1984": {
+   "bytes_approx": 1231642000,
+   "excluded_pfl": [],
+   "files": [
+    "wod_osd_1984.nc",
+    "wod_ctd_1984.nc",
+    "wod_mbt_1984.nc",
+    "wod_xbt_1984.nc",
+    "wod_mrb_1984.nc",
+    "wod_uor_1984.nc"
+   ],
+   "unknown_instrument": []
+  },
+  "1985": {
+   "bytes_approx": 1322598000,
+   "excluded_pfl": [],
+   "files": [
+    "wod_osd_1985.nc",
+    "wod_ctd_1985.nc",
+    "wod_mbt_1985.nc",
+    "wod_xbt_1985.nc",
+    "wod_mrb_1985.nc",
+    "wod_drb_1985.nc"
+   ],
+   "unknown_instrument": []
+  },
+  "1986": {
+   "bytes_approx": 1440978000,
+   "excluded_pfl": [],
+   "files": [
+    "wod_osd_1986.nc",
+    "wod_ctd_1986.nc",
+    "wod_mbt_1986.nc",
+    "wod_xbt_1986.nc",
+    "wod_mrb_1986.nc",
+    "wod_drb_1986.nc",
+    "wod_uor_1986.nc"
+   ],
+   "unknown_instrument": []
+  },
+  "1987": {
+   "bytes_approx": 1577017000,
+   "excluded_pfl": [],
+   "files": [
+    "wod_osd_1987.nc",
+    "wod_ctd_1987.nc",
+    "wod_mbt_1987.nc",
+    "wod_xbt_1987.nc",
+    "wod_mrb_1987.nc",
+    "wod_drb_1987.nc",
+    "wod_uor_1987.nc"
+   ],
+   "unknown_instrument": []
+  },
+  "1988": {
+   "bytes_approx": 1490929000,
+   "excluded_pfl": [],
+   "files": [
+    "wod_osd_1988.nc",
+    "wod_ctd_1988.nc",
+    "wod_mbt_1988.nc",
+    "wod_xbt_1988.nc",
+    "wod_mrb_1988.nc",
+    "wod_drb_1988.nc",
+    "wod_uor_1988.nc"
+   ],
+   "unknown_instrument": []
+  },
+  "1989": {
+   "bytes_approx": 1445900000,
+   "excluded_pfl": [],
+   "files": [
+    "wod_osd_1989.nc",
+    "wod_ctd_1989.nc",
+    "wod_mbt_1989.nc",
+    "wod_xbt_1989.nc",
+    "wod_mrb_1989.nc",
+    "wod_drb_1989.nc",
+    "wod_uor_1989.nc"
+   ],
+   "unknown_instrument": []
+  },
+  "1990": {
+   "bytes_approx": 1538700000,
+   "excluded_pfl": [],
+   "files": [
+    "wod_osd_1990.nc",
+    "wod_ctd_1990.nc",
+    "wod_mbt_1990.nc",
+    "wod_xbt_1990.nc",
+    "wod_mrb_1990.nc",
+    "wod_drb_1990.nc",
+    "wod_uor_1990.nc"
+   ],
+   "unknown_instrument": []
+  },
+  "1991": {
+   "bytes_approx": 1456700000,
+   "excluded_pfl": [],
+   "files": [
+    "wod_osd_1991.nc",
+    "wod_ctd_1991.nc",
+    "wod_mbt_1991.nc",
+    "wod_xbt_1991.nc",
+    "wod_mrb_1991.nc",
+    "wod_drb_1991.nc",
+    "wod_uor_1991.nc"
+   ],
+   "unknown_instrument": []
+  },
+  "1992": {
+   "bytes_approx": 1618776000,
+   "excluded_pfl": [],
+   "files": [
+    "wod_osd_1992.nc",
+    "wod_ctd_1992.nc",
+    "wod_mbt_1992.nc",
+    "wod_xbt_1992.nc",
+    "wod_mrb_1992.nc",
+    "wod_drb_1992.nc",
+    "wod_uor_1992.nc"
+   ],
+   "unknown_instrument": []
+  },
+  "1993": {
+   "bytes_approx": 1823599000,
+   "excluded_pfl": [],
+   "files": [
+    "wod_osd_1993.nc",
+    "wod_ctd_1993.nc",
+    "wod_mbt_1993.nc",
+    "wod_xbt_1993.nc",
+    "wod_mrb_1993.nc",
+    "wod_drb_1993.nc",
+    "wod_uor_1993.nc"
+   ],
+   "unknown_instrument": []
+  },
+  "1994": {
+   "bytes_approx": 1740685000,
+   "excluded_pfl": [
+    "wod_pfl_1994.nc"
+   ],
+   "files": [
+    "wod_osd_1994.nc",
+    "wod_ctd_1994.nc",
+    "wod_mbt_1994.nc",
+    "wod_xbt_1994.nc",
+    "wod_mrb_1994.nc",
+    "wod_drb_1994.nc",
+    "wod_uor_1994.nc"
+   ],
+   "unknown_instrument": []
+  },
+  "1995": {
+   "bytes_approx": 1940200000,
+   "excluded_pfl": [
+    "wod_pfl_1995.nc"
+   ],
+   "files": [
+    "wod_osd_1995.nc",
+    "wod_ctd_1995.nc",
+    "wod_mbt_1995.nc",
+    "wod_xbt_1995.nc",
+    "wod_mrb_1995.nc",
+    "wod_uor_1995.nc"
+   ],
+   "unknown_instrument": []
+  },
+  "1996": {
+   "bytes_approx": 1571100000,
+   "excluded_pfl": [
+    "wod_pfl_1996.nc"
+   ],
+   "files": [
+    "wod_osd_1996.nc",
+    "wod_ctd_1996.nc",
+    "wod_mbt_1996.nc",
+    "wod_xbt_1996.nc",
+    "wod_mrb_1996.nc",
+    "wod_uor_1996.nc"
+   ],
+   "unknown_instrument": []
+  },
+  "1997": {
+   "bytes_approx": 1616200000,
+   "excluded_pfl": [
+    "wod_pfl_1997.nc"
+   ],
+   "files": [
+    "wod_osd_1997.nc",
+    "wod_ctd_1997.nc",
+    "wod_mbt_1997.nc",
+    "wod_xbt_1997.nc",
+    "wod_mrb_1997.nc",
+    "wod_uor_1997.nc",
+    "wod_apb_1997.nc"
+   ],
+   "unknown_instrument": []
+  },
+  "1998": {
+   "bytes_approx": 1627829999,
+   "excluded_pfl": [
+    "wod_pfl_1998.nc"
+   ],
+   "files": [
+    "wod_osd_1998.nc",
+    "wod_ctd_1998.nc",
+    "wod_mbt_1998.nc",
+    "wod_xbt_1998.nc",
+    "wod_mrb_1998.nc",
+    "wod_drb_1998.nc",
+    "wod_uor_1998.nc",
+    "wod_apb_1998.nc"
+   ],
+   "unknown_instrument": []
+  },
+  "1999": {
+   "bytes_approx": 1479499999,
+   "excluded_pfl": [
+    "wod_pfl_1999.nc"
+   ],
+   "files": [
+    "wod_osd_1999.nc",
+    "wod_ctd_1999.nc",
+    "wod_mbt_1999.nc",
+    "wod_xbt_1999.nc",
+    "wod_mrb_1999.nc",
+    "wod_drb_1999.nc",
+    "wod_uor_1999.nc",
+    "wod_apb_1999.nc"
+   ],
+   "unknown_instrument": []
+  },
+  "2000": {
+   "bytes_approx": 1430487000,
+   "excluded_pfl": [
+    "wod_pfl_2000.nc"
+   ],
+   "files": [
+    "wod_osd_2000.nc",
+    "wod_ctd_2000.nc",
+    "wod_mbt_2000.nc",
+    "wod_xbt_2000.nc",
+    "wod_mrb_2000.nc",
+    "wod_drb_2000.nc",
+    "wod_uor_2000.nc",
+    "wod_gld_2000.nc"
+   ],
+   "unknown_instrument": []
+  },
+  "2001": {
+   "bytes_approx": 1477100000,
+   "excluded_pfl": [
+    "wod_pfl_2001.nc"
+   ],
+   "files": [
+    "wod_osd_2001.nc",
+    "wod_ctd_2001.nc",
+    "wod_mbt_2001.nc",
+    "wod_xbt_2001.nc",
+    "wod_mrb_2001.nc",
+    "wod_drb_2001.nc",
+    "wod_uor_2001.nc"
+   ],
+   "unknown_instrument": []
+  },
+  "2002": {
+   "bytes_approx": 1146100000,
+   "excluded_pfl": [
+    "wod_pfl_2002.nc"
+   ],
+   "files": [
+    "wod_osd_2002.nc",
+    "wod_ctd_2002.nc",
+    "wod_mbt_2002.nc",
+    "wod_xbt_2002.nc",
+    "wod_mrb_2002.nc",
+    "wod_drb_2002.nc",
+    "wod_uor_2002.nc",
+    "wod_gld_2002.nc"
+   ],
+   "unknown_instrument": []
+  },
+  "2003": {
+   "bytes_approx": 1294453000,
+   "excluded_pfl": [
+    "wod_pfl_2003.nc"
+   ],
+   "files": [
+    "wod_osd_2003.nc",
+    "wod_ctd_2003.nc",
+    "wod_mbt_2003.nc",
+    "wod_xbt_2003.nc",
+    "wod_mrb_2003.nc",
+    "wod_drb_2003.nc",
+    "wod_uor_2003.nc",
+    "wod_gld_2003.nc"
+   ],
+   "unknown_instrument": []
+  },
+  "2004": {
+   "bytes_approx": 1924200000,
+   "excluded_pfl": [
+    "wod_pfl_2004.nc"
+   ],
+   "files": [
+    "wod_osd_2004.nc",
+    "wod_ctd_2004.nc",
+    "wod_mbt_2004.nc",
+    "wod_xbt_2004.nc",
+    "wod_mrb_2004.nc",
+    "wod_drb_2004.nc",
+    "wod_uor_2004.nc",
+    "wod_apb_2004.nc",
+    "wod_gld_2004.nc"
+   ],
+   "unknown_instrument": []
+  },
+  "2005": {
+   "bytes_approx": 2208000000,
+   "excluded_pfl": [
+    "wod_pfl_2005.nc"
+   ],
+   "files": [
+    "wod_osd_2005.nc",
+    "wod_ctd_2005.nc",
+    "wod_xbt_2005.nc",
+    "wod_mrb_2005.nc",
+    "wod_drb_2005.nc",
+    "wod_uor_2005.nc",
+    "wod_apb_2005.nc",
+    "wod_gld_2005.nc"
+   ],
+   "unknown_instrument": []
+  },
+  "2006": {
+   "bytes_approx": 1695000000,
+   "excluded_pfl": [
+    "wod_pfl_2006.nc"
+   ],
+   "files": [
+    "wod_osd_2006.nc",
+    "wod_ctd_2006.nc",
+    "wod_xbt_2006.nc",
+    "wod_mrb_2006.nc",
+    "wod_drb_2006.nc",
+    "wod_uor_2006.nc",
+    "wod_apb_2006.nc",
+    "wod_gld_2006.nc"
+   ],
+   "unknown_instrument": []
+  },
+  "2007": {
+   "bytes_approx": 2051000000,
+   "excluded_pfl": [
+    "wod_pfl_2007.nc"
+   ],
+   "files": [
+    "wod_osd_2007.nc",
+    "wod_ctd_2007.nc",
+    "wod_xbt_2007.nc",
+    "wod_mrb_2007.nc",
+    "wod_drb_2007.nc",
+    "wod_uor_2007.nc",
+    "wod_apb_2007.nc",
+    "wod_gld_2007.nc"
+   ],
+   "unknown_instrument": []
+  },
+  "2008": {
+   "bytes_approx": 2173000000,
+   "excluded_pfl": [
+    "wod_pfl_2008.nc"
+   ],
+   "files": [
+    "wod_osd_2008.nc",
+    "wod_ctd_2008.nc",
+    "wod_xbt_2008.nc",
+    "wod_mrb_2008.nc",
+    "wod_drb_2008.nc",
+    "wod_uor_2008.nc",
+    "wod_apb_2008.nc",
+    "wod_gld_2008.nc"
+   ],
+   "unknown_instrument": []
+  },
+  "2009": {
+   "bytes_approx": 2315000000,
+   "excluded_pfl": [
+    "wod_pfl_2009.nc"
+   ],
+   "files": [
+    "wod_osd_2009.nc",
+    "wod_ctd_2009.nc",
+    "wod_xbt_2009.nc",
+    "wod_mrb_2009.nc",
+    "wod_drb_2009.nc",
+    "wod_uor_2009.nc",
+    "wod_apb_2009.nc",
+    "wod_gld_2009.nc"
+   ],
+   "unknown_instrument": []
+  },
+  "2010": {
+   "bytes_approx": 2600000000,
+   "excluded_pfl": [
+    "wod_pfl_2010.nc"
+   ],
+   "files": [
+    "wod_osd_2010.nc",
+    "wod_ctd_2010.nc",
+    "wod_xbt_2010.nc",
+    "wod_mrb_2010.nc",
+    "wod_drb_2010.nc",
+    "wod_uor_2010.nc",
+    "wod_apb_2010.nc",
+    "wod_gld_2010.nc"
+   ],
+   "unknown_instrument": []
+  },
+  "2011": {
+   "bytes_approx": 2180000000,
+   "excluded_pfl": [
+    "wod_pfl_2011.nc"
+   ],
+   "files": [
+    "wod_osd_2011.nc",
+    "wod_ctd_2011.nc",
+    "wod_xbt_2011.nc",
+    "wod_mrb_2011.nc",
+    "wod_drb_2011.nc",
+    "wod_uor_2011.nc",
+    "wod_apb_2011.nc",
+    "wod_gld_2011.nc"
+   ],
+   "unknown_instrument": []
+  },
+  "2012": {
+   "bytes_approx": 2729000000,
+   "excluded_pfl": [
+    "wod_pfl_2012.nc"
+   ],
+   "files": [
+    "wod_osd_2012.nc",
+    "wod_ctd_2012.nc",
+    "wod_xbt_2012.nc",
+    "wod_mrb_2012.nc",
+    "wod_drb_2012.nc",
+    "wod_uor_2012.nc",
+    "wod_apb_2012.nc",
+    "wod_gld_2012.nc"
+   ],
+   "unknown_instrument": []
+  },
+  "2013": {
+   "bytes_approx": 3652000000,
+   "excluded_pfl": [
+    "wod_pfl_2013.nc"
+   ],
+   "files": [
+    "wod_osd_2013.nc",
+    "wod_ctd_2013.nc",
+    "wod_xbt_2013.nc",
+    "wod_mrb_2013.nc",
+    "wod_drb_2013.nc",
+    "wod_apb_2013.nc",
+    "wod_gld_2013.nc"
+   ],
+   "unknown_instrument": []
+  },
+  "2014": {
+   "bytes_approx": 4542000000,
+   "excluded_pfl": [
+    "wod_pfl_2014.nc"
+   ],
+   "files": [
+    "wod_osd_2014.nc",
+    "wod_ctd_2014.nc",
+    "wod_xbt_2014.nc",
+    "wod_mrb_2014.nc",
+    "wod_drb_2014.nc",
+    "wod_apb_2014.nc",
+    "wod_gld_2014.nc"
+   ],
+   "unknown_instrument": []
+  },
+  "2015": {
+   "bytes_approx": 4281000000,
+   "excluded_pfl": [
+    "wod_pfl_2015.nc"
+   ],
+   "files": [
+    "wod_osd_2015.nc",
+    "wod_ctd_2015.nc",
+    "wod_xbt_2015.nc",
+    "wod_mrb_2015.nc",
+    "wod_drb_2015.nc",
+    "wod_apb_2015.nc",
+    "wod_gld_2015.nc"
+   ],
+   "unknown_instrument": []
+  },
+  "2016": {
+   "bytes_approx": 4783000000,
+   "excluded_pfl": [
+    "wod_pfl_2016.nc"
+   ],
+   "files": [
+    "wod_osd_2016.nc",
+    "wod_ctd_2016.nc",
+    "wod_xbt_2016.nc",
+    "wod_mrb_2016.nc",
+    "wod_drb_2016.nc",
+    "wod_apb_2016.nc",
+    "wod_gld_2016.nc"
+   ],
+   "unknown_instrument": []
+  },
+  "2017": {
+   "bytes_approx": 4053000000,
+   "excluded_pfl": [
+    "wod_pfl_2017.nc"
+   ],
+   "files": [
+    "wod_osd_2017.nc",
+    "wod_ctd_2017.nc",
+    "wod_xbt_2017.nc",
+    "wod_mrb_2017.nc",
+    "wod_drb_2017.nc",
+    "wod_apb_2017.nc",
+    "wod_gld_2017.nc"
+   ],
+   "unknown_instrument": []
+  },
+  "2018": {
+   "bytes_approx": 5127000000,
+   "excluded_pfl": [
+    "wod_pfl_2018.nc"
+   ],
+   "files": [
+    "wod_osd_2018.nc",
+    "wod_ctd_2018.nc",
+    "wod_xbt_2018.nc",
+    "wod_mrb_2018.nc",
+    "wod_drb_2018.nc",
+    "wod_apb_2018.nc",
+    "wod_gld_2018.nc"
+   ],
+   "unknown_instrument": []
+  },
+  "2019": {
+   "bytes_approx": 3876800000,
+   "excluded_pfl": [
+    "wod_pfl_2019.nc"
+   ],
+   "files": [
+    "wod_osd_2019.nc",
+    "wod_ctd_2019.nc",
+    "wod_xbt_2019.nc",
+    "wod_mrb_2019.nc",
+    "wod_drb_2019.nc",
+    "wod_apb_2019.nc",
+    "wod_gld_2019.nc"
+   ],
+   "unknown_instrument": []
+  },
+  "2020": {
+   "bytes_approx": 4047400000,
+   "excluded_pfl": [
+    "wod_pfl_2020.nc"
+   ],
+   "files": [
+    "wod_osd_2020.nc",
+    "wod_ctd_2020.nc",
+    "wod_xbt_2020.nc",
+    "wod_mrb_2020.nc",
+    "wod_drb_2020.nc",
+    "wod_apb_2020.nc",
+    "wod_gld_2020.nc"
+   ],
+   "unknown_instrument": []
+  },
+  "2021": {
+   "bytes_approx": 4178500000,
+   "excluded_pfl": [
+    "wod_pfl_2021.nc"
+   ],
+   "files": [
+    "wod_osd_2021.nc",
+    "wod_ctd_2021.nc",
+    "wod_xbt_2021.nc",
+    "wod_mrb_2021.nc",
+    "wod_drb_2021.nc",
+    "wod_apb_2021.nc",
+    "wod_gld_2021.nc"
+   ],
+   "unknown_instrument": []
+  },
+  "2022": {
+   "bytes_approx": 1600200000,
+   "excluded_pfl": [
+    "wod_pfl_2022.nc"
+   ],
+   "files": [
+    "wod_osd_2022.nc",
+    "wod_ctd_2022.nc",
+    "wod_xbt_2022.nc",
+    "wod_mrb_2022.nc",
+    "wod_drb_2022.nc",
+    "wod_apb_2022.nc",
+    "wod_gld_2022.nc"
+   ],
+   "unknown_instrument": []
+  },
+  "2023": {
+   "bytes_approx": 956300000,
+   "excluded_pfl": [
+    "wod_pfl_2023.nc"
+   ],
+   "files": [
+    "wod_osd_2023.nc",
+    "wod_ctd_2023.nc",
+    "wod_xbt_2023.nc",
+    "wod_mrb_2023.nc",
+    "wod_drb_2023.nc",
+    "wod_apb_2023.nc",
+    "wod_gld_2023.nc"
+   ],
+   "unknown_instrument": []
+  },
+  "2024": {
+   "bytes_approx": 799500000,
+   "excluded_pfl": [
+    "wod_pfl_2024.nc"
+   ],
+   "files": [
+    "wod_osd_2024.nc",
+    "wod_ctd_2024.nc",
+    "wod_xbt_2024.nc",
+    "wod_mrb_2024.nc",
+    "wod_apb_2024.nc",
+    "wod_gld_2024.nc"
+   ],
+   "unknown_instrument": []
+  },
+  "2025": {
+   "bytes_approx": 716681000,
+   "excluded_pfl": [
+    "wod_pfl_2025.nc"
+   ],
+   "files": [
+    "wod_osd_2025.nc",
+    "wod_ctd_2025.nc",
+    "wod_xbt_2025.nc",
+    "wod_mrb_2025.nc",
+    "wod_apb_2025.nc",
+    "wod_gld_2025.nc"
+   ],
+   "unknown_instrument": []
+  },
+  "2026": {
+   "bytes_approx": 64000000,
+   "excluded_pfl": [
+    "wod_pfl_2026.nc"
+   ],
+   "files": [
+    "wod_gld_2026.nc"
+   ],
+   "unknown_instrument": []
+  }
+ },
+ "first_record": {
+  "casts": 99507,
+  "file": "1800/wod_osd_1800.nc",
+  "units_unrecognized": {},
+  "variables": [
+   "O2",
+   "S",
+   "T"
+  ]
+ },
+ "footprint": {
+  "log2_dt": -6.906890595608519,
+  "log2_fp": -4.0
+ },
+ "listing": {
+  "directories": 128,
+  "first": "1800",
+  "last": "2026"
+ },
+ "per_year_resume": true,
+ "qc_policy": "Only WOD flag 0 values are used: a sample needs V_WODflag 0 and z_WODflag 0, and a variable of a cast needs V_WODprofileflag 0. qc is a bitmask: 1 a value flag seen, 2 a profile flag seen, 4 a depth flag seen; the high nibble is the instrument (1 OSD .. 9 GLD). Depth -> pressure by Saunders (1981); interpolation onto the 16 RG pressures by build_family8_argo.interp_levels. Out-of-bounds level values -> NaN, counted; a cast with no level value dropped.",
+ "sources": [
+  "https://www.ncei.noaa.gov/data/oceans/ncei/wod/<YYYY>/wod_<inst>_<YYYY>.nc",
+  "https://www.ncei.noaa.gov/data/oceans/ncei/wod/"
+ ],
+ "store": "wod",
+ "title": "World Ocean Database (NOAA NCEI) casts, all instruments but Argo floats, at the 16 Argo pressures, one row per cast",
+ "url": "https://www.ncei.noaa.gov/data/oceans/ncei/wod/",
+ "verified": "2026-09-17 from the sandbox: the root listing (128 directories: 1800 bundle + 1900..2026), the 2005, 1965, 1800 and 2026 directories, wod_uor_2005.nc (28.8 MB, 1,331 casts) and wod_osd_2005.nc (146 MB, 15,020 casts, 23 variables): layout, units, row-size alignment, flags, time units",
+ "years": [
+  1772,
+  1773,
+  1774,
+  1775,
+  1776,
+  1777,
+  1778,
+  1779,
+  1780,
+  1781,
+  1782,
+  1783,
+  1784,
+  1785,
+  1786,
+  1787,
+  1788,
+  1789,
+  1790,
+  1791,
+  1792,
+  1793,
+  1794,
+  1795,
+  1796,
+  1797,
+  1798,
+  1799,
+  1800,
+  1801,
+  1802,
+  1803,
+  1804,
+  1805,
+  1806,
+  1807,
+  1808,
+  1809,
+  1810,
+  1811,
+  1812,
+  1813,
+  1814,
+  1815,
+  1816,
+  1817,
+  1818,
+  1819,
+  1820,
+  1821,
+  1822,
+  1823,
+  1824,
+  1825,
+  1826,
+  1827,
+  1828,
+  1829,
+  1830,
+  1831,
+  1832,
+  1833,
+  1834,
+  1835,
+  1836,
+  1837,
+  1838,
+  1839,
+  1840,
+  1841,
+  1842,
+  1843,
+  1844,
+  1845,
+  1846,
+  1847,
+  1848,
+  1849,
+  1850,
+  1851,
+  1852,
+  1853,
+  1854,
+  1855,
+  1856,
+  1857,
+  1858,
+  1859,
+  1860,
+  1861,
+  1862,
+  1863,
+  1864,
+  1865,
+  1866,
+  1867,
+  1868,
+  1869,
+  1870,
+  1871,
+  1872,
+  1873,
+  1874,
+  1875,
+  1876,
+  1877,
+  1878,
+  1879,
+  1880,
+  1881,
+  1882,
+  1883,
+  1884,
+  1885,
+  1886,
+  1887,
+  1888,
+  1889,
+  1890,
+  1891,
+  1892,
+  1893,
+  1894,
+  1895,
+  1896,
+  1897,
+  1898,
+  1899,
+  1900,
+  1901,
+  1902,
+  1903,
+  1904,
+  1905,
+  1906,
+  1907,
+  1908,
+  1909,
+  1910,
+  1911,
+  1912,
+  1913,
+  1914,
+  1915,
+  1916,
+  1917,
+  1918,
+  1919,
+  1920,
+  1921,
+  1922,
+  1923,
+  1924,
+  1925,
+  1926,
+  1927,
+  1928,
+  1929,
+  1930,
+  1931,
+  1932,
+  1933,
+  1934,
+  1935,
+  1936,
+  1937,
+  1938,
+  1939,
+  1940,
+  1941,
+  1942,
+  1943,
+  1944,
+  1945,
+  1946,
+  1947,
+  1948,
+  1949,
+  1950,
+  1951,
+  1952,
+  1953,
+  1954,
+  1955,
+  1956,
+  1957,
+  1958,
+  1959,
+  1960,
+  1961,
+  1962,
+  1963,
+  1964,
+  1965,
+  1966,
+  1967,
+  1968,
+  1969,
+  1970,
+  1971,
+  1972,
+  1973,
+  1974,
+  1975,
+  1976,
+  1977,
+  1978,
+  1979,
+  1980,
+  1981,
+  1982,
+  1983,
+  1984,
+  1985,
+  1986,
+  1987,
+  1988,
+  1989,
+  1990,
+  1991,
+  1992,
+  1993,
+  1994,
+  1995,
+  1996,
+  1997,
+  1998,
+  1999,
+  2000,
+  2001,
+  2002,
+  2003,
+  2004,
+  2005,
+  2006,
+  2007,
+  2008,
+  2009,
+  2010,
+  2011,
+  2012,
+  2013,
+  2014,
+  2015,
+  2016,
+  2017,
+  2018,
+  2019,
+  2020,
+  2021,
+  2022,
+  2023,
+  2024,
+  2025,
+  2026
+ ],
+ "years_not_listed": []
+}
