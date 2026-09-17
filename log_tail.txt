@@ -1,0 +1,80 @@
+  [fetch gliders (one stream)] gliders deployments 200/491  176.3s
+  [fetch gliders (one stream)] gliders deployments 250/491  232.6s
+  [fetch gliders (one stream)] gliders deployments 300/491  316.1s
+  [fetch gliders (one stream)] gliders deployments 350/491  345.7s
+  [fetch gliders (one stream)] gliders deployments 400/491  379.2s
+  [fetch gliders (one stream)] gliders deployments 450/491  404.5s
+  gliders: 544,851 row(s) over 3 year(s) in one pass (416.3s)
+  hub: chfrank/earth-tensors with the token from $HF_TOKEN
+  gliders: uploading 6 file(s) of 3 year(s), 82.3 MB -> chfrank/earth-tensors:partials/family1_tf/gliders/
+Processing Files (0 / 0)      : |          |  0.00B /  0.00B            
+New Data Upload               : |          |  0.00B /  0.00B            [A
+
+  ...ders/parts/2026/00000.npz:  47%|████▋     | 5.94MB / 12.7MB            [A[A
+
+
+  ...ders/parts/2025/00000.npz:  47%|████▋     | 14.0MB / 30.1MB            [A[A[A
+
+  ...ders/parts/2026/00000.npz:  47%|████▋     | 5.94MB / 12.7MB            [A[A
+
+
+  ...ders/parts/2025/00000.npz:  47%|████▋     | 14.0MB / 30.1MB            [A[A[AProcessing Files (0 / 3)      :  24%|██▍       | 20.0MB / 82.3MB,   ???B/s  
+New Data Upload               :  24%|██▍       | 20.0MB / 82.3MB,   ???B/s  [A
+
+
+
+  ...ders/parts/2024/00000.npz: 100%|█████████▉| 39.5MB / 39.5MB            [A[A[A[A
+
+  ...ders/parts/2026/00000.npz: 100%|█████████▉| 12.7MB / 12.7MB            [A[A
+
+
+  ...ders/parts/2025/00000.npz: 100%|█████████▉| 30.1MB / 30.1MB            [A[A[A
+
+
+
+  ...ders/parts/2024/00000.npz: 100%|█████████▉| 39.5MB / 39.5MB            [A[A[A[AProcessing Files (0 / 3)      : 100%|█████████▉| 82.3MB / 82.3MB,   ???B/s  
+New Data Upload               : 100%|█████████▉| 82.3MB / 82.3MB,   ???B/s  [A
+
+  ...ders/parts/2026/00000.npz: 100%|█████████▉| 12.7MB / 12.7MB            [A[A
+
+
+  ...ders/parts/2025/00000.npz: 100%|█████████▉| 30.1MB / 30.1MB            [A[A[A
+
+
+
+  ...ders/parts/2024/00000.npz: 100%|█████████▉| 39.5MB / 39.5MB            [A[A[A[A
+
+  ...ders/parts/2026/00000.npz: 100%|██████████| 12.7MB / 12.7MB            [A[A
+
+
+  ...ders/parts/2025/00000.npz: 100%|██████████| 30.1MB / 30.1MB            [A[A[A
+
+
+
+  ...ders/parts/2024/00000.npz: 100%|██████████| 39.5MB / 39.5MB            [A[A[A[AProcessing Files (3 / 3)      : 100%|██████████| 82.3MB / 82.3MB, 8.00MB/s  
+New Data Upload               : 100%|██████████| 82.3MB / 82.3MB, 8.00MB/s  [A
+
+  ...ders/parts/2026/00000.npz: 100%|██████████| 12.7MB / 12.7MB            [A[A
+
+
+  ...ders/parts/2025/00000.npz: 100%|██████████| 30.1MB / 30.1MB            [A[A[A
+
+
+
+  ...ders/parts/2024/00000.npz: 100%|██████████| 39.5MB / 39.5MB            [A[A[A[A
+
+  ...ders/parts/2026/00000.npz: 100%|██████████| 12.7MB / 12.7MB            [A[A
+
+
+  ...ders/parts/2025/00000.npz: 100%|██████████| 30.1MB / 30.1MB            [A[A[A
+
+
+
+  ...ders/parts/2024/00000.npz: 100%|██████████| 39.5MB / 39.5MB            [A[A[A[AProcessing Files (3 / 3)      : 100%|██████████| 82.3MB / 82.3MB, 7.91MB/s  
+New Data Upload               : 100%|██████████| 82.3MB / 82.3MB, 7.91MB/s  
+  ...ders/parts/2026/00000.npz: 100%|██████████| 12.7MB / 12.7MB            
+  ...ders/parts/2025/00000.npz: 100%|██████████| 30.1MB / 30.1MB            
+  ...ders/parts/2024/00000.npz: 100%|██████████| 39.5MB / 39.5MB            
+  gliders: 3 year(s) pushed and verified in 1 part commit(s), done.json written last (0 already present)
+  push-parts: 3 year(s) on the Hub under partials/family1_tf/gliders/
+=== stage fetch done in 423.9s ===
