@@ -1,0 +1,80 @@
+
+
+
+  ...ites/parts/2026/00000.npz:  43%|████▎     |  212kB /  491kB            [A[A[A[AProcessing Files (0 / 3)      :  26%|██▋       | 22.3MB / 84.5MB, 2.18MB/s  
+New Data Upload               :  26%|██▋       | 20.5MB / 77.3MB, 1.99MB/s  [A
+
+  ...ites/parts/2024/00000.npz:  58%|█████▊    | 38.3MB / 66.1MB            [A[A
+
+
+  ...ites/parts/2025/00000.npz: 100%|█████████▉| 17.9MB / 17.9MB            [A[A[A
+
+
+
+  ...ites/parts/2026/00000.npz: 100%|█████████▉|  491kB /  491kB            [A[A[A[AProcessing Files (0 / 3)      :  67%|██████▋   | 56.7MB / 84.5MB, 5.51MB/s  
+New Data Upload               :  67%|██████▋   | 52.0MB / 77.3MB, 5.05MB/s  [A
+
+  ...ites/parts/2024/00000.npz:  80%|███████▉  | 52.7MB / 66.1MB            [A[A
+
+
+  ...ites/parts/2025/00000.npz: 100%|█████████▉| 17.9MB / 17.9MB            [A[A[A
+
+
+
+  ...ites/parts/2026/00000.npz: 100%|█████████▉|  491kB /  491kB            [A[A[A[AProcessing Files (0 / 3)      :  84%|████████▍ | 71.1MB / 84.5MB, 6.86MB/s  
+New Data Upload               :  84%|████████▍ | 65.1MB / 77.3MB, 6.27MB/s  [A
+
+  ...ites/parts/2024/00000.npz: 100%|█████████▉| 66.1MB / 66.1MB            [A[A
+
+
+  ...ites/parts/2025/00000.npz: 100%|█████████▉| 17.9MB / 17.9MB            [A[A[A
+
+
+
+  ...ites/parts/2026/00000.npz: 100%|█████████▉|  491kB /  491kB            [A[A[A[AProcessing Files (0 / 3)      : 100%|█████████▉| 84.5MB / 84.5MB, 8.09MB/s  
+New Data Upload               : 100%|█████████▉| 77.3MB / 77.3MB, 7.40MB/s  [A
+
+  ...ites/parts/2024/00000.npz: 100%|█████████▉| 66.1MB / 66.1MB            [A[A
+
+
+  ...ites/parts/2025/00000.npz: 100%|██████████| 17.9MB / 17.9MB            [A[A[A
+
+
+
+  ...ites/parts/2026/00000.npz: 100%|██████████|  491kB /  491kB            [A[A[A[AProcessing Files (2 / 3)      : 100%|█████████▉| 84.5MB / 84.5MB, 8.01MB/s  
+New Data Upload               : 100%|█████████▉| 77.3MB / 77.3MB, 7.33MB/s  [A
+
+  ...ites/parts/2024/00000.npz: 100%|██████████| 66.1MB / 66.1MB            [A[A
+
+
+  ...ites/parts/2025/00000.npz: 100%|██████████| 17.9MB / 17.9MB            [A[A[A
+
+
+
+  ...ites/parts/2026/00000.npz: 100%|██████████|  491kB /  491kB            [A[A[A[AProcessing Files (3 / 3)      : 100%|██████████| 84.5MB / 84.5MB, 7.93MB/s  
+New Data Upload               : 100%|██████████| 77.3MB / 77.3MB, 7.26MB/s  [A
+
+  ...ites/parts/2024/00000.npz: 100%|██████████| 66.1MB / 66.1MB            [A[A
+
+
+  ...ites/parts/2025/00000.npz: 100%|██████████| 17.9MB / 17.9MB            [A[A[A
+
+
+
+  ...ites/parts/2026/00000.npz: 100%|██████████|  491kB /  491kB            [A[A[A[A
+
+  ...ites/parts/2024/00000.npz: 100%|██████████| 66.1MB / 66.1MB            [A[A
+
+
+  ...ites/parts/2025/00000.npz: 100%|██████████| 17.9MB / 17.9MB            [A[A[A
+
+
+
+  ...ites/parts/2026/00000.npz: 100%|██████████|  491kB /  491kB            [A[A[A[AProcessing Files (3 / 3)      : 100%|██████████| 84.5MB / 84.5MB, 7.82MB/s  
+New Data Upload               : 100%|██████████| 77.3MB / 77.3MB, 7.16MB/s  
+  ...ites/parts/2024/00000.npz: 100%|██████████| 66.1MB / 66.1MB            
+  ...ites/parts/2025/00000.npz: 100%|██████████| 17.9MB / 17.9MB            
+  ...ites/parts/2026/00000.npz: 100%|██████████|  491kB /  491kB            
+  oceansites: 3 year(s) pushed and verified in 1 part commit(s), done.json written last (0 already present)
+  push-parts: 3 year(s) on the Hub under partials/family1_gf/oceansites/
+=== stage fetch done in 874.8s ===
