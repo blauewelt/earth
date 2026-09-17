@@ -1,0 +1,80 @@
+
+
+
+
+
+  .../ghcnd/ghcnd/platform.npy: 100%|█████████▉| 9.10GB / 9.15GB            [A[A[A[A[A[A
+
+
+
+
+
+
+  ...y1_tf/ghcnd/ghcnd/lat.npy: 100%|█████████▉| 4.57GB / 4.57GB            [A[A[A[A[A[A[A
+
+
+
+
+
+
+
+  ...y1_tf/ghcnd/ghcnd/lon.npy: 100%|█████████▉| 4.57GB / 4.57GB            [A[A[A[A[A[A[A[A
+
+
+
+
+
+
+
+
+  ...tf/ghcnd/ghcnd/values.npy: 100%|██████████| 11.4GB / 11.4GB            [A[A[A[A[A[A[A[A[A
+
+
+
+
+
+
+
+
+
+  ...hcnd/ghcnd/platforms.json: 100%|██████████| 21.1MB / 21.1MB            [A[A[A[A[A[A[A[A[A[A
+
+
+
+
+
+
+
+
+
+
+  ...cnd/ghcnd/bin_offsets.npy: 100%|██████████|  154kB /  154kB            [A[A[A[A[A[A[A[A[A[A[AProcessing Files (4 / 10)     :  99%|█████████▉| 46.7GB / 46.9GB,  282MB/s  
+New Data Upload               : 100%|██████████| 42.1GB / 42.1GB,  281MB/s  
+  ...y1_tf/ghcnd/ghcnd/bin.npy:  94%|█████████▍| 2.15GB / 2.29GB            
+  ...ly1_tf/ghcnd/ghcnd/qc.npy: 100%|██████████| 1.14GB / 1.14GB            
+  ...ly1_tf/ghcnd/ghcnd/fp.npy: 100%|█████████▉| 4.56GB / 4.57GB            
+  ...tf/ghcnd/ghcnd/time_s.npy: 100%|█████████▉| 9.12GB / 9.15GB            
+  .../ghcnd/ghcnd/platform.npy: 100%|█████████▉| 9.10GB / 9.15GB            
+  ...y1_tf/ghcnd/ghcnd/lat.npy: 100%|█████████▉| 4.57GB / 4.57GB            
+  ...y1_tf/ghcnd/ghcnd/lon.npy: 100%|█████████▉| 4.57GB / 4.57GB            
+  ...tf/ghcnd/ghcnd/values.npy: 100%|██████████| 11.4GB / 11.4GB            
+  ...hcnd/ghcnd/platforms.json: 100%|██████████| 21.1MB / 21.1MB            
+  ...cnd/ghcnd/bin_offsets.npy: 100%|██████████|  154kB /  154kB            
+  [publish ghcnd] bin.npy  1/11  122.8s
+  [publish ghcnd] bin_offsets.npy  2/11  123.4s
+  [publish ghcnd] fp.npy  3/11  128.4s
+  [publish ghcnd] lat.npy  4/11  148.6s
+  [publish ghcnd] lon.npy  5/11  167.1s
+  [publish ghcnd] platform.npy  6/11  215.2s
+  [publish ghcnd] platforms.json  7/11  216.0s
+  [publish ghcnd] qc.npy  8/11  218.2s
+  [publish ghcnd] time_s.npy  9/11  229.5s
+  [publish ghcnd] values.npy  10/11  257.4s
+  [publish ghcnd] store.json  11/11  257.6s
+  publish: 11 file(s) verified by restore -> https://huggingface.co/datasets/chfrank/earth-tensors/tree/main/tensors/family1_tf/ghcnd
+=== stage publish done in 439.7s ===
+
+=== stage check (ghcnd) ===
+  hub: chfrank/earth-tensors with the token from $HF_TOKEN
+  check: ghcnd — 10 file(s) verified, N=1,143,728,366, schema 3, Hub chfrank/earth-tensors:tensors/family1_tf/ghcnd agrees
+=== stage check done in 224.0s ===
