@@ -1,0 +1,80 @@
+  [+ 102 files]               : 100%|██████████| 3.67GB / 3.67GB            [A[A[A[A[A[A[A[A[A[A[A
+
+  ...hcnd/parts/1964/00009.npz: 100%|██████████| 37.0MB / 37.0MB            [A[A
+
+
+  ...hcnd/parts/1963/00000.npz: 100%|██████████| 37.0MB / 37.0MB            [A[A[A
+
+
+
+  ...hcnd/parts/1963/00008.npz: 100%|██████████| 37.0MB / 37.0MB            [A[A[A[A
+
+
+
+
+  ...hcnd/parts/1966/00006.npz: 100%|██████████| 37.0MB / 37.0MB            [A[A[A[A[A
+
+
+
+
+
+  ...hcnd/parts/1965/00001.npz: 100%|██████████| 37.0MB / 37.0MB            [A[A[A[A[A[A
+
+
+
+
+
+
+  ...hcnd/parts/1967/00010.npz: 100%|██████████| 37.0MB / 37.0MB            [A[A[A[A[A[A[A
+
+
+
+
+
+
+
+  ...hcnd/parts/1959/00006.npz: 100%|██████████| 37.0MB / 37.0MB            [A[A[A[A[A[A[A[A
+
+
+
+
+
+
+
+
+  ...hcnd/parts/1961/00011.npz: 100%|██████████| 10.8MB / 10.8MB            [A[A[A[A[A[A[A[A[A
+
+
+
+
+
+
+
+
+
+  ...hcnd/parts/1961/00008.npz: 100%|██████████| 37.0MB / 37.0MB            [A[A[A[A[A[A[A[A[A[A
+
+
+
+
+
+
+
+
+
+
+  [+ 102 files]               : 100%|██████████| 3.67GB / 3.67GB            [A[A[A[A[A[A[A[A[A[A[AProcessing Files (112 / 112)  : 100%|██████████| 3.97GB / 3.97GB,  224MB/s  
+New Data Upload               : 100%|██████████| 3.93GB / 3.93GB,  221MB/s  
+  ...hcnd/parts/1964/00009.npz: 100%|██████████| 37.0MB / 37.0MB            
+  ...hcnd/parts/1963/00000.npz: 100%|██████████| 37.0MB / 37.0MB            
+  ...hcnd/parts/1963/00008.npz: 100%|██████████| 37.0MB / 37.0MB            
+  ...hcnd/parts/1966/00006.npz: 100%|██████████| 37.0MB / 37.0MB            
+  ...hcnd/parts/1965/00001.npz: 100%|██████████| 37.0MB / 37.0MB            
+  ...hcnd/parts/1967/00010.npz: 100%|██████████| 37.0MB / 37.0MB            
+  ...hcnd/parts/1959/00006.npz: 100%|██████████| 37.0MB / 37.0MB            
+  ...hcnd/parts/1961/00011.npz: 100%|██████████| 10.8MB / 10.8MB            
+  ...hcnd/parts/1961/00008.npz: 100%|██████████| 37.0MB / 37.0MB            
+  [+ 102 files]               : 100%|██████████| 3.67GB / 3.67GB            
+  ghcnd: 68 year(s) pushed and verified in 4 part commit(s), done.json written last (0 already present)
+  push-parts: 68 year(s) on the Hub under partials/family1_tf/ghcnd/
+=== stage fetch done in 1940.8s ===
