@@ -1,0 +1,221 @@
+{
+ "bins": [
+  2629,
+  2921
+ ],
+ "builder_git_sha": "8e231982080d4205498708d702851a5d52c60637",
+ "built_at": "2026-09-17T17:05:52+00:00",
+ "bytes_approx": 1392588329,
+ "bytes_note": "the listing's size column is human-readable (K/M); the probe measures exact bytes",
+ "channels": [
+  {
+   "max": 360.0,
+   "min": 0.0,
+   "name": "WDIR",
+   "unit": "degT"
+  },
+  {
+   "max": 80.0,
+   "min": 0.0,
+   "name": "WSPD",
+   "unit": "m/s"
+  },
+  {
+   "max": 100.0,
+   "min": 0.0,
+   "name": "GST",
+   "unit": "m/s"
+  },
+  {
+   "max": 30.0,
+   "min": 0.0,
+   "name": "WVHT",
+   "unit": "m"
+  },
+  {
+   "max": 40.0,
+   "min": 0.0,
+   "name": "DPD",
+   "unit": "s"
+  },
+  {
+   "max": 40.0,
+   "min": 0.0,
+   "name": "APD",
+   "unit": "s"
+  },
+  {
+   "max": 360.0,
+   "min": 0.0,
+   "name": "MWD",
+   "unit": "degT"
+  },
+  {
+   "max": 1090.0,
+   "min": 850.0,
+   "name": "PRES",
+   "unit": "hPa"
+  },
+  {
+   "max": 60.0,
+   "min": -60.0,
+   "name": "ATMP",
+   "unit": "degC"
+  },
+  {
+   "max": 40.0,
+   "min": -3.0,
+   "name": "WTMP",
+   "unit": "degC"
+  }
+ ],
+ "dataset": "NDBC historical stdmet",
+ "date_range": [
+  "2018-01-01",
+  "2021-12-31"
+ ],
+ "first_record": {
+  "file": "41057h2018.txt.gz",
+  "header": "#YY  MM DD hh mm WDIR WSPD GST  WVHT   DPD   APD MWD   PRES  ATMP  WTMP  DEWP  VIS  TIDE",
+  "lines": 265
+ },
+ "footprint": {
+  "log2_dt": -6.906890595608519,
+  "log2_fp": -4.0
+ },
+ "gtmba_entries": [
+  "13001",
+  "13002",
+  "13008",
+  "13009",
+  "13010",
+  "14040",
+  "14041",
+  "14043",
+  "14047",
+  "14048",
+  "14049",
+  "15001",
+  "15002",
+  "15006",
+  "15007",
+  "15008",
+  "15009",
+  "23001",
+  "23003",
+  "23004",
+  "23006",
+  "23007",
+  "23008",
+  "23009",
+  "23010",
+  "23011",
+  "23012",
+  "23013",
+  "23014",
+  "23015",
+  "23016",
+  "23017",
+  "23019",
+  "31001",
+  "31002",
+  "31003",
+  "31004",
+  "31005",
+  "31006",
+  "31007",
+  "41026",
+  "41139",
+  "51542",
+  "53005",
+  "53006",
+  "53009",
+  "53040",
+  "53056",
+  "53057",
+  "56053",
+  "56055"
+ ],
+ "listed_stations_gtmba": [],
+ "listed_stations_without_position": [
+  "32st1",
+  "32st2",
+  "41nt1",
+  "41nt2",
+  "42360",
+  "42361",
+  "42362",
+  "42363",
+  "42364",
+  "42365",
+  "42369",
+  "42370",
+  "42374",
+  "42375",
+  "42376",
+  "42390",
+  "42392",
+  "42394",
+  "42395",
+  "42887",
+  "42902",
+  "42a02",
+  "42a03",
+  "42otp",
+  "43wsl",
+  "46074",
+  "46a35",
+  "46a54",
+  "47072",
+  "4conf",
+  "4h361",
+  "4h363",
+  "4h364",
+  "4h365",
+  "4h390",
+  "4h394",
+  "51wh1",
+  "51wh2",
+  "53anf",
+  "53mkf",
+  "clkns",
+  "et01z",
+  "f022l",
+  "misma",
+  "plsfa"
+ ],
+ "listing": {
+  "files": 17049,
+  "first": 1970,
+  "last": 2025,
+  "stations": 1350
+ },
+ "owners": 182,
+ "per_year_resume": true,
+ "qc_policy": "qc 0 for every row: stdmet/ is NDBC's quality-controlled historical archive and carries no per-value flag. Per-column missing sentinels (WDIR/MWD 999, WSPD/GST/WVHT/DPD/APD 99, PRES 9999, ATMP/WTMP 999) are NaN and counted (`value_missing`); a value outside its channel's bounds is NaN and counted (`out_of_bounds`); a report whose ten values are all NaN is dropped (`rows_all_blanked`); a repeated station-second keeps the last line (`rows_duplicate_time`).",
+ "sources": [
+  "https://www.ndbc.noaa.gov/data/historical/stdmet/<station>h<YYYY>.txt.gz",
+  "https://www.ndbc.noaa.gov/data/stations/station_table.txt",
+  "https://www.ndbc.noaa.gov/data/stations/station_owners.txt",
+  "https://www.ndbc.noaa.gov/data/historical/stdmet/"
+ ],
+ "station_table_bad_lines": 0,
+ "station_table_entries": 1938,
+ "store": "ndbc",
+ "title": "NDBC buoys and C-MAN stations, standard meteorological reports (NOAA), one row per station report",
+ "url": "https://www.ndbc.noaa.gov/data/historical/stdmet/",
+ "verified": "2026-09-17 from the sandbox: the stdmet listing (17,049 files, 1,350 stations, 1970..2025, \u22486.19 GB by its human-readable size column); station_table.txt (364,536 B, 1,938 entries); station_owners.txt (7,731 B); files in all four header eras (41001h1976, h1995, h1999, h2000, h2005, h2006, h2007, 46042h2023, 0y2w3h2012, 42360h2020, 45T01h2018) and 40 random files for the sentinels",
+ "year_files": {
+  "2018": 737,
+  "2019": 730,
+  "2020": 751,
+  "2021": 740
+ },
+ "years": [
+  2018,
+  2019,
+  2020,
+  2021
+ ],
+ "years_not_listed": []
+}
