@@ -130,3 +130,47 @@ helper, and one naming convention the probe relies on.
   `distribution`, `licence`, and on an int64 store `schema_version: 3` and
   `time_dtype: "int64"`. (The existing `schema` key is the per-file dtype
   table, so the schema NUMBER is `schema_version`, as in family 10.)
+
+## Tier G — the sharded gridded layout (E-082 wave 2, 2026-09-17)
+
+A gridded store finer than 0.25° subclasses `family1.sharded.GridAdapter`
+(itself a `SourceAdapter`) instead of producing rows. The layout is
+`ml/family1/sharded.py`'s docstring; `seaice_asi` is the worked example.
+
+```python
+tier = "G"; layout = "sharded"   # set by GridAdapter
+frames_per_bin = 5               # F; F * frame_seconds must be 432,000; F <= 64
+frame_seconds = 86400
+dtype = "float16"                # or "uint8" (255 = missing, 0..254 stored)
+tile = 256; zstd_level = 15
+grid = {...}                     # one group named after the store, OR
+grids = {"n": {...}, "s": {...}} # several; each JSON-able: H, W, x0, dx, y0,
+                                 # dy, crs / projection text, row_order
+def grid_latlon(self, group, x, y): ...   # optional: tile-corner lat/lon
+def record_frames(self, ctx, group): ...  # optional: the probe's extrapolation
+def fetch_frames(self, ctx, wanted):      # wanted = [(group, bin, frame), ...]
+    yield group, bin, frame, array_or_None, counts
+note_estimate = {"bytes": ..., "what": ...}
+```
+
+- `array` is `[H, W, C]` (or `[H, W]` when C = 1), raw units, NaN for
+  missing, bounds already masked (`self.mask_bounds`). Row 0 is whatever the
+  grid's `row_order` says — state it.
+- `None` is a frame that is not in the source; `counts["frame_missing"]`
+  names why (`absent_upstream`, `before_record`, `after_record`). It is
+  stored as a zero-length frame and counted by reason in store.json. A bin
+  whose frames are ALL `before_record`/`after_record` is not written.
+- An input that could not be READ is `ctx.note_absent(...)` and nothing is
+  yielded for it — the year is then not marked. A frame that is neither
+  yielded nor noted absent is an adapter bug and the fetch refuses.
+- The framework's `fetch_year` hands `fetch_frames` every frame of the
+  year's bins, where a year is the bins whose FIRST day falls in it
+  (`--start/--end` choose bins, not days). `ctx.grid_specs`, `ctx.grid_bins`
+  and `ctx.grid_wanted(year)` are set by `prepare_grid_ctx`.
+- The smoke hook `smoke_sources(root, d_lo, d_hi)` returns
+  `{(group, bin, frame): (stored-dtype array [H, W, C] or None, reason or
+  None)}` for every frame of every bin overlapping the record; `--smoke`
+  reads every frame back tile by tile and compares exactly.
+- A licence the producer has not confirmed carries
+  `"redistribution_confirmed": False`; a PUBLIC publish or parts push is then
+  refused unless `--allow-unconfirmed-licence` is passed.

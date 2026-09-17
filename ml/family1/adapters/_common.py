@@ -112,7 +112,7 @@ def get_bytes(url, attempts=4, sleep=3.0, headers=None, timeout=None):
     raise IOError(f"{url}: {type(err).__name__}: {err}")
 
 
-def range_reader(url, attempts=4, counter=None):
+def range_reader(url, attempts=4, counter=None, headers=None):
     """`read_at(off, n)` over HTTP Range requests.
 
     The server must honour Range: a 200 where 206 was asked for is REFUSED,
@@ -120,7 +120,8 @@ def range_reader(url, attempts=4, counter=None):
     accepted ONLY when its Content-Range says the file ends there (a header
     read past a small file's end); anything else short RAISES. No listed size
     is trusted for clamping — THREDDS lists sizes rounded to 10 kB (measured:
-    "37.24 Mbytes").
+    "37.24 Mbytes"). `headers` are added to every request (the sharded tier-G
+    reader, `family1/sharded.py`, passes none for a public Hub file).
     """
     def read_at(off, n):
         if n <= 0:
@@ -130,7 +131,8 @@ def range_reader(url, attempts=4, counter=None):
         for i in range(max(1, attempts)):
             try:
                 req = urllib.request.Request(
-                    url, headers={**f10b.UA, "Range": f"bytes={off}-{end}"})
+                    url, headers={**f10b.UA, **(headers or {}),
+                                  "Range": f"bytes={off}-{end}"})
                 with urllib.request.urlopen(req,
                                             timeout=f10b.SOCKET_TIMEOUT) as r:
                     if r.status != 206:

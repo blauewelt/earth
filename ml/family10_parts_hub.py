@@ -134,12 +134,20 @@ def year_dir(work, store, year):
     return os.path.join(store_root(work, store), "parts", str(year))
 
 
+# What a year directory's parts are. `.npz` is a tier-P column part; `.zst`
+# and `.npy` are a family-1 SHARDED tier-G year (E-082 wave 2: the year's
+# shards, their indices and one shard_index.npy per group — see
+# ml/family1/sharded.py). A family-10 year directory holds only `.npz`, so its
+# list, and therefore its done.json, is exactly what it always was.
+PART_SUFFIXES = (".npz", ".zst", ".npy")
+
+
 def local_part_files(d):
     """The files a year directory contributes, in the order `read_parts` reads
     them: the numbered parts sorted by name, then `counts.json`."""
     if not os.path.isdir(d):
         return []
-    npz = sorted(n for n in os.listdir(d) if n.endswith(".npz"))
+    npz = sorted(n for n in os.listdir(d) if n.endswith(PART_SUFFIXES))
     out = list(npz)
     if os.path.exists(os.path.join(d, COUNTS)):
         out.append(COUNTS)
