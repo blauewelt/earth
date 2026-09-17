@@ -1,0 +1,10 @@
+{
+ "at": "2026-09-17T15:33:53+00:00",
+ "done": 31,
+ "elapsed_s": 669.2,
+ "eta_s": 0.0,
+ "item": "ghcnd 1998 rows 10,000,000+",
+ "stage": "fetch ghcnd",
+ "total": 31,
+ "year_rows": 10021869
+}

@@ -1,0 +1,80 @@
+  ...hcnd/parts/1998/00010.npz: 100%|██████████|  811kB /  811kB            [A[A[A[A[A[A[A[A[A[A[A
+
+  ...hcnd/parts/1998/00002.npz: 100%|██████████| 37.0MB / 37.0MB            [A[A
+
+
+  ...hcnd/parts/1998/00003.npz: 100%|██████████| 37.0MB / 37.0MB            [A[A[A
+
+
+
+  ...hcnd/parts/1998/00005.npz: 100%|██████████| 37.0MB / 37.0MB            [A[A[A[A
+
+
+
+
+  ...hcnd/parts/1998/00001.npz: 100%|██████████| 37.0MB / 37.0MB            [A[A[A[A[A
+
+
+
+
+
+  ...hcnd/parts/1998/00006.npz: 100%|██████████| 37.0MB / 37.0MB            [A[A[A[A[A[A
+
+
+
+
+
+
+  ...hcnd/parts/1998/00008.npz: 100%|██████████| 37.0MB / 37.0MB            [A[A[A[A[A[A[A
+
+
+
+
+
+
+
+  ...hcnd/parts/1998/00007.npz: 100%|██████████| 37.0MB / 37.0MB            [A[A[A[A[A[A[A[A
+
+
+
+
+
+
+
+
+  ...hcnd/parts/1998/00004.npz: 100%|██████████| 37.0MB / 37.0MB            [A[A[A[A[A[A[A[A[A
+
+
+
+
+
+
+
+
+
+  ...hcnd/parts/1998/00009.npz: 100%|██████████| 37.0MB / 37.0MB            [A[A[A[A[A[A[A[A[A[A
+
+
+
+
+
+
+
+
+
+
+  ...hcnd/parts/1998/00010.npz: 100%|██████████|  811kB /  811kB            [A[A[A[A[A[A[A[A[A[A[AProcessing Files (10 / 10)    : 100%|██████████|  334MB /  334MB, 31.5MB/s  
+New Data Upload               : 100%|██████████|  334MB /  334MB, 31.5MB/s  
+  ...hcnd/parts/1998/00002.npz: 100%|██████████| 37.0MB / 37.0MB            
+  ...hcnd/parts/1998/00003.npz: 100%|██████████| 37.0MB / 37.0MB            
+  ...hcnd/parts/1998/00005.npz: 100%|██████████| 37.0MB / 37.0MB            
+  ...hcnd/parts/1998/00001.npz: 100%|██████████| 37.0MB / 37.0MB            
+  ...hcnd/parts/1998/00006.npz: 100%|██████████| 37.0MB / 37.0MB            
+  ...hcnd/parts/1998/00008.npz: 100%|██████████| 37.0MB / 37.0MB            
+  ...hcnd/parts/1998/00007.npz: 100%|██████████| 37.0MB / 37.0MB            
+  ...hcnd/parts/1998/00004.npz: 100%|██████████| 37.0MB / 37.0MB            
+  ...hcnd/parts/1998/00009.npz: 100%|██████████| 37.0MB / 37.0MB            
+  ...hcnd/parts/1998/00010.npz: 100%|██████████|  811kB /  811kB            
+  ghcnd: 31 year(s) pushed and verified in 4 part commit(s), done.json written last (0 already present)
+  push-parts: 31 year(s) on the Hub under partials/family1_tf/ghcnd/
+=== stage fetch done in 1346.6s ===

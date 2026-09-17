@@ -1,0 +1,137 @@
+{
+ "bins": [
+  -1023,
+  1241
+ ],
+ "block_bytes": 16777216,
+ "builder_git_sha": "c74ee36398c16a3b3c7179b346c1fea97d98a175",
+ "built_at": "2026-09-17T15:22:44+00:00",
+ "bytes": 4607509235,
+ "channels": [
+  {
+   "max": 65.0,
+   "min": -90.0,
+   "name": "TMAX",
+   "unit": "degC"
+  },
+  {
+   "max": 65.0,
+   "min": -90.0,
+   "name": "TMIN",
+   "unit": "degC"
+  },
+  {
+   "max": 2000.0,
+   "min": 0.0,
+   "name": "PRCP",
+   "unit": "mm"
+  },
+  {
+   "max": 2000.0,
+   "min": 0.0,
+   "name": "SNOW",
+   "unit": "mm"
+  },
+  {
+   "max": 15000.0,
+   "min": 0.0,
+   "name": "SNWD",
+   "unit": "mm"
+  }
+ ],
+ "dataset": "GHCN-Daily by_year",
+ "date_range": [
+  "1968-01-01",
+  "1998-12-31"
+ ],
+ "first_record": "ASN00009500,19680101,PRCP,0,,,a,",
+ "footprint": {
+  "log2_dt": -2.321928094887362,
+  "log2_fp": -4.0
+ },
+ "listing": {
+  "first": 1763,
+  "last": 2026,
+  "years": 264
+ },
+ "per_year_resume": true,
+ "qc_policy": "qc 0: no used element (TMAX, TMIN, PRCP, SNOW, SNWD) of the station-day carried an NCEI quality flag (QFLAG); qc 1: at least one did, and that element's value is NaN (counted per element in `qflag_blanked`). A value outside its channel's bounds is NaN and counted (`out_of_bounds`); -9999 is NaN and counted (`value_missing`); MFLAG and SFLAG are ignored; a station-day whose five values are all NaN is dropped and counted (`rows_all_blanked`). Unlike family 10, qc 0 means 'passed the producer's QC', not 'not assessed'.",
+ "sources": [
+  "https://www.ncei.noaa.gov/pub/data/ghcn/daily/by_year/YYYY.csv.gz",
+  "https://www.ncei.noaa.gov/pub/data/ghcn/daily/ghcnd-stations.txt",
+  "https://www.ncei.noaa.gov/pub/data/ghcn/daily/by_year/"
+ ],
+ "stations": 132503,
+ "stations_bad_lines": 0,
+ "store": "ghcnd",
+ "title": "GHCN-Daily station observations (NOAA NCEI), one row per station-day",
+ "url": "https://www.ncei.noaa.gov/pub/data/ghcn/daily/by_year/",
+ "verified": "2026-09-17 from the sandbox: by_year listing (264 files, 1763..2026); ghcnd-stations.txt (11,395,086 bytes); the whole 2024.csv.gz (168,280,901 bytes) \u2014 37,106,916 lines, 12,470,777 station-days, 44,668 stations, not sorted by station or strictly by date, 132,171 station-days split across non-adjacent lines",
+ "year_bytes": {
+  "1968": 143361609,
+  "1969": 145193220,
+  "1970": 146086110,
+  "1971": 140644509,
+  "1972": 139754001,
+  "1973": 146388378,
+  "1974": 147631683,
+  "1975": 147147087,
+  "1976": 147000550,
+  "1977": 146822319,
+  "1978": 147007903,
+  "1979": 147301805,
+  "1980": 147707723,
+  "1981": 150740652,
+  "1982": 152550643,
+  "1983": 153924385,
+  "1984": 152399270,
+  "1985": 150830430,
+  "1986": 149786030,
+  "1987": 149789968,
+  "1988": 150539312,
+  "1989": 150938877,
+  "1990": 151054575,
+  "1991": 151715303,
+  "1992": 151916596,
+  "1993": 150768957,
+  "1994": 149724332,
+  "1995": 149397867,
+  "1996": 149664160,
+  "1997": 148410528,
+  "1998": 151310453
+ },
+ "years": [
+  1968,
+  1969,
+  1970,
+  1971,
+  1972,
+  1973,
+  1974,
+  1975,
+  1976,
+  1977,
+  1978,
+  1979,
+  1980,
+  1981,
+  1982,
+  1983,
+  1984,
+  1985,
+  1986,
+  1987,
+  1988,
+  1989,
+  1990,
+  1991,
+  1992,
+  1993,
+  1994,
+  1995,
+  1996,
+  1997,
+  1998
+ ],
+ "years_not_listed": []
+}
