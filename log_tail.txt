@@ -1,0 +1,80 @@
+
+
+
+
+  ...igra/parts/2022/00000.npz: 100%|██████████| 91.2MB / 91.2MB            [A[A[A[A[A
+
+
+
+
+
+  ...igra/parts/2026/00000.npz: 100%|██████████| 58.0MB / 58.0MB            [A[A[A[A[A[A
+
+  ...igra/parts/2023/00000.npz: 100%|██████████| 91.2MB / 91.2MB            [A[A
+
+
+  ...igra/parts/2025/00000.npz: 100%|██████████| 85.7MB / 85.7MB            [A[A[A
+
+
+
+  ...igra/parts/2024/00000.npz: 100%|██████████| 89.0MB / 89.0MB            [A[A[A[A
+
+
+
+
+  ...igra/parts/2022/00000.npz: 100%|██████████| 91.2MB / 91.2MB            [A[A[A[A[A
+
+
+
+
+
+  ...igra/parts/2026/00000.npz: 100%|██████████| 58.0MB / 58.0MB            [A[A[A[A[A[A
+
+  ...igra/parts/2023/00000.npz: 100%|██████████| 91.2MB / 91.2MB            [A[A
+
+
+  ...igra/parts/2025/00000.npz: 100%|██████████| 85.7MB / 85.7MB            [A[A[A
+
+
+
+  ...igra/parts/2024/00000.npz: 100%|██████████| 89.0MB / 89.0MB            [A[A[A[A
+
+
+
+
+  ...igra/parts/2022/00000.npz: 100%|██████████| 91.2MB / 91.2MB            [A[A[A[A[A
+
+
+
+
+
+  ...igra/parts/2026/00000.npz: 100%|██████████| 58.0MB / 58.0MB            [A[A[A[A[A[A
+
+  ...igra/parts/2023/00000.npz: 100%|██████████| 91.2MB / 91.2MB            [A[A
+
+
+  ...igra/parts/2025/00000.npz: 100%|██████████| 85.7MB / 85.7MB            [A[A[A
+
+
+
+  ...igra/parts/2024/00000.npz: 100%|██████████| 89.0MB / 89.0MB            [A[A[A[A
+
+
+
+
+  ...igra/parts/2022/00000.npz: 100%|██████████| 91.2MB / 91.2MB            [A[A[A[A[A
+
+
+
+
+
+  ...igra/parts/2026/00000.npz: 100%|██████████| 58.0MB / 58.0MB            [A[A[A[A[A[AProcessing Files (5 / 5)      : 100%|██████████|  415MB /  415MB, 34.9MB/s  
+New Data Upload               : 100%|██████████|  415MB /  415MB, 34.9MB/s  
+  ...igra/parts/2023/00000.npz: 100%|██████████| 91.2MB / 91.2MB            
+  ...igra/parts/2025/00000.npz: 100%|██████████| 85.7MB / 85.7MB            
+  ...igra/parts/2024/00000.npz: 100%|██████████| 89.0MB / 89.0MB            
+  ...igra/parts/2022/00000.npz: 100%|██████████| 91.2MB / 91.2MB            
+  ...igra/parts/2026/00000.npz: 100%|██████████| 58.0MB / 58.0MB            
+  igra: 42 year(s) pushed and verified in 2 part commit(s), done.json written last (0 already present)
+  push-parts: 42 year(s) on the Hub under partials/family1_tf/igra/
+=== stage fetch done in 1349.8s ===

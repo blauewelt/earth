@@ -1,0 +1,600 @@
+{
+ "bins": [
+  219,
+  3287
+ ],
+ "builder_git_sha": "c74ee36398c16a3b3c7179b346c1fea97d98a175",
+ "built_at": "2026-09-17T15:22:51+00:00",
+ "channels": [
+  {
+   "max": 60.0,
+   "min": -100.0,
+   "name": "T_1000",
+   "unit": "degC"
+  },
+  {
+   "max": 60.0,
+   "min": -100.0,
+   "name": "T_925",
+   "unit": "degC"
+  },
+  {
+   "max": 60.0,
+   "min": -100.0,
+   "name": "T_850",
+   "unit": "degC"
+  },
+  {
+   "max": 60.0,
+   "min": -100.0,
+   "name": "T_700",
+   "unit": "degC"
+  },
+  {
+   "max": 60.0,
+   "min": -100.0,
+   "name": "T_500",
+   "unit": "degC"
+  },
+  {
+   "max": 60.0,
+   "min": -100.0,
+   "name": "T_400",
+   "unit": "degC"
+  },
+  {
+   "max": 60.0,
+   "min": -100.0,
+   "name": "T_300",
+   "unit": "degC"
+  },
+  {
+   "max": 60.0,
+   "min": -100.0,
+   "name": "T_250",
+   "unit": "degC"
+  },
+  {
+   "max": 60.0,
+   "min": -100.0,
+   "name": "T_200",
+   "unit": "degC"
+  },
+  {
+   "max": 60.0,
+   "min": -100.0,
+   "name": "T_150",
+   "unit": "degC"
+  },
+  {
+   "max": 60.0,
+   "min": -100.0,
+   "name": "T_100",
+   "unit": "degC"
+  },
+  {
+   "max": 60.0,
+   "min": -100.0,
+   "name": "T_70",
+   "unit": "degC"
+  },
+  {
+   "max": 60.0,
+   "min": -100.0,
+   "name": "T_50",
+   "unit": "degC"
+  },
+  {
+   "max": 60.0,
+   "min": -100.0,
+   "name": "T_30",
+   "unit": "degC"
+  },
+  {
+   "max": 60.0,
+   "min": -100.0,
+   "name": "T_20",
+   "unit": "degC"
+  },
+  {
+   "max": 60.0,
+   "min": -100.0,
+   "name": "T_10",
+   "unit": "degC"
+  },
+  {
+   "max": 80.0,
+   "min": 0.0,
+   "name": "DPD_1000",
+   "unit": "degC"
+  },
+  {
+   "max": 80.0,
+   "min": 0.0,
+   "name": "DPD_925",
+   "unit": "degC"
+  },
+  {
+   "max": 80.0,
+   "min": 0.0,
+   "name": "DPD_850",
+   "unit": "degC"
+  },
+  {
+   "max": 80.0,
+   "min": 0.0,
+   "name": "DPD_700",
+   "unit": "degC"
+  },
+  {
+   "max": 80.0,
+   "min": 0.0,
+   "name": "DPD_500",
+   "unit": "degC"
+  },
+  {
+   "max": 80.0,
+   "min": 0.0,
+   "name": "DPD_400",
+   "unit": "degC"
+  },
+  {
+   "max": 80.0,
+   "min": 0.0,
+   "name": "DPD_300",
+   "unit": "degC"
+  },
+  {
+   "max": 80.0,
+   "min": 0.0,
+   "name": "DPD_250",
+   "unit": "degC"
+  },
+  {
+   "max": 80.0,
+   "min": 0.0,
+   "name": "DPD_200",
+   "unit": "degC"
+  },
+  {
+   "max": 80.0,
+   "min": 0.0,
+   "name": "DPD_150",
+   "unit": "degC"
+  },
+  {
+   "max": 80.0,
+   "min": 0.0,
+   "name": "DPD_100",
+   "unit": "degC"
+  },
+  {
+   "max": 80.0,
+   "min": 0.0,
+   "name": "DPD_70",
+   "unit": "degC"
+  },
+  {
+   "max": 80.0,
+   "min": 0.0,
+   "name": "DPD_50",
+   "unit": "degC"
+  },
+  {
+   "max": 80.0,
+   "min": 0.0,
+   "name": "DPD_30",
+   "unit": "degC"
+  },
+  {
+   "max": 80.0,
+   "min": 0.0,
+   "name": "DPD_20",
+   "unit": "degC"
+  },
+  {
+   "max": 80.0,
+   "min": 0.0,
+   "name": "DPD_10",
+   "unit": "degC"
+  },
+  {
+   "max": 150.0,
+   "min": -150.0,
+   "name": "U_1000",
+   "unit": "m/s"
+  },
+  {
+   "max": 150.0,
+   "min": -150.0,
+   "name": "U_925",
+   "unit": "m/s"
+  },
+  {
+   "max": 150.0,
+   "min": -150.0,
+   "name": "U_850",
+   "unit": "m/s"
+  },
+  {
+   "max": 150.0,
+   "min": -150.0,
+   "name": "U_700",
+   "unit": "m/s"
+  },
+  {
+   "max": 150.0,
+   "min": -150.0,
+   "name": "U_500",
+   "unit": "m/s"
+  },
+  {
+   "max": 150.0,
+   "min": -150.0,
+   "name": "U_400",
+   "unit": "m/s"
+  },
+  {
+   "max": 150.0,
+   "min": -150.0,
+   "name": "U_300",
+   "unit": "m/s"
+  },
+  {
+   "max": 150.0,
+   "min": -150.0,
+   "name": "U_250",
+   "unit": "m/s"
+  },
+  {
+   "max": 150.0,
+   "min": -150.0,
+   "name": "U_200",
+   "unit": "m/s"
+  },
+  {
+   "max": 150.0,
+   "min": -150.0,
+   "name": "U_150",
+   "unit": "m/s"
+  },
+  {
+   "max": 150.0,
+   "min": -150.0,
+   "name": "U_100",
+   "unit": "m/s"
+  },
+  {
+   "max": 150.0,
+   "min": -150.0,
+   "name": "U_70",
+   "unit": "m/s"
+  },
+  {
+   "max": 150.0,
+   "min": -150.0,
+   "name": "U_50",
+   "unit": "m/s"
+  },
+  {
+   "max": 150.0,
+   "min": -150.0,
+   "name": "U_30",
+   "unit": "m/s"
+  },
+  {
+   "max": 150.0,
+   "min": -150.0,
+   "name": "U_20",
+   "unit": "m/s"
+  },
+  {
+   "max": 150.0,
+   "min": -150.0,
+   "name": "U_10",
+   "unit": "m/s"
+  },
+  {
+   "max": 150.0,
+   "min": -150.0,
+   "name": "V_1000",
+   "unit": "m/s"
+  },
+  {
+   "max": 150.0,
+   "min": -150.0,
+   "name": "V_925",
+   "unit": "m/s"
+  },
+  {
+   "max": 150.0,
+   "min": -150.0,
+   "name": "V_850",
+   "unit": "m/s"
+  },
+  {
+   "max": 150.0,
+   "min": -150.0,
+   "name": "V_700",
+   "unit": "m/s"
+  },
+  {
+   "max": 150.0,
+   "min": -150.0,
+   "name": "V_500",
+   "unit": "m/s"
+  },
+  {
+   "max": 150.0,
+   "min": -150.0,
+   "name": "V_400",
+   "unit": "m/s"
+  },
+  {
+   "max": 150.0,
+   "min": -150.0,
+   "name": "V_300",
+   "unit": "m/s"
+  },
+  {
+   "max": 150.0,
+   "min": -150.0,
+   "name": "V_250",
+   "unit": "m/s"
+  },
+  {
+   "max": 150.0,
+   "min": -150.0,
+   "name": "V_200",
+   "unit": "m/s"
+  },
+  {
+   "max": 150.0,
+   "min": -150.0,
+   "name": "V_150",
+   "unit": "m/s"
+  },
+  {
+   "max": 150.0,
+   "min": -150.0,
+   "name": "V_100",
+   "unit": "m/s"
+  },
+  {
+   "max": 150.0,
+   "min": -150.0,
+   "name": "V_70",
+   "unit": "m/s"
+  },
+  {
+   "max": 150.0,
+   "min": -150.0,
+   "name": "V_50",
+   "unit": "m/s"
+  },
+  {
+   "max": 150.0,
+   "min": -150.0,
+   "name": "V_30",
+   "unit": "m/s"
+  },
+  {
+   "max": 150.0,
+   "min": -150.0,
+   "name": "V_20",
+   "unit": "m/s"
+  },
+  {
+   "max": 150.0,
+   "min": -150.0,
+   "name": "V_10",
+   "unit": "m/s"
+  },
+  {
+   "max": 40000.0,
+   "min": -1000.0,
+   "name": "Z_1000",
+   "unit": "m"
+  },
+  {
+   "max": 40000.0,
+   "min": -1000.0,
+   "name": "Z_925",
+   "unit": "m"
+  },
+  {
+   "max": 40000.0,
+   "min": -1000.0,
+   "name": "Z_850",
+   "unit": "m"
+  },
+  {
+   "max": 40000.0,
+   "min": -1000.0,
+   "name": "Z_700",
+   "unit": "m"
+  },
+  {
+   "max": 40000.0,
+   "min": -1000.0,
+   "name": "Z_500",
+   "unit": "m"
+  },
+  {
+   "max": 40000.0,
+   "min": -1000.0,
+   "name": "Z_400",
+   "unit": "m"
+  },
+  {
+   "max": 40000.0,
+   "min": -1000.0,
+   "name": "Z_300",
+   "unit": "m"
+  },
+  {
+   "max": 40000.0,
+   "min": -1000.0,
+   "name": "Z_250",
+   "unit": "m"
+  },
+  {
+   "max": 40000.0,
+   "min": -1000.0,
+   "name": "Z_200",
+   "unit": "m"
+  },
+  {
+   "max": 40000.0,
+   "min": -1000.0,
+   "name": "Z_150",
+   "unit": "m"
+  },
+  {
+   "max": 40000.0,
+   "min": -1000.0,
+   "name": "Z_100",
+   "unit": "m"
+  },
+  {
+   "max": 40000.0,
+   "min": -1000.0,
+   "name": "Z_70",
+   "unit": "m"
+  },
+  {
+   "max": 40000.0,
+   "min": -1000.0,
+   "name": "Z_50",
+   "unit": "m"
+  },
+  {
+   "max": 40000.0,
+   "min": -1000.0,
+   "name": "Z_30",
+   "unit": "m"
+  },
+  {
+   "max": 40000.0,
+   "min": -1000.0,
+   "name": "Z_20",
+   "unit": "m"
+  },
+  {
+   "max": 40000.0,
+   "min": -1000.0,
+   "name": "Z_10",
+   "unit": "m"
+  }
+ ],
+ "dataset": "IGRA v2.2 data-por",
+ "date_range": [
+  "1985-01-01",
+  "2026-12-31"
+ ],
+ "first_record": {
+  "header": "#PKM00041759 2003 03 19 12 9999    2 ncdc-gts           252667   634833",
+  "station": "PKM00041759"
+ },
+ "footprint": {
+  "log2_dt": -6.906890595608519,
+  "log2_fp": -4.0
+ },
+ "levels_hpa": [
+  1000,
+  925,
+  850,
+  700,
+  500,
+  400,
+  300,
+  250,
+  200,
+  150,
+  100,
+  70,
+  50,
+  30,
+  20,
+  10
+ ],
+ "listing": {
+  "bytes": 27872615466,
+  "zips": 2931
+ },
+ "per_year_resume": false,
+ "projected_soundings": 26970304,
+ "qc_policy": "qc 0: no kept value of the sounding was removed by IGRA's quality assurance; qc 1: at least one was (-8888), and that value is NaN (counted per quantity in `qa_removed`). -9999 is NaN and counted (`value_missing`); a value outside its channel's bounds is NaN and counted (`out_of_bounds`); the A/B climatology flags are ignored; a sounding with no value at any mandatory level is dropped (`soundings_no_mandatory_level`).",
+ "quantities": [
+  "T",
+  "DPD",
+  "U",
+  "V",
+  "Z"
+ ],
+ "selection": {
+  "stations_in_list_without_zip": 1,
+  "stations_listed": 2931,
+  "stations_not_in_station_list": 1,
+  "stations_skipped_by_years": 957
+ },
+ "sources": [
+  "https://www.ncei.noaa.gov/data/integrated-global-radiosonde-archive/access/data-por/<ID>-data.txt.zip",
+  "https://www.ncei.noaa.gov/data/integrated-global-radiosonde-archive/doc/igra2-station-list.txt",
+  "https://www.ncei.noaa.gov/data/integrated-global-radiosonde-archive/access/data-por/"
+ ],
+ "station_list_bad_lines": [
+  "                                                                        1946 2025  70410"
+ ],
+ "station_list_entries": 2931,
+ "store": "igra",
+ "title": "IGRA v2.2 radiosonde soundings (NOAA NCEI), one row per sounding at the 16 mandatory levels",
+ "url": "https://www.ncei.noaa.gov/data/integrated-global-radiosonde-archive/access/data-por/",
+ "verified": "2026-09-17 from the sandbox: data-por listing (2,931 zips, 27,870,184,241 B); igra2-station-list.txt (2,932 lines, one with a blank ID); igra2-data-format.txt; USM00072201 whole (101,678,874 B zip, 69,360 soundings, headers 71 / data 52 characters, dates monotone) and 12 random whole stations (same layout, all monotone); 58 MB/s",
+ "window_bytes": 27427304784,
+ "window_stations": 1974,
+ "years": [
+  1985,
+  1986,
+  1987,
+  1988,
+  1989,
+  1990,
+  1991,
+  1992,
+  1993,
+  1994,
+  1995,
+  1996,
+  1997,
+  1998,
+  1999,
+  2000,
+  2001,
+  2002,
+  2003,
+  2004,
+  2005,
+  2006,
+  2007,
+  2008,
+  2009,
+  2010,
+  2011,
+  2012,
+  2013,
+  2014,
+  2015,
+  2016,
+  2017,
+  2018,
+  2019,
+  2020,
+  2021,
+  2022,
+  2023,
+  2024,
+  2025,
+  2026
+ ]
+}
