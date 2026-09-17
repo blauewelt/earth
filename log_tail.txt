@@ -1,0 +1,80 @@
+  [fetch bgcargo] bgcargo 2017  1/1  1848.5s
+  [fetch bgcargo] bgcargo 2017  1/1  1849.4s
+  [fetch bgcargo] bgcargo 2017  1/1  1849.4s
+  [fetch bgcargo] bgcargo 2017  1/1  1850.9s
+  [fetch bgcargo] bgcargo 2017  1/1  1851.0s
+  [fetch bgcargo] bgcargo 2017  1/1  1851.0s
+  [fetch bgcargo] bgcargo 2017  1/1  1851.1s
+  [fetch bgcargo] bgcargo 2017  1/1  1851.5s
+  [fetch bgcargo] bgcargo 2017  1/1  1852.3s
+  [fetch bgcargo] bgcargo 2017  1/1  1852.5s
+  [fetch bgcargo] bgcargo 2017  1/1  1852.6s
+  [fetch bgcargo] bgcargo 2017  1/1  1853.1s
+  [fetch bgcargo] bgcargo 2017  1/1  1853.8s
+  [fetch bgcargo] bgcargo 2017  1/1  1854.2s
+  [fetch bgcargo] bgcargo 2017  1/1  1854.6s
+  [fetch bgcargo] bgcargo 2017  1/1  1855.2s
+  [fetch bgcargo] bgcargo 2017  1/1  1855.6s
+  [fetch bgcargo] bgcargo 2017  1/1  1856.3s
+  [fetch bgcargo] bgcargo 2017  1/1  1856.7s
+  [fetch bgcargo] bgcargo 2017  1/1  1856.9s
+  [fetch bgcargo] bgcargo 2017  1/1  1857.6s
+  [fetch bgcargo] bgcargo 2017  1/1  1858.1s
+  [fetch bgcargo] bgcargo 2017  1/1  1858.6s
+  [fetch bgcargo] bgcargo 2017  1/1  1858.7s
+  [fetch bgcargo] bgcargo 2017  1/1  1859.4s
+  [fetch bgcargo] bgcargo 2017  1/1  1859.5s
+  [fetch bgcargo] bgcargo 2017  1/1  1860.3s
+  [fetch bgcargo] bgcargo 2017  1/1  1860.5s
+  [fetch bgcargo] bgcargo 2017  1/1  1860.9s
+  [fetch bgcargo] bgcargo 2017  1/1  1860.9s
+  [fetch bgcargo] bgcargo 2017  1/1  1861.4s
+  [fetch bgcargo] bgcargo 2017  1/1  1861.4s
+  [fetch bgcargo] bgcargo 2017  1/1  1862.8s
+  [fetch bgcargo] bgcargo 2017  1/1  1863.0s
+  [fetch bgcargo] bgcargo 2017  1/1  1863.3s
+  [fetch bgcargo] bgcargo 2017  1/1  1863.4s
+  [fetch bgcargo] bgcargo 2017  1/1  2055.4s
+  [fetch bgcargo] bgcargo 2017  1/1  2055.4s
+  [fetch bgcargo] bgcargo 2017  1/1  2055.5s
+  [fetch bgcargo] bgcargo 2017  1/1  2055.6s
+  [fetch bgcargo] bgcargo 2017  1/1  2055.6s
+  [fetch bgcargo] bgcargo 2017  1/1  2055.7s
+  [fetch bgcargo] bgcargo 2017  1/1  2055.7s
+  [fetch bgcargo] bgcargo 2017  1/1  2055.7s
+  [fetch bgcargo] bgcargo 2017  1/1  2057.3s
+  [fetch bgcargo] bgcargo 2017  1/1  2057.6s
+  [fetch bgcargo] bgcargo 2017  1/1  2057.7s
+  [fetch bgcargo] bgcargo 2017  1/1  2057.7s
+  [fetch bgcargo] bgcargo 2017  1/1  2058.4s
+  [fetch bgcargo] bgcargo 2017  1/1  2058.9s
+  [fetch bgcargo] bgcargo 2017  1/1  2059.3s
+  [fetch bgcargo] bgcargo 2017  1/1  2060.4s
+  [fetch bgcargo] bgcargo 2017  1/1  2061.3s
+  [fetch bgcargo] bgcargo 2017  1/1  2186.3s
+  [fetch bgcargo] bgcargo 2017  1/1  2186.3s
+  2017: 17,064 row(s) in 1 part(s) (2186.4s)
+  hub: chfrank/earth-tensors with the token from $HF_TOKEN
+  bgcargo: uploading 2 file(s) of 1 year(s), 3.7 MB -> chfrank/earth-tensors:partials/family1_gf/bgcargo/
+Processing Files (0 / 0)      : |          |  0.00B /  0.00B            
+New Data Upload               : |          |  0.00B /  0.00B            [A
+
+  ...argo/parts/2017/00000.npz:  38%|███▊      | 1.38MB / 3.67MB            [A[A
+
+  ...argo/parts/2017/00000.npz:  38%|███▊      | 1.38MB / 3.67MB            [A[AProcessing Files (0 / 1)      :  38%|███▊      | 1.38MB / 3.67MB,   ???B/s  
+New Data Upload               :  38%|███▊      | 1.38MB / 3.67MB,   ???B/s  [A
+
+  ...argo/parts/2017/00000.npz: 100%|█████████▉| 3.67MB / 3.67MB            [A[AProcessing Files (0 / 1)      : 100%|█████████▉| 3.67MB / 3.67MB,   ???B/s  
+New Data Upload               : 100%|█████████▉| 3.67MB / 3.67MB,   ???B/s  [A
+
+  ...argo/parts/2017/00000.npz: 100%|██████████| 3.67MB / 3.67MB            [A[AProcessing Files (1 / 1)      : 100%|██████████| 3.67MB / 3.67MB,  360kB/s  
+New Data Upload               : 100%|██████████| 3.67MB / 3.67MB,  360kB/s  [A
+
+  ...argo/parts/2017/00000.npz: 100%|██████████| 3.67MB / 3.67MB            [A[A
+
+  ...argo/parts/2017/00000.npz: 100%|██████████| 3.67MB / 3.67MB            [A[AProcessing Files (1 / 1)      : 100%|██████████| 3.67MB / 3.67MB,  356kB/s  
+New Data Upload               : 100%|██████████| 3.67MB / 3.67MB,  356kB/s  
+  ...argo/parts/2017/00000.npz: 100%|██████████| 3.67MB / 3.67MB            
+  bgcargo: 1 year(s) pushed and verified in 1 part commit(s), done.json written last (0 already present)
+  push-parts: 1 year(s) on the Hub under partials/family1_gf/bgcargo/
+=== stage fetch done in 2192.5s ===
