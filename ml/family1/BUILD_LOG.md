@@ -41,6 +41,9 @@ back and compares its sha256.
 | `wod` | 1.gf | lanes #16, #25, #57, #62 (4 windows); assembly #75 (hosted, `--assemble streaming`; #73 was killed by the memory assembler) | 15,281,373 | 4,385,949,864 (4.39 GB) | 1772–2026 (195 years with rows) | 2026-09-17 | World Ocean Database casts, all instruments but Argo; public; schema 3. The adapter estimated ≈ 14.7 M casts and 4.2 GB |
 | `ndbc` | 1.0.tf | lanes #44, #45, #58, #63 (4 windows, each re-run once after the parser fixes); assembly #74 (hosted, `--assemble streaming`, 45 min) | 628,157,329 | 29,523,701,726 (29.52 GB) | 1970–2025 (56 years with rows) | 2026-09-17 | NDBC buoy and C-MAN standard meteorology; public; schema 2. The adapter estimated ≈ 6.3 × 10⁸ rows and 30 GB — both hit. Ends 2025: NDBC's historical listing has no 2026 file, and an unlisted year is an absence |
 
+| `tide` | 1.0.tf | lanes #19 (1800–1989), #32 (1990–2009), #59 (2010–2026); assembly #82 (hosted, `--assemble streaming`, 21 min; #77, #79 and #80 died on the UHSLC record list timing out from runner IPs) | 1,080,914,415 | 35,671,451,441 (35.67 GB) | 1800–2026 (227 years with rows) | 2026-09-17 | GESLA-4 tide gauges, public track; schema 3. The reader's whole-record sample projected ≈ 8.6 × 10⁸ rows and 28 GB, so the store is **26 % more rows** than projected |
+| `bgcargo` | 1.gf | lanes #34 (2002–2012), #35–#54 and #81 (one per year), 2022 / 2025 / 2026 fetched **from the sandbox**; assembly #84 (hosted, 1 min) | 335,231 | 73,467,590 (73.5 MB) | 2002–2026 (25 years with rows) | 2026-09-17 | BGC-Argo synthetic profiles; public; schema 2. The adapter projected ≈ 336 k rows and 80 MB — both hit |
+
 ## Notes
 
 - **Measured on hosted runners, 2026-09-17.** A GitHub-hosted
@@ -90,4 +93,14 @@ back and compares its sha256.
   after 62 min: from GitHub's runners the Ifremer GDAC gave 2.2 GB of the
   74.7 GB in that time (≈ 0.6 MB/s, against 23 MB/s from the sandbox
   probe). bgcargo is fetched in lanes instead: 2002–2012, then one lane per
-  year.
+  year. Even one lane at a time with ten attempts, Ifremer then answered
+  `Connection refused` for tens to hundreds of floats a run (481 in run #54),
+  while the same archive serves this sandbox at 23 MB/s: 2022, 2025 and 2026
+  were fetched here and pushed with `--push-parts` in 8–10 minutes each,
+  against 136 and 187 minutes of failing on runners. A lane's stage markers
+  live under `<work>/<store>/`, not per window, so each sandbox year needs
+  its own `--work` or it silently skips ("already done").
+- **UHSLC throttles the runners after a build.** Three tide assemblies
+  (#77, #79, #80) failed in the index stage with the GESLA record list
+  timing out, while the same URL answered this sandbox in 2 s. It cleared
+  about 45 minutes after the last tide lane finished, and #82 went through.
