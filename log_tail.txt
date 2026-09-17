@@ -1,0 +1,80 @@
+  ::warning::bgcargo: 2026 — meds/4902555_Sprof.nc: listed in the index, https://data-argo.ifremer.fr/dac/meds/4902555/4902555_Sprof.nc: <urlopen error [Errno 111] Connection refused>
+  ::warning::bgcargo: 2026 — meds/4902576_Sprof.nc: listed in the index, https://data-argo.ifremer.fr/dac/meds/4902576/4902576_Sprof.nc: <urlopen error [Errno 111] Connection refused>
+  ::warning::bgcargo: 2026 — meds/4902584_Sprof.nc: listed in the index, https://data-argo.ifremer.fr/dac/meds/4902584/4902584_Sprof.nc: <urlopen error [Errno 111] Connection refused>
+  ::warning::bgcargo: 2026 — meds/4902585_Sprof.nc: listed in the index, https://data-argo.ifremer.fr/dac/meds/4902585/4902585_Sprof.nc: <urlopen error [Errno 111] Connection refused>
+  ::warning::bgcargo: 2026 — meds/4902586_Sprof.nc: listed in the index, https://data-argo.ifremer.fr/dac/meds/4902586/4902586_Sprof.nc: <urlopen error [Errno 111] Connection refused>
+  ::warning::bgcargo: 2026 — meds/4902587_Sprof.nc: listed in the index, https://data-argo.ifremer.fr/dac/meds/4902587/4902587_Sprof.nc: <urlopen error [Errno 111] Connection refused>
+  ::warning::bgcargo: 2026 — meds/4902589_Sprof.nc: listed in the index, https://data-argo.ifremer.fr/dac/meds/4902589/4902589_Sprof.nc: <urlopen error [Errno 111] Connection refused>
+  [fetch bgcargo] bgcargo 2026  1/1  10519.7s
+  [fetch bgcargo] bgcargo 2026  1/1  10519.7s
+  [fetch bgcargo] bgcargo 2026  1/1  10519.8s
+  ::warning::bgcargo: 2026 — meds/4902600_Sprof.nc: listed in the index, https://data-argo.ifremer.fr/dac/meds/4902600/4902600_Sprof.nc: <urlopen error [Errno 111] Connection refused>
+  [fetch bgcargo] bgcargo 2026  1/1  10557.5s
+  ::warning::bgcargo: 2026 — meds/4902612_Sprof.nc: listed in the index, https://data-argo.ifremer.fr/dac/meds/4902612/4902612_Sprof.nc: <urlopen error [Errno 111] Connection refused>
+  ::warning::bgcargo: 2026 — meds/4902613_Sprof.nc: listed in the index, https://data-argo.ifremer.fr/dac/meds/4902613/4902613_Sprof.nc: <urlopen error [Errno 111] Connection refused>
+  ::warning::bgcargo: 2026 — meds/4902615_Sprof.nc: listed in the index, https://data-argo.ifremer.fr/dac/meds/4902615/4902615_Sprof.nc: <urlopen error [Errno 111] Connection refused>
+  [fetch bgcargo] bgcargo 2026  1/1  10618.2s
+  [fetch bgcargo] bgcargo 2026  1/1  10618.3s
+  [fetch bgcargo] bgcargo 2026  1/1  10638.1s
+  ::warning::bgcargo: 2026 — meds/4902624_Sprof.nc: listed in the index, https://data-argo.ifremer.fr/dac/meds/4902624/4902624_Sprof.nc: <urlopen error [Errno 111] Connection refused>
+  ::warning::bgcargo: 2026 — meds/4902625_Sprof.nc: listed in the index, https://data-argo.ifremer.fr/dac/meds/4902625/4902625_Sprof.nc: <urlopen error [Errno 111] Connection refused>
+  [fetch bgcargo] bgcargo 2026  1/1  10668.1s
+  ::warning::bgcargo: 2026 — meds/4902627_Sprof.nc: listed in the index, https://data-argo.ifremer.fr/dac/meds/4902627/4902627_Sprof.nc: <urlopen error [Errno 111] Connection refused>
+  [fetch bgcargo] bgcargo 2026  1/1  10706.4s
+  [fetch bgcargo] bgcargo 2026  1/1  10706.4s
+  [fetch bgcargo] bgcargo 2026  1/1  10706.4s
+  ::warning::bgcargo: 2026 — meds/4902633_Sprof.nc: listed in the index, https://data-argo.ifremer.fr/dac/meds/4902633/4902633_Sprof.nc: <urlopen error [Errno 111] Connection refused>
+  ::warning::bgcargo: 2026 — meds/4902634_Sprof.nc: listed in the index, https://data-argo.ifremer.fr/dac/meds/4902634/4902634_Sprof.nc: <urlopen error [Errno 111] Connection refused>
+  ::warning::bgcargo: 2026 — meds/4902635_Sprof.nc: listed in the index, https://data-argo.ifremer.fr/dac/meds/4902635/4902635_Sprof.nc: <urlopen error [Errno 111] Connection refused>
+  ::warning::bgcargo: 2026 — meds/4902636_Sprof.nc: listed in the index, https://data-argo.ifremer.fr/dac/meds/4902636/4902636_Sprof.nc: <urlopen error [Errno 111] Connection refused>
+  ::warning::bgcargo: 2026 — meds/4902637_Sprof.nc: listed in the index, https://data-argo.ifremer.fr/dac/meds/4902637/4902637_Sprof.nc: <urlopen error [Errno 111] Connection refused>
+  ::warning::bgcargo: 2026 — meds/4902638_Sprof.nc: listed in the index, https://data-argo.ifremer.fr/dac/meds/4902638/4902638_Sprof.nc: <urlopen error [Errno 111] Connection refused>
+  [fetch bgcargo] bgcargo 2026  1/1  10819.4s
+  [fetch bgcargo] bgcargo 2026  1/1  10819.4s
+  [fetch bgcargo] bgcargo 2026  1/1  10819.4s
+  [fetch bgcargo] bgcargo 2026  1/1  10819.4s
+  ::warning::bgcargo: 2026 — meds/4902646_Sprof.nc: listed in the index, https://data-argo.ifremer.fr/dac/meds/4902646/4902646_Sprof.nc: <urlopen error [Errno 111] Connection refused>
+  ::warning::bgcargo: 2026 — meds/4902647_Sprof.nc: listed in the index, https://data-argo.ifremer.fr/dac/meds/4902647/4902647_Sprof.nc: <urlopen error [Errno 111] Connection refused>
+  ::warning::bgcargo: 2026 — meds/4902651_Sprof.nc: listed in the index, https://data-argo.ifremer.fr/dac/meds/4902651/4902651_Sprof.nc: <urlopen error [Errno 111] Connection refused>
+  ::warning::bgcargo: 2026 — meds/4902660_Sprof.nc: listed in the index, https://data-argo.ifremer.fr/dac/meds/4902660/4902660_Sprof.nc: <urlopen error [Errno 111] Connection refused>
+  ::warning::bgcargo: 2026 — meds/4902662_Sprof.nc: listed in the index, https://data-argo.ifremer.fr/dac/meds/4902662/4902662_Sprof.nc: <urlopen error [Errno 111] Connection refused>
+  ::warning::bgcargo: 2026 — meds/4902674_Sprof.nc: listed in the index, https://data-argo.ifremer.fr/dac/meds/4902674/4902674_Sprof.nc: <urlopen error [Errno 111] Connection refused>
+  [fetch bgcargo] bgcargo 2026  1/1  10944.2s
+  ::warning::bgcargo: 2026 — meds/4902676_Sprof.nc: listed in the index, https://data-argo.ifremer.fr/dac/meds/4902676/4902676_Sprof.nc: <urlopen error [Errno 111] Connection refused>
+  [fetch bgcargo] bgcargo 2026  1/1  10963.6s
+  ::warning::bgcargo: 2026 — meds/4902678_Sprof.nc: listed in the index, https://data-argo.ifremer.fr/dac/meds/4902678/4902678_Sprof.nc: <urlopen error [Errno 111] Connection refused>
+  [fetch bgcargo] bgcargo 2026  1/1  11004.0s
+  ::warning::bgcargo: 2026 — meds/4902680_Sprof.nc: listed in the index, https://data-argo.ifremer.fr/dac/meds/4902680/4902680_Sprof.nc: <urlopen error [Errno 111] Connection refused>
+  [fetch bgcargo] bgcargo 2026  1/1  11027.0s
+  [fetch bgcargo] bgcargo 2026  1/1  11027.1s
+  [fetch bgcargo] bgcargo 2026  1/1  11027.2s
+  ::warning::bgcargo: 2026 — meds/4902685_Sprof.nc: listed in the index, https://data-argo.ifremer.fr/dac/meds/4902685/4902685_Sprof.nc: <urlopen error [Errno 111] Connection refused>
+  [fetch bgcargo] bgcargo 2026  1/1  11041.7s
+  [fetch bgcargo] bgcargo 2026  1/1  11041.7s
+  ::warning::bgcargo: 2026 — meds/4902688_Sprof.nc: listed in the index, https://data-argo.ifremer.fr/dac/meds/4902688/4902688_Sprof.nc: <urlopen error [Errno 111] Connection refused>
+  ::warning::bgcargo: 2026 — meds/4902719_Sprof.nc: listed in the index, https://data-argo.ifremer.fr/dac/meds/4902719/4902719_Sprof.nc: <urlopen error [Errno 111] Connection refused>
+  ::warning::bgcargo: 2026 — meds/4902722_Sprof.nc: listed in the index, https://data-argo.ifremer.fr/dac/meds/4902722/4902722_Sprof.nc: <urlopen error [Errno 111] Connection refused>
+  [fetch bgcargo] bgcargo 2026  1/1  11095.6s
+  ::warning::bgcargo: 2026 — meds/4902726_Sprof.nc: listed in the index, https://data-argo.ifremer.fr/dac/meds/4902726/4902726_Sprof.nc: <urlopen error [Errno 111] Connection refused>
+  [fetch bgcargo] bgcargo 2026  1/1  11140.8s
+  ::warning::bgcargo: 2026 — meds/4902729_Sprof.nc: listed in the index, https://data-argo.ifremer.fr/dac/meds/4902729/4902729_Sprof.nc: <urlopen error [Errno 111] Connection refused>
+  [fetch bgcargo] bgcargo 2026  1/1  11164.0s
+  [fetch bgcargo] bgcargo 2026  1/1  11164.0s
+  [fetch bgcargo] bgcargo 2026  1/1  11164.0s
+  [fetch bgcargo] bgcargo 2026  1/1  11164.0s
+  [fetch bgcargo] bgcargo 2026  1/1  11164.1s
+  [fetch bgcargo] bgcargo 2026  1/1  11164.1s
+  [fetch bgcargo] bgcargo 2026  1/1  11187.0s
+  [fetch bgcargo] bgcargo 2026  1/1  11187.0s
+  ::warning::2026: NOT MARKED — 473 input(s) could not be read (2026; 2026; 2026; 2026 …); the 15,099 row(s) that did arrive stay on disk, and the retry clears them and re-fetches the year whole
+stage fetch (bgcargo): 473 input(s) could not be read, and every one of them is a hole nothing downstream can see — a store of point observations has no empty cell to look at, so a month, a dataset-year or a mission-year that did not arrive is indistinguishable from an ocean nobody sampled. REFUSING to mark the stage.
+  2026: aoml/2903455_Sprof.nc: listed in the index, https://data-argo.ifremer.fr/dac/aoml/2903455/2903455_Sprof.nc: <urlopen error [Errno 111] Connection refused>
+  2026: aoml/2903457_Sprof.nc: listed in the index, https://data-argo.ifremer.fr/dac/aoml/2903457/2903457_Sprof.nc: <urlopen error [Errno 111] Connection refused>
+  2026: aoml/2903459_Sprof.nc: listed in the index, https://data-argo.ifremer.fr/dac/aoml/2903459/2903459_Sprof.nc: <urlopen error [Errno 111] Connection refused>
+  2026: aoml/2903461_Sprof.nc: listed in the index, https://data-argo.ifremer.fr/dac/aoml/2903461/2903461_Sprof.nc: <urlopen error [Errno 111] Connection refused>
+  2026: aoml/2903463_Sprof.nc: listed in the index, https://data-argo.ifremer.fr/dac/aoml/2903463/2903463_Sprof.nc: <urlopen error [Errno 111] Connection refused>
+  2026: aoml/2903465_Sprof.nc: listed in the index, https://data-argo.ifremer.fr/dac/aoml/2903465/2903465_Sprof.nc: <urlopen error [Errno 111] Connection refused>
+  2026: aoml/2903467_Sprof.nc: listed in the index, https://data-argo.ifremer.fr/dac/aoml/2903467/2903467_Sprof.nc: <urlopen error [Errno 111] Connection refused>
+  2026: aoml/2903468_Sprof.nc: listed in the index, https://data-argo.ifremer.fr/dac/aoml/2903468/2903468_Sprof.nc: <urlopen error [Errno 111] Connection refused>
+  … and 465 more
+The year(s) [2026] carry no `parts/<year>.done` marker and no counts.json, so nothing will assemble or publish them and a re-run with the SAME --work value retries exactly those — the years that DID land are marked and skipped. Two ways on: (1) fix the source (a moved ERDDAP dataset id, a short mirror, a filter that does not match the remote layout) and re-run; or (2) pass --allow-missing-years if a store with those inputs missing is genuinely what you want.
