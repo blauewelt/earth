@@ -1,0 +1,652 @@
+{
+ "bins": [
+  1534,
+  3287
+ ],
+ "builder_git_sha": "8e231982080d4205498708d702851a5d52c60637",
+ "built_at": "2026-09-17T18:28:39+00:00",
+ "channels": [
+  {
+   "max": 40.0,
+   "min": -3.0,
+   "name": "T_10",
+   "unit": "degC"
+  },
+  {
+   "max": 40.0,
+   "min": -3.0,
+   "name": "T_30",
+   "unit": "degC"
+  },
+  {
+   "max": 40.0,
+   "min": -3.0,
+   "name": "T_50",
+   "unit": "degC"
+  },
+  {
+   "max": 40.0,
+   "min": -3.0,
+   "name": "T_100",
+   "unit": "degC"
+  },
+  {
+   "max": 40.0,
+   "min": -3.0,
+   "name": "T_150",
+   "unit": "degC"
+  },
+  {
+   "max": 40.0,
+   "min": -3.0,
+   "name": "T_200",
+   "unit": "degC"
+  },
+  {
+   "max": 40.0,
+   "min": -3.0,
+   "name": "T_300",
+   "unit": "degC"
+  },
+  {
+   "max": 40.0,
+   "min": -3.0,
+   "name": "T_400",
+   "unit": "degC"
+  },
+  {
+   "max": 40.0,
+   "min": -3.0,
+   "name": "T_500",
+   "unit": "degC"
+  },
+  {
+   "max": 40.0,
+   "min": -3.0,
+   "name": "T_700",
+   "unit": "degC"
+  },
+  {
+   "max": 40.0,
+   "min": -3.0,
+   "name": "T_900",
+   "unit": "degC"
+  },
+  {
+   "max": 40.0,
+   "min": -3.0,
+   "name": "T_1100",
+   "unit": "degC"
+  },
+  {
+   "max": 40.0,
+   "min": -3.0,
+   "name": "T_1300",
+   "unit": "degC"
+  },
+  {
+   "max": 40.0,
+   "min": -3.0,
+   "name": "T_1500",
+   "unit": "degC"
+  },
+  {
+   "max": 40.0,
+   "min": -3.0,
+   "name": "T_1700",
+   "unit": "degC"
+  },
+  {
+   "max": 40.0,
+   "min": -3.0,
+   "name": "T_1900",
+   "unit": "degC"
+  },
+  {
+   "max": 42.0,
+   "min": 0.0,
+   "name": "S_10",
+   "unit": "PSU"
+  },
+  {
+   "max": 42.0,
+   "min": 0.0,
+   "name": "S_30",
+   "unit": "PSU"
+  },
+  {
+   "max": 42.0,
+   "min": 0.0,
+   "name": "S_50",
+   "unit": "PSU"
+  },
+  {
+   "max": 42.0,
+   "min": 0.0,
+   "name": "S_100",
+   "unit": "PSU"
+  },
+  {
+   "max": 42.0,
+   "min": 0.0,
+   "name": "S_150",
+   "unit": "PSU"
+  },
+  {
+   "max": 42.0,
+   "min": 0.0,
+   "name": "S_200",
+   "unit": "PSU"
+  },
+  {
+   "max": 42.0,
+   "min": 0.0,
+   "name": "S_300",
+   "unit": "PSU"
+  },
+  {
+   "max": 42.0,
+   "min": 0.0,
+   "name": "S_400",
+   "unit": "PSU"
+  },
+  {
+   "max": 42.0,
+   "min": 0.0,
+   "name": "S_500",
+   "unit": "PSU"
+  },
+  {
+   "max": 42.0,
+   "min": 0.0,
+   "name": "S_700",
+   "unit": "PSU"
+  },
+  {
+   "max": 42.0,
+   "min": 0.0,
+   "name": "S_900",
+   "unit": "PSU"
+  },
+  {
+   "max": 42.0,
+   "min": 0.0,
+   "name": "S_1100",
+   "unit": "PSU"
+  },
+  {
+   "max": 42.0,
+   "min": 0.0,
+   "name": "S_1300",
+   "unit": "PSU"
+  },
+  {
+   "max": 42.0,
+   "min": 0.0,
+   "name": "S_1500",
+   "unit": "PSU"
+  },
+  {
+   "max": 42.0,
+   "min": 0.0,
+   "name": "S_1700",
+   "unit": "PSU"
+  },
+  {
+   "max": 42.0,
+   "min": 0.0,
+   "name": "S_1900",
+   "unit": "PSU"
+  },
+  {
+   "max": 600.0,
+   "min": 0.0,
+   "name": "O2_10",
+   "unit": "umol/kg"
+  },
+  {
+   "max": 600.0,
+   "min": 0.0,
+   "name": "O2_30",
+   "unit": "umol/kg"
+  },
+  {
+   "max": 600.0,
+   "min": 0.0,
+   "name": "O2_50",
+   "unit": "umol/kg"
+  },
+  {
+   "max": 600.0,
+   "min": 0.0,
+   "name": "O2_100",
+   "unit": "umol/kg"
+  },
+  {
+   "max": 600.0,
+   "min": 0.0,
+   "name": "O2_150",
+   "unit": "umol/kg"
+  },
+  {
+   "max": 600.0,
+   "min": 0.0,
+   "name": "O2_200",
+   "unit": "umol/kg"
+  },
+  {
+   "max": 600.0,
+   "min": 0.0,
+   "name": "O2_300",
+   "unit": "umol/kg"
+  },
+  {
+   "max": 600.0,
+   "min": 0.0,
+   "name": "O2_400",
+   "unit": "umol/kg"
+  },
+  {
+   "max": 600.0,
+   "min": 0.0,
+   "name": "O2_500",
+   "unit": "umol/kg"
+  },
+  {
+   "max": 600.0,
+   "min": 0.0,
+   "name": "O2_700",
+   "unit": "umol/kg"
+  },
+  {
+   "max": 600.0,
+   "min": 0.0,
+   "name": "O2_900",
+   "unit": "umol/kg"
+  },
+  {
+   "max": 600.0,
+   "min": 0.0,
+   "name": "O2_1100",
+   "unit": "umol/kg"
+  },
+  {
+   "max": 600.0,
+   "min": 0.0,
+   "name": "O2_1300",
+   "unit": "umol/kg"
+  },
+  {
+   "max": 600.0,
+   "min": 0.0,
+   "name": "O2_1500",
+   "unit": "umol/kg"
+  },
+  {
+   "max": 600.0,
+   "min": 0.0,
+   "name": "O2_1700",
+   "unit": "umol/kg"
+  },
+  {
+   "max": 600.0,
+   "min": 0.0,
+   "name": "O2_1900",
+   "unit": "umol/kg"
+  },
+  {
+   "max": 100.0,
+   "min": -0.5,
+   "name": "CHL_10",
+   "unit": "mg/m3"
+  },
+  {
+   "max": 100.0,
+   "min": -0.5,
+   "name": "CHL_30",
+   "unit": "mg/m3"
+  },
+  {
+   "max": 100.0,
+   "min": -0.5,
+   "name": "CHL_50",
+   "unit": "mg/m3"
+  },
+  {
+   "max": 100.0,
+   "min": -0.5,
+   "name": "CHL_100",
+   "unit": "mg/m3"
+  },
+  {
+   "max": 100.0,
+   "min": -0.5,
+   "name": "CHL_150",
+   "unit": "mg/m3"
+  },
+  {
+   "max": 100.0,
+   "min": -0.5,
+   "name": "CHL_200",
+   "unit": "mg/m3"
+  },
+  {
+   "max": 100.0,
+   "min": -0.5,
+   "name": "CHL_300",
+   "unit": "mg/m3"
+  },
+  {
+   "max": 100.0,
+   "min": -0.5,
+   "name": "CHL_400",
+   "unit": "mg/m3"
+  },
+  {
+   "max": 100.0,
+   "min": -0.5,
+   "name": "CHL_500",
+   "unit": "mg/m3"
+  },
+  {
+   "max": 100.0,
+   "min": -0.5,
+   "name": "CHL_700",
+   "unit": "mg/m3"
+  },
+  {
+   "max": 100.0,
+   "min": -0.5,
+   "name": "CHL_900",
+   "unit": "mg/m3"
+  },
+  {
+   "max": 100.0,
+   "min": -0.5,
+   "name": "CHL_1100",
+   "unit": "mg/m3"
+  },
+  {
+   "max": 100.0,
+   "min": -0.5,
+   "name": "CHL_1300",
+   "unit": "mg/m3"
+  },
+  {
+   "max": 100.0,
+   "min": -0.5,
+   "name": "CHL_1500",
+   "unit": "mg/m3"
+  },
+  {
+   "max": 100.0,
+   "min": -0.5,
+   "name": "CHL_1700",
+   "unit": "mg/m3"
+  },
+  {
+   "max": 100.0,
+   "min": -0.5,
+   "name": "CHL_1900",
+   "unit": "mg/m3"
+  }
+ ],
+ "dataset": "https://gliders.ioos.us/erddap allDatasets + https://gliders.ioos.us/thredds deployments",
+ "datasets": 2541,
+ "date_range": [
+  "2003-01-01",
+  "2026-12-31"
+ ],
+ "delayed_datasets": 868,
+ "first_record": {
+  "bytes": 4808000,
+  "dataset": "Gichigami-20110629T1821",
+  "dims": {
+   "obs": 258,
+   "profile": 198,
+   "trajectory": 1,
+   "trajectory_strlen": 23,
+   "wmo_id_strlen": 7
+  },
+  "file": "deployments/lfiorentino/Gichigami-20110629T1821/Gichigami-20110629T1821.nc3.nc",
+  "header_bytes": 43960
+ },
+ "footprint": {
+  "log2_dt": -6.906890595608519,
+  "log2_fp": -4.0
+ },
+ "levels_dbar": [
+  10.0,
+  30.0,
+  50.0,
+  100.0,
+  150.0,
+  200.0,
+  300.0,
+  400.0,
+  500.0,
+  700.0,
+  900.0,
+  1100.0,
+  1300.0,
+  1500.0,
+  1700.0,
+  1900.0
+ ],
+ "per_year_resume": false,
+ "qc_policy": "qc 1: the file carries QARTOD primary flags for temperature or salinity, and samples flagged 3/4/9 were removed before interpolation (`qartod_removed`); qc 0: no such flags (not assessed). A level value outside its channel's bounds is NaN and counted; a profile with no level value is dropped.",
+ "sources": [
+  "https://gliders.ioos.us/thredds/fileServer/deployments/<user>/<id>/<id>.nc3.nc",
+  "https://gliders.ioos.us/erddap/tabledap/allDatasets.csv?datasetID%2Cinstitution%2CminTime%2CmaxTime%2CminLatitude%2CmaxLatitude%2CminLongitude%2CmaxLongitude%2Ccdm_data_type",
+  "https://gliders.ioos.us/erddap/info/<id>/index.csv",
+  "https://gliders.ioos.us/thredds/catalog/deployments/catalog.xml"
+ ],
+ "store": "gliders",
+ "thredds_deployment_dirs": 3065,
+ "thredds_dirs_not_in_erddap": 524,
+ "title": "Ocean glider profiles (IOOS Glider DAC): T, S, O2, chlorophyll at the 16 Roemmich-Gilson pressures, one row per profile",
+ "verified": "2026-09-17 from the sandbox: allDatasets (2,541 TrajectoryProfile datasets, 868 -delayed); ERDDAP info for 15 datasets; the THREDDS tree (57 users, 3,064 deployment dirs); angus-20200319T0000.nc3.nc whole (104,213,412 B, 90 MB/s, Accept-Ranges) read bit-identically by _nc3 and netCDF4; tabledap throughput 244 kB/s (not used)",
+ "window_bytes_listed_approx": 1088674439925,
+ "window_deployments": 2058,
+ "window_plan": {
+  "datasets_listed": 2541,
+  "delayed_used": 652,
+  "deployments_in_window": 2223,
+  "deployments_without_file": 165,
+  "deployments_without_file_ids": [
+   "MARACOOS03-SEA064-20220311T1622",
+   "MARACOOS03-SEA064-20240710T0137",
+   "MARACOOS03-SEA064-20240720T2306",
+   "SEA044-20260812T1310",
+   "amlr01-20181216T0641",
+   "amlr01-20191206T0452",
+   "amlr02-20181211T1233",
+   "amlr02-20191206T1236",
+   "amlr03-20191206T0529",
+   "bios_anna-20190606T1553",
+   "bios_anna2-20260818T1639",
+   "bios_jack-20150917T1749",
+   "bios_jack-20160701T1425",
+   "bios_jack-20170106T1741",
+   "bios_jack-20170628T1305",
+   "bios_minnie-20170220T1229",
+   "bios_minnie-20180312T1540",
+   "bios_minnie-20211110T2025",
+   "capex690-20260812T1423",
+   "cp_339-20181030T2158",
+   "cp_340-20150507T0237",
+   "cp_340-20190205T0824",
+   "cp_380-20191212T2231",
+   "crate-20200130T0820",
+   "crate-20200213T0854",
+   "dfo-bb046-20200717T1628",
+   "dfo-bb046-20200810T1324",
+   "dfo-bb046-20220608T1543",
+   "dfo-bumblebee998-20260205T0000",
+   "dfo-eva035-20190613T1750",
+   "dfo-eva035-20230720T1404",
+   "dfo-eva035-20260625T0000",
+   "dfo-eva035-20260713T0000",
+   "dfo-hal1002-20220804T1804",
+   "dfo-hal1002-20220914T1703",
+   "dfo-k999-20220803T1656",
+   "dfo-k999-20230320T1522",
+   "dfo-k999-20230418T1629",
+   "dfo-marvin1003-20220928T2031",
+   "dfo-marvin1003-20221018T1740",
+   "dfo-mike579-20190612T0033",
+   "dfo-mike579-20210704T1828",
+   "dfo-rosie713-20220531T1641",
+   "dfo-walle652-20190718T2201",
+   "dfo-walle652-20191205T1456",
+   "dfo-walle652-20210121T1643",
+   "dfo-walle652-20210902T2131",
+   "e640sg17-20221105T1234",
+   "franklin-20230804T0000",
+   "maracoos_01-20260617T1437",
+   "maracoos_02-20260814T1341",
+   "maracoos_04-20221021T1433",
+   "mote-dora-20260107T0000",
+   "ng219-20220803T0000",
+   "ng288-20260826T0000",
+   "ng347-20220727T0000",
+   "ng598-20260630T0000",
+   "ng644-20230614T0957",
+   "ng644-20260630T0000",
+   "osu033-20060712T1702",
+   "osu033-20061204T1734",
+   "osu033-20070501T1921",
+   "osu033-20070613T1503",
+   "osu033-20070725T1623",
+   "osu033-20070814T2154",
+   "osu033-20070914T1634",
+   "osu033-20110920T1738",
+   "osu033-20130307T1842",
+   "osu033-20130510T1644",
+   "osu033-20140617T1720",
+   "osu035-20070411T1530",
+   "osu035-20070814T1655",
+   "osu035-20080630T1713",
+   "osu035-20090602T1655",
+   "osu035-20090629T1710",
+   "osu035-20090805T0256",
+   "osu035-20110210T2257",
+   "osu035-20120211T1831",
+   "osu551-20230715T1728",
+   "osu592-20180507T1733",
+   "osu592-20190908T1451",
+   "osu592-20260915T1700",
+   "ru03-20031203T1800",
+   "ru05-20050713T1543",
+   "ru05-20050809T1403",
+   "ru05-20051212T1845",
+   "ru05-20060406T1539",
+   "ru05-20060427T1451",
+   "ru05-20060531T1733",
+   "ru05-20090119T1757",
+   "ru05-20090826T1701",
+   "ru05-20110128T0546",
+   "ru05-20111214T2032",
+   "ru05-20120119T1449",
+   "ru05-20120216T1757",
+   "ru06-20070109T1733",
+   "ru06-20091202T1424",
+   "ru06-20100117T2255",
+   "ru06-20100125T2305",
+   "ru06-20100127T1655",
+   "ru06-20120216T2035",
+   "ru07-20111006T1820",
+   "ru07-20140918T1310",
+   "ru16-20100820T1425",
+   "ru16-20100901T1445",
+   "ru16-20101102T1739",
+   "ru24-20120118T1748",
+   "ru24-20120124T1853",
+   "ru24-20120224T1713",
+   "ru24-20121207T2035",
+   "ru25d-20091111T1255",
+   "ru25d-20101218T1500",
+   "ru25d-20110103T1405",
+   "ru25d-20121218T1941",
+   "ru26d-20111120T1554",
+   "ru26d-20121222T1945",
+   "ru26d-20220714T2322",
+   "ru26d-20260130T2026",
+   "ru28-20191025T1640",
+   "ru29-20130111T0724",
+   "ru29-20131110T1400",
+   "ru29-20260623T2102",
+   "ru30-20140422T1743",
+   "ru30-20140702T2329",
+   "ru34-20220330T1435",
+   "ru34-20260731T1604",
+   "ru36-20230611T2254",
+   "ru37-20260615T1524",
+   "ru37-20260916T2016",
+   "ru40-20230629T1430",
+   "ru40-20260731T1600",
+   "ru43-20260507T1706",
+   "ru43-20260624T1742",
+   "ru43-20260731T1602",
+   "sbu01-20260716T1505",
+   "sg511-20260722T1831",
+   "sg523-20220419T2001",
+   "sg683-20260702T0000",
+   "sg684-20260902T0000",
+   "sp070-20220824T1510",
+   "sylvia-20260813T1245",
+   "ud_134-20110110T2238",
+   "ud_134-20110115T2355",
+   "ud_476-20200110T1828",
+   "ud_476-20200204T1911",
+   "ud_476-20200213T1410",
+   "ud_orris-20260813T1614",
+   "um_242-20210630T1904",
+   "um_242-20211105T1545",
+   "um_242-20220513T1556",
+   "um_242-20220903T1649",
+   "um_242-20221205T1648",
+   "um_242-20230803T1949",
+   "um_242-20231109T1526",
+   "unit_1091-20260826T0000",
+   "unit_1141-20250502T0000",
+   "unit_1190-20260121T1322",
+   "unit_308-20220826T2012",
+   "unit_507-20200109T1549",
+   "unit_541-20260630T0000",
+   "unit_595-20260724T0000",
+   "usf-jaialai-20230718T1200",
+   "usf-murphy-20221104T1001",
+   "usf-sam-20260708T0000",
+   "we15-20231209T1801"
+  ],
+  "realtime_used": 1406,
+  "realtime_used_delayed_missing": 98
+ },
+ "years": [
+  2003,
+  2004,
+  2005,
+  2006,
+  2007,
+  2008,
+  2009,
+  2010,
+  2011,
+  2012,
+  2013,
+  2014,
+  2015,
+  2016,
+  2017,
+  2018,
+  2019,
+  2020,
+  2021,
+  2022,
+  2023,
+  2024,
+  2025,
+  2026
+ ]
+}

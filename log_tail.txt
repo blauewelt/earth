@@ -1,0 +1,80 @@
+
+
+  ...f/gliders/gliders/lon.npy: 100%|██████████| 11.2MB / 11.2MB            [A[A[A
+
+
+
+  ...tf/gliders/gliders/qc.npy: 100%|██████████| 2.81MB / 2.81MB            [A[A[A[A
+
+
+
+
+  ...ders/gliders/platform.npy: 100%|██████████| 22.5MB / 22.5MB            [A[A[A[A[A
+
+
+
+
+
+  ...liders/gliders/time_s.npy: 100%|██████████| 11.2MB / 11.2MB            [A[A[A[A[A[A
+
+
+
+
+
+
+  ...f/gliders/gliders/lat.npy: 100%|██████████| 11.2MB / 11.2MB            [A[A[A[A[A[A[A
+
+
+
+
+
+
+
+  ...f/gliders/gliders/bin.npy: 100%|██████████| 5.62MB / 5.62MB            [A[A[A[A[A[A[A[A
+
+
+
+
+
+
+
+
+  ...tf/gliders/gliders/fp.npy: 100%|██████████| 11.2MB / 11.2MB            [A[A[A[A[A[A[A[A[A
+
+
+
+
+
+
+
+
+
+  ...s/gliders/bin_offsets.npy: 100%|██████████| 13.5kB / 13.5kB            [A[A[A[A[A[A[A[A[A[AProcessing Files (9 / 9)      : 100%|██████████|  435MB /  435MB, 36.4MB/s  
+New Data Upload               : 100%|██████████|  422MB /  422MB, 35.3MB/s  
+  ...liders/gliders/values.npy: 100%|██████████|  359MB /  359MB            
+  ...f/gliders/gliders/lon.npy: 100%|██████████| 11.2MB / 11.2MB            
+  ...tf/gliders/gliders/qc.npy: 100%|██████████| 2.81MB / 2.81MB            
+  ...ders/gliders/platform.npy: 100%|██████████| 22.5MB / 22.5MB            
+  ...liders/gliders/time_s.npy: 100%|██████████| 11.2MB / 11.2MB            
+  ...f/gliders/gliders/lat.npy: 100%|██████████| 11.2MB / 11.2MB            
+  ...f/gliders/gliders/bin.npy: 100%|██████████| 5.62MB / 5.62MB            
+  ...tf/gliders/gliders/fp.npy: 100%|██████████| 11.2MB / 11.2MB            
+  ...s/gliders/bin_offsets.npy: 100%|██████████| 13.5kB / 13.5kB            
+  [publish gliders] bin.npy  1/11  5.6s
+  [publish gliders] bin_offsets.npy  2/11  6.1s
+  [publish gliders] fp.npy  3/11  6.6s
+  [publish gliders] lat.npy  4/11  7.4s
+  [publish gliders] lon.npy  5/11  8.3s
+  [publish gliders] platform.npy  6/11  9.2s
+  [publish gliders] platforms.json  7/11  9.4s
+  [publish gliders] qc.npy  8/11  10.0s
+  [publish gliders] time_s.npy  9/11  10.8s
+  [publish gliders] values.npy  10/11  13.4s
+  [publish gliders] store.json  11/11  13.6s
+  publish: 11 file(s) verified by restore -> https://huggingface.co/datasets/chfrank/earth-tensors/tree/main/tensors/family1_tf/gliders
+=== stage publish done in 15.9s ===
+
+=== stage check (gliders) ===
+  hub: chfrank/earth-tensors with the token from $HF_TOKEN
+  check: gliders — 10 file(s) verified, N=2,808,590, schema 2, Hub chfrank/earth-tensors:tensors/family1_tf/gliders agrees
+=== stage check done in 2.0s ===
