@@ -1,0 +1,80 @@
+
+  .../wod/parts/2009/00000.npz: 100%|██████████| 86.0MB / 86.0MB            [A[A[A[A[A[A[A[A[A
+
+
+
+
+
+
+
+
+
+  .../wod/parts/2017/00000.npz: 100%|██████████|  100MB /  100MB            [A[A[A[A[A[A[A[A[A[AProcessing Files (9 / 9)      : 100%|██████████|  846MB /  846MB, 75.5MB/s  
+New Data Upload               : 100%|██████████|  846MB /  846MB, 75.5MB/s  [A
+
+  .../wod/parts/2014/00000.npz: 100%|██████████|  110MB /  110MB            [A[A
+
+
+  .../wod/parts/2010/00000.npz: 100%|██████████|  109MB /  109MB            [A[A[A
+
+
+
+  .../wod/parts/2013/00000.npz: 100%|██████████| 98.3MB / 98.3MB            [A[A[A[A
+
+
+
+
+  .../wod/parts/2015/00000.npz: 100%|██████████| 91.4MB / 91.4MB            [A[A[A[A[A
+
+
+
+
+
+  .../wod/parts/2016/00000.npz: 100%|██████████|  109MB /  109MB            [A[A[A[A[A[A
+
+
+
+
+
+
+  .../wod/parts/2012/00000.npz: 100%|██████████| 75.0MB / 75.0MB            [A[A[A[A[A[A[A
+
+
+
+
+
+
+
+  .../wod/parts/2011/00000.npz: 100%|██████████| 67.6MB / 67.6MB            [A[A[A[A[A[A[A[A
+
+
+
+
+
+
+
+
+  .../wod/parts/2009/00000.npz: 100%|██████████| 86.0MB / 86.0MB            [A[A[A[A[A[A[A[A[A
+
+
+
+
+
+
+
+
+
+  .../wod/parts/2017/00000.npz: 100%|██████████|  100MB /  100MB            [A[A[A[A[A[A[A[A[A[AProcessing Files (9 / 9)      : 100%|██████████|  846MB /  846MB, 75.0MB/s  
+New Data Upload               : 100%|██████████|  846MB /  846MB, 75.0MB/s  
+  .../wod/parts/2014/00000.npz: 100%|██████████|  110MB /  110MB            
+  .../wod/parts/2010/00000.npz: 100%|██████████|  109MB /  109MB            
+  .../wod/parts/2013/00000.npz: 100%|██████████| 98.3MB / 98.3MB            
+  .../wod/parts/2015/00000.npz: 100%|██████████| 91.4MB / 91.4MB            
+  .../wod/parts/2016/00000.npz: 100%|██████████|  109MB /  109MB            
+  .../wod/parts/2012/00000.npz: 100%|██████████| 75.0MB / 75.0MB            
+  .../wod/parts/2011/00000.npz: 100%|██████████| 67.6MB / 67.6MB            
+  .../wod/parts/2009/00000.npz: 100%|██████████| 86.0MB / 86.0MB            
+  .../wod/parts/2017/00000.npz: 100%|██████████|  100MB /  100MB            
+  wod: 9 year(s) pushed and verified in 1 part commit(s), done.json written last (0 already present)
+  push-parts: 9 year(s) on the Hub under partials/family1_gf/wod/
+=== stage fetch done in 1773.1s ===
