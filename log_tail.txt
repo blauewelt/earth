@@ -1,0 +1,80 @@
+New Data Upload               : |          |  0.00B /  0.00B            [A
+
+  ...ites/parts/1990/00000.npz: 100%|██████████| 93.7kB / 93.7kB            [A[A
+
+
+  ...ites/parts/1993/00000.npz: 100%|██████████| 16.6kB / 16.6kB            [A[A[A
+
+
+
+  ...ites/parts/1991/00000.npz: 100%|██████████|  348kB /  348kB            [A[A[A[A
+
+
+
+
+  ...ites/parts/1992/00000.npz: 100%|██████████| 52.9kB / 52.9kB            [A[A[A[A[A
+
+  ...ites/parts/1990/00000.npz: 100%|██████████| 93.7kB / 93.7kB            [A[A
+
+
+  ...ites/parts/1993/00000.npz: 100%|██████████| 16.6kB / 16.6kB            [A[A[A
+
+
+
+  ...ites/parts/1991/00000.npz: 100%|██████████|  348kB /  348kB            [A[A[A[A
+
+
+
+
+  ...ites/parts/1992/00000.npz: 100%|██████████| 52.9kB / 52.9kB            [A[A[A[A[AProcessing Files (4 / 4)      : 100%|██████████|  511kB /  511kB,   ???B/s  
+New Data Upload               : 100%|██████████|  511kB /  511kB,   ???B/s  [A
+
+  ...ites/parts/1990/00000.npz: 100%|██████████| 93.7kB / 93.7kB            [A[A
+
+
+  ...ites/parts/1993/00000.npz: 100%|██████████| 16.6kB / 16.6kB            [A[A[A
+
+
+
+  ...ites/parts/1991/00000.npz: 100%|██████████|  348kB /  348kB            [A[A[A[A
+
+
+
+
+  ...ites/parts/1992/00000.npz: 100%|██████████| 52.9kB / 52.9kB            [A[A[A[A[A
+
+  ...ites/parts/1990/00000.npz: 100%|██████████| 93.7kB / 93.7kB            [A[A
+
+
+  ...ites/parts/1993/00000.npz: 100%|██████████| 16.6kB / 16.6kB            [A[A[A
+
+
+
+  ...ites/parts/1991/00000.npz: 100%|██████████|  348kB /  348kB            [A[A[A[A
+
+
+
+
+  ...ites/parts/1992/00000.npz: 100%|██████████| 52.9kB / 52.9kB            [A[A[A[A[A
+
+  ...ites/parts/1990/00000.npz: 100%|██████████| 93.7kB / 93.7kB            [A[A
+
+
+  ...ites/parts/1993/00000.npz: 100%|██████████| 16.6kB / 16.6kB            [A[A[A
+
+
+
+  ...ites/parts/1991/00000.npz: 100%|██████████|  348kB /  348kB            [A[A[A[A
+
+
+
+
+  ...ites/parts/1992/00000.npz: 100%|██████████| 52.9kB / 52.9kB            [A[A[A[A[AProcessing Files (4 / 4)      : 100%|██████████|  511kB /  511kB, 49.5kB/s  
+New Data Upload               : 100%|██████████|  511kB /  511kB, 49.5kB/s  
+  ...ites/parts/1990/00000.npz: 100%|██████████| 93.7kB / 93.7kB            
+  ...ites/parts/1993/00000.npz: 100%|██████████| 16.6kB / 16.6kB            
+  ...ites/parts/1991/00000.npz: 100%|██████████|  348kB /  348kB            
+  ...ites/parts/1992/00000.npz: 100%|██████████| 52.9kB / 52.9kB            
+  oceansites: 6 year(s) pushed and verified in 1 part commit(s), done.json written last (0 already present)
+  push-parts: 6 year(s) on the Hub under partials/family1_gf/oceansites/
+=== stage fetch done in 2001.6s ===
