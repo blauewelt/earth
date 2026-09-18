@@ -1,0 +1,2 @@
+  [index flux] start (1 items)  0/1  0.0s
+REFUSING flux: the icos hub: ICOS file name 'FLX_DE-Dgw_FLUXNET2015_FULLSET_2015-2018_beta-3.zip' does not carry a site id in the ONEFlux form <network>_<site>_FLUXNET_<years>_<version> — a listing that comes back empty or unreadable is a refusal (ml/CLAUDE.md, the 2026-09-14 rule)
