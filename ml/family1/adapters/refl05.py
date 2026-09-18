@@ -99,11 +99,24 @@ THE GRID: 7,200 x 3,600 at 0.05 degrees, EPSG:4326, row 0 the northernmost
 (90 N) — the source SDS' own orientation. F = 5 daily frames per five-day
 bin, so a frame IS a calendar day.
 
-SIZE, AND THE ORDER THE RECORD IS BUILT IN. The note's arithmetic is
-v ~= 0.15: about 700 GB for Terra, which is more than one rented box should
-assemble in one pass and 5.4 TB of downloads. The store is therefore built
-2015-2026 FIRST and the rest only after the probe's measured bytes per frame
-have been compared with that estimate (`ml/family1/probes/refl05_2015-07.json`).
+SIZE — MEASURED, AND FAR ABOVE THE NOTE. The ledger row assumes a valid
+fraction of about 0.15 and arrives at ~700 GB for Terra. The probe of
+2015-07 (run #232, 31 frames, `ml/family1/probes/refl05_2015-07.json`)
+measured **0.80** instead, on every one of the nine channels: MOD09CMG v061
+fills only a fifth of the grid, because a surface-reflectance retrieval is
+made over OCEAN as well as land and only the night side and the declined
+pixels are fill. With 257.2 MB stored a frame and 9,622 frames that is
+**2.47 TB** for the Terra record, against the note's 700 GB — and 5.6 TB of
+downloads and about 75 hours of fetching and encoding to produce it. The
+compression ratio is 1.81, so there is no headroom in the codec either:
+float16 reflectance is high-entropy and zstd has little to remove.
+
+2015-2026 alone — the part the plan asks for first — is about 4,380 frames,
+i.e. **1.13 TB** and some 34 hours. THAT IS A DECISION, NOT A DISPATCH, and
+the store is therefore measured and not built. The choice in front of it is
+between the whole nine-channel field at 2.47 TB, a land-only variant (the
+layout would store only the tiles with a land pixel, which the note's own
+0.15 assumption implicitly described), and fewer bands.
 
 `REFL05_SMOKE_GRID` ("W,H") shrinks the grid for `--smoke`.
 """
@@ -279,7 +292,15 @@ class Refl05Adapter(mc.CmgAdapter):
             out[:, :, i] = v
             allfill &= fill
             counts[f"fill_pixels_b{i + 1}"] = int(fill.sum())
-            counts.setdefault("fill_value_seen", {})[f"b{i + 1}"] = int(f)
+            # A VALUE, NOT A COUNT: `_merge_counts` SUMS the numeric leaves
+            # of a counts dict across every frame and every part, so the
+            # first version of this line reported the fill as -888,832 —
+            # -28,672 added up over the probe's 31 frames. The value goes in
+            # the KEY and the tally counts the frames that carried it.
+            counts.setdefault("fill_value_seen", {})
+            k = f"b{i + 1}={int(f)}"
+            counts["fill_value_seen"][k] = \
+                counts["fill_value_seen"].get(k, 0) + 1
             if n_bad:
                 counts.setdefault("refl_outside_valid_range",
                                   {})[f"b{i + 1}"] = n_bad
@@ -302,7 +323,9 @@ class Refl05Adapter(mc.CmgAdapter):
         counts["pixels_qa_fill"] = int(qa_fill.sum())
         counts["pixels_qa_fill_with_a_band"] = int((qa_fill & ~allfill).sum())
         counts["pixels_band_without_qa"] = int((allfill & ~qa_fill).sum())
-        counts.setdefault("fill_value_seen", {})["state_qa"] = int(qf)
+        counts.setdefault("fill_value_seen", {})
+        k = f"state_qa={int(qf)}"
+        counts["fill_value_seen"][k] = counts["fill_value_seen"].get(k, 0) + 1
         return out, counts
 
     @staticmethod
