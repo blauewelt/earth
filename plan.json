@@ -1,0 +1,147 @@
+{
+ "bins": [
+  2775,
+  2848
+ ],
+ "builder_git_sha": "ce4dcf6ac08b1c91d2017a0d0b0807fde97a6d50",
+ "built_at": "2026-09-18T09:49:53+00:00",
+ "channels": [
+  {
+   "max": 100.0,
+   "min": 0.0,
+   "name": "cloud",
+   "unit": "%"
+  },
+  {
+   "max": 100.0,
+   "min": 0.0,
+   "name": "valid",
+   "unit": "%"
+  },
+  {
+   "max": 90.0,
+   "min": 0.0,
+   "name": "angle",
+   "unit": "deg"
+  },
+  {
+   "max": 26.0,
+   "min": -10.0,
+   "name": "log2_area",
+   "unit": "log2(km2)"
+  },
+  {
+   "max": 255.0,
+   "min": 0.0,
+   "name": "sensor",
+   "unit": "1"
+  }
+ ],
+ "collection": "SENTINEL-2",
+ "dataset": "Sentinel-2 L2A (CDSE OData)",
+ "date_range": [
+  "2020-01-01",
+  "2020-12-31"
+ ],
+ "first_month": "2020-01",
+ "first_record": {
+  "asset_template": "$value",
+  "attributes": {
+   "beginningDateTime": "2020-01-01T00:17:19.024000Z",
+   "cloudCover": 45.60878,
+   "datastripId": "S2B_OPER_MSI_L2A_DS_S2RP_20230514T123048_S20200101T001716_N05.00",
+   "endingDateTime": "2020-01-01T00:17:19.024000Z",
+   "granuleIdentifier": "S2B_OPER_MSI_L2A_TL_S2RP_20230514T123048_A014728_T56MKS_N05.00",
+   "instrumentShortName": "MSI",
+   "operationalMode": "INS-NOBS",
+   "orbitNumber": 14728,
+   "origin": "ESA",
+   "platformSerialIdentifier": "B",
+   "platformShortName": "SENTINEL-2",
+   "processingDate": "2023-05-14T12:30:48.000000Z",
+   "processingLevel": "S2MSI2A",
+   "processorVersion": "05.00",
+   "productGroupId": "GS2B_20200101T001719_014728_N05.00",
+   "productType": "S2MSI2A",
+   "relativeOrbitNumber": 116,
+   "tileId": "56MKS"
+  },
+  "base_url": "https://catalogue.dataspace.copernicus.eu/odata/v1/Products(01314dd9-e011-4473-a639-97db369cb9dc)",
+  "counts": {},
+  "lat": -7.633273071723277,
+  "lon": 150.589594994575,
+  "name": "S2B_MSIL2A_20200101T001719_N0500_R116_T56MKS_20230514T123048.SAFE",
+  "qc": 0,
+  "time_s": 1199146639,
+  "values": {
+   "angle": null,
+   "cloud": 45.60878,
+   "log2_area": 13.536107409778271,
+   "sensor": 2.0,
+   "valid": null
+  }
+ },
+ "footprint": {
+  "log2_dt": -18.720671786825555,
+  "log2_fp": 1.9801652405609538
+ },
+ "paging_reach": 11000,
+ "per_year_resume": true,
+ "product_types": [
+  "S2MSI2A"
+ ],
+ "products_first_month": 275265,
+ "products_first_month_by_satellite": {
+  "S2A": 123788,
+  "S2B": 151477,
+  "S2C": 0,
+  "S2D": 0
+ },
+ "qc_policy": "qc is the ESA PROCESSING BASELINE (`processorVersion`): 0 = 05.00, 1 = 05.10, 2 = 05.11, 3 = 05.12, 4 = 05.13, and 10..30 for the 02.x-04.x baselines and the 99.99 test value. A baseline the table does not list is 255 and counted by name in `qc_unlisted`, so a new baseline appears in the build report instead of changing what a row means. `cloud` is the `cloudCover` attribute; `valid` and `angle` are NaN for every row because CDSE publishes neither a valid-pixel percentage nor a mean sun zenith in the product attributes. A value outside a channel's bounds is NaN and counted (`out_of_bounds`), never clipped.",
+ "qc_table": {
+  "0": "05.00",
+  "1": "05.10",
+  "10": "04.00",
+  "11": "03.01",
+  "12": "02.14",
+  "13": "02.12",
+  "14": "02.11",
+  "15": "02.10",
+  "16": "02.09",
+  "17": "02.08",
+  "18": "02.07",
+  "19": "02.06",
+  "2": "05.11",
+  "20": "02.05",
+  "21": "02.04",
+  "22": "02.01",
+  "3": "05.12",
+  "30": "99.99",
+  "4": "05.13"
+ },
+ "s2a_still_acquiring": true,
+ "s3_path_pattern": "/eodata/Sentinel-2/MSI/L2A/<YYYY>/<MM>/<DD>/<Name>",
+ "sensor_table": {
+  "1": "S2A",
+  "2": "S2B",
+  "3": "S2C",
+  "4": "S2D"
+ },
+ "skip_max": 10000,
+ "sources": [
+  "https://catalogue.dataspace.copernicus.eu/odata/v1/Products",
+  "https://catalogue.dataspace.copernicus.eu/stac/collections",
+  "https://catalogue.dataspace.copernicus.eu/odata/v1/Products({id})/$value"
+ ],
+ "stac_endpoint_note": "https://catalogue.dataspace.copernicus.eu/stac lists ten collections, all Contributing Missions or CLMS burnt area, and no Sentinel collection (measured 2026-09-18) \u2014 OData is the only CDSE catalogue for this data",
+ "stac_endpoint_serves_sentinel": false,
+ "store": "cat_s2",
+ "title": "Sentinel-2 L2A tile catalogue (10/20/60 m surface reflectance, S2A + S2B + S2C, CDSE), one row per tile-overpass",
+ "top_max": 1000,
+ "url": "https://catalogue.dataspace.copernicus.eu/odata/v1/Products",
+ "verified": "2026-09-18 from the sandbox, anonymously: the CDSE STAC serves TEN collections and no Sentinel one, so OData is the catalogue; $top>1000 and $skip>10000 both answer HTTP 422 (the $skip body names the limit); $orderby=ContentDate/Start asc works; 12,683 products on 2024-06-01 and 993 in the hour 10:00-11:00; 15,844 on 2026-09-01; 41,232,005 products over 2015-2026 by year; productType S2MSI2Ap is empty; and S2A is STILL ACQUIRING (48,637 products in 2026-09) against the ledger's 'retired 2026-03'",
+ "window_step": "hour",
+ "years": [
+  2020
+ ]
+}
