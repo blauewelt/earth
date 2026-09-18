@@ -1,0 +1,80 @@
+  139310,
+  142402,
+  140610,
+  140364,
+  140645,
+  140327,
+  141583,
+  134510,
+  142625,
+  140325,
+  137922,
+  140234,
+  140385,
+  137963,
+  143162,
+  140059,
+  142649,
+  141171,
+  144068,
+  140186,
+  142423,
+  141700
+ ],
+ "days_with_no_rows": 0,
+ "distinct_platforms": 3,
+ "channels": [
+  "swh",
+  "swh_denoised",
+  "swh_uncertainty"
+ ],
+ "nan_fraction": {
+  "swh": 0.0,
+  "swh_denoised": 0.011474,
+  "swh_uncertainty": 0.024921
+ },
+ "out_of_bounds": {
+  "swh": 0,
+  "swh_denoised": 0,
+  "swh_uncertainty": 0
+ },
+ "out_of_bounds_stored": {
+  "swh": 0,
+  "swh_denoised": 0,
+  "swh_uncertainty": 0
+ },
+ "rows_outside_month_dropped_by_probe": 0,
+ "qc": {
+  "1": 4352091
+ },
+ "counts": {
+  "days_listed": 31,
+  "days_absent_upstream": 0,
+  "days_read": 31,
+  "samples_in_file": 4352093,
+  "samples_per_mission": {
+   "cryosat-2": 1255788,
+   "jason-2": 1719307,
+   "saral": 1376996
+  },
+  "rows_kept": 4352091,
+  "fetch_seconds": 22.6
+ },
+ "counts_scope": "month",
+ "bytes_fetched": 304162654,
+ "bytes_index": 18327285,
+ "wall_seconds": 22.62,
+ "wall_seconds_index": 20.27,
+ "bytes_per_row": 69.889,
+ "stored_bytes_per_row": 33,
+ "time_dtype": "int32",
+ "schema_version": 2,
+ "platforms": null,
+ "estimate_rows_per_year": null,
+ "estimate_store_bytes": null,
+ "note_estimate": null,
+ "runner": "GitHub Actions 1000005313",
+ "builder_git_sha": "f2051e9ccf02a71847ff20e5e8d20ccdc8811444",
+ "at": "2026-09-18T07:41:07+00:00"
+}
+probe -> /home/runner/work/earth/earth/ml/cache/family1_gf/probe/swh/2015-01.json
