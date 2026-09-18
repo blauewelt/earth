@@ -53,7 +53,9 @@ library that is not on PyPI:
     GET  .../fluxnet/BIF_all_sites.csv -> the BADM metadata for all of them
 
 WHAT IS STORED: C = 10, one row per site half-hour, from the FULLSET
-half-hourly file inside each site's zip (`*_FLUXNET_FLUXMET_HH_*.csv`):
+half-hourly file inside each site's zip (`*_FLUXNET_FLUXMET_HH_*.csv`, or
+`*_FLUXNET_FULLSET_HH_*.csv` at the sites AmeriFlux still publishes under the
+FLUXNET2015-era naming — the columns are identical and both are read):
 
   nee   umolCO2/m2/s  NEE_VUT_REF        net ecosystem exchange
   gpp   umolCO2/m2/s  GPP_NT_VUT_REF     gross primary production
@@ -163,8 +165,15 @@ QC_COLUMNS = (("nee", "NEE_VUT_REF_QC"), ("le", "LE_F_MDS_QC"))
 # the other, never both; dropping the hourly ones would throw away real towers
 # over a naming convention, so both are read and the CADENCE is recorded --
 # per row in qc bit 6, and per site in platforms.json.
-HH_NAME = re.compile(r"_FLUXNET_FLUXMET_(HH|HR)_.*\.csv$", re.I)
-HR_NAME = re.compile(r"_FLUXNET_FLUXMET_HR_.*\.csv$", re.I)
+# AND THE HALF-HOURLY FILE HAS TWO NAMES, because AmeriFlux still publishes
+# some sites under the FLUXNET2015-era naming. Measured on a runner:
+#   AMF_US-Ha1_FLUXNET_FLUXMET_HH_1991-2025_v1.3_r1.csv   ONEFlux v1.3+
+#   AMF_CA-ER1_FLUXNET_FULLSET_HH_2015-2021_4-7.csv       the older shape
+# The columns are the same in both (TA_F, NEE_VUT_REF, GPP_NT_VUT_REF, ...),
+# which is the whole point of FULLSET, so both are read — BY COLUMN NAME, as
+# everything here is — and a zip carrying two of them is a refusal.
+HH_NAME = re.compile(r"_FLUXNET_(FLUXMET|FULLSET)_(HH|HR)_.*\.csv$", re.I)
+HR_NAME = re.compile(r"_FLUXNET_(FLUXMET|FULLSET)_HR_.*\.csv$", re.I)
 BIF_NAME = re.compile(r"_FLUXNET_BIF_(?!VARINFO).*\.csv$", re.I)
 IGBP_URI = re.compile(r"igbp_([A-Za-z]+)$")
 

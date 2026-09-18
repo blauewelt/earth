@@ -172,6 +172,36 @@ def test_the_missing_value_becomes_nan_and_the_qc_is_packed():
     assert (cols3["qc"] == q).all()
 
 
+def test_the_older_fullset_naming_is_read_too():
+    """AmeriFlux still publishes some sites as `_FLUXNET_FULLSET_HH_` with a
+    `4-7` version rather than `_FLUXNET_FLUXMET_HH_` with `v1.3_r1`; the
+    columns are the same and CA-ER1 is one of them (measured on a runner)."""
+    import io as _io
+    buf = _io.BytesIO()
+    with zipfile.ZipFile(buf, "w") as z:
+        z.writestr("AMF_CA-ER1_FLUXNET_FULLSET_HH_2015-2021_4-7.csv",
+                   fx._hh_csv("CA-ER1", -5, None))
+        z.writestr("AMF_CA-ER1_FLUXNET_FULLSET_DD_2015-2021_4-7.csv",
+                   "TIMESTAMP,TA_F\n20180601,12.0\n")
+        z.writestr("AMF_CA-ER1_FLUXNET_ERA5_HH_1981-2024_4-7.csv", "x\n")
+        z.writestr("AMF_CA-ER1_FLUXNET_BIF_2015-2021_4-7.csv",
+                   fx._bif_csv("CA-ER1", -5, 42.0, -82.0, 190.0, "CRO", None))
+    cols, off, meta, counts = fx.read_zip(buf.getvalue(), "CA-ER1", "amf", {})
+    assert off == -5.0 and meta["_resolution"] == "HH"
+    assert cols["t"].size > 0
+    # and a zip with BOTH namings is a refusal, not a coin toss
+    buf2 = _io.BytesIO()
+    with zipfile.ZipFile(buf2, "w") as z:
+        z.writestr("AMF_X-Y_FLUXNET_FULLSET_HH_2015-2021_4-7.csv",
+                   fx._hh_csv("X-Y", 0, None))
+        z.writestr("AMF_X-Y_FLUXNET_FLUXMET_HH_2015-2021_v1.3_r1.csv",
+                   fx._hh_csv("X-Y", 0, None))
+        z.writestr("AMF_X-Y_FLUXNET_BIF_2015-2021_4-7.csv",
+                   fx._bif_csv("X-Y", 0, 0, 0, 0, "CRO", None))
+    with pytest.raises(fx.FormatError):
+        fx.read_zip(buf2.getvalue(), "X-Y", "amf", {})
+
+
 def test_an_hourly_site_is_read_and_marked_not_dropped():
     """TERN's AU-Otw publishes `_FLUXMET_HR_` and no HH file at all."""
     import io as _io
