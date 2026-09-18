@@ -1,0 +1,50 @@
+store     fire — Active fire detections, FIRMS MODIS C6.1 (1 km) and VIIRS S-NPP / NOAA-20 / NOAA-21 (375 m)
+family    family1_tf (1.0.tf) · public -> chfrank/earth-tensors:tensors/family1_tf/fire
+axis      2007-01-01 .. 2013-12-31  bins 1826..2337 · time_s int32 (schema 2)
+channels  C=4: brightness, frp, confidence, daynight
+work      /home/runner/work/earth/earth/ml/cache/family1_tf
+
+=== stage index (fire) ===
+  [index fire] start (1 items)  0/1  0.0s
+  [index fire] plan.json  1/1  0.6s
+  index: fire — 7 year(s), C=4 (brightness, frp, confidence, daynight), bins 1826..2337
+=== stage index done in 0.6s ===
+
+=== stage fetch (fire) ===
+  [fetch fire] start (7 items)  0/7  0.0s
+  [fetch fire] fire 2007 MODIS_SP 2007-01-01+5d  1/7  1.0s
+  [fetch fire] fire 2007 MODIS_SP 2007-01-06+5d  1/7  2.2s
+  [fetch fire] fire 2007 MODIS_SP 2007-01-11+5d  1/7  3.4s
+  [fetch fire] fire 2007 MODIS_SP 2007-01-16+5d  1/7  4.4s
+  [fetch fire] fire 2007 MODIS_SP 2007-01-21+5d  1/7  5.2s
+  [fetch fire] fire 2007 MODIS_SP 2007-01-26+5d  1/7  6.1s
+  [fetch fire] fire 2007 MODIS_SP 2007-01-31+5d  1/7  7.0s
+  [fetch fire] fire 2007 MODIS_SP 2007-02-05+5d  1/7  8.0s
+  [fetch fire] fire 2007 MODIS_SP 2007-02-10+5d  1/7  9.3s
+  [fetch fire] fire 2007 MODIS_SP 2007-02-15+5d  1/7  10.2s
+  [fetch fire] fire 2007 MODIS_SP 2007-02-15  10.2s
+  [fetch fire] fire 2007 MODIS_SP 2007-02-20+5d  1/7  11.0s
+  [fetch fire] fire 2007 MODIS_SP 2007-02-25+5d  1/7  11.7s
+Traceback (most recent call last):
+  File "/home/runner/work/earth/earth/ml/build_family1_stores.py", line 1488, in <module>
+    sys.exit(main())
+             ^^^^^^
+  File "/home/runner/work/earth/earth/ml/build_family1_stores.py", line 1483, in main
+    f10b.run_stages(ctx, stages, stage_fn=stage_fns(ad), deps=DEPS)
+  File "/home/runner/work/earth/earth/ml/build_family10_stores.py", line 5331, in run_stages
+    stage_fn[s](ctx)
+  File "/home/runner/work/earth/earth/ml/build_family1_stores.py", line 264, in stage_fetch
+    f10b.stage_fetch(ctx, assemble_store_after=False)
+  File "/home/runner/work/earth/earth/ml/build_family10_stores.py", line 3912, in stage_fetch
+    for label, rows, counts in ad.fetch_year(ctx, y):
+  File "/home/runner/work/earth/earth/ml/family1/adapters/fire.py", line 607, in fetch_year
+    yield from self._fetch(ctx, self.windows(ctx, year), str(year))
+  File "/home/runner/work/earth/earth/ml/family1/adapters/fire.py", line 636, in _fetch
+    raw, url, why = self.request(ctx, src, day, n)
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/work/earth/earth/ml/family1/adapters/fire.py", line 584, in request
+    raw, why = cm.get_bytes(url, attempts=ctx.a.attempts)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/work/earth/earth/ml/family1/adapters/_common.py", line 113, in get_bytes
+    raise IOError(f"{url}: {type(err).__name__}: {err}")
+OSError: https://firms.modaps.eosdis.nasa.gov/api/area/csv/3c9f361cd761f9018d27fc83af2bd03e/MODIS_SP/world/5/2007-03-02: OSError: https://firms.modaps.eosdis.nasa.gov/api/area/csv/3c9f361cd761f9018d27fc83af2bd03e/MODIS_SP/world/5/2007-03-02: HTTP 400 — Exceeding allowed transaction limit.

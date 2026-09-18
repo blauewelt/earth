@@ -1,0 +1,10 @@
+{
+ "at": "2026-09-18T09:48:55+00:00",
+ "done": 1,
+ "elapsed_s": 11.7,
+ "eta_s": 70.5,
+ "item": "fire 2007 MODIS_SP 2007-02-25+5d",
+ "stage": "fetch fire",
+ "total": 7,
+ "year_rows": 772717
+}
