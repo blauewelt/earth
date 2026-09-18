@@ -174,7 +174,14 @@ class NisarCatalogue(st.CatalogueAdapter):
     scene_seconds = 40.0
     SENSOR_TABLE = SENSOR_TABLE
     QC_TABLE = QC_TABLE
-    window_step = "hour"
+    # DAY WINDOWS, SPLIT WHEN THEY DO NOT FIT — not hour windows. Both work,
+    # and the day plan costs a SIXTH of the requests against a host that
+    # allows 240 a minute, which is the whole cost of this store. Measured:
+    # 2025-10 to 2025-12 holds 206 frames a day (one count and one walk, two
+    # requests), 2026-07 to 2026-09 holds 1,120 (the splitter halves it to
+    # eight sub-windows of about 140, so 15 counts and 8 walks), and the whole
+    # record is about 2,500 requests where hour windows needed 15,000.
+    window_step = "day"
     qc_policy = (
         "qc is the processing TIER and product class: 0 BETA/PR, 1 BETA/UR, "
         "2 PROVISIONAL/PR, 3 PROVISIONAL/UR, 4 VALIDATED/PR, 5 VALIDATED/UR. "

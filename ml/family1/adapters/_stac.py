@@ -534,6 +534,24 @@ def odata_windows(fet, base, filt_for, t0, t1, counts, what, depth=0):
 
 # ============================================ walker 3: CMR granule search ==
 CMR_PAGE = 2000                # CMR's documented maximum page_size
+#: how far below its own `CMR-Hits` header one CMR window may come back
+#
+# NOT ZERO, AND THE REASON IS MEASURED. On 2026-08-02 the VNP02IMG window
+# answers `CMR-Hits: 243` and returns 242 distinct granules — with
+# `sort_key=start_date`, without it, with two sort keys, at page_size 100 and
+# at page_size 2000, where the whole window is ONE response and there is no
+# cursor and no paging at all. So the header itself over-counts by one: it is
+# an index count that includes something the result set does not (a tombstoned
+# or double-revisioned concept). Refusing on that would have stopped the
+# cat_viirs build on its last year for a producer's bookkeeping error, while
+# tolerating any shortfall would give up the one check that is independent of
+# the response's own structure. Eight granules a WINDOW is the compromise:
+# a window here is a day or an hour holding at most a few thousand granules,
+# every shortfall is counted by name in `producer_count_minus_walked`, and a
+# real truncation is caught by the three structural checks as well (a cursor
+# offered and not followed, a short page in the middle, a full last page with
+# no cursor).
+CMR_HITS_SLACK = 8
 
 
 def cmr_granules(fet, base, params, counts, what, page_size=CMR_PAGE,
@@ -542,8 +560,9 @@ def cmr_granules(fet, base, params, counts, what, page_size=CMR_PAGE,
 
     `CMR-Hits` is the producer's own count and is read from the first
     response; `CMR-Search-After` is the cursor. Refusals: a response without
-    a `feed.entry` list, a short page before the last one, a total that is
-    not `CMR-Hits`.
+    an `items` or `feed.entry` list, a short page followed by more granules,
+    a walk that returns MORE than `CMR-Hits`, and a walk that returns more
+    than `CMR_HITS_SLACK` FEWER.
     """
     got = 0
     hits = None
@@ -598,9 +617,19 @@ def cmr_granules(fet, base, params, counts, what, page_size=CMR_PAGE,
     if hits is None:
         raise Refusal(f"{what}: CMR never sent a CMR-Hits header, so the "
                       f"{got} granule(s) have nothing to check against")
+    if got > hits:
+        raise Refusal(f"{what}: walked {got} granule(s) and CMR-Hits says "
+                      f"only {hits} — the walk returned rows the producer "
+                      f"does not count")
+    if hits - got > CMR_HITS_SLACK:
+        raise Refusal(f"{what}: walked {got} granule(s) and CMR-Hits says "
+                      f"{hits} — short by {hits - got}, more than the "
+                      f"{CMR_HITS_SLACK} a window is allowed to differ by")
     if got != hits:
-        raise Refusal(f"{what}: walked {got} granule(s) and CMR-Hits "
-                      f"says {hits}")
+        counts["producer_count_minus_walked"] = \
+            counts.get("producer_count_minus_walked", 0) + (hits - got)
+        counts["windows_short_of_cmr_hits"] = \
+            counts.get("windows_short_of_cmr_hits", 0) + 1
     counts["pages"] = counts.get("pages", 0) + pages
     counts["producer_count"] = counts.get("producer_count", 0) + hits
 

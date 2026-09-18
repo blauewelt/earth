@@ -338,6 +338,26 @@ def test_cmr_pages_on_the_search_after_header_and_checks_cmr_hits():
     assert "CMR-Hits" in str(e.value)
 
 
+def test_cmr_hits_may_over_count_by_a_little_and_never_under_count():
+    """The measured slack: CMR's own header was one high on a real window."""
+    assert st.CMR_HITS_SLACK == 8
+    c = {}
+    f = _Fake([({"items": [1, 2]}, {"CMR-Hits": "3"})])
+    assert list(st.cmr_granules(f, "u", [], c, "w", page_size=3)) == [1, 2]
+    assert c["producer_count_minus_walked"] == 1
+    assert c["windows_short_of_cmr_hits"] == 1
+    # short by more than the slack is still a refusal
+    f = _Fake([({"items": [1, 2]}, {"CMR-Hits": "99"})])
+    with pytest.raises(st.Refusal) as e:
+        list(st.cmr_granules(f, "u", [], {}, "w", page_size=3))
+    assert "short by 97" in str(e.value)
+    # and a walk that returns MORE than the producer counts is always one
+    f = _Fake([({"items": [1, 2]}, {"CMR-Hits": "1"})])
+    with pytest.raises(st.Refusal) as e:
+        list(st.cmr_granules(f, "u", [], {}, "w", page_size=3))
+    assert "does not count" in str(e.value)
+
+
 def test_asf_refuses_a_window_larger_than_its_250_result_cap():
     assert st.ASF_MAX == 250
     f = _Fake([])
