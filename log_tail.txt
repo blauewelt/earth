@@ -1,0 +1,44 @@
+store     lst05 — Daily land-surface temperature day and night with quality, MODIS MOD11C1 v061, 0.05 degrees
+family    family1_tf (1.0.tf) · public -> chfrank/earth-tensors:tensors/family1_tf/lst05
+axis      2012-01-04 .. 2016-01-02  bins 2192..2483 · time_s int32 (schema 2)
+channels  C=4: lst_day, lst_night, qc_day, qc_night
+tier G    sharded, groups ['terra'], F=5 x 86400 s, float16, years (by bin start) 2012..2015
+work      /home/runner/work/earth/earth/ml/cache/family1_tf
+
+=== stage index (lst05) ===
+  [index lst05] start (1 items)  0/1  0.0s
+::warning::lst05: the index could not open MOD11C1.A2026259.061.2026260092805 (OSError) — trying another day; a login that does not answer is not a verdict about the product
+::warning::lst05: the index could not open MOD11C1.A2000058.061.2020058191556 (OSError) — trying another day; a login that does not answer is not a verdict about the product
+::warning::lst05: the index could not open MOD11C1.A2013181.061.2021306122946 (OSError) — trying another day; a login that does not answer is not a verdict about the product
+::warning::lst05: NO granule could be opened at index time ([{'date': '2026-09-16', 'error': "OSError: https://data.lpdaac.earthdatacloud.nasa.gov/lp-prod-protected/MOD11C1.061/MOD11C1.A2026259.061.2026260092805/MOD11C1.A2026259.061.2026260092805.hdf: ConnectTimeout: HTTPSConnectionPool(host='urs.earthdata.nasa.gov', port=443): Max retries exceeded with url: /oauth/authorize?client_id=FtSFfbOeuxDcdf4"}, {'date': '2000-02-27', 'error': "OSError: https://data.lpdaac.earthdatacloud.nasa.gov/lp-prod-protected/MOD11C1.061/MOD11C1.A2000058.061.2020058191556/MOD11C1.A2000058.061.2020058191556.hdf: ConnectTimeout: HTTPSConnectionPool(host='urs.earthdata.nasa.gov', port=443): Max retries exceeded with url: /oauth/authorize?client_id=FtSFfbOeuxDcdf4"}, {'date': '2013-06-30', 'error': "OSError: https://data.lpdaac.earthdatacloud.nasa.gov/lp-prod-protected/MOD11C1.061/MOD11C1.A2013181.061.2021306122946/MOD11C1.A2013181.061.2021306122946.hdf: ConnectTimeout: HTTPSConnectionPool(host='urs.earthdata.nasa.gov', port=443): Max retries exceeded with url: /oauth/authorize?client_id=FtSFfbOeuxDcdf4"}]) — the fetch stage meets the same login, where a failure is definite
+  [index lst05] plan.json  1/1  894.8s
+  index: lst05 — 4 year(s), C=4 (lst_day, lst_night, qc_day, qc_night), bins 2192..2483
+=== stage index done in 894.8s ===
+
+=== stage fetch (lst05) ===
+  [fetch lst05 (tier G)] start (4 items)  0/4  0.0s
+Traceback (most recent call last):
+  File "/home/runner/work/earth/earth/ml/build_family1_stores.py", line 1488, in <module>
+    sys.exit(main())
+             ^^^^^^
+  File "/home/runner/work/earth/earth/ml/build_family1_stores.py", line 1483, in main
+    f10b.run_stages(ctx, stages, stage_fn=stage_fns(ad), deps=DEPS)
+  File "/home/runner/work/earth/earth/ml/build_family10_stores.py", line 5331, in run_stages
+    stage_fn[s](ctx)
+  File "/home/runner/work/earth/earth/ml/build_family1_stores.py", line 550, in stage_fetch_grid
+    fetch_grid_year(ctx, y)
+  File "/home/runner/work/earth/earth/ml/build_family1_stores.py", line 460, in fetch_grid_year
+    for i, item in enumerate(ad.fetch_year(ctx, y), 1):
+  File "/home/runner/work/earth/earth/ml/family1/sharded.py", line 840, in fetch_year
+    yield from self.fetch_frames(ctx, wanted)
+  File "/home/runner/work/earth/earth/ml/family1/adapters/_modis_cmg.py", line 931, in fetch_frames
+    raise err
+  File "/home/runner/work/earth/earth/ml/family1/adapters/_modis_cmg.py", line 914, in work
+    p, tmpdir = self.granule_file(ctx, g, files[day])
+                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/work/earth/earth/ml/family1/adapters/_modis_cmg.py", line 858, in granule_file
+    n, why = download(self.session(), rec["url"], p,
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/work/earth/earth/ml/family1/adapters/_modis_cmg.py", line 389, in download
+    raise IOError(f"{url}: {type(err).__name__}: {err}")
+OSError: https://data.lpdaac.earthdatacloud.nasa.gov/lp-prod-protected/MOD11C1.061/MOD11C1.A2012004.061.2021209021430/MOD11C1.A2012004.061.2021209021430.hdf: ConnectTimeout: HTTPSConnectionPool(host='urs.earthdata.nasa.gov', port=443): Max retries exceeded with url: /oauth/authorize?client_id=FtSFfbOeuxDcdf4px-elGw&response_type=code&redirect_uri=https://data.lpdaac.earthdatacloud.nasa.gov/login&state=%2Flp-prod-protected%2FMOD11C1.061%2FMOD11C1.A2012004.061.2021209021430%2FMOD11C1.A2012004.061.2021209021430.hdf&app_type=401 (Caused by ConnectTimeoutError(<urllib3.connection.HTTPSConnection object at 0x7f33d58900b0>, 'Connection to urs.earthdata.nasa.gov timed out. (connect timeout=30)'))
