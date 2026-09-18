@@ -1,0 +1,80 @@
+
+
+chirps05__bin_3252.zst:   0%|          | 0.00/6.66M [00:00<?, ?B/s][A[A[A
+
+
+
+chirps05__bin_3253.idx.npy:   0%|          | 0.00/9.41k [00:00<?, ?B/s][A[A[A[A
+
+
+
+
+chirps05__bin_3253.zst:   0%|          | 0.00/6.57M [00:00<?, ?B/s][A[A[A[A[Achirps05__bin_3252.idx.npy: 100%|██████████| 9.41k/9.41k [00:00<00:00, 105kB/s]
+chirps05__bin_3253.idx.npy: 100%|██████████| 9.41k/9.41k [00:00<00:00, 106kB/s]
+chirps05__bin_3251.zst: 100%|██████████| 6.76M/6.76M [00:00<00:00, 43.1MB/s]
+Upload 37 LFS files:  43%|████▎     | 16/37 [00:00<00:00, 21.39it/s]
+chirps05__bin_3254.idx.npy:   0%|          | 0.00/9.41k [00:00<?, ?B/s][Achirps05__bin_3253.zst: 100%|██████████| 6.57M/6.57M [00:00<00:00, 44.3MB/s]
+chirps05__bin_3252.zst: 100%|██████████| 6.66M/6.66M [00:00<00:00, 31.4MB/s]
+
+
+chirps05__bin_3254.zst:   0%|          | 0.00/6.90M [00:00<?, ?B/s][A[A
+
+
+chirps05__bin_3256.idx.npy:   0%|          | 0.00/9.41k [00:00<?, ?B/s][A[A[Achirps05__bin_3254.idx.npy: 100%|██████████| 9.41k/9.41k [00:00<00:00, 102kB/s]
+Upload 37 LFS files:  51%|█████▏    | 19/37 [00:00<00:00, 22.67it/s]
+chirps05__bin_3256.zst:   0%|          | 0.00/7.02M [00:00<?, ?B/s][A
+
+
+
+chirps05__bin_3257.idx.npy:   0%|          | 0.00/9.41k [00:00<?, ?B/s][A[A[A[Achirps05__bin_3256.idx.npy: 100%|██████████| 9.41k/9.41k [00:00<00:00, 108kB/s]
+
+
+
+chirps05__bin_3257.zst:   0%|          | 0.00/6.87M [00:00<?, ?B/s][A[A[Achirps05__bin_3257.idx.npy: 100%|██████████| 9.41k/9.41k [00:00<00:00, 108kB/s]
+chirps05__bin_3254.zst: 100%|██████████| 6.90M/6.90M [00:00<00:00, 43.3MB/s]
+Upload 37 LFS files:  59%|█████▉    | 22/37 [00:01<00:00, 24.17it/s]
+
+chirps05__bin_3258.idx.npy:   0%|          | 0.00/9.41k [00:00<?, ?B/s][A[A
+
+
+
+chirps05__bin_3258.zst:   0%|          | 0.00/6.71M [00:00<?, ?B/s][A[A[A[Achirps05__bin_3258.idx.npy: 100%|██████████| 9.41k/9.41k [00:00<00:00, 111kB/s]
+
+
+chirps05__bin_3259.idx.npy:   0%|          | 0.00/9.41k [00:00<?, ?B/s][A[Achirps05__bin_3256.zst: 100%|██████████| 7.02M/7.02M [00:00<00:00, 32.9MB/s]
+chirps05__bin_3257.zst: 100%|██████████| 6.87M/6.87M [00:00<00:00, 42.3MB/s]
+Upload 37 LFS files:  68%|██████▊   | 25/37 [00:01<00:00, 22.50it/s]
+chirps05__bin_3259.zst:   0%|          | 0.00/6.81M [00:00<?, ?B/s][A
+
+
+chirps05__bin_3260.idx.npy:   0%|          | 0.00/9.41k [00:00<?, ?B/s][A[A[Achirps05__bin_3259.idx.npy: 100%|██████████| 9.41k/9.41k [00:00<00:00, 107kB/s]
+
+
+chirps05__bin_3260.zst:   0%|          | 0.00/6.69M [00:00<?, ?B/s][A[Achirps05__bin_3258.zst: 100%|██████████| 6.71M/6.71M [00:00<00:00, 48.0MB/s]
+chirps05__bin_3260.idx.npy: 100%|██████████| 9.41k/9.41k [00:00<00:00, 147kB/s]
+Upload 37 LFS files:  76%|███████▌  | 28/37 [00:01<00:00, 22.92it/s]
+
+
+chirps05__bin_3261.idx.npy:   0%|          | 0.00/9.41k [00:00<?, ?B/s][A[A[A
+
+
+
+chirps05__bin_3261.zst:   0%|          | 0.00/6.91M [00:00<?, ?B/s][A[A[A[A
+
+
+
+
+chirps05__bin_3262.idx.npy:   0%|          | 0.00/9.41k [00:00<?, ?B/s][A[A[A[A[Achirps05__bin_3260.zst: 100%|██████████| 6.69M/6.69M [00:00<00:00, 45.0MB/s]
+chirps05__bin_3261.idx.npy: 100%|██████████| 9.41k/9.41k [00:00<00:00, 112kB/s]
+chirps05__bin_3259.zst: 100%|██████████| 6.81M/6.81M [00:00<00:00, 31.9MB/s]
+Upload 37 LFS files:  84%|████████▍ | 31/37 [00:01<00:00, 22.35it/s]
+chirps05__bin_3262.zst:   0%|          | 0.00/6.88M [00:00<?, ?B/s][Achirps05__bin_3262.idx.npy: 100%|██████████| 9.41k/9.41k [00:00<00:00, 92.7kB/s]
+
+
+chirps05__shard_index.npy:   0%|          | 0.00/17.8k [00:00<?, ?B/s][A[Achirps05__bin_3261.zst: 100%|██████████| 6.91M/6.91M [00:00<00:00, 43.6MB/s]
+chirps05__shard_index.npy: 100%|██████████| 17.8k/17.8k [00:00<00:00, 287kB/s]
+Upload 37 LFS files:  95%|█████████▍| 35/37 [00:01<00:00, 25.62it/s]chirps05__bin_3262.zst: 100%|██████████| 6.88M/6.88M [00:00<00:00, 34.9MB/s]
+Upload 37 LFS files: 100%|██████████| 37/37 [00:01<00:00, 21.01it/s]
+  chirps05: 6 year(s) pushed and verified in 3 part commit(s), done.json written last (0 already present)
+  push-parts: 6 year(s) on the Hub under partials/family1_tf/chirps05/
+=== stage fetch done in 813.6s ===
