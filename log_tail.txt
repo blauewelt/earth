@@ -1,0 +1,80 @@
+    0.79929,
+    0.818797,
+    0.799327,
+    0.822199,
+    0.808803,
+    0.82042,
+    0.821299,
+    0.813798
+   ],
+   "bytes_per_frame": {
+    "mean": 257190884.2,
+    "min": 246523840,
+    "max": 265297037
+   },
+   "bytes_per_stored_tile": {
+    "mean": 714035.2,
+    "median": 789991.5,
+    "p90": 843851.0,
+    "max": 887374
+   },
+   "tiles_stored": 11166,
+   "tiles_empty": 2319,
+   "raw_bytes_per_frame": 466560000,
+   "compression_ratio": 1.81,
+   "bytes_per_valid_pixel": 1.3776,
+   "encode_seconds_per_frame": 20.331,
+   "record_frames": 9622,
+   "index_bytes_per_bin": 34928,
+   "estimate_store_bytes": 2474757903463,
+   "note_formula_bytes": 4311448654648,
+   "note_formula": "pixels x frames x valid fraction x 2C x 1.2"
+  }
+ },
+ "out_of_bounds": {},
+ "out_of_bounds_stored": 0,
+ "inputs_not_read": [],
+ "counts": {
+  "fill_pixels_b1": 160281642,
+  "fill_value_seen": {
+   "b1": -888832,
+   "b2": -888832,
+   "b3": -888832,
+   "b4": -888832,
+   "b5": -888832,
+   "b6": -888832,
+   "b7": -888832,
+   "state_qa": 0
+  },
+  "fill_pixels_b2": 160281642,
+  "fill_pixels_b3": 160198624,
+  "fill_pixels_b4": 160198624,
+  "fill_pixels_b5": 160198624,
+  "fill_pixels_b6": 160198624,
+  "fill_pixels_b7": 160198624,
+  "pixels_no_band_retrieved": 160198624,
+  "pixels_qa_fill": 161196431,
+  "pixels_qa_fill_with_a_band": 997807,
+  "pixels_band_without_qa": 0,
+  "files_read": 31,
+  "valid_pixels": 5787730734,
+  "bytes_files": 18158375422,
+  "fetch_seconds": 850.5999999999998
+ },
+ "bytes_fetched": 18158375422,
+ "bytes_index": 689396534,
+ "bytes_fetched_per_frame": 585754045.9,
+ "wall_seconds": 871.92,
+ "wall_seconds_index": 71.74,
+ "seconds_per_frame": 28.126,
+ "estimate_store_bytes": 2474757903463,
+ "note_formula_bytes": 4311448654648,
+ "note_estimate": {
+  "bytes": 700000000000.0,
+  "what": "family1tf.tex \u00a74.3 ledger: 'v ~ 0.15: ~700 GB (Terra)' for MOD09CMG v061; the native record is ~600 MB/day, 5.5 TB"
+ },
+ "runner": "GitHub Actions 1000005417",
+ "builder_git_sha": "c6f790f6ff9f5866097e871bdb2df45b79197ed7",
+ "at": "2026-09-18T11:23:38+00:00"
+}
+probe -> /home/runner/work/earth/earth/ml/cache/family1_tf/probe/refl05/2015-07.json
