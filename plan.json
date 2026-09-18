@@ -1,0 +1,270 @@
+{
+ "bins": [
+  1314,
+  1972
+ ],
+ "builder_git_sha": "bd7f6666885e39852610708af0b8bc1133e01b42",
+ "built_at": "2026-09-18T11:33:03+00:00",
+ "channels": [
+  {
+   "max": 253.0,
+   "min": 0.0,
+   "name": "snow_cover",
+   "unit": "percent_or_code"
+  },
+  {
+   "max": 253.0,
+   "min": 0.0,
+   "name": "cloud",
+   "unit": "percent_or_code"
+  }
+ ],
+ "dataset": "MOD10C1 v61 daily 0.05-degree CMG (HDF-EOS2)",
+ "date_range": [
+  "2000-01-01",
+  "2008-12-31"
+ ],
+ "files": 9634,
+ "files_per_year": {
+  "2000": 300,
+  "2001": 348,
+  "2002": 356,
+  "2003": 358,
+  "2004": 366,
+  "2005": 365,
+  "2006": 365,
+  "2007": 365,
+  "2008": 364,
+  "2009": 365,
+  "2010": 365,
+  "2011": 365,
+  "2012": 366,
+  "2013": 365,
+  "2014": 365,
+  "2015": 365,
+  "2016": 357,
+  "2017": 365,
+  "2018": 365,
+  "2019": 365,
+  "2020": 366,
+  "2021": 365,
+  "2022": 353,
+  "2023": 365,
+  "2024": 366,
+  "2025": 365,
+  "2026": 259
+ },
+ "footprint": {
+  "log2_dt": -2.321928094887362,
+  "log2_fp": -2.321934704446797
+ },
+ "frame_seconds": 86400,
+ "frames_per_bin": 5,
+ "grid": {
+  "H": 3600,
+  "W": 7200,
+  "coordinates": "lon = x0 + (col + 0.5) * dx, lat = y0 + (row + 0.5) * dy with dy NEGATIVE; x0/y0 are the grid's WEST and NORTH edges, which are MODIS' own CMG corners (-180, 90) and (180, -90)",
+  "crs": "EPSG:4326",
+  "dx": 0.05,
+  "dy": -0.05,
+  "extent": [
+   -180.0,
+   -90.0,
+   180.0,
+   90.0
+  ],
+  "extent_note": "[west, south, east, north] in degrees; global",
+  "no_tile_corners": "a plain geographic grid: the affine rule above IS the lat/lon of every pixel and every tile corner, so no corner table is stored",
+  "pixel_deg": 0.05,
+  "pixel_km_equator": 5.566,
+  "proj4": "+proj=longlat +datum=WGS84 +no_defs",
+  "projection": {
+   "grid_mapping_name": "latitude_longitude",
+   "inverse_flattening": 298.257223563,
+   "semi_major_axis": 6378137.0
+  },
+  "row_order": "row 0 is the NORTHERNMOST row, 90 N \u2014 the order the HDF-EOS SDS itself is stored in (YDim ascending southward), so the store keeps the source's own orientation and nothing is flipped",
+  "x0": -180.0,
+  "y0": 90.0
+ },
+ "groups": {
+  "terra": {
+   "bin_first": 1325,
+   "bin_last": 3265,
+   "bytes_cmr": 46322074462,
+   "bytes_note": "CMR's own `granule_size` in MB, summed; the probe measures exact bytes",
+   "days_absent_upstream": 68,
+   "days_absent_upstream_sample": [
+    "2000-08-06",
+    "2000-08-07",
+    "2000-08-08",
+    "2000-08-09",
+    "2000-08-10",
+    "2000-08-11",
+    "2000-08-12",
+    "2000-08-13",
+    "2000-08-14",
+    "2000-08-15",
+    "2000-08-16",
+    "2000-08-17",
+    "2001-06-16",
+    "2001-06-17",
+    "2001-06-18",
+    "2001-06-19",
+    "2001-06-20",
+    "2001-06-21",
+    "2001-06-22",
+    "2001-06-23",
+    "2001-06-24",
+    "2001-06-25",
+    "2001-06-26",
+    "2001-06-27",
+    "2001-06-28",
+    "2001-06-29",
+    "2001-06-30",
+    "2001-07-01",
+    "2001-07-02",
+    "2002-03-20",
+    "2002-03-21",
+    "2002-03-22",
+    "2002-03-23",
+    "2002-03-24",
+    "2002-03-25",
+    "2002-03-26",
+    "2002-03-27",
+    "2002-04-15",
+    "2003-12-17",
+    "2003-12-18"
+   ],
+   "days_in_record": 9702,
+   "files": 9634,
+   "files_per_year": {
+    "2000": 300,
+    "2001": 348,
+    "2002": 356,
+    "2003": 358,
+    "2004": 366,
+    "2005": 365,
+    "2006": 365,
+    "2007": 365,
+    "2008": 364,
+    "2009": 365,
+    "2010": 365,
+    "2011": 365,
+    "2012": 366,
+    "2013": 365,
+    "2014": 365,
+    "2015": 365,
+    "2016": 357,
+    "2017": 365,
+    "2018": 365,
+    "2019": 365,
+    "2020": 366,
+    "2021": 365,
+    "2022": 353,
+    "2023": 365,
+    "2024": 366,
+    "2025": 365,
+    "2026": 259
+   },
+   "first_file": {
+    "bytes": 4485186,
+    "date": "2026-09-16",
+    "sds_in_file": 4,
+    "sds_names_sample": [
+     "Day_CMG_Clear_Index",
+     "Day_CMG_Cloud_Obscured",
+     "Day_CMG_Snow_Cover",
+     "Snow_Spatial_QA"
+    ],
+    "sds_read": {
+     "Day_CMG_Cloud_Obscured": {
+      "attributes": {
+       "_FillValue": 255,
+       "long_name": "Daily cloud obscuration percentage",
+       "units": "none",
+       "valid_range": [
+        0,
+        100
+       ]
+      },
+      "dtype": "uint8",
+      "fill_pixels": 365257,
+      "raw_max": 253,
+      "raw_min": 0,
+      "shape": [
+       3600,
+       7200
+      ],
+      "valid_fraction": 0.985908
+     },
+     "Day_CMG_Snow_Cover": {
+      "attributes": {
+       "_FillValue": 255,
+       "long_name": "Daily snow extent, global at 5km ",
+       "units": "none",
+       "valid_range": [
+        0,
+        100
+       ]
+      },
+      "dtype": "uint8",
+      "fill_pixels": 365257,
+      "raw_max": 253,
+      "raw_min": 0,
+      "shape": [
+       3600,
+       7200
+      ],
+      "valid_fraction": 0.985908
+     }
+    },
+    "title": "MOD10C1.A2026259.061.2026261041242.hdf_pLz73vVQ",
+    "url": "https://data.nsidc.earthdatacloud.nasa.gov/nsidc-cumulus-prod-protected/MODIS/MOD10C1/61/2026/09/16/MOD10C1.A2026259.061.2026261041242.hdf"
+   },
+   "listing": {
+    "cmr_bytes": 38958462,
+    "cmr_hits": 9634,
+    "cmr_pages": 6,
+    "cmr_seconds": 13.1,
+    "granules_listed": 9634
+   },
+   "record": [
+    "2000-02-24",
+    "2026-09-16"
+   ],
+   "short_name": "MOD10C1",
+   "version": "61"
+  }
+ },
+ "per_year_resume": true,
+ "qc_policy": "MOD10C1 publishes its quality INSIDE the two channels rather than beside them: 0..100 is a percentage and every higher value is one of the producer's own classes \u2014 107 lake ice, 111 night, 237 inland water, 239 ocean, 250 cloud-obscured water, 252 the Antarctica mask, 253 data not mapped, 255 fill. The store keeps those numbers unchanged (family1tf.tex \u00a75: nothing is homogenised); the channel bounds are 0..253, so 255 arrives as the layout's missing value and 254, which the producer's key does not define, would be counted `out_of_bounds` rather than stored. The cloud channel is what says how much to believe the snow channel; the product's own third SDS (Day_CMG_Clear_Index) says the same thing the other way round and is not carried, because the note's ledger row is C = 2. Antarctica is deliberately mapped as snow by the producer, and its cloud value is the 252 mask",
+ "record": [
+  "2000-02-24",
+  "2026-09-16"
+ ],
+ "record_days": [
+  "2000-02-24",
+  "2026-09-16"
+ ],
+ "sources": [
+  "https://data.nsidc.earthdatacloud.nasa.gov/nsidc-cumulus-prod-protected/MODIS/MOD10C1/61/<yyyy>/<mm>/<dd>/<granule>.hdf",
+  "https://cmr.earthdata.nasa.gov/search/granules.json?short_name=MOD10C1&version=61"
+ ],
+ "store": "snow05",
+ "title": "Daily snow-cover and cloud percent, MODIS MOD10C1 v61, 0.05 degrees",
+ "url": "https://cmr.earthdata.nasa.gov/search/granules.json?short_name=MOD10C1&version=61",
+ "verified": "2026-09-18 from the sandbox, keyless: the CMR collection search (C3044686669-NSIDC_CPRD, MOD10C1 v61, cloud_hosted, time_start 2000-02-24), the granule search for 2015-02-01 (4.70 MB, one https 'nsidc-cumulus-prod-protected' .hdf data link), and the WHOLE collection paged with CMR-Search-After: 9,634 granules, MOD10C1.A2000055 .. MOD10C1.A2026259, 39 MB of JSON in 12.7 s. The SDS names, the uint8 fill 255 and the class key come from the producer's file specification (ladsweb.modaps.eosdis.nasa.gov/filespec/MODIS/61/MOD10C1). The granules are behind Earthdata Login and were opened on a GitHub-hosted runner by the probe, which re-checks the shape and the fill value in every file it reads",
+ "years": [
+  1999,
+  2000,
+  2001,
+  2002,
+  2003,
+  2004,
+  2005,
+  2006,
+  2007,
+  2008
+ ]
+}

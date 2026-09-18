@@ -1,0 +1,80 @@
+  [fetch snow05 (tier G)] snow05 2004 terra bin 1631  3830.9s
+  [fetch snow05 (tier G)] snow05 2004 terra bin 1636  3894.4s
+  [fetch snow05 (tier G)] snow05 2004 terra bin 1641  3959.0s
+  [fetch snow05 (tier G)] snow05 2004 terra bin 1646  4024.7s
+  [fetch snow05 (tier G)] snow05 2004 terra bin 1651  4090.5s
+  [fetch snow05 (tier G)] snow05 2004 terra bin 1656  4154.7s
+  [fetch snow05 (tier G)] snow05 2004 terra bin 1661  4217.4s
+  [fetch snow05 (tier G)] snow05 2004 terra bin 1666  4279.7s
+  [fetch snow05 (tier G)] snow05 2004 terra bin 1671  4341.4s
+  [fetch snow05 (tier G)] snow05 2004 terra bin 1676  4400.4s
+  2004: terra 74 bin(s) 370 frame(s) 863.8 MB (931.1s)
+  [fetch snow05 (tier G)] snow05 2005 terra bin 1685  4509.2s
+  [fetch snow05 (tier G)] snow05 2005 terra bin 1690  4573.0s
+  [fetch snow05 (tier G)] snow05 2005 terra bin 1695  4638.3s
+  [fetch snow05 (tier G)] snow05 2005 terra bin 1700  4701.3s
+  [fetch snow05 (tier G)] snow05 2005 terra bin 1705  4765.8s
+  [fetch snow05 (tier G)] snow05 2005 terra bin 1710  4830.8s
+  [fetch snow05 (tier G)] snow05 2005 terra bin 1715  4896.6s
+  [fetch snow05 (tier G)] snow05 2005 terra bin 1720  4962.7s
+  [fetch snow05 (tier G)] snow05 2005 terra bin 1725  5027.5s
+  [fetch snow05 (tier G)] snow05 2005 terra bin 1730  5091.4s
+  [fetch snow05 (tier G)] snow05 2005 terra bin 1735  5153.9s
+  [fetch snow05 (tier G)] snow05 2005 terra bin 1740  5216.4s
+  [fetch snow05 (tier G)] snow05 2005 terra bin 1745  5277.4s
+  [fetch snow05 (tier G)] snow05 2005 terra bin 1750  5336.2s
+  2005: terra 73 bin(s) 365 frame(s) 867.9 MB (924.3s)
+  [fetch snow05 (tier G)] snow05 2006 terra bin 1758  5433.2s
+  [fetch snow05 (tier G)] snow05 2006 terra bin 1763  5496.6s
+  [fetch snow05 (tier G)] snow05 2006 terra bin 1768  5560.6s
+  [fetch snow05 (tier G)] snow05 2006 terra bin 1773  5625.1s
+  [fetch snow05 (tier G)] snow05 2006 terra bin 1778  5689.8s
+  [fetch snow05 (tier G)] snow05 2006 terra bin 1783  5755.1s
+  [fetch snow05 (tier G)] snow05 2006 terra bin 1788  5819.9s
+  [fetch snow05 (tier G)] snow05 2006 terra bin 1793  5885.4s
+  [fetch snow05 (tier G)] snow05 2006 terra bin 1798  5950.5s
+  [fetch snow05 (tier G)] snow05 2006 terra bin 1803  6013.8s
+  [fetch snow05 (tier G)] snow05 2006 terra bin 1808  6077.5s
+  [fetch snow05 (tier G)] snow05 2006 terra bin 1813  6143.2s
+  [fetch snow05 (tier G)] snow05 2006 terra bin 1818  6205.3s
+  [fetch snow05 (tier G)] snow05 2006 terra bin 1823  6264.3s
+  2006: terra 73 bin(s) 365 frame(s) 865.1 MB (928.3s)
+  [fetch snow05 (tier G)] snow05 2007 terra bin 1831  6362.2s
+  [fetch snow05 (tier G)] snow05 2007 terra bin 1836  6425.6s
+  [fetch snow05 (tier G)] snow05 2007 terra bin 1841  6488.9s
+  [fetch snow05 (tier G)] snow05 2007 terra bin 1846  6552.9s
+  [fetch snow05 (tier G)] snow05 2007 terra bin 1851  6616.9s
+  [fetch snow05 (tier G)] snow05 2007 terra bin 1856  6681.1s
+  [fetch snow05 (tier G)] snow05 2007 terra bin 1861  6746.1s
+  [fetch snow05 (tier G)] snow05 2007 terra bin 1866  6813.0s
+  [fetch snow05 (tier G)] snow05 2007 terra bin 1871  6878.7s
+  [fetch snow05 (tier G)] snow05 2007 terra bin 1876  6942.3s
+  [fetch snow05 (tier G)] snow05 2007 terra bin 1881  7004.1s
+  [fetch snow05 (tier G)] snow05 2007 terra bin 1886  7066.2s
+  [fetch snow05 (tier G)] snow05 2007 terra bin 1891  7128.8s
+  [fetch snow05 (tier G)] snow05 2007 terra bin 1896  7191.6s
+  2007: terra 73 bin(s) 365 frame(s) 869.2 MB (928.8s)
+  [fetch snow05 (tier G)] snow05 2008 terra bin 1904  7292.9s
+  [fetch snow05 (tier G)] snow05 2008 terra bin 1909  7359.8s
+  [fetch snow05 (tier G)] snow05 2008 terra bin 1914  7426.7s
+  [fetch snow05 (tier G)] snow05 2008 terra bin 1919  7494.1s
+  [fetch snow05 (tier G)] snow05 2008 terra bin 1924  7561.0s
+  [fetch snow05 (tier G)] snow05 2008 terra bin 1929  7630.0s
+  [fetch snow05 (tier G)] snow05 2008 terra bin 1934  7699.7s
+  [fetch snow05 (tier G)] snow05 2008 terra bin 1939  7769.8s
+  [fetch snow05 (tier G)] snow05 2008 terra bin 1944  7838.2s
+  [fetch snow05 (tier G)] snow05 2008 terra bin 1949  7905.1s
+  [fetch snow05 (tier G)] snow05 2008 terra bin 1954  7971.6s
+  [fetch snow05 (tier G)] snow05 2008 terra bin 1959  8037.0s
+  [fetch snow05 (tier G)] snow05 2008 terra bin 1964  8100.8s
+  [fetch snow05 (tier G)] snow05 2008 terra bin 1969  8162.7s
+  2008: terra 73 bin(s) 363 frame(s) 866.2 MB (964.3s)
+  hub: chfrank/earth-tensors with the token from $HF_TOKEN
+  snow05: uploading 1316 file(s) of 10 year(s), 7885.3 MB -> chfrank/earth-tensors:partials/family1_tf/snow05/
+Upload 0 LFS files: 0it [00:00, ?it/s]Upload 0 LFS files: 0it [00:00, ?it/s]
+Upload 0 LFS files: 0it [00:00, ?it/s]Upload 0 LFS files: 0it [00:00, ?it/s]
+Upload 0 LFS files: 0it [00:00, ?it/s]Upload 0 LFS files: 0it [00:00, ?it/s]
+Upload 0 LFS files: 0it [00:00, ?it/s]Upload 0 LFS files: 0it [00:00, ?it/s]
+  snow05: 10 year(s) pushed and verified in 4 part commit(s), done.json written last (0 already present)
+  push-parts: 10 year(s) on the Hub under partials/family1_tf/snow05/
+=== stage fetch done in 9214.6s ===
