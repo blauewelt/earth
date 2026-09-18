@@ -1,0 +1,80 @@
+  index: cat_ecostress — 1 year(s), C=5 (cloud, valid, angle, log2_area, sensor), bins 2775..2848
+=== stage index done in 3.7s ===
+
+=== stage fetch (cat_ecostress) ===
+  [fetch cat_ecostress] start (1 items)  0/1  0.0s
+  [fetch cat_ecostress] cat_ecostress 2020 rows 0+  1/1  762.0s
+  [fetch cat_ecostress] cat_ecostress 2020 rows 500,999+  1/1  1816.7s
+  [fetch cat_ecostress] cat_ecostress 2020 rows 1,003,315+  1/1  3171.7s
+  [fetch cat_ecostress] cat_ecostress 2020  1/1  3738.3s
+  2020: 1,732,197 row(s) in 2 part(s) (3738.4s)
+  hub: chfrank/earth-tensors with the token from $HF_TOKEN
+  cat_ecostress: uploading 5 file(s) of 1 year(s), 104.5 MB -> chfrank/earth-tensors:partials/family1_tf/cat_ecostress/
+Upload 4 LFS files:   0%|          | 0/4 [00:00<?, ?it/s]
+00001.npz:   0%|          | 0.00/24.1M [00:00<?, ?B/s][A
+
+00000.npz:   0%|          | 0.00/33.1M [00:00<?, ?B/s][A[A
+
+
+assets-00000.npy:   0%|          | 0.00/27.1M [00:00<?, ?B/s][A[A[A
+
+
+
+assets-00001.npy:   0%|          | 0.00/20.2M [00:00<?, ?B/s][A[A[A[A
+
+
+assets-00000.npy:  11%|█         | 2.88M/27.1M [00:00<00:01, 20.6MB/s][A[A[A
+
+
+
+assets-00001.npy:  14%|█▍        | 2.88M/20.2M [00:00<00:00, 20.4MB/s][A[A[A[A
+
+00000.npz:  22%|██▏       | 7.21M/33.1M [00:00<00:00, 50.1MB/s][A[A
+00001.npz:  30%|███       | 7.27M/24.1M [00:00<00:00, 45.8MB/s][A
+
+
+
+assets-00001.npy:  33%|███▎      | 6.75M/20.2M [00:00<00:00, 28.9MB/s][A[A[A[A
+
+
+assets-00000.npy:  30%|███       | 8.19M/27.1M [00:00<00:00, 35.2MB/s][A[A[A
+00001.npz:  54%|█████▎    | 12.9M/24.1M [00:00<00:00, 47.8MB/s][A
+
+00000.npz:  37%|███▋      | 12.3M/33.1M [00:00<00:00, 32.8MB/s][A[A
+
+
+
+assets-00001.npy:  55%|█████▍    | 11.1M/20.2M [00:00<00:00, 29.9MB/s][A[A[A[A
+
+
+assets-00000.npy:  44%|████▍     | 11.9M/27.1M [00:00<00:00, 30.8MB/s][A[A[A
+
+
+
+assets-00001.npy:  79%|███████▊  | 15.9M/20.2M [00:00<00:00, 34.4MB/s][A[A[A[A
+
+
+assets-00000.npy:  58%|█████▊    | 15.9M/27.1M [00:00<00:00, 32.2MB/s][A[A[A
+00001.npz:  74%|███████▍  | 17.8M/24.1M [00:00<00:00, 26.0MB/s][A
+
+00000.npz:  49%|████▊     | 16.1M/33.1M [00:00<00:00, 19.7MB/s][A[A
+
+
+
+assets-00001.npy:  96%|█████████▌| 19.4M/20.2M [00:00<00:00, 21.5MB/s][A[A[A[A
+
+
+assets-00000.npy:  71%|███████   | 19.2M/27.1M [00:00<00:00, 19.7MB/s][A[A[Aassets-00001.npy: 100%|██████████| 20.2M/20.2M [00:00<00:00, 21.8MB/s]
+
+
+00000.npz:  73%|███████▎  | 24.1M/33.1M [00:00<00:00, 22.6MB/s][A[Aassets-00000.npy: 100%|██████████| 27.1M/27.1M [00:01<00:00, 26.3MB/s]
+
+
+00000.npz:  89%|████████▊ | 29.3M/33.1M [00:01<00:00, 27.1MB/s][A[A00001.npz: 100%|██████████| 24.1M/24.1M [00:01<00:00, 21.4MB/s]
+Upload 4 LFS files:  25%|██▌       | 1/4 [00:01<00:03,  1.15s/it]Upload 4 LFS files:  75%|███████▌  | 3/4 [00:01<00:00,  2.72it/s]
+
+00000.npz:  98%|█████████▊| 32.6M/33.1M [00:01<00:00, 20.1MB/s][A[A00000.npz: 100%|██████████| 33.1M/33.1M [00:01<00:00, 20.9MB/s]
+Upload 4 LFS files: 100%|██████████| 4/4 [00:01<00:00,  2.32it/s]Upload 4 LFS files: 100%|██████████| 4/4 [00:01<00:00,  2.12it/s]
+  cat_ecostress: 1 year(s) pushed and verified in 1 part commit(s), done.json written last (0 already present)
+  push-parts: 1 year(s) on the Hub under partials/family1_tf/cat_ecostress/
+=== stage fetch done in 3758.5s ===
