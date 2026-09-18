@@ -1,0 +1,80 @@
+    "valid_fraction": 0.568724,
+    "ssha_present_fraction": 0.569094,
+    "cycle": "010",
+    "pass": "011",
+    "bytes": 32226601
+   },
+   {
+    "num_lines": 9866,
+    "num_pixels": 69,
+    "pixels": 680754,
+    "time_units": "seconds since 2000-01-01 00:00:00.0",
+    "variables": 103,
+    "has_time_tai": true,
+    "format": "NETCDF4",
+    "cycle_attr": "10",
+    "pass_attr": "12",
+    "qual_flag_meanings": "suspect_large_ssh_delta suspect_large_ssh_std suspect_large_ssh_window_std suspect_beam_used suspect_less_than_nine_beams suspect_ssb_out_of_range suspect_pixel_used suspect_num_pt_avg suspect_karin_t",
+    "grades_named": [
+     "suspect",
+     "degraded",
+     "bad"
+    ],
+    "valid_pixels": 271114,
+    "valid_fraction": 0.398255,
+    "ssha_present_fraction": 0.398906,
+    "cycle": "010",
+    "pass": "012",
+    "bytes": 32151246
+   }
+  ],
+  "storage_options": [
+   {
+    "measured": {
+     "passes_read": 12,
+     "pixels_per_pass": 680754.0,
+     "valid_pixels_per_pass": 350750.7,
+     "valid_fraction": 0.515238
+    },
+    "extrapolation_basis": {
+     "passes_per_cycle": 584,
+     "cycle_days": 20.86,
+     "passes_per_year": 10225.6,
+     "note": "584 passes a 20.86-day cycle is the science orbit's own geometry (family1gf.tex); cycle 010 held 581 of the 584"
+    },
+    "tier_p": {
+     "bytes_per_row": 33,
+     "rows_per_pass": 350750.7,
+     "rows_per_year": 3586635748,
+     "bytes_per_year": 118358979685,
+     "what": "one row per valid pixel at 27 + 2C = 33 bytes; no grid, the swath moves every pass"
+    },
+    "tier_g_per_pass_group": {
+     "bytes_per_valid_pixel": 7.199999999999999,
+     "bytes_per_year": 25823777386,
+     "groups": 584,
+     "shards_per_year": 10226,
+     "what": "one sharded group per pass, 256 x 256 float16 tiles at about 2C x 1.2 bytes a valid pixel; keeps the swath's SHAPE, costs per-pass per-cycle corner geometry in tile_grid.json because the orbit repeats to ~1 km, not exactly"
+    },
+    "ratio_p_over_g": 4.583
+   }
+  ]
+ },
+ "counts_scope": "month",
+ "bytes_fetched": 409912719,
+ "bytes_index": 19572756,
+ "wall_seconds": 9.86,
+ "wall_seconds_index": 3.42,
+ "bytes_per_row": 97.389,
+ "stored_bytes_per_row": 33,
+ "time_dtype": "int32",
+ "schema_version": 2,
+ "platforms": null,
+ "estimate_rows_per_year": null,
+ "estimate_store_bytes": null,
+ "note_estimate": null,
+ "runner": "GitHub Actions 1000005355",
+ "builder_git_sha": "4fea5bf826edfd9969a1571f7273a5d9d7a47d75",
+ "at": "2026-09-18T08:24:27+00:00"
+}
+probe -> /home/runner/work/earth/earth/ml/cache/family1_gf/probe/swot/2024-01.json
