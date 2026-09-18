@@ -132,7 +132,7 @@ jobs:
       - name: Install
         run: |
           pip install --quiet numpy huggingface_hub zstandard netCDF4 requests rasterio pyhdf scipy
-          python3 -c "import numpy, huggingface_hub, zstandard, netCDF4, requests, rasterio, pyhdf, scipy; import pyhdf.SD; print('deps ok', rasterio.__version__, rasterio.__gdal_version__, 'pyhdf', pyhdf.__version__, 'scipy', scipy.__version__)"
+          python3 -c "import importlib.metadata as m, numpy, huggingface_hub, zstandard, netCDF4, requests, rasterio, scipy, pyhdf.SD; print('deps ok', rasterio.__version__, rasterio.__gdal_version__, 'pyhdf', m.version('pyhdf'), 'scipy', scipy.__version__)"
 
       - name: Earthdata Login check (hosted runner only)
         if: ${{ github.event.inputs.check_credentials == 'true' }}
