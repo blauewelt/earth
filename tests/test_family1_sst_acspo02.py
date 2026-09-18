@@ -140,6 +140,10 @@ def test_smoke_all_frames_and_the_probe(tmp_path):
     assert g["compression_ratio"] > 1.0
     assert p["bytes_fetched"] > 0
     assert p["counts"]["resolution"]["sst=sea_surface_temperature"] == 4
+    # CMR's declared size is NOT a refusal: the synthetic listing declares
+    # real sizes, so no granule is counted small here, and the rule that
+    # matters is that a small DECLARED size is counted and read anyway
+    assert "granules_small_declared" not in p["counts"]
 
 
 def test_the_spec_says_why_both_channels_are_float16(tmp_path):

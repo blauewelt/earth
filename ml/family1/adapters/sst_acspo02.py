@@ -41,15 +41,21 @@ shape, so they are listed, reachable by the knob, and not the default — the
 ledger's own words are "day and night as 2 frames/day" for the 5 km CCI
 store, and that is the shape to give this one when phase C decides to.
 
-A TINY GRANULE IS NOT AN EMPTY DAY. CMR reports 2020-01-03's DY granule as
-1.09e-4 MB — about 114 bytes — beside 423 MB for 2020-01-01 and 2020-01-02.
-Whatever that record is (a sidecar counted as the granule, or a placeholder),
-a 114-byte file is not a day of SST, so `read_frame` refuses to treat a file
-it cannot open or whose grid does not check out as a frame: it is
-`ctx.note_absent`, which leaves the year unmarked, never a smaller frame
-(ml/CLAUDE.md, the 2026-09-14 rule). `index` reports every granule whose
-declared size is under `MIN_GRANULE_BYTES` as `granules_suspiciously_small`
-so the list is visible before the fetch spends anything.
+CMR'S DECLARED GRANULE SIZE IS NOT EVIDENCE ABOUT THE FILE, and this
+collection is the case that proves it. CMR reports 423 MB for 2020-01-01 and
+2020-01-02 and **108 bytes for most of the rest of January 2020** (measured,
+probe #172), while the real files download and open perfectly. So the size
+field is a metadata artefact here, not a placeholder granule: `index` REPORTS
+every granule declared under `MIN_GRANULE_BYTES` as
+`granules_suspiciously_small`, so the list is visible before the fetch spends
+anything, and the FETCH downloads them anyway and lets the FILE decide.
+`cm.earthdata_download` already refuses a body short of its Content-Length or
+empty, and `read_frame` refuses a file that will not open or whose lat/lon
+axes do not check out — both `ctx.note_absent`, which leaves the year
+unmarked, never a smaller frame (ml/CLAUDE.md, the 2026-09-14 rule). The first
+version of this adapter refused on the DECLARED size and turned a whole month
+into absences; verifying the artefact rather than its metadata is the rule
+that was missing (ml/CLAUDE.md §0.1).
 
 WHAT IS STORED. One group, `sst_acspo02`, on the GHRSST 0.02-degree grid
 (18,000 x 9,000), F = 5 daily frames a bin, dtype **FLOAT16**, C = 2:
@@ -641,11 +647,10 @@ class SSTACSPO02Adapter(sh.GridAdapter):
         good = [d for d in sorted(days)
                 if not days[d]["bytes"] or
                 days[d]["bytes"] >= MIN_GRANULE_BYTES]
-        if not good:
-            sys.exit(f"REFUSING sst_acspo02: every granule in the window is "
-                     f"under {MIN_GRANULE_BYTES} bytes ({small[:3]}) — that "
-                     f"is not a day of SST")
-        key = good[0]
+        # A window whose granules are ALL declared small is the ordinary case
+        # for this collection (probe #172), so the first day is read anyway —
+        # what decides is whether the FILE opens and its grid checks out.
+        key = (good or sorted(days))[0]
         try:
             path, tmp = self._get(ctx, days[key])
         except (IOError, f10b._NotFound) as e:
@@ -723,12 +728,23 @@ class SSTACSPO02Adapter(sh.GridAdapter):
             path, tmp = got
             counts = {}
             try:
+                # CMR'S DECLARED SIZE IS NOT EVIDENCE ABOUT THE FILE. Probe
+                # #172 found 2020-01-01 and -02 declared at 423 MB and most
+                # of the rest of the month at 108 BYTES, with the real files
+                # downloading and opening fine — so the size field is a
+                # metadata artefact of this collection, not a placeholder
+                # granule. Refusing on it turned a whole month into
+                # absences. The FILE decides: `cm.earthdata_download` already
+                # refuses a body short of its Content-Length or empty, and
+                # `read_frame` refuses one that will not open or whose grid
+                # does not check out.
                 if days[d]["bytes"] and \
                         days[d]["bytes"] < MIN_GRANULE_BYTES:
-                    raise FormatError(
-                        f"CMR declares this granule as {days[d]['bytes']} "
-                        f"bytes, under the {MIN_GRANULE_BYTES}-byte floor — a "
-                        f"file that small is not a day of 0.02-degree SST")
+                    counts["granules_small_declared"] = \
+                        counts.get("granules_small_declared", 0) + 1
+                    counts["granule_bytes_declared_vs_read"] = [
+                        {"date": str(d), "declared": days[d]["bytes"],
+                         "read": os.path.getsize(path)}]
                 arr = read_frame(path, counts, self.full_h, self.full_w)
             except FormatError as e:
                 ctx.note_absent(str(d), f"{days[d]['name']}: {e}")
@@ -755,7 +771,7 @@ class SSTACSPO02Adapter(sh.GridAdapter):
 
 # ================================================================== smoke ==
 SMOKE_W, SMOKE_H = 720, 360
-SMOKE_ABSENT_DAY = dt.date(2020, 1, 3)       # the 114-byte granule's date
+SMOKE_ABSENT_DAY = dt.date(2020, 1, 3)       # a day the archive does not hold
 SMOKE_OOB_DAY = dt.date(2020, 1, 2)
 
 
