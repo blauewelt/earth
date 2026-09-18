@@ -1,0 +1,10 @@
+{
+ "at": "2026-09-18T12:27:44+00:00",
+ "done": 1,
+ "elapsed_s": 3218.6,
+ "eta_s": 0.0,
+ "item": "cat_s2 2018 rows 1,006,053+",
+ "stage": "fetch cat_s2",
+ "total": 1,
+ "year_rows": 1514911
+}
