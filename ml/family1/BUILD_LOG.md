@@ -196,3 +196,339 @@ peaked at **48.90 GB RSS**.
 - **The Hugging Face tree API pages at 50 entries and refuses `limit=1000`.**
   A parts directory that looks like 50 files is a page, not a listing;
   `?limit=100` with the `Link` header's cursor is what reads the real 149.
+
+## Notes — E-082 wave 4, the read-out targets and the credentialed
+## ocean/atmosphere stores (added 2026-09-18)
+
+**What this wave was asked for and what it measured.** Eight stores:
+`burned500`, `alerts`, `cat_gfm` (family 1.0.tf read-out targets) and
+`sst_acspo02`, `irtb`, `xco2`, `swot`, `swh` (family 1.gf). Five adapters
+landed with smokes; three did not, and the reason in each case is a
+MEASUREMENT about the archive rather than a shortage of code. The access
+findings below are the wave's main result, because each one is a decision the
+note cannot make from a product page.
+
+### Access findings, each measured rather than transcribed
+
+- **`swh` NEEDS NO ACCOUNT.** The ledger reaches ESA CCI Sea State v4
+  along-track wave height through Copernicus Marine "(account, as
+  `slatrack`)". The same daily files sit on Copernicus Marine's OWN native
+  object store, `https://s3.waw3-1.cloudferro.com/mdl-native-05/native/
+  WAVE_GLO_PHY_SWH_L3_MY_014_005/...`, which answers an ANONYMOUS
+  ListObjectsV2 and an anonymous GET (measured 2026-09-18 from the sandbox:
+  12 paginated pages, 11,832 daily files, 116,351,837,853 bytes). So
+  `credentials = ()`, the `copernicusmarine` toolbox is never imported, and
+  the whole store can be built on a hosted runner, a box or the sandbox. The
+  prefix is read out of the product's public STAC each run and a href that
+  leaves that bucket is a refusal.
+- **EARTHDATA DOWNLOADS NEED `requests` AND A NETRC, NOT `urllib`.** The first
+  `swot` probe (#152) listed cycle 010 correctly from CMR and then failed on
+  all twelve passes with `HTTP 401 — HTTP Basic: Access denied.`
+  `f10b.http_to_file` is urllib, urllib follows the 302 to
+  `urs.earthdata.nasa.gov` WITHOUT credentials, and the workflow's `.netrc`
+  is never consulted. `requests`' `Session.rebuild_auth` looks the host up in
+  the netrc on every redirect hop and strips the Authorization header on a
+  cross-host hop, so a netrc naming Earthdata Login alone sends the password
+  there and nowhere else. `ml/family1/adapters/_common.py` now carries
+  `earthdata_session` / `earthdata_download` / `netrc_has_urs` /
+  `force_ipv4_once`, and every Earthdata adapter of this wave REFUSES in
+  `fetch_preflight` when no such netrc is visible — #152 spent its whole
+  listing to discover a page of 401s. `_modis_cmg.py` has the same trio for
+  the MODIS CMG stores; the two copies should be consolidated.
+- **NO ANONYMOUS ROUTE TO A NASA FILE'S VARIABLE LIST.** A GES DISC `.nc4`,
+  its `.nc4.xml` sidecar, a PO.DAAC L3S granule and a SWOT pass all answer an
+  unauthenticated GET with 302 → 401, and CMR publishes no UMM-Var for these
+  collections (`variables.json?concept_id=...` returns 0 hits). Writing a
+  variable-name table from memory is what ADAPTER_CONTRACT rule 4 forbids, so
+  `xco2`, `irtb` and `sst_acspo02` all RESOLVE each quantity against a
+  candidate list, refuse with the file's own variable list when a required one
+  matches nothing, and write ONE real file's WHOLE inventory (path, dtype,
+  shape, dims, units, scale/offset, fill, flag table) into `plan.json`. One
+  runner round trip settles the format whichever way it goes, and the
+  resolution that was used is recorded in the store.
+- **THE GFM FLOOD CATALOGUE HAS NO ANONYMOUS LISTING, so `cat_gfm` is
+  OPERA-only.** `https://gfm.eodc.eu/` answers 404; the service's API is
+  `https://api.gfm.eodc.eu/v2/` and its Swagger (`/v2/swagger.json`, "GFM JRC
+  API", version 24.01) shows the shape of the thing: every product path is
+  scoped to a subscribed AREA OF INTEREST (`/aoi/{aoi_id}/products`,
+  `/download/product/{product_id}/{user_id}`) behind `/auth/login` and
+  `/auth/get_bearer_token`, with `/aoi/create` and an allowance per user.
+  There is no global scene listing at all, anonymous or otherwise — the
+  Copernicus Global Flood Monitoring Sentinel-1 archive is an
+  alert-subscription service, not a catalogue. So the `cat_gfm` store is
+  buildable from OPERA DSWx-HLS (C2617126679-POCLOUD, 2016-01 →, 10,703
+  granules on 2024-06-01 alone) and DSWx-S1 (C2949811996-POCLOUD, 2023-12 →),
+  both anonymously LISTABLE through CMR, and the GFM half needs a decision
+  from Chris: register a GFM account and subscribe areas of interest, or drop
+  the GFM column from the ledger row.
+- **RADD, GLAD-L AND GLAD-S2 ARE CC BY 4.0 AND HAVE NO KEYLESS BULK
+  DOWNLOAD.** The ledger's `alerts` row says "CC BY 4.0 (GLAD terms
+  unverified)". The terms are now VERIFIED, from Global Forest Watch's own
+  data API (`https://data-api.globalforestwatch.org/dataset/<name>`):
+  `wur_radd_alerts`, `umd_glad_landsat_alerts` and `umd_glad_sentinel2_alerts`
+  each declare `license: "[CC by 4.0](https://creativecommons.org/licenses/
+  by/4.0/)"` with the citation to quote. **So the GLAD terms do not force the
+  private track.** What blocks them is ACCESS, not licence: the native
+  `epsg-4326` date_conf tile sets are
+  `s3://gfw-data-lake/<dataset>/<version>/raster/epsg-4326/10/100000/
+  date_conf/geotiff/{tile_id}.tif`, and that bucket is REQUESTER PAYS —
+  an anonymous `list-type=2` answers `AccessDenied: Anonymous users cannot
+  invoke requests against Requester Pays buckets`. The API's own
+  `/download/geotiff` proxy answers `403 Request is missing valid API key`.
+  UMD's own page (`glad.umd.edu/dataset/glad-forest-alerts`) links only Earth
+  Engine apps. The public GCS prefix `earthenginepartners-hansen/alert/` holds
+  a 2017-era partial snapshot (261 objects, 242 of them under `2017/`) and is
+  not a maintained archive. So RADD and the two GLAD systems need one of: a
+  free GFW data-API key (a new repository secret), an AWS account willing to
+  pay the requester-pays egress, or Earth Engine — each a decision, none of
+  them a keyless route. OPERA DIST-ALERT via CMR/LPCLOUD is the one system
+  `alerts` can be built from today.
+- **DIST-ALERT'S VOLUME IS THE REAL OBSTACLE, AND IT IS ARITHMETIC.** CMR
+  lists **11,333 DIST-ALERT granules for 2024-03-01 alone** (one per HLS tile
+  per acquisition, each ~10 layers of 3,660 x 3,660 uint8). One row per
+  alerted pixel-date means reading every granule of every day: order a
+  terabyte a day, against a store the note sizes at 30 GB. The cheap
+  alternative is the ANNUAL product, OPERA DIST-ANN, which settles each tile's
+  disturbance date once a year — a few thousand granules a year instead of
+  four million — and `family1tf.tex` §4.5 already files an annual target under
+  the bin of its period's end. Whether `alerts` is built from DIST-ANN
+  (cheap, annual) or from DIST-ALERT over a bounded REGION (expensive, dated
+  to the pass) is a decision for the main session; neither is a code problem.
+- **`burned500` IS HDF4 AND THE TIER-G BIN AXIS IS THE PROBLEM, NOT THE
+  FORMAT.** MCD64A1 v6.1 (C2565786756-LPCLOUD, 2000-11-01 →) publishes 268
+  HDF-EOS2 tiles for 2019-08 at ~0.15 MB each through LP DAAC's cloud
+  archive, and `pyhdf`'s manylinux wheel reads HDF4 (rasterio's GDAL has no
+  HDF4 driver — the wave's MODIS CMG stores hit this first and the install
+  step now carries `pyhdf`). What is not settled is the FILE COUNT. A monthly
+  frame filed under the bin holding the month's 15th means ~310 frames spread
+  over ~1,890 five-day bins, and `fetch_grid_year` writes a shard and an index
+  for EVERY bin of the window unless all its frames are `before_record` or
+  `after_record` (`OUTSIDE_RECORD` in `ml/build_family1_stores.py`). With one
+  group per MODIS tile row (18 groups, 2,400 x 86,400, the largest frame whose
+  probe fits a runner) that is ~11,000 useful files and ~57,000 empty-bin
+  files; with one group per tile (268 groups) it is 166,000 files, past the
+  Hub's 100k-per-repository limit. **The clean fix is a third skip reason in
+  `OUTSIDE_RECORD` — a one-line framework change this wave deliberately did
+  not make**, since `ml/build_family1_stores.py` belongs to the framework and
+  three other waves were editing the same tree. Until it lands, a monthly
+  tier-G store cannot be filed on the five-day bin axis without paying tens of
+  thousands of empty shards.
+
+### What ran
+
+- **`swh` is keyless and the sandbox measured its whole record**, so the probe
+  ran BOTH places and agreed to the byte: 2015-01 gave 4,352,091 rows from
+  4,352,093 samples over 31 days, 304,162,654 bytes, 69.889 source bytes a
+  row and 33 stored, NaN fractions swh 0 / swh_denoised 0.0115 /
+  swh_uncertainty 0.0249, zero out of bounds, three missions (cryosat-2
+  1,255,788, jason-2 1,719,307, saral 1,376,996). The sandbox did it in
+  14.7 s (20.7 MB/s) and the hosted runner in 22.6 s (13.4 MB/s) — the only
+  difference between the two reports. **116.35 GB / 69.889 B a row projects
+  1.665e9 rows and about 55 GB stored, 17 % under the note's ~2e9 rows and
+  ~70 GB.**
+- **`swh`'s six fetch lanes** (1991-1996, 1997-2002, 2003-2008, 2009-2013,
+  2014-2018, 2019-2023) each ran in 21-30 min on hosted runners and parked
+  their years under `partials/family1_gf/swh/<year>/`.
+
+## Notes — E-082 wave 4, the CREDENTIALED land stores (added 2026-09-18)
+
+`lst05`, `snow05`, `refl05`, `fire`, `flux` and `static_fine`. Everything
+here was measured on 2026-09-18, from this sandbox where the source needs no
+account and on GitHub-hosted runners where it does.
+
+- **rasterio's GDAL HAS NO HDF4 DRIVER, and the three MODIS fields are all
+  HDF4.** Measured in the sandbox: 155 drivers, HDF5, HDF5Image and netCDF
+  among them, and nothing that reads HDF-EOS2. `pyhdf` 0.11.7 publishes a
+  manylinux wheel that BUNDLES the HDF4 library, so `pip install pyhdf` is the
+  whole fix and it is in `family1-build.yml`'s install step beside `rasterio`.
+  One trap in it: `_FillValue` is a PREDEFINED HDF attribute, so a plain
+  `setattr` on an SDS is silently ignored and `SDS.setfillvalue()` is what
+  writes it — which the smokes' synthetic granules need and the first run of
+  them found.
+- **A MODIS GRANULE'S URL CANNOT BE DERIVED FROM ITS DATE**, so CMR is not a
+  convenience but the only honest way to name the file (contract rule 4 in its
+  strongest form). `MOD11C1.A2015182.061.2021358223019.hdf` carries the
+  PRODUCTION timestamp. NASA's Common Metadata Repository lists every granule
+  of a collection with its https link and byte size, needs NO account, and
+  pages 2,000 at a time behind the `CMR-Search-After` header. Measured, the
+  whole MOD10C1 collection came back in **12.7 s and 39 MB of JSON**: 9,634
+  granules. The other counts are 9,587 (MOD11C1 v061), 9,622 (MOD09CMG v061)
+  and 8,815 (MYD11C1 v061, Aqua).
+- **A CMR COLLECTION CAN LIST TWO GRANULES FOR ONE DAY.** A reprocessing that
+  did not retire its predecessor shows up as two entries with different
+  production timestamps. `_modis_cmg.parse_cmr` keeps the newest and counts
+  the rest as `granules_superseded`; it never silently takes the first.
+- **The Earthdata login through a `.netrc` works, and `requests` is what makes
+  it safe.** `Session.rebuild_auth` looks the request's host up in the netrc on
+  EVERY redirect hop and strips any Authorization header on a cross-host hop,
+  so a netrc naming `urs.earthdata.nasa.gov` alone sends the password there and
+  nowhere else. With `force_ipv4` (the wave-1 lesson: the runners resolve AAAA
+  and have no IPv6 route) the lst05 and snow05 probes each downloaded a month
+  of protected granules first time.
+- **A STALLED EARTHDATA HANDSHAKE COST A RUN, AND A SINGLE TIMEOUT IS WHY.**
+  Run #151 (the first refl05 probe) sat on one 300-second `requests` timeout
+  three times over, because a single timeout covers connect AND read;
+  `urs.earthdata.nasa.gov` had simply not answered the TCP handshake. Eight
+  minutes of the job went on one granule's login and nothing was measured. The
+  connect timeout is now 30 s separately from the 300 s read (a 540 MB granule
+  legitimately takes minutes), and a granule download gets **at least six
+  attempts whatever `--attempts` says** — a lane is hours long and losing the
+  year to one refused handshake costs far more than fifteen minutes of backoff.
+- **The install step is SHARED, and a bad version check in it takes every
+  store down.** The line I added asked for `pyhdf.__version__`, which does not
+  exist, so the step exited 1 before anything else ran and killed runs #140,
+  #141 and #142 — and would have killed any other store dispatched in that
+  window. `importlib.metadata.version("pyhdf")` is the version that exists.
+- **THE PROBES, and what they did to the note's estimates.**
+
+  | store | run | month | frames | bytes/frame | valid fraction | projection | the note | verdict |
+  |---|---|---|---|---|---|---|---|---|
+  | `snow05` | #149, 2 min | 2015-02 | 28 of 28 | 2,442,346 | 0.986 both channels | **23.60 GB** over 9,634 frames | 60 GB | **61 % under** |
+  | `lst05` | #150, 5 min | 2015-07 | 31 of 31 | 15,357,302 | 0.2334 day, 0.2357 night, **1.0** both QC | **147.30 GB** over 9,587 frames | 350 GB | **58 % under** |
+
+  `lst05`'s numbers also size its lanes: 46.4 MB a granule at 6.9 MB/s, and
+  the ENCODE is 5.2 s of the 6.9 s a frame costs, so the lane length is set by
+  CPU and not by the network — four years (1,460 frames) is about 2.8 h of
+  fetch plus 22 GB of parts to push.
+- **`lst05` keeps its quality bits EVERYWHERE, so every tile of every frame is
+  stored.** MOD11C1's QC encodes "not produced because of cloud" versus "for
+  another reason" — information about the ABSENCE — and its file specification
+  says in as many words that the SDS has no fill value, so 0 is a real
+  reading. The measured consequence is `valid_fraction` exactly 1.0 on both QC
+  channels against 0.233 on the temperatures, and `tiles_stored` equal to
+  frames × 435. `refl05` does the opposite for a reason in the product: its
+  state word describes a RETRIEVAL and has no not-produced code, and its
+  all-zero value is an ordinary reading (clear, shallow ocean, climatological
+  aerosol), so both QA bytes are NaN exactly where all seven bands are fill and
+  an all-fill tile costs nothing.
+- **`refl05` carries C = 9 where `family1tf.tex` §4.3 plans C = 8.** The state
+  QA is a uint16 bit field and float16 represents CONSECUTIVE integers exactly
+  only to 2,048 (2,049, 4,097 and 65,535 all change), so one channel cannot
+  hold the producer's quality word without losing bits. §5's rule — the
+  source's own quality flag is kept and nothing is homogenised — decides it:
+  the word is split into its two bytes and `state_qa_hi << 8 | state_qa_lo`
+  reconstructs it bit for bit.
+- **`lst05` stores CELSIUS, not kelvin, and the reason is measured.** float16
+  spaces its values **0.25 K apart at 300 K** and **0.03 K apart near zero
+  Celsius**, so in kelvin the store's own quantisation would be a quarter of
+  MOD11C1's 1 K accuracy.
+- **`snow05` keeps the producer's CLASS CODES, not just its percentages.** Both
+  channels are 0..100 percent OR one of 107 lake ice, 111 night, 237 inland
+  water, 239 ocean, 250 cloud-obscured water, 252 the Antarctica mask, 253 not
+  mapped, 255 fill. The bounds are 0..253, so 255 becomes the layout's missing
+  value and 254 — which the producer's key does not define — would be counted
+  out of bounds rather than stored. The probe's own tally of the 2015-02 month:
+  459,253,879 ocean, 68,250,748 Antarctica-mask, 23,757,474 not-mapped,
+  8,694,086 night, 1,237,800 cloud-obscured-water, 444,619 lake-ice pixels.
+- **FIRMS' ARCHIVE DOWNLOAD PAGE IS NOT SCRIPTABLE, AND ITS AREA API IS.**
+  `firms.modaps.eosdis.nasa.gov/download/` (read 2026-09-18) puts a human in
+  the loop by design: it answers a request by e-mailing a link ("Once the
+  request has been processed, you will receive an email with instructions on
+  how to download your data"). `/api/area/csv/<MAP_KEY>/<SOURCE>/world/
+  <DAY_RANGE>/<DATE>` covers the whole record instead — DAY_RANGE 1..5, `world`
+  = [-180,-90,180,90] — and `/api/data_availability/csv/<MAP_KEY>/all` says
+  which dates each source holds, so the record's ends are read rather than
+  assumed. A year is 73 requests a source against a documented limit of 5,000
+  per ten minutes.
+- **`MODIS_SP` CARRIES TERRA AND AQUA IN ONE CSV**, so a fetch keyed by
+  satellite would have asked for every MODIS window twice and stored every
+  MODIS detection twice. `fire`'s unit of fetching is a SOURCE PAIR (Standard
+  Processing plus its Near-Real-Time tail); every day belongs to exactly one
+  source, and a gap between SP's `max_date` and NRT's `min_date` is a refusal.
+- **THE VIIRS CONFIDENCE IS THREE CLASSES AND NO PERCENTAGE.** MODIS publishes
+  0..100; VIIRS publishes `l`, `n`, `h`. Placing them at 0, 50 and 100 would
+  invent three numbers the producer never published, so `fire`'s `confidence`
+  channel is NaN for a VIIRS row and the class is kept exactly in qc bits 3-4.
+  A class that is not one of the three is a refusal.
+- **A PLATFORM HASH MUST BE OF A CANONICAL NAME, NOT OF THE ARCHIVE'S OWN
+  TEXT.** FIRMS writes `Terra` in one product and `N20` in another; hashing the
+  raw string made one satellite two platforms and left the second with no entry
+  in platforms.json, which the smoke caught as
+  `probe_platforms_without_entry: 2`. Every spelling now resolves to one
+  canonical platform and the spellings seen are counted. platforms.json is also
+  where each platform's OWN `log2_fp` lives — a MODIS detection is 1 km
+  (-4.798) and a VIIRS one 375 m (-6.214) — because a tier-P store has one
+  store-level footprint and two instruments.
+- **FLUXNET NEEDS NO LOGIN AT ALL, measured on all three hubs.** The plan
+  allowed for `FLUXNET_USERNAME` / `FLUXNET_PASSWORD`; the Shuttle
+  (github.com/fluxnet/shuttle, not on PyPI) is a library over three PUBLIC
+  hubs and its AmeriFlux plugin posts the fixed literal
+  `user_id: "fluxnetshuttle"`. Anonymously from this sandbox: AmeriFlux's
+  `site_info_display/AmeriFlux` (844 sites, **407** with
+  `grp_publish_fluxnet`, each with lat/lon/elev and IGBP) and its
+  `amf_shuttle_data_files_and_manifest` POST (a `ftp.fluxdata.org` zip per
+  site with its size and MD5 — `AMF_AR-Bal_FLUXNET_2012-2013_v1.3_r1.zip`
+  downloaded whole, 22,077,723 bytes, MD5 matching the API's); ICOS' SPARQL
+  endpoint (**352** FLUXNET archive products with lat, lon and IGBP); TERN's
+  two published CSVs (**53** sites). 812 products in all, which is the ledger
+  row's "700+ sites". So `flux` declares `credentials = ()`.
+- **ICOS NEEDS A LICENCE COOKIE, AND WITHOUT IT SERVES HTML THAT LOOKS LIKE A
+  DOWNLOAD.** `GET https://data.icos-cp.eu/licence_accept?ids=%5B%22<id>%22%5D`
+  sets `CpLicenseAcceptedFor`, after which the object answers **206
+  application/zip** with `PK\x03\x04` magic (measured: 29,093,732 bytes).
+  Without the cookie BOTH that URL and `/objects/<id>` answer the licence page
+  as `text/html` with HTTP 200 — a body an unguarded reader would hand to
+  `zipfile` and get an empty site from. `flux` keeps a cookie jar and refuses a
+  body that does not start with a zip signature.
+- **FLUXNET TIMESTAMPS ARE LOCAL STANDARD TIME AND THE OFFSET IS IN THE
+  ARCHIVE.** `TIMESTAMP_START` is `YYYYMMDDHHMM` local, no daylight saving.
+  Every site zip carries a BADM file (`*_FLUXNET_BIF_*.csv`) whose
+  `UTC_OFFSET` row gives the offset (AR-Bal reads -3); a site whose BADM has
+  none is an ABSENCE that stops the pass, never a longitude guess that puts the
+  tower in the wrong hour. `*_FLUXNET_BIFVARINFO_*` is NOT that file.
+
+### `static_fine` — DESIGNED AND MEASURED, NOT BUILT, and exactly why
+
+Its three sources were verified on 2026-09-18 and none of them needs an
+account:
+
+- **GEBCO_2026** (the 15-arc-second global terrain model) is at
+  `https://dap.ceda.ac.uk/bodc/gebco/global/gebco_2026/ice_surface_elevation/
+  netcdf/GEBCO_2026.zip?download=1` — **4,252,016,343 bytes**, `application/
+  zip`, range requests honoured, keyless. (The `bodc.ac.uk/data/open_download/
+  gebco/gebco_2026/zip/` path the older releases used answers 404; CEDA is
+  where 2025 and 2026 live, and CEDA serves a GitHub runner at 5.0 MB/s per the
+  wave-2 note, so the pull is about 14 minutes.) Uncompressed the grid is
+  43,200 × 86,400 int16 = 7.46 GB.
+- **ESA WorldCover 2021 v200** is on `s3://esa-worldcover`, whose HTTP listing
+  is keyless: **2,651 `*_Map.tif` tiles, 124.03 GB** (measured by paging the
+  bucket). Each is a 3° × 3° tile at 36,000 × 36,000.
+- **GSHHG** (for `dist_coast`) is at
+  `https://www.soest.hawaii.edu/pwessel/gshhg/gshhg-bin-2.3.7.zip`, HTTP 200,
+  `application/zip`, keyless. (NOAA's `ngdc.noaa.gov/mgg/shorelines/data/
+  gshhg/latest/` path answers 404.) `scipy` is now in the workflow's install
+  step for the nearest-shoreline search.
+
+**TWO THINGS STOP IT BEING BUILT IN THIS WAVE, and both are findings rather
+than excuses.**
+
+1. **The sharded tier-G layout carries ONE `channels` and ONE `dtype` PER
+   STORE, and `static_fine` needs three of each.** `GridAdapter.specs()` hands
+   `sharded.make_spec` the ADAPTER's `channels` and `dtype` for every group, and
+   `stage_assemble_grid` writes `ad.schema()`, `ad.C` and `ad.dtype` as
+   store.json's own top-level declaration. That is right for every store built
+   so far, whose groups differ only in GRID (seaice_asi's two hemispheres,
+   lossyear's tiles). `static_fine` is the first store whose groups differ in
+   WHAT THEY MEASURE: elevation in metres (float16, C = 1) at 15″, eleven
+   WorldCover class fractions (C = 11) at 0.05°, and distance to coast (C = 1)
+   at 0.05°. A store.json whose `C` and `channels` describe one of the three
+   and are published as the store's own is not something to ship quietly. The
+   minimal change is small and belongs to whoever owns
+   `ml/build_family1_stores.py`: let `specs()` supply per-group `channels` and
+   `dtype` (`check_sharded` ALREADY reads the bounds and the dtype from each
+   group's own `tile_grid.json`, so the store's self-check needs nothing), have
+   `stage_probe_grid` take its bounds and channel names from the group's spec
+   rather than from `ad.bounds()` / `ad.channel_names`, and write store.json's
+   channel table PER GROUP instead of once at the top.
+2. **The WorldCover half is a multi-lane build in its own right, and the
+   measurement is what says so.** 124 GB of 10 m tiles to download and, per
+   tile, eleven masked reductions over 1.3 × 10⁹ pixels to get the class
+   fractions of its 3,600 0.05° cells — about 1.4 × 10¹⁰ element operations a
+   tile, i.e. of the order of ten seconds each even done band by band, so tens
+   of hours over the 2,651 tiles. That is the "heavy compute: lanes by 3° tile"
+   the plan names, and it wants its own wave with the per-group channels
+   question settled first — not a corner of this one.
+
+Until then the store is designed and nothing is published under its name,
+which is the honest state: a family with a store missing and a note saying so
+is better than a store whose store.json misdescribes two thirds of itself.
