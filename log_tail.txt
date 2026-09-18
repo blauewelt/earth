@@ -1,0 +1,80 @@
+  [index lst05] start (1 items)  0/1  0.0s
+  [index lst05] plan.json  1/1  39.1s
+  index: lst05 — 4 year(s), C=4 (lst_day, lst_night, qc_day, qc_night), bins 2192..2483
+=== stage index done in 39.1s ===
+
+=== stage fetch (lst05) ===
+  [fetch lst05 (tier G)] start (4 items)  0/4  0.0s
+  [fetch lst05 (tier G)] lst05 2012 terra bin 2196  130.8s
+  [fetch lst05 (tier G)] lst05 2012 terra bin 2201  251.3s
+  [fetch lst05 (tier G)] lst05 2012 terra bin 2206  370.8s
+  [fetch lst05 (tier G)] lst05 2012 terra bin 2211  515.2s
+  [fetch lst05 (tier G)] lst05 2012 terra bin 2216  643.5s
+  [fetch lst05 (tier G)] lst05 2012 terra bin 2221  771.4s
+  [fetch lst05 (tier G)] lst05 2012 terra bin 2226  901.7s
+  [fetch lst05 (tier G)] lst05 2012 terra bin 2231  1035.1s
+  [fetch lst05 (tier G)] lst05 2012 terra bin 2236  1160.0s
+  [fetch lst05 (tier G)] lst05 2012 terra bin 2241  1286.0s
+  [fetch lst05 (tier G)] lst05 2012 terra bin 2246  1409.1s
+  [fetch lst05 (tier G)] lst05 2012 terra bin 2251  1537.6s
+  [fetch lst05 (tier G)] lst05 2012 terra bin 2256  1663.8s
+  [fetch lst05 (tier G)] lst05 2012 terra bin 2261  1786.8s
+  2012: terra 73 bin(s) 365 frame(s) 5585.5 MB (1858.8s)
+  [fetch lst05 (tier G)] lst05 2013 terra bin 2269  1986.0s
+  [fetch lst05 (tier G)] lst05 2013 terra bin 2274  2116.2s
+  [fetch lst05 (tier G)] lst05 2013 terra bin 2279  2243.6s
+  [fetch lst05 (tier G)] lst05 2013 terra bin 2284  2373.4s
+  [fetch lst05 (tier G)] lst05 2013 terra bin 2289  2503.3s
+  [fetch lst05 (tier G)] lst05 2013 terra bin 2294  2639.4s
+  [fetch lst05 (tier G)] lst05 2013 terra bin 2299  2776.1s
+  [fetch lst05 (tier G)] lst05 2013 terra bin 2304  2912.0s
+  [fetch lst05 (tier G)] lst05 2013 terra bin 2309  3049.2s
+  [fetch lst05 (tier G)] lst05 2013 terra bin 2314  3195.1s
+  [fetch lst05 (tier G)] lst05 2013 terra bin 2319  3332.6s
+  [fetch lst05 (tier G)] lst05 2013 terra bin 2324  3474.8s
+  [fetch lst05 (tier G)] lst05 2013 terra bin 2329  3610.0s
+  [fetch lst05 (tier G)] lst05 2013 terra bin 2334  3740.1s
+  2013: terra 73 bin(s) 365 frame(s) 5552.2 MB (1958.5s)
+  [fetch lst05 (tier G)] lst05 2014 terra bin 2342  3950.5s
+  [fetch lst05 (tier G)] lst05 2014 terra bin 2347  4087.2s
+  [fetch lst05 (tier G)] lst05 2014 terra bin 2352  4229.9s
+  [fetch lst05 (tier G)] lst05 2014 terra bin 2357  4362.7s
+  [fetch lst05 (tier G)] lst05 2014 terra bin 2362  4494.8s
+  [fetch lst05 (tier G)] lst05 2014 terra bin 2367  4625.8s
+  [fetch lst05 (tier G)] lst05 2014 terra bin 2372  4759.2s
+  [fetch lst05 (tier G)] lst05 2014 terra bin 2377  4891.8s
+  [fetch lst05 (tier G)] lst05 2014 terra bin 2382  5019.2s
+  [fetch lst05 (tier G)] lst05 2014 terra bin 2387  5159.1s
+  [fetch lst05 (tier G)] lst05 2014 terra bin 2392  5305.4s
+  [fetch lst05 (tier G)] lst05 2014 terra bin 2397  5438.1s
+  [fetch lst05 (tier G)] lst05 2014 terra bin 2402  5559.1s
+  [fetch lst05 (tier G)] lst05 2014 terra bin 2407  5679.1s
+  2014: terra 73 bin(s) 365 frame(s) 5536.8 MB (1933.9s)
+  [fetch lst05 (tier G)] lst05 2015 terra bin 2415  5874.4s
+  [fetch lst05 (tier G)] lst05 2015 terra bin 2420  5998.0s
+  [fetch lst05 (tier G)] lst05 2015 terra bin 2425  6122.6s
+  [fetch lst05 (tier G)] lst05 2015 terra bin 2430  6246.8s
+  [fetch lst05 (tier G)] lst05 2015 terra bin 2435  6370.6s
+  [fetch lst05 (tier G)] lst05 2015 terra bin 2440  6498.1s
+  [fetch lst05 (tier G)] lst05 2015 terra bin 2445  6644.7s
+  [fetch lst05 (tier G)] lst05 2015 terra bin 2450  6773.6s
+  [fetch lst05 (tier G)] lst05 2015 terra bin 2455  6896.9s
+  [fetch lst05 (tier G)] lst05 2015 terra bin 2460  7023.5s
+  [fetch lst05 (tier G)] lst05 2015 terra bin 2465  7169.3s
+  [fetch lst05 (tier G)] lst05 2015 terra bin 2470  7308.5s
+  [fetch lst05 (tier G)] lst05 2015 terra bin 2475  7433.9s
+  [fetch lst05 (tier G)] lst05 2015 terra bin 2480  7564.9s
+  2015: terra 73 bin(s) 365 frame(s) 5576.9 MB (1889.4s)
+  hub: chfrank/earth-tensors with the token from $HF_TOKEN
+  lst05: uploading 592 file(s) of 4 year(s), 22261.7 MB -> chfrank/earth-tensors:partials/family1_tf/lst05/
+Upload 0 LFS files: 0it [00:00, ?it/s]Upload 0 LFS files: 0it [00:00, ?it/s]
+No files have been modified since last commit. Skipping to prevent empty commit.
+Upload 0 LFS files: 0it [00:00, ?it/s]Upload 0 LFS files: 0it [00:00, ?it/s]
+Upload 0 LFS files: 0it [00:00, ?it/s]Upload 0 LFS files: 0it [00:00, ?it/s]
+Upload 0 LFS files: 0it [00:00, ?it/s]Upload 0 LFS files: 0it [00:00, ?it/s]
+Upload 0 LFS files: 0it [00:00, ?it/s]Upload 0 LFS files: 0it [00:00, ?it/s]
+No files have been modified since last commit. Skipping to prevent empty commit.
+Upload 0 LFS files: 0it [00:00, ?it/s]Upload 0 LFS files: 0it [00:00, ?it/s]
+  lst05: 4 year(s) pushed and verified in 6 part commit(s), done.json written last (0 already present)
+  push-parts: 4 year(s) on the Hub under partials/family1_tf/lst05/
+=== stage fetch done in 8562.3s ===
