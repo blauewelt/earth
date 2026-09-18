@@ -244,6 +244,16 @@ jobs:
           COPERNICUSMARINE_SERVICE_USERNAME: ${{ (github.event.inputs.runner == 'ubuntu-latest' || github.event.inputs.runner == '') && secrets.COPERNICUSMARINE_SERVICE_USERNAME || '' }}
           COPERNICUSMARINE_SERVICE_PASSWORD: ${{ (github.event.inputs.runner == 'ubuntu-latest' || github.event.inputs.runner == '') && secrets.COPERNICUSMARINE_SERVICE_PASSWORD || '' }}
           GITHUB_TOKEN: ${{ github.token }}
+          # THE CLASSIC LFS UPLOAD PATH, NOT XET. Measured 2026-09-18 on one
+          # rented box: ghcnd's 46.91 GB published first time, and icoads'
+          # 52.07 GB timed out inside `_upload_xet_files` ->
+          # `session.new_upload_commit` on every attempt of two runs (#91 as
+          # one commit, #92 in batches of three files), 63 and 75 minutes of
+          # backoff, while a 1 KB commit to the SAME repository from the
+          # sandbox returned 200 in 1.0 s -- so the repository was healthy and
+          # the Xet content-addressed uploader was not. Classic LFS is the
+          # path family 10.1's 67 GB slatrack store went up by.
+          HF_HUB_DISABLE_XET: "1"
           STORE: ${{ github.event.inputs.store }}
           STAGE: ${{ github.event.inputs.stage || 'all' }}
           START: ${{ github.event.inputs.start }}
