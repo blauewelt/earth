@@ -72,13 +72,14 @@ QA bits say "not produced because of cloud" versus "for another reason",
 which is information about the absence itself.
 
 THE CHANNEL BOUNDS CARRY ONE float16 STEP OF HEADROOM. The producer's
-valid_range maps to reflectance [-0.01, 1.6], and float16's nearest value to
-1.6 is 1.6005859 — ABOVE 1.6 — so a bound of exactly 1.6 would make the
-store fail its own tile check on a legitimate maximum. The bounds are
-therefore -0.02 .. 1.7: outside the producer's range by less than the
-smallest thing float16 can resolve there, and far inside anything a corrupt
-file would produce. The QA bytes are bounded 0..255, which float16 holds
-exactly.
+valid_range maps to reflectance [-0.01, 1.6], and float16's step THERE is
+0.00098 — ten times the source's own 0.0001 — so a stored value sits up to
+half a step either side of the number the file carried, and a bound set
+exactly at the producer's endpoint could make the store fail its own tile
+check on a legitimate extreme. The bounds are therefore -0.02 .. 1.7: one
+whole float16 step outside the producer's range, and far inside anything a
+corrupt file would produce. The QA bytes are bounded 0..255, which float16
+holds exactly.
 
 PRECISION. float16 spaces its values 0.000488 apart at reflectance 0.5, where
 the source's raw step is 0.0001. The store therefore quantises about five
@@ -189,9 +190,11 @@ class Refl05Adapter(mc.CmgAdapter):
         "unchanged, zero included, because an all-zero QA word is an ordinary "
         "reading (clear, shallow ocean, climatological aerosol) and not a "
         "fill. The channel bounds -0.02..1.7 are the producer's range plus "
-        "one float16 step of headroom, so a legitimate 1.6 does not fail the "
-        "store's own bounds check; a value outside them becomes NaN and is "
-        "counted (`out_of_bounds`), never clipped")
+        "one float16 step of headroom (that step is 0.00098 at reflectance "
+        "1.6, ten times the source's own 0.0001), so a legitimate extreme "
+        "cannot fail the store's own bounds check whichever way float16 "
+        "rounds it; a value outside them becomes NaN and is counted "
+        "(`out_of_bounds`), never clipped")
     sources = (LP_PREFIX + "<granule>/<granule>.hdf",
                mc.CMR + "?short_name=MOD09CMG&version=061")
     verified = (

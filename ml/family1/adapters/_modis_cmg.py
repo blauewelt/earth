@@ -92,6 +92,15 @@ BIN_KM = 27.83                  # the family's reference footprint (0.25 deg)
 UA = {"User-Agent": "earth-science-pipeline/1.0 (research; github "
                     "blauewelt/earth)"}
 TIMEOUT = 300
+# A SEPARATE, SHORT CONNECT TIMEOUT. Measured on run #151 (the first refl05
+# probe): `urs.earthdata.nasa.gov` refused to answer the TCP handshake and
+# `requests` sat on it for the whole 300-second timeout, four times over, so
+# eight minutes of the job went on one granule's login and the run died
+# without measuring anything. A stalled CONNECT is exactly the failure a
+# retry fixes, so it is given 30 seconds and the retry ladder does the
+# waiting; the READ timeout stays long, because a 540 MB granule legitimately
+# takes minutes.
+CONNECT_TIMEOUT = 30
 
 # pyhdf's HDF4 library is not thread-safe across datasets in every build, so
 # every open/read/close holds this lock (chirps05 holds TIF_LOCK, seaice_asi
@@ -339,7 +348,8 @@ def download(session, url, path, attempts=4, sleep=3.0):
         got = 0
         want = None
         try:
-            with session.get(url, stream=True, timeout=TIMEOUT,
+            with session.get(url, stream=True,
+                             timeout=(CONNECT_TIMEOUT, TIMEOUT),
                              allow_redirects=True) as r:
                 if r.status_code == 404:
                     return None, "notfound"
@@ -797,8 +807,12 @@ class CmgAdapter(sh.GridAdapter):
         name = os.path.basename(rec["url"].split("?")[0])
         p = os.path.join(tmpdir, name)
         try:
+            # AT LEAST SIX ATTEMPTS, whatever --attempts says. A lane is
+            # hours long and Earthdata Login stalls for a minute at a time
+            # from runner IPs (#151); losing the year to one refused
+            # handshake costs far more than fifteen minutes of backoff.
             n, why = download(self.session(), rec["url"], p,
-                              attempts=ctx.a.attempts)
+                              attempts=max(int(ctx.a.attempts), 6))
         except Exception:
             import shutil
             shutil.rmtree(tmpdir, ignore_errors=True)
