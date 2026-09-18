@@ -30,10 +30,14 @@ TWO SERVER LIMITS DECIDE THE WHOLE DESIGN, both measured:
     "msg":"Input should be less than or equal to 10000"}]}`.
 So at most 11,000 products are reachable inside ONE filter, and a Sentinel-2
 DAY holds 15,844 (2026-09-01, measured). A day therefore cannot be paged at
-all. The adapter lists HOUR windows — a 2024 hour holds 993 (measured) — and
-`_stac.odata_windows` halves any window whose own `@odata.count` exceeds what
-paging can reach, so a burst hour costs two extra count queries and nothing
-is ever truncated. Every window's rows must equal that window's
+all. The adapter lists DAY windows and `_stac.odata_windows` halves any window
+whose own `@odata.count` exceeds what paging can reach — a 2026 day becomes
+two 12-hour windows of about 7,900 — so nothing is ever truncated and the
+request count is 40 % of what hour windows cost. Requests, not round trips,
+are the binding constraint here: CDSE sits behind a WAF that answers
+`{"error":"WAF","message":"Rate limit exceeded"}` and counts something wider
+than one client, so `_stac.RATE_LIMITS` holds this host to 120 a minute per
+lane and no more than four lanes list it at once. Every window's rows must equal that window's
 `@odata.count` or the fetch refuses.
 
 S2A IS NOT RETIRED — A LEDGER CORRECTION. The note's table says
@@ -122,7 +126,15 @@ class S2Catalogue(st.OdataCatalogue):
     PRODUCTS = PRODUCTS
     SENSOR_TABLE = SENSOR_TABLE
     QC_TABLE = QC_TABLE
-    window_step = "hour"
+    # DAY WINDOWS, SPLIT WHEN THEY DO NOT FIT. A 2026 day holds 15,844
+    # products and CDSE can page 11,000, so `_stac.odata_windows` halves it
+    # into two 12-hour windows of about 7,900 — which costs ONE count for the
+    # day, two for the halves and sixteen pages, against the twenty-four
+    # counts and twenty-four pages twenty-four hour-windows need. Against a
+    # host whose WAF is the binding constraint, that is 40 % of the requests
+    # for the same rows, and an early year (a 2016 day is 3,600 products) is
+    # one count and four pages.
+    window_step = "day"
     qc_policy = (
         "qc is the ESA PROCESSING BASELINE (`processorVersion`): 0 = 05.00, "
         "1 = 05.10, 2 = 05.11, 3 = 05.12, 4 = 05.13, and 10..30 for the "

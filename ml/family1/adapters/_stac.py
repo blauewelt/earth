@@ -151,7 +151,13 @@ RATE_LIMITS = {"api.daac.asf.alaska.edu": 240,
                # eight workers on DAY windows (cat_olci, from this sandbox)
                # never did. 300 a minute is below both and the adaptive rule
                # below tightens it further if the host still says no.
-               "catalogue.dataspace.copernicus.eu": 300}
+               # 120, not 300: a lane that had slowed ITSELF to the 30-a-
+               # minute floor was still refused twelve times in a row while
+               # seven other lanes were listing the same host, so the WAF
+               # counts something wider than one client — a subnet or the
+               # anonymous pool. The budget has to be split ACROSS the lanes,
+               # so each is held to 120 and no more than four run at once.
+               "catalogue.dataspace.copernicus.eu": 120}
 #: where a 429 puts a host that had no declared limit, and the floor it may
 #: be slowed to. CDSE answers 429 with `Retry-After: 2` under a dozen lanes
 #: at once and publishes no number, so the limiter is LEARNED: the first 429

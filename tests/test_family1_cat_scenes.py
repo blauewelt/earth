@@ -226,11 +226,14 @@ def test_ecostress_keeps_both_processing_versions_apart_in_qc(smokes):
     assert len(rings) == 1 and rings[0][0] == [50.0, 50.0, 51.0, 51.0]
 
 
-def test_s2_walks_hour_windows_and_names_a_new_baseline(smokes):
+def test_s2_walks_day_windows_and_names_a_new_baseline(smokes):
     p = smokes["cat_s2"]["probe"]
     c = p["counts"]
-    assert c["windows"] == 720                   # 30 days x 24 hours
-    assert c["windows_empty"] == 720 - 4
+    # DAY windows, halved by `odata_windows` only when a day holds more than
+    # CDSE can page — 40 % of the requests hour windows cost, against a host
+    # whose WAF is the binding constraint
+    assert c["windows"] == 30
+    assert c["windows_empty"] == 28
     assert c["scenes_l2a"] == 8
     assert c["attr_missing_cloudCover"] == 1
     assert c["sensor_unlisted"] == {"S2X": 1}
@@ -240,7 +243,7 @@ def test_s2_walks_hour_windows_and_names_a_new_baseline(smokes):
     for ch in ("valid", "angle"):
         assert p["nan_fraction"][ch] == 1.0, ch
     ad = fam.REGISTRY["cat_s2"]()
-    assert ad.window_step == "hour"
+    assert ad.window_step == "day"
     assert set(ad.SENSOR_TABLE.values()) == {"S2A", "S2B", "S2C", "S2D"}
 
 
