@@ -324,10 +324,16 @@ def _project(feat, fields):
 def _umm(g):
     """One synthetic UMM-G granule from a smoke descriptor."""
     urls = [{"URL": f"{g['dir']}/{n}", "Type": "GET DATA"} for n in g["files"]]
+    # the s3 twin, an ordinary browse image — and the trap LP DAAC really
+    # sets: a browse file in ANOTHER directory typed `GET DATA` as well as
+    # `GET RELATED VISUALIZATION`, which is how it is told apart
+    pub = g["dir"].replace("protected", "public") + f"/{g['ur']}.jpg"
     urls += [{"URL": f"s3://bucket/{g['ur']}/{g['files'][0]}",
               "Type": "GET DATA VIA DIRECT ACCESS"},
              {"URL": f"https://browse.example/{g['ur']}.jpg",
-              "Type": "GET RELATED VISUALIZATION"}]
+              "Type": "GET RELATED VISUALIZATION"},
+             {"URL": pub, "Type": "GET DATA"},
+             {"URL": pub, "Type": "GET RELATED VISUALIZATION"}]
     umm = {"GranuleUR": g["ur"],
            "TemporalExtent": {"RangeDateTime": {
                "BeginningDateTime": g["t"], "EndingDateTime": g["t"]}},

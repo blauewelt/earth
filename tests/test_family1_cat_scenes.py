@@ -177,6 +177,10 @@ def test_hls_reads_the_three_numbers_only_umm_json_carries(smokes):
     # also returns the next day's granules; they are dropped by their own
     # start time, which is what keeps a granule in exactly one window
     assert c["granule_starts_outside_window"] == 3
+    # LP DAAC types an HLS granule's browse .jpg `GET DATA` as well as
+    # `GET RELATED VISUALIZATION`, in a SECOND bucket; a url the producer
+    # also publishes under a non-data type is not a data url
+    assert c["asset_urls_also_browse_or_metadata"] == 10
     assert c["attr_missing_CLOUD_COVERAGE"] == 1
     assert c["attr_not_numeric_SPATIAL_COVERAGE"] == 2
     assert c["sensor_unlisted"] == {"Sentinel-2X/Sentinel-2 MSI": 2}

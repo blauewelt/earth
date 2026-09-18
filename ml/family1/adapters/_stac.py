@@ -1643,9 +1643,33 @@ class CmrCatalogue(CatalogueAdapter):
         t = seconds_of(start)
         lat, lon, area = centre_area(cmr_rings(umm))
         aa = cmr_add_attrs(umm)
-        hrefs = [u.get("URL") for u in (umm.get("RelatedUrls") or [])
+        # WHAT COUNTS AS A DATA URL, and the trap that is not a heuristic.
+        # LP DAAC publishes an HLS granule's browse `.jpg` and its
+        # `_stac.json` under a SECOND bucket (`lp-prod-public` beside
+        # `lp-prod-protected`) and types them `GET DATA` *as well as*
+        # `GET RELATED VISUALIZATION` / `VIEW RELATED INFORMATION`. Measured
+        # on HLS.S30.T17PRR.2019005T154549.v2.0: nineteen data files in one
+        # directory and two of these in another, which made
+        # `asset_template` refuse the whole granule ("assets spread over 2
+        # directories") and killed a lane. A url the producer ALSO publishes
+        # under a non-data type is not a data url — that is the producer's own
+        # statement about it, not a rule about bucket names or file counts.
+        urls = umm.get("RelatedUrls") or []
+        not_data = {str(u.get("URL", "")) for u in urls
+                    if u.get("Type") not in CMR_DATA_TYPES}
+        hrefs = [u["URL"] for u in urls
                  if (u.get("Type") in CMR_DATA_TYPES
-                     and str(u.get("URL", "")).startswith("http"))]
+                     and str(u.get("URL", "")).startswith("http")
+                     and str(u.get("URL", "")) not in not_data)]
+        if not hrefs:
+            raise Refusal(f"{what}: granule {gid} has no data url that is not "
+                          f"also published as browse or metadata")
+        counts["asset_urls_also_browse_or_metadata"] = \
+            counts.get("asset_urls_also_browse_or_metadata", 0) + \
+            sum(1 for u in urls
+                if u.get("Type") in CMR_DATA_TYPES
+                and str(u.get("URL", "")).startswith("http")
+                and str(u.get("URL", "")) in not_data)
         base, tmpl = asset_template(hrefs, self.asset_id(gid, umm), f"{what} "
                                     f"{gid}")
         sens = self.sensor_code(cmr_platform(umm), counts)
