@@ -142,7 +142,16 @@ def area_channel(area_km2, counts):
 # not to limit us at these rates: CMR served 2,000-granule pages to eight
 # workers for an hour, CDSE's OData the same, and landsatlook answered 859
 # items a second. A host that is not in this table is not throttled here.
-RATE_LIMITS = {"api.daac.asf.alaska.edu": 240}
+RATE_LIMITS = {"api.daac.asf.alaska.edu": 240,
+               # CDSE sits behind a WAF that answers
+               #   {"error":"WAF","message":"Rate limit exceeded",
+               #    "status":429}
+               # with `Retry-After: 2`, and publishes no number. Eight workers
+               # on hour windows tripped it on two cat_s2 lanes within an hour;
+               # eight workers on DAY windows (cat_olci, from this sandbox)
+               # never did. 300 a minute is below both and the adaptive rule
+               # below tightens it further if the host still says no.
+               "catalogue.dataspace.copernicus.eu": 300}
 #: where a 429 puts a host that had no declared limit, and the floor it may
 #: be slowed to. CDSE answers 429 with `Retry-After: 2` under a dozen lanes
 #: at once and publishes no number, so the limiter is LEARNED: the first 429
@@ -1680,6 +1689,11 @@ class OdataCatalogue(CatalogueAdapter):
     collection_name = ""
     window_step = "hour"
     expand = "Attributes"
+    # FOUR workers, not eight. CDSE's WAF is the binding constraint here, not
+    # the round trip: two cat_s2 lanes died on it with eight. Four still fits
+    # the biggest lane (Sentinel-2's 5.07-million-product 2025) in about two
+    # hours against the runner's six.
+    WORKERS = 4
 
     def filt(self, t0, t1, product_type):
         return (f"Collection/Name eq '{self.collection_name}' and "
