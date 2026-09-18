@@ -1,0 +1,80 @@
+  ::warning::catalogue.dataspace.copernicus.eu answered HTTP 429 — waiting 2s and holding it to 30 requests/minute (10/12)
+  ::warning::catalogue.dataspace.copernicus.eu answered HTTP 429 — waiting 2s and holding it to 30 requests/minute (10/12)
+  ::warning::catalogue.dataspace.copernicus.eu answered HTTP 429 — waiting 2s and holding it to 30 requests/minute (12/12)
+  ::warning::catalogue.dataspace.copernicus.eu answered HTTP 429 — waiting 2s and holding it to 30 requests/minute (12/12)
+  ::warning::catalogue.dataspace.copernicus.eu answered HTTP 429 — waiting 2s and holding it to 30 requests/minute (12/12)
+  ::warning::catalogue.dataspace.copernicus.eu answered HTTP 429 — waiting 2s and holding it to 30 requests/minute (11/12)
+  ::warning::catalogue.dataspace.copernicus.eu answered HTTP 429 — waiting 2s and holding it to 30 requests/minute (11/12)
+  ::warning::catalogue.dataspace.copernicus.eu answered HTTP 429 — waiting 2s and holding it to 30 requests/minute (11/12)
+  ::warning::catalogue.dataspace.copernicus.eu answered HTTP 429 — waiting 2s and holding it to 30 requests/minute (11/12)
+  ::warning::catalogue.dataspace.copernicus.eu answered HTTP 429 — waiting 2s and holding it to 30 requests/minute (11/12)
+  ::warning::catalogue.dataspace.copernicus.eu answered HTTP 429 — waiting 2s and holding it to 30 requests/minute (1/12)
+  ::warning::catalogue.dataspace.copernicus.eu answered HTTP 429 — waiting 2s and holding it to 30 requests/minute (1/12)
+  ::warning::catalogue.dataspace.copernicus.eu answered HTTP 429 — waiting 2s and holding it to 30 requests/minute (1/12)
+  ::warning::catalogue.dataspace.copernicus.eu answered HTTP 429 — waiting 2s and holding it to 30 requests/minute (12/12)
+Traceback (most recent call last):
+  File "/home/runner/work/earth/earth/ml/family1/adapters/_stac.py", line 298, in _do
+    with urllib.request.urlopen(req, timeout=self.timeout) as r:
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/urllib/request.py", line 215, in urlopen
+    return opener.open(url, data, timeout)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/urllib/request.py", line 521, in open
+    response = meth(req, response)
+               ^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/urllib/request.py", line 630, in http_response
+    response = self.parent.error(
+               ^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/urllib/request.py", line 559, in error
+    return self._call_chain(*args)
+           ^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/urllib/request.py", line 492, in _call_chain
+    result = func(*args)
+             ^^^^^^^^^^^
+  File "/usr/lib/python3.12/urllib/request.py", line 639, in http_error_default
+    raise HTTPError(req.full_url, code, msg, hdrs, fp)
+urllib.error.HTTPError: HTTP Error 429: Too Many Requests
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/home/runner/work/earth/earth/ml/build_family1_stores.py", line 1488, in <module>
+    sys.exit(main())
+             ^^^^^^
+  File "/home/runner/work/earth/earth/ml/build_family1_stores.py", line 1483, in main
+    f10b.run_stages(ctx, stages, stage_fn=stage_fns(ad), deps=DEPS)
+  File "/home/runner/work/earth/earth/ml/build_family10_stores.py", line 5331, in run_stages
+    stage_fn[s](ctx)
+  File "/home/runner/work/earth/earth/ml/build_family1_stores.py", line 264, in stage_fetch
+    f10b.stage_fetch(ctx, assemble_store_after=False)
+  File "/home/runner/work/earth/earth/ml/build_family10_stores.py", line 3912, in stage_fetch
+    for label, rows, counts in ad.fetch_year(ctx, y):
+  File "/home/runner/work/earth/earth/ml/family1/adapters/_stac.py", line 1390, in fetch_year
+    for label, rows, c in self._rows(ctx, windows, str(year), ctx.t_lo,
+  File "/home/runner/work/earth/earth/ml/family1/adapters/_stac.py", line 1352, in _rows
+    for scs, c in cm.ordered_map(fn, windows, self.workers(ctx)):
+  File "/home/runner/work/earth/earth/ml/family1/adapters/_common.py", line 188, in ordered_map
+    yield q.popleft().result()
+          ^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/concurrent/futures/_base.py", line 456, in result
+    return self.__get_result()
+           ^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/concurrent/futures/_base.py", line 401, in __get_result
+    raise self._exception
+  File "/usr/lib/python3.12/concurrent/futures/thread.py", line 58, in run
+    result = self.fn(*self.args, **self.kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/work/earth/earth/ml/family1/adapters/_stac.py", line 1351, in <lambda>
+    fn = (lambda w: self.scenes(ctx, w))
+                    ^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/work/earth/earth/ml/family1/adapters/_stac.py", line 1711, in scenes
+    for p in odata_window(fet, CDSE_ODATA,
+  File "/home/runner/work/earth/earth/ml/family1/adapters/_stac.py", line 526, in odata_window
+    d, _ = fet.get(odata_url(base, **kw))
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/work/earth/earth/ml/family1/adapters/_stac.py", line 365, in get
+    return self._do("GET", url, None, headers)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/work/earth/earth/ml/family1/adapters/_stac.py", line 340, in _do
+    raise Refusal(
+family1.adapters._stac.Refusal: https://catalogue.dataspace.copernicus.eu/odata/v1/Products?$filter=Collection/Name%20eq%20'SENTINEL-2'%20and%20Attributes/OData.CSC.StringAttribute/any(a%3Aa/Name%20eq%20'productType'%20and%20a/OData.CSC.StringAttribute/Value%20eq%20'S2MSI2A')%20and%20ContentDate/Start%20ge%202017-05-08T21%3A00%3A00.000Z%20and%20ContentDate/Start%20lt%202017-05-08T22%3A00%3A00.000Z&$top=58&$expand=Attributes&$orderby=ContentDate/Start%20asc: HTTP 429 12 times in a row even at 30 requests a minute — the host is refusing this build's rate, not hiccuping
