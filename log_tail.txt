@@ -1,0 +1,80 @@
+   "note_formula": "pixels x frames x valid fraction x 2C x 1.2"
+  },
+  "00N_180W_r3c3": {
+   "H": 10000,
+   "W": 10000,
+   "C": 2,
+   "dtype": "uint8",
+   "tiles_per_frame": 1600,
+   "frames_requested": 6,
+   "frames_fetched": 0,
+   "frames_missing": {
+    "absent_upstream": 1,
+    "after_record": 5
+   },
+   "frame_present_by_slot": [
+    0,
+    0,
+    0,
+    0,
+    0,
+    0
+   ],
+   "valid_fraction": null,
+   "valid_fraction_per_frame": [],
+   "bytes_per_frame": {
+    "mean": 0.0,
+    "min": 0,
+    "max": 0
+   },
+   "bytes_per_stored_tile": {
+    "mean": 0.0,
+    "median": 0.0,
+    "p90": 0.0,
+    "max": 0
+   },
+   "tiles_stored": 0,
+   "tiles_empty": 0,
+   "raw_bytes_per_frame": 200000000,
+   "compression_ratio": null,
+   "bytes_per_valid_pixel": null,
+   "encode_seconds_per_frame": null,
+   "record_frames": 1,
+   "index_bytes_per_bin": 25728,
+   "estimate_store_bytes": null,
+   "note_formula_bytes": null,
+   "note_formula": "pixels x frames x valid fraction x 2C x 1.2"
+  }
+ },
+ "out_of_bounds": {},
+ "out_of_bounds_stored": 0,
+ "inputs_not_read": [],
+ "counts": {
+  "datamask_pixels": {
+   "1": 5248619865,
+   "2": 780120883,
+   "0": 371259252
+  },
+  "land_pixels": 5248619865,
+  "files_read": 48,
+  "bytes_files": 2303815379,
+  "bands_read": 16,
+  "fetch_seconds": 661.9599999999997
+ },
+ "bytes_fetched": 2303815379,
+ "bytes_index": 43083203,
+ "bytes_fetched_per_frame": 35997115.3,
+ "wall_seconds": 671.99,
+ "wall_seconds_index": 4.09,
+ "seconds_per_frame": 10.5,
+ "estimate_store_bytes": 2077410879,
+ "note_formula_bytes": 25193375324,
+ "note_estimate": {
+  "bytes": 30000000000.0,
+  "what": "family1tf.tex ledger: 'loss is sparse: ~30 GB' for Hansen v1.13 tree cover 2000 and loss year at 30 m"
+ },
+ "runner": "GitHub Actions 1000005269",
+ "builder_git_sha": "82a83b5f6b2ba1fe7cbb8604facb3aae7e03f1e6",
+ "at": "2026-09-18T05:39:27+00:00"
+}
+probe -> /home/runner/work/earth/earth/ml/cache/family1_tf/probe/lossyear/2026-01.json
