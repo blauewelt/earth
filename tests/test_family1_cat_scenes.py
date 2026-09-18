@@ -41,8 +41,8 @@ pytest.importorskip("pyarrow")
 EXPECT = {
     # 7 scenes in the two days; the eighth listing is the same scene twice
     "cat_landsat": 7,
-    # 7 granules over two collections; three more are the paging duplicates
-    # the recorder replays when the probe widens the window
+    # 7 granules over two collections; three more are returned by the
+    # next day's window (CMR matches on overlap) and dropped by their start
     "cat_hls": 7,
     "cat_viirs": 6,
     "cat_ecostress": 5,
@@ -172,7 +172,11 @@ def test_landsat_refuses_an_asset_set_it_has_never_seen():
 def test_hls_reads_the_three_numbers_only_umm_json_carries(smokes):
     p = smokes["cat_hls"]["probe"]
     c = p["counts"]
-    assert c["scenes_S30"] == 6 and c["scenes_L30"] == 4
+    assert c["scenes_S30"] == 4 and c["scenes_L30"] == 3
+    # CMR matches on OVERLAP with both ends inclusive, so a day-window query
+    # also returns the next day's granules; they are dropped by their own
+    # start time, which is what keeps a granule in exactly one window
+    assert c["granule_starts_outside_window"] == 3
     assert c["attr_missing_CLOUD_COVERAGE"] == 1
     assert c["attr_not_numeric_SPATIAL_COVERAGE"] == 2
     assert c["sensor_unlisted"] == {"Sentinel-2X/Sentinel-2 MSI": 2}
@@ -187,8 +191,9 @@ def test_hls_reads_the_three_numbers_only_umm_json_carries(smokes):
 def test_viirs_carries_three_satellites_and_three_nan_channels(smokes):
     p = smokes["cat_viirs"]["probe"]
     c = p["counts"]
-    assert c["scenes_npp"] == 8 and c["scenes_j01"] == 2 \
-        and c["scenes_j02"] == 2
+    assert c["scenes_npp"] == 4 and c["scenes_j01"] == 1 \
+        and c["scenes_j02"] == 1
+    assert c["granule_starts_outside_window"] == 6
     assert c["sensor_unlisted"] == {"NOAA-99/VIIRS": 2}
     for ch in ("cloud", "valid", "angle"):
         assert p["nan_fraction"][ch] == 1.0, ch
@@ -203,7 +208,8 @@ def test_viirs_carries_three_satellites_and_three_nan_channels(smokes):
 def test_ecostress_keeps_both_processing_versions_apart_in_qc(smokes):
     p = smokes["cat_ecostress"]["probe"]
     c = p["counts"]
-    assert c["scenes_v002"] == 4 and c["scenes_v003"] == 3
+    assert c["scenes_v002"] == 3 and c["scenes_v003"] == 2
+    assert c["granule_starts_outside_window"] == 2
     assert p["qc"] == {"2": 3, "3": 2}
     for ch in ("cloud", "valid", "angle"):
         assert p["nan_fraction"][ch] == 1.0, ch
@@ -290,11 +296,13 @@ def test_nisar_codes_the_polarimetric_mode_and_the_processing_tier(smokes):
         assert p["nan_fraction"][ch] == 1.0, ch
     from family1.adapters import cat_nisar as cn
     ad = cn.NisarCatalogue()
-    assert len(ad.SENSOR_TABLE) == 64             # 8 x 8 two-band modes
+    assert len(ad.SENSOR_TABLE) == 81             # 9 x 9 two-band modes
     assert ad.SENSOR_TABLE[1] == "SHSH"
+    assert "QPDH" in ad.SENSOR_TABLE.values()     # measured 2026-08
     assert ad.sensor_code("DHDH", {}) in ad.SENSOR_TABLE
     assert cn.tier_of("NISAR_L2_GCOV_PROVISIONAL_V1") == "PROVISIONAL"
     assert cn.tier_of("NISAR_L2_GCOV_BETA_V1") == "BETA"
+    assert cn.tier_of("NISAR_UR_L2") == "URGENT"  # measured 2026-08
     with pytest.raises(st.Refusal):
         cn.name_fields("NISAR_L2_PR")
 

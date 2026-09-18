@@ -89,6 +89,10 @@ class EcostressCatalogue(st.CmrCatalogue):
     SENSOR_TABLE = SENSOR_TABLE
     QC_TABLE = QC_TABLE
     window_step = "day"
+    # 400 a page: an ECOSTRESS granule is 19 kB of UMM (121 related urls), so
+    # 2,000 would be a 38 MB response and CMR cut exactly that in a measured
+    # run. 7.6 MB a page goes through.
+    page_size = 400
     qc_policy = (
         "qc is the ECOSTRESS processing version: 2 = v002, 3 = v003. The two "
         "versions are separate CMR collections over the same mission, so one "

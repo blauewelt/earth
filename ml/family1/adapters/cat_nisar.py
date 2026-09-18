@@ -30,6 +30,9 @@ THE PARAMETERS, MEASURED RATHER THAN TRANSCRIBED.
     to page is to narrow the window. The adapter lists HOUR windows (about 50
     granules in a 2026 hour) and `_stac.asf_windows` halves any window whose
     own `output=count` exceeds 250, so nothing is ever truncated.
+  * `start` and `end` are BOTH INCLUSIVE (see `asf_params`), so a window's
+    `end` is one second before the next window's `start` — otherwise every
+    boundary instant is listed twice.
   * a day with no acquisitions answers `0` and is COUNTED
     (`windows_empty`), not refused: 2026-08-01 to 08-08 really holds none,
     while 08-15 to 09-01 holds 23,318 of the month's 29,992.
@@ -89,11 +92,19 @@ from family1.adapters import _stac as st
 ASF = "https://api.daac.asf.alaska.edu/services/search/param"
 DATASET = "NISAR"
 LEVEL = "GCOV"
-POL_CODES = ("SH", "SV", "DH", "DV", "QQ", "CL", "CR", "NA")
-#: every two-band polarimetric mode NISAR can fly, 1..64
+# The per-band polarisation codes. `QP` was ADDED after the first real probe:
+# 305 granules of 2026-08 carry the mode `QPDH`, which a table without `QP`
+# turned into sensor 255. Measured modes so far: NADV, DHDH, SHNA, NASV,
+# SVSH, DVDV, SHSH, QPDH.
+POL_CODES = ("SH", "SV", "DH", "DV", "QP", "QQ", "CL", "CR", "NA")
+#: every two-band polarimetric mode NISAR can fly, 1..81
 SENSOR_TABLE = {i: a + b for i, (a, b) in
                 enumerate(itertools.product(POL_CODES, POL_CODES), start=1)}
-TIERS = ("BETA", "PROVISIONAL", "VALIDATED")
+# The processing tiers, from each granule's own `collectionName`. `URGENT`
+# was ADDED after the first real probe: 112 granules of 2026-08 come from the
+# separate `NISAR_UR_L2` collection (CMR calls it "NISAR Urgent Response
+# Level 2 Product"), which carries no tier word at all and turned into qc 255.
+TIERS = ("BETA", "PROVISIONAL", "VALIDATED", "URGENT")
 CLASSES = ("PR", "UR")
 QC_TABLE = {}
 for _i, _t in enumerate(TIERS):
@@ -104,11 +115,17 @@ PRIVATE_MARK = "NISAR-JPL-PRIVATE-DATA"
 
 
 def tier_of(collection):
-    """`NISAR_L2_GCOV_PROVISIONAL_V1` -> `PROVISIONAL`."""
+    """`NISAR_L2_GCOV_PROVISIONAL_V1` -> `PROVISIONAL`.
+
+    The urgent-response collection is named `NISAR_UR_L2` and carries no tier
+    word, so it maps to `URGENT` — measured on 112 granules of 2026-08.
+    """
     s = str(collection or "").upper()
     for t in TIERS:
         if t in s:
             return t
+    if "NISAR_UR" in s:
+        return "URGENT"
     return s or "?"
 
 
@@ -197,8 +214,20 @@ class NisarCatalogue(st.CatalogueAdapter):
         return self.windows(ctx, year, month, step=self.window_step)
 
     def asf_params(self, t0, t1):
+        """ASF's `start` and `end` are BOTH INCLUSIVE, so `end` is t1 minus
+        one second.
+
+        Measured 2026-09-18: `output=count` over 2026-08-01..08-15 is 6,675
+        and over 08-15..09-01 is 23,318, which sums to 29,993 against the
+        whole month's 29,992 — one granule counted twice, at the shared
+        boundary instant. Half-open windows built the naive way therefore
+        overlapped at every hour boundary and the first real probe found 243
+        of them in one month (caught by the de-duplication, so the store was
+        right and the producer's per-window counts no longer added up to it).
+        """
         return [("dataset", DATASET), ("processingLevel", LEVEL),
-                ("start", st.utc_z(t0)), ("end", st.utc_z(t1))]
+                ("start", st.utc_z(t0)),
+                ("end", st.utc_z(t1 - dt.timedelta(seconds=1)))]
 
     # -- one window --------------------------------------------------------
     def scenes(self, ctx, window):
@@ -206,6 +235,16 @@ class NisarCatalogue(st.CatalogueAdapter):
         counts = {}
         fet = st.Fetcher(ctx, self.store)
         what = f"{self.store} {t0:%FT%H:%M}"
+        # ASF MATCHES ON OVERLAP, like CMR: a frame whose 20-to-35-second
+        # acquisition spans an hour boundary is returned for BOTH hours even
+        # with a window that ends one second before the next one starts.
+        # Measured on the first real probe of 2026-08: 237 of 30,229 frames
+        # came back twice. A frame belongs to the window its START falls in,
+        # and filtering here makes that true whichever lane lists it, instead
+        # of leaving the producer's per-window counts unable to add up to the
+        # store.
+        s_lo = f10b.seconds_since_epoch(t0)
+        s_hi = f10b.seconds_since_epoch(t1)
         out = []
         for lo, hi, n in st.asf_windows(fet, ASF, self.asf_params, t0, t1,
                                         counts, what):
@@ -215,8 +254,13 @@ class NisarCatalogue(st.CatalogueAdapter):
             for g in st.asf_window(fet, ASF, self.asf_params(lo, hi), counts,
                                    what):
                 sc = self.granule(g, counts, what)
-                if sc is not None:
-                    out.append(sc)
+                if sc is None:
+                    continue
+                if not (s_lo <= sc.t < s_hi):
+                    counts["granule_starts_outside_window"] = \
+                        counts.get("granule_starts_outside_window", 0) + 1
+                    continue
+                out.append(sc)
         counts["requests"] = counts.get("requests", 0) + fet.requests
         counts["request_retries"] = counts.get("request_retries", 0) + \
             fet.retries

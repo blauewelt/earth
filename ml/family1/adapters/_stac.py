@@ -77,6 +77,7 @@ import os
 import re
 import sys
 import time
+import http.client
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -236,7 +237,15 @@ class Fetcher:
             except (json.JSONDecodeError, UnicodeDecodeError) as e:
                 self.seconds += time.time() - t0
                 raise Refusal(f"{url}: the body is not JSON ({e})") from None
-            except (OSError, urllib.error.URLError) as e:
+            except (OSError, urllib.error.URLError,
+                    http.client.HTTPException) as e:
+                # `http.client.IncompleteRead` IS IN THIS LIST ON PURPOSE and
+                # it is NOT an OSError, so it used to escape the ladder and
+                # kill a whole probe. CMR cut a 28 MB chunked response in the
+                # middle twice in one run (measured 2026-09-18: 23,623,598 and
+                # 38,018,377 bytes read of a page of 2,000 granules), which is
+                # a transient to retry — and the reason the heavy collections
+                # ask for smaller pages.
                 self.seconds += time.time() - t0
                 err = f"{type(e).__name__}: {e}"
             if i < self.attempts - 1:
@@ -599,7 +608,8 @@ def _text(fet, url):
             if e.code not in Fetcher.RETRY_ON:
                 raise Refusal(f"{url}: HTTP {e.code}") from None
             err = e
-        except (OSError, urllib.error.URLError) as e:
+        except (OSError, urllib.error.URLError,
+                http.client.HTTPException) as e:
             fet.seconds += time.time() - t0
             err = e
         if i < fet.attempts - 1:
@@ -701,6 +711,17 @@ def sphere_centre_area(lats, lons):
     dl = (l2 - lam + math.pi) % (2 * math.pi) - math.pi
     s = float((dl * (2.0 + np.sin(phi) + np.sin(p2))).sum())
     area = abs(s) * EARTH_R_KM * EARTH_R_KM / 2.0
+    # THE POLE CORRECTION. The spherical-excess formula returns the area of
+    # ONE of the two regions the ring divides the sphere into, and which one
+    # depends on the ring's winding — so a footprint that ENCLOSES A POLE
+    # comes back as the whole sphere minus itself. Measured on cat_viirs's
+    # first real probe: 1,239 of 20,796 six-minute granules (6 %) came back
+    # at 2**28.9 km2, which is the area of the Earth, and every one of them
+    # was a polar pass. No real scene covers half the planet, so the smaller
+    # of the two regions is the footprint.
+    whole = 4.0 * math.pi * EARTH_R_KM * EARTH_R_KM
+    if area > whole / 2.0:
+        area = whole - area
     return clat, float(f10b.f10.wrap_lon(clon)), area
 
 
@@ -1313,7 +1334,13 @@ def asset_template(hrefs, scene_id, what, drop_hosts=()):
 
 # ============================================== a CMR-listed catalogue store ==
 CMR_GRANULES = "https://cmr.earthdata.nasa.gov/search/granules.umm_json"
-CMR_DATA_TYPES = ("GET DATA", "GET DATA VIA DIRECT ACCESS", "USE SERVICE API")
+# ONLY `GET DATA`. `GET DATA VIA DIRECT ACCESS` is the `s3://` twin of the
+# same file and `USE SERVICE API` is an OPeNDAP HTML page in a DIFFERENT
+# directory — including the latter is what made cat_viirs's first real index
+# refuse ("assets spread over 2 directories": the LAADS cloud bucket and
+# ladsweb's opendap tree). A catalogue row points at the file, not at a
+# viewer of it.
+CMR_DATA_TYPES = ("GET DATA",)
 
 
 def cmr_add_attrs(umm):
@@ -1392,13 +1419,28 @@ class CmrCatalogue(CatalogueAdapter):
         counts = {}
         fet = Fetcher(ctx, self.store)
         what = f"{self.store} {coll[0]} {t0:%F}T{t0:%H}"
+        # CMR MATCHES ON OVERLAP, NOT ON THE START TIME. `temporal=a,b` returns
+        # every granule whose own time RANGE overlaps [a, b], and both ends are
+        # inclusive — so a six-minute VIIRS granule that spans midnight is
+        # returned for BOTH days. Measured on the first real probe: 169 of
+        # 20,796 granules of 2024-06 came back twice and 5 more started in
+        # May. A granule belongs to the window its START falls in, and
+        # filtering here rather than leaning on the de-duplication makes each
+        # granule land in exactly one window whichever lane lists it.
+        lo = f10b.seconds_since_epoch(t0)
+        hi = f10b.seconds_since_epoch(t1)
         out = []
         for it in cmr_granules(fet, CMR_GRANULES,
                                self.cmr_params(t0, t1, coll), counts, what,
                                page_size=self.page_for(ctx, self.page_size)):
             sc = self.granule(it, coll, counts, what)
-            if sc is not None:
-                out.append(sc)
+            if sc is None:
+                continue
+            if not (lo <= sc.t < hi):
+                counts["granule_starts_outside_window"] = \
+                    counts.get("granule_starts_outside_window", 0) + 1
+                continue
+            out.append(sc)
         counts["requests"] = counts.get("requests", 0) + fet.requests
         counts["request_retries"] = counts.get("request_retries", 0) + \
             fet.retries

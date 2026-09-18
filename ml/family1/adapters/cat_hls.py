@@ -101,6 +101,10 @@ class HlsCatalogue(st.CmrCatalogue):
     SENSOR_TABLE = SENSOR_TABLE
     QC_TABLE = QC_TABLE
     window_step = "day"
+    # 500, NOT the 2,000 CMR allows: a page of 2,000 HLS granules is 28 MB and
+    # CMR cut two of them mid-chunk in one run (IncompleteRead at 23.6 MB and
+    # 38.0 MB). Seven megabytes a page goes through.
+    page_size = 500
     qc_policy = (
         "qc is the HLS product version taken from the granule's own "
         "identifier suffix: 0 = v2.0, 1 = v2.1 (not yet published). A version "

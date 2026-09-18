@@ -103,6 +103,27 @@ def test_a_footprints_centre_and_area_are_computed_on_the_sphere():
     assert abs(a60 / area - 0.5) < 0.01
 
 
+def test_a_footprint_that_encloses_a_pole_is_not_the_whole_planet():
+    """The measured reason for the pole correction in `sphere_centre_area`.
+
+    A ring around the north pole divides the sphere into a small cap and
+    everything else; the spherical-excess formula returns whichever the
+    winding names, and 6 % of VIIRS's six-minute granules came back at the
+    area of the Earth before the correction.
+    """
+    lats = [80.0] * 36
+    lons = [(-180.0 + 10.0 * i) for i in range(36)]
+    _, _, area = st.sphere_centre_area(lats, lons)
+    whole = 4.0 * math.pi * st.EARTH_R_KM ** 2
+    # the true cap above 80 N is 2πR²(1 − sin 80°) ≈ 3.88e6 km²
+    cap = 2 * math.pi * st.EARTH_R_KM ** 2 * (1 - math.sin(math.radians(80.0)))
+    assert abs(area - cap) / cap < 0.01, (area, cap)
+    assert area < whole / 2
+    # and the same ring wound the other way gives the same answer
+    _, _, rev = st.sphere_centre_area(lats[::-1], lons[::-1])
+    assert abs(rev - area) / area < 1e-9
+
+
 def test_the_centre_has_no_seam_at_the_antimeridian():
     """The reason the centre is a 3-vector mean and not a mean of degrees."""
     lat, lon, _ = st.sphere_centre_area([0.0, 0.0, 1.0, 1.0],
