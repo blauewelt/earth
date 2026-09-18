@@ -381,6 +381,29 @@ dispatched. And 49.4 s of encoding a frame means **5.0 h for 366 frames**,
 which is inside a hosted runner's six hours only just: size the year as TWO
 six-month lanes, not one.
 
+### Still in flight at the end of wave 4, and what each one settles
+
+Four dispatches were queued and had not started when this wave stopped. The
+account's concurrency ceiling is the reason and it is worth recording as
+operational lore: **twenty concurrent jobs is the ceiling and it is SHARED
+across every wave working the repository at once.** With four waves dispatching
+together the queue reached 34 jobs behind 9 running, so a probe dispatched at
+the wrong minute waits half an hour for a two-minute job. The wave-2 note
+already says "dispatch the job you need FIRST, then fill the pool"; the
+addition is that the pool is not yours.
+
+| run | what it settles |
+|---|---|
+| #177 `check_credentials` | whether Earthdata still answers this account for LP DAAC, GES DISC and PO.DAAC — the definitive confirmation for the GES DISC 401 diagnosis above |
+| #178 `irtb` probe 2015-01 | the MERGIR file's internal layout (written into plan.json as a whole inventory), whether an hourly file really holds two time steps, its lat/lon axes against the declared grid, and the compressed bytes a tile and a frame |
+| #179 `xco2` probe 2019-06 | the OCO-2/OCO-3 Lite file's internal layout, likewise, plus rows a day and the NaN fraction per channel |
+| #199 `sst_acspo02` probe 2020-01 | the same month with the declared-size refusal removed, i.e. all 31 days rather than 18 |
+
+Each was dispatched AFTER the Earthdata session fix, which is the change #170
+and #169 needed. `irtb` and `xco2` were probed once before it and failed in
+the index with `HTTP 401 after 2 redirect(s)` from GES DISC; nothing else
+about either adapter has changed.
+
 ### `swot`: the storage decision, with measured numbers
 
 The probe (#168, 2024-01, twelve passes of cycle 010,
