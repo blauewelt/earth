@@ -377,6 +377,29 @@ def test_asf_refuses_a_window_larger_than_its_250_result_cap():
         mod._text = real
 
 
+def test_a_429_slows_the_host_down_and_does_not_spend_an_attempt():
+    """The measured shape of a rate limit, on both producers that have one."""
+    import family1.adapters._stac as mod
+    host = "rate.example.test"
+    mod._LIMITERS.pop(host, None)
+    assert mod.limiter_for(f"https://{host}/x") is None
+    h, r1 = mod.slow_host(f"https://{host}/x")
+    assert h == host and r1 == mod.ADAPTIVE_START
+    lim = mod.limiter_for(f"https://{host}/x")
+    assert lim is not None
+    _, r2 = mod.slow_host(f"https://{host}/x")
+    assert r2 < r1                                # each 429 halves the rate
+    for _ in range(40):
+        mod.slow_host(f"https://{host}/x")
+    _, rn = mod.slow_host(f"https://{host}/x")
+    assert rn >= mod.ADAPTIVE_FLOOR - 1e-9        # and never below the floor
+    mod._LIMITERS.pop(host, None)
+    # ASF's is declared rather than learned
+    assert mod.RATE_LIMITS["api.daac.asf.alaska.edu"] == 240
+    assert mod.limiter_for("https://api.daac.asf.alaska.edu/x") is not None
+    assert mod.THROTTLE_TRIES >= 8
+
+
 # ============================================================== the client ==
 def test_the_canned_key_includes_the_headers_because_cmr_pages_in_one():
     a = st.canned_key("GET", "u", None, None)

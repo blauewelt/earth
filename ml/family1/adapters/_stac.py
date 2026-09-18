@@ -143,6 +143,16 @@ def area_channel(area_km2, counts):
 # workers for an hour, CDSE's OData the same, and landsatlook answered 859
 # items a second. A host that is not in this table is not throttled here.
 RATE_LIMITS = {"api.daac.asf.alaska.edu": 240}
+#: where a 429 puts a host that had no declared limit, and the floor it may
+#: be slowed to. CDSE answers 429 with `Retry-After: 2` under a dozen lanes
+#: at once and publishes no number, so the limiter is LEARNED: the first 429
+#: installs one, each further 429 makes it half again slower.
+ADAPTIVE_START = 600
+ADAPTIVE_FLOOR = 30
+#: how many times one request may be told to wait by a 429 before the attempt
+#: ladder takes over. A rate limit is not an attempt: three tries two seconds
+#: apart cannot clear a quota, and that is exactly how a cat_s2 lane died.
+THROTTLE_TRIES = 12
 
 
 class _Limiter:
@@ -153,6 +163,7 @@ class _Limiter:
         self.lock = threading.Lock()
         self.next_at = 0.0
         self.waited = 0.0
+        self.slowed = 0
 
     def take(self):
         with self.lock:
@@ -164,12 +175,33 @@ class _Limiter:
             self.waited += d
             time.sleep(d)
 
+    def slow_down(self, factor=1.5):
+        with self.lock:
+            floor = 60.0 / ADAPTIVE_FLOOR
+            self.interval = min(self.interval * factor, floor)
+            self.slowed += 1
+            return 60.0 / self.interval
+
 
 _LIMITERS = {h: _Limiter(n) for h, n in RATE_LIMITS.items()}
+_LIMITERS_LOCK = threading.Lock()
 
 
 def limiter_for(url):
     return _LIMITERS.get(urllib.parse.urlparse(url).netloc)
+
+
+def slow_host(url):
+    """A 429 from `url`'s host: install or tighten that host's limiter."""
+    host = urllib.parse.urlparse(url).netloc
+    with _LIMITERS_LOCK:
+        lim = _LIMITERS.get(host)
+        if lim is None:
+            lim = _LIMITERS[host] = _Limiter(ADAPTIVE_START)
+            rate = ADAPTIVE_START
+        else:
+            rate = lim.slow_down()
+    return host, rate
 
 
 class Refusal(ValueError):
@@ -250,8 +282,13 @@ class Fetcher:
             hdr["Content-Type"] = "application/json"
         hdr.update(headers or {})
         err = None
-        lim = limiter_for(url)
-        for i in range(self.attempts):
+        throttles = 0
+        i = -1
+        while True:
+            i += 1
+            if i >= self.attempts:
+                break
+            lim = limiter_for(url)
             if lim is not None:
                 lim.take()
             t0 = time.time()
@@ -280,21 +317,30 @@ class Fetcher:
                 if e.code not in self.RETRY_ON:
                     raise Refusal(f"{url}: {err}") from None
                 if e.code == 429:
-                    # A RATE LIMIT IS NOT A HICCUP: two seconds of backoff
-                    # cannot clear a per-MINUTE quota, so honour Retry-After
-                    # when the producer sends one and wait out the minute when
-                    # it does not.
+                    # A RATE LIMIT IS NOT A HICCUP AND IT IS NOT AN ATTEMPT.
+                    # Three tries two seconds apart cannot clear a quota — a
+                    # cat_s2 lane died that way — so a 429 does not consume
+                    # the attempt budget, it SLOWS THE HOST DOWN and waits.
                     ra = e.headers.get("Retry-After") if e.headers else None
                     try:
                         wait = float(ra)
                     except (TypeError, ValueError):
-                        wait = 60.0
+                        wait = 30.0
+                    host, rate = slow_host(url)
                     self.retries += 1
                     self.throttled += 1
-                    print(f"  ::warning::{urllib.parse.urlparse(url).netloc} "
-                          f"answered HTTP 429 — waiting {wait:.0f}s "
-                          f"(attempt {i + 1}/{self.attempts})", flush=True)
-                    time.sleep(min(wait, 120.0))
+                    throttles += 1
+                    i -= 1                      # not an attempt
+                    print(f"  ::warning::{host} answered HTTP 429 — waiting "
+                          f"{wait:.0f}s and holding it to {rate:.0f} "
+                          f"requests/minute ({throttles}/{THROTTLE_TRIES})",
+                          flush=True)
+                    time.sleep(min(max(wait, 1.0), 120.0))
+                    if throttles >= THROTTLE_TRIES:
+                        raise Refusal(
+                            f"{url}: HTTP 429 {THROTTLE_TRIES} times in a row "
+                            f"even at {rate:.0f} requests a minute — the host "
+                            f"is refusing this build's rate, not hiccuping")
                     continue
             except (json.JSONDecodeError, UnicodeDecodeError) as e:
                 self.seconds += time.time() - t0
@@ -684,8 +730,13 @@ def _text(fet, url):
             raise Refusal(f"{url}: the canned response carries no __text__")
         return str(d["__text__"])
     err = None
-    lim = limiter_for(url)
-    for i in range(fet.attempts):
+    throttles = 0
+    i = -1
+    while True:
+        i += 1
+        if i >= fet.attempts:
+            break
+        lim = limiter_for(url)
         if lim is not None:
             lim.take()
         t0 = time.time()
@@ -707,12 +758,20 @@ def _text(fet, url):
                 try:
                     wait = float(ra)
                 except (TypeError, ValueError):
-                    wait = 60.0
+                    wait = 30.0
+                host, rate = slow_host(url)
                 fet.retries += 1
                 fet.throttled += 1
-                print(f"  ::warning::{urllib.parse.urlparse(url).netloc} "
-                      f"answered HTTP 429 — waiting {wait:.0f}s", flush=True)
-                time.sleep(min(wait, 120.0))
+                throttles += 1
+                i -= 1
+                print(f"  ::warning::{host} answered HTTP 429 — waiting "
+                      f"{wait:.0f}s and holding it to {rate:.0f} "
+                      f"requests/minute ({throttles}/{THROTTLE_TRIES})",
+                      flush=True)
+                time.sleep(min(max(wait, 1.0), 120.0))
+                if throttles >= THROTTLE_TRIES:
+                    raise Refusal(f"{url}: HTTP 429 {THROTTLE_TRIES} times "
+                                  f"even at {rate:.0f} requests a minute")
                 continue
         except (OSError, urllib.error.URLError,
                 http.client.HTTPException) as e:
