@@ -1,0 +1,198 @@
+{
+ "bins": [
+  2337,
+  2702
+ ],
+ "builder_git_sha": "52dea802b2d1ff09d6ff1f5b968a1d324f7e9a6f",
+ "built_at": "2026-09-18T07:48:53+00:00",
+ "bytes": 116351837853,
+ "bytes_per_year": {
+  "1991": 448077676,
+  "1992": 1346365628,
+  "1993": 2363046919,
+  "1994": 2380357334,
+  "1995": 3023463341,
+  "1996": 2871418701,
+  "1997": 2374433405,
+  "1998": 2349967084,
+  "1999": 2332765164,
+  "2000": 2345100089,
+  "2001": 2352427879,
+  "2002": 3930715022,
+  "2003": 3710582873,
+  "2004": 3235994884,
+  "2005": 3007789588,
+  "2006": 2170601150,
+  "2007": 2245192224,
+  "2008": 2820738517,
+  "2009": 3744178248,
+  "2010": 4108621019,
+  "2011": 4825270120,
+  "2012": 2897452795,
+  "2013": 3191620922,
+  "2014": 3494644775,
+  "2015": 3513036998,
+  "2016": 5288086795,
+  "2017": 5488691578,
+  "2018": 6333079907,
+  "2019": 6075484962,
+  "2020": 5452829399,
+  "2021": 5525998142,
+  "2022": 5533199254,
+  "2023": 5570605461
+ },
+ "channels": [
+  {
+   "max": 25.0,
+   "min": 0.0,
+   "name": "swh",
+   "unit": "m"
+  },
+  {
+   "max": 25.0,
+   "min": -1.0,
+   "name": "swh_denoised",
+   "unit": "m"
+  },
+  {
+   "max": 5.0,
+   "min": 0.0,
+   "name": "swh_uncertainty",
+   "unit": "m"
+  }
+ ],
+ "credentials": "none \u2014 the object store answers anonymously",
+ "dataset": "ESA CCI Sea State v4 L3 along-track significant wave height, daily multi-mission files (WAVE_GLO_PHY_SWH_L3_MY_014_005)",
+ "date_range": [
+  "2014-01-01",
+  "2018-12-31"
+ ],
+ "files": 11832,
+ "files_per_year": {
+  "1991": 151,
+  "1992": 363,
+  "1993": 365,
+  "1994": 365,
+  "1995": 365,
+  "1996": 366,
+  "1997": 365,
+  "1998": 365,
+  "1999": 365,
+  "2000": 366,
+  "2001": 361,
+  "2002": 365,
+  "2003": 365,
+  "2004": 366,
+  "2005": 365,
+  "2006": 365,
+  "2007": 365,
+  "2008": 366,
+  "2009": 365,
+  "2010": 365,
+  "2011": 365,
+  "2012": 366,
+  "2013": 365,
+  "2014": 365,
+  "2015": 365,
+  "2016": 366,
+  "2017": 365,
+  "2018": 365,
+  "2019": 365,
+  "2020": 366,
+  "2021": 365,
+  "2022": 365,
+  "2023": 365
+ },
+ "first_file": {
+  "bytes": 9756816,
+  "format": "NETCDF4",
+  "instruments": [
+   "SIRAL",
+   "Poseidon-3",
+   "AltiKa"
+  ],
+  "key_variables": "swh_denoised",
+  "licence_attr": "ESA CCI Data Policy - free and open access",
+  "missions": [
+   "cryosat-2",
+   "envisat",
+   "ers-1",
+   "ers-2",
+   "jason-1",
+   "jason-2",
+   "jason-3",
+   "saral",
+   "sentinel-3_a",
+   "sentinel-3_b",
+   "sentinel-6_a",
+   "topex-poseidon"
+  ],
+  "n_time": 139234,
+  "name": "ESACCI-SEASTATE-L3-SWH-MULTI_1D-20140101-fv01.nc",
+  "platforms": [
+   "cryosat-2",
+   "jason-2",
+   "saral"
+  ],
+  "product_version": "4.0",
+  "spatial_resolution": [
+   "6 km",
+   "5.8 km",
+   "7 km"
+  ],
+  "time_units": "seconds since 1981-01-01",
+  "variables": [
+   "bathymetry",
+   "cycle",
+   "distance_to_coast",
+   "lat",
+   "lon",
+   "relative_pass",
+   "satellite",
+   "swh",
+   "swh_adjusted",
+   "swh_denoised",
+   "swh_uncertainty",
+   "time"
+  ]
+ },
+ "footprint": {
+  "log2_dt": -4.0,
+  "log2_fp": -1.9912140814992785
+ },
+ "missing_days": [
+  "1992-07-20",
+  "1992-07-21",
+  "1992-07-22",
+  "2001-01-19",
+  "2001-01-20",
+  "2001-01-21",
+  "2001-01-22"
+ ],
+ "missing_days_n": 7,
+ "other_files": {},
+ "per_year_resume": true,
+ "qc_policy": "THE PRODUCT PUBLISHES NO PER-SAMPLE QUALITY FLAG \u2014 the daily files carry no `*_qc` variable at all (measured 2026-09-18 on ESACCI-SEASTATE-L3-SWH-MULTI_1D-20150101-fv01.nc, whose variables are time, lat, lon, swh, swh_adjusted, swh_denoised, swh_uncertainty, bathymetry, distance_to_coast, satellite, cycle, relative_pass). The L2P-to-L3 processor edits upstream, so every kept row carries qc 1 and the store says so rather than inventing a grade; `swh_uncertainty` is the per-sample number closest to one and is a CHANNEL. A row is kept when its time and position are present and at least one of `swh` / `swh_denoised` is; a value outside its channel's bounds becomes NaN for that channel alone and is counted, never clipped. The mission is the `platform` (from the file's own flag_meanings), so a consumer can hold out an altimeter the way it holds out a year.",
+ "record": [
+  "1991-08-03",
+  "2023-12-31"
+ ],
+ "record_days": 11839,
+ "sources": [
+  "https://s3.waw3-1.cloudferro.com/mdl-native-05/native/WAVE_GLO_PHY_SWH_L3_MY_014_005/cci_obs-wave_glo_phy-swh_my_l3_PT1S-i_202607/<YYYY>/<MM>/ESACCI-SEASTATE-L3-SWH-MULTI_1D-<YYYYMMDD>-fv01.nc",
+  "https://stac.marine.copernicus.eu/metadata/WAVE_GLO_PHY_SWH_L3_MY_014_005/product.stac.json (public metadata, no login)"
+ ],
+ "stac": "https://stac.marine.copernicus.eu/metadata/WAVE_GLO_PHY_SWH_L3_MY_014_005/product.stac.json",
+ "store": "swh",
+ "title": "ESA CCI Sea State v4 along-track significant wave height, all altimeter missions 1991-2023, one row per 1 Hz sample",
+ "url": "https://s3.waw3-1.cloudferro.com/mdl-native-05/native/WAVE_GLO_PHY_SWH_L3_MY_014_005/cci_obs-wave_glo_phy-swh_my_l3_PT1S-i_202607/",
+ "verified": "2026-09-18 from this sandbox, with NO credentials: the product's public STAC (one dataset item, cci_obs-wave_glo_phy-swh_my_l3_PT1S-i_202607, time extent 1991-08-03T21:22:46Z .. 2023-12-31T23:59:59Z, variables swh, swh_adjusted, swh_denoised, swh_uncertainty, bathymetry, distance_to_coast) and its `native` asset href on s3.waw3-1.cloudferro.com; the WHOLE anonymous ListObjectsV2 listing of that prefix (12 pages, 11,832 daily files, 116,351,837,853 bytes, 19910803 .. 20231231, exactly 7 calendar days absent: 1992-07-20/21/22 and 2001-01-19/20/21/22, no day with two files); and one real file downloaded and opened with netCDF4 (ESACCI-SEASTATE-L3-SWH-MULTI_1D-20150101-fv01.nc, 9,802,660 B, NETCDF4, one dimension time = 139,842, featureType trajectory, float64 columns with _FillValue 1e+20, time in 'seconds since 1981-01-01' proleptic_gregorian, satellite uint8 with flag_values 0..11 and flag_meanings 'cryosat-2 jason-1 jason-2 jason-3 saral sentinel-3_a envisat topex-poseidon ers-...', that day's platforms cryosat-2 / jason-2 / saral at 6 / 5.8 / 7 km, license attribute 'ESA CCI Data Policy - free and open access')",
+ "version": "cci_obs-wave_glo_phy-swh_my_l3_PT1S-i_202607",
+ "years": [
+  2014,
+  2015,
+  2016,
+  2017,
+  2018
+ ]
+}
