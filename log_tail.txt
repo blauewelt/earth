@@ -1,0 +1,80 @@
+    0.990712,
+    0.992587,
+    0.990175,
+    0.992799,
+    0.947029,
+    0.993255,
+    0.993055,
+    0.992393
+   ],
+   "bytes_per_frame": {
+    "mean": 2442345.6,
+    "min": 2083742,
+    "max": 2637235
+   },
+   "bytes_per_stored_tile": {
+    "mean": 5614.6,
+    "median": 305.0,
+    "p90": 20014.30000000001,
+    "max": 63036
+   },
+   "tiles_stored": 12180,
+   "tiles_empty": 0,
+   "raw_bytes_per_frame": 51840000,
+   "compression_ratio": 21.23,
+   "bytes_per_valid_pixel": 0.0478,
+   "encode_seconds_per_frame": 1.827,
+   "record_frames": 9634,
+   "index_bytes_per_bin": 34928,
+   "estimate_store_bytes": 23596857193,
+   "note_formula_bytes": 1181810867605,
+   "note_formula": "pixels x frames x valid fraction x 2C x 1.2"
+  }
+ },
+ "out_of_bounds": {},
+ "out_of_bounds_stored": 0,
+ "inputs_not_read": [],
+ "counts": {
+  "fill_pixels_snow_cover": 10180103,
+  "code_snow_cover": {
+   "107": 444619,
+   "111": 8694086,
+   "237": 256152,
+   "239": 459253879,
+   "250": 1237800,
+   "253": 23757474
+  },
+  "percent_pixels_snow_cover": 221935887,
+  "fill_pixels_cloud": 10180103,
+  "code_cloud": {
+   "107": 444619,
+   "111": 8694086,
+   "237": 256152,
+   "239": 459253879,
+   "250": 1237800,
+   "252": 68250748,
+   "253": 23757474
+  },
+  "percent_pixels_cloud": 153685139,
+  "files_read": 28,
+  "valid_pixels": 1431159794,
+  "bytes_files": 144494874,
+  "fetch_seconds": 78.4
+ },
+ "bytes_fetched": 144494874,
+ "bytes_index": 43443648,
+ "bytes_fetched_per_frame": 5160531.2,
+ "wall_seconds": 80.67,
+ "wall_seconds_index": 8.05,
+ "seconds_per_frame": 2.881,
+ "estimate_store_bytes": 23596857193,
+ "note_formula_bytes": 1181810867605,
+ "note_estimate": {
+  "bytes": 60000000000.0,
+  "what": "family1tf.tex \u00a74.3 ledger: '~60 GB (Terra; classes compress far below the float formula)' for MOD10C1 v61"
+ },
+ "runner": "GitHub Actions 1000005327",
+ "builder_git_sha": "b7cd84cee25a49abdac26803b3431a9e47de80dd",
+ "at": "2026-09-18T07:47:50+00:00"
+}
+probe -> /home/runner/work/earth/earth/ml/cache/family1_tf/probe/snow05/2015-02.json
