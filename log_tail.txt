@@ -1,0 +1,80 @@
+  ..._gf/icoads/icoads/bin.npy: 100%|█████████▉| 2.22GB / 2.22GB            [A[A
+
+
+  ...ds/icoads/bin_offsets.npy: 100%|██████████|  213kB /  213kB            [A[A[A
+
+
+
+  ...1_gf/icoads/icoads/fp.npy: 100%|██████████| 4.43GB / 4.43GB            [A[A[A[A
+
+  ..._gf/icoads/icoads/bin.npy: 100%|█████████▉| 2.22GB / 2.22GB            [A[A
+
+
+  ...ds/icoads/bin_offsets.npy: 100%|██████████|  213kB /  213kB            [A[A[A
+
+
+
+  ...1_gf/icoads/icoads/fp.npy: 100%|██████████| 4.43GB / 4.43GB            [A[A[A[A
+
+  ..._gf/icoads/icoads/bin.npy: 100%|█████████▉| 2.22GB / 2.22GB            [A[A
+
+
+  ...ds/icoads/bin_offsets.npy: 100%|██████████|  213kB /  213kB            [A[A[A
+
+
+
+  ...1_gf/icoads/icoads/fp.npy: 100%|██████████| 4.43GB / 4.43GB            [A[A[A[A
+
+  ..._gf/icoads/icoads/bin.npy: 100%|█████████▉| 2.22GB / 2.22GB            [A[A
+
+
+  ...ds/icoads/bin_offsets.npy: 100%|██████████|  213kB /  213kB            [A[A[A
+
+
+
+  ...1_gf/icoads/icoads/fp.npy: 100%|██████████| 4.43GB / 4.43GB            [A[A[A[A
+
+  ..._gf/icoads/icoads/bin.npy: 100%|█████████▉| 2.22GB / 2.22GB            [A[A
+
+
+  ...ds/icoads/bin_offsets.npy: 100%|██████████|  213kB /  213kB            [A[A[A
+
+
+
+  ...1_gf/icoads/icoads/fp.npy: 100%|██████████| 4.43GB / 4.43GB            [A[A[A[A
+
+  ..._gf/icoads/icoads/bin.npy: 100%|█████████▉| 2.22GB / 2.22GB            [A[A
+
+
+  ...ds/icoads/bin_offsets.npy: 100%|██████████|  213kB /  213kB            [A[A[A
+
+
+
+  ...1_gf/icoads/icoads/fp.npy: 100%|██████████| 4.43GB / 4.43GB            [A[A[A[A
+
+  ..._gf/icoads/icoads/bin.npy: 100%|█████████▉| 2.22GB / 2.22GB            [A[A
+
+
+  ...ds/icoads/bin_offsets.npy: 100%|██████████|  213kB /  213kB            [A[A[A
+
+
+
+  ...1_gf/icoads/icoads/fp.npy: 100%|██████████| 4.43GB / 4.43GB            [A[A[A[A
+
+  ..._gf/icoads/icoads/bin.npy: 100%|█████████▉| 2.22GB / 2.22GB            [A[A
+
+
+  ...ds/icoads/bin_offsets.npy: 100%|██████████|  213kB /  213kB            [A[A[A
+
+
+
+  ...1_gf/icoads/icoads/fp.npy: 100%|██████████| 4.43GB / 4.43GB            [A[A[A[A
+
+  ..._gf/icoads/icoads/bin.npy: 100%|█████████▉| 2.22GB / 2.22GB            [A[A
+
+
+  ...ds/icoads/bin_offsets.npy: 100%|██████████|  213kB /  213kB            [A[A[A
+
+
+
+  ...1_gf/icoads/icoads/fp.npy: 100%|██████████| 4.43GB / 4.43GB            [A[A[A[A
