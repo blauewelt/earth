@@ -45,8 +45,16 @@ back and compares its sha256.
 | `bgcargo` | 1.gf | lanes #34 (2002–2012), #35–#54 and #81 (one per year), 2022 / 2025 / 2026 fetched **from the sandbox**; assembly #84 (hosted, 1 min) | 335,231 | 73,467,590 (73.5 MB) | 2002–2026 (25 years with rows) | 2026-09-17 | BGC-Argo synthetic profiles; public; schema 2. The adapter projected ≈ 336 k rows and 80 MB — both hit |
 
 | `oceansites` | 1.gf | lanes #8, #13, #23, #29, #30, #85, #86, #87 (8 windows; #65's 1989–2006 window was cancelled at 4 h 20 m and split); assembly #88 (hosted, `--assemble streaming`, 6 min) | 66,483,202 | 5,518,209,460 (5.52 GB) | 1980–2026 (39 years with rows) | 2026-09-17 | OceanSITES moored time series, tropical arrays excluded; public; schema 2. The adapter's ceiling was ≤ 1.3 × 10⁸ rows and ≤ 11 GB, and the measurement sits under both. The index lists files from 1950, but no year before 1980 holds a kept row |
-| `ghcnd` | 1.0.tf | lanes #7, #15, #24, #56 — **all 264 years parked** (1,143,728,366 rows, 42.32 GB) | — | — | 1763–2026 | **not assembled** | Needs the rented box: 42.3 GB of parts plus ≈ 47 GB of store is past a hosted runner's ≈ 90 GB. Blocked on `/home/claude/.vast_key`, which is absent |
-| `icoads` | 1.gf | lanes #14, #21, #55, #61, #66, #68, #70, #72 — **all 365 years parked** (1,107,951,670 rows, 47.64 GB) | — | — | 1662–2026 | **not assembled** | Same: 47.6 GB of parts plus ≈ 52 GB of store. Blocked on the Vast key |
+| `ghcnd` | 1.0.tf | lanes #7, #15, #24, #56; assembly #89 (**the rented box**, `--parts-from-hub --assemble streaming`, 63 min) | 1,143,728,366 | 46,914,117,496 (46.91 GB) | 1763–2026 (264 years with rows) | 2026-09-17 | GHCN-Daily station-days; public; schema 3. The adapter projected ≈ 40 GB. Peak RSS 48.90 GB — no hosted runner could have assembled it |
+| `icoads` | 1.gf | lanes #14, #21, #55, #61, #66, #68, #70, #72; assembly #93 (the same box, 72 min; #91 and #92 could not commit through Xet) | 1,107,951,670 | 52,073,957,276 (52.07 GB) | 1662–2026 (286 years with rows) | 2026-09-18 | ICOADS marine reports (IMMA1), 1662 onward; public; schema 3. The adapter projected ≈ 1.37 × 10⁹ rows and ≈ 64 GB from the listings’ bytes — the measurement is **19 % fewer rows** |
+
+**The box.** One rented Vast instance did both: offer 48942875, instance
+51358803, a *verified* Quebec host with 129 GB of RAM, 32 CPUs, 2.2 Gbps up
+and a 250 GB disk, at $0.107/h plus $0.069/h of storage. Created
+2026-09-17 23:00Z, destroyed 2026-09-18 04:15Z: **5.26 h for $0.93**. It was
+not the cheapest qualifying offer ($0.096/h, 16 GB of RAM) and the 1.7 ¢/h
+went on memory, which the measurement justified: ghcnd's streaming assembly
+peaked at **48.90 GB RSS**.
 
 ## Notes
 
@@ -93,6 +101,28 @@ back and compares its sha256.
   files). Values are float16, so a store's largest file is 2 bytes a value.
   ghcnd (42.3 GB of parts + ≈ 47 GB of store) and icoads (47.6 + ≈ 52 GB)
   still exceed it and need the rented box.
+- **The Xet uploader could not publish a 52 GB store; classic LFS could.**
+  On that one box, ghcnd's 46.91 GB went up first time, and icoads' 52.07 GB
+  died in `huggingface_hub/_commit_api.py::_upload_xet_files` ->
+  `session.new_upload_commit` on every attempt of two runs — #91 as one
+  commit (four attempts, 63 of the 75 allowed backoff minutes) and #92 in
+  batches of three files (four attempts on batch 1/4). A 1 KB NDJSON commit
+  to the same repository from the sandbox answered 200 in 1.0 s while #92 was
+  still retrying, and ghcnd's twelve files were already on the Hub, so
+  neither the repository nor the commit endpoint was at fault.
+  `HF_HUB_DISABLE_XET=1` on the build step put the publish back on the
+  classic LFS path and #93 published and restore-verified all ten files in
+  27 minutes. The publish also now commits `PUBLISH_BATCH` (3) files at a
+  time with store.json alone and last, which is the tier-G rule.
+- **The Earthdata account is GOOD, and the first check could not see it.**
+  Re-run #90, with IPv4 forced and PO.DAAC asked for bytes behind the login:
+  LP DAAC (MOD11C1), GES DISC (MERGIR) and PO.DAAC (MUR SST) each answered
+  **HTTP 206 with 1,024 bytes after 4–5 redirects through
+  urs.earthdata.nasa.gov**, no approval page and no EULA. Run #3's two
+  `[Errno 101] Network is unreachable` failures were the runner's missing
+  IPv6 route (both hosts publish AAAA records), and its PO.DAAC "ok" was a
+  CloudFront 200 that never passed through Earthdata Login — reported as
+  `ok_without_login` now rather than as a pass.
 - **bgcargo cannot be fetched in one hosted job.** Run #4 was cancelled
   after 62 min: from GitHub's runners the Ifremer GDAC gave 2.2 GB of the
   74.7 GB in that time (≈ 0.6 MB/s, against 23 MB/s from the sandbox
