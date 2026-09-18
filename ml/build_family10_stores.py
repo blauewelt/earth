@@ -5051,6 +5051,8 @@ def stage_grid(ctx):
 
 # ========================================================== stage: publish ===
 RESTORE_HEADROOM = 1.1
+# Files per publish commit (store.json always alone, last). See stage_publish.
+PUBLISH_BATCH = 3
 
 
 def _restore_disk_preflight(ctx, dest, names):
@@ -5137,15 +5139,30 @@ def stage_publish(ctx):
     ctx.prog.stage_start(f"publish {ad.store}", len(names))
     entries = []
     scratch = os.path.join(ctx.scratch, "verify")
-    # ONE COMMIT for the nine arrays + store.json. The Hub allows 256 commits
-    # per repository per hour and `upload_file` is one commit each; a store
-    # publish that spent ten of them per store is what put the PSL mirror over
-    # the line on 2026-09-14. The restore check below is unchanged.
+    # A FEW COMMITS, NOT ONE PER FILE AND NOT ONE FOR EVERYTHING. The Hub
+    # allows 256 commits per repository per hour and `upload_file` is one
+    # commit each, so a publish that spent ten of them per store is what put
+    # the PSL mirror over the line on 2026-09-14 — hence batching. But ONE
+    # commit for the whole store does not survive a big one: icoads (52.07 GB
+    # over ten files) had every file uploaded and then timed out in
+    # `create_commit` four times in a row, 63 of the 75 allowed retry minutes,
+    # while ghcnd's 46.91 GB went through first time (family1-build #89/#91,
+    # 2026-09-17/18). `PUBLISH_BATCH` files a commit keeps both ends: a
+    # handful of commits per store, none of them carrying the whole store.
+    # STORE.JSON GOES LAST, IN ITS OWN COMMIT — the rule the tier-G path
+    # already follows: a consumer that finds store.json finds every file it
+    # names. The restore check below is unchanged.
     digests = {n: sha256(os.path.join(dest, n)) for n in names}
-    hub_commit(api, repo,
-               hub_add_ops([(f"{prefix}/{n}", os.path.join(dest, n))
-                            for n in names]),
-               f"{lay.label} ({ad.store}): {len(names)} file(s)")
+    arrays = [n for n in names if n != "store.json"]
+    batches = [arrays[i:i + PUBLISH_BATCH]
+               for i in range(0, len(arrays), PUBLISH_BATCH)] + \
+        [["store.json"]]
+    for i, chunk in enumerate(batches, 1):
+        hub_commit(api, repo,
+                   hub_add_ops([(f"{prefix}/{n}", os.path.join(dest, n))
+                                for n in chunk]),
+                   f"{lay.label} ({ad.store}): {len(chunk)} file(s), batch "
+                   f"{i}/{len(batches)}")
     for i, n in enumerate(names, 1):
         p = os.path.join(dest, n)
         src = digests[n]

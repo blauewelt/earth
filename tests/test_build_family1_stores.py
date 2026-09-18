@@ -858,3 +858,27 @@ def test_the_family1_workflow_is_safe():
 
 if __name__ == "__main__":
     sys.exit(pytest.main([__file__, "-q"]))
+
+
+def test_a_publish_commits_in_batches_with_store_json_last(tmp_path,
+                                                            monkeypatch):
+    """icoads (52.07 GB, ten files) timed out in create_commit four times as
+    ONE commit while ghcnd's 46.91 GB went through (#91 / #89). The publish
+    now spends a few commits, and store.json is alone in the last one."""
+    ctx = _built_private(str(tmp_path))
+    api = _fake_hub(monkeypatch, str(tmp_path / "hub"), None)
+    monkeypatch.setattr(ctx, "hub", lambda: (api, ctx.layout.repo_id, "tok"))
+    monkeypatch.setattr(b10, "PUBLISH_BATCH", 3)
+    b1.stage_publish(ctx)
+    commits = [c for c in api.calls if c[0] == "commit"]
+    sm = json.load(open(os.path.join(ctx.store, "store.json")))
+    n_files = len(sm["sha256"]) + 1                      # + store.json
+    # every file committed exactly once, in batches of at most three
+    batched = [c for c in commits if "batch" in c[2]]
+    assert len(batched) == -(-(n_files - 1) // 3) + 1
+    assert batched[-1][2].endswith(f"batch {len(batched)}/{len(batched)}")
+    assert "1 file(s)" in batched[-1][2]
+    hub = os.path.join(str(tmp_path / "hub"), ctx.layout.repo_id,
+                       ctx.layout.prefix(ctx.adapter.store))
+    for n in list(sm["sha256"]) + ["store.json"]:
+        assert os.path.exists(os.path.join(hub, n)), n
