@@ -1,0 +1,80 @@
+Upload 0 LFS files: 0it [00:00, ?it/s]Upload 0 LFS files: 0it [00:00, ?it/s]
+Upload 0 LFS files: 0it [00:00, ?it/s]Upload 0 LFS files: 0it [00:00, ?it/s]
+Upload 0 LFS files: 0it [00:00, ?it/s]Upload 0 LFS files: 0it [00:00, ?it/s]
+Upload 0 LFS files: 0it [00:00, ?it/s]Upload 0 LFS files: 0it [00:00, ?it/s]
+Upload 0 LFS files: 0it [00:00, ?it/s]Upload 0 LFS files: 0it [00:00, ?it/s]
+Upload 0 LFS files: 0it [00:00, ?it/s]Upload 0 LFS files: 0it [00:00, ?it/s]
+Upload 0 LFS files: 0it [00:00, ?it/s]Upload 0 LFS files: 0it [00:00, ?it/s]
+Upload 0 LFS files: 0it [00:00, ?it/s]Upload 0 LFS files: 0it [00:00, ?it/s]
+shard_index.npy:   0%|          | 0.00/1.21M [00:00<?, ?B/s]shard_index.npy: 100%|██████████| 1.21M/1.21M [00:00<00:00, 10.7MB/s]
+  [publish chirps05] chirps05  2/6675  103.7s
+  [publish chirps05] chirps05/1981  148/6675  108.5s
+  [publish chirps05] chirps05/1982  294/6675  113.1s
+  [publish chirps05] chirps05/1983  440/6675  118.4s
+  [publish chirps05] chirps05/1984  588/6675  123.6s
+  [publish chirps05] chirps05/1985  734/6675  128.2s
+  [publish chirps05] chirps05/1986  880/6675  133.2s
+  [publish chirps05] chirps05/1987  1026/6675  138.4s
+  [publish chirps05] chirps05/1988  1172/6675  142.9s
+  [publish chirps05] chirps05/1989  1318/6675  148.2s
+  [publish chirps05] chirps05/1990  1464/6675  154.1s
+  [publish chirps05] chirps05/1991  1610/6675  159.7s
+  [publish chirps05] chirps05/1992  1756/6675  165.5s
+  [publish chirps05] chirps05/1993  1902/6675  171.2s
+  [publish chirps05] chirps05/1994  2048/6675  176.5s
+  [publish chirps05] chirps05/1995  2194/6675  182.2s
+  [publish chirps05] chirps05/1996  2340/6675  188.2s
+  [publish chirps05] chirps05/1997  2486/6675  193.7s
+  [publish chirps05] chirps05/1998  2632/6675  199.2s
+  [publish chirps05] chirps05/1999  2778/6675  204.6s
+  [publish chirps05] chirps05/2000  2924/6675  209.8s
+  [publish chirps05] chirps05/2001  3070/6675  216.0s
+  [publish chirps05] chirps05/2002  3216/6675  221.4s
+  [publish chirps05] chirps05/2003  3362/6675  226.9s
+  [publish chirps05] chirps05/2004  3510/6675  232.9s
+  [publish chirps05] chirps05/2005  3656/6675  238.7s
+  [publish chirps05] chirps05/2006  3802/6675  245.3s
+  [publish chirps05] chirps05/2007  3948/6675  250.7s
+  [publish chirps05] chirps05/2008  4094/6675  256.3s
+  [publish chirps05] chirps05/2009  4240/6675  262.4s
+  [publish chirps05] chirps05/2010  4386/6675  267.8s
+  [publish chirps05] chirps05/2011  4532/6675  274.0s
+  [publish chirps05] chirps05/2012  4678/6675  279.7s
+  [publish chirps05] chirps05/2013  4824/6675  285.2s
+  [publish chirps05] chirps05/2014  4970/6675  291.8s
+  [publish chirps05] chirps05/2015  5116/6675  297.9s
+  [publish chirps05] chirps05/2016  5262/6675  304.3s
+  [publish chirps05] chirps05/2017  5408/6675  310.6s
+  [publish chirps05] chirps05/2018  5554/6675  317.3s
+  [publish chirps05] chirps05/2019  5700/6675  323.7s
+  [publish chirps05] chirps05/2020  5846/6675  328.5s
+  [publish chirps05] chirps05/2021  5992/6675  334.2s
+HTTP Error 429 thrown while requesting GET https://huggingface.co/datasets/chfrank/earth-tensors/resolve/main/tensors/family1_tf/chirps05/chirps05/2022/bin_2939.zst
+Rate limited. Waiting 28.0s before retry [Retry 1/5].
+HTTP Error 429 thrown while requesting GET https://huggingface.co/datasets/chfrank/earth-tensors/resolve/main/tensors/family1_tf/chirps05/chirps05/2022/bin_2939.idx.npy
+Rate limited. Waiting 28.0s before retry [Retry 1/5].
+HTTP Error 429 thrown while requesting HEAD https://huggingface.co/datasets/chfrank/earth-tensors/resolve/main/tensors/family1_tf/chirps05/chirps05/2022/bin_2941.idx.npy
+Rate limited. Waiting 28.0s before retry [Retry 1/5].
+HTTP Error 429 thrown while requesting GET https://huggingface.co/datasets/chfrank/earth-tensors/resolve/main/tensors/family1_tf/chirps05/chirps05/2022/bin_2940.zst
+Rate limited. Waiting 28.0s before retry [Retry 1/5].
+HTTP Error 429 thrown while requesting HEAD https://huggingface.co/datasets/chfrank/earth-tensors/resolve/main/tensors/family1_tf/chirps05/chirps05/2022/bin_2942.idx.npy
+Rate limited. Waiting 27.0s before retry [Retry 1/5].
+HTTP Error 429 thrown while requesting HEAD https://huggingface.co/datasets/chfrank/earth-tensors/resolve/main/tensors/family1_tf/chirps05/chirps05/2022/bin_2942.zst
+Rate limited. Waiting 27.0s before retry [Retry 1/5].
+HTTP Error 429 thrown while requesting HEAD https://huggingface.co/datasets/chfrank/earth-tensors/resolve/main/tensors/family1_tf/chirps05/chirps05/2022/bin_2941.zst
+Rate limited. Waiting 27.0s before retry [Retry 1/5].
+HTTP Error 429 thrown while requesting HEAD https://huggingface.co/datasets/chfrank/earth-tensors/resolve/main/tensors/family1_tf/chirps05/chirps05/2022/bin_2943.idx.npy
+Rate limited. Waiting 27.0s before retry [Retry 1/5].
+  [publish chirps05] chirps05/2022  6138/6675  367.8s
+  [publish chirps05] chirps05/2023  6284/6675  373.2s
+  [publish chirps05] chirps05/2024  6432/6675  378.2s
+  [publish chirps05] chirps05/2025  6578/6675  383.0s
+  [publish chirps05] chirps05/2026  6674/6675  386.0s
+  [publish chirps05] store.json  6675/6675  386.2s
+  publish: 6675 file(s) verified by restore, 50 tile(s) decompressed, HTTP range {'checked': 5} -> https://huggingface.co/datasets/chfrank/earth-tensors/tree/main/tensors/family1_tf/chirps05
+=== stage publish done in 733.4s ===
+
+=== stage check (chirps05) ===
+  hub: chfrank/earth-tensors with the token from $HF_TOKEN
+  check: chirps05 — 6674 file(s) verified, chirps05: 628008 tile(s) decompressed, Hub chfrank/earth-tensors agrees
+=== stage check done in 344.6s ===
