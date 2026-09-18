@@ -86,8 +86,19 @@ in the wrong hour. The row's time is the START of the half hour.
 `qc`, ONE uint8 PER ROW:
   bits 0-2   NEE_VUT_REF_QC: 0 measured, 1 good-quality gap-fill, 2 medium,
              3 poor, 7 not reported by this file
-  bits 3-4   the hub: 1 AmeriFlux, 2 ICOS, 3 TERN
-  bits 5-7   LE_F_MDS_QC, on the same scale as the NEE one
+  bits 3-5   LE_F_MDS_QC, on the same scale as the NEE one
+  bit  6     the site averages HOURLY rather than half-hourly
+
+THE CADENCE IS PER SITE AND IT IS IN THE ROW. Most towers publish
+`_FLUXMET_HH_` (half-hourly); some publish `_FLUXMET_HR_` (hourly) and no HH
+file at all — TERN's AU-Otw is one, measured on a runner. Dropping those would
+throw away real towers over a naming convention, so both are read and the
+cadence is recorded twice: in qc bit 6, so a consumer of the arrays alone can
+see it, and as `resolution` in platforms.json. The store's `log2_dt` is the
+half-hourly value, -7.907; an hourly row's support is log2((1/24)/5) = -6.907,
+which is the same arrangement `fire` uses for its two footprints. The HUB is
+NOT in qc: it is a property of the SITE, and platforms.json is where a site's
+properties belong.
 
 `platform` is `platform_hash(site_id)` and `platforms.json` carries each
 site's id, latitude, longitude, elevation, IGBP vegetation class, hub, the
@@ -146,7 +157,14 @@ COLUMNS = (("nee", "NEE_VUT_REF"), ("gpp", "GPP_NT_VUT_REF"),
            ("h", "H_F_MDS"), ("rn", "NETRAD"), ("ta", "TA_F"),
            ("vpd", "VPD_F"), ("swc", "SWC_F_MDS_1"), ("p", "P_F"))
 QC_COLUMNS = (("nee", "NEE_VUT_REF_QC"), ("le", "LE_F_MDS_QC"))
-HH_NAME = re.compile(r"_FLUXNET_FLUXMET_HH_.*\.csv$", re.I)
+# SOME TOWERS AVERAGE HOURLY, NOT HALF-HOURLY, and FLUXNET names their file
+# `_FLUXMET_HR_` instead of `_FLUXMET_HH_`. Measured on a runner: TERN's
+# AU-Otw publishes HR, DD, WW, MM and YY and no HH at all. A site is one or
+# the other, never both; dropping the hourly ones would throw away real towers
+# over a naming convention, so both are read and the CADENCE is recorded --
+# per row in qc bit 6, and per site in platforms.json.
+HH_NAME = re.compile(r"_FLUXNET_FLUXMET_(HH|HR)_.*\.csv$", re.I)
+HR_NAME = re.compile(r"_FLUXNET_FLUXMET_HR_.*\.csv$", re.I)
 BIF_NAME = re.compile(r"_FLUXNET_BIF_(?!VARINFO).*\.csv$", re.I)
 IGBP_URI = re.compile(r"igbp_([A-Za-z]+)$")
 
@@ -434,15 +452,22 @@ def read_zip(raw, site_id, hub, counts):
     hh = [n for n in names if HH_NAME.search(n)]
     bif = [n for n in names if BIF_NAME.search(n)]
     if len(hh) != 1:
-        raise FormatError(f"{site_id}: {len(hh)} half-hourly FLUXMET file(s) "
-                          f"in the zip ({names[:8]}), expected exactly one")
+        raise FormatError(f"{site_id}: {len(hh)} half-hourly or hourly "
+                          f"FLUXMET file(s) in the zip ({names[:8]}), "
+                          f"expected exactly one")
     if not bif:
         raise FormatError(f"{site_id}: no BADM (BIF) file in the zip "
                           f"({names[:8]}) — the UTC offset lives there and is "
                           f"never guessed from the longitude")
     off, meta = read_bif(z.read(bif[0]), site_id)
-    cols, counts = parse_hh(z.read(hh[0]), site_id, hub, off, counts)
+    hourly = bool(HR_NAME.search(hh[0]))
+    cols, counts = parse_hh(z.read(hh[0]), site_id, hub, off, counts,
+                            hourly=hourly)
     counts["site_zip_members"] = len(names)
+    counts["sites_hourly" if hourly else "sites_half_hourly"] = \
+        counts.get("sites_hourly" if hourly else "sites_half_hourly", 0) + 1
+    meta = dict(meta)
+    meta["_resolution"] = "HR" if hourly else "HH"
     return cols, off, meta, counts
 
 
@@ -468,7 +493,7 @@ def read_bif(raw, site_id):
     return off, meta
 
 
-def parse_hh(raw, site_id, hub, utc_offset, counts):
+def parse_hh(raw, site_id, hub, utc_offset, counts, hourly=False):
     """The FULLSET half-hourly CSV -> columns, BY COLUMN NAME."""
     text = raw.decode("utf-8", "replace")
     lines = text.splitlines()
@@ -498,7 +523,7 @@ def parse_hh(raw, site_id, hub, utc_offset, counts):
     vals = np.full((n, len(COLUMNS)), np.nan, np.float64)
     qc = np.zeros(n, np.uint8)
     off_s = int(round(utc_offset * 3600))
-    hub_bits = (HUB_CODE[hub] & 0b11) << 3
+    cadence_bit = (1 << 6) if hourly else 0
     ncol = len(head)
     k = bad = 0
     for line in lines[1:]:
@@ -529,8 +554,8 @@ def parse_hh(raw, site_id, hub, utc_offset, counts):
                         continue
                     if x != FILL:
                         vals[k, j] = x
-        q = hub_bits
-        for shift, i in zip((0, 5), qidx):
+        q = cadence_bit
+        for shift, i in zip((0, 3), qidx):
             cls = QC_NOT_REPORTED
             if i is not None:
                 w = f[i].strip()
@@ -593,10 +618,15 @@ class FluxAdapter(f10b.SourceAdapter):
     credentials = ()          # MEASURED: all three hubs answer anonymously
     platform_meta = True
     qc_policy = (
-        "qc is one uint8 per half hour: bits 0-2 NEE_VUT_REF_QC (0 measured, "
-        "1 good-quality gap-fill, 2 medium, 3 poor, 7 not reported by this "
-        "file), bits 3-4 the hub (1 AmeriFlux, 2 ICOS, 3 TERN), bits 5-7 "
-        "LE_F_MDS_QC on the same scale. The product's own -9999 becomes NaN; "
+        "qc is one uint8 per row: bits 0-2 NEE_VUT_REF_QC (0 measured, 1 "
+        "good-quality gap-fill, 2 medium, 3 poor, 7 not reported by this "
+        "file), bits 3-5 LE_F_MDS_QC on the same scale, and bit 6 set when "
+        "the site averages HOURLY rather than half-hourly (some towers "
+        "publish _FLUXMET_HR_ and no HH file; the store's log2_dt is the "
+        "half-hourly value and platforms.json carries each site's own "
+        "`resolution`). The hub is NOT in qc -- it is a property of the site "
+        "and platforms.json is where a site's properties belong. The "
+        "product's own -9999 becomes NaN; "
         "a column a site's file does not carry (NETRAD and SWC_F_MDS_1 are "
         "the usual ones, because not every tower has a net radiometer or a "
         "soil probe) leaves that channel NaN for the whole site and is "
@@ -836,19 +866,36 @@ class FluxAdapter(f10b.SourceAdapter):
     def _stream(self, ctx, t_lo, t_hi):
         sites, _ = self.sites(ctx)
         counts = {"sites_wanted": len(sites)}
+        y_lo = (dt.datetime(1982, 1, 1)
+                + dt.timedelta(seconds=int(t_lo))).year
+        y_hi = (dt.datetime(1982, 1, 1)
+                + dt.timedelta(seconds=int(t_hi))).year
         t0 = time.time()
         for i, sid in enumerate(sorted(sites), 1):
             rec = sites[sid]
+            # A SITE THE HUB SAYS HAS NO YEAR IN THIS WINDOW IS NOT
+            # DOWNLOADED. Each site is one archive covering its whole record,
+            # so a month probe would otherwise pull every one of the 812 —
+            # about 36 GB — to keep thirty days of a few hundred. The years
+            # come from the hub's own listing; a site that publishes none is
+            # read rather than skipped.
+            yrs = rec.get("years") or []
+            if yrs and (max(yrs) < y_lo or min(yrs) > y_hi):
+                counts["sites_outside_window"] = \
+                    counts.get("sites_outside_window", 0) + 1
+                continue
             raw, why = self.archive(ctx, rec)
             if raw is None:
                 ctx.note_absent(sid, f"{rec.get('url')}: {why}")
                 continue
             try:
-                cols, off, _meta, counts = read_zip(raw, sid, rec["hub"],
-                                                    counts)
+                cols, off, meta, counts = read_zip(raw, sid, rec["hub"],
+                                                   counts)
             except FormatError as e:
                 ctx.note_absent(sid, str(e))
                 continue
+            rec["resolution"] = meta.get("_resolution")
+            rec["utc_offset"] = off
             del raw
             t = cols["t"]
             keep = (t >= t_lo) & (t <= t_hi)
@@ -912,6 +959,8 @@ class FluxAdapter(f10b.SourceAdapter):
                 "igbp": s.get("igbp"),
                 "name": s.get("name"), "country": s.get("country"),
                 "hub": s["hub"], "hub_code": HUB_CODE[s["hub"]],
+                "resolution": s.get("resolution"),
+                "utc_offset": s.get("utc_offset"),
                 "years_published": s.get("years") or [],
                 "doi": s.get("doi"), "citation": s.get("citation"),
                 "product_bytes": s.get("bytes") or None}

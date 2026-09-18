@@ -160,12 +160,47 @@ def test_the_missing_value_becomes_nan_and_the_qc_is_packed():
     nee = cols["values"][:, 0]
     assert np.isnan(nee).any()                  # the -9999 row
     q = cols["qc"]
-    assert (((q >> 3) & 0b11) == fx.HUB_CODE["amf"]).all()
     assert set(int(x) for x in np.unique(q & 0b111)) <= {0, 1, 2, 3}
-    assert set(int(x) for x in np.unique(q >> 5)) <= {0, 1, 2, 3}
-    # and an ICOS row carries the ICOS hub code
-    cols, _ = fx.parse_hh(raw, "IT-Smk", "icos", 1.0, {})
-    assert (((cols["qc"] >> 3) & 0b11) == fx.HUB_CODE["icos"]).all()
+    assert set(int(x) for x in np.unique((q >> 3) & 0b111)) <= {0, 1, 2, 3}
+    assert ((q >> 6) & 1 == 0).all()            # a half-hourly site
+    # an HOURLY site sets bit 6, and nothing else moves
+    cols2, _ = fx.parse_hh(raw, "AU-Otw", "tern", 10.0, {}, hourly=True)
+    assert ((cols2["qc"] >> 6) & 1 == 1).all()
+    assert ((cols2["qc"] & 0b111) == (q & 0b111)).all()
+    # the HUB is NOT in qc: it is a property of the site, not of the row
+    cols3, _ = fx.parse_hh(raw, "IT-Smk", "icos", 1.0, {})
+    assert (cols3["qc"] == q).all()
+
+
+def test_an_hourly_site_is_read_and_marked_not_dropped():
+    """TERN's AU-Otw publishes `_FLUXMET_HR_` and no HH file at all."""
+    import io as _io
+    buf = _io.BytesIO()
+    with zipfile.ZipFile(buf, "w") as z:
+        z.writestr("TERN_AU-Otw_FLUXNET_FLUXMET_HR_2007-2010_v1.3_r1.csv",
+                   fx._hh_csv("AU-Otw", 10, None))
+        z.writestr("TERN_AU-Otw_FLUXNET_FLUXMET_DD_2007-2010_v1.3_r1.csv",
+                   "TIMESTAMP,TA_F\n20180601,12.0\n")
+        z.writestr("TERN_AU-Otw_FLUXNET_BIF_2007-2010_v1.3_r1.csv",
+                   fx._bif_csv("AU-Otw", 10, -38.5, 142.8, 90.0, "GRA", None))
+    cols, off, meta, counts = fx.read_zip(buf.getvalue(), "AU-Otw", "tern",
+                                          {})
+    assert off == 10.0
+    assert meta["_resolution"] == "HR"
+    assert counts["sites_hourly"] == 1
+    assert ((cols["qc"] >> 6) & 1 == 1).all()
+    # two FLUXMET averaging files in one zip is still a refusal
+    buf2 = _io.BytesIO()
+    with zipfile.ZipFile(buf2, "w") as z:
+        z.writestr("X_A-B_FLUXNET_FLUXMET_HR_2018-2018_v1.3_r1.csv",
+                   fx._hh_csv("A-B", 0, None))
+        z.writestr("X_A-B_FLUXNET_FLUXMET_HH_2018-2018_v1.3_r1.csv",
+                   fx._hh_csv("A-B", 0, None))
+        z.writestr("X_A-B_FLUXNET_BIF_2018-2018_v1.3_r1.csv",
+                   fx._bif_csv("A-B", 0, 0, 0, 0, "GRA", None))
+    with pytest.raises(fx.FormatError) as e:
+        fx.read_zip(buf2.getvalue(), "A-B", "amf", {})
+    assert "expected exactly one" in str(e.value)
 
 
 def test_a_zip_that_is_not_a_zip_and_a_zip_with_no_badm_are_refusals():
@@ -226,6 +261,8 @@ def test_platforms_json_carries_the_site_metadata(smoke):
     us = by_id["US-Smk"]
     assert us["igbp"] == "DBF" and us["hub"] == "amf"
     assert us["elev_m"] == 340.0 and us["hub_code"] == 1
+    # the cadence and the offset the archive itself declared
+    assert us["resolution"] == "HH" and us["utc_offset"] == -5.0
     assert by_id["AU-Smk"]["hub"] == "tern"
     assert by_id["IT-Smk"]["hub"] == "icos"
 
