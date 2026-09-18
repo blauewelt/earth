@@ -1,0 +1,10 @@
+  [index flux] start (1 items)  0/1  0.0s
+  [index flux] plan.json  1/1  22.7s
+  index: flux — 1 year(s), C=10 (nee, gpp, reco, le, h, rn, ta, vpd …), bins 2660..2665
+  [index flux] flux AT-Zoe  84.6s
+  [index flux] flux AU-DaP  208.1s
+  [index flux] flux AU-Lon  350.3s
+  ::warning::flux: AU-Otw — AU-Otw: 0 half-hourly FLUXMET file(s) in the zip (['TERN_AU-Otw_FLUXNET_FLUXMET_HR_2007-2010_v1.3_r1.csv', 'TERN_AU-Otw_FLUXNET_FLUXMET_DD_2007-2010_v1.3_r1.csv', 'TERN_AU-Otw_FLUXNET_FLUXMET_WW_2007-2010_v1.3_r1.csv', 'TERN_AU-Otw_FLUXNET_FLUXMET_MM_2007-2010_v1.3_r1.csv', 'TERN_AU-Otw_FLUXNET_FLUXMET_YY_2007-2010_v1.3_r1.csv', 'TERN_AU-Otw_FLUXNET_ERA5_HR_1981-2024_v1.3_r1.csv', 'TERN_AU-Otw_FLUXNET_ERA5_DD_1981-2024_v1.3_r1.csv', 'TERN_AU-Otw_FLUXNET_ERA5_WW_1981-2024_v1.3_r1.csv']), expected exactly one
+  [index flux] flux AU-Sil  449.4s
+  [index flux] flux AU-Wrr  561.3s
+  [index flux] flux BJ-Bfg  721.5s
