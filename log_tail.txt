@@ -1,0 +1,80 @@
+    0.104143,
+    0.113098,
+    0.093499,
+    0.104609,
+    0.102126,
+    0.089194,
+    0.095241,
+    0.091165,
+    0.101623,
+    0.106567,
+    0.092119,
+    0.110061,
+    0.108688,
+    0.096055,
+    0.112571,
+    0.099603,
+    0.103235,
+    0.104493,
+    0.098574,
+    0.107437,
+    0.110302,
+    0.099657,
+    0.106982,
+    0.098232,
+    0.097277,
+    0.105689
+   ],
+   "bytes_per_frame": {
+    "mean": 17181216.8,
+    "min": 15128871,
+    "max": 19093091
+   },
+   "bytes_per_stored_tile": {
+    "mean": 45761.5,
+    "median": 33112.0,
+    "p90": 110944.80000000005,
+    "max": 236828
+   },
+   "tiles_stored": 11639,
+   "tiles_empty": 6279,
+   "raw_bytes_per_frame": 223948800,
+   "compression_ratio": 13.03,
+   "bytes_per_valid_pixel": 1.5145,
+   "encode_seconds_per_frame": 3.143,
+   "record_frames": 9224,
+   "index_bytes_per_bin": 46368,
+   "estimate_store_bytes": 158565083806,
+   "note_formula_bytes": 251132323595,
+   "note_formula": "pixels x frames x valid fraction x 2C x 1.2"
+  }
+ },
+ "out_of_bounds": {},
+ "out_of_bounds_stored": 0,
+ "inputs_not_read": [],
+ "counts": {
+  "files_read": 62,
+  "bytes_files": 4989343316,
+  "valid_pixels": 117222831,
+  "product_version": {
+   "6.0": 31
+  },
+  "fetch_seconds": 999.96
+ },
+ "bytes_fetched": 4989343316,
+ "bytes_index": 167270293,
+ "bytes_fetched_per_frame": 160946558.6,
+ "wall_seconds": 1003.91,
+ "wall_seconds_index": 161.14,
+ "seconds_per_frame": 32.384,
+ "estimate_store_bytes": 158565083806,
+ "note_formula_bytes": 251132323595,
+ "note_estimate": {
+  "bytes": 350000000000.0,
+  "what": "family1gf.tex storage table: '0.3-0.4 TB (C = 3); ~1.1 TB with Rrs' for 37.3 M px x 10,500 d at v ~ 0.10-0.15"
+ },
+ "runner": "GitHub Actions 1000005275",
+ "builder_git_sha": "895de4e7174b230e0d5bd8be8a0959246131343b",
+ "at": "2026-09-18T05:58:51+00:00"
+}
+probe -> /home/runner/work/earth/earth/ml/cache/family1_gf/probe/oc4k/2015-01.json
