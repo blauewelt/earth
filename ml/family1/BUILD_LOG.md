@@ -339,6 +339,55 @@ note cannot make from a product page.
   so **≈ 1.5e9 rows** over the record, against the probe's 1.665e9
   extrapolation and the note's ~2e9.
 
+### `swot`: the storage decision, with measured numbers
+
+The probe (#168, 2024-01, twelve passes of cycle 010,
+`ml/family1/probes/swot_2024-01.json`) read 409,912,719 bytes in 9.86 s
+(41.6 MB/s) and STOPPED, as the brief asked. Every number below is measured
+except the orbit geometry, which is the note's.
+
+| what | measured |
+|---|---|
+| pixels a pass | **680,754** — every one of the twelve passes is exactly 9,866 x 69, so the swath geometry is fixed |
+| `ssha_karin` present | 50.21 % of pixels (the nadir gap and land are the rest) |
+| VALID (present, and not graded `bad`) | **51.52 %**, i.e. **350,751 pixels a pass** |
+| `ssh_karin_qual` grades seen | good 4,209,008 · bad 3,960,040 — the product's top-byte summary is effectively binary here; no `suspect` or `degraded` pixel appeared in twelve passes |
+| bytes a pass | 32.39 MB (CMR's declared size, confirmed) |
+| variables a granule | 103; `time_tai` is present beside `time`, and `time`'s units are "seconds since 2000-01-01 00:00:00.0" |
+| cycle 010 in full | **581 granules**, passes 1..584 with three absent, 2024-01-25T00:19 .. 2024-02-14T21:04, 18,807.9 MB |
+
+**THE TWO OPTIONS, per year (584 passes a 20.86-day cycle = 10,225.6 passes):**
+
+| | tier P (rows) | tier G (one sharded group a pass) |
+|---|---|---|
+| rows / valid pixels a year | 3,586,635,748 | the same pixels |
+| bytes a valid pixel | 33 (27 + 2C) | ≈ 7.2 (2C x 1.2) |
+| **bytes a year** | **118.4 GB** | **25.8 GB** |
+| files a year | the store's nine arrays | ≈ 20,452 (a shard + an index a pass) plus 584 `tile_grid.json` + `shard_index.npy` |
+| reads a cone | rows by (bin, position), as `slatrack` | 39 tile ranges a pass |
+
+**Tier G is 4.58x cheaper in bytes and much worse in FILES**, and the probe
+turned up a third consideration the note does not mention: a pass is **69
+pixels wide**, so on the layout's 256 x 256 tiles a frame is 39 x 1 tiles and
+**73 % of every tile is pad**. zstd compresses the pad to almost nothing, so
+the byte column above is not wrong — but a reader still pays 39 range reads to
+cross one swath, and the tile shape is simply a poor fit. If the G form is
+chosen, the tile should be re-shaped (64 or 128 columns) rather than left at
+256, which is a `family1/sharded.py` change and not an adapter setting.
+
+Two more things the main session should weigh, both measured:
+- **The note's arithmetic is about 40 % high.** It projects ~16e9 rows and
+  ~0.6 TB for 55 cycles; 3.59e9 rows a year over the ~3.1 years of science
+  orbit those 55 cycles are is **1.13e10 rows and ~372 GB**.
+- **The channel bounds this adapter declared are too tight, and the probe
+  said so instead of clipping**: 47,390 `sig0_karin` values (1.1 %) fell
+  outside [-10, 40] dB and 33,675 `ssha_karin` values (0.8 %) outside
+  +/- 3 m. Those are NaN in the probe's own frame and COUNTED
+  (`out_of_bounds`), and nothing reached the writer out of bounds
+  (`out_of_bounds_stored` 0). Whichever tier is chosen, the bounds want
+  widening from a distribution rather than from a guess — which is exactly
+  what the probe is for.
+
 **`swh`'s ASSEMBLY IS PARKED FOR THE BOX.** 48.73 GB of parts plus a store of
 about 54 GB (the ghcnd and icoads precedent is store ≈ parts × 1.1) is ~103 GB
 on one disk, past the 86.4 GB a hosted runner leaves free, so it goes the way
