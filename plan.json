@@ -1,0 +1,278 @@
+{
+ "bins": [
+  1242,
+  1314
+ ],
+ "builder_git_sha": "895de4e7174b230e0d5bd8be8a0959246131343b",
+ "built_at": "2026-09-18T06:06:13+00:00",
+ "channels": [
+  {
+   "max": 2.5,
+   "min": -4.0,
+   "name": "log_chl",
+   "unit": "log10(mg m-3) \u2014 the base-10 LOGARITHM of chlorophyll-a, not the concentration"
+  },
+  {
+   "max": 20.0,
+   "min": 0.0,
+   "name": "kd_490",
+   "unit": "m-1"
+  },
+  {
+   "max": 2048.0,
+   "min": 0.0,
+   "name": "total_nobs",
+   "unit": "count (a float in the source)"
+  }
+ ],
+ "dataset": "ESA OC-CCI v6.0 merged L3S daily 4 km geographic (v6.0-release)",
+ "date_range": [
+  "1999-01-02",
+  "2000-01-01"
+ ],
+ "days_absent_in_record": [
+  "1997-09-05",
+  "1997-09-07",
+  "1997-09-08",
+  "1997-09-11",
+  "1997-09-12",
+  "1997-09-13",
+  "1997-09-14",
+  "1997-09-17",
+  "1997-10-13",
+  "1997-10-14",
+  "1997-10-15",
+  "1997-10-16",
+  "1997-10-17",
+  "1997-10-18",
+  "1997-12-15",
+  "1998-07-10",
+  "1998-11-17",
+  "1998-11-18",
+  "1998-11-19",
+  "1998-11-20",
+  "1998-12-17",
+  "1999-01-25",
+  "1999-11-17",
+  "1999-11-18",
+  "2000-11-17",
+  "2001-11-18"
+ ],
+ "days_in_both_products": 9224,
+ "first_file": {
+  "bytes_files": 83400896,
+  "day": "1999-01-01",
+  "files_read": 2,
+  "names": {
+   "chlor_a": "ESACCI-OC-L3S-CHLOR_A-MERGED-1D_DAILY_4km_GEO_PML_OCx-19990101-fv6.0.nc",
+   "kd": "ESACCI-OC-L3S-K_490-MERGED-1D_DAILY_4km_GEO_PML_KD490_Lee-19990101-fv6.0.nc"
+  },
+  "product_version": {
+   "6.0": 1
+  },
+  "range": {
+   "kd_490": [
+    0.012535,
+    9.687661
+   ],
+   "log_chl": [
+    -2.895687,
+    1.982401
+   ],
+   "total_nobs": [
+    0.111111,
+    27.555555
+   ]
+  },
+  "valid_fraction": {
+   "kd_490": 0.053273,
+   "log_chl": 0.053269,
+   "total_nobs": 0.053273
+  },
+  "valid_pixels": 1988243
+ },
+ "footprint": {
+  "log2_dt": -2.321928094887362,
+  "log2_fp": -2.584969110280591
+ },
+ "grid": {
+  "H": 4320,
+  "W": 8640,
+  "coordinates": "lon = x0 + (col + 0.5) * dx, lat = y0 + (row + 0.5) * dy with dy NEGATIVE; x0/y0 are the grid's WEST and NORTH edges, and the source's `lat`/`lon` are the pixel CENTRES those edges imply",
+  "crs": "EPSG:4326",
+  "dx": 0.041666666666666664,
+  "dy": -0.041666666666666664,
+  "extent": [
+   -180.0,
+   -90.0,
+   180.0,
+   90.0
+  ],
+  "extent_note": "[west, south, east, north] in degrees; ocean only",
+  "no_tile_corners": "a plain geographic grid: the affine rule above IS the lat/lon of every pixel and every tile corner, so no corner table is stored",
+  "pixel_deg": 0.041666666666666664,
+  "pixel_km_equator": 4.6383,
+  "proj4": "+proj=longlat +datum=WGS84 +no_defs",
+  "projection": {
+   "grid_mapping_name": "latitude_longitude",
+   "inverse_flattening": 298.257223563,
+   "semi_major_axis": 6378137.0
+  },
+  "row_order": "row 0 is the NORTHERNMOST row (the source netCDF's DESCENDING `lat` axis, 89.97917 .. -89.97917, checked on the real 2015-01-15 files); col 0 is the westernmost, lon -179.97917",
+  "source_variables": "chlor_a (float32 mg m-3, stored as log10), kd_490 (float32 m-1) and total_nobs (float32), with the netCDF default float fill over land, cloud, night and ice",
+  "x0": -180.0,
+  "y0": 90.0
+ },
+ "ledger_says": "family1gf.tex: '1997-09-04 -> 2026-06-30, quarterly updates'. MEASURED HERE: the daily record of v6.0-release ends 2022-12-31",
+ "per_year_resume": true,
+ "products": {
+  "chlor_a": {
+   "files": 9224,
+   "files_per_year": {
+    "1997": 104,
+    "1998": 359,
+    "1999": 362,
+    "2000": 365,
+    "2001": 364,
+    "2002": 365,
+    "2003": 365,
+    "2004": 366,
+    "2005": 365,
+    "2006": 365,
+    "2007": 365,
+    "2008": 366,
+    "2009": 365,
+    "2010": 365,
+    "2011": 365,
+    "2012": 366,
+    "2013": 365,
+    "2014": 365,
+    "2015": 365,
+    "2016": 366,
+    "2017": 365,
+    "2018": 365,
+    "2019": 365,
+    "2020": 366,
+    "2021": 365,
+    "2022": 365
+   },
+   "listing": "https://dap.ceda.ac.uk/neodc/esacci/ocean_colour/data/v6.0-release/geographic/netcdf/chlor_a/daily/v6.0/",
+   "other_files": {},
+   "record": [
+    "1997-09-04",
+    "2022-12-31"
+   ],
+   "years": [
+    1997,
+    1998,
+    1999,
+    2000,
+    2001,
+    2002,
+    2003,
+    2004,
+    2005,
+    2006,
+    2007,
+    2008,
+    2009,
+    2010,
+    2011,
+    2012,
+    2013,
+    2014,
+    2015,
+    2016,
+    2017,
+    2018,
+    2019,
+    2020,
+    2021,
+    2022
+   ]
+  },
+  "kd": {
+   "files": 9224,
+   "files_per_year": {
+    "1997": 104,
+    "1998": 359,
+    "1999": 362,
+    "2000": 365,
+    "2001": 364,
+    "2002": 365,
+    "2003": 365,
+    "2004": 366,
+    "2005": 365,
+    "2006": 365,
+    "2007": 365,
+    "2008": 366,
+    "2009": 365,
+    "2010": 365,
+    "2011": 365,
+    "2012": 366,
+    "2013": 365,
+    "2014": 365,
+    "2015": 365,
+    "2016": 366,
+    "2017": 365,
+    "2018": 365,
+    "2019": 365,
+    "2020": 366,
+    "2021": 365,
+    "2022": 365
+   },
+   "listing": "https://dap.ceda.ac.uk/neodc/esacci/ocean_colour/data/v6.0-release/geographic/netcdf/kd/daily/v6.0/",
+   "other_files": {},
+   "record": [
+    "1997-09-04",
+    "2022-12-31"
+   ],
+   "years": [
+    1997,
+    1998,
+    1999,
+    2000,
+    2001,
+    2002,
+    2003,
+    2004,
+    2005,
+    2006,
+    2007,
+    2008,
+    2009,
+    2010,
+    2011,
+    2012,
+    2013,
+    2014,
+    2015,
+    2016,
+    2017,
+    2018,
+    2019,
+    2020,
+    2021,
+    2022
+   ]
+  }
+ },
+ "qc_policy": "the only per-pixel flag in these two products is the fill value: chlor_a, kd_490 and total_nobs all carry netCDF's default float fill (9.96921e36) over land, cloud, night and ice, and that becomes NaN. A chlorophyll at or below 1e-4 mg m-3 is NaN too, because log10 of it is not a measurement, and it is counted (`chl_below_floor`). A value outside its channel's bounds becomes NaN and is counted (`out_of_bounds`), never clipped. The source's own per-pixel uncertainties (chlor_a_log10_bias / _rmsd, kd_490_bias / _rmsd) and the six per-sensor nobs fields are in the same files and are NOT stored: they are phase B, with the Rrs bands",
+ "record": [
+  "1997-09-04",
+  "2022-12-31"
+ ],
+ "release": "v6.0-release",
+ "sources": [
+  "https://dap.ceda.ac.uk/neodc/esacci/ocean_colour/data/v6.0-release/geographic/netcdf/chlor_a/daily/v6.0/<YYYY>/ESACCI-OC-L3S-CHLOR_A-MERGED-1D_DAILY_4km_GEO_PML_OCx-<YYYYMMDD>-fv6.0.nc",
+  "https://dap.ceda.ac.uk/neodc/esacci/ocean_colour/data/v6.0-release/geographic/netcdf/kd/daily/v6.0/<YYYY>/ESACCI-OC-L3S-K_490-MERGED-1D_DAILY_4km_GEO_PML_KD490_Lee-<YYYYMMDD>-fv6.0.nc"
+ ],
+ "store": "oc4k",
+ "title": "Ocean colour, ESA OC-CCI v6.0 merged L3S, daily 4 km geographic: log10 chlorophyll-a, Kd(490) and the merged observation count",
+ "url": "https://dap.ceda.ac.uk/neodc/esacci/ocean_colour/data/v6.0-release/geographic/netcdf/",
+ "verified": "2026-09-18 from the sandbox: the release tree (v6.0-release/geographic/netcdf/{all_products,chlor_a,iop,kd,rrs}), the chlor_a and kd daily year listings (1997..2022, 365 files in 2015, 366 entries listed including the parent link, and 2022 ending 20221231), and the chlor_a, kd and rrs files of 2015-01-15 opened with netCDF4: 4320 x 8640, lat DESCENDING 89.97917..-89.97917, lon -179.97917.., chlor_a float32 mg m-3 fill 9.96921e36 with 10.657 % valid and values 0.00105..99.758, total_nobs 0.111..197.89, kd_490 0.01145..9.6808, and the rrs file's 6 Rrs bands + 14 water_classN fields at 521 MB a day against chlor_a's 83",
+ "version": "v6.0",
+ "years": [
+  1999
+ ]
+}
