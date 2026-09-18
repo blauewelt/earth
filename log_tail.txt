@@ -1,0 +1,80 @@
+   ],
+   "scale_factor": 0.01,
+   "scale_factor_err": 0.0,
+   "add_offset": 0.0,
+   "add_offset_err": 0.0,
+   "calibrated_nt": 5,
+   "units": "degrees",
+   "long_name": "Coarse Resolution View Zenith Angle"
+  }
+ },
+ "n pixels averaged": {
+  "rank": 2,
+  "dims": [
+   3600,
+   7200
+  ],
+  "number_type": 21,
+  "attributes": {
+   "_FillValue": 0,
+   "valid_range": [
+    1,
+    100
+   ],
+   "units": "(unitless)",
+   "long_name": "n pixels averaged"
+  }
+ },
+ "number of 250m pixels averaged b1-2": {
+  "rank": 2,
+  "dims": [
+   3600,
+   7200
+  ],
+  "number_type": 23,
+  "attributes": {
+   "_FillValue": 0,
+   "valid_range": [
+    1,
+    2000
+   ],
+   "units": "(unitless)",
+   "long_name": "number of 250m pixels averaged b1-2"
+  }
+ },
+ "number of 500m pixels averaged b3-7": {
+  "rank": 2,
+  "dims": [
+   3600,
+   7200
+  ],
+  "number_type": 23,
+  "attributes": {
+   "_FillValue": 0,
+   "valid_range": [
+    1,
+    500
+   ],
+   "units": "(unitless)",
+   "long_name": "number of 500m pixels averaged b3-7"
+  }
+ },
+ "number of 500m rej. detector": {
+  "rank": 2,
+  "dims": [
+   3600,
+   7200
+  ],
+  "number_type": 21,
+  "attributes": {
+   "_FillValue": 0,
+   "valid_range": [
+    1,
+    100
+   ],
+   "units": "(unitless)",
+   "long_name": "number of 500m rej. detector"
+  }
+ }
+}
+REFUSING refl05: MOD09CMG.A2026259.061.2026261032136 does not match the declared grid or attributes: MOD09CMG.A2026259.061.2026261032136.hdf: SDS 'Coarse Resolution Surface Reflectance Band 1' has _FillValue = -28672, the adapter declares 0 — a product whose scaling changed is refused, not rescaled
