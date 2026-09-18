@@ -1,0 +1,28 @@
+store     oc4k — Ocean colour, ESA OC-CCI v6.0 merged L3S, daily 4 km geographic: log10 chlorophyll-a, Kd(490) and the merged observation count
+family    family1_gf (1.gf) · public -> chfrank/earth-tensors:tensors/family1_gf/oc4k
+axis      2018-01-02 .. 2019-01-01  bins 2630..2702 · time_s int32 (schema 2)
+channels  C=3: log_chl, kd_490, total_nobs
+tier G    sharded, groups ['oc4k'], F=5 x 86400 s, float16, years (by bin start) 2018..2018
+work      /home/runner/work/earth/earth/ml/cache/family1_gf
+
+=== stage index (oc4k) ===
+  [index oc4k] start (1 items)  0/1  0.0s
+  [index oc4k] plan.json  1/1  248.0s
+  index: oc4k — 1 year(s), C=3 (log_chl, kd_490, total_nobs), bins 2630..2702
+=== stage index done in 248.0s ===
+
+=== stage fetch (oc4k) ===
+  [fetch oc4k (tier G)] start (1 items)  0/1  0.0s
+  [fetch oc4k (tier G)] oc4k 2018 oc4k bin 2634  1561.4s
+  [fetch oc4k (tier G)] oc4k 2018 oc4k bin 2639  2989.5s
+  [fetch oc4k (tier G)] oc4k 2018 oc4k bin 2644  4787.1s
+  [fetch oc4k (tier G)] oc4k 2018 oc4k bin 2649  6682.5s
+  [fetch oc4k (tier G)] oc4k 2018 oc4k bin 2654  8386.1s
+  [fetch oc4k (tier G)] oc4k 2018 oc4k bin 2659  9970.8s
+  [fetch oc4k (tier G)] oc4k 2018 oc4k bin 2664  11402.4s
+  [fetch oc4k (tier G)] oc4k 2018 oc4k bin 2669  12748.7s
+  [fetch oc4k (tier G)] oc4k 2018 oc4k bin 2674  14350.8s
+  [fetch oc4k (tier G)] oc4k 2018 oc4k bin 2679  15718.2s
+  [fetch oc4k (tier G)] oc4k 2018 oc4k bin 2684  17302.5s
+  [fetch oc4k (tier G)] oc4k 2018 oc4k bin 2689  18804.6s
+  [fetch oc4k (tier G)] oc4k 2018 oc4k bin 2694  20485.2s
