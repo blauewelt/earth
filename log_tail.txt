@@ -1,0 +1,55 @@
+store     cat_hls — HLS v2.0 scene catalogue — harmonised Sentinel-2 (S30) and Landsat (L30) 30 m tiles, one row per granule
+family    family1_tf (1.0.tf) · public -> chfrank/earth-tensors:tensors/family1_tf/cat_hls
+axis      2026-01-01 .. 2026-09-30  bins 3214..3268 · time_s int32 (schema 2)
+channels  C=5: cloud, valid, angle, log2_area, sensor
+work      /home/runner/work/earth/earth/ml/cache/family1_tf
+
+=== stage index (cat_hls) ===
+  [index cat_hls] start (1 items)  0/1  0.0s
+  [index cat_hls] plan.json  1/1  2.3s
+  index: cat_hls — 1 year(s), C=5 (cloud, valid, angle, log2_area, sensor), bins 3214..3268
+=== stage index done in 2.3s ===
+
+=== stage fetch (cat_hls) ===
+  [fetch cat_hls] start (1 items)  0/1  0.0s
+  [fetch cat_hls] cat_hls 2026 rows 0+  1/1  923.1s
+  [fetch cat_hls] cat_hls 2026 rows 500,148+  1/1  1824.5s
+  [fetch cat_hls] cat_hls 2026 rows 1,003,677+  1/1  2722.0s
+  [fetch cat_hls] cat_hls 2026 rows 1,506,031+  1/1  3820.2s
+  [fetch cat_hls] cat_hls 2026 rows 2,008,245+  1/1  4693.8s
+  [fetch cat_hls] cat_hls 2026 rows 2,508,593+  1/1  5489.6s
+Traceback (most recent call last):
+  File "/home/runner/work/earth/earth/ml/build_family1_stores.py", line 1488, in <module>
+    sys.exit(main())
+             ^^^^^^
+  File "/home/runner/work/earth/earth/ml/build_family1_stores.py", line 1483, in main
+    f10b.run_stages(ctx, stages, stage_fn=stage_fns(ad), deps=DEPS)
+  File "/home/runner/work/earth/earth/ml/build_family10_stores.py", line 5331, in run_stages
+    stage_fn[s](ctx)
+  File "/home/runner/work/earth/earth/ml/build_family1_stores.py", line 264, in stage_fetch
+    f10b.stage_fetch(ctx, assemble_store_after=False)
+  File "/home/runner/work/earth/earth/ml/build_family10_stores.py", line 3912, in stage_fetch
+    for label, rows, counts in ad.fetch_year(ctx, y):
+  File "/home/runner/work/earth/earth/ml/family1/adapters/_stac.py", line 1399, in fetch_year
+    for label, rows, c in self._rows(ctx, windows, str(year), ctx.t_lo,
+  File "/home/runner/work/earth/earth/ml/family1/adapters/_stac.py", line 1361, in _rows
+    for scs, c in cm.ordered_map(fn, windows, self.workers(ctx)):
+  File "/home/runner/work/earth/earth/ml/family1/adapters/_common.py", line 188, in ordered_map
+    yield q.popleft().result()
+          ^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/concurrent/futures/_base.py", line 449, in result
+    return self.__get_result()
+           ^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/concurrent/futures/_base.py", line 401, in __get_result
+    raise self._exception
+  File "/usr/lib/python3.12/concurrent/futures/thread.py", line 58, in run
+    result = self.fn(*self.args, **self.kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/work/earth/earth/ml/family1/adapters/_stac.py", line 1360, in <lambda>
+    fn = (lambda w: self.scenes(ctx, w))
+                    ^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/work/earth/earth/ml/family1/adapters/_stac.py", line 1611, in scenes
+    for it in cmr_granules(fet, CMR_GRANULES,
+  File "/home/runner/work/earth/earth/ml/family1/adapters/_stac.py", line 651, in cmr_granules
+    raise Refusal(f"{what}: CMR-Hits changed from {hits} to {h} "
+family1.adapters._stac.Refusal: cat_hls S30 2026-09-14T00: CMR-Hits changed from 7920 to 7921 on page 8 — the catalogue moved under the walk
