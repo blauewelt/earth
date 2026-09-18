@@ -52,6 +52,15 @@
 # a name that is not a plain upper-case identifier, or one in a credential's
 # namespace, is a refusal, and every pair is echoed into the log.
 #
+# TIER G (E-082 wave 4): the three MODIS Climate Modeling Grid fields (lst05,
+# snow05, refl05) are HDF-EOS2 (HDF4) files, and rasterio's GDAL has NO HDF4
+# driver (measured in the sandbox: 155 drivers, HDF5 and netCDF among them, no
+# HDF4), so the install step also carries `pyhdf`, whose manylinux wheel
+# bundles the HDF4 library. It carries `scipy` too, for the nearest-shoreline
+# search that makes `static_fine`'s dist_coast. Their adapter_env knobs are
+# LST05_GROUPS / SNOW05_GROUPS / REFL05_GROUPS (which satellite's group to
+# build) and STATIC_FINE_FIELDS (which of the static store's fields to build).
+#
 # workflow_dispatch ONLY. The `runner` input can point this at a rented box;
 # a pull_request / schedule trigger here would hand that box to anyone who
 # opens a PR (ml/CLAUDE.md 6). 9 inputs of the 25 GitHub allows.
@@ -122,8 +131,8 @@ jobs:
 
       - name: Install
         run: |
-          pip install --quiet numpy huggingface_hub zstandard netCDF4 requests rasterio
-          python3 -c "import numpy, huggingface_hub, zstandard, netCDF4, requests, rasterio; print('deps ok', rasterio.__version__, rasterio.__gdal_version__)"
+          pip install --quiet numpy huggingface_hub zstandard netCDF4 requests rasterio pyhdf scipy
+          python3 -c "import numpy, huggingface_hub, zstandard, netCDF4, requests, rasterio, pyhdf, scipy; import pyhdf.SD; print('deps ok', rasterio.__version__, rasterio.__gdal_version__, 'pyhdf', pyhdf.__version__, 'scipy', scipy.__version__)"
 
       - name: Earthdata Login check (hosted runner only)
         if: ${{ github.event.inputs.check_credentials == 'true' }}
