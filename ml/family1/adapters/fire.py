@@ -120,6 +120,15 @@ AVAIL = BASE + "data_availability/csv/"
 WORLD = "world"
 MAX_DAY_RANGE = 5
 FILL = -9999.0
+# THE DOCUMENTED BUDGET IS 5,000 TRANSACTIONS PER TEN MINUTES, and "larger
+# transactions may count as multiple requests (ex. requesting 7 days)". Two
+# lanes running at once went through it inside an hour (#197, #198), and the
+# service says so with HTTP 400 and the body "Exceeding allowed transaction
+# limit" — which is a throttle wearing a bad request's status code.
+THROTTLE = "exceeding allowed transaction limit"
+THROTTLE_WAIT_S = 130
+THROTTLE_TRIES = 8
+PACE_S = 0.2          # a fifth of a second between windows, always
 
 # THE UNIT OF FETCHING IS A SOURCE, NOT A SATELLITE. `MODIS_SP` carries Terra
 # AND Aqua in one CSV, so asking for it once per satellite would fetch every
@@ -443,8 +452,8 @@ class FireAdapter(f10b.SourceAdapter):
                 raw = fh.read()
             ctx.count_bytes(len(raw))
         else:
-            raw, why = cm.get_bytes(AVAIL + self.key() + "/all",
-                                    attempts=ctx.a.attempts)
+            raw, why = self.get(ctx, AVAIL + self.key() + "/all",
+                                AVAIL + "<MAP_KEY>/all")
             if raw is None:
                 sys.exit(f"REFUSING fire: the data_availability endpoint "
                          f"answered {why} — without it the record's own ends "
@@ -569,8 +578,51 @@ class FireAdapter(f10b.SourceAdapter):
                 "columns_checked": list(NEEDED) + ["brightness|bright_ti4"]}
 
     # ----------------------------------------------------------- one window -
+    def mask(self, text):
+        """The MAP_KEY never reaches a log, an exception or an artifact.
+
+        THE REASON IS A REAL LEAK: the key is a path segment of every area-API
+        URL, and `_common.get_bytes` raises `IOError(f"{url}: ...")`. Runs
+        #197 and #198 hit the transaction limit and printed the whole URL —
+        key included — into a PUBLIC Actions log. Every string this adapter
+        raises, prints or stores goes through here.
+        """
+        k = os.environ.get("FIRMS_MAP_KEY", "")
+        t = str(text)
+        return t.replace(k, "<MAP_KEY>") if k else t
+
+    def get(self, ctx, url, what):
+        """GET, with the key masked out of every message it can raise.
+
+        A 400 whose body says the transaction limit is exceeded is a THROTTLE
+        and not a bad request: the documented budget is 5,000 transactions per
+        TEN-MINUTE window, a five-day world request counts as several, and two
+        lanes at once went through it in an hour. `_common.get_bytes` treats
+        any 4xx but 429 as our own bad request and does not retry it, which is
+        right in general and wrong here — so the wait is done in this loop,
+        long enough for the window to roll over.
+        """
+        last = None
+        for i in range(THROTTLE_TRIES):
+            try:
+                raw, why = cm.get_bytes(url, attempts=ctx.a.attempts)
+                return raw, why
+            except (IOError, OSError) as e:
+                msg = self.mask(str(e))
+                last = msg
+                if THROTTLE not in msg.lower():
+                    raise IOError(f"{what}: {msg}") from None
+                wait = THROTTLE_WAIT_S
+                print(f"  ::warning::fire: {what}: the FIRMS transaction "
+                      f"limit is exceeded ({i + 1}/{THROTTLE_TRIES}); the "
+                      f"documented window is ten minutes, waiting {wait}s",
+                      flush=True)
+                time.sleep(wait)
+        raise IOError(f"{what}: still throttled after {THROTTLE_TRIES} "
+                      f"waits of {THROTTLE_WAIT_S}s — {last}")
+
     def request(self, ctx, source, day, days):
-        """(bytes, url, why) for one area-API window."""
+        """(bytes, url, why) for one area-API window. The url is MASKED."""
         if ctx.source_dir:
             p = os.path.join(ctx.source_dir, "fire",
                              f"{source}_{day}_{days}.csv")
@@ -580,11 +632,13 @@ class FireAdapter(f10b.SourceAdapter):
                 raw = fh.read()
             ctx.count_bytes(len(raw))
             return raw, p, "ok"
+        shown = f"{AREA}<MAP_KEY>/{source}/{WORLD}/{int(days)}/{day}"
         url = f"{AREA}{self.key()}/{source}/{WORLD}/{int(days)}/{day}"
-        raw, why = cm.get_bytes(url, attempts=ctx.a.attempts)
-        shown = url.replace(self.key(), "<MAP_KEY>")
+        raw, why = self.get(ctx, url, shown)
         if raw is None:
             return None, shown, why
+        if PACE_S:
+            time.sleep(PACE_S)
         return raw, shown, "ok"
 
     def windows(self, ctx, year):

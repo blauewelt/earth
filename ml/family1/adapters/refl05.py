@@ -55,21 +55,29 @@ notes and in `ml/family1/BUILD_LOG.md`.
   bit  14    BRDF correction performed       -> state_qa_hi
   bit  15    internal snow algorithm flag    -> state_qa_hi
 
-WHEN A PIXEL IS NOT MEASURED, AND WHY THE QA IS MASKED HERE AND NOT IN
-`lst05`. Each reflectance SDS has `_FillValue` 0 and `valid_range`
--100..16,000; raw 0 is not measured and a raw value outside the valid range
-is not measured either (counted `refl_outside_valid_range`). MOD09CMG is a
-DAY product, so the night side of a composite, and everything the retrieval
-declined, is fill. The state QA word describes A RETRIEVAL: unlike MOD11C1's
-QC it carries no "not produced, and here is why" code, and its all-zero value
-is a perfectly ordinary reading (clear, shallow ocean, climatological
-aerosol). Storing that zero where there was no observation would assert a
-retrieval that never happened, so BOTH QA channels are NaN exactly where ALL
-SEVEN bands are fill — "no band was retrieved" being precisely "there was no
-observation" — and are kept unchanged, zero included, wherever any band was.
-`lst05` keeps its QC everywhere for the opposite reason: MOD11C1's mandatory
-QA bits say "not produced because of cloud" versus "for another reason",
-which is information about the absence itself.
+WHEN A PIXEL IS NOT MEASURED, AND WHY THE FILL IS READ RATHER THAN DECLARED.
+The producer's 2010 file specification (revision 6.0.3, for Collection 6)
+gives the reflectance bands `_FillValue` 0. THE v061 GRANULES SAY -28,672,
+which is what the index stage found on a runner and refused on — correctly,
+because "a product whose scaling changed is refused, not rescaled". A fill
+value is a property of the FILE, and every one of these SDS states its own,
+so the adapter now READS each `_FillValue` and uses it, records the value it
+saw (`fill_value_seen`), and refuses an SDS that declares none. The scale
+factor and the valid range, which must NOT differ between granules of one
+collection, stay declared and are still compared in every file.
+
+MOD09CMG is a DAY product, so the night side of a composite, and everything
+the retrieval declined, is fill. Its State QA declares `_FillValue` 0 and
+`valid_range` [1, 65535] — so in v061 an all-zero quality word IS the
+producer saying "nothing here", not "clear, shallow ocean, climatological
+aerosol". Both QA bytes are therefore NaN where the word is the producer's
+fill OR where all seven bands are fill; the two agree almost everywhere and
+the counts (`pixels_qa_fill`, `pixels_no_band_retrieved`,
+`pixels_qa_fill_with_a_band`, `pixels_band_without_qa`) say by how much,
+which is the cross-check. `lst05` keeps its QC EVERYWHERE for the opposite
+reason: MOD11C1's file specification says in as many words that its QC SDS
+has no fill value, and its mandatory bits say "not produced because of
+cloud" versus "for another reason" — information about the absence itself.
 
 THE CHANNEL BOUNDS CARRY ONE float16 STEP OF HEADROOM. The producer's
 valid_range maps to reflectance [-0.01, 1.6], and float16's step THERE is
@@ -109,7 +117,15 @@ from family1 import sharded as sh
 from family1.adapters import _modis_cmg as mc
 
 SCALE = 1e-4
-REFL_FILL = 0
+# THE FILL VALUE IS READ FROM THE FILE, NOT DECLARED. The producer's 2010
+# file specification (revision 6.0.3, written for Collection 6) says the
+# reflectance bands' `_FillValue` is 0; the v061 granule the index opened on a
+# runner declares **-28,672**, and its State QA declares fill 0 with
+# `valid_range` [1, 65535]. A fill value is a property of the FILE and the
+# file states it, so the adapter reads each SDS' own `_FillValue` and uses it,
+# and REFUSES an SDS that declares none — the scaling and the valid range,
+# which must not change, stay declared and are still compared.
+REFL_FILL_DOC = -28672
 REFL_VALID = [-100, 16000]
 BANDS = tuple(f"Coarse Resolution Surface Reflectance Band {i}"
               for i in range(1, 8))
@@ -166,8 +182,8 @@ class Refl05Adapter(mc.CmgAdapter):
     dtype = "float16"
     first_year = 2000
     sds = BANDS + (SDS_QA,)
-    sds_want = {b: {"scale_factor": SCALE, "_FillValue": REFL_FILL,
-                    "valid_range": REFL_VALID} for b in BANDS}
+    sds_want = {b: {"scale_factor": SCALE, "valid_range": REFL_VALID}
+                for b in BANDS}
     note_estimate = {
         "bytes": 700e9,
         "what": ("family1tf.tex §4.3 ledger: 'v ~ 0.15: ~700 GB (Terra)' for "
@@ -182,14 +198,17 @@ class Refl05Adapter(mc.CmgAdapter):
         "state, 2 cloud shadow, 3-5 land/water class, 6-7 aerosol quantity, "
         "8-9 cirrus, 10 internal cloud, 11 internal fire, 12 MOD35 snow/ice, "
         "13 adjacent to cloud, 14 BRDF corrected, 15 internal snow. "
-        "Reflectance is not measured where the raw value is 0 (_FillValue) or "
-        "outside the producer's valid_range -100..16000, and the second case "
-        "is counted `refl_outside_valid_range`. Both QA channels are NaN "
-        "exactly where all seven bands are fill — that is what 'no "
-        "observation' means for a day product — and are otherwise kept "
-        "unchanged, zero included, because an all-zero QA word is an ordinary "
-        "reading (clear, shallow ocean, climatological aerosol) and not a "
-        "fill. The channel bounds -0.02..1.7 are the producer's range plus "
+        "Reflectance is not measured where the raw value is the SDS' OWN "
+        "_FillValue -- READ from the file, because the 2010 file "
+        "specification says 0 and the v061 granules say -28672, and a fill "
+        "value is a property of the file (the value seen is recorded in "
+        "`fill_value_seen`) -- or outside the producer's valid_range "
+        "-100..16000, and the second case is counted "
+        "`refl_outside_valid_range`. Both QA bytes are NaN where the State QA "
+        "word is its own fill (v061 declares 0, with valid_range [1, 65535]) "
+        "or where all seven bands are fill; the two agree almost everywhere "
+        "and `pixels_qa_fill_with_a_band` and `pixels_band_without_qa` "
+        "measure the difference. The channel bounds -0.02..1.7 are the producer's range plus "
         "one float16 step of headroom (that step is 0.00098 at reflectance "
         "1.6, ten times the source's own 0.0001), so a legitimate extreme "
         "cannot fail the store's own bounds check whichever way float16 "
@@ -251,7 +270,8 @@ class Refl05Adapter(mc.CmgAdapter):
             raw = arrs[name]
             if raw.dtype != np.int16:
                 raise mc.FormatError(f"{name}: {raw.dtype}, expected int16")
-            fill = raw == REFL_FILL
+            f = self.fill_of(name, attrs)
+            fill = raw == np.int16(f)
             bad = (raw < REFL_VALID[0]) | (raw > REFL_VALID[1])
             n_bad = int((bad & ~fill).sum())
             v = raw.astype(np.float32) * np.float32(SCALE)
@@ -259,20 +279,44 @@ class Refl05Adapter(mc.CmgAdapter):
             out[:, :, i] = v
             allfill &= fill
             counts[f"fill_pixels_b{i + 1}"] = int(fill.sum())
+            counts.setdefault("fill_value_seen", {})[f"b{i + 1}"] = int(f)
             if n_bad:
                 counts.setdefault("refl_outside_valid_range",
                                   {})[f"b{i + 1}"] = n_bad
         qa = arrs[SDS_QA]
         if qa.dtype != np.uint16:
             raise mc.FormatError(f"{SDS_QA}: {qa.dtype}, expected uint16")
+        qf = self.fill_of(SDS_QA, attrs)
+        qa_fill = qa == np.uint16(qf)
         lo = (qa & np.uint16(0x00FF)).astype(np.float32)
         hi = (qa >> np.uint16(8)).astype(np.float32)
-        lo[allfill] = np.nan
-        hi[allfill] = np.nan
+        # NOT MEASURED where the producer's OWN fill says so, and also where
+        # no band was retrieved — the two agree almost everywhere and the
+        # counts say by how much, which is the cross-check.
+        gone = qa_fill | allfill
+        lo[gone] = np.nan
+        hi[gone] = np.nan
         out[:, :, 7] = lo
         out[:, :, 8] = hi
         counts["pixels_no_band_retrieved"] = int(allfill.sum())
+        counts["pixels_qa_fill"] = int(qa_fill.sum())
+        counts["pixels_qa_fill_with_a_band"] = int((qa_fill & ~allfill).sum())
+        counts["pixels_band_without_qa"] = int((allfill & ~qa_fill).sum())
+        counts.setdefault("fill_value_seen", {})["state_qa"] = int(qf)
         return out, counts
+
+    @staticmethod
+    def fill_of(name, attrs):
+        """The SDS' OWN `_FillValue`. An SDS with none is a refusal."""
+        a = (attrs or {}).get(name) or {}
+        if "_FillValue" not in a:
+            raise mc.FormatError(
+                f"{name}: the SDS declares no _FillValue. Without it 'not "
+                f"measured' cannot be told from a reading, and the value is "
+                f"not the same in every collection (the 2010 file "
+                f"specification says 0 for the reflectance bands and the v061 "
+                f"granules say -28672), so it is never assumed")
+        return int(a["_FillValue"])
 
     # --------------------------------------------------------------- smoke --
     def smoke_sources(self, root, d_lo, d_hi, seed=20260918):
@@ -297,7 +341,7 @@ def smoke_fields(d, w, h):
     clear = lit & (np.sin(10 * xx + k) + np.cos(8 * yy - k) > -0.5)
     out = {}
     for i, name in enumerate(BANDS, start=1):
-        raw = np.zeros((h, w), np.int16)
+        raw = np.full((h, w), np.int16(REFL_FILL_DOC), np.int16)
         r = 0.03 + 0.28 * i / 7.0 + 0.10 * np.sin(6 * xx + i + k) \
             * np.cos(4 * yy - i)
         raw[clear] = np.rint(np.broadcast_to(r, (h, w))[clear]
@@ -324,11 +368,15 @@ def make_smoke_sources(root, d_lo, d_hi, seed=20260918, skip=None,
     sn, ver = Refl05Adapter.groups_available[group]
     mc.write_smoke_archive(
         root, "refl05", group, days, arrays, w, h, LP_PREFIX, sn, ver,
-        attrs={b: dict(Refl05Adapter.sds_want[b]) for b in BANDS},
+        attrs={**{b: {**Refl05Adapter.sds_want[b],
+                      "_FillValue": REFL_FILL_DOC} for b in BANDS},
+               SDS_QA: {"_FillValue": 0, "valid_range": [1, 65535]}},
         absent=absent, skip=skip)
 
     ad = Refl05Adapter()
     ad.w, ad.h = w, h
+    attrs = {**{b: {"_FillValue": REFL_FILL_DOC} for b in BANDS},
+             SDS_QA: {"_FillValue": 0}}
     listed = [d for d in days if d not in skip]
     lo, hi = min(listed), max(listed)
     t_lo = f10b.seconds_since_epoch(lo)
@@ -344,7 +392,7 @@ def make_smoke_sources(root, d_lo, d_hi, seed=20260918, skip=None,
             elif day in skip or day in absent:
                 truth[(group, b, f)] = (None, "absent_upstream")
             else:
-                a, _ = ad.frame_from(arrays[day], {})
+                a, _ = ad.frame_from(arrays[day], attrs)
                 mc.mask_bounds_low_memory(ad, a)
                 truth[(group, b, f)] = (a.astype(np.float16), None)
     return truth

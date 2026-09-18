@@ -222,3 +222,55 @@ def test_both_sources_of_the_seam_are_in_the_store(smoke):
     assert nrt.any() and (~nrt.astype(bool)).any()
     codes = set(int(x) for x in np.unique(qc & 0b111))
     assert codes == {1, 2, 3}
+
+
+def test_the_map_key_never_reaches_a_message(monkeypatch):
+    """The leak this guard exists for: the key is a PATH SEGMENT of every
+    area-API URL, and `_common.get_bytes` raises `IOError(f"{url}: ...")`.
+    Runs #197 and #198 printed the whole URL into a public Actions log."""
+    monkeypatch.setenv("FIRMS_MAP_KEY", "deadbeefdeadbeefdeadbeefdeadbeef")
+    ad = fr.FireAdapter()
+    url = f"{fr.AREA}{ad.key()}/MODIS_SP/world/5/2001-01-06"
+    assert "deadbeef" not in ad.mask(f"{url}: HTTP 400")
+    assert "<MAP_KEY>" in ad.mask(url)
+    # and a throttle is told apart from a bad request by the BODY, not the
+    # status code: FIRMS answers 400 for both
+    assert fr.THROTTLE in "HTTP 400 — Exceeding allowed transaction limit." \
+        .lower()
+    assert fr.THROTTLE not in "HTTP 400 — Invalid MAP_KEY.".lower()
+
+
+def test_a_throttled_window_waits_and_a_bad_request_does_not(monkeypatch):
+    clear_env(monkeypatch)
+    monkeypatch.setenv("FIRMS_MAP_KEY", "k" * 32)
+    monkeypatch.setattr(fr.time, "sleep", lambda s: None)
+    ad = fr.FireAdapter()
+
+    class _Ctx:
+        source_dir = ""
+
+        class a:
+            attempts = 1
+    calls = {"n": 0}
+
+    def throttled(url, attempts=1):
+        calls["n"] += 1
+        raise IOError(f"{url}: HTTP 400 — Exceeding allowed transaction "
+                      f"limit.")
+    monkeypatch.setattr(fr.cm, "get_bytes", throttled)
+    with pytest.raises(IOError) as e:
+        ad.get(_Ctx(), f"{fr.AREA}{'k' * 32}/MODIS_SP/world/5/2001-01-06",
+               "masked")
+    assert calls["n"] == fr.THROTTLE_TRIES
+    assert "k" * 32 not in str(e.value)
+
+    def refused(url, attempts=1):
+        calls["n"] += 1
+        raise IOError(f"{url}: HTTP 400 — Invalid MAP_KEY.")
+    calls["n"] = 0
+    monkeypatch.setattr(fr.cm, "get_bytes", refused)
+    with pytest.raises(IOError) as e:
+        ad.get(_Ctx(), f"{fr.AREA}{'k' * 32}/MODIS_SP/world/5/2001-01-06",
+               "masked")
+    assert calls["n"] == 1                       # our own bad request: once
+    assert "k" * 32 not in str(e.value)
