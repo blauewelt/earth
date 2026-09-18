@@ -1,0 +1,334 @@
+{
+ "bins": [
+  2775,
+  3067
+ ],
+ "builder_git_sha": "8f6a2d66b7d7c32dbb9b141c233a7803ec4dee9a",
+ "built_at": "2026-09-18T08:36:07+00:00",
+ "channels": [
+  {
+   "max": 100.0,
+   "min": -150.0,
+   "name": "lst_day",
+   "unit": "degC"
+  },
+  {
+   "max": 100.0,
+   "min": -150.0,
+   "name": "lst_night",
+   "unit": "degC"
+  },
+  {
+   "max": 255.0,
+   "min": 0.0,
+   "name": "qc_day",
+   "unit": "bitfield"
+  },
+  {
+   "max": 255.0,
+   "min": 0.0,
+   "name": "qc_night",
+   "unit": "bitfield"
+  }
+ ],
+ "dataset": "MOD11C1 v061 daily 0.05-degree CMG (HDF-EOS2)",
+ "date_range": [
+  "2020-01-01",
+  "2023-12-31"
+ ],
+ "files": 9587,
+ "files_per_year": {
+  "2000": 266,
+  "2001": 348,
+  "2002": 355,
+  "2003": 358,
+  "2004": 366,
+  "2005": 365,
+  "2006": 365,
+  "2007": 365,
+  "2008": 364,
+  "2009": 365,
+  "2010": 365,
+  "2011": 365,
+  "2012": 366,
+  "2013": 365,
+  "2014": 365,
+  "2015": 365,
+  "2016": 357,
+  "2017": 365,
+  "2018": 365,
+  "2019": 365,
+  "2020": 366,
+  "2021": 365,
+  "2022": 352,
+  "2023": 365,
+  "2024": 366,
+  "2025": 361,
+  "2026": 252
+ },
+ "footprint": {
+  "log2_dt": -2.321928094887362,
+  "log2_fp": -2.321934704446797
+ },
+ "frame_seconds": 86400,
+ "frames_per_bin": 5,
+ "grid": {
+  "H": 3600,
+  "W": 7200,
+  "coordinates": "lon = x0 + (col + 0.5) * dx, lat = y0 + (row + 0.5) * dy with dy NEGATIVE; x0/y0 are the grid's WEST and NORTH edges, which are MODIS' own CMG corners (-180, 90) and (180, -90)",
+  "crs": "EPSG:4326",
+  "dx": 0.05,
+  "dy": -0.05,
+  "extent": [
+   -180.0,
+   -90.0,
+   180.0,
+   90.0
+  ],
+  "extent_note": "[west, south, east, north] in degrees; global",
+  "no_tile_corners": "a plain geographic grid: the affine rule above IS the lat/lon of every pixel and every tile corner, so no corner table is stored",
+  "pixel_deg": 0.05,
+  "pixel_km_equator": 5.566,
+  "proj4": "+proj=longlat +datum=WGS84 +no_defs",
+  "projection": {
+   "grid_mapping_name": "latitude_longitude",
+   "inverse_flattening": 298.257223563,
+   "semi_major_axis": 6378137.0
+  },
+  "row_order": "row 0 is the NORTHERNMOST row, 90 N \u2014 the order the HDF-EOS SDS itself is stored in (YDim ascending southward), so the store keeps the source's own orientation and nothing is flipped",
+  "x0": -180.0,
+  "y0": 90.0
+ },
+ "groups": {
+  "terra": {
+   "bin_first": 1326,
+   "bin_last": 3265,
+   "bytes_cmr": 439097580109,
+   "bytes_note": "CMR's own `granule_size` in MB, summed; the probe measures exact bytes",
+   "days_absent_upstream": 112,
+   "days_absent_upstream_sample": [
+    "2000-02-29",
+    "2000-03-03",
+    "2000-03-04",
+    "2000-03-06",
+    "2000-03-12",
+    "2000-03-13",
+    "2000-03-14",
+    "2000-03-16",
+    "2000-03-18",
+    "2000-03-21",
+    "2000-03-22",
+    "2000-03-24",
+    "2000-03-25",
+    "2000-04-26",
+    "2000-04-27",
+    "2000-06-02",
+    "2000-06-07",
+    "2000-06-10",
+    "2000-06-14",
+    "2000-06-17",
+    "2000-06-21",
+    "2000-06-30",
+    "2000-07-04",
+    "2000-07-08",
+    "2000-07-11",
+    "2000-07-15",
+    "2000-07-16",
+    "2000-08-06",
+    "2000-08-07",
+    "2000-08-08",
+    "2000-08-09",
+    "2000-08-10",
+    "2000-08-11",
+    "2000-08-12",
+    "2000-08-13",
+    "2000-08-14",
+    "2000-08-15",
+    "2000-08-16",
+    "2000-08-17",
+    "2000-11-24"
+   ],
+   "days_in_record": 9699,
+   "files": 9587,
+   "files_per_year": {
+    "2000": 266,
+    "2001": 348,
+    "2002": 355,
+    "2003": 358,
+    "2004": 366,
+    "2005": 365,
+    "2006": 365,
+    "2007": 365,
+    "2008": 364,
+    "2009": 365,
+    "2010": 365,
+    "2011": 365,
+    "2012": 366,
+    "2013": 365,
+    "2014": 365,
+    "2015": 365,
+    "2016": 357,
+    "2017": 365,
+    "2018": 365,
+    "2019": 365,
+    "2020": 366,
+    "2021": 365,
+    "2022": 352,
+    "2023": 365,
+    "2024": 366,
+    "2025": 361,
+    "2026": 252
+   },
+   "first_file": {
+    "bytes": 46215908,
+    "date": "2026-09-16",
+    "sds_in_file": 21,
+    "sds_names_sample": [
+     "Day_view_angl",
+     "Day_view_time",
+     "Emis_20",
+     "Emis_20_night",
+     "Emis_22",
+     "Emis_22_night",
+     "Emis_23",
+     "Emis_23_night",
+     "Emis_29",
+     "Emis_29_night",
+     "Emis_31",
+     "Emis_32",
+     "LST_Day_CMG",
+     "LST_Night_CMG",
+     "Night_view_angl",
+     "Night_view_time",
+     "Percent_land_in_grid",
+     "QC_Day",
+     "QC_Emis",
+     "QC_Emis_night",
+     "QC_Night"
+    ],
+    "sds_read": {
+     "LST_Day_CMG": {
+      "attributes": {
+       "_FillValue": 0,
+       "long_name": "Daily daytime 3min CMG Land-surface Temperature",
+       "scale_factor": 0.02,
+       "units": "K",
+       "valid_range": [
+        7500,
+        65535
+       ]
+      },
+      "dtype": "uint16",
+      "fill_pixels": 19986189,
+      "raw_max": 16512,
+      "raw_min": 9168,
+      "shape": [
+       3600,
+       7200
+      ],
+      "valid_fraction": 0.228928
+     },
+     "LST_Night_CMG": {
+      "attributes": {
+       "_FillValue": 0,
+       "long_name": "Daily nighttime 3min CMG Land-surface Temperature",
+       "scale_factor": 0.02,
+       "units": "K",
+       "valid_range": [
+        7500,
+        65535
+       ]
+      },
+      "dtype": "uint16",
+      "fill_pixels": 19899958,
+      "raw_max": 15860,
+      "raw_min": 9209,
+      "shape": [
+       3600,
+       7200
+      ],
+      "valid_fraction": 0.232255
+     },
+     "QC_Day": {
+      "attributes": {
+       "_FillValue": 0,
+       "long_name": "Quality control for daytime LST and emissivity",
+       "valid_range": [
+        0,
+        255
+       ]
+      },
+      "dtype": "uint8",
+      "fill_pixels": 1366569,
+      "raw_max": 253,
+      "raw_min": 1,
+      "shape": [
+       3600,
+       7200
+      ],
+      "valid_fraction": 0.947277
+     },
+     "QC_Night": {
+      "attributes": {
+       "_FillValue": 0,
+       "long_name": "Quality control for nighttime LST and emissivity",
+       "valid_range": [
+        0,
+        255
+       ]
+      },
+      "dtype": "uint8",
+      "fill_pixels": 1724836,
+      "raw_max": 253,
+      "raw_min": 1,
+      "shape": [
+       3600,
+       7200
+      ],
+      "valid_fraction": 0.933455
+     }
+    },
+    "title": "MOD11C1.A2026259.061.2026260092805",
+    "url": "https://data.lpdaac.earthdatacloud.nasa.gov/lp-prod-protected/MOD11C1.061/MOD11C1.A2026259.061.2026260092805/MOD11C1.A2026259.061.2026260092805.hdf"
+   },
+   "listing": {
+    "cmr_bytes": 46690911,
+    "cmr_hits": 9587,
+    "cmr_pages": 6,
+    "cmr_seconds": 4.9,
+    "granules_listed": 9587
+   },
+   "record": [
+    "2000-02-27",
+    "2026-09-16"
+   ],
+   "short_name": "MOD11C1",
+   "version": "061"
+  }
+ },
+ "per_year_resume": true,
+ "qc_policy": "the producer's own QC_Day and QC_Night uint8 bit fields are CARRIED AS CHANNELS, unchanged, so the consumer picks the threshold (family1tf.tex \u00a75). Their bits are: 0-1 mandatory QA (00 good, 01 other quality, 10 not produced because of cloud, 11 not produced for another reason), 2 L1B data quality, 3 Terra/Aqua combined use, 4-5 emissivity error class, 6-7 LST error class. The file specification states that this SDS has NO fill value, so 0 is a real reading and is never masked; the two QC channels are therefore valid over the whole grid, ocean included, where the mandatory bits say why no LST was produced. LST itself is not measured where the raw value is 0 (_FillValue) or outside the producer's valid_range 7500..65535, and the second case is counted `lst_outside_valid_range`. The channel bounds -150..100 degrees C are tripwires: the coldest surface ever measured from orbit is about -98 and the hottest about +81, so a real value never reaches them and a corrupt one does; a value outside becomes NaN and is counted (`out_of_bounds`), never clipped",
+ "record": [
+  "2000-02-27",
+  "2026-09-16"
+ ],
+ "record_days": [
+  "2000-02-27",
+  "2026-09-16"
+ ],
+ "sources": [
+  "https://data.lpdaac.earthdatacloud.nasa.gov/lp-prod-protected/MOD11C1.061/<granule>/<granule>.hdf",
+  "https://cmr.earthdata.nasa.gov/search/granules.json?short_name=MOD11C1&version=061"
+ ],
+ "store": "lst05",
+ "title": "Daily land-surface temperature day and night with quality, MODIS MOD11C1 v061, 0.05 degrees",
+ "url": "https://cmr.earthdata.nasa.gov/search/granules.json?short_name=MOD11C1&version=061",
+ "verified": "2026-09-18 from the sandbox, keyless: the CMR collection search (C2565788888-LPCLOUD, MOD11C1 v061, cloud_hosted, time_start 2000-02-27) and the granule search for 2015-07-01..03 (three granules of 44.7, 44.5 and 44.6 MB, each with one https 'lp-prod-protected' .hdf data link whose name carries the production timestamp); the whole-collection paged listing measured 9,587 granules; and the producer's file specification (ladsweb.modaps.eosdis.nasa.gov/filespec/MODIS/61/MOD11C1) for the SDS names, scale factor 0.02, fill 0, valid_range 7500..65535 and the QC bit legend. The granules themselves are behind Earthdata Login and were opened on a GitHub-hosted runner by the probe, which re-checks every one of those attributes in every file it reads",
+ "years": [
+  2019,
+  2020,
+  2021,
+  2022,
+  2023
+ ]
+}
