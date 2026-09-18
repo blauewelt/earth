@@ -1662,16 +1662,26 @@ class CmrCatalogue(CatalogueAdapter):
                      and str(u.get("URL", "")).startswith("http")
                      and str(u.get("URL", "")) not in not_data)]
         if not hrefs:
-            raise Refusal(f"{what}: granule {gid} has no data url that is not "
-                          f"also published as browse or metadata")
+            # A GRANULE WITH NO `RelatedUrls` AT ALL IS A REAL ARCHIVE STATE,
+            # not a malformed record: HLS.L30.T34NGH.2026002T083747.v2.0 has
+            # every attribute, a footprint and a time and simply no download
+            # links in CMR. The scene EXISTS, which is the whole claim a
+            # catalogue row makes, so the row is kept and its asset entry is
+            # empty — `assets.parquet` then says, correctly, that this store
+            # has no url for it. Refusing instead would lose a whole lane for
+            # one granule.
+            counts["granules_without_asset_url"] = \
+                counts.get("granules_without_asset_url", 0) + 1
+            base, tmpl = "", ""
+        else:
+            base, tmpl = asset_template(hrefs, self.asset_id(gid, umm),
+                                        f"{what} {gid}")
         counts["asset_urls_also_browse_or_metadata"] = \
             counts.get("asset_urls_also_browse_or_metadata", 0) + \
             sum(1 for u in urls
                 if u.get("Type") in CMR_DATA_TYPES
                 and str(u.get("URL", "")).startswith("http")
                 and str(u.get("URL", "")) in not_data)
-        base, tmpl = asset_template(hrefs, self.asset_id(gid, umm), f"{what} "
-                                    f"{gid}")
         sens = self.sensor_code(cmr_platform(umm), counts)
         qc = self.qc_code(self.qc_text(gid, coll, umm, aa), counts)
         return Scene(t, lat, lon,

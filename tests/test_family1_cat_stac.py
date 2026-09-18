@@ -461,6 +461,38 @@ def test_the_asset_template_is_the_producers_own_urls_re_encoded():
         st.asset_template([], "x", "w")
 
 
+def test_a_cmr_granule_with_no_download_links_is_a_row_with_no_asset():
+    """Measured: HLS.L30.T34NGH.2026002T083747.v2.0 has no `RelatedUrls`.
+
+    Every attribute, a footprint and a time, and no download links in CMR at
+    all. The scene EXISTS, which is the whole claim a catalogue row makes, so
+    the row is kept with an empty asset entry and the case is counted —
+    refusing would have lost a whole year lane for one granule.
+    """
+    ad = fam.REGISTRY["cat_hls"]()
+    item = {"umm": {
+        "GranuleUR": "HLS.L30.TX.2026002T083747.v2.0",
+        "TemporalExtent": {"RangeDateTime": {
+            "BeginningDateTime": "2026-01-02T08:37:47.964Z"}},
+        "AdditionalAttributes": [
+            {"Name": "CLOUD_COVERAGE", "Values": ["33"]},
+            {"Name": "SPATIAL_COVERAGE", "Values": ["69"]},
+            {"Name": "MEAN_SUN_ZENITH_ANGLE", "Values": ["37.1"]}],
+        "Platforms": [{"ShortName": "LANDSAT-8",
+                       "Instruments": [{"ShortName": "OLI"}]}],
+        "SpatialExtent": {"HorizontalSpatialDomain": {"Geometry": {
+            "GPolygons": [{"Boundary": {"Points": [
+                {"Latitude": 1, "Longitude": 2},
+                {"Latitude": 1, "Longitude": 3},
+                {"Latitude": 2, "Longitude": 3},
+                {"Latitude": 2, "Longitude": 2}]}}]}}}}}
+    counts = {}
+    sc = ad.granule(item, ("L30", "HLSL30", "2.0"), counts, "t")
+    assert sc.base_url == "" and sc.asset_set == ""
+    assert counts["granules_without_asset_url"] == 1
+    assert sc.values[0] == 33.0 and sc.values[1] == 69.0
+
+
 def test_the_sidecar_round_trips_through_a_npy_and_into_one_parquet(tmp_path):
     pa = pytest.importorskip("pyarrow")
     import pyarrow.parquet as pq
