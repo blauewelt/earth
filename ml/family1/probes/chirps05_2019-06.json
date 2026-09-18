@@ -1,0 +1,103 @@
+{
+ "at": "2026-09-18T05:25:19+00:00",
+ "builder_git_sha": "f29ab8f88a85d1ba2970342b4d8a629f7828281f",
+ "bytes_fetched": 115516656,
+ "bytes_fetched_per_frame": 19252776.0,
+ "bytes_index": 19574236,
+ "counts": {
+  "bytes_files": 115516656,
+  "fetch_seconds": 12.110000000000001,
+  "files_read": 6,
+  "fill_pixels": 74590308,
+  "pentad_days": {
+   "5": 6
+  },
+  "valid_pixels": 29089692
+ },
+ "distribution": "public",
+ "estimate_store_bytes": 21184416312,
+ "family": "1tf",
+ "frame_seconds": 216000,
+ "frames_fetched": 6,
+ "frames_per_bin": 2,
+ "groups": {
+  "chirps05": {
+   "C": 1,
+   "H": 2400,
+   "W": 7200,
+   "bytes_per_frame": {
+    "max": 6620831,
+    "mean": 6438245.0,
+    "min": 6105700
+   },
+   "bytes_per_stored_tile": {
+    "max": 112294,
+    "mean": 33708.1,
+    "median": 18442.5,
+    "p90": 98808.5
+   },
+   "bytes_per_valid_pixel": 1.3279,
+   "compression_ratio": 5.37,
+   "dtype": "float16",
+   "encode_seconds_per_frame": 0.908,
+   "estimate_store_bytes": 21184416312,
+   "frame_present_by_slot": [
+    0,
+    1,
+    0,
+    1,
+    0,
+    1,
+    0,
+    1,
+    0,
+    1,
+    0,
+    1
+   ],
+   "frames_fetched": 6,
+   "frames_missing": {
+    "no_pentad_in_slot": 6
+   },
+   "frames_requested": 12,
+   "index_bytes_per_bin": 9408,
+   "note_formula": "pixels x frames x valid fraction x 2C x 1.2",
+   "note_formula_bytes": 38258762918,
+   "raw_bytes_per_frame": 34560000,
+   "record_frames": 3288,
+   "tiles_empty": 594,
+   "tiles_per_frame": 290,
+   "tiles_stored": 1146,
+   "valid_fraction": {
+    "precip": 0.280572
+   },
+   "valid_fraction_per_frame": [
+    0.280572,
+    0.280572,
+    0.280572,
+    0.280572,
+    0.280572,
+    0.280572
+   ]
+  }
+ },
+ "inputs_not_read": [],
+ "layout": "sharded",
+ "licence_redistribution_confirmed": true,
+ "month": "2019-06",
+ "note_estimate": {
+  "bytes": 40000000000.0,
+  "what": "family1tf.tex ledger: 'v ~ 0.3: ~40 GB' for ~3,300 CHIRPS v3.0 pentads at 0.05 degrees"
+ },
+ "note_formula_bytes": 38258762918,
+ "out_of_bounds": {},
+ "out_of_bounds_stored": 0,
+ "runner": "vm",
+ "seconds_per_frame": 2.175,
+ "source": "https://data.chc.ucsb.edu/products/CHIRPS/v3.0/pentads/global/tifs/chirps-v3.0.<YYYY>.<MM>.<P>.tif",
+ "store": "chirps05",
+ "tier": "G",
+ "wall_seconds": 13.05,
+ "wall_seconds_index": 3.3,
+ "zstd_level": 15
+}

@@ -40,14 +40,21 @@
 # application-approval or EULA page, the bytes received and the exact URL to
 # open. It fails the job only on a definite refusal. Hosted runner only.
 #
-# TIER G (E-082 wave 2): a sharded gridded store (seaice_asi) runs through the
-# same five stages; its parts are zstd shards, pushed and pulled like tier-P
-# parts. A public store whose licence is unconfirmed needs
-# extra_args=--allow-unconfirmed-licence to publish or push parts.
+# TIER G (E-082 wave 2): a sharded gridded store (seaice_asi, lossyear,
+# chirps05) runs through the same five stages; its parts are zstd shards,
+# pushed and pulled like tier-P parts. A public store whose licence is
+# unconfirmed needs extra_args=--allow-unconfirmed-licence to publish or push
+# parts. The install step carries `rasterio` because the two GeoTIFF sources
+# (Hansen Global Forest Change, CHIRPS) are read with it, and `adapter_env`
+# hands a tier-G adapter the environment knobs it reads at construction time
+# -- LOSSYEAR_TILES is the one a probe needs, because the lossyear store has
+# 4,480 groups and a probe measures five tiles of it. That input is guarded:
+# a name that is not a plain upper-case identifier, or one in a credential's
+# namespace, is a refusal, and every pair is echoed into the log.
 #
 # workflow_dispatch ONLY. The `runner` input can point this at a rented box;
 # a pull_request / schedule trigger here would hand that box to anyone who
-# opens a PR (ml/CLAUDE.md 6). 8 inputs of the 25 GitHub allows.
+# opens a PR (ml/CLAUDE.md 6). 9 inputs of the 25 GitHub allows.
 name: Family 1 build (tier-P observation stores, E-082)
 run-name: family1 ${{ github.event.inputs.check_credentials == 'true' && 'check-credentials' || github.event.inputs.store }} ${{ github.event.inputs.check_credentials != 'true' && (github.event.inputs.stage || 'all') || '' }} ${{ github.event.inputs.check_credentials != 'true' && github.event.inputs.stage != 'probe' && format('{0}..{1}', github.event.inputs.start || 'first', github.event.inputs.end || '2024-12-31') || '' }} ${{ github.event.inputs.probe_month }} ${{ github.event.inputs.runner != 'ubuntu-latest' && github.event.inputs.runner || '' }}
 
@@ -76,6 +83,9 @@ on:
         default: ""
       probe_month:
         description: "YYYY-MM -- the month stage=probe measures (required for a probe, ignored otherwise)"
+        default: ""
+      adapter_env:
+        description: "NAME=VALUE pairs, space-separated, exported for the build step only -- the knobs a tier-G adapter reads from the environment (e.g. LOSSYEAR_TILES=00N_060W,00N_020E,00N_110E,70N_100E,00N_180W to probe five tiles of a 4,480-group store instead of all 280). Names must match [A-Z][A-Z0-9_]* and may not begin with HF_, GITHUB_, EARTHDATA_, FIRMS_, FLUXNET_ or COPERNICUS -- a credential is never settable from a dispatch input. Every pair is echoed into the log, so nothing secret belongs here"
         default: ""
       check_credentials:
         description: "true = build nothing; check the Earthdata Login account against LP DAAC, GES DISC and PO.DAAC (hosted runner only) and print what each archive answered"
@@ -112,8 +122,8 @@ jobs:
 
       - name: Install
         run: |
-          pip install --quiet numpy huggingface_hub zstandard netCDF4 requests
-          python3 -c "import numpy, huggingface_hub, zstandard, netCDF4, requests; print('deps ok')"
+          pip install --quiet numpy huggingface_hub zstandard netCDF4 requests rasterio
+          python3 -c "import numpy, huggingface_hub, zstandard, netCDF4, requests, rasterio; print('deps ok', rasterio.__version__, rasterio.__gdal_version__)"
 
       - name: Earthdata Login check (hosted runner only)
         if: ${{ github.event.inputs.check_credentials == 'true' }}
@@ -260,10 +270,37 @@ jobs:
           END: ${{ github.event.inputs.end || '2024-12-31' }}
           EXTRA: ${{ github.event.inputs.extra_args }}
           PROBE_MONTH: ${{ github.event.inputs.probe_month }}
+          ADAPTER_ENV: ${{ github.event.inputs.adapter_env }}
           WORK: ${{ steps.preflight.outputs.work }}
           LIVE_BRANCH: ml-live-f1-${{ github.event.inputs.store }}-${{ github.run_number }}
         run: |
           set -o pipefail
+          # ADAPTER KNOBS, ONE AT A TIME AND ALL OF THEM PRINTED. A tier-G
+          # adapter can be asked for a subset of its groups (the lossyear
+          # probe cannot fetch all 280 Hansen tiles) and the mechanism is an
+          # environment variable it reads at construction time. The guard
+          # below is the whole security of it: a name that is not a plain
+          # upper-case identifier, or one in a credential's namespace, is a
+          # REFUSAL rather than an export.
+          for kv in ${ADAPTER_ENV}; do
+            name="${kv%%=*}"
+            val="${kv#*=}"
+            if ! printf '%s' "${name}" | grep -Eq '^[A-Z][A-Z0-9_]*$'; then
+              echo "::error::adapter_env: ${name} is not a plain upper-case name"
+              exit 1
+            fi
+            case "${name}" in
+              HF_*|GITHUB_*|EARTHDATA_*|FIRMS_*|FLUXNET_*|COPERNICUS*)
+                echo "::error::adapter_env may not set ${name} -- credentials come from repository secrets only (ml/CLAUDE.md 6)"
+                exit 1 ;;
+            esac
+            if [ "${name}" = "${kv}" ]; then
+              echo "::error::adapter_env: ${kv} is not NAME=VALUE"
+              exit 1
+            fi
+            export "${name}=${val}"
+            echo "::notice::adapter env ${name}=${val}"
+          done
           mkdir -p "${WORK}/${STORE}"
           LOG="${WORK}/${STORE}/build.log"
           : > "${LOG}"

@@ -1020,9 +1020,14 @@ def stage_probe_grid(a, adapter_cls, month):
             "tiles_empty": A["tiles_empty"],
             "raw_bytes_per_frame": H * W * C * sh.DTYPES[spec["dtype"]]
             .itemsize,
+            # `fb.mean()` is 0 when every tile of the probed frame is
+            # missing-valued and so nothing was stored (a lossyear sub-tile
+            # that is all ocean, a polar group with no retrieval). That is a
+            # legitimate frame, not a broken one, so the ratio is None rather
+            # than a ZeroDivisionError that loses the whole probe.
             "compression_ratio": (round(H * W * C * sh.DTYPES[spec["dtype"]]
                                         .itemsize / float(fb.mean()), 2)
-                                  if n else None),
+                                  if n and fb.mean() else None),
             "bytes_per_valid_pixel": (round(float(fb.sum())
                                             / max(int(A["valid"].sum()), 1),
                                             4) if n else None),
@@ -1108,7 +1113,12 @@ def check_grid_smoke(ctx, truth):
                 continue
             assert got is not None, (g, b, f)
             assert got.shape == want.shape and got.dtype == want.dtype
-            assert np.array_equal(got, want), (g, b, f)
+            # `equal_nan` for a float group: NaN IS the missing value there
+            # (`sharded.DTYPES`), so a plain array_equal can never pass on a
+            # float16 store with any missing pixel. `stage_publish_grid` and
+            # `http_verify` already compare this way.
+            assert np.array_equal(got, want,
+                                  equal_nan=got.dtype.kind == "f"), (g, b, f)
             n_frames += 1
     sm = read_json(os.path.join(ctx.store, "store.json"), {})
     stored = dict(sm.get("frames_missing_by_reason") or {})
