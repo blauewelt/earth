@@ -1,0 +1,80 @@
+  270329,
+  270212,
+  230279,
+  235796,
+  205897,
+  192138,
+  182252,
+  176934
+ ],
+ "days_with_no_rows": 0,
+ "distinct_platforms": 4,
+ "channels": [
+  "brightness",
+  "frp",
+  "confidence",
+  "daynight"
+ ],
+ "nan_fraction": {
+  "brightness": 0.0,
+  "frp": 0.0,
+  "confidence": 0.900302,
+  "daynight": 0.0
+ },
+ "out_of_bounds": {
+  "brightness": 0,
+  "frp": 0,
+  "confidence": 0,
+  "daynight": 0
+ },
+ "out_of_bounds_stored": {
+  "brightness": 0,
+  "frp": 0,
+  "confidence": 0,
+  "daynight": 0
+ },
+ "rows_outside_month_dropped_by_probe": 0,
+ "qc": {
+  "1": 199668,
+  "2": 455197,
+  "12": 291352,
+  "20": 2485416,
+  "28": 164185,
+  "11": 281735,
+  "19": 2505502,
+  "27": 185410
+ },
+ "counts": {
+  "windows": 21,
+  "rows_read": 6568465,
+  "rows_by_spelling": {
+   "Terra/MODIS -> Terra": 199668,
+   "Aqua/MODIS -> Aqua": 455197,
+   "N20/VIIRS -> NOAA-20": 2940953,
+   "N/VIIRS -> Suomi-NPP": 2972647
+  },
+  "bytes_windows": 525687561,
+  "rows_kept": 6568465,
+  "fetch_seconds": 70.7
+ },
+ "counts_scope": "month",
+ "bytes_fetched": 525687561,
+ "bytes_index": 1227525,
+ "wall_seconds": 70.67,
+ "wall_seconds_index": 3.67,
+ "bytes_per_row": 80.032,
+ "stored_bytes_per_row": 35,
+ "time_dtype": "int32",
+ "schema_version": 2,
+ "platforms": {
+  "entries": 5,
+  "probe_platforms_without_entry": 0
+ },
+ "estimate_rows_per_year": null,
+ "estimate_store_bytes": null,
+ "note_estimate": null,
+ "runner": "GitHub Actions 1000005357",
+ "builder_git_sha": "942fb496a192f35d2de32577fc676404320d0f58",
+ "at": "2026-09-18T08:27:34+00:00"
+}
+probe -> /home/runner/work/earth/earth/ml/cache/family1_tf/probe/fire/2023-08.json
