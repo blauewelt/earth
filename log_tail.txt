@@ -1,0 +1,80 @@
+
+values.npy:  98%|█████████▊| 17.4G/17.7G [04:43<00:05, 62.3MB/s][A[A[A
+
+
+values.npy:  98%|█████████▊| 17.4G/17.7G [04:44<00:05, 64.4MB/s][A[A[A
+
+
+values.npy:  98%|█████████▊| 17.4G/17.7G [04:44<00:05, 63.8MB/s][A[A[A
+
+
+values.npy:  98%|█████████▊| 17.4G/17.7G [04:44<00:04, 65.4MB/s][A[A[A
+
+
+values.npy:  98%|█████████▊| 17.4G/17.7G [04:45<00:04, 66.8MB/s][A[A[A
+
+
+values.npy:  98%|█████████▊| 17.4G/17.7G [04:45<00:04, 67.1MB/s][A[A[A
+
+
+values.npy:  99%|█████████▊| 17.5G/17.7G [04:45<00:03, 68.7MB/s][A[A[A
+
+
+values.npy:  99%|█████████▊| 17.5G/17.7G [04:45<00:03, 67.9MB/s][A[A[A
+
+
+values.npy:  99%|█████████▊| 17.5G/17.7G [04:46<00:03, 67.9MB/s][A[A[A
+
+
+values.npy:  99%|█████████▉| 17.5G/17.7G [04:46<00:03, 67.3MB/s][A[A[A
+
+
+values.npy:  99%|█████████▉| 17.5G/17.7G [04:46<00:03, 49.0MB/s][A[A[A
+
+
+values.npy:  99%|█████████▉| 17.6G/17.7G [04:47<00:03, 50.5MB/s][A[A[A
+
+
+values.npy:  99%|█████████▉| 17.6G/17.7G [04:47<00:03, 50.9MB/s][A[A[A
+
+
+values.npy:  99%|█████████▉| 17.6G/17.7G [04:47<00:02, 50.9MB/s][A[A[A
+
+
+values.npy:  99%|█████████▉| 17.6G/17.7G [04:48<00:02, 52.7MB/s][A[A[A
+
+
+values.npy:  99%|█████████▉| 17.6G/17.7G [04:48<00:01, 57.0MB/s][A[A[A
+
+
+values.npy: 100%|█████████▉| 17.6G/17.7G [04:48<00:01, 57.8MB/s][A[A[A
+
+
+values.npy: 100%|█████████▉| 17.7G/17.7G [04:49<00:01, 57.3MB/s][A[A[A
+
+
+values.npy: 100%|█████████▉| 17.7G/17.7G [04:49<00:00, 60.0MB/s][A[A[A
+
+
+values.npy: 100%|█████████▉| 17.7G/17.7G [04:49<00:00, 57.7MB/s][A[A[A
+
+
+values.npy: 100%|█████████▉| 17.7G/17.7G [04:49<00:00, 60.3MB/s][A[A[Avalues.npy: 100%|██████████| 17.7G/17.7G [04:50<00:00, 61.1MB/s]
+Upload 3 LFS files: 100%|██████████| 3/3 [04:50<00:00, 110.38s/it]Upload 3 LFS files: 100%|██████████| 3/3 [04:50<00:00, 96.89s/it] 
+  [publish icoads] bin.npy  1/10  598.8s
+  [publish icoads] bin_offsets.npy  2/10  599.2s
+  [publish icoads] fp.npy  3/10  629.9s
+  [publish icoads] lat.npy  4/10  678.0s
+  [publish icoads] lon.npy  5/10  753.8s
+  [publish icoads] platform.npy  6/10  925.5s
+  [publish icoads] qc.npy  7/10  937.8s
+  [publish icoads] time_s.npy  8/10  1004.4s
+  [publish icoads] values.npy  9/10  1396.1s
+  [publish icoads] store.json  10/10  1396.2s
+  publish: 10 file(s) verified by restore -> https://huggingface.co/datasets/chfrank/earth-tensors/tree/main/tensors/family1_gf/icoads
+=== stage publish done in 1623.0s ===
+
+=== stage check (icoads) ===
+  hub: chfrank/earth-tensors with the token from $HF_TOKEN
+  check: icoads — 9 file(s) verified, N=1,107,951,670, schema 3, Hub chfrank/earth-tensors:tensors/family1_gf/icoads agrees
+=== stage check done in 258.6s ===
