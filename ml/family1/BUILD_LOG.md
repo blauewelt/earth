@@ -824,3 +824,62 @@ small catalogues were built and published from the sandbox instead
 (`HF_TOKEN` from `/home/claude/.hf_token`, `--stage all`), which is the
 `bgcargo` precedent from wave 1. Each restore-verified every file and its Hub
 `store.json` agrees with the local sha256 block.
+
+### TWO ADJACENT LANES WRITE THE SAME YEAR, and the last one to push wins
+
+The wave's most expensive finding, and it is about the FRAMEWORK rather than
+about any source. `--start` / `--end` choose BINS, and the bin that straddles
+a lane boundary is inside BOTH lanes' windows. That bin belongs to the year of
+its FIRST day, so:
+
+- the earlier lane writes year *N* complete (73 or 74 bins), and
+- the later lane writes a ONE-BIN copy of the same year *N*,
+
+both under `partials/<family>/<store>/<N>/`. `family10_parts_hub.push_many`
+skips a year only when its `done.json` already matches what it is about to
+upload, and otherwise OVERWRITES — so whichever lane finishes last decides
+which of the two versions the assembly will read. Nothing warns.
+
+**Measured on snow05.** Lane #159 (2000-2008) and lane #160 (2009-2017) both
+contain bin 1972 (2008-12-30 .. 2009-01-03), whose first day is in 2008.
+#160 reached its 2008 first and pushed a one-bin year at 07:54; #159 pushed
+its 74-bin 2008 two hours later, downloaded the file back to check it, and got
+**#160's** copy:
+
+    RESTORE MISMATCH partials/family1_tf/snow05/2008/terra__shard_index.npy:
+    uploaded 4e861afe…, downloaded 6b169f4b… — the push is not trustworthy
+
+That looked like a Hub flake for ten minutes. It is not: the restore check
+caught a genuine concurrent overwrite of one path by two jobs, which is
+exactly what it is for. Without it the store would have assembled with 2008
+holding five frames instead of 366, and the only sign would have been a frame
+count nobody had a reason to distrust.
+
+**The rule that removes it: a lane boundary must fall on a BIN boundary that
+is also a YEAR boundary** — a lane starts on the first day *d* of a year with
+`(d − 1982-01-01) mod 5 == 0`, and the previous lane ends on *d − 1*. Then
+every year belongs to exactly one lane and no two lanes ever write the same
+path. For the four-year lanes this wave used:
+
+| lane starts | (bin) | previous lane ends |
+|---|---|---|
+| 2000-01-02 | 1315 | — |
+| 2004-01-01 | 1607 | 2003-12-31 |
+| 2008-01-05 | 1900 | 2008-01-04 |
+| 2012-01-04 | 2192 | 2012-01-03 |
+| 2016-01-03 | 2484 | 2016-01-02 |
+| 2020-01-02 | 2776 | 2020-01-01 |
+| 2024-01-01 | 3068 | 2023-12-31 |
+
+(The first bin-start of a year is always inside that year, because a bin is
+five days — so this always exists and never pulls the previous year in.)
+
+**How to check a store's parked parts before assembling one**, which is now
+the thing to do after any multi-lane tier-G fetch:
+`/tmp/.../scratchpad/years.py <store>` reads every parked
+`<year>/counts.json` off the Hub and prints its bin count beside the number
+the family's calendar says that year holds. A year short of its calendar is
+either a lane collision or the record's own end — the record's ends are
+legitimately short (snow05's 2000 holds 63 bins of 73 because MOD10C1 starts
+on 2000-02-24, and 2026 holds 51 because the record ends in September), and
+everything between them should be exact.
