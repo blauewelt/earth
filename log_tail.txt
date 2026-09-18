@@ -1,0 +1,14 @@
+store     cat_s2 — Sentinel-2 L2A tile catalogue (10/20/60 m surface reflectance, S2A + S2B + S2C, CDSE), one row per tile-overpass
+family    family1_tf (1.0.tf) · public -> chfrank/earth-tensors:tensors/family1_tf/cat_s2
+axis      2022-01-01 .. 2022-12-31  bins 2922..2994 · time_s int32 (schema 2)
+channels  C=5: cloud, valid, angle, log2_area, sensor
+work      /home/runner/work/earth/earth/ml/cache/family1_tf
+
+=== stage index (cat_s2) ===
+  [index cat_s2] start (1 items)  0/1  0.0s
+  [index cat_s2] plan.json  1/1  12.5s
+  index: cat_s2 — 1 year(s), C=5 (cloud, valid, angle, log2_area, sensor), bins 2922..2994
+=== stage index done in 12.5s ===
+
+=== stage fetch (cat_s2) ===
+  [fetch cat_s2] start (1 items)  0/1  0.0s
