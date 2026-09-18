@@ -674,3 +674,153 @@ than excuses.**
 Until then the store is designed and nothing is published under its name,
 which is the honest state: a family with a store missing and a note saying so
 is better than a store whose store.json misdescribes two thirds of itself.
+
+## E-082 wave 3 — the SCENE CATALOGUES, tier T (added 2026-09-18)
+
+*Eight stores that hold no pixels: one row per satellite scene, with the
+second it was taken, its footprint's centre and area, how cloudy it was, how
+high the sun stood, which instrument took it and which processing baseline
+produced it. The pixels — between 0.01 and 3 petabytes a year each — stay at
+the producer, and a sidecar `assets.parquet` maps each row's hashed scene
+identifier back to the producer's own identifier and download URLs. The
+design note is `ml/paper/notes/family1tf.tex`, "The image catalogue, tier T";
+the shared machinery is `ml/family1/adapters/_stac.py`. **None of the eight
+needs an account**: every listing endpoint answers anonymously.*
+
+| store | family | run(s) | N | stored bytes | record | verified | notes |
+|---|---|---|---|---|---|---|---|
+| `cat_nisar` | 1.0.tf (tier T) | built and published **from the sandbox** (`--stage all`, 2025-10-01..2026-09-30) because the hosted pool was saturated by another wave | 138,804 | 8,907,651 (8.9 MB; `assets.parquet` 3.8 MB) | 2025-10 → 2026-09 (bins 3198–3266) | 2026-09-18 | NISAR L2 GCOV, ASF; public; schema 2. **The record starts 2025-10, not the ledger's 2026-06**: 1,719 frames in 2025-10 under the BETA collection, none in 2025-09. Three sampled rows were re-read against ASF and their time, footprint centre, sensor code and asset URL all match the producer's own record |
+| `cat_viirs` | 1.0.tf (tier T) | the sandbox, `--stage all` 2012-01-01..2026-09-30; the first attempt died on its last year on a CMR-Hits inconsistency (below) and the re-run skipped the fourteen finished years | 2,341,071 | 128,806,565 (128.8 MB; `assets.parquet` 42.2 MB) | 2012-01 → 2026-09 (bins 2195–3266) | 2026-09-18 | VIIRS I-band L1B, LAADS; public; schema 2. **THREE satellites, not the ledger's two**: VJ202IMG (NOAA-21) has been flying since 2023-02 and is catalogued with its own sensor code. Three of the five channels are NaN for every row — an L1B radiance granule publishes no cloud fraction, no valid fraction and no mean angle — and that is the honest answer rather than an invented one |
+| `cat_olci` | 1.0.tf (tier T) | the sandbox, `--stage all` 2016-04-01..2026-09-30, 11 years in 43 min | 1,591,637 | 126,776,002 (126.8 MB; `assets.parquet` 64.7 MB) | 2016-04 → 2026-09 (bins 2506–3266) | 2026-09-18 | Sentinel-3 OLCI L2 WFR, CDSE; public; schema 2; **C = 6** — the only catalogue with a sixth channel, `coastal`. **From 2026 every overpass is published twice**, once NR and once NT, and the store keeps ONE row per overpass (measured on 2026-09: 15,033 products → 7,766 rows). Every WFR granule is catalogued, not only the coastal ones, because the GSHHG ±100 km band static the note's "coastal band" refers to is not built yet; `coastal` is a coarse stand-in computed from the repository's own `data/family7_sphere.json`, and store.json says so |
+
+**What each store is, in one line.** `cat_landsat` every Landsat Collection 2
+Level-2 scene since 1982 (all five cameras) · `cat_hls` NASA's harmonised
+Landsat and Sentinel-2 30 m tiles · `cat_s2` every Sentinel-2 L2A tile ·
+`cat_s1` every Sentinel-1 IW strip, ground-range AND single-look complex ·
+`cat_nisar` every NISAR L-band covariance frame · `cat_olci` every Sentinel-3
+ocean-colour granule · `cat_viirs` every VIIRS 375 m six-minute swath ·
+`cat_ecostress` every 70 m thermal tile from the Space Station.
+
+**The probes.** One real month per store, through the real adapter, with the
+producer's own count for that month beside it
+(`ml/family1/probes/cat_*.json`):
+
+| store | month | rows | the producer's count | rate | MB fetched | B/row |
+|---|---|---|---|---|---|---|
+| `cat_hls` | 2024-06 | 413,796 | 413,796 | 1,169/s | 5,540 | 13,389 |
+| `cat_landsat` | 2024-06 | 42,339 | 42,339 | 859/s | 173 | 4,087 |
+| `cat_s2` | 2024-06 | 375,674 | 375,674 | 848/s | 1,647 | 4,384 |
+| `cat_s1` | 2024-06 | 30,326 | 30,326 | 671/s | 142 | 4,677 |
+| `cat_ecostress` | 2024-06 | 126,788 | 126,788 | 983/s | 2,422 | 19,105 |
+| `cat_viirs` | 2024-06 | 20,796 | 20,970 | 1,359/s | 51 | 2,465 |
+| `cat_nisar` | 2026-08 | 29,992 | 30,229 | 171/s | 505 | 16,834 |
+| `cat_olci` | 2026-09 | 7,766 | 15,033 | 528/s | 65 | 8,334 |
+
+Six of the eight walked exactly the producer's number. `cat_viirs`' 174 and
+`cat_nisar`' 237 are `granule_starts_outside_window` (below);
+`cat_olci`'s gap is the NR/NT de-duplication. `out_of_bounds_stored` is 0
+everywhere and every store's `distinct_platforms` equals its rows — **no hash
+collision in 1.05 million probed scenes**.
+
+**Whole-archive sizes, from the producers' own per-year counts, measured
+2026-09-18:** `cat_s2` 41,232,005 · `cat_hls` 37,936,283 (S30 21,924,986 +
+L30 16,011,297) · `cat_ecostress` 19,524,702 (v002 15,616,410 + v003
+3,908,292) · `cat_landsat` 10,315,132 · `cat_s1` 6,203,352 (GRDH 3,184,957 +
+SLC 3,018,395) · `cat_viirs` 2,341,106 · `cat_olci` ≈ 1,608,336 ·
+`cat_nisar` 138,762. About **1.19 × 10⁸ rows** and, at 37–39 stored bytes a
+row, roughly 4.5 GB of arrays plus the sidecars.
+
+### What the producers do that a careless adapter would get wrong
+
+Each of these was MEASURED, and four of them contradict the ledger.
+
+- **Sentinel-2A is not retired.** The note says "S2B + S2C (S2A retired
+  2026-03)". By acquisition time: S2A produced 24,411 L2A products in 2026-02,
+  **86,193 in 2026-04** and **48,637 in 2026-09**. `cat_s2` carries three
+  satellites and its index re-measures the claim on every build.
+- **Every Sentinel-1 GRDH scene is in CDSE twice.** `IW_GRDH_1S` and
+  `IW_GRDH_1S-COG` hold the same scenes — 529/529 on 2024-06-01, 922/922 on
+  2026-09-01, 1,110/1,110 on 2019-06-01 — so `contains(Name,'IW_GRDH')`
+  returns exactly double. The filter is on `productType` and the index counts
+  the mirror beside the store.
+- **From 2026 every OLCI overpass is published twice**, once near-real-time
+  and once consolidated: 846 products on 2026-09-01 are 423 NT + 423 NR, and
+  NR is 0 for every year 2016–2025. The store keeps the NT where both exist
+  and the NR where NT does not exist yet, so the newest weeks are not lost.
+- **NISAR GCOV starts 2025-10**, not 2026-06.
+- **VIIRS I-band L1B has three satellites**, not two.
+- **Both CMR and ASF match on OVERLAP.** `temporal=a,b` returns every granule
+  whose own time RANGE overlaps `[a, b]`, both ends inclusive, so a six-minute
+  VIIRS granule or a 30-second NISAR frame that spans a window boundary is
+  returned for both windows. A granule belongs to the window its START falls
+  in; without that rule 169 of 20,796 VIIRS granules and 237 of 30,229 NISAR
+  frames came back twice. (ASF's inclusive end is separately visible in its own
+  counts: 6,675 + 23,318 over two halves of August 2026 against 29,992 for the
+  whole month.)
+- **CMR's own `CMR-Hits` header can over-count.** On 2026-08-02 the VNP02IMG
+  window answers `CMR-Hits: 243` and serves 242 distinct granules — with any
+  sort key, with none, and at `page_size=2000` where the window is ONE response
+  with no cursor and no paging at all. A window may be up to 8 short of its own
+  header; the shortfall is counted by name, a walk that returns MORE is still a
+  refusal, and the three structural truncation checks are untouched.
+- **A short LAST page that still offers a cursor is normal.** landsatlook ends
+  a window with 66 of 100 items and a `next` link. What is truncation is a
+  short page FOLLOWED by more items, and that is what is refused.
+- **ASF rate-limits at 250 requests a minute and says so in a 429.** Eight
+  workers at two requests a window were issuing about 800 a minute and killed
+  a whole-archive fetch 34 minutes in. `_stac.RATE_LIMITS` holds that host at
+  240 through a token bucket every thread shares; no other producer throttled
+  us (CMR served 2,000-granule pages to eight workers for an hour, CDSE's
+  OData the same, landsatlook answered 859 items a second).
+
+### Three decisions the note did not anticipate
+
+- **`area` is stored as `log2(km²)`, not km².** A store's `values` is
+  **float16**, whose largest finite number is 65,504; a VIIRS six-minute
+  granule is about 7 × 10⁶ km² and a Sentinel-3 OLCI granule 1.5 × 10⁶, so
+  both round to **infinity** on the way in — which is exactly how `cat_s1`'s
+  and `cat_olci`'s first smokes failed (`values.npy holds an infinity`). The
+  price is float16's ten-bit mantissa: the round trip is 0.007 % at a
+  Sentinel-2 tile's 12,364 km², 0.31 % at a VIIRS granule's 7 × 10⁶, never
+  worse than about 1.2 %. The note's "area" is `2 ** log2_area`.
+- **A footprint that encloses a pole is not the whole planet.** The
+  spherical-excess formula returns one of the two regions a ring divides the
+  sphere into, depending on the winding, so 1,239 of 20,796 VIIRS granules
+  (6 %) came back at the area of the Earth. `sphere_centre_area` takes the
+  smaller of the two.
+- **The CDSE STAC endpoint serves no Sentinel collection at all.**
+  `catalogue.dataspace.copernicus.eu/stac/collections` answers 200 with ten
+  collections — five Contributing Missions groups and five CLMS burnt-area
+  products — and not one Sentinel among them. For `cat_s2`, `cat_s1` and
+  `cat_olci` the OData API is not a fallback, it is the only catalogue CDSE
+  offers.
+
+### The sidecar, and how it travels with a lane's parts
+
+`assets.parquet` has one row per catalogue row: `platform` (the row's hash),
+`stac_id`, `collection`, `base_url` (the directory the scene's files live in)
+and `asset_set` (the file names with `{id}` standing for the identifier, so a
+URL is `base_url + "/" + name.replace("{id}", stac_id)`). The names are the
+PRODUCER's own — nothing is derived from a pattern — and parquet's dictionary
+encoding collapses the column to one entry per distinct set (two for the whole
+Landsat archive: TM/ETM+ and OLI/TIRS, verified on 360 scenes across six eras).
+
+A fetch writes its asset rows beside that year's `.npz` parts as
+`assets-NNNNN.npy`, because `family10_parts_hub` already carries `.npy` files
+out of a year directory to the Hub and back and neither assembler reads them —
+so a lane's sidecar travels with its parts for free and a
+`--parts-from-hub` assembly finds it. The bytes inside are a zstd-compressed
+Arrow IPC stream. `extra_files` concatenates them one row group at a time
+(Sentinel-2's table is 41 million rows whose `stac_id` and `base_url` are
+unique per row, so building it in memory first would need about 8 GB), checks
+that the `platform` column is unique across the whole table, and refuses
+unless it has exactly as many rows as the store.
+
+### Why three stores were built in the sandbox
+
+The hosted pool was saturated by another wave of this experiment — 30 jobs in
+flight and 49 queued, the oldest of them 3.3-hour `oc4k` lanes — so the three
+small catalogues were built and published from the sandbox instead
+(`HF_TOKEN` from `/home/claude/.hf_token`, `--stage all`), which is the
+`bgcargo` precedent from wave 1. Each restore-verified every file and its Hub
+`store.json` agrees with the local sha256 block.
