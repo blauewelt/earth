@@ -1,0 +1,115 @@
+{
+ "bins": [
+  2702,
+  2775
+ ],
+ "builder_git_sha": "bd7f6666885e39852610708af0b8bc1133e01b42",
+ "built_at": "2026-09-18T11:32:36+00:00",
+ "channels": [
+  {
+   "max": 100.0,
+   "min": 0.0,
+   "name": "cloud",
+   "unit": "%"
+  },
+  {
+   "max": 100.0,
+   "min": 0.0,
+   "name": "valid",
+   "unit": "%"
+  },
+  {
+   "max": 90.0,
+   "min": 0.0,
+   "name": "angle",
+   "unit": "deg"
+  },
+  {
+   "max": 26.0,
+   "min": -10.0,
+   "name": "log2_area",
+   "unit": "log2(km2)"
+  },
+  {
+   "max": 255.0,
+   "min": 0.0,
+   "name": "sensor",
+   "unit": "1"
+  }
+ ],
+ "collections": {
+  "L30": {
+   "concept_id": "C2021957657-LPCLOUD",
+   "dataset_id": "HLS Landsat Operational Land Imager Surface Reflectance and TOA Brightness Daily Global 30m v2.0",
+   "first_month": "2019-01",
+   "granules_first_month": 52603,
+   "granules_total": 16011297,
+   "time_end": null,
+   "time_start": "2013-04-11T00:00:00.000Z"
+  },
+  "S30": {
+   "concept_id": "C2021957295-LPCLOUD",
+   "dataset_id": "HLS Sentinel-2 Multi-spectral Instrument Surface Reflectance Daily Global 30m v2.0",
+   "first_month": "2019-01",
+   "granules_first_month": 131608,
+   "granules_total": 21925625,
+   "time_end": null,
+   "time_start": "2015-11-28T00:00:00.000Z"
+  }
+ },
+ "dataset": "HLS v2.0 (NASA LP DAAC) via CMR granule search",
+ "date_range": [
+  "2019-01-01",
+  "2019-12-31"
+ ],
+ "first_record": {
+  "asset_dir": "https://data.lpdaac.earthdatacloud.nasa.gov/lp-prod-protected/HLSS30.020/HLS.S30.T56MLC.2019001T001721.v2.0",
+  "asset_template": "{id}.B01.tif {id}.B02.tif {id}.B03.tif {id}.B04.tif {id}.B05.tif {id}.B06.tif {id}.B07.tif {id}.B08.tif {id}.B09.tif {id}.B10.tif {id}.B11.tif {id}.B12.tif {id}.B8A.tif {id}.Fmask.tif {id}.SAA.tif {id}.SZA.tif {id}.VAA.tif {id}.VZA.tif",
+  "collection": "S30",
+  "counts": {
+   "asset_urls_also_browse_or_metadata": 0
+  },
+  "id": "HLS.S30.T56MLC.2019001T001721.v2.0",
+  "lat": -2.446775247368374,
+  "lon": 151.8154156411303,
+  "qc": 0,
+  "time_s": 1167610645,
+  "values": {
+   "angle": 31.50857729,
+   "cloud": 98.0,
+   "log2_area": 12.691865299187917,
+   "sensor": 1.0,
+   "valid": 54.0
+  }
+ },
+ "footprint": {
+  "log2_dt": -18.720671786825555,
+  "log2_fp": 1.9801652405609538
+ },
+ "page_size": 500,
+ "per_year_resume": true,
+ "qc_policy": "qc is the HLS product version taken from the granule's own identifier suffix: 0 = v2.0, 1 = v2.1 (not yet published). A version the table does not list is 255 and counted by name in `qc_unlisted`. `cloud` is CLOUD_COVERAGE, `valid` is SPATIAL_COVERAGE and `angle` is MEAN_SUN_ZENITH_ANGLE, each NaN when the granule does not carry it and counted (`attr_missing_<name>`); a value outside its channel's bounds is NaN and counted (`out_of_bounds`), never clipped.",
+ "qc_table": {
+  "0": "v2.0",
+  "1": "v2.1"
+ },
+ "sensor_table": {
+  "1": "Sentinel-2A/Sentinel-2 MSI",
+  "2": "Sentinel-2B/Sentinel-2 MSI",
+  "3": "Sentinel-2C/Sentinel-2 MSI",
+  "4": "LANDSAT-8/OLI",
+  "5": "LANDSAT-9/OLI"
+ },
+ "sources": [
+  "https://cmr.earthdata.nasa.gov/search/granules.umm_json",
+  "https://cmr.earthdata.nasa.gov/search/collections.json?short_name=HLSS30",
+  "https://cmr.earthdata.nasa.gov/stac/LPCLOUD"
+ ],
+ "store": "cat_hls",
+ "title": "HLS v2.0 scene catalogue \u2014 harmonised Sentinel-2 (S30) and Landsat (L30) 30 m tiles, one row per granule",
+ "url": "https://cmr.earthdata.nasa.gov/search/granules.umm_json",
+ "verified": "2026-09-18 from the sandbox, anonymously: both collections exist (HLSS30 v2.0 from 2015-11, HLSL30 v2.0 from 2013-04); CMR-Hits for HLSS30 2024-06 is 226,982 and for 2024-06-01 alone 7,698; page_size=2000 with the CMR-Search-After cursor walks a window and the walk equals CMR-Hits; the UMM-G granule carries CLOUD_COVERAGE, SPATIAL_COVERAGE, MEAN_SUN_ZENITH_ANGLE, GPolygons and Platforms, and the CMR-STAC endpoint answers HTTP 502 for any limit above 1",
+ "years": [
+  2019
+ ]
+}
