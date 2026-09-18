@@ -1,0 +1,10 @@
+{
+ "at": "2026-09-18T08:06:58+00:00",
+ "done": 6,
+ "elapsed_s": 1126.3,
+ "eta_s": 0.0,
+ "item": "swh 2002",
+ "stage": "fetch swh",
+ "total": 6,
+ "year_rows": 59609148
+}
