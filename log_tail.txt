@@ -1,0 +1,80 @@
+  {
+   "unit": "2020-01-09",
+   "why": "20200109120000-STAR-L3S_GHRSST-SSTsubskin-LEO_Daily-ACSPO_V2.81-v02.0-fv01.0: CMR declares this granule as 108 bytes, under the 1000000-byte floor \u2014 a file that small is not a day of 0.02-degree SST"
+  },
+  {
+   "unit": "2020-01-12",
+   "why": "20200112120000-STAR-L3S_GHRSST-SSTsubskin-LEO_Daily-ACSPO_V2.81-v02.0-fv01.0: CMR declares this granule as 108 bytes, under the 1000000-byte floor \u2014 a file that small is not a day of 0.02-degree SST"
+  },
+  {
+   "unit": "2020-01-16",
+   "why": "20200116120000-STAR-L3S_GHRSST-SSTsubskin-LEO_Daily-ACSPO_V2.81-v02.0-fv01.0: CMR declares this granule as 108 bytes, under the 1000000-byte floor \u2014 a file that small is not a day of 0.02-degree SST"
+  },
+  {
+   "unit": "2020-01-17",
+   "why": "20200117120000-STAR-L3S_GHRSST-SSTsubskin-LEO_Daily-ACSPO_V2.81-v02.0-fv01.0: CMR declares this granule as 108 bytes, under the 1000000-byte floor \u2014 a file that small is not a day of 0.02-degree SST"
+  },
+  {
+   "unit": "2020-01-20",
+   "why": "20200120120000-STAR-L3S_GHRSST-SSTsubskin-LEO_Daily-ACSPO_V2.81-v02.0-fv01.0: CMR declares this granule as 108 bytes, under the 1000000-byte floor \u2014 a file that small is not a day of 0.02-degree SST"
+  },
+  {
+   "unit": "2020-01-22",
+   "why": "20200122120000-STAR-L3S_GHRSST-SSTsubskin-LEO_Daily-ACSPO_V2.81-v02.0-fv01.0: CMR declares this granule as 108 bytes, under the 1000000-byte floor \u2014 a file that small is not a day of 0.02-degree SST"
+  },
+  {
+   "unit": "2020-01-23",
+   "why": "20200123120000-STAR-L3S_GHRSST-SSTsubskin-LEO_Daily-ACSPO_V2.81-v02.0-fv01.0: CMR declares this granule as 108 bytes, under the 1000000-byte floor \u2014 a file that small is not a day of 0.02-degree SST"
+  },
+  {
+   "unit": "2020-01-25",
+   "why": "20200125120000-STAR-L3S_GHRSST-SSTsubskin-LEO_Daily-ACSPO_V2.81-v02.0-fv01.0: CMR declares this granule as 108 bytes, under the 1000000-byte floor \u2014 a file that small is not a day of 0.02-degree SST"
+  },
+  {
+   "unit": "2020-01-28",
+   "why": "20200128120000-STAR-L3S_GHRSST-SSTsubskin-LEO_Daily-ACSPO_V2.81-v02.0-fv01.0: CMR declares this granule as 108 bytes, under the 1000000-byte floor \u2014 a file that small is not a day of 0.02-degree SST"
+  }
+ ],
+ "counts": {
+  "quality_grade": {
+   "absent": 32076000,
+   "0": 1865625546,
+   "5": 1018298454
+  },
+  "pixels_in_frame": 2916000000,
+  "pixels_valid": 1018298454,
+  "resolution": {
+   "sst=sea_surface_temperature": 18,
+   "quality=quality_level": 18,
+   "lat=lat": 18,
+   "lon=lon": 18,
+   "time=time": 18
+  },
+  "grid_meta": {
+   "{\"lat_first\": 89.98999786376953, \"lat_last\": -89.98999786376953, \"lon_first\": -179.99000549316406, \"lon_last\": 179.99000549316406}": 18
+  },
+  "out_of_bounds": {
+   "sst": 17
+  },
+  "files_read": 18,
+  "bytes_files": 7540148193,
+  "fetch_seconds": 1021.51
+ },
+ "bytes_fetched": 13597336020,
+ "bytes_index": 443740239,
+ "bytes_fetched_per_frame": 755407556.7,
+ "wall_seconds": 1075.01,
+ "wall_seconds_index": 7.15,
+ "seconds_per_frame": 59.723,
+ "estimate_store_bytes": 1604064519,
+ "note_formula_bytes": 8417933816,
+ "note_estimate": {
+  "bytes": 2300000000000.0,
+  "what": "family1gf.tex: 162 M px x 9,700 days, v ~ 0.3 -> ~2.3 TB for the whole record (phase C)"
+ },
+ "runner": "GitHub Actions 1000005360",
+ "builder_git_sha": "ce19e746ece389e687baeeb3770dcd7afdc997a5",
+ "at": "2026-09-18T08:47:05+00:00"
+}
+probe -> /home/runner/work/earth/earth/ml/cache/family1_gf/probe/sst_acspo02/2020-01.json
+probe sst_acspo02 2020-01: 13 input(s) could not be read — see inputs_not_read
