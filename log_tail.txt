@@ -1,0 +1,80 @@
+  ::warning::catalogue.dataspace.copernicus.eu answered HTTP 429 — waiting 2s (attempt 2/3)
+  ::warning::catalogue.dataspace.copernicus.eu answered HTTP 429 — waiting 2s (attempt 3/3)
+  ::warning::catalogue.dataspace.copernicus.eu answered HTTP 429 — waiting 2s (attempt 3/3)
+  ::warning::catalogue.dataspace.copernicus.eu answered HTTP 429 — waiting 2s (attempt 1/3)
+  ::warning::catalogue.dataspace.copernicus.eu answered HTTP 429 — waiting 2s (attempt 3/3)
+  ::warning::catalogue.dataspace.copernicus.eu answered HTTP 429 — waiting 2s (attempt 1/3)
+  ::warning::catalogue.dataspace.copernicus.eu answered HTTP 429 — waiting 2s (attempt 3/3)
+  ::warning::catalogue.dataspace.copernicus.eu answered HTTP 429 — waiting 2s (attempt 3/3)
+  ::warning::catalogue.dataspace.copernicus.eu answered HTTP 429 — waiting 2s (attempt 1/3)
+  ::warning::catalogue.dataspace.copernicus.eu answered HTTP 429 — waiting 2s (attempt 1/3)
+  ::warning::catalogue.dataspace.copernicus.eu answered HTTP 429 — waiting 2s (attempt 2/3)
+  ::warning::catalogue.dataspace.copernicus.eu answered HTTP 429 — waiting 2s (attempt 1/3)
+  ::warning::catalogue.dataspace.copernicus.eu answered HTTP 429 — waiting 2s (attempt 2/3)
+  ::warning::catalogue.dataspace.copernicus.eu answered HTTP 429 — waiting 2s (attempt 1/3)
+  ::warning::catalogue.dataspace.copernicus.eu answered HTTP 429 — waiting 2s (attempt 1/3)
+  ::warning::catalogue.dataspace.copernicus.eu answered HTTP 429 — waiting 2s (attempt 2/3)
+  ::warning::catalogue.dataspace.copernicus.eu answered HTTP 429 — waiting 2s (attempt 2/3)
+  ::warning::catalogue.dataspace.copernicus.eu answered HTTP 429 — waiting 2s (attempt 3/3)
+  ::warning::catalogue.dataspace.copernicus.eu answered HTTP 429 — waiting 2s (attempt 2/3)
+  ::warning::catalogue.dataspace.copernicus.eu answered HTTP 429 — waiting 2s (attempt 3/3)
+  ::warning::catalogue.dataspace.copernicus.eu answered HTTP 429 — waiting 2s (attempt 2/3)
+  ::warning::catalogue.dataspace.copernicus.eu answered HTTP 429 — waiting 2s (attempt 2/3)
+  ::warning::catalogue.dataspace.copernicus.eu answered HTTP 429 — waiting 2s (attempt 3/3)
+  ::warning::catalogue.dataspace.copernicus.eu answered HTTP 429 — waiting 2s (attempt 3/3)
+  ::warning::catalogue.dataspace.copernicus.eu answered HTTP 429 — waiting 2s (attempt 1/3)
+  ::warning::catalogue.dataspace.copernicus.eu answered HTTP 429 — waiting 2s (attempt 3/3)
+  ::warning::catalogue.dataspace.copernicus.eu answered HTTP 429 — waiting 2s (attempt 1/3)
+  ::warning::catalogue.dataspace.copernicus.eu answered HTTP 429 — waiting 2s (attempt 3/3)
+  ::warning::catalogue.dataspace.copernicus.eu answered HTTP 429 — waiting 2s (attempt 1/3)
+  ::warning::catalogue.dataspace.copernicus.eu answered HTTP 429 — waiting 2s (attempt 3/3)
+  ::warning::catalogue.dataspace.copernicus.eu answered HTTP 429 — waiting 2s (attempt 1/3)
+  ::warning::catalogue.dataspace.copernicus.eu answered HTTP 429 — waiting 2s (attempt 2/3)
+  ::warning::catalogue.dataspace.copernicus.eu answered HTTP 429 — waiting 2s (attempt 2/3)
+  ::warning::catalogue.dataspace.copernicus.eu answered HTTP 429 — waiting 2s (attempt 2/3)
+  ::warning::catalogue.dataspace.copernicus.eu answered HTTP 429 — waiting 2s (attempt 2/3)
+  ::warning::catalogue.dataspace.copernicus.eu answered HTTP 429 — waiting 2s (attempt 3/3)
+  ::warning::catalogue.dataspace.copernicus.eu answered HTTP 429 — waiting 2s (attempt 3/3)
+  ::warning::catalogue.dataspace.copernicus.eu answered HTTP 429 — waiting 2s (attempt 3/3)
+  ::warning::catalogue.dataspace.copernicus.eu answered HTTP 429 — waiting 2s (attempt 3/3)
+Traceback (most recent call last):
+  File "/home/runner/work/earth/earth/ml/build_family1_stores.py", line 1488, in <module>
+    sys.exit(main())
+             ^^^^^^
+  File "/home/runner/work/earth/earth/ml/build_family1_stores.py", line 1483, in main
+    f10b.run_stages(ctx, stages, stage_fn=stage_fns(ad), deps=DEPS)
+  File "/home/runner/work/earth/earth/ml/build_family10_stores.py", line 5331, in run_stages
+    stage_fn[s](ctx)
+  File "/home/runner/work/earth/earth/ml/build_family1_stores.py", line 264, in stage_fetch
+    f10b.stage_fetch(ctx, assemble_store_after=False)
+  File "/home/runner/work/earth/earth/ml/build_family10_stores.py", line 3912, in stage_fetch
+    for label, rows, counts in ad.fetch_year(ctx, y):
+  File "/home/runner/work/earth/earth/ml/family1/adapters/_stac.py", line 1302, in fetch_year
+    for label, rows, c in self._rows(ctx, windows, str(year), ctx.t_lo,
+  File "/home/runner/work/earth/earth/ml/family1/adapters/_stac.py", line 1264, in _rows
+    for scs, c in cm.ordered_map(fn, windows, self.workers(ctx)):
+  File "/home/runner/work/earth/earth/ml/family1/adapters/_common.py", line 188, in ordered_map
+    yield q.popleft().result()
+          ^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/concurrent/futures/_base.py", line 449, in result
+    return self.__get_result()
+           ^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/concurrent/futures/_base.py", line 401, in __get_result
+    raise self._exception
+  File "/usr/lib/python3.12/concurrent/futures/thread.py", line 58, in run
+    result = self.fn(*self.args, **self.kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/work/earth/earth/ml/family1/adapters/_stac.py", line 1263, in <lambda>
+    fn = (lambda w: self.scenes(ctx, w))
+                    ^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/work/earth/earth/ml/family1/adapters/_stac.py", line 1623, in scenes
+    for p in odata_window(fet, CDSE_ODATA,
+  File "/home/runner/work/earth/earth/ml/family1/adapters/_stac.py", line 480, in odata_window
+    d, _ = fet.get(odata_url(base, **kw))
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/work/earth/earth/ml/family1/adapters/_stac.py", line 319, in get
+    return self._do("GET", url, None, headers)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/work/earth/earth/ml/family1/adapters/_stac.py", line 316, in _do
+    raise IOError(f"{url}: {err} (after {self.attempts} attempts)")
+OSError: https://catalogue.dataspace.copernicus.eu/odata/v1/Products?$filter=Collection/Name%20eq%20'SENTINEL-2'%20and%20Attributes/OData.CSC.StringAttribute/any(a%3Aa/Name%20eq%20'productType'%20and%20a/OData.CSC.StringAttribute/Value%20eq%20'S2MSI2A')%20and%20ContentDate/Start%20ge%202022-01-23T01%3A00%3A00.000Z%20and%20ContentDate/Start%20lt%202022-01-23T02%3A00%3A00.000Z&$top=366&$expand=Attributes&$orderby=ContentDate/Start%20asc: HTTP 429 b'{"error":"WAF","message":"Rate limit exceeded","status":429}' (after 3 attempts)
