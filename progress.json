@@ -1,0 +1,10 @@
+{
+ "at": "2026-09-18T11:26:06+00:00",
+ "done": 3,
+ "elapsed_s": 5091.0,
+ "eta_s": 0.0,
+ "item": "cat_hls 2015",
+ "stage": "fetch cat_hls",
+ "total": 3,
+ "year_rows": 896594
+}
