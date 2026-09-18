@@ -78,6 +78,7 @@ import re
 import sys
 import time
 import http.client
+import threading
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -131,6 +132,46 @@ def area_channel(area_km2, counts):
     return math.log2(a)
 
 
+# ================================================== the producers' own limits ==
+# REQUESTS A MINUTE, PER HOST, where the producer publishes a limit and
+# enforces it. ASF's is not a courtesy: it answers
+#   HTTP 429 {"error": {"report": "Rate limited, please reduce your request
+#             rate to 250/minute or less", "type": "RATE_LIMITED"}}
+# and it did so 34 minutes into cat_nisar's first whole-archive fetch, after
+# eight workers had been issuing about 800 a minute. The others were measured
+# not to limit us at these rates: CMR served 2,000-granule pages to eight
+# workers for an hour, CDSE's OData the same, and landsatlook answered 859
+# items a second. A host that is not in this table is not throttled here.
+RATE_LIMITS = {"api.daac.asf.alaska.edu": 240}
+
+
+class _Limiter:
+    """A token bucket shared by every thread and every Fetcher of one host."""
+
+    def __init__(self, per_minute):
+        self.interval = 60.0 / float(per_minute)
+        self.lock = threading.Lock()
+        self.next_at = 0.0
+        self.waited = 0.0
+
+    def take(self):
+        with self.lock:
+            now = time.monotonic()
+            at = max(now, self.next_at)
+            self.next_at = at + self.interval
+        d = at - time.monotonic()
+        if d > 0:
+            self.waited += d
+            time.sleep(d)
+
+
+_LIMITERS = {h: _Limiter(n) for h, n in RATE_LIMITS.items()}
+
+
+def limiter_for(url):
+    return _LIMITERS.get(urllib.parse.urlparse(url).netloc)
+
+
 class Refusal(ValueError):
     """A listing that does not add up — the 2026-09-14 rule.
 
@@ -179,6 +220,7 @@ class Fetcher:
         self.source_dir = getattr(ctx, "source_dir", "") or ""
         self.requests = 0
         self.retries = 0
+        self.throttled = 0
         self.seconds = 0.0
 
     # -- canned ------------------------------------------------------------
@@ -208,7 +250,10 @@ class Fetcher:
             hdr["Content-Type"] = "application/json"
         hdr.update(headers or {})
         err = None
+        lim = limiter_for(url)
         for i in range(self.attempts):
+            if lim is not None:
+                lim.take()
             t0 = time.time()
             try:
                 req = urllib.request.Request(url, data=data, headers=hdr,
@@ -234,6 +279,23 @@ class Fetcher:
                 # query is wrong and retrying it wastes the window.
                 if e.code not in self.RETRY_ON:
                     raise Refusal(f"{url}: {err}") from None
+                if e.code == 429:
+                    # A RATE LIMIT IS NOT A HICCUP: two seconds of backoff
+                    # cannot clear a per-MINUTE quota, so honour Retry-After
+                    # when the producer sends one and wait out the minute when
+                    # it does not.
+                    ra = e.headers.get("Retry-After") if e.headers else None
+                    try:
+                        wait = float(ra)
+                    except (TypeError, ValueError):
+                        wait = 60.0
+                    self.retries += 1
+                    self.throttled += 1
+                    print(f"  ::warning::{urllib.parse.urlparse(url).netloc} "
+                          f"answered HTTP 429 — waiting {wait:.0f}s "
+                          f"(attempt {i + 1}/{self.attempts})", flush=True)
+                    time.sleep(min(wait, 120.0))
+                    continue
             except (json.JSONDecodeError, UnicodeDecodeError) as e:
                 self.seconds += time.time() - t0
                 raise Refusal(f"{url}: the body is not JSON ({e})") from None
@@ -593,7 +655,10 @@ def _text(fet, url):
             raise Refusal(f"{url}: the canned response carries no __text__")
         return str(d["__text__"])
     err = None
+    lim = limiter_for(url)
     for i in range(fet.attempts):
+        if lim is not None:
+            lim.take()
         t0 = time.time()
         try:
             req = urllib.request.Request(url, headers=dict(f10b.UA))
@@ -608,6 +673,18 @@ def _text(fet, url):
             if e.code not in Fetcher.RETRY_ON:
                 raise Refusal(f"{url}: HTTP {e.code}") from None
             err = e
+            if e.code == 429:
+                ra = e.headers.get("Retry-After") if e.headers else None
+                try:
+                    wait = float(ra)
+                except (TypeError, ValueError):
+                    wait = 60.0
+                fet.retries += 1
+                fet.throttled += 1
+                print(f"  ::warning::{urllib.parse.urlparse(url).netloc} "
+                      f"answered HTTP 429 — waiting {wait:.0f}s", flush=True)
+                time.sleep(min(wait, 120.0))
+                continue
         except (OSError, urllib.error.URLError,
                 http.client.HTTPException) as e:
             fet.seconds += time.time() - t0
@@ -618,14 +695,18 @@ def _text(fet, url):
     raise IOError(f"{url}: {err}")
 
 
-def asf_window(fet, base, params, counts, what):
+def asf_window(fet, base, params, counts, what, count=None):
     """Every granule of one ASF time window, checked against `output=count`.
 
     ASF has no cursor: `maxResults` caps a response at 250 and the only way
     to page is to narrow the window. So the caller hands windows and this
     function refuses one that does not fit, and `asf_windows` splits.
+
+    `count` is that splitter's OWN count for this window, passed in so the
+    window is not counted twice — which matters because ASF allows 250
+    requests a minute and a third of them were the duplicate count query.
     """
-    n = asf_count(fet, base, params)
+    n = asf_count(fet, base, params) if count is None else int(count)
     if n > ASF_MAX:
         raise Refusal(f"{what}: {n} granule(s) and ASF serves at most "
                       f"{ASF_MAX} per request — split the window")

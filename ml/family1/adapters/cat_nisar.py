@@ -26,6 +26,15 @@ THE PARAMETERS, MEASURED RATHER THAN TRANSCRIBED.
     read off each granule instead — a parameter that looks like it works and
     silently returns nothing is the shape of failure this whole contract is
     written against.
+  * **ASF ALLOWS 250 REQUESTS A MINUTE AND SAYS SO IN A 429.** Eight workers
+    at two requests a window issued about 800 a minute and the whole-archive
+    fetch died 34 minutes in with `{"error": {"report": "Rate limited, please
+    reduce your request rate to 250/minute or less", "type":
+    "RATE_LIMITED"}}`. `_stac.RATE_LIMITS` now holds this host at 240 a minute
+    through a token bucket every thread shares, a 429 waits out the minute
+    rather than backing off two seconds, and the splitter's count is passed
+    into the walk so a window is not counted twice — which removed a third of
+    the requests.
   * `maxResults` above 250 FAILS, and ASF offers no cursor, so the only way
     to page is to narrow the window. The adapter lists HOUR windows (about 50
     granules in a 2026 hour) and `_stac.asf_windows` halves any window whose
@@ -188,7 +197,8 @@ class NisarCatalogue(st.CatalogueAdapter):
         "collectionName as a FILTER returns 0 while every result carries it "
         "as a FIELD; maxResults=250 works and 1000 fails; output=count "
         "answers a bare integer and is additive across windows (6,675 + "
-        "23,318 = 29,993 against the month's 29,992); the record begins "
+        "23,318 = 29,993 against the month's 29,992); the host rate-limits at "
+        "250 requests a minute and says so in a 429; the record begins "
         "2025-10 with 1,719 granules (2025-09 holds none) and runs 7,697 / "
         "9,537 / 6,638 / 20,465 / 37,262 in 2025-11, 2025-12, 2026-01, "
         "2026-06 and 2026-07; two collections (BETA_V1 with PGE R05.00.8, "
@@ -252,7 +262,7 @@ class NisarCatalogue(st.CatalogueAdapter):
                 counts["windows_empty"] = counts.get("windows_empty", 0) + 1
                 continue
             for g in st.asf_window(fet, ASF, self.asf_params(lo, hi), counts,
-                                   what):
+                                   what, count=n):
                 sc = self.granule(g, counts, what)
                 if sc is None:
                     continue
