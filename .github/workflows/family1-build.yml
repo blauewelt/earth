@@ -40,6 +40,16 @@
 # application-approval or EULA page, the bytes received and the exact URL to
 # open. It fails the job only on a definite refusal. Hosted runner only.
 #
+# TIER T (E-082 wave 3): the eight SCENE CATALOGUE stores (cat_landsat,
+# cat_hls, cat_s2, cat_s1, cat_nisar, cat_olci, cat_viirs, cat_ecostress) are
+# ordinary tier-P stores whose source is a listing API rather than a file
+# archive, and they publish one extra file beside their nine arrays --
+# `assets.parquet`, the table that maps a row's hashed scene id back to the
+# producer's own identifier and download urls. That is why the install step
+# carries `pyarrow`. None of the eight needs an account: every listing
+# endpoint (USGS landsatlook, NASA CMR, ASF, the Copernicus Data Space OData
+# API) answers anonymously, so these stores run with no credential at all.
+#
 # TIER G (E-082 wave 2): a sharded gridded store (seaice_asi, lossyear,
 # chirps05) runs through the same five stages; its parts are zstd shards,
 # pushed and pulled like tier-P parts. A public store whose licence is
@@ -131,8 +141,8 @@ jobs:
 
       - name: Install
         run: |
-          pip install --quiet numpy huggingface_hub zstandard netCDF4 requests rasterio pyhdf scipy
-          python3 -c "import importlib.metadata as m, numpy, huggingface_hub, zstandard, netCDF4, requests, rasterio, scipy, pyhdf.SD; print('deps ok', rasterio.__version__, rasterio.__gdal_version__, 'pyhdf', m.version('pyhdf'), 'scipy', scipy.__version__)"
+          pip install --quiet numpy huggingface_hub zstandard netCDF4 requests rasterio pyhdf scipy pyarrow
+          python3 -c "import importlib.metadata as m, numpy, huggingface_hub, zstandard, netCDF4, requests, rasterio, scipy, pyhdf.SD, pyarrow; print('deps ok', rasterio.__version__, rasterio.__gdal_version__, 'pyhdf', m.version('pyhdf'), 'scipy', scipy.__version__, 'pyarrow', pyarrow.__version__)"
 
       - name: Earthdata Login check (hosted runner only)
         if: ${{ github.event.inputs.check_credentials == 'true' }}
