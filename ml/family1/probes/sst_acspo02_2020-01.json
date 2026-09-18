@@ -1,0 +1,203 @@
+{
+ "at": "2026-09-18T08:47:05+00:00",
+ "builder_git_sha": "ce19e746ece389e687baeeb3770dcd7afdc997a5",
+ "bytes_fetched": 13597336020,
+ "bytes_fetched_per_frame": 755407556.7,
+ "bytes_index": 443740239,
+ "counts": {
+  "bytes_files": 7540148193,
+  "fetch_seconds": 1021.51,
+  "files_read": 18,
+  "grid_meta": {
+   "{\"lat_first\": 89.98999786376953, \"lat_last\": -89.98999786376953, \"lon_first\": -179.99000549316406, \"lon_last\": 179.99000549316406}": 18
+  },
+  "out_of_bounds": {
+   "sst": 17
+  },
+  "pixels_in_frame": 2916000000,
+  "pixels_valid": 1018298454,
+  "quality_grade": {
+   "0": 1865625546,
+   "5": 1018298454,
+   "absent": 32076000
+  },
+  "resolution": {
+   "lat=lat": 18,
+   "lon=lon": 18,
+   "quality=quality_level": 18,
+   "sst=sea_surface_temperature": 18,
+   "time=time": 18
+  }
+ },
+ "distribution": "public",
+ "estimate_store_bytes": 1604064519,
+ "family": "1gf",
+ "frame_seconds": 86400,
+ "frames_fetched": 18,
+ "frames_per_bin": 5,
+ "groups": {
+  "sst_acspo02": {
+   "C": 2,
+   "H": 9000,
+   "W": 18000,
+   "bytes_per_frame": {
+    "max": 53875930,
+    "mean": 51703095.2,
+    "min": 50067656
+   },
+   "bytes_per_stored_tile": {
+    "max": 78461,
+    "mean": 30400.7,
+    "median": 35068.0,
+    "p90": 52307.0
+   },
+   "bytes_per_valid_pixel": 0.457,
+   "compression_ratio": 12.53,
+   "dtype": "float16",
+   "encode_seconds_per_frame": 49.357,
+   "estimate_store_bytes": 1604064519,
+   "frame_present_by_slot": [
+    1,
+    1,
+    0,
+    0,
+    1,
+    0,
+    0,
+    1,
+    0,
+    1,
+    1,
+    0,
+    1,
+    1,
+    1,
+    0,
+    0,
+    1,
+    1,
+    0,
+    1,
+    0,
+    0,
+    1,
+    0,
+    1,
+    1,
+    0,
+    1,
+    1,
+    1
+   ],
+   "frames_fetched": 18,
+   "frames_missing": {},
+   "frames_requested": 31,
+   "index_bytes_per_bin": 204608,
+   "note_formula": "pixels x frames x valid fraction x 2C x 1.2",
+   "note_formula_bytes": 8417933816,
+   "raw_bytes_per_frame": 648000000,
+   "record_frames": 31,
+   "tiles_empty": 15395,
+   "tiles_per_frame": 2556,
+   "tiles_stored": 30613,
+   "valid_fraction": {
+    "quality_level": 0.349211,
+    "sst": 0.349211
+   },
+   "valid_fraction_per_frame": [
+    0.351935,
+    0.35163,
+    0.350352,
+    0.353003,
+    0.337133,
+    0.343266,
+    0.342396,
+    0.340013,
+    0.348101,
+    0.338715,
+    0.33911,
+    0.33835,
+    0.352865,
+    0.352809,
+    0.360413,
+    0.362939,
+    0.366974,
+    0.355788
+   ]
+  }
+ },
+ "inputs_not_read": [
+  {
+   "unit": "2020-01-03",
+   "why": "20200103120000-STAR-L3S_GHRSST-SSTsubskin-LEO_Daily-ACSPO_V2.81-v02.0-fv01.0: CMR declares this granule as 108 bytes, under the 1000000-byte floor \u2014 a file that small is not a day of 0.02-degree SST"
+  },
+  {
+   "unit": "2020-01-04",
+   "why": "20200104120000-STAR-L3S_GHRSST-SSTsubskin-LEO_Daily-ACSPO_V2.81-v02.0-fv01.0: CMR declares this granule as 108 bytes, under the 1000000-byte floor \u2014 a file that small is not a day of 0.02-degree SST"
+  },
+  {
+   "unit": "2020-01-06",
+   "why": "20200106120000-STAR-L3S_GHRSST-SSTsubskin-LEO_Daily-ACSPO_V2.81-v02.0-fv01.0: CMR declares this granule as 108 bytes, under the 1000000-byte floor \u2014 a file that small is not a day of 0.02-degree SST"
+  },
+  {
+   "unit": "2020-01-07",
+   "why": "20200107120000-STAR-L3S_GHRSST-SSTsubskin-LEO_Daily-ACSPO_V2.81-v02.0-fv01.0: CMR declares this granule as 108 bytes, under the 1000000-byte floor \u2014 a file that small is not a day of 0.02-degree SST"
+  },
+  {
+   "unit": "2020-01-09",
+   "why": "20200109120000-STAR-L3S_GHRSST-SSTsubskin-LEO_Daily-ACSPO_V2.81-v02.0-fv01.0: CMR declares this granule as 108 bytes, under the 1000000-byte floor \u2014 a file that small is not a day of 0.02-degree SST"
+  },
+  {
+   "unit": "2020-01-12",
+   "why": "20200112120000-STAR-L3S_GHRSST-SSTsubskin-LEO_Daily-ACSPO_V2.81-v02.0-fv01.0: CMR declares this granule as 108 bytes, under the 1000000-byte floor \u2014 a file that small is not a day of 0.02-degree SST"
+  },
+  {
+   "unit": "2020-01-16",
+   "why": "20200116120000-STAR-L3S_GHRSST-SSTsubskin-LEO_Daily-ACSPO_V2.81-v02.0-fv01.0: CMR declares this granule as 108 bytes, under the 1000000-byte floor \u2014 a file that small is not a day of 0.02-degree SST"
+  },
+  {
+   "unit": "2020-01-17",
+   "why": "20200117120000-STAR-L3S_GHRSST-SSTsubskin-LEO_Daily-ACSPO_V2.81-v02.0-fv01.0: CMR declares this granule as 108 bytes, under the 1000000-byte floor \u2014 a file that small is not a day of 0.02-degree SST"
+  },
+  {
+   "unit": "2020-01-20",
+   "why": "20200120120000-STAR-L3S_GHRSST-SSTsubskin-LEO_Daily-ACSPO_V2.81-v02.0-fv01.0: CMR declares this granule as 108 bytes, under the 1000000-byte floor \u2014 a file that small is not a day of 0.02-degree SST"
+  },
+  {
+   "unit": "2020-01-22",
+   "why": "20200122120000-STAR-L3S_GHRSST-SSTsubskin-LEO_Daily-ACSPO_V2.81-v02.0-fv01.0: CMR declares this granule as 108 bytes, under the 1000000-byte floor \u2014 a file that small is not a day of 0.02-degree SST"
+  },
+  {
+   "unit": "2020-01-23",
+   "why": "20200123120000-STAR-L3S_GHRSST-SSTsubskin-LEO_Daily-ACSPO_V2.81-v02.0-fv01.0: CMR declares this granule as 108 bytes, under the 1000000-byte floor \u2014 a file that small is not a day of 0.02-degree SST"
+  },
+  {
+   "unit": "2020-01-25",
+   "why": "20200125120000-STAR-L3S_GHRSST-SSTsubskin-LEO_Daily-ACSPO_V2.81-v02.0-fv01.0: CMR declares this granule as 108 bytes, under the 1000000-byte floor \u2014 a file that small is not a day of 0.02-degree SST"
+  },
+  {
+   "unit": "2020-01-28",
+   "why": "20200128120000-STAR-L3S_GHRSST-SSTsubskin-LEO_Daily-ACSPO_V2.81-v02.0-fv01.0: CMR declares this granule as 108 bytes, under the 1000000-byte floor \u2014 a file that small is not a day of 0.02-degree SST"
+  }
+ ],
+ "layout": "sharded",
+ "licence_redistribution_confirmed": true,
+ "month": "2020-01",
+ "note_estimate": {
+  "bytes": 2300000000000.0,
+  "what": "family1gf.tex: 162 M px x 9,700 days, v ~ 0.3 -> ~2.3 TB for the whole record (phase C)"
+ },
+ "note_formula_bytes": 8417933816,
+ "out_of_bounds": {
+  "sst": 17
+ },
+ "out_of_bounds_stored": 0,
+ "runner": "GitHub Actions 1000005360",
+ "seconds_per_frame": 59.723,
+ "source": "https://cmr.earthdata.nasa.gov/search/granules.json?collection_concept_id=C2805339147-POCLOUD (L3S_LEO_DY-STAR-v2.81, anonymous listing)",
+ "store": "sst_acspo02",
+ "tier": "G",
+ "wall_seconds": 1075.01,
+ "wall_seconds_index": 7.15,
+ "zstd_level": 15
+}

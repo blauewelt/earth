@@ -339,6 +339,48 @@ note cannot make from a product page.
   so **≈ 1.5e9 rows** over the record, against the probe's 1.665e9
   extrapolation and the note's ~2e9.
 
+### `sst_acspo02`: the note is 4.6x high, and one year fits a hosted runner
+
+The probe (#172, 2020-01, `ml/family1/probes/sst_acspo02_2020-01.json`) read
+eighteen of the month's thirty-one days and measured, per daily 18,000 x 9,000
+x 2 frame:
+
+| what | measured | the note / brief |
+|---|---|---|
+| valid fraction after the grade-2 floor | **0.3492** | "v ≈ 0.3" |
+| compressed bytes a frame | **51,703,095** (mean; 50.07-53.88 MB) | — |
+| raw bytes a frame | 648,000,000 | — |
+| compression ratio | **12.53x** | — |
+| bytes a VALID pixel | **0.457** | the note's formula charges 2C x 1.2 = 4.8 |
+| tiles stored / empty a frame | 1,701 / 855 of 2,556 | — |
+| encode seconds a frame | **49.4** (of 59.7 s wall) | — |
+| **the whole record (9,700 days)** | **≈ 501 GB** | the note's **2.3 TB**, the brief's **1.5 TB** |
+| **one year (366 days)** | **≈ 18.9 GB** | — |
+
+**The note's own arithmetic is 4.6x high and the brief's 3.0x**, and the reason
+is the one the note's formula cannot see: the field COMPRESSES. SST is smooth
+and the quality grade is constant over large areas, so zstd gets 12.5x rather
+than the 1.2x overhead the formula assumes — 0.457 bytes a valid pixel instead
+of 4.8. **So one year is 19 GB, not 85, and 19 GB of parts plus a 19 GB store
+fits a hosted runner with room to spare; the whole record is ~500 GB, which is
+a box job but not a "contact us about terabytes" job.** That changes the phase-C
+conversation and is the probe's main result.
+
+What the probe also settled: the grade histogram over 18 frames is 0 →
+1,865,625,546, 5 → 1,018,298,454 and absent → 32,076,000, i.e. **the DY
+super-collation publishes grade 0 or grade 5 and nothing in between** — so the
+"grade 2..5 stored with its grade" rule stores a constant 5 in practice and
+the quality channel is, for this collection, a mask. That is worth knowing
+before paying two bytes a pixel for it.
+
+**Two cautions on this probe.** It ran on the code that refused a granule on
+CMR's DECLARED size, so thirteen days of January 2020 are in
+`inputs_not_read` rather than measured (see the fix above) — the per-frame
+numbers are from eighteen real days and are what matter, and a re-probe is
+dispatched. And 49.4 s of encoding a frame means **5.0 h for 366 frames**,
+which is inside a hosted runner's six hours only just: size the year as TWO
+six-month lanes, not one.
+
 ### `swot`: the storage decision, with measured numbers
 
 The probe (#168, 2024-01, twelve passes of cycle 010,
