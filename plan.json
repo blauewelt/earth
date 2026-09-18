@@ -1,0 +1,105 @@
+{
+ "bins": [
+  2995,
+  3067
+ ],
+ "builder_git_sha": "ce4dcf6ac08b1c91d2017a0d0b0807fde97a6d50",
+ "built_at": "2026-09-18T09:48:48+00:00",
+ "channels": [
+  {
+   "max": 100.0,
+   "min": 0.0,
+   "name": "cloud",
+   "unit": "%"
+  },
+  {
+   "max": 100.0,
+   "min": 0.0,
+   "name": "valid",
+   "unit": "%"
+  },
+  {
+   "max": 90.0,
+   "min": 0.0,
+   "name": "angle",
+   "unit": "deg"
+  },
+  {
+   "max": 26.0,
+   "min": -10.0,
+   "name": "log2_area",
+   "unit": "log2(km2)"
+  },
+  {
+   "max": 255.0,
+   "min": 0.0,
+   "name": "sensor",
+   "unit": "1"
+  }
+ ],
+ "collections": {
+  "v002": {
+   "concept_id": "C2076090826-LPCLOUD",
+   "dataset_id": "ECOSTRESS Tiled Land Surface Temperature and Emissivity Instantaneous L2 Global 70 m V002",
+   "granules_first_month": 322933,
+   "granules_total": 15616308,
+   "short_name": "ECO_L2T_LSTE",
+   "time_start": "2018-07-09T00:00:00.000Z",
+   "version": "002"
+  },
+  "v003": {
+   "concept_id": "C3998139651-LPCLOUD",
+   "dataset_id": "ECOSTRESS Tiled Land Surface Temperature and Emissivity Instantaneous L2 Global 70 m V003",
+   "granules_first_month": 0,
+   "granules_total": 3908577,
+   "short_name": "ECO_L2T_LSTE",
+   "time_start": "2018-07-09T00:00:00.000Z",
+   "version": "003"
+  }
+ },
+ "dataset": "ECOSTRESS L2T LSTE (LP DAAC) via CMR granule search",
+ "date_range": [
+  "2023-01-01",
+  "2023-12-31"
+ ],
+ "first_month": "2023-01",
+ "first_record": {
+  "asset_dir": "https://data.lpdaac.earthdatacloud.nasa.gov/lp-prod-protected/ECO_L2T_LSTE.002/ECOv002_L2T_LSTE_25450_003_31RBP_20221231T235932_0710_01",
+  "asset_template": "{id}_EmisWB.tif {id}_LST.tif {id}_LST_err.tif {id}_QC.tif {id}_cloud.tif {id}_height.tif {id}_view_zenith.tif {id}_water.tif",
+  "collection": "v002",
+  "counts": {},
+  "id": "ECOv002_L2T_LSTE_25450_003_31RBP_20221231T235932_0710_01",
+  "lat": 30.213332877028055,
+  "log2_area": 13.620127498711756,
+  "lon": 0.4504244999999969,
+  "qc": 2,
+  "time_s": 1293839972
+ },
+ "footprint": {
+  "log2_dt": -18.720671786825555,
+  "log2_fp": 1.9801652405609538
+ },
+ "granules_first_month_total": 322933,
+ "page_size": 400,
+ "per_year_resume": true,
+ "qc_policy": "qc is the ECOSTRESS processing version: 2 = v002, 3 = v003. The two versions are separate CMR collections over the same mission, so one overpass can appear twice with different qc \u2014 that is a reprocessing, not a duplicate, and a consumer selects on qc. A version the table does not list is 255 and counted by name in `qc_unlisted`. `cloud`, `valid` and `angle` are NaN for every row: the producer ships a cloud RASTER rather than a scene cloud fraction, and publishes no valid fraction and no mean angle. A value outside a channel's bounds is NaN and counted (`out_of_bounds`).",
+ "qc_table": {
+  "2": "002",
+  "3": "003"
+ },
+ "sensor_table": {
+  "1": "ISS/ECOSTRESS"
+ },
+ "sources": [
+  "https://cmr.earthdata.nasa.gov/search/granules.umm_json",
+  "https://cmr.earthdata.nasa.gov/search/collections.json?short_name=ECO_L2T_LSTE",
+  "https://lpdaac.usgs.gov/products/eco_l2t_lstev002/"
+ ],
+ "store": "cat_ecostress",
+ "title": "ECOSTRESS L2T LSTE tile catalogue (70 m land-surface temperature from the ISS, v002 and v003), one row per granule",
+ "url": "https://cmr.earthdata.nasa.gov/search/granules.umm_json",
+ "verified": "2026-09-18 from the sandbox, anonymously: both collections exist (ECO_L2T_LSTE v002 and v003, LPCLOUD, both declaring 2018-07-09); CMR-Hits 15,616,308 for v002 and 3,908,292 for v003; 3,140 v002 and 0 v003 granules on 2024-06-01, 787 v002 and 411 v003 on 2026-09-01; the UMM-G granule carries BoundingRectangles (never GPolygons), no cloud, valid or angle attribute, and 121 related URLs \u2014 19,080 bytes in umm_json against 22,403 in the .json feed",
+ "years": [
+  2023
+ ]
+}
