@@ -1,0 +1,110 @@
+{
+ "at": "2026-09-18T08:27:34+00:00",
+ "builder_git_sha": "942fb496a192f35d2de32577fc676404320d0f58",
+ "bytes_fetched": 525687561,
+ "bytes_index": 1227525,
+ "bytes_per_row": 80.032,
+ "channels": [
+  "brightness",
+  "frp",
+  "confidence",
+  "daynight"
+ ],
+ "counts": {
+  "bytes_windows": 525687561,
+  "fetch_seconds": 70.7,
+  "rows_by_spelling": {
+   "Aqua/MODIS -> Aqua": 455197,
+   "N/VIIRS -> Suomi-NPP": 2972647,
+   "N20/VIIRS -> NOAA-20": 2940953,
+   "Terra/MODIS -> Terra": 199668
+  },
+  "rows_kept": 6568465,
+  "rows_read": 6568465,
+  "windows": 21
+ },
+ "counts_scope": "month",
+ "days_with_no_rows": 0,
+ "distinct_platforms": 4,
+ "distribution": "public",
+ "estimate_rows_per_year": null,
+ "estimate_store_bytes": null,
+ "family": "1tf",
+ "month": "2023-08",
+ "nan_fraction": {
+  "brightness": 0.0,
+  "confidence": 0.900302,
+  "daynight": 0.0,
+  "frp": 0.0
+ },
+ "note_estimate": null,
+ "out_of_bounds": {
+  "brightness": 0,
+  "confidence": 0,
+  "daynight": 0,
+  "frp": 0
+ },
+ "out_of_bounds_stored": {
+  "brightness": 0,
+  "confidence": 0,
+  "daynight": 0,
+  "frp": 0
+ },
+ "platforms": {
+  "entries": 5,
+  "probe_platforms_without_entry": 0
+ },
+ "qc": {
+  "1": 199668,
+  "11": 281735,
+  "12": 291352,
+  "19": 2505502,
+  "2": 455197,
+  "20": 2485416,
+  "27": 185410,
+  "28": 164185
+ },
+ "rows": 6568465,
+ "rows_outside_month_dropped_by_probe": 0,
+ "rows_per_day": [
+  196646,
+  178107,
+  151850,
+  179737,
+  226934,
+  227436,
+  247568,
+  235129,
+  259189,
+  205222,
+  175707,
+  184929,
+  212646,
+  244681,
+  180711,
+  203150,
+  193624,
+  181653,
+  182678,
+  189139,
+  235170,
+  240064,
+  272658,
+  270329,
+  270212,
+  230279,
+  235796,
+  205897,
+  192138,
+  182252,
+  176934
+ ],
+ "runner": "GitHub Actions 1000005357",
+ "schema_version": 2,
+ "source": "https://firms.modaps.eosdis.nasa.gov/api/area/csv/<MAP_KEY>/<SOURCE>/world/<DAY_RANGE>/<DATE>",
+ "store": "fire",
+ "stored_bytes_per_row": 35,
+ "time_dtype": "int32",
+ "wall_seconds": 70.67,
+ "wall_seconds_index": 3.67
+}

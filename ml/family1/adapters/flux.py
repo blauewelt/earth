@@ -283,15 +283,23 @@ def icos_listing(attempts=4):
     if not binds:
         raise FormatError(f"{ICOS_SPARQL} returned no binding for {ICOS_SPEC}")
     out = {}
+    skipped = {}
     for b in binds:
         def g(k):
             return (b.get(k) or {}).get("value")
         name = g("fileName") or ""
         m = re.match(r"^[A-Za-z0-9]+_([A-Za-z]{2}-[A-Za-z0-9]+)_FLUXNET_", name)
         if not m:
-            raise FormatError(
-                f"ICOS file name {name!r} does not carry a site id in the "
-                f"ONEFlux form <network>_<site>_FLUXNET_<years>_<version>")
+            # NOT A REFUSAL: the `miscFluxnetArchiveProduct` spec also holds
+            # the OLDER FLUXNET2015 archives (measured on a runner:
+            # `FLX_DE-Dgw_FLUXNET2015_FULLSET_2015-2018_beta-3.zip`), whose
+            # half-hourly file is a different product with a different column
+            # set. The Shuttle's own `validate_fluxnet_filename_format` skips
+            # exactly these, so the adapter skips them too and COUNTS them by
+            # name rather than refusing the whole hub over a product it was
+            # not asked for.
+            skipped[name] = skipped.get(name, 0) + 1
+            continue
         sid = m.group(1)
         oid = (g("dobj") or "").rsplit("/", 1)[-1]
         if not oid:
@@ -313,7 +321,14 @@ def icos_listing(attempts=4):
         old = out.get(sid)
         if old is None or rec["filename"] > old["filename"]:
             out[sid] = rec
+    if not out:
+        raise FormatError(
+            f"{ICOS_SPARQL} returned {len(binds)} object(s) and none in the "
+            f"ONEFlux form <network>_<site>_FLUXNET_<years>_<version> "
+            f"(skipped: {sorted(skipped)[:6]})")
     return out, {"icos_objects": len(binds), "icos_sites": len(out),
+                 "icos_not_oneflux": int(sum(skipped.values())),
+                 "icos_not_oneflux_names": sorted(skipped)[:20],
                  "icos_bytes_listing": n,
                  "icos_bytes_products": int(sum(v["bytes"]
                                                 for v in out.values()))}

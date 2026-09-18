@@ -741,9 +741,7 @@ class CmgAdapter(sh.GridAdapter):
                  "bin_last": f10b.seconds_since_epoch(hi) // sh.BIN_SECONDS}
             # ONE REAL GRANULE PER GROUP, downloaded and read against the
             # declared grid and the declared SDS attributes
-            probe_day = self.index_probe_day(files)
-            g["first_file"] = self.read_header(ctx, group, files[probe_day])
-            g["first_file"]["date"] = str(probe_day)
+            g["first_file"] = self.read_first_file(ctx, group, files)
             out["groups"][group] = g
             out["files"] += len(files)
             for k, v in per_year.items():
@@ -752,10 +750,56 @@ class CmgAdapter(sh.GridAdapter):
         out["record_days"] = out["record"]
         return out
 
-    def index_probe_day(self, files):
-        """Which listed day the index stage opens. The LAST one: the newest
-        granule is the one whose format a future build will meet."""
-        return max(files)
+    def index_probe_days(self, files):
+        """Which listed days the index stage tries to open, in order.
+
+        The NEWEST first: the newest granule is the one whose format a future
+        build will meet. The oldest and the middle one are the fallbacks,
+        because Earthdata Login refuses a runner's handshake for minutes at a
+        time (#164, #167) and a store must not be un-indexable because one
+        granule's login happened to be the one that stalled.
+        """
+        days = sorted(files)
+        return [days[-1], days[0], days[len(days) // 2]]
+
+    def read_first_file(self, ctx, group, files):
+        """One real granule, read — and a NETWORK failure is not a verdict.
+
+        A file that IS read and does not match the declared grid or attributes
+        is fatal (`read_header` exits): that is a definite answer about the
+        product. A login that does not answer is not an answer at all
+        (ml/CLAUDE.md §5.17), and it stopped two runs dead at the index stage
+        while the same account was downloading granules successfully in
+        another job. So the three candidate days are tried in turn, and if
+        every one of them fails on the NETWORK the index records why and the
+        stage goes on — the fetch will meet the same login within the minute,
+        where a failure is definite and is a refusal.
+        """
+        tried = []
+        for day in self.index_probe_days(files):
+            try:
+                meta = self.read_header(ctx, group, files[day])
+            except (IOError, OSError) as e:
+                tried.append({"date": str(day),
+                              "error": f"{type(e).__name__}: "
+                                       f"{str(e)[:300]}"})
+                print(f"::warning::{self.store}: the index could not open "
+                      f"{files[day]['title']} ({type(e).__name__}) — trying "
+                      f"another day; a login that does not answer is not a "
+                      f"verdict about the product")
+                continue
+            meta["date"] = str(day)
+            if tried:
+                meta["days_that_would_not_open"] = tried
+            return meta
+        print(f"::warning::{self.store}: NO granule could be opened at index "
+              f"time ({tried}) — the fetch stage meets the same login, where "
+              f"a failure is definite")
+        return {"read": False, "days_that_would_not_open": tried,
+                "note": ("a network failure at index time is not a verdict "
+                         "about the product (ml/CLAUDE.md §5.17); the grid "
+                         "and every declared SDS attribute are re-checked in "
+                         "EVERY granule the fetch reads")}
 
     def read_header(self, ctx, group, rec):
         import shutil
