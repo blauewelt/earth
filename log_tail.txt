@@ -1,0 +1,2 @@
+  [index xco2] start (1 items)  0/1  0.0s
+REFUSING xco2: the first file OCO2_L2_Lite_FP.11.2r:oco2_LtCO2_190601_B11210Ar_240910224028s.nc4 could not be read: https://data.gesdisc.earthdata.nasa.gov/data/OCO2_DATA/OCO2_L2_Lite_FP.11.2r/2019/oco2_LtCO2_190601_B11210Ar_240910224028s.nc4: HTTP 401 after 2 redirect(s) — Earthdata Login refused this account for this archive. Dispatch family1-build.yml with check_credentials=true and read the approval URL it prints.
