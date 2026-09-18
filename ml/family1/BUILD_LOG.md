@@ -197,8 +197,7 @@ peaked at **48.90 GB RSS**.
   A parts directory that looks like 50 files is a page, not a listing;
   `?limit=100` with the `Link` header's cursor is what reads the real 149.
 
-## Notes — E-082 wave 4, the read-out targets and the credentialed
-## ocean/atmosphere stores (added 2026-09-18)
+## Notes — E-082 wave 4, the read-out targets and the credentialed ocean/atmosphere stores (added 2026-09-18)
 
 **What this wave was asked for and what it measured.** Eight stores:
 `burned500`, `alerts`, `cat_gfm` (family 1.0.tf read-out targets) and
@@ -326,9 +325,38 @@ note cannot make from a product page.
   difference between the two reports. **116.35 GB / 69.889 B a row projects
   1.665e9 rows and about 55 GB stored, 17 % under the note's ~2e9 rows and
   ~70 GB.**
-- **`swh`'s six fetch lanes** (1991-1996, 1997-2002, 2003-2008, 2009-2013,
-  2014-2018, 2019-2023) each ran in 21-30 min on hosted runners and parked
-  their years under `partials/family1_gf/swh/<year>/`.
+- **`swh`'s six fetch lanes** — #153 (1991-1996, 20.7 min), #154
+  (1997-2002, 23.2), #155 (2003-2008, 30.9), #156 (2009-2013, 21.5), #157
+  (2014-2018, 34.3) and #158 (2019-2023, 35.4) — all went green and parked
+  **all 33 years, 1,626 files, 48,730,861,888 bytes (48.73 GB), every year
+  carrying its `done.json`**, under `partials/family1_gf/swh/<year>/`. The
+  runner's own index reproduced the sandbox's listing exactly: 11,832 files,
+  116,351,837,853 bytes, 1991-08-03 → 2023-12-31, 7 days absent, and the
+  first file's own `flag_meanings` naming twelve missions (cryosat-2, envisat,
+  ers-1, ers-2, jason-1/2/3, saral, sentinel-3_a, sentinel-3_b,
+  sentinel-6_a, topex-poseidon). Rows a year, measured: 39,462,435 (1996),
+  59,609,148 (2002), 42,950,441 (2008), 45,484,441 (2013) — about 47 M a year,
+  so **≈ 1.5e9 rows** over the record, against the probe's 1.665e9
+  extrapolation and the note's ~2e9.
+
+**`swh`'s ASSEMBLY IS PARKED FOR THE BOX.** 48.73 GB of parts plus a store of
+about 54 GB (the ghcnd and icoads precedent is store ≈ parts × 1.1) is ~103 GB
+on one disk, past the 86.4 GB a hosted runner leaves free, so it goes the way
+ghcnd's and icoads' did. The exact command, for a *verified* Vast box with
+≥ 150 GB of disk whose runner name is `<runner>`:
+
+    node scripts/../<dispatch> family1-build.yml '{"store":"swh",
+      "stage":"all","runner":"<runner>","start":"1991-01-01",
+      "end":"2023-12-31",
+      "extra_args":"--parts-from-hub --assemble streaming"}'
+
+i.e. dispatch `family1-build.yml` with store `swh`, stage `all`, the box's
+runner name, start 1991-01-01, end 2023-12-31 and
+`extra_args=--parts-from-hub --assemble streaming`. Streaming because the
+store is past the assembler's 50 M-row `auto` threshold by thirty times; the
+box needs no credential of any kind for this store, since even the FETCH is
+keyless. `HF_HUB_DISABLE_XET=1` is already set on the build step, which is
+what let icoads' 52 GB publish at all.
 
 ## Notes — E-082 wave 4, the CREDENTIALED land stores (added 2026-09-18)
 
