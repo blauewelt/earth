@@ -1,0 +1,80 @@
+channels  C=5: cloud, valid, angle, log2_area, sensor
+work      /home/runner/work/earth/earth/ml/cache/family1_tf
+
+=== stage index (cat_hls) ===
+  [index cat_hls] start (1 items)  0/1  0.0s
+  [index cat_hls] plan.json  1/1  1.9s
+  index: cat_hls — 1 year(s), C=5 (cloud, valid, angle, log2_area, sensor), bins 2775..2848
+=== stage index done in 1.9s ===
+
+=== stage fetch (cat_hls) ===
+  [fetch cat_hls] start (1 items)  0/1  0.0s
+  [fetch cat_hls] cat_hls 2020 rows 0+  1/1  921.3s
+  [fetch cat_hls] cat_hls 2020 rows 502,348+  1/1  1944.9s
+  [fetch cat_hls] cat_hls 2020 rows 1,006,740+  1/1  2947.5s
+  [fetch cat_hls] cat_hls 2020 rows 1,509,387+  1/1  3862.2s
+  [fetch cat_hls] cat_hls 2020 rows 2,013,806+  1/1  4677.8s
+  [fetch cat_hls] cat_hls 2020  1/1  5200.6s
+  2020: 2,920,708 row(s) in 3 part(s) (5200.7s)
+  hub: chfrank/earth-tensors with the token from $HF_TOKEN
+  cat_hls: uploading 7 file(s) of 1 year(s), 175.7 MB -> chfrank/earth-tensors:partials/family1_tf/cat_hls/
+Upload 6 LFS files:   0%|          | 0/6 [00:00<?, ?it/s]
+00000.npz:   0%|          | 0.00/33.2M [00:00<?, ?B/s][A
+
+00001.npz:   0%|          | 0.00/33.2M [00:00<?, ?B/s][A[A
+
+
+assets-00001.npy:   0%|          | 0.00/27.6M [00:00<?, ?B/s][A[A[A
+
+
+
+00002.npz:   0%|          | 0.00/29.9M [00:00<?, ?B/s][A[A[A[A
+
+
+
+
+assets-00000.npy:   0%|          | 0.00/27.1M [00:00<?, ?B/s][A[A[A[A[A
+00000.npz:  18%|█▊        | 5.90M/33.2M [00:00<00:00, 58.7MB/s][A
+
+00001.npz:  16%|█▌        | 5.37M/33.2M [00:00<00:00, 53.5MB/s][A[A
+
+
+assets-00001.npy:  19%|█▊        | 5.11M/27.6M [00:00<00:00, 50.9MB/s][A[A[A
+
+
+
+00002.npz:   5%|▍         | 1.44M/29.9M [00:00<00:01, 14.4MB/s][A[A[A[A
+
+
+
+
+assets-00000.npy:  16%|█▌        | 4.26M/27.1M [00:00<00:00, 42.5MB/s][A[A[A[A[A
+00000.npz:  48%|████▊     | 16.1M/33.2M [00:00<00:00, 56.8MB/s][A
+
+00001.npz:  48%|████▊     | 16.1M/33.2M [00:00<00:00, 51.8MB/s][A[A
+
+
+
+00002.npz:  54%|█████▎    | 16.1M/29.9M [00:00<00:00, 55.0MB/s][A[A[A[A
+
+
+assets-00001.npy:  58%|█████▊    | 16.1M/27.6M [00:00<00:00, 50.1MB/s][A[A[A
+
+
+
+
+assets-00000.npy:  59%|█████▉    | 16.1M/27.1M [00:00<00:00, 39.2MB/s][A[A[A[A[A
+00000.npz:  97%|█████████▋| 32.1M/33.2M [00:00<00:00, 71.3MB/s][Aassets-00001.npy: 100%|██████████| 27.6M/27.6M [00:00<00:00, 57.2MB/s]
+00002.npz: 100%|██████████| 29.9M/29.9M [00:00<00:00, 60.6MB/s]
+
+
+00001.npz:  96%|█████████▋| 32.1M/33.2M [00:00<00:00, 61.1MB/s][A[A00000.npz: 100%|██████████| 33.2M/33.2M [00:00<00:00, 61.2MB/s]
+assets-00000.npy: 100%|██████████| 27.1M/27.1M [00:00<00:00, 48.3MB/s]
+Upload 6 LFS files:  17%|█▋        | 1/6 [00:00<00:03,  1.60it/s]
+assets-00002.npy:   0%|          | 0.00/24.7M [00:00<?, ?B/s][A00001.npz: 100%|██████████| 33.2M/33.2M [00:00<00:00, 52.3MB/s]
+Upload 6 LFS files:  50%|█████     | 3/6 [00:00<00:00,  4.86it/s]
+assets-00002.npy:  65%|██████▌   | 16.1M/24.7M [00:00<00:00, 82.3MB/s][Aassets-00002.npy: 100%|██████████| 24.7M/24.7M [00:00<00:00, 63.3MB/s]
+Upload 6 LFS files: 100%|██████████| 6/6 [00:01<00:00,  5.60it/s]Upload 6 LFS files: 100%|██████████| 6/6 [00:01<00:00,  4.88it/s]
+  cat_hls: 1 year(s) pushed and verified in 1 part commit(s), done.json written last (0 already present)
+  push-parts: 1 year(s) on the Hub under partials/family1_tf/cat_hls/
+=== stage fetch done in 5216.9s ===
