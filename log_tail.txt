@@ -1,0 +1,52 @@
+store     cat_ecostress — ECOSTRESS L2T LSTE tile catalogue (70 m land-surface temperature from the ISS, v002 and v003), one row per granule
+family    family1_tf (1.0.tf) · public -> chfrank/earth-tensors:tensors/family1_tf/cat_ecostress
+axis      2024-01-01 .. 2024-12-31  bins 3068..3141 · time_s int32 (schema 2)
+channels  C=5: cloud, valid, angle, log2_area, sensor
+work      /home/runner/work/earth/earth/ml/cache/family1_tf
+
+=== stage index (cat_ecostress) ===
+  [index cat_ecostress] start (1 items)  0/1  0.0s
+  [index cat_ecostress] plan.json  1/1  3.7s
+  index: cat_ecostress — 1 year(s), C=5 (cloud, valid, angle, log2_area, sensor), bins 3068..3141
+=== stage index done in 3.7s ===
+
+=== stage fetch (cat_ecostress) ===
+  [fetch cat_ecostress] start (1 items)  0/1  0.0s
+  [fetch cat_ecostress] cat_ecostress 2024 rows 0+  1/1  945.4s
+  [fetch cat_ecostress] cat_ecostress 2024 rows 503,146+  1/1  1986.7s
+  [fetch cat_ecostress] cat_ecostress 2024  1/1  2878.7s
+  2024: 1,374,851 row(s) in 2 part(s) (2878.8s)
+  hub: chfrank/earth-tensors with the token from $HF_TOKEN
+  cat_ecostress: uploading 5 file(s) of 1 year(s), 82.6 MB -> chfrank/earth-tensors:partials/family1_tf/cat_ecostress/
+Upload 4 LFS files:   0%|          | 0/4 [00:00<?, ?it/s]
+00000.npz:   0%|          | 0.00/33.2M [00:00<?, ?B/s][A
+
+assets-00000.npy:   0%|          | 0.00/27.0M [00:00<?, ?B/s][A[A
+
+
+00001.npz:   0%|          | 0.00/12.1M [00:00<?, ?B/s][A[A[A
+
+
+
+assets-00001.npy:   0%|          | 0.00/10.2M [00:00<?, ?B/s][A[A[A[A
+00000.npz:  10%|▉         | 3.21M/33.2M [00:00<00:00, 32.1MB/s][A
+
+assets-00000.npy:  12%|█▏        | 3.34M/27.0M [00:00<00:00, 33.4MB/s][A[A
+
+
+00001.npz:  38%|███▊      | 4.65M/12.1M [00:00<00:00, 46.5MB/s][A[A[A
+
+
+
+assets-00001.npy:  43%|████▎     | 4.39M/10.2M [00:00<00:00, 43.8MB/s][A[A[A[Aassets-00001.npy: 100%|██████████| 10.2M/10.2M [00:00<00:00, 38.0MB/s]
+00001.npz: 100%|██████████| 12.1M/12.1M [00:00<00:00, 41.1MB/s]
+
+
+assets-00000.npy:  59%|█████▉    | 16.1M/27.0M [00:00<00:00, 53.7MB/s][A[A
+00000.npz:  48%|████▊     | 16.1M/33.2M [00:00<00:00, 53.5MB/s][AUpload 4 LFS files:  25%|██▌       | 1/4 [00:00<00:01,  2.43it/s]assets-00000.npy: 100%|██████████| 27.0M/27.0M [00:00<00:00, 56.1MB/s]
+
+00000.npz:  96%|█████████▋| 32.1M/33.2M [00:00<00:00, 69.8MB/s][A00000.npz: 100%|██████████| 33.2M/33.2M [00:00<00:00, 57.0MB/s]
+Upload 4 LFS files:  50%|█████     | 2/4 [00:00<00:00,  3.55it/s]Upload 4 LFS files: 100%|██████████| 4/4 [00:00<00:00,  5.94it/s]Upload 4 LFS files: 100%|██████████| 4/4 [00:00<00:00,  4.97it/s]
+  cat_ecostress: 1 year(s) pushed and verified in 1 part commit(s), done.json written last (0 already present)
+  push-parts: 1 year(s) on the Hub under partials/family1_tf/cat_ecostress/
+=== stage fetch done in 2891.4s ===
