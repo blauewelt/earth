@@ -12,6 +12,7 @@ cd "$(dirname "$0")"
 if [ "$1" = "--figs" ]; then
   python3 make_figs.py
   python3 make_figs.py --dark
+  python3 make_hourglass_fig.py   # fig_hourglass.png, both themes (design section)
 fi
 
 # Dark variant: same source, dark page + light ink + dark-mode figures.

@@ -771,6 +771,24 @@ THEME_LIGHT = dict(
     axis="#1A1A19", rib=0.45, pane=(0.988, 0.988, 0.984, 1.0),
     grid=(0.0, 0.0, 0.0, 0.10),
     out="two_scales_3d_light.png")
+# The paper (ml/paper) prints the same figure at \linewidth, 15.8 cm for an
+# 11 in drawing, so every font and mark is scaled by `fs` / `ms` (default 1,
+# which leaves the two deck files byte-identical) to land at 6-8 pt on the
+# page. The dark twin takes the paper's page and ink colours, not the deck's.
+# Four labels move at the larger size or they cover the "km" axis word, the
+# lowest past ring and the widest future ring; `pos` overrides _POS_DECK.
+_POS_DECK = dict(fut_y=0.855, past_x=0.50, d_xy=(0.035, 0.255), cap_y=0.800,
+                 cap_text="reach stops growing at\nthe 4,444 km cap (lag 33)",
+                 dot_y=0.680)
+_POS_PAPER = dict(fut_y=0.845, past_x=0.555, d_xy=(0.0, 0.42), cap_y=0.775,
+                  cap_text="reach stops growing\nat the 4,444 km cap\n(lag 33)",
+                  dot_y=0.655)
+THEME_PAPER_LIGHT = dict(THEME_LIGHT, fs=1.3, ms=1.3, pos=_POS_PAPER,
+                         out="fig_hourglass.png")
+THEME_PAPER_DARK = dict(
+    THEME_DARK, bg="#14140F", ink="#E8E6DF", mut="#A5A396", axis="#A5A396",
+    pane=(0x14 / 255, 0x14 / 255, 0x0F / 255, 1.0), fs=1.3, ms=1.3,
+    pos=_POS_PAPER, out="fig_hourglass.png")
 
 
 _R30 = np.array([[np.cos(np.deg2rad(30.0)), -np.sin(np.deg2rad(30.0))],
@@ -795,7 +813,7 @@ def _footprint(k, reach, drift, sign, n_ring=72):
 
 
 def _cone3d(ax, th, lags, reach_of, drift, colour, sign, dot_s, ribs=24,
-            face_alpha=0.10, dots=True, lw=1.0):
+            face_alpha=0.10, dots=True, lw=1.0, ms=1.0):
     """Draw one half of the hourglass as stacked footprints plus rib lines.
 
     The surface is a FAN OF LINES rather than plot_surface: mplot3d sorts whole
@@ -807,37 +825,39 @@ def _cone3d(ax, th, lags, reach_of, drift, colour, sign, dot_s, ribs=24,
         r = reach_of(k)
         (rx, ry), (dx_, dy_) = _footprint(k, r, drift, sign)
         z = sign * k
-        ax.plot(rx, ry, zs=z, zdir="z", color=colour, lw=lw, alpha=0.85,
+        ax.plot(rx, ry, zs=z, zdir="z", color=colour, lw=lw * ms, alpha=0.85,
                 zorder=2)
         ax.add_collection3d(
             Poly3DCollection([list(zip(rx, ry, np.full_like(rx, float(z))))],
                              facecolor=colour, alpha=face_alpha,
                              edgecolor="none"))
         if dots:
-            ax.scatter(dx_, dy_, z, s=dot_s, c=colour, depthshade=False,
-                       edgecolors=th["bg"], linewidths=0.25, zorder=4)
+            ax.scatter(dx_, dy_, z, s=dot_s * ms ** 2, c=colour,
+                       depthshade=False, edgecolors=th["bg"],
+                       linewidths=0.25 * ms, zorder=4)
         rings.append((rx, ry, z))
     step = max(1, len(rings[0][0]) // ribs)
     for i in range(0, len(rings[0][0]) - 1, step):
         ax.plot([r[0][i] for r in rings], [r[1][i] for r in rings],
-                [r[2] for r in rings], color=colour, lw=0.5, alpha=th["rib"],
-                zorder=1)
+                [r[2] for r in rings], color=colour, lw=0.5 * ms,
+                alpha=th["rib"], zorder=1)
     return rings
 
 
-def _waist3d(ax, th, radius, drift_unused=None):
+def _waist3d(ax, th, radius, drift_unused=None, ms=1.0):
     t = np.linspace(0, 2 * np.pi, 72)
     ax.plot(radius * np.cos(t), radius * np.sin(t), zs=0, zdir="z",
-            color=th["gold"], lw=1.6, zorder=6)
+            color=th["gold"], lw=1.6 * ms, zorder=6)
     ax.add_collection3d(
         Poly3DCollection([list(zip(radius * np.cos(t), radius * np.sin(t),
                                    np.zeros_like(t)))],
                          facecolor=th["gold"], alpha=0.40, edgecolor="none"))
-    ax.scatter([0], [0], [0], s=14, c=th["gold"], depthshade=False, zorder=7)
+    ax.scatter([0], [0], [0], s=14 * ms ** 2, c=th["gold"], depthshade=False,
+               zorder=7)
 
 
 def _style3d(ax, th, xy_lim, xy_ticks, z_lim, z_ticks, z_ticklabels,
-             xy_ticklabels):
+             xy_ticklabels, fs=1.0):
     for axis in (ax.xaxis, ax.yaxis, ax.zaxis):
         axis.set_pane_color(th["pane"])
         axis.line.set_color(th["mut"])
@@ -845,16 +865,17 @@ def _style3d(ax, th, xy_lim, xy_ticks, z_lim, z_ticks, z_ticklabels,
     ax.set_xlim(-xy_lim, xy_lim); ax.set_ylim(-xy_lim, xy_lim)
     ax.set_zlim(-z_lim, z_lim)
     ax.set_xticks(xy_ticks); ax.set_yticks(xy_ticks); ax.set_zticks(z_ticks)
-    ax.set_xticklabels(xy_ticklabels, fontsize=8.5, color=th["axis"])
-    ax.set_yticklabels(xy_ticklabels, fontsize=8.5, color=th["axis"])
-    ax.set_zticklabels(z_ticklabels, fontsize=8.5, color=th["axis"])
+    ax.set_xticklabels(xy_ticklabels, fontsize=8.5 * fs, color=th["axis"])
+    ax.set_yticklabels(xy_ticklabels, fontsize=8.5 * fs, color=th["axis"])
+    ax.set_zticklabels(z_ticklabels, fontsize=8.5 * fs, color=th["axis"])
     # a negative pad makes the "−" of a tick label collide with the axis line
     ax.tick_params(axis="both", pad=1.5, length=0)
     # only ONE of the two horizontal axes is named: both are kilometres, and a
     # second "km" at the other bottom corner only crowds the tick numbers.
-    ax.set_xlabel("km", color=th["axis"], fontsize=9, labelpad=-6)
+    ax.set_xlabel("km", color=th["axis"], fontsize=9 * fs, labelpad=-6)
     ax.set_ylabel("")
-    ax.set_zlabel("time (pentads)", color=th["axis"], fontsize=9, labelpad=-2)
+    ax.set_zlabel("time (pentads)", color=th["axis"], fontsize=9 * fs,
+                  labelpad=-2)
     ax.view_init(elev=22, azim=-55)
     ax.set_box_aspect((1, 1, 1.05))
 
@@ -869,6 +890,8 @@ def two_scales_3d(th=THEME_DARK):
     geometry, the labels and their places are one definition for both."""
     BLUE_, GOLD_, ORANGE_ = th["blue"], th["gold"], th["orange"]
     INK, MUT_, BG_ = th["ink"], th["mut"], th["bg"]
+    FS, MS = th.get("fs", 1.0), th.get("ms", 1.0)   # font / mark scale, 1 = deck
+    P = dict(_POS_DECK, **th.get("pos", {}))         # label places, deck default
     LBOX = dict(facecolor=BG_, edgecolor="none", pad=1.5)   # opaque label patch
 
     fig = plt.figure(figsize=(11.0, 4.8), facecolor=BG_)
@@ -880,34 +903,37 @@ def two_scales_3d(th=THEME_DARK):
     ax.set_facecolor(BG_)
     L1 = list(range(1, 7))
     D1 = (-27.0, -27.0)                    # ~38 km per pentad, south-west
-    _cone3d(ax, th, L1, lambda k: reach_km("B", k), D1, BLUE_, -1, dot_s=9)
-    _cone3d(ax, th, L1, lambda k: reach_km("B", k), D1, ORANGE_, +1, dot_s=9)
-    _waist3d(ax, th, 56.0)                 # ~13 cells at 0.25 degrees
+    _cone3d(ax, th, L1, lambda k: reach_km("B", k), D1, BLUE_, -1, dot_s=9,
+            ms=MS)
+    _cone3d(ax, th, L1, lambda k: reach_km("B", k), D1, ORANGE_, +1, dot_s=9,
+            ms=MS)
+    _waist3d(ax, th, 56.0, ms=MS)          # ~13 cells at 0.25 degrees
     # a few past dots held out by a dropout pattern
     for k, idx in ((3, (1, 9, 17)), (4, (5, 21))):
         _, (dx_, dy_) = _footprint(k, reach_km("B", k), D1, -1)
-        ax.scatter([dx_[i] for i in idx], [dy_[i] for i in idx], -k, s=26,
-                   facecolors=BG_, edgecolors=BLUE_, linewidths=1.0,
-                   depthshade=False, zorder=8)
+        ax.scatter([dx_[i] for i in idx], [dy_[i] for i in idx], -k,
+                   s=26 * MS ** 2, facecolors=BG_, edgecolors=BLUE_,
+                   linewidths=1.0 * MS, depthshade=False, zorder=8)
     # the drift, once
-    ax.plot([0, 6 * D1[0]], [0, 6 * D1[1]], [0, -6], color=GOLD_, lw=1.6,
-            zorder=9)
+    ax.plot([0, 6 * D1[0]], [0, 6 * D1[1]], [0, -6], color=GOLD_,
+            lw=1.6 * MS, zorder=9)
     _style3d(ax, th, 1450, [-1000, 1000], 7.6, [-6, 0, 6],
-             ["−6", "0", "+6"], ["−1,000", "+1,000"])
-    ax.set_title("stage 1 — the codec, raw values", color=INK, fontsize=11,
-                 fontweight="bold", pad=-2, y=0.97)
-    ax.text2D(0.50, 0.855, "future cone — targets", color=ORANGE_, fontsize=9.5,
-              fontweight="bold", ha="center", transform=ax.transAxes)
-    ax.text2D(0.50, 0.075, "past cone — input", color=BLUE_, fontsize=9.5,
-              fontweight="bold", ha="center", transform=ax.transAxes,
-              bbox=LBOX)
+             ["−6", "0", "+6"], ["−1,000", "+1,000"], fs=FS)
+    ax.set_title("stage 1 — the codec, raw values", color=INK,
+                 fontsize=11 * FS, fontweight="bold", pad=-2, y=0.97)
+    ax.text2D(0.50, P["fut_y"], "future cone — targets", color=ORANGE_,
+              fontsize=9.5 * FS, fontweight="bold", ha="center",
+              transform=ax.transAxes)
+    ax.text2D(P["past_x"], 0.075, "past cone — input", color=BLUE_,
+              fontsize=9.5 * FS, fontweight="bold", ha="center",
+              transform=ax.transAxes, bbox=LBOX)
     ax.text2D(0.035, 0.50, "waist — present\n(≈ 13 cells)", color=GOLD_,
-              fontsize=9.5, fontweight="bold", ha="left", va="center",
+              fontsize=9.5 * FS, fontweight="bold", ha="left", va="center",
               linespacing=1.3, transform=ax.transAxes)
-    ax.text2D(0.035, 0.255, "d — toward the source", color=GOLD_, fontsize=9,
-              ha="left", transform=ax.transAxes, bbox=LBOX)
+    ax.text2D(*P["d_xy"], "d — toward the source", color=GOLD_,
+              fontsize=9 * FS, ha="left", transform=ax.transAxes, bbox=LBOX)
     ax.text2D(0.020, 0.800, "hollow dots =\nheld out (dropout)", color=BLUE_,
-              fontsize=9, ha="left", va="center", linespacing=1.3,
+              fontsize=9 * FS, ha="left", va="center", linespacing=1.3,
               transform=ax.transAxes)
 
     # ------------------------------------------------------------- stage 2
@@ -924,60 +950,63 @@ def two_scales_3d(th=THEME_DARK):
     # would sit 5,400 km off its own anchor and read as a shear, not a cone.
     D2 = (-5.4, -5.4)
     _cone3d(ax, th, L2, outer_reach_km, D2, BLUE_, -1, dot_s=3.5,
-            face_alpha=0.085)
+            face_alpha=0.085, ms=MS)
     _cone3d(ax, th, L2, outer_reach_km, D2, ORANGE_, +1, dot_s=3.5,
-            face_alpha=0.085)
-    _waist3d(ax, th, 56.0)
+            face_alpha=0.085, ms=MS)
+    _waist3d(ax, th, 56.0, ms=MS)
     # where the opening stops: the cap ring, drawn once on each side
     for sgn, col in ((-1, BLUE_), (+1, ORANGE_)):
         (rx, ry), _ = _footprint(K_CAP, outer_reach_km(K_CAP), D2, sgn)
-        ax.plot(rx, ry, zs=sgn * K_CAP, zdir="z", color=col, lw=1.8,
+        ax.plot(rx, ry, zs=sgn * K_CAP, zdir="z", color=col, lw=1.8 * MS,
                 alpha=1.0, zorder=5)
     # stage 1's whole double cone, to scale, at the centre
     for sgn in (-1, +1):
         for k in (3, 6):
             (rx, ry), _ = _footprint(k, reach_km("B", k), (0.0, 0.0), sgn)
-            ax.plot(rx, ry, zs=sgn * k, zdir="z", color=INK, lw=0.8,
+            ax.plot(rx, ry, zs=sgn * k, zdir="z", color=INK, lw=0.8 * MS,
                     alpha=0.9, zorder=9)
             ax.add_collection3d(
                 Poly3DCollection([list(zip(rx, ry,
                                            np.full_like(rx, float(sgn * k))))],
                                  facecolor=BG_, alpha=0.85, edgecolor="none"))
     _style3d(ax, th, 6300, [-4444, 4444], 178, [-143, 0, 143],
-             ["−143", "0", "+143"], ["−4,444", "+4,444"])
+             ["−143", "0", "+143"], ["−4,444", "+4,444"], fs=FS)
     ax.set_title("stage 2 — the forecaster, embeddings", color=INK,
-                 fontsize=11, fontweight="bold", pad=-2, y=0.97)
-    ax.text2D(0.50, 0.855, "future cone — targets", color=ORANGE_, fontsize=9.5,
-              fontweight="bold", ha="center", transform=ax.transAxes)
-    ax.text2D(0.50, 0.075, "past cone — input", color=BLUE_, fontsize=9.5,
-              fontweight="bold", ha="center", transform=ax.transAxes,
-              bbox=LBOX)
+                 fontsize=11 * FS, fontweight="bold", pad=-2, y=0.97)
+    ax.text2D(0.50, P["fut_y"], "future cone — targets", color=ORANGE_,
+              fontsize=9.5 * FS, fontweight="bold", ha="center",
+              transform=ax.transAxes)
+    ax.text2D(P["past_x"], 0.075, "past cone — input", color=BLUE_,
+              fontsize=9.5 * FS, fontweight="bold", ha="center",
+              transform=ax.transAxes, bbox=LBOX)
     ax.annotate("stage 1, to scale —\nthe near field\nthe codec already read",
                 xy=(0.485, 0.487), xytext=(0.005, 0.255), xycoords="axes fraction",
-                textcoords="axes fraction", color=INK, fontsize=9, ha="left",
-                va="center", linespacing=1.3,
+                textcoords="axes fraction", color=INK, fontsize=9 * FS,
+                ha="left", va="center", linespacing=1.3,
                 arrowprops=dict(arrowstyle="-", color=MUT_, lw=0.8,
                                 shrinkA=2, shrinkB=2))
-    ax.text2D(0.010, 0.800, "reach stops growing at\nthe 4,444 km cap (lag 33)",
-              color=MUT_, fontsize=8.5, ha="left", va="center",
+    ax.text2D(0.010, P["cap_y"], P["cap_text"],
+              color=MUT_, fontsize=8.5 * FS, ha="left", va="center",
               linespacing=1.3, transform=ax.transAxes)
-    ax.text2D(0.010, 0.680, "each dot is\nan embedding", color=BLUE_, fontsize=9,
-              ha="left", va="center", linespacing=1.3, transform=ax.transAxes)
+    ax.text2D(0.010, P["dot_y"], "each dot is\nan embedding", color=BLUE_,
+              fontsize=9 * FS, ha="left", va="center", linespacing=1.3,
+              transform=ax.transAxes)
 
     fig.text(0.5, 0.016, "same shape  ·  ×24 in time  ·  ×5 in space",
-             color=MUT_, fontsize=9.5, ha="center", va="center")
+             color=MUT_, fontsize=9.5 * FS, ha="center", va="center")
 
     fig.savefig(f"{OUT}/{th['out']}", dpi=200, facecolor=BG_)
     plt.close(fig)
 
 
-hourglass()
-warped_sunflower()
-channel_apertures_ab()
-channel_apertures_c()
-amoc_cones()
-summary_cone()
-summary_hourglass()
-two_scales_3d(THEME_DARK)
-two_scales_3d(THEME_LIGHT)
-print("figures written to", OUT)
+if __name__ == "__main__":
+    hourglass()
+    warped_sunflower()
+    channel_apertures_ab()
+    channel_apertures_c()
+    amoc_cones()
+    summary_cone()
+    summary_hourglass()
+    two_scales_3d(THEME_DARK)
+    two_scales_3d(THEME_LIGHT)
+    print("figures written to", OUT)
