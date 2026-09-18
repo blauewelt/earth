@@ -1,0 +1,24 @@
+  [index refl05] start (1 items)  0/1  0.0s
+Traceback (most recent call last):
+  File "/home/runner/work/earth/earth/ml/build_family1_stores.py", line 1488, in <module>
+    sys.exit(main())
+             ^^^^^^
+  File "/home/runner/work/earth/earth/ml/build_family1_stores.py", line 1460, in main
+    stage_probe_grid(a, cls, a.probe_month)
+  File "/home/runner/work/earth/earth/ml/build_family1_stores.py", line 927, in stage_probe_grid
+    f10b.stage_index(ctx)
+  File "/home/runner/work/earth/earth/ml/build_family10_stores.py", line 3846, in stage_index
+    plan = ad.index(ctx)
+           ^^^^^^^^^^^^^
+  File "/home/runner/work/earth/earth/ml/family1/adapters/_modis_cmg.py", line 745, in index
+    g["first_file"] = self.read_header(ctx, group, files[probe_day])
+                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/work/earth/earth/ml/family1/adapters/_modis_cmg.py", line 764, in read_header
+    p, why = self.granule_file(ctx, group, rec)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/work/earth/earth/ml/family1/adapters/_modis_cmg.py", line 814, in granule_file
+    n, why = download(self.session(), rec["url"], p,
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/work/earth/earth/ml/family1/adapters/_modis_cmg.py", line 389, in download
+    raise IOError(f"{url}: {type(err).__name__}: {err}")
+OSError: https://data.lpdaac.earthdatacloud.nasa.gov/lp-prod-protected/MOD09CMG.061/MOD09CMG.A2026259.061.2026261032136/MOD09CMG.A2026259.061.2026261032136.hdf: ConnectTimeout: HTTPSConnectionPool(host='urs.earthdata.nasa.gov', port=443): Max retries exceeded with url: /oauth/authorize?client_id=FtSFfbOeuxDcdf4px-elGw&response_type=code&redirect_uri=https://data.lpdaac.earthdatacloud.nasa.gov/login&state=%2Flp-prod-protected%2FMOD09CMG.061%2FMOD09CMG.A2026259.061.2026261032136%2FMOD09CMG.A2026259.061.2026261032136.hdf&app_type=401 (Caused by ConnectTimeoutError(<urllib3.connection.HTTPSConnection object at 0x7fe1957aa480>, 'Connection to urs.earthdata.nasa.gov timed out. (connect timeout=30)'))
