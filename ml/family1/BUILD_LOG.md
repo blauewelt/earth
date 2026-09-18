@@ -22,8 +22,9 @@ Before the store is marked published, the publish stage downloads every file
 back and compares its sha256.
 
 **Columns.**
-- **N** is the number of rows. For the sharded sea-ice store it is the number
-  of daily grids (frames) per hemisphere.
+- **N** is the number of rows. For a sharded tier-G store it is the number of
+  stored FRAMES (daily grids for `seaice_asi`, pentad grids for `chirps05`),
+  with the bins and tiles beside it.
 - **Stored bytes** is the sum over the store's `manifest.json`.
 - **Years** is the first and last year that holds rows.
 - **Run(s)** are family1-build workflow runs:
@@ -55,6 +56,8 @@ and a 250 GB disk, at $0.107/h plus $0.069/h of storage. Created
 not the cheapest qualifying offer ($0.096/h, 16 GB of RAM) and the 1.7 ¢/h
 went on memory, which the measurement justified: ghcnd's streaming assembly
 peaked at **48.90 GB RSS**.
+
+| `chirps05` | 1.0.tf (tier G, sharded) | lanes #95 (1981–1990), #96 (1991–2000), #97 (2001–2010), #98 (2011–2020), #99 (2021–2026), 15–33 min each; assembly #127 (hosted, `--parts-from-hub`, 66 min) | 3,288 pentad frames in 3,336 bins (628,008 tiles) | 19,064,019,352 (19.06 GB, 6,674 files) | 1981-01 → 2026-08 (bins −73–3262) | 2026-09-18 | CHIRPS v3.0 pentad precipitation, 0.05°, land 60°S–60°N; public; CC BY 4.0, confirmed from chc.ucsb.edu. Exception E4: **F = 2** half-bins of 2.5 days, the pentad filed by its MIDPOINT — F = 1 is impossible because 14 bins of the record hold two pentad midpoints (measured, all in February) — and a `frame_table` in tile_grid.json gives every (bin, frame) its pentad's own dates. 3,384 half-bins hold no pentad and are counted `no_pentad_in_slot`; nothing is absent upstream. Pentad lengths came out 2,922 × 5 days, 320 × 6, 35 × 3, 11 × 4, which is the producer's calendar exactly. 57.68 GB of GeoTIFF read; valid fraction 0.28056. The probe projected 21.18 GB and the store is **10 % under** it |
 
 ## Notes
 
@@ -138,3 +141,58 @@ peaked at **48.90 GB RSS**.
   (#77, #79, #80) failed in the index stage with the GESLA record list
   timing out, while the same URL answered this sandbox in 2 s. It cleared
   about 45 minutes after the last tide lane finished, and #82 went through.
+
+## Notes — E-082 wave 2, the sharded tier-G stores (added 2026-09-18)
+
+- **A GeoTIFF source means `rasterio` on the runner.** `lossyear` (Hansen
+  Global Forest Change) and `chirps05` (CHIRPS pentads) both read GeoTIFFs,
+  so `family1-build.yml`'s install step carries `rasterio` and prints its
+  GDAL version. Neither source needs an account.
+- **`adapter_env` is how a tier-G adapter's construction-time knobs reach a
+  runner.** A space-separated list of NAME=VALUE pairs, exported for the
+  build step only, echoed into the log, and REFUSED for anything that is not
+  a plain upper-case identifier or that sits in a credential's namespace
+  (`HF_`, `GITHUB_`, `EARTHDATA_`, `FIRMS_`, `FLUXNET_`, `COPERNICUS`).
+  `lossyear`'s probe needs it: the store has 4,480 groups and a probe
+  measures five Hansen tiles (`LOSSYEAR_TILES=...`).
+- **A tier-G group's frame size is capped by the PROBE, not by the store.**
+  `stage_probe_grid` converts each frame to float64 to check the channel
+  bounds, so a group of H × W × C elements costs 8 H W C bytes there plus the
+  boolean temporaries. Hansen's native 40,000 × 40,000 × 2 tile would need
+  25.6 GB of that and could not be probed at all; cut into 2.5-degree
+  sub-tiles of 10,000 × 10,000 it needs 1.6 GB and the whole probe fits this
+  sandbox's 7 GB. **Size a tier-G group so its probe fits, and read the
+  source in whatever shape the FILES want** — Hansen's LZW GeoTIFFs are
+  striped one row at a time, so the fetch reads a full-width 10,000-row band
+  once per variable and slices four sub-tiles out of it; sixteen square
+  windows would decompress every tile four times over.
+- **Two one-line gaps in `ml/build_family1_stores.py` that only a float16 or
+  sparse tier-G store reaches.** `stage_probe_grid`'s `compression_ratio`
+  divided by a zero mean frame size, which is exactly what a probed frame
+  with no stored tile legitimately has (an all-ocean lossyear sub-tile), and
+  lost the whole probe to a ZeroDivisionError; it is None now.
+  `check_grid_smoke` compared frames with `np.array_equal` and no
+  `equal_nan`, so no float16 group with a missing pixel could pass its own
+  smoke — `stage_publish_grid` and `http_verify` already compared with
+  `equal_nan` and it now does too.
+- **A hosted runner's SIX-HOUR limit is what decides hosted-or-box for a
+  tier-G store, not its size.** `lossyear` projects to 60.7 GB — which fits
+  a runner's disk — and needs about 11 h of fetch, because `write_bin` was
+  402 s of its probe's 672 and the store is ONE bin with no year axis to
+  spread over. Splitting by tile across two lanes does not work either: each
+  lane's `counts.json` declares only its own groups' grids and
+  `stage_assemble_grid` refuses parts written for a different grid
+  declaration. So `lossyear` waits for one box run; `chirps05` (21 GB, 3,288
+  pentads, five decade lanes at 15–33 min each) did not.
+- **CEDA serves a GitHub runner at 5.0 MB/s.** Measured on `oc4k`'s probe
+  (#100): 4.99 GB of OC-CCI in 1,004 s, the same order as the 2.0 MB/s this
+  sandbox sees. That is what sizes the `oc4k` lanes at ONE YEAR each — 58.7
+  GB and about 3.3 h — rather than by disk.
+- **Twenty concurrent jobs is the ceiling, and a queued assembly behind
+  nineteen lanes is a self-inflicted delay.** Dispatching all 26 `oc4k` year
+  lanes put the `chirps05` assembly in the queue; cancelling the newest
+  eleven lanes (which had done the least) let it start. Dispatch the job you
+  need FIRST, then fill the pool.
+- **The Hugging Face tree API pages at 50 entries and refuses `limit=1000`.**
+  A parts directory that looks like 50 files is a page, not a listing;
+  `?limit=100` with the `Link` header's cursor is what reads the real 149.
