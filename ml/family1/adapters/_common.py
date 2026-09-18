@@ -9,6 +9,7 @@ body, and an ordered thread map with a bounded look-ahead so a pool of
 downloads never holds more than a few files at once.
 """
 import collections
+import os
 import re
 import concurrent.futures as cf
 import time
@@ -211,3 +212,116 @@ def concat_rows(parts, C, time_dtype):
 
 def add_counts(into, new):
     return f10b._merge_counts(into, new)
+
+
+# ========================================================== Earthdata =====
+# EARTHDATA LOGIN FOR A DOWNLOAD, THROUGH A .netrc, IPv4 ONLY.
+#
+# Every NASA archive in family 1 (LP DAAC, GES DISC, PO.DAAC, the SWOT
+# archive) answers an unauthenticated GET with a 302 to
+# `urs.earthdata.nasa.gov/oauth/authorize`, and `urllib` follows that
+# redirect without credentials and lands on `HTTP 401 — HTTP Basic: Access
+# denied.` (measured 2026-09-18, family1-build run #152: every SWOT pass).
+# `requests` is what works: `Session.rebuild_auth` looks the host up in
+# `~/.netrc` on EVERY redirect hop and STRIPS any Authorization header on a
+# cross-host hop, so a netrc naming `urs.earthdata.nasa.gov` ALONE sends the
+# password to Earthdata Login and to nothing else — not to the archive, not
+# to the signed S3 URL the cloud hands back. `family1-build.yml` writes that
+# netrc on hosted runners only, mode 600, and deletes it in an always() step.
+#
+# IPv4 IS FORCED for the same reason `ml/family1/earthdata_check.py` forces
+# it: GitHub's runners resolve AAAA records for these hosts and have no IPv6
+# route, so a request dies with `[Errno 101] Network is unreachable` before
+# any HTTP status exists — which reads exactly like an archive refusing the
+# account and is nothing of the kind (BUILD_LOG.md, run #3).
+#
+# NOTE, 2026-09-18: `family1/adapters/_modis_cmg.py` carries the same trio,
+# written in the same wave for the MODIS CMG stores. They should be one copy;
+# consolidating them is a follow-up, and until then a change to one belongs
+# in both.
+URS_HOST = "urs.earthdata.nasa.gov"
+_IPV4 = {"done": False}
+
+
+def force_ipv4_once():
+    if _IPV4["done"]:
+        return
+    from family1 import earthdata_check as edc
+    edc.force_ipv4(True)
+    _IPV4["done"] = True
+
+
+def netrc_has_urs(home=None):
+    """Does a netrc this process can see name Earthdata Login?"""
+    p = os.environ.get("NETRC") or os.path.join(
+        home or os.path.expanduser("~"), ".netrc")
+    try:
+        with open(p, "r") as fh:
+            return URS_HOST in fh.read()
+    except OSError:
+        return False
+
+
+def earthdata_session():
+    """A `requests` session that authenticates to Earthdata Login only."""
+    import requests
+    force_ipv4_once()
+    s = requests.Session()
+    s.trust_env = True                 # .netrc per redirect hop; see above
+    s.headers.update(f10b.UA)
+    return s
+
+
+def earthdata_download(session, url, path, attempts=4, sleep=3.0,
+                       timeout=300):
+    """GET `url` -> `path`, size-verified. (bytes, None) or (None, "notfound").
+
+    A definite 404 is a legitimate absence the caller counts. A 401/403 after
+    an Earthdata hop is a DEFINITE refusal about the account and raises at
+    once with the check to run; anything else retries and then raises. A short
+    or empty body is a refusal, never a smaller record (ml/CLAUDE.md, the
+    2026-09-14 rule).
+    """
+    os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
+    part = f"{path}.part{os.getpid()}"
+    err = None
+    for i in range(max(1, attempts)):
+        got, want = 0, None
+        try:
+            with session.get(url, stream=True, timeout=timeout,
+                             allow_redirects=True) as r:
+                if r.status_code == 404:
+                    return None, "notfound"
+                if r.status_code in (401, 403):
+                    raise IOError(
+                        f"{url}: HTTP {r.status_code} after "
+                        f"{len(r.history)} redirect(s) — Earthdata Login "
+                        f"refused this account for this archive. Dispatch "
+                        f"family1-build.yml with check_credentials=true and "
+                        f"read the approval URL it prints.")
+                if r.status_code != 200:
+                    raise IOError(f"{url}: HTTP {r.status_code}")
+                cl = r.headers.get("Content-Length")
+                want = int(cl) if cl is not None else None
+                with open(part, "wb") as fh:
+                    for chunk in r.iter_content(1 << 20):
+                        if chunk:
+                            fh.write(chunk)
+                            got += len(chunk)
+            if want is not None and got != want:
+                raise IOError(f"{url}: {got:,} of {want:,} bytes — truncated")
+            if got == 0:
+                raise IOError(f"{url}: an empty body — a download that comes "
+                              f"back empty is a refusal")
+            f10b.count_bytes(got)
+            os.replace(part, path)
+            return got, None
+        except Exception as e:                                  # noqa: BLE001
+            err = e
+            if os.path.exists(part):
+                os.remove(part)
+            if "Earthdata Login refused" in str(e):
+                raise
+            if i < attempts - 1:
+                time.sleep(sleep * (2 ** i))
+    raise IOError(f"{url}: {type(err).__name__}: {err}")

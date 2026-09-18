@@ -462,6 +462,7 @@ class XCO2Adapter(f10b.SourceAdapter):
             self.notes = (f"{self.notes}\nXCO2_SENSORS restricted this build "
                           f"to {only!r}. This is not the whole store.")
         self._days = None
+        self._session = None
 
     # ------------------------------------------------------------- listing --
     def days(self, ctx):
@@ -520,21 +521,20 @@ class XCO2Adapter(f10b.SourceAdapter):
                 raise f10b._NotFound(p)
             ctx.count_bytes(os.path.getsize(p))
             return p, False
+        # EARTHDATA LOGIN, not a plain GET: a GES DISC .nc4 answers an
+        # unauthenticated request with `401 HTTP Basic: Access denied.` after
+        # a redirect to urs.earthdata.nasa.gov. `cm.earthdata_download`
+        # carries the .netrc through the redirect chain, to the login host
+        # and nowhere else, and forces IPv4.
         dest = os.path.join(ctx.scratch, self.store,
                             f"{entry['sensor']}_{entry['name']}.nc4")
-        os.makedirs(os.path.dirname(dest), exist_ok=True)
-        err = None
-        for i in range(max(1, ctx.a.attempts)):
-            try:
-                f10b.http_to_file(entry["url"], dest)
-                return dest, True
-            except f10b._NotFound:
-                raise
-            except (IOError, *cm.RETRY_ERRORS) as e:
-                err = e
-                if i < ctx.a.attempts - 1:
-                    time.sleep(4.0 * (2 ** i))
-        raise IOError(f"{entry['url']}: {type(err).__name__}: {err}")
+        if self._session is None:
+            self._session = cm.earthdata_session()
+        n, why = cm.earthdata_download(self._session, entry["url"], dest,
+                                       attempts=max(1, ctx.a.attempts))
+        if n is None:
+            raise f10b._NotFound(f"{entry['url']}: {why}")
+        return dest, True
 
     # ---------------------------------------------------------------- rows --
     def _rows(self, ctx, label, d_lo, d_hi, t_lo, t_hi):
@@ -678,6 +678,22 @@ class XCO2Adapter(f10b.SourceAdapter):
                               max(lo, ctx.t_lo), min(hi, ctx.t_hi))
 
     # --------------------------------------------------------------- smoke --
+    def fetch_preflight(self, ctx):
+        """The netrc must exist BEFORE the first granule (ml/CLAUDE.md §0.3).
+
+        Every Lite file is Earthdata-protected, so a fetch without a netrc
+        spends the whole CMR listing to discover a page of 401s — which is
+        exactly what the first swot probe did (family1-build run #152).
+        """
+        if not ctx.source_dir and not cm.netrc_has_urs():
+            sys.exit(
+                "REFUSING xco2: the Lite files are Earthdata-protected and no "
+                "netrc naming urs.earthdata.nasa.gov is visible to this "
+                "process. family1-build.yml writes it on a HOSTED runner from "
+                "EARTHDATA_USERNAME / EARTHDATA_PASSWORD (ml/CLAUDE.md §6); a "
+                "box never gets one. Nothing has been fetched.")
+        return None
+
     def smoke_sources(self, root, d_lo, d_hi, seed=20260918):
         truth = make_smoke_sources(root, d_lo, d_hi, seed)
         self.__init__()

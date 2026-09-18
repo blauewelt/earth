@@ -354,6 +354,7 @@ class SWOTAdapter(f10b.SourceAdapter):
     smoke_probe_month = "2024-01"
 
     def __init__(self):
+        self._session = None
         self.cycle = (os.environ.get("SWOT_CYCLE") or "010").strip()
         try:
             self.max_passes = int(os.environ.get("SWOT_MAX_PASSES") or 12)
@@ -426,20 +427,21 @@ class SWOTAdapter(f10b.SourceAdapter):
                 raise f10b._NotFound(p)
             ctx.count_bytes(os.path.getsize(p))
             return p, False
+        # EARTHDATA LOGIN, not a plain GET. `archive.swot.podaac.
+        # earthdata.nasa.gov` answers an unauthenticated request with a 302
+        # to urs.earthdata.nasa.gov and then `HTTP 401 — HTTP Basic: Access
+        # denied.`, which is what family1-build run #152 measured on every
+        # one of the twelve passes it asked for. `cm.earthdata_download`
+        # carries the .netrc through the redirect chain (and only to the
+        # login host) and forces IPv4.
         dest = os.path.join(ctx.scratch, self.store, entry["name"] + ".nc")
-        os.makedirs(os.path.dirname(dest), exist_ok=True)
-        err = None
-        for i in range(max(1, ctx.a.attempts)):
-            try:
-                f10b.http_to_file(entry["url"], dest)
-                return dest, True
-            except f10b._NotFound:
-                raise
-            except (IOError, *cm.RETRY_ERRORS) as e:
-                err = e
-                if i < ctx.a.attempts - 1:
-                    time.sleep(4.0 * (2 ** i))
-        raise IOError(f"{entry['url']}: {type(err).__name__}: {err}")
+        if self._session is None:
+            self._session = cm.earthdata_session()
+        n, why = cm.earthdata_download(self._session, entry["url"], dest,
+                                       attempts=max(1, ctx.a.attempts))
+        if n is None:
+            raise f10b._NotFound(f"{entry['url']}: {why}")
+        return dest, True
 
     # --------------------------------------------------------------- rows ---
     def _rows(self, ctx, label, t_lo, t_hi):
@@ -505,6 +507,10 @@ class SWOTAdapter(f10b.SourceAdapter):
     def fetch_preflight(self, ctx):
         """A BUILD refuses here, where the inputs are all it has cost.
 
+        And so does a run with no Earthdata netrc: the granules are
+        protected, so a fetch without one spends the whole listing to
+        discover twelve 401s (run #152).
+
         ml/CLAUDE.md §0.3: a precondition that depends only on the inputs is
         free at dispatch and expensive at hour three. This store has not been
         given a storage decision yet, so a build is refused before its first
@@ -514,6 +520,14 @@ class SWOTAdapter(f10b.SourceAdapter):
                 or ctx.source_dir:
             # `--source-dir` is the smoke's synthetic archive: building THAT
             # is how the code is exercised and is not a build of the store.
+            if not ctx.source_dir and not cm.netrc_has_urs():
+                sys.exit(
+                    "REFUSING swot: the granules are Earthdata-protected and "
+                    "no netrc naming urs.earthdata.nasa.gov is visible to "
+                    "this process. family1-build.yml writes it on a HOSTED "
+                    "runner from EARTHDATA_USERNAME / EARTHDATA_PASSWORD "
+                    "(ml/CLAUDE.md §6); a box never gets one. Nothing has "
+                    "been fetched.")
             return None
         sys.exit(
             "REFUSING to build swot: this store is a MEASUREMENT until the "

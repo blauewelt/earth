@@ -46,20 +46,30 @@ def test_registered_and_declared():
     assert "PROBE ONLY" in ad.notes
 
 
-def test_a_build_refuses_before_its_first_byte(monkeypatch):
-    """ml/CLAUDE.md §0.3 — the guard is at dispatch, where the inputs are all
-    it has cost."""
+def test_a_build_refuses_before_its_first_byte(monkeypatch, tmp_path):
+    """ml/CLAUDE.md §0.3 — both guards are at dispatch, where the inputs are
+    all they have cost: the storage decision, and the Earthdata netrc."""
     monkeypatch.delenv("SWOT_ALLOW_BUILD", raising=False)
     ad = swot.SWOTAdapter()
     a = argparse.Namespace(stage="all", source_dir="")
     ctx = argparse.Namespace(a=a, source_dir="")
     with pytest.raises(SystemExit, match="MEASUREMENT until the storage"):
         ad.fetch_preflight(ctx)
-    # a probe is allowed, and so is SWOT_ALLOW_BUILD=1
+    # a probe is allowed past the storage guard; the netrc guard is separate
+    # and only applies when a real archive is being read
     assert ad.fetch_preflight(
         argparse.Namespace(a=argparse.Namespace(stage="probe"),
-                           source_dir="")) is None
+                           source_dir=str(tmp_path))) is None
+    # with the decision made and NO netrc, the SECOND guard fires: the
+    # granules are Earthdata-protected and a fetch without one spends the
+    # whole listing to discover a page of 401s (run #152)
     monkeypatch.setenv("SWOT_ALLOW_BUILD", "1")
+    monkeypatch.setenv("NETRC", str(tmp_path / "absent"))
+    with pytest.raises(SystemExit, match="no netrc naming"):
+        swot.SWOTAdapter().fetch_preflight(ctx)
+    nr = tmp_path / "netrc"
+    nr.write_text("machine urs.earthdata.nasa.gov login u password p\n")
+    monkeypatch.setenv("NETRC", str(nr))
     assert swot.SWOTAdapter().fetch_preflight(ctx) is None
 
 
