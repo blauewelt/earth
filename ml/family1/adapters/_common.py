@@ -262,8 +262,46 @@ def netrc_has_urs(home=None):
         return False
 
 
-def earthdata_session():
-    """A `requests` session that authenticates to Earthdata Login only."""
+def earthdata_credentials(env=None):
+    """(user, password) from the environment, or (None, None)."""
+    env = os.environ if env is None else env
+    u = env.get("EARTHDATA_USERNAME") or ""
+    p = env.get("EARTHDATA_PASSWORD") or ""
+    return (u, p) if (u and p) else (None, None)
+
+
+def earthdata_ready(env=None):
+    """Can this process authenticate to Earthdata at all — env or netrc?"""
+    u, _p = earthdata_credentials(env)
+    return bool(u) or netrc_has_urs()
+
+
+def earthdata_session(env=None):
+    """A `requests` session that authenticates to Earthdata Login ONLY.
+
+    TWO ROUTES, AND THE EXPLICIT ONE IS PREFERRED BECAUSE IT WAS MEASURED.
+    `ml/family1/earthdata_check.session(user, password)` sets
+    `trust_env = False` and re-prepares Basic auth on every hop INTO
+    urs.earthdata.nasa.gov (and strips it on every other hop), and that is the
+    session family1-build run #90 measured getting HTTP 206 out of LP DAAC,
+    GES DISC and PO.DAAC with this account (BUILD_LOG: "The Earthdata account
+    is GOOD"). The netrc route — `trust_env = True`, letting `requests` look
+    the host up per redirect hop — works for LP DAAC and for PO.DAAC's SWOT
+    archive (measured: family1-build #150 and #168) and returned
+    `HTTP 401 after 2 redirect(s)` from GES DISC's
+    data.gesdisc.earthdata.nasa.gov in #170, whose 302 carries the SAME
+    Earthdata client_id (e2WVk8Pw6weeLUKZYOxvTQ) as the disc2 host #90
+    succeeded against — so the account is not the problem and the session
+    construction is. The netrc route is kept as the fallback for a process
+    that has a netrc and no environment variables.
+    """
+    from family1 import earthdata_check as edc
+    user, password = earthdata_credentials(env)
+    if user:
+        force_ipv4_once()
+        s = edc.session(user, password)
+        s.headers.update(f10b.UA)
+        return s
     import requests
     force_ipv4_once()
     s = requests.Session()

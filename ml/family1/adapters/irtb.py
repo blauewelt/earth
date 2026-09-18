@@ -563,13 +563,16 @@ class IRTBAdapter(sh.GridAdapter):
 
     # ------------------------------------------------------------- contract --
     def fetch_preflight(self, ctx):
-        if not ctx.source_dir and not cm.netrc_has_urs():
+        if not ctx.source_dir and not cm.earthdata_ready():
             sys.exit(
-                "REFUSING irtb: GPM_MERGIR is Earthdata-protected and no "
-                "netrc naming urs.earthdata.nasa.gov is visible to this "
-                "process. family1-build.yml writes it on a HOSTED runner from "
-                "EARTHDATA_USERNAME / EARTHDATA_PASSWORD (ml/CLAUDE.md §6); a "
-                "box never gets one. Nothing has been fetched.")
+                "REFUSING irtb: "
+                "the GPM_MERGIR files are Earthdata-protected and this "
+                "process can authenticate to Earthdata Login in NEITHER way: "
+                "no EARTHDATA_USERNAME / EARTHDATA_PASSWORD in the "
+                "environment and no netrc naming urs.earthdata.nasa.gov. "
+                "family1-build.yml gives both on a HOSTED runner from the "
+                "repository secrets (ml/CLAUDE.md §6); a box gets neither. "
+                "Nothing has been fetched.")
         return None
 
     def index(self, ctx):
