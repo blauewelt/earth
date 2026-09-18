@@ -1,0 +1,96 @@
+{
+ "at": "2026-09-18T07:39:00+00:00",
+ "builder_git_sha": "ed7a75f0d471de74b68c304ecab5514643cb9c54",
+ "bytes_fetched": 304162654,
+ "bytes_index": 18327285,
+ "bytes_per_row": 69.889,
+ "channels": [
+  "swh",
+  "swh_denoised",
+  "swh_uncertainty"
+ ],
+ "counts": {
+  "days_absent_upstream": 0,
+  "days_listed": 31,
+  "days_read": 31,
+  "fetch_seconds": 14.7,
+  "rows_kept": 4352091,
+  "samples_in_file": 4352093,
+  "samples_per_mission": {
+   "cryosat-2": 1255788,
+   "jason-2": 1719307,
+   "saral": 1376996
+  }
+ },
+ "counts_scope": "month",
+ "days_with_no_rows": 0,
+ "distinct_platforms": 3,
+ "distribution": "public",
+ "estimate_rows_per_year": null,
+ "estimate_store_bytes": null,
+ "family": "1gf",
+ "month": "2015-01",
+ "nan_fraction": {
+  "swh": 0.0,
+  "swh_denoised": 0.011474,
+  "swh_uncertainty": 0.024921
+ },
+ "note_estimate": null,
+ "out_of_bounds": {
+  "swh": 0,
+  "swh_denoised": 0,
+  "swh_uncertainty": 0
+ },
+ "out_of_bounds_stored": {
+  "swh": 0,
+  "swh_denoised": 0,
+  "swh_uncertainty": 0
+ },
+ "platforms": null,
+ "qc": {
+  "1": 4352091
+ },
+ "rows": 4352091,
+ "rows_outside_month_dropped_by_probe": 0,
+ "rows_per_day": [
+  139841,
+  138131,
+  140430,
+  138057,
+  141370,
+  140854,
+  139333,
+  138357,
+  141095,
+  139310,
+  142402,
+  140610,
+  140364,
+  140645,
+  140327,
+  141583,
+  134510,
+  142625,
+  140325,
+  137922,
+  140234,
+  140385,
+  137963,
+  143162,
+  140059,
+  142649,
+  141171,
+  144068,
+  140186,
+  142423,
+  141700
+ ],
+ "runner": "vm",
+ "schema_version": 2,
+ "source": "https://s3.waw3-1.cloudferro.com/mdl-native-05/native/WAVE_GLO_PHY_SWH_L3_MY_014_005/cci_obs-wave_glo_phy-swh_my_l3_PT1S-i_202607/<YYYY>/<MM>/ESACCI-SEASTATE-L3-SWH-MULTI_1D-<YYYYMMDD>-fv01.nc",
+ "store": "swh",
+ "stored_bytes_per_row": 33,
+ "time_dtype": "int32",
+ "wall_seconds": 14.67,
+ "wall_seconds_index": 16.25
+}
