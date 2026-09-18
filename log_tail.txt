@@ -1,0 +1,61 @@
+store     cat_hls — HLS v2.0 scene catalogue — harmonised Sentinel-2 (S30) and Landsat (L30) 30 m tiles, one row per granule
+family    family1_tf (1.0.tf) · public -> chfrank/earth-tensors:tensors/family1_tf/cat_hls
+axis      2025-01-01 .. 2025-12-31  bins 3141..3214 · time_s int32 (schema 2)
+channels  C=5: cloud, valid, angle, log2_area, sensor
+work      /home/runner/work/earth/earth/ml/cache/family1_tf
+
+=== stage index (cat_hls) ===
+  [index cat_hls] start (1 items)  0/1  0.0s
+  [index cat_hls] plan.json  1/1  1.5s
+  index: cat_hls — 1 year(s), C=5 (cloud, valid, angle, log2_area, sensor), bins 3141..3214
+=== stage index done in 1.5s ===
+
+=== stage fetch (cat_hls) ===
+  [fetch cat_hls] start (1 items)  0/1  0.0s
+  [fetch cat_hls] cat_hls 2025 rows 0+  1/1  1031.0s
+  [fetch cat_hls] cat_hls 2025 rows 502,731+  1/1  1930.9s
+  [fetch cat_hls] cat_hls 2025 rows 1,010,094+  1/1  2931.1s
+  [fetch cat_hls] cat_hls 2025 rows 1,518,812+  1/1  3671.9s
+  [fetch cat_hls] cat_hls 2025 rows 2,020,940+  1/1  4619.6s
+  [fetch cat_hls] cat_hls 2025 rows 2,521,330+  1/1  5509.3s
+  [fetch cat_hls] cat_hls 2025 rows 3,025,340+  1/1  6552.5s
+  [fetch cat_hls] cat_hls 2025 rows 3,530,836+  1/1  7363.3s
+Traceback (most recent call last):
+  File "/home/runner/work/earth/earth/ml/build_family1_stores.py", line 1488, in <module>
+    sys.exit(main())
+             ^^^^^^
+  File "/home/runner/work/earth/earth/ml/build_family1_stores.py", line 1483, in main
+    f10b.run_stages(ctx, stages, stage_fn=stage_fns(ad), deps=DEPS)
+  File "/home/runner/work/earth/earth/ml/build_family10_stores.py", line 5331, in run_stages
+    stage_fn[s](ctx)
+  File "/home/runner/work/earth/earth/ml/build_family1_stores.py", line 264, in stage_fetch
+    f10b.stage_fetch(ctx, assemble_store_after=False)
+  File "/home/runner/work/earth/earth/ml/build_family10_stores.py", line 3912, in stage_fetch
+    for label, rows, counts in ad.fetch_year(ctx, y):
+  File "/home/runner/work/earth/earth/ml/family1/adapters/_stac.py", line 1302, in fetch_year
+    for label, rows, c in self._rows(ctx, windows, str(year), ctx.t_lo,
+  File "/home/runner/work/earth/earth/ml/family1/adapters/_stac.py", line 1264, in _rows
+    for scs, c in cm.ordered_map(fn, windows, self.workers(ctx)):
+  File "/home/runner/work/earth/earth/ml/family1/adapters/_common.py", line 188, in ordered_map
+    yield q.popleft().result()
+          ^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/concurrent/futures/_base.py", line 449, in result
+    return self.__get_result()
+           ^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/concurrent/futures/_base.py", line 401, in __get_result
+    raise self._exception
+  File "/usr/lib/python3.12/concurrent/futures/thread.py", line 58, in run
+    result = self.fn(*self.args, **self.kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/work/earth/earth/ml/family1/adapters/_stac.py", line 1263, in <lambda>
+    fn = (lambda w: self.scenes(ctx, w))
+                    ^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/work/earth/earth/ml/family1/adapters/_stac.py", line 1517, in scenes
+    sc = self.granule(it, coll, counts, what)
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/work/earth/earth/ml/family1/adapters/_stac.py", line 1552, in granule
+    base, tmpl = asset_template(hrefs, self.asset_id(gid, umm), f"{what} "
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/work/earth/earth/ml/family1/adapters/_stac.py", line 1407, in asset_template
+    raise Refusal(f"{what}: no asset url at all")
+family1.adapters._stac.Refusal: cat_hls S30 2025-12-16T00 HLS.S30.T51UYP.2025350T025131.v2.0: no asset url at all
