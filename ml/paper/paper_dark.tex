@@ -284,6 +284,57 @@ ready-made token cache, which is what allows the programme's own tile codec
 to be measured against it with everything else held fixed.
 \end{itemize}
 
+The global fine-granularity family --- the ocean and the air measured at
+10\,km or finer and every five days or finer --- is the concrete instance
+of tiers G and P above the $0.25^\circ$ tensor (Table~\ref{tab:gf}); its
+land-and-coast counterpart holds the station networks, gauges, towers, fire
+detections, rivers, the daily $0.05^\circ$ land fields, the imagery
+catalogue and the land-change targets, and a third family is that
+counterpart with the imagery catalogue replaced by the AlphaEarth embedding.
+Two rules govern admission to the family. Raw measurements first: a derived
+product is admitted only where it carries measurements nothing else does,
+and gap-filled analyses are not admitted; three sources slightly coarser
+than the rule --- scatterometer wind at 12.5\,km, satellite rainfall at
+11\,km, one column-CO$_2$ sounder at 10.5\,km --- are named exceptions. And
+every store must lower the model's error on one of the four read-outs, on
+the comparison of \S\ref{sec:eval-compare}, or be dropped. Sources already
+held elsewhere --- the reanalysis and level-4 fields of the tensor, the Argo
+profiles, the drifters, tropical moorings, ship CO$_2$ and along-track sea
+level of the point families --- are not rebuilt.
+
+\begin{table}[t]
+\centering\scriptsize\setlength{\tabcolsep}{3pt}
+\begin{tabular}{@{}L{1.6cm}L{4.1cm}L{2.2cm}L{1.9cm}L{1.9cm}L{2.0cm}c@{}}
+\toprule
+store & what it is & producer & space & time & record & tier \\
+\midrule
+\code{seaice\_asi} & daily sea-ice concentration from microwave radiometers & Univ.\ Bremen, AMSR-E/2 & 6.25\,km polar grids & daily & 2002--11, 2012-- & G \\
+\code{oc4k} & daily ocean colour: chlorophyll, attenuation, reflectance & ESA OC-CCI v6.0 & 4.6\,km & daily & 1997-09-- & G \\
+\code{sst\_cci05} & daily sea-surface temperature per sensor & ESA SST CCI v3.0 & 5.6\,km & daily, day and night & 1979-07-- & G \\
+\code{sst\_acspo02} & daily sea-surface temperature merged across sensors & NOAA ACSPO & 2.2\,km & daily, AM and PM & 2000-02-- & G \\
+\code{irtb} & cloud-top brightness temperature from geostationary satellites & NOAA CPC & 4\,km & 30\,min (3-hourly first) & 1998-01-- & G \\
+\code{precip01} & daily satellite precipitation (IMERG) & NASA/JAXA GPM & 11\,km & daily & 2000-- & G \\
+\code{wind12} & ocean wind from scatterometers & EUMETSAT OSI SAF; QuikSCAT & 12.5\,km swath cells & per pass & 1999--2009, 2007-- & G \\
+\code{swot} & sea-surface height across two 50\,km radar swaths & NASA/CNES SWOT & 2\,km & per pass, 20.86-day cycle & 2023-07-- & P \\
+\code{swh} & significant wave height along altimeter tracks & ESA CCI Sea State & ${\approx}$7\,km along track & 1\,Hz & 1991-08--2023-12 & P \\
+\code{icoads} & ship and buoy weather reports & NOAA NCEI / NCAR, ICOADS 3.0 & point & per report & 1662-- & P \\
+\code{wod} & ocean temperature, salinity and oxygen profiles, Argo excluded & NOAA NCEI, WOD & point profile & per cast & 1772-- & P \\
+\code{glodap} & ship bottle samples of carbon, nutrients and oxygen at depth & GLODAPv3 & point bottle & per cruise & 1972--2023 & P \\
+\code{bgcargo} & floats measuring oxygen, nitrate, pH, chlorophyll, backscatter & Argo GDAC, BGC-Argo & point profile & ${\approx}$10 days per float & 2002-- & P \\
+\code{oceansites} & fixed open-ocean moorings & OceanSITES & point mooring & hourly or finer & 1980s-- & P \\
+\code{deep\_arrays} & the instrument records of the four Atlantic overturning arrays & RAPID/MOCHA, OSNAP, SAMBA, MOVE & point mooring & 15\,min--1\,h & 2000 / 2004 / 2009 / 2014-- & P \\
+\code{xco2} & column-averaged CO$_2$ soundings & NASA OCO-2, OCO-3; GOSAT & $<3$\,km$^2$ sounding & per sounding & 2014-06-- & P \\
+\bottomrule
+\end{tabular}
+\caption{The global fine-granularity family: the ocean and the air at 10\,km
+or finer and five days or finer, as the model reads it. Each store is
+stored at its own resolution and cadence in its tier and enters through the
+token schema of \S\ref{sec:data-token} with its own footprint. Sizes range
+from tens of megabytes (the bottle samples) to a few terabytes (the
+kilometre-scale temperature fields); a one-month test fetch through the real
+builder replaces every estimate before a store is built.\label{tab:gf}}
+\end{table}
+
 Three properties make the tiers one family. One time axis: every tier is
 indexed by the pentad bin from the 1982 epoch, tier-P rows keeping their
 exact time inside the bin so $\Delta t$ is fractional. One registry: a JSON
@@ -634,11 +685,50 @@ $s$ is clamped to $[-8, 8]$, the first 2{,}000 steps run at fixed $\sigma =
 anomalies for the continuous fields, Gaussian in log space for the
 log-normal ones, a hurdle model (Bernoulli wet or dry times a log-Gaussian
 amount) for precipitation, and a logit-Gaussian for bounded fractions.
-Channel groups are weighted explicitly in the loss as a stated choice, never
-through $\sigma$ as a side effect. Every family --- waist reconstruction,
+Every family --- waist reconstruction,
 fill-in, each future lead --- is scored at every evaluation against its own
 predict-the-mean bar; coverage of the $\pm1\sigma$ and $\pm2\sigma$ bands on
 held-out targets is reported as the calibration check.
+
+\paragraph{Weighting across targets.} The squared-error term sums over
+targets whose residual errors differ by orders of magnitude --- a persistent
+sea-surface temperature at lead one against a wind-stress standard deviation
+at lead six --- and a plain sum lets the hardest targets dominate the
+gradient. Standardising the targets, which the anomaly transform already
+does, weights each by its marginal variance, and that is the wrong scale in
+principle: marginal variance conflates \emph{varies a lot} with \emph{hard
+to predict}. The right scale for a target is its irreducible error, so the
+mean's loss is
+\begin{equation}
+\mathcal{L}_\mu = \sum_{k} w_k\,\mathrm{MSE}_k, \qquad
+w_k = 1 / \mathrm{MSE}_k^{\text{ref}}, \qquad \text{no gradient through } w_k,
+\end{equation}
+where $k$ runs over (channel, task family, lead) --- a waist reconstruction,
+a fill-in point at lag four and a future point at lead three of the same
+channel have different residuals and are weighted separately. This is the
+stop-gradient form of $\sum_k \log\mathrm{MSE}_k$, i.e.\ Gaussian maximum
+likelihood with one fixed variance per target class, so every target
+contributes its relative improvement independently of its units; it keeps
+the residual scale out of the co-adapting $\sigma$ head, which is what the
+decoupled form above is for, and it is the rule behind the sentence that
+target classes are weighted explicitly and never through $\sigma$ as a side
+effect. The reference is the held-out per-class error, never the final
+training-set error, under which an overfitted class's weight explodes. At a
+tier with no previous run the reference is an exponential moving average of
+the held-out per-class error under stop-gradient, started from the marginal
+variance (which the standardisation gives at step zero) and annealed to the
+residual over the first few thousand steps; at a tier with a previous run
+the weights are frozen from that run's held-out errors, and they are a fixed
+point: after a run they are recomputed, and a run is repeated once if any
+moved by more than a factor of two. For the heavy-tailed classes ---
+precipitation, chlorophyll --- the reference uses a robust scale or the
+error a Huber loss. Two things are logged per class: the weighted term
+$w_k\,\mathrm{MSE}_k$, which sits near one at convergence and drifts when a
+weight is off, and the skill $1 - \mathrm{MSE}_k/\mathrm{var}_k$, which is the
+readable number; progress is never judged from the aggregate loss. A
+downstream use that cares more about one class's absolute error adds an
+explicit multiplier on top, kept separate from the statistical
+normalisation.
 
 \paragraph{Training stability.} Embedding collapse is invisible to a
 reconstruction loss, because a decoder rescales freely, so the effective
@@ -702,9 +792,11 @@ querying again: the multi-year roll is a second mode of the same model, not
 its training objective.
 
 \paragraph{Objective and calibration.} The decoupled Gaussian likelihood on
-each target embedding, normalised per lead by that lead's predict-the-mean
-bar so that every lead counts equally and the long, unpredictable leads do
-not dominate the gradient; plus a decoded-space term through the frozen
+each target embedding, weighted per lead and footprint position by the
+inverse of its held-out residual error under the rule of \S\ref{sec:stage1}
+--- started from the predict-the-mean bar, which is the marginal variance
+--- so that every lead contributes its relative improvement and the long,
+unpredictable leads do not dominate the gradient; plus a decoded-space term through the frozen
 codec decoder for the scoreable channels at leads 1, 8 and 34 (squared error
 against the standardised anomaly, relative to climatology), because the
 embedding metric is not the metric the forecast is scored on; plus, for the
@@ -916,8 +1008,10 @@ the same starts and the same battery.
 \paragraph{(4) The footprint and the tiers.} Coarse groups re-read as offset
 tokens with their true footprint against nearest-cell copies, on the same
 anchors and seed --- no change in held-out per-family loss falsifies the
-footprint fields at this scale. The tier-P stores added to the cone against
-the cone without them, per read-out goal: El Ni\~no through Ni\~no-3.4 at a
+footprint fields at this scale. The stores of Table~\ref{tab:gf} and the
+point families added to the cone against the cone without them, per
+read-out goal --- and, per store, the same contrast on the read-out the
+store was admitted for, which is the test a store must pass to stay: El Ni\~no through Ni\~no-3.4 at a
 six-month lead against persistence of the warm-water volume; the carbon sink
 through held-out surface-CO$_2$ reconstruction against a climatological
 null; the overturning through the held-out per-family loss on velocity with
