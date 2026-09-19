@@ -54,6 +54,10 @@ CMR = "https://cmr.earthdata.nasa.gov/search/granules.json"
 LP_SHORT, LP_VERSION = "MOD11C1", "061"
 GES_BASE = "https://disc2.gesdisc.eosdis.nasa.gov/data/MERGED_IR/GPM_MERGIR.1/"
 GES_DAY = "2020/001/"
+# The host the irtb / xco2 adapters READ (run #259/#260, 2026-09-19: HTTP 401
+# after 2 redirects while disc2.gesdisc answered 206 in run #90) — a second
+# GES DISC target so the check answers for the archive that refused.
+GES_DATA_BASE = "https://data.gesdisc.earthdata.nasa.gov/data/MERGED_IR/GPM_MERGIR.1/"
 PODAAC_SHORT = "MUR-JPL-L4-GLOB-v4.1"
 TIMEOUT = 60
 RANGE = "bytes=0-1023"
@@ -280,6 +284,24 @@ def check_ges_disc(s):
     return out
 
 
+def check_ges_disc_data(s):
+    """Same probe against data.gesdisc.earthdata.nasa.gov (what irtb reads)."""
+    import requests
+    page = requests.get(GES_DATA_BASE + GES_DAY, timeout=TIMEOUT,
+                        headers={"User-Agent": UA})
+    page.raise_for_status()
+    names = sorted(set(re.findall(r'href="(merg_[^"]+\.nc4)"', page.text)))
+    if not names:
+        raise LookupError(f"no .nc4 in the listing {GES_DATA_BASE + GES_DAY}")
+    m = CLIENT_RE.search(page.text) if "approve_app" in page.text else None
+    out = {"listing": GES_DATA_BASE + GES_DAY, "files_listed": len(names),
+           **_request(s, "GET", GES_DATA_BASE + GES_DAY + names[0])}
+    if m and out["verdict"] != "ok" and not out.get("approval_url"):
+        out["approval_url"] = (f"https://{URS_HOST}/approve_app?client_id="
+                               f"{m.group(1)}")
+    return out
+
+
 def check_podaac(s):
     """One KB of a PROTECTED PO.DAAC granule, BY GET AND THROUGH URS.
 
@@ -321,7 +343,7 @@ def require_urs(out, name):
 
 
 TARGETS = (("lp_daac", check_lp_daac), ("ges_disc", check_ges_disc),
-           ("podaac", check_podaac))
+           ("ges_disc_data", check_ges_disc_data), ("podaac", check_podaac))
 
 
 def run(user, password, targets=None, ipv4=True):
