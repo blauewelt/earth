@@ -1,0 +1,42 @@
+store     oc4k — Ocean colour, ESA OC-CCI v6.0 merged L3S, daily 4 km geographic: log10 chlorophyll-a, Kd(490) and the merged observation count
+family    family1_gf (1.gf) · public -> chfrank/earth-tensors:tensors/family1_gf/oc4k
+axis      1997-09-04 .. 2022-12-31  bins 1145..2994 · time_s int32 (schema 2)
+channels  C=3: log_chl, kd_490, total_nobs
+tier G    sharded, groups ['oc4k'], F=5 x 86400 s, float16, years (by bin start) 1997..2022
+work      /opt/runner/_work/earth/earth/ml/cache/family1_gf
+stage index: already done — skipping (--force to redo)
+
+=== stage fetch (oc4k) ===
+  [pull oc4k parts] start (26 items)  0/26  0.0s
+  hub: chfrank/earth-tensors with the token from $HF_TOKEN
+  oc4k 1997: 50 file(s), 105 row(s) -> /opt/runner/_work/earth/earth/ml/cache/family1_gf/oc4k/parts/1997
+  oc4k 1998: 148 file(s), 359 row(s) -> /opt/runner/_work/earth/earth/ml/cache/family1_gf/oc4k/parts/1998
+  oc4k 1999: 148 file(s), 362 row(s) -> /opt/runner/_work/earth/earth/ml/cache/family1_gf/oc4k/parts/1999
+  oc4k 2000: 148 file(s), 364 row(s) -> /opt/runner/_work/earth/earth/ml/cache/family1_gf/oc4k/parts/2000
+  oc4k 2001: 148 file(s), 364 row(s) -> /opt/runner/_work/earth/earth/ml/cache/family1_gf/oc4k/parts/2001
+  oc4k 2002: 148 file(s), 365 row(s) -> /opt/runner/_work/earth/earth/ml/cache/family1_gf/oc4k/parts/2002
+  oc4k 2003: 148 file(s), 365 row(s) -> /opt/runner/_work/earth/earth/ml/cache/family1_gf/oc4k/parts/2003
+  oc4k 2004: 150 file(s), 370 row(s) -> /opt/runner/_work/earth/earth/ml/cache/family1_gf/oc4k/parts/2004
+  oc4k 2005: 148 file(s), 365 row(s) -> /opt/runner/_work/earth/earth/ml/cache/family1_gf/oc4k/parts/2005
+  oc4k 2006: 148 file(s), 365 row(s) -> /opt/runner/_work/earth/earth/ml/cache/family1_gf/oc4k/parts/2006
+  oc4k 2007: 148 file(s), 365 row(s) -> /opt/runner/_work/earth/earth/ml/cache/family1_gf/oc4k/parts/2007
+  oc4k 2008: 148 file(s), 365 row(s) -> /opt/runner/_work/earth/earth/ml/cache/family1_gf/oc4k/parts/2008
+  oc4k 2009: 148 file(s), 365 row(s) -> /opt/runner/_work/earth/earth/ml/cache/family1_gf/oc4k/parts/2009
+  oc4k 2010: 148 file(s), 365 row(s) -> /opt/runner/_work/earth/earth/ml/cache/family1_gf/oc4k/parts/2010
+  oc4k 2011: 148 file(s), 365 row(s) -> /opt/runner/_work/earth/earth/ml/cache/family1_gf/oc4k/parts/2011
+  oc4k 2012: 148 file(s), 365 row(s) -> /opt/runner/_work/earth/earth/ml/cache/family1_gf/oc4k/parts/2012
+  oc4k 2013: 148 file(s), 365 row(s) -> /opt/runner/_work/earth/earth/ml/cache/family1_gf/oc4k/parts/2013
+  oc4k 2014: 148 file(s), 365 row(s) -> /opt/runner/_work/earth/earth/ml/cache/family1_gf/oc4k/parts/2014
+  oc4k 2015: 148 file(s), 365 row(s) -> /opt/runner/_work/earth/earth/ml/cache/family1_gf/oc4k/parts/2015
+  oc4k 2016: 148 file(s), 365 row(s) -> /opt/runner/_work/earth/earth/ml/cache/family1_gf/oc4k/parts/2016
+  oc4k 2017: 148 file(s), 365 row(s) -> /opt/runner/_work/earth/earth/ml/cache/family1_gf/oc4k/parts/2017
+  oc4k 2018: 148 file(s), 365 row(s) -> /opt/runner/_work/earth/earth/ml/cache/family1_gf/oc4k/parts/2018
+  oc4k 2019: 148 file(s), 365 row(s) -> /opt/runner/_work/earth/earth/ml/cache/family1_gf/oc4k/parts/2019
+  oc4k 2020: 148 file(s), 365 row(s) -> /opt/runner/_work/earth/earth/ml/cache/family1_gf/oc4k/parts/2020
+  oc4k 2021: 148 file(s), 365 row(s) -> /opt/runner/_work/earth/earth/ml/cache/family1_gf/oc4k/parts/2021
+  oc4k 2022: 148 file(s), 365 row(s) -> /opt/runner/_work/earth/earth/ml/cache/family1_gf/oc4k/parts/2022
+  pull: 26 year(s) present (0 already local), 9,224 row(s), 0 missing
+=== stage fetch done in 11449.0s ===
+
+=== stage assemble (oc4k) ===
+  [oc4k store (tier G)] start (1 items)  0/1  0.0s
