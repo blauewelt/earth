@@ -1,0 +1,9 @@
+{
+ "at": "2026-09-19T21:06:59+00:00",
+ "elapsed_s": 5655.9,
+ "item": "fire 2015 VIIRS_SNPP_SP 2015-03-22",
+ "of": 146,
+ "rows": 9204408,
+ "stage": "fetch fire",
+ "windows": 90
+}
