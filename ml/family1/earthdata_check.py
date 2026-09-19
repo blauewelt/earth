@@ -58,6 +58,7 @@ GES_DAY = "2020/001/"
 # after 2 redirects while disc2.gesdisc answered 206 in run #90) — a second
 # GES DISC target so the check answers for the archive that refused.
 GES_DATA_BASE = "https://data.gesdisc.earthdata.nasa.gov/data/MERGED_IR/GPM_MERGIR.1/"
+GES_DATA_CLIENT = "e2WVk8Pw6weeLUKZYOxvTQ"   # "NASA GESDISC DATA ARCHIVE" in URS
 PODAAC_SHORT = "MUR-JPL-L4-GLOB-v4.1"
 TIMEOUT = 60
 RANGE = "bytes=0-1023"
@@ -287,8 +288,22 @@ def check_ges_disc(s):
 def check_ges_disc_data(s):
     """Same probe against data.gesdisc.earthdata.nasa.gov (what irtb reads)."""
     import requests
-    page = requests.get(GES_DATA_BASE + GES_DAY, timeout=TIMEOUT,
-                        headers={"User-Agent": UA})
+    # Even the DIRECTORY LISTING sits behind Earthdata Login on this host, and
+    # an unapproved application answers HTTP 401 straight from URS
+    # (`app_type=401` in the redirect) — measured on run #273, 2026-09-19.
+    # That is a definite verdict about the ACCOUNT, so it carries the
+    # approval URL rather than surfacing as an "error" nobody can act on.
+    page = s.get(GES_DATA_BASE + GES_DAY, timeout=TIMEOUT,
+                 headers={"User-Agent": UA})
+    if page.status_code == 401 and URS_HOST in page.url:
+        client = (CLIENT_RE.search(page.url) or CLIENT_RE.search(page.text))
+        cid = client.group(1) if client else GES_DATA_CLIENT
+        return {"listing": GES_DATA_BASE + GES_DAY, "status": 401,
+                "final_host": URS_HOST, "via_urs": True, "definite": True,
+                "verdict": "needs_approval",
+                "approval_url": f"https://{URS_HOST}/approve_app?client_id={cid}",
+                "why": ("Earthdata Login answered 401 for the GES DISC "
+                        "application — this account has not approved it")}
     page.raise_for_status()
     names = sorted(set(re.findall(r'href="(merg_[^"]+\.nc4)"', page.text)))
     if not names:
