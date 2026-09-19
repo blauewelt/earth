@@ -1,0 +1,80 @@
+  [fetch flux (one stream)] flux IT-MtP  2752.1s
+  [fetch flux (one stream)] flux 2003  2806.0s
+  [fetch flux (one stream)] flux IT-Tor  2852.4s
+  [fetch flux (one stream)] flux JP-Khw  2953.9s
+  [fetch flux (one stream)] flux JP-SMF  3034.5s
+  [fetch flux (one stream)] flux 2004  3069.8s
+  [fetch flux (one stream)] flux JP-Tkb  3130.2s
+  [fetch flux (one stream)] flux KE-Mkt  3210.5s
+  [fetch flux (one stream)] flux KR-Hnm  3281.8s
+  [fetch flux (one stream)] flux KR-TwC  3345.3s
+  [fetch flux (one stream)] flux MX-Tes  3398.7s
+  [fetch flux (one stream)] flux 2010  3406.9s
+  [fetch flux (one stream)] flux NZ-ADw  3500.8s
+  [fetch flux (one stream)] flux PE-QFR  3573.6s
+  [fetch flux (one stream)] flux RU-Ha1  3649.4s
+  [fetch flux (one stream)] flux SE-Hmr  3717.4s
+  [fetch flux (one stream)] flux 2023  3733.9s
+  [fetch flux (one stream)] flux SN-Dhr  3794.9s
+  [fetch flux (one stream)] flux UK-Gnn  3869.4s
+  [fetch flux (one stream)] flux US-ABa  3901.0s
+  [fetch flux (one stream)] flux US-ARb  3934.6s
+  [fetch flux (one stream)] flux 2017  3967.8s
+  ::warning::flux: US-BZS — US-BZS: no BADM (BIF) file in the zip (['AMF_US-BZS_FLUXNET_FULLSET_HH_2010-2024_5-7.csv', 'AMF_US-BZS_FLUXNET_FULLSET_DD_2010-2024_5-7.csv', 'AMF_US-BZS_FLUXNET_FULLSET_WW_2010-2024_5-7.csv', 'AMF_US-BZS_FLUXNET_FULLSET_MM_2010-2024_5-7.csv', 'AMF_US-BZS_FLUXNET_FULLSET_YY_2010-2024_5-7.csv', 'AMF_US-BZS_FLUXNET_AUXMETEO_2010-2024_5-7.csv', 'AMF_US-BZS_FLUXNET_AUXNEE_2010-2024_5-7.csv', 'AMF_US-BZS_FLUXNET_ERA5_HH_1981-2024_5-7.csv']) — the UTC offset lives there and is never guessed from the longitude
+  [fetch flux (one stream)] flux US-BZo  3974.5s
+  [fetch flux (one stream)] flux US-CLF  4009.3s
+  [fetch flux (one stream)] flux US-CS8  4032.3s
+  [fetch flux (one stream)] flux US-DPW  4064.6s
+  [fetch flux (one stream)] flux US-EA5  4090.5s
+  [fetch flux (one stream)] flux 2015  4116.5s
+  [fetch flux (one stream)] flux US-Fcr  4129.8s
+  ::warning::flux: US-GL1 — US-GL1: no BADM (BIF) file in the zip (['AMF_US-GL1_FLUXNET_FULLSET_HH_2008-2022_3-7.csv', 'AMF_US-GL1_FLUXNET_FULLSET_DD_2008-2022_3-7.csv', 'AMF_US-GL1_FLUXNET_FULLSET_WW_2008-2022_3-7.csv', 'AMF_US-GL1_FLUXNET_FULLSET_MM_2008-2022_3-7.csv', 'AMF_US-GL1_FLUXNET_FULLSET_YY_2008-2022_3-7.csv', 'AMF_US-GL1_FLUXNET_AUXMETEO_2008-2022_3-7.csv', 'AMF_US-GL1_FLUXNET_AUXNEE_2008-2022_3-7.csv', 'AMF_US-GL1_FLUXNET_ERA5_HH_1981-2024_3-7.csv']) — the UTC offset lives there and is never guessed from the longitude
+  [fetch flux (one stream)] flux US-HB3  4169.2s
+  ::warning::flux: US-Ho1 — US-Ho1: no BADM (BIF) file in the zip (['AMF_US-Ho1_FLUXNET_FULLSET_HH_1996-2023_3-6.csv', 'AMF_US-Ho1_FLUXNET_FULLSET_DD_1996-2023_3-6.csv', 'AMF_US-Ho1_FLUXNET_FULLSET_WW_1996-2023_3-6.csv', 'AMF_US-Ho1_FLUXNET_FULLSET_MM_1996-2023_3-6.csv', 'AMF_US-Ho1_FLUXNET_FULLSET_YY_1996-2023_3-6.csv', 'AMF_US-Ho1_FLUXNET_AUXMETEO_1996-2023_3-6.csv', 'AMF_US-Ho1_FLUXNET_AUXNEE_1996-2023_3-6.csv', 'AMF_US-Ho1_FLUXNET_ERA5_HH_1981-2023_3-6.csv']) — the UTC offset lives there and is never guessed from the longitude
+  [fetch flux (one stream)] flux 2019  4260.8s
+  [fetch flux (one stream)] flux US-Jo1  4267.3s
+  [fetch flux (one stream)] flux US-LA3  4301.8s
+  [fetch flux (one stream)] flux US-MN3  4343.7s
+  ::warning::flux: US-Me2 — US-Me2: no BADM (BIF) file in the zip (['AMF_US-Me2_FLUXNET_FULLSET_HH_2002-2022_4-6.csv', 'AMF_US-Me2_FLUXNET_FULLSET_DD_2002-2022_4-6.csv', 'AMF_US-Me2_FLUXNET_FULLSET_WW_2002-2022_4-6.csv', 'AMF_US-Me2_FLUXNET_FULLSET_MM_2002-2022_4-6.csv', 'AMF_US-Me2_FLUXNET_FULLSET_YY_2002-2022_4-6.csv', 'AMF_US-Me2_FLUXNET_AUXMETEO_2002-2022_4-6.csv', 'AMF_US-Me2_FLUXNET_AUXNEE_2002-2022_4-6.csv', 'AMF_US-Me2_FLUXNET_ERA5_HH_1981-2023_4-6.csv']) — the UTC offset lives there and is never guessed from the longitude
+  [fetch flux (one stream)] flux US-Mo2  4380.0s
+  [fetch flux (one stream)] flux 2016  4397.7s
+  [fetch flux (one stream)] flux US-NGB  4432.4s
+  [fetch flux (one stream)] flux US-OPE  4474.0s
+  ::warning::flux: US-ORv — US-ORv: no BADM (BIF) file in the zip (['AMF_US-ORv_FLUXNET_FULLSET_HH_2011-2016_5-7.csv', 'AMF_US-ORv_FLUXNET_FULLSET_DD_2011-2016_5-7.csv', 'AMF_US-ORv_FLUXNET_FULLSET_WW_2011-2016_5-7.csv', 'AMF_US-ORv_FLUXNET_FULLSET_MM_2011-2016_5-7.csv', 'AMF_US-ORv_FLUXNET_FULLSET_YY_2011-2016_5-7.csv', 'AMF_US-ORv_FLUXNET_AUXMETEO_2011-2016_5-7.csv', 'AMF_US-ORv_FLUXNET_AUXNEE_2011-2016_5-7.csv', 'AMF_US-ORv_FLUXNET_ERA5_HH_1981-2024_5-7.csv']) — the UTC offset lives there and is never guessed from the longitude
+  ::warning::flux: US-PFe — US-PFe: no BADM (BIF) file in the zip (['AMF_US-PFe_FLUXNET_FULLSET_HH_2019-2019_3-7.csv', 'AMF_US-PFe_FLUXNET_FULLSET_DD_2019-2019_3-7.csv', 'AMF_US-PFe_FLUXNET_FULLSET_WW_2019-2019_3-7.csv', 'AMF_US-PFe_FLUXNET_FULLSET_MM_2019-2019_3-7.csv', 'AMF_US-PFe_FLUXNET_FULLSET_YY_2019-2019_3-7.csv', 'AMF_US-PFe_FLUXNET_AUXMETEO_2019-2019_3-7.csv', 'AMF_US-PFe_FLUXNET_AUXNEE_2019-2019_3-7.csv', 'AMF_US-PFe_FLUXNET_ERA5_HH_1981-2024_3-7.csv']) — the UTC offset lives there and is never guessed from the longitude
+  [fetch flux (one stream)] flux US-PFf  4492.7s
+  [fetch flux (one stream)] flux US-PFr  4501.2s
+  ::warning::flux: US-Pnp — US-Pnp: no BADM (BIF) file in the zip (['AMF_US-Pnp_FLUXNET_FULLSET_HH_2016-2022_4-6.csv', 'AMF_US-Pnp_FLUXNET_FULLSET_DD_2016-2022_4-6.csv', 'AMF_US-Pnp_FLUXNET_FULLSET_WW_2016-2022_4-6.csv', 'AMF_US-Pnp_FLUXNET_FULLSET_MM_2016-2022_4-6.csv', 'AMF_US-Pnp_FLUXNET_FULLSET_YY_2016-2022_4-6.csv', 'AMF_US-Pnp_FLUXNET_AUXMETEO_2016-2022_4-6.csv', 'AMF_US-Pnp_FLUXNET_AUXNEE_2016-2022_4-6.csv', 'AMF_US-Pnp_FLUXNET_ERA5_HH_1981-2023_4-6.csv']) — the UTC offset lives there and is never guessed from the longitude
+  [fetch flux (one stream)] flux US-RC4  4528.3s
+  [fetch flux (one stream)] flux 2024  4536.0s
+  [fetch flux (one stream)] flux US-Ro1  4559.2s
+  [fetch flux (one stream)] flux US-SD1  4604.8s
+  [fetch flux (one stream)] flux US-Seg  4663.5s
+  [fetch flux (one stream)] flux 2015  4686.7s
+  [fetch flux (one stream)] flux US-TLR  4707.4s
+  [fetch flux (one stream)] flux US-UC2  4747.8s
+  ::warning::flux: US-UM3 — US-UM3: no BADM (BIF) file in the zip (['AMF_US-UM3_FLUXNET_FULLSET_HH_2013-2014_5-7.csv', 'AMF_US-UM3_FLUXNET_FULLSET_DD_2013-2014_5-7.csv', 'AMF_US-UM3_FLUXNET_FULLSET_WW_2013-2014_5-7.csv', 'AMF_US-UM3_FLUXNET_FULLSET_MM_2013-2014_5-7.csv', 'AMF_US-UM3_FLUXNET_FULLSET_YY_2013-2014_5-7.csv', 'AMF_US-UM3_FLUXNET_AUXMETEO_2013-2014_5-7.csv', 'AMF_US-UM3_FLUXNET_AUXNEE_2013-2014_5-7.csv', 'AMF_US-UM3_FLUXNET_ERA5_HH_1981-2024_5-7.csv']) — the UTC offset lives there and is never guessed from the longitude
+  ::warning::flux: US-UMB — US-UMB: no BADM (BIF) file in the zip (['AMF_US-UMB_FLUXNET_FULLSET_HH_2007-2021_3-5.csv', 'AMF_US-UMB_FLUXNET_FULLSET_DD_2007-2021_3-5.csv', 'AMF_US-UMB_FLUXNET_FULLSET_WW_2007-2021_3-5.csv', 'AMF_US-UMB_FLUXNET_FULLSET_MM_2007-2021_3-5.csv', 'AMF_US-UMB_FLUXNET_FULLSET_YY_2007-2021_3-5.csv', 'AMF_US-UMB_FLUXNET_AUXMETEO_2007-2021_3-5.csv', 'AMF_US-UMB_FLUXNET_AUXNEE_2007-2021_3-5.csv', 'AMF_US-UMB_FLUXNET_ERA5_HH_1981-2021_3-5.csv']) — the UTC offset lives there and is never guessed from the longitude
+  [fetch flux (one stream)] flux US-UTP  4771.4s
+  [fetch flux (one stream)] flux 2023  4817.5s
+  [fetch flux (one stream)] flux US-UiG  4817.5s
+  ::warning::flux: US-Wi0 — US-Wi0: no BADM (BIF) file in the zip (['AMF_US-Wi0_FLUXNET_FULLSET_HH_2002-2002_5-7.csv', 'AMF_US-Wi0_FLUXNET_FULLSET_DD_2002-2002_5-7.csv', 'AMF_US-Wi0_FLUXNET_FULLSET_WW_2002-2002_5-7.csv', 'AMF_US-Wi0_FLUXNET_FULLSET_MM_2002-2002_5-7.csv', 'AMF_US-Wi0_FLUXNET_FULLSET_YY_2002-2002_5-7.csv', 'AMF_US-Wi0_FLUXNET_AUXMETEO_2002-2002_5-7.csv', 'AMF_US-Wi0_FLUXNET_AUXNEE_2002-2002_5-7.csv', 'AMF_US-Wi0_FLUXNET_ERA5_HH_1981-2024_5-7.csv']) — the UTC offset lives there and is never guessed from the longitude
+  ::warning::flux: US-Wi1 — US-Wi1: no BADM (BIF) file in the zip (['AMF_US-Wi1_FLUXNET_FULLSET_HH_2003-2003_5-7.csv', 'AMF_US-Wi1_FLUXNET_FULLSET_DD_2003-2003_5-7.csv', 'AMF_US-Wi1_FLUXNET_FULLSET_WW_2003-2003_5-7.csv', 'AMF_US-Wi1_FLUXNET_FULLSET_MM_2003-2003_5-7.csv', 'AMF_US-Wi1_FLUXNET_FULLSET_YY_2003-2003_5-7.csv', 'AMF_US-Wi1_FLUXNET_AUXMETEO_2003-2003_5-7.csv', 'AMF_US-Wi1_FLUXNET_AUXNEE_2003-2003_5-7.csv', 'AMF_US-Wi1_FLUXNET_ERA5_HH_1981-2024_5-7.csv']) — the UTC offset lives there and is never guessed from the longitude
+  ::warning::flux: US-Wi3 — US-Wi3: no BADM (BIF) file in the zip (['AMF_US-Wi3_FLUXNET_FULLSET_HH_2002-2004_5-7.csv', 'AMF_US-Wi3_FLUXNET_FULLSET_DD_2002-2004_5-7.csv', 'AMF_US-Wi3_FLUXNET_FULLSET_WW_2002-2004_5-7.csv', 'AMF_US-Wi3_FLUXNET_FULLSET_MM_2002-2004_5-7.csv', 'AMF_US-Wi3_FLUXNET_FULLSET_YY_2002-2004_5-7.csv', 'AMF_US-Wi3_FLUXNET_AUXMETEO_2002-2004_5-7.csv', 'AMF_US-Wi3_FLUXNET_AUXNEE_2002-2004_5-7.csv', 'AMF_US-Wi3_FLUXNET_ERA5_HH_1981-2024_5-7.csv']) — the UTC offset lives there and is never guessed from the longitude
+  ::warning::flux: US-Wi4 — US-Wi4: no BADM (BIF) file in the zip (['AMF_US-Wi4_FLUXNET_FULLSET_HH_2002-2005_5-7.csv', 'AMF_US-Wi4_FLUXNET_FULLSET_DD_2002-2005_5-7.csv', 'AMF_US-Wi4_FLUXNET_FULLSET_WW_2002-2005_5-7.csv', 'AMF_US-Wi4_FLUXNET_FULLSET_MM_2002-2005_5-7.csv', 'AMF_US-Wi4_FLUXNET_FULLSET_YY_2002-2005_5-7.csv', 'AMF_US-Wi4_FLUXNET_AUXMETEO_2002-2005_5-7.csv', 'AMF_US-Wi4_FLUXNET_AUXNEE_2002-2005_5-7.csv', 'AMF_US-Wi4_FLUXNET_ERA5_HH_1981-2024_5-7.csv']) — the UTC offset lives there and is never guessed from the longitude
+  ::warning::flux: US-Wi5 — US-Wi5: no BADM (BIF) file in the zip (['AMF_US-Wi5_FLUXNET_FULLSET_HH_2004-2004_5-7.csv', 'AMF_US-Wi5_FLUXNET_FULLSET_DD_2004-2004_5-7.csv', 'AMF_US-Wi5_FLUXNET_FULLSET_WW_2004-2004_5-7.csv', 'AMF_US-Wi5_FLUXNET_FULLSET_MM_2004-2004_5-7.csv', 'AMF_US-Wi5_FLUXNET_FULLSET_YY_2004-2004_5-7.csv', 'AMF_US-Wi5_FLUXNET_AUXMETEO_2004-2004_5-7.csv', 'AMF_US-Wi5_FLUXNET_AUXNEE_2004-2004_5-7.csv', 'AMF_US-Wi5_FLUXNET_ERA5_HH_1981-2024_5-7.csv']) — the UTC offset lives there and is never guessed from the longitude
+  ::warning::flux: US-Wi6 — US-Wi6: no BADM (BIF) file in the zip (['AMF_US-Wi6_FLUXNET_FULLSET_HH_2002-2003_5-7.csv', 'AMF_US-Wi6_FLUXNET_FULLSET_DD_2002-2003_5-7.csv', 'AMF_US-Wi6_FLUXNET_FULLSET_WW_2002-2003_5-7.csv', 'AMF_US-Wi6_FLUXNET_FULLSET_MM_2002-2003_5-7.csv', 'AMF_US-Wi6_FLUXNET_FULLSET_YY_2002-2003_5-7.csv', 'AMF_US-Wi6_FLUXNET_AUXMETEO_2002-2003_5-7.csv', 'AMF_US-Wi6_FLUXNET_AUXNEE_2002-2003_5-7.csv', 'AMF_US-Wi6_FLUXNET_ERA5_HH_1981-2024_5-7.csv']) — the UTC offset lives there and is never guessed from the longitude
+  ::warning::flux: US-Wi7 — US-Wi7: no BADM (BIF) file in the zip (['AMF_US-Wi7_FLUXNET_FULLSET_HH_2005-2005_5-7.csv', 'AMF_US-Wi7_FLUXNET_FULLSET_DD_2005-2005_5-7.csv', 'AMF_US-Wi7_FLUXNET_FULLSET_WW_2005-2005_5-7.csv', 'AMF_US-Wi7_FLUXNET_FULLSET_MM_2005-2005_5-7.csv', 'AMF_US-Wi7_FLUXNET_FULLSET_YY_2005-2005_5-7.csv', 'AMF_US-Wi7_FLUXNET_AUXMETEO_2005-2005_5-7.csv', 'AMF_US-Wi7_FLUXNET_AUXNEE_2005-2005_5-7.csv', 'AMF_US-Wi7_FLUXNET_ERA5_HH_1981-2024_5-7.csv']) — the UTC offset lives there and is never guessed from the longitude
+  ::warning::flux: US-Wi8 — US-Wi8: no BADM (BIF) file in the zip (['AMF_US-Wi8_FLUXNET_FULLSET_HH_2002-2002_5-7.csv', 'AMF_US-Wi8_FLUXNET_FULLSET_DD_2002-2002_5-7.csv', 'AMF_US-Wi8_FLUXNET_FULLSET_WW_2002-2002_5-7.csv', 'AMF_US-Wi8_FLUXNET_FULLSET_MM_2002-2002_5-7.csv', 'AMF_US-Wi8_FLUXNET_FULLSET_YY_2002-2002_5-7.csv', 'AMF_US-Wi8_FLUXNET_AUXMETEO_2002-2002_5-7.csv', 'AMF_US-Wi8_FLUXNET_AUXNEE_2002-2002_5-7.csv', 'AMF_US-Wi8_FLUXNET_ERA5_HH_1981-2024_5-7.csv']) — the UTC offset lives there and is never guessed from the longitude
+  ::warning::flux: US-Wi9 — US-Wi9: no BADM (BIF) file in the zip (['AMF_US-Wi9_FLUXNET_FULLSET_HH_2004-2005_5-7.csv', 'AMF_US-Wi9_FLUXNET_FULLSET_DD_2004-2005_5-7.csv', 'AMF_US-Wi9_FLUXNET_FULLSET_WW_2004-2005_5-7.csv', 'AMF_US-Wi9_FLUXNET_FULLSET_MM_2004-2005_5-7.csv', 'AMF_US-Wi9_FLUXNET_FULLSET_YY_2004-2005_5-7.csv', 'AMF_US-Wi9_FLUXNET_AUXMETEO_2004-2005_5-7.csv', 'AMF_US-Wi9_FLUXNET_AUXNEE_2004-2005_5-7.csv', 'AMF_US-Wi9_FLUXNET_ERA5_HH_1981-2024_5-7.csv']) — the UTC offset lives there and is never guessed from the longitude
+  [fetch flux (one stream)] flux US-Wkg  4903.0s
+  [fetch flux (one stream)] flux US-xBR  4934.5s
+  [fetch flux (one stream)] flux US-xJE  4968.2s
+  [fetch flux (one stream)] flux 2021  4975.1s
+  [fetch flux (one stream)] flux US-xPU  5001.3s
+  [fetch flux (one stream)] flux US-xST  5032.4s
+  [fetch flux (one stream)] flux VU-Coc  5071.1s
+  ::warning::flux: NO year marked — 27 input(s) could not be read in the one pass that is this store's resumable unit; 108,292,080 row(s) kept on disk for the retry
+  flux: 108,292,080 row(s) over 36 year(s) in one pass (5108.9s)
+  ::warning::flux: 27 input(s) could not be read (CA-ER1, CA-NS1, CA-NS2, CA-NS3, CA-NS4, CA-NS5 …) — --allow-missing-years says that is deliberate; the degrade goes into store.json
+--push-parts: flux 1991 is not marked done locally — refusing to push a partial year
