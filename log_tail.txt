@@ -1,0 +1,2 @@
+  [index xco2] start (1 items)  0/1  0.0s
+REFUSING xco2: the first file ACOS_L2_Lite_FP.11.0:acos_LtCO2_190601_v300300_B11.0_260415185721c.nc4 could not be read: https://data.gesdisc.earthdata.nasa.gov/data/GOSAT_TANSO_Level2/ACOS_L2_Lite_FP.11.0/2019/06/01/acos_LtCO2_190601_v300300_B11.0_260415185721c.nc4: HTTP 401 after 2 redirect(s) — Earthdata Login refused this account for this archive. Dispatch family1-build.yml with check_credentials=true and read the approval URL it prints.
