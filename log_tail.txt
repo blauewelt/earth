@@ -1,0 +1,16 @@
+store     oc4k — Ocean colour, ESA OC-CCI v6.0 merged L3S, daily 4 km geographic: log10 chlorophyll-a, Kd(490) and the merged observation count
+family    family1_gf (1.gf) · public -> chfrank/earth-tensors:tensors/family1_gf/oc4k
+axis      2017-01-02 .. 2020-01-01  bins 2557..2775 · time_s int32 (schema 2)
+channels  C=3: log_chl, kd_490, total_nobs
+tier G    sharded, groups ['oc4k'], F=5 x 86400 s, float16, years (by bin start) 2017..2019
+work      /opt/runner/_work/earth/earth/ml/cache/family1_gf
+
+=== stage index (oc4k) ===
+  [index oc4k] start (1 items)  0/1  0.0s
+  [index oc4k] plan.json  1/1  286.4s
+  index: oc4k — 3 year(s), C=3 (log_chl, kd_490, total_nobs), bins 2557..2775
+=== stage index done in 286.4s ===
+
+=== stage fetch (oc4k) ===
+  [fetch oc4k (tier G)] start (3 items)  0/3  0.0s
+  [fetch oc4k (tier G)] oc4k 2017 oc4k bin 2561  1525.1s
