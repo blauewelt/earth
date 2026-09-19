@@ -1,0 +1,31 @@
+store     fire — Active fire detections, FIRMS MODIS C6.1 (1 km) and VIIRS S-NPP / NOAA-20 / NOAA-21 (375 m)
+family    family1_tf (1.0.tf) · public -> chfrank/earth-tensors:tensors/family1_tf/fire
+axis      2014-01-01 .. 2020-12-31  bins 2337..2848 · time_s int32 (schema 2)
+channels  C=4: brightness, frp, confidence, daynight
+work      /home/runner/work/earth/earth/ml/cache/family1_tf
+
+=== stage index (fire) ===
+  [index fire] start (1 items)  0/1  0.0s
+Traceback (most recent call last):
+  File "/home/runner/work/earth/earth/ml/build_family1_stores.py", line 1488, in <module>
+    sys.exit(main())
+             ^^^^^^
+  File "/home/runner/work/earth/earth/ml/build_family1_stores.py", line 1483, in main
+    f10b.run_stages(ctx, stages, stage_fn=stage_fns(ad), deps=DEPS)
+  File "/home/runner/work/earth/earth/ml/build_family10_stores.py", line 5331, in run_stages
+    stage_fn[s](ctx)
+  File "/home/runner/work/earth/earth/ml/build_family10_stores.py", line 3846, in stage_index
+    plan = ad.index(ctx)
+           ^^^^^^^^^^^^^
+  File "/home/runner/work/earth/earth/ml/family1/adapters/fire.py", line 523, in index
+    cov = self.coverage(ctx)
+          ^^^^^^^^^^^^^^^^^^
+  File "/home/runner/work/earth/earth/ml/family1/adapters/fire.py", line 490, in coverage
+    av = self.availability(ctx)
+         ^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/work/earth/earth/ml/family1/adapters/fire.py", line 455, in availability
+    raw, why = self.get(ctx, AVAIL + self.key() + "/all",
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/work/earth/earth/ml/family1/adapters/fire.py", line 614, in get
+    raise IOError(f"{what}: {msg}") from None
+OSError: https://firms.modaps.eosdis.nasa.gov/api/data_availability/csv/<MAP_KEY>/all: https://firms.modaps.eosdis.nasa.gov/api/data_availability/csv/<MAP_KEY>/all: URLError: <urlopen error [Errno 101] Network is unreachable>
