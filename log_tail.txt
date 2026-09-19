@@ -1,0 +1,80 @@
+
+
+time_s.npy:   3%|▎         | 4.19M/152M [00:00<00:04, 34.9MB/s][A[A[A
+
+
+time_s.npy:  11%|█         | 16.1M/152M [00:00<00:03, 44.9MB/s][A[A[A
+
+qc.npy:  42%|████▏     | 16.1M/38.0M [00:00<00:00, 43.6MB/s][A[A
+platform.npy:   5%|▌         | 16.1M/304M [00:00<00:06, 42.6MB/s][A
+
+
+time_s.npy:  21%|██        | 32.1M/152M [00:00<00:02, 54.0MB/s][A[A[A
+
+qc.npy:  84%|████████▍ | 32.1M/38.0M [00:00<00:00, 54.3MB/s][A[A
+platform.npy:  11%|█         | 32.1M/304M [00:00<00:05, 51.9MB/s][Aqc.npy: 100%|██████████| 38.0M/38.0M [00:00<00:00, 48.4MB/s]
+
+
+
+time_s.npy:  32%|███▏      | 48.1M/152M [00:00<00:01, 56.4MB/s][A[A[A
+platform.npy:  16%|█▌        | 48.1M/304M [00:00<00:04, 53.5MB/s][AUpload 3 LFS files:  33%|███▎      | 1/3 [00:00<00:01,  1.01it/s]
+
+
+time_s.npy:  42%|████▏     | 64.1M/152M [00:01<00:01, 58.3MB/s][A[A[A
+platform.npy:  21%|██        | 64.1M/304M [00:01<00:04, 55.5MB/s][A
+
+
+time_s.npy:  53%|█████▎    | 80.1M/152M [00:01<00:01, 60.5MB/s][A[A[A
+platform.npy:  26%|██▋       | 80.1M/304M [00:01<00:04, 54.8MB/s][A
+
+
+time_s.npy:  58%|█████▊    | 88.3M/152M [00:01<00:01, 61.1MB/s][A[A[A
+
+
+time_s.npy:  62%|██████▏   | 94.5M/152M [00:01<00:00, 57.4MB/s][A[A[A
+platform.npy:  32%|███▏      | 96.1M/304M [00:01<00:03, 56.4MB/s][A
+
+
+time_s.npy:  66%|██████▌   | 100M/152M [00:01<00:01, 41.5MB/s] [A[A[A
+platform.npy:  37%|███▋      | 112M/304M [00:02<00:03, 56.3MB/s] [A
+
+
+time_s.npy:  74%|███████▍  | 112M/152M [00:02<00:00, 42.8MB/s][A[A[A
+platform.npy:  42%|████▏     | 128M/304M [00:02<00:03, 58.3MB/s][A
+
+
+time_s.npy:  84%|████████▍ | 128M/152M [00:02<00:00, 49.8MB/s][A[A[A
+platform.npy:  47%|████▋     | 144M/304M [00:02<00:02, 60.0MB/s][A
+
+
+time_s.npy:  95%|█████████▍| 144M/152M [00:02<00:00, 53.7MB/s][A[A[A
+platform.npy:  53%|█████▎    | 160M/304M [00:02<00:02, 59.9MB/s][Atime_s.npy: 100%|██████████| 152M/152M [00:02<00:00, 51.8MB/s]
+
+platform.npy:  58%|█████▊    | 176M/304M [00:03<00:02, 58.8MB/s][AUpload 3 LFS files:  67%|██████▋   | 2/3 [00:03<00:01,  1.67s/it]
+platform.npy:  63%|██████▎   | 192M/304M [00:03<00:01, 58.8MB/s][A
+platform.npy:  69%|██████▊   | 208M/304M [00:03<00:01, 60.4MB/s][A
+platform.npy:  74%|███████▍  | 224M/304M [00:03<00:01, 60.4MB/s][A
+platform.npy:  79%|███████▉  | 240M/304M [00:04<00:01, 47.9MB/s][A
+platform.npy:  84%|████████▍ | 256M/304M [00:04<00:00, 51.8MB/s][A
+platform.npy:  90%|████████▉ | 272M/304M [00:04<00:00, 52.4MB/s][A
+platform.npy:  95%|█████████▍| 288M/304M [00:05<00:00, 55.4MB/s][Aplatform.npy: 100%|██████████| 304M/304M [00:05<00:00, 55.8MB/s]
+Upload 3 LFS files: 100%|██████████| 3/3 [00:05<00:00,  2.05s/it]Upload 3 LFS files: 100%|██████████| 3/3 [00:05<00:00,  1.88s/it]
+values.npy:   0%|          | 0.00/380M [00:00<?, ?B/s]values.npy:   1%|          | 4.19M/380M [00:00<00:10, 36.2MB/s]values.npy:   4%|▍         | 16.1M/380M [00:00<00:08, 42.5MB/s]values.npy:   8%|▊         | 32.1M/380M [00:00<00:06, 53.1MB/s]values.npy:  13%|█▎        | 48.1M/380M [00:00<00:06, 54.5MB/s]values.npy:  17%|█▋        | 64.1M/380M [00:01<00:05, 56.3MB/s]values.npy:  21%|██        | 80.1M/380M [00:01<00:05, 56.8MB/s]values.npy:  25%|██▌       | 96.1M/380M [00:01<00:04, 59.2MB/s]values.npy:  30%|██▉       | 112M/380M [00:02<00:04, 58.0MB/s] values.npy:  34%|███▎      | 128M/380M [00:02<00:04, 58.2MB/s]values.npy:  38%|███▊      | 144M/380M [00:02<00:03, 59.9MB/s]values.npy:  42%|████▏     | 160M/380M [00:02<00:03, 60.8MB/s]values.npy:  46%|████▋     | 176M/380M [00:03<00:03, 61.4MB/s]values.npy:  51%|█████     | 192M/380M [00:03<00:03, 62.4MB/s]values.npy:  55%|█████▍    | 208M/380M [00:03<00:02, 61.4MB/s]values.npy:  59%|█████▉    | 224M/380M [00:03<00:02, 62.5MB/s]values.npy:  63%|██████▎   | 240M/380M [00:04<00:02, 63.2MB/s]values.npy:  67%|██████▋   | 256M/380M [00:04<00:01, 63.7MB/s]values.npy:  72%|███████▏  | 272M/380M [00:04<00:01, 63.3MB/s]values.npy:  76%|███████▌  | 288M/380M [00:04<00:01, 58.6MB/s]values.npy:  80%|████████  | 304M/380M [00:05<00:01, 57.8MB/s]values.npy:  84%|████████▍ | 320M/380M [00:05<00:01, 59.0MB/s]values.npy:  89%|████████▊ | 336M/380M [00:05<00:00, 59.2MB/s]values.npy:  93%|█████████▎| 352M/380M [00:05<00:00, 58.0MB/s]values.npy:  97%|█████████▋| 368M/380M [00:06<00:00, 57.6MB/s]values.npy: 100%|██████████| 380M/380M [00:06<00:00, 58.5MB/s]
+  [publish cat_hls] assets.parquet  1/11  47.2s
+  [publish cat_hls] bin.npy  2/11  48.4s
+  [publish cat_hls] bin_offsets.npy  3/11  48.6s
+  [publish cat_hls] fp.npy  4/11  50.4s
+  [publish cat_hls] lat.npy  5/11  52.3s
+  [publish cat_hls] lon.npy  6/11  54.2s
+  [publish cat_hls] platform.npy  7/11  57.6s
+  [publish cat_hls] qc.npy  8/11  58.3s
+  [publish cat_hls] time_s.npy  9/11  60.1s
+  [publish cat_hls] values.npy  10/11  65.7s
+  [publish cat_hls] store.json  11/11  65.9s
+  publish: 11 file(s) verified by restore -> https://huggingface.co/datasets/chfrank/earth-tensors/tree/main/tensors/family1_tf/cat_hls
+=== stage publish done in 73.0s ===
+
+=== stage check (cat_hls) ===
+  hub: chfrank/earth-tensors with the token from $HF_TOKEN
+  check: cat_hls — 10 file(s) verified, N=37,951,341, schema 2, Hub chfrank/earth-tensors:tensors/family1_tf/cat_hls agrees
+=== stage check done in 7.2s ===
