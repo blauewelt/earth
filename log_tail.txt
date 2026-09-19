@@ -1,0 +1,2 @@
+  [index irtb] start (1 items)  0/1  0.0s
+REFUSING irtb: the first file GPM_MERGIR.1:merg_2015010100_4km-pixel.nc4 could not be read: https://data.gesdisc.earthdata.nasa.gov/data/MERGED_IR/GPM_MERGIR.1/2015/001/merg_2015010100_4km-pixel.nc4: HTTP 401 after 2 redirect(s) — Earthdata Login refused this account for this archive. Dispatch family1-build.yml with check_credentials=true and read the approval URL it prints.
