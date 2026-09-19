@@ -1,0 +1,9 @@
+{
+ "at": "2026-09-19T12:27:57+00:00",
+ "elapsed_s": 2017.1,
+ "item": "fire 2014 MODIS_SP 2014-12-12",
+ "of": 146,
+ "rows": 4254391,
+ "stage": "fetch fire",
+ "windows": 70
+}

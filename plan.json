@@ -1,0 +1,254 @@
+{
+ "availability": {
+  "BA_MODIS": [
+   "2000-11-01",
+   "2026-07-01"
+  ],
+  "BA_VIIRS": [
+   "2012-03-01",
+   "2026-07-01"
+  ],
+  "GOES_NRT": [
+   "2022-08-09",
+   "2026-09-19"
+  ],
+  "LANDSAT_NRT": [
+   "2022-06-20",
+   "2026-09-19"
+  ],
+  "MODIS_NRT": [
+   "2026-07-01",
+   "2026-09-19"
+  ],
+  "MODIS_SP": [
+   "2000-11-01",
+   "2026-06-30"
+  ],
+  "VIIRS_NOAA20_NRT": [
+   "2026-07-01",
+   "2026-09-19"
+  ],
+  "VIIRS_NOAA20_SP": [
+   "2018-04-01",
+   "2026-06-30"
+  ],
+  "VIIRS_NOAA21_NRT": [
+   "2024-01-17",
+   "2026-09-19"
+  ],
+  "VIIRS_SNPP_NRT": [
+   "2026-07-01",
+   "2026-09-19"
+  ],
+  "VIIRS_SNPP_SP": [
+   "2012-01-20",
+   "2026-06-30"
+  ]
+ },
+ "bins": [
+  2337,
+  2848
+ ],
+ "builder_git_sha": "2681bd56ffba4607cb48545bf8b06a1ef4ecfde1",
+ "built_at": "2026-09-19T11:54:20+00:00",
+ "channels": [
+  {
+   "max": 600.0,
+   "min": 200.0,
+   "name": "brightness",
+   "unit": "K"
+  },
+  {
+   "max": 100000.0,
+   "min": 0.0,
+   "name": "frp",
+   "unit": "MW"
+  },
+  {
+   "max": 100.0,
+   "min": 0.0,
+   "name": "confidence",
+   "unit": "percent"
+  },
+  {
+   "max": 1.0,
+   "min": 0.0,
+   "name": "daynight",
+   "unit": "flag"
+  }
+ ],
+ "dataset": "FIRMS active fire, MODIS C6.1 and VIIRS 375 m",
+ "date_range": [
+  "2014-01-01",
+  "2020-12-31"
+ ],
+ "day_range": 5,
+ "first_request": {
+  "bytes": 1227121,
+  "columns_checked": [
+   "latitude",
+   "longitude",
+   "acq_date",
+   "acq_time",
+   "satellite",
+   "instrument",
+   "confidence",
+   "frp",
+   "daynight",
+   "brightness|bright_ti4"
+  ],
+  "counts": {
+   "rows_by_spelling": {
+    "Terra/MODIS -> Terra": 15537
+   },
+   "rows_read": 15537
+  },
+  "date": "2000-11-01",
+  "days": 5,
+  "rows": 15537,
+  "source": "MODIS_SP",
+  "url": "https://firms.modaps.eosdis.nasa.gov/api/area/csv/<MAP_KEY>/MODIS_SP/world/5/2000-11-01"
+ },
+ "footprint": {
+  "log2_dt": -4.0,
+  "log2_fp": -4.798569003556882
+ },
+ "instruments": {
+  "modis": {
+   "documented_first_day": "2000-11-01",
+   "instrument": "MODIS",
+   "log2_fp": -4.7986,
+   "pixel_km": 1.0,
+   "qc_codes": [
+    1,
+    2
+   ],
+   "satellites": [
+    "Terra",
+    "Aqua"
+   ],
+   "spans": [
+    {
+     "from": "2000-11-01",
+     "nrt": false,
+     "source": "MODIS_SP",
+     "to": "2026-06-30"
+    },
+    {
+     "from": "2026-07-01",
+     "nrt": true,
+     "source": "MODIS_NRT",
+     "to": "2026-09-19"
+    }
+   ]
+  },
+  "noaa20": {
+   "documented_first_day": "2018-04-01",
+   "instrument": "VIIRS",
+   "log2_fp": -6.2136,
+   "pixel_km": 0.375,
+   "qc_codes": [
+    4
+   ],
+   "satellites": [
+    "N20",
+    "NOAA-20",
+    "J1"
+   ],
+   "spans": [
+    {
+     "from": "2018-04-01",
+     "nrt": false,
+     "source": "VIIRS_NOAA20_SP",
+     "to": "2026-06-30"
+    },
+    {
+     "from": "2026-07-01",
+     "nrt": true,
+     "source": "VIIRS_NOAA20_NRT",
+     "to": "2026-09-19"
+    }
+   ]
+  },
+  "noaa21": {
+   "documented_first_day": "2024-01-17",
+   "instrument": "VIIRS",
+   "log2_fp": -6.2136,
+   "pixel_km": 0.375,
+   "qc_codes": [
+    5
+   ],
+   "satellites": [
+    "N21",
+    "NOAA-21",
+    "J2"
+   ],
+   "spans": [
+    {
+     "from": "2024-01-17",
+     "nrt": true,
+     "source": "VIIRS_NOAA21_NRT",
+     "to": "2026-09-19"
+    }
+   ]
+  },
+  "snpp": {
+   "documented_first_day": "2012-01-20",
+   "instrument": "VIIRS",
+   "log2_fp": -6.2136,
+   "pixel_km": 0.375,
+   "qc_codes": [
+    3
+   ],
+   "satellites": [
+    "N",
+    "1",
+    "NPP",
+    "SNPP",
+    "Suomi-NPP"
+   ],
+   "spans": [
+    {
+     "from": "2012-01-20",
+     "nrt": false,
+     "source": "VIIRS_SNPP_SP",
+     "to": "2026-06-30"
+    },
+    {
+     "from": "2026-07-01",
+     "nrt": true,
+     "source": "VIIRS_SNPP_NRT",
+     "to": "2026-09-19"
+    }
+   ]
+  }
+ },
+ "per_year_resume": true,
+ "qc_policy": "qc is one uint8 per detection: bits 0-2 the platform code (1 Terra/MODIS, 2 Aqua/MODIS, 3 Suomi-NPP/VIIRS, 4 NOAA-20/VIIRS, 5 NOAA-21/VIIRS; 0 is never written), bits 3-4 the VIIRS confidence class (1 low, 2 nominal, 3 high, 0 not applicable), bit 5 set when the row came from the Near-Real-Time series rather than from Standard Processing. The `confidence` CHANNEL carries MODIS' 0..100 percentage and is NaN for a VIIRS row, because the VIIRS 375 m product publishes three classes and no percentage: placing them at 0, 50 and 100 would invent three numbers the producer never published (family1tf.tex \u00a75 -- nothing is homogenised), so the class is kept exactly in qc instead. A value outside a channel's physical bound becomes NaN and is counted, never clipped. A satellite/instrument pair the adapter's platform table does not know, and a VIIRS confidence that is not l / n / h, are both REFUSALS: platforms.json must describe every platform the store holds, and a changed vocabulary must be read by a human before a store is built on it",
+ "record": [
+  "2000-11-01",
+  "2026-09-19"
+ ],
+ "record_days": [
+  "2000-11-01",
+  "2026-09-19"
+ ],
+ "requests_per_year_per_instrument": 74,
+ "sources": [
+  "https://firms.modaps.eosdis.nasa.gov/api/area/csv/<MAP_KEY>/<SOURCE>/world/<DAY_RANGE>/<DATE>",
+  "https://firms.modaps.eosdis.nasa.gov/api/data_availability/csv/<MAP_KEY>/all"
+ ],
+ "store": "fire",
+ "title": "Active fire detections, FIRMS MODIS C6.1 (1 km) and VIIRS S-NPP / NOAA-20 / NOAA-21 (375 m)",
+ "url": "https://firms.modaps.eosdis.nasa.gov/api/area/csv/<MAP_KEY>/<SOURCE>/world/<DAY_RANGE>/<DATE>",
+ "verified": "2026-09-18 from the sandbox, keyless (the documentation and the endpoint shapes; the data itself needs FIRMS_MAP_KEY and was read on a GitHub-hosted runner): firms.modaps.eosdis.nasa.gov/api/area/ for the URL form, the 1..5 DAY_RANGE limit, the `world` bounding box and the eight source ids; firms.modaps.eosdis.nasa.gov/content/academy/data_api/firms_api_use.html for the data_availability endpoint (whose documented output reads MODIS_SP 2000-11-01..2025-01-31 and MODIS_NRT 2025-02-01..) and for the exact CSV columns of the MODIS and VIIRS products; and firms.modaps.eosdis.nasa.gov/download/ for the archive route this adapter does NOT use, whose own page says a request is answered by e-mail. The 5,000-transactions-per-ten-minutes MAP_KEY limit is quoted on the API page",
+ "years": [
+  2014,
+  2015,
+  2016,
+  2017,
+  2018,
+  2019,
+  2020
+ ]
+}

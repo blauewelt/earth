@@ -1,0 +1,80 @@
+  [fetch fire] fire 2014 MODIS_SP 2014-03-07+5d  1/7  11.4s
+  [fetch fire] fire 2014 MODIS_SP 2014-03-12+5d  1/7  12.4s
+  [fetch fire] fire 2014 MODIS_SP 2014-03-17+5d  1/7  13.2s
+  [fetch fire] fire 2014 MODIS_SP 2014-03-22+5d  1/7  14.0s
+  [fetch fire] fire 2014 MODIS_SP 2014-03-27+5d  1/7  15.2s
+  [fetch fire] fire 2014 MODIS_SP 2014-04-01+5d  1/7  16.3s
+  [fetch fire] fire 2014 MODIS_SP 2014-04-06+5d  1/7  17.0s
+  [fetch fire] fire 2014 MODIS_SP 2014-04-06  17.0s
+  [fetch fire] fire 2014 MODIS_SP 2014-04-11+5d  1/7  18.1s
+  ::warning::fire: https://firms.modaps.eosdis.nasa.gov/api/area/csv/<MAP_KEY>/MODIS_SP/world/5/2014-04-16: the FIRMS transaction limit is exceeded (1/8); the documented window is ten minutes, waiting 130s
+  ::warning::fire: https://firms.modaps.eosdis.nasa.gov/api/area/csv/<MAP_KEY>/MODIS_SP/world/5/2014-04-16: the FIRMS transaction limit is exceeded (2/8); the documented window is ten minutes, waiting 130s
+  ::warning::fire: https://firms.modaps.eosdis.nasa.gov/api/area/csv/<MAP_KEY>/MODIS_SP/world/5/2014-04-16: the FIRMS transaction limit is exceeded (3/8); the documented window is ten minutes, waiting 130s
+  ::warning::fire: https://firms.modaps.eosdis.nasa.gov/api/area/csv/<MAP_KEY>/MODIS_SP/world/5/2014-04-16: the FIRMS transaction limit is exceeded (4/8); the documented window is ten minutes, waiting 130s
+  ::warning::fire: https://firms.modaps.eosdis.nasa.gov/api/area/csv/<MAP_KEY>/MODIS_SP/world/5/2014-04-16: the FIRMS transaction limit is exceeded (5/8); the documented window is ten minutes, waiting 130s
+  [fetch fire] fire 2014 MODIS_SP 2014-04-16+5d  1/7  669.9s
+  [fetch fire] fire 2014 MODIS_SP 2014-04-21+5d  1/7  670.7s
+  [fetch fire] fire 2014 MODIS_SP 2014-04-26+5d  1/7  671.5s
+  [fetch fire] fire 2014 MODIS_SP 2014-05-01+5d  1/7  672.1s
+  [fetch fire] fire 2014 MODIS_SP 2014-05-06+5d  1/7  672.8s
+  [fetch fire] fire 2014 MODIS_SP 2014-05-11+5d  1/7  673.5s
+  [fetch fire] fire 2014 MODIS_SP 2014-05-16+5d  1/7  674.1s
+  [fetch fire] fire 2014 MODIS_SP 2014-05-21+5d  1/7  674.8s
+  [fetch fire] fire 2014 MODIS_SP 2014-05-26+5d  1/7  675.4s
+  [fetch fire] fire 2014 MODIS_SP 2014-05-26  675.4s
+  [fetch fire] fire 2014 MODIS_SP 2014-05-31+5d  1/7  676.0s
+  [fetch fire] fire 2014 MODIS_SP 2014-06-05+5d  1/7  676.9s
+  [fetch fire] fire 2014 MODIS_SP 2014-06-10+5d  1/7  677.8s
+  [fetch fire] fire 2014 MODIS_SP 2014-06-15+5d  1/7  678.7s
+  [fetch fire] fire 2014 MODIS_SP 2014-06-20+5d  1/7  679.5s
+  [fetch fire] fire 2014 MODIS_SP 2014-06-25+5d  1/7  680.5s
+  [fetch fire] fire 2014 MODIS_SP 2014-06-30+5d  1/7  681.6s
+  [fetch fire] fire 2014 MODIS_SP 2014-07-05+5d  1/7  682.5s
+  [fetch fire] fire 2014 MODIS_SP 2014-07-10+5d  1/7  683.7s
+  ::warning::fire: https://firms.modaps.eosdis.nasa.gov/api/area/csv/<MAP_KEY>/MODIS_SP/world/5/2014-07-15: the FIRMS transaction limit is exceeded (1/8); the documented window is ten minutes, waiting 130s
+  ::warning::fire: https://firms.modaps.eosdis.nasa.gov/api/area/csv/<MAP_KEY>/MODIS_SP/world/5/2014-07-15: the FIRMS transaction limit is exceeded (2/8); the documented window is ten minutes, waiting 130s
+  ::warning::fire: https://firms.modaps.eosdis.nasa.gov/api/area/csv/<MAP_KEY>/MODIS_SP/world/5/2014-07-15: the FIRMS transaction limit is exceeded (3/8); the documented window is ten minutes, waiting 130s
+  ::warning::fire: https://firms.modaps.eosdis.nasa.gov/api/area/csv/<MAP_KEY>/MODIS_SP/world/5/2014-07-15: the FIRMS transaction limit is exceeded (4/8); the documented window is ten minutes, waiting 130s
+  ::warning::fire: https://firms.modaps.eosdis.nasa.gov/api/area/csv/<MAP_KEY>/MODIS_SP/world/5/2014-07-15: the FIRMS transaction limit is exceeded (5/8); the documented window is ten minutes, waiting 130s
+  [fetch fire] fire 2014 MODIS_SP 2014-07-15+5d  1/7  1335.8s
+  [fetch fire] fire 2014 MODIS_SP 2014-07-15  1335.8s
+  [fetch fire] fire 2014 MODIS_SP 2014-07-20+5d  1/7  1337.1s
+  [fetch fire] fire 2014 MODIS_SP 2014-07-25+5d  1/7  1338.3s
+  [fetch fire] fire 2014 MODIS_SP 2014-07-30+5d  1/7  1339.4s
+  [fetch fire] fire 2014 MODIS_SP 2014-08-04+5d  1/7  1340.7s
+  [fetch fire] fire 2014 MODIS_SP 2014-08-09+5d  1/7  1341.6s
+  [fetch fire] fire 2014 MODIS_SP 2014-08-14+5d  1/7  1342.8s
+  [fetch fire] fire 2014 MODIS_SP 2014-08-19+5d  1/7  1344.2s
+  [fetch fire] fire 2014 MODIS_SP 2014-08-24+5d  1/7  1345.5s
+  [fetch fire] fire 2014 MODIS_SP 2014-08-29+5d  1/7  1346.8s
+  [fetch fire] fire 2014 MODIS_SP 2014-09-03+5d  1/7  1347.8s
+  [fetch fire] fire 2014 MODIS_SP 2014-09-03  1347.8s
+  [fetch fire] fire 2014 MODIS_SP 2014-09-08+5d  1/7  1349.4s
+  [fetch fire] fire 2014 MODIS_SP 2014-09-13+5d  1/7  1350.7s
+  [fetch fire] fire 2014 MODIS_SP 2014-09-18+5d  1/7  1351.7s
+  ::warning::fire: https://firms.modaps.eosdis.nasa.gov/api/area/csv/<MAP_KEY>/MODIS_SP/world/5/2014-09-23: the FIRMS transaction limit is exceeded (1/8); the documented window is ten minutes, waiting 130s
+  ::warning::fire: https://firms.modaps.eosdis.nasa.gov/api/area/csv/<MAP_KEY>/MODIS_SP/world/5/2014-09-23: the FIRMS transaction limit is exceeded (2/8); the documented window is ten minutes, waiting 130s
+  ::warning::fire: https://firms.modaps.eosdis.nasa.gov/api/area/csv/<MAP_KEY>/MODIS_SP/world/5/2014-09-23: the FIRMS transaction limit is exceeded (3/8); the documented window is ten minutes, waiting 130s
+  ::warning::fire: https://firms.modaps.eosdis.nasa.gov/api/area/csv/<MAP_KEY>/MODIS_SP/world/5/2014-09-23: the FIRMS transaction limit is exceeded (4/8); the documented window is ten minutes, waiting 130s
+  ::warning::fire: https://firms.modaps.eosdis.nasa.gov/api/area/csv/<MAP_KEY>/MODIS_SP/world/5/2014-09-23: the FIRMS transaction limit is exceeded (5/8); the documented window is ten minutes, waiting 130s
+  [fetch fire] fire 2014 MODIS_SP 2014-09-23+5d  1/7  2003.1s
+  [fetch fire] fire 2014 MODIS_SP 2014-09-28+5d  1/7  2004.0s
+  [fetch fire] fire 2014 MODIS_SP 2014-10-03+5d  1/7  2004.9s
+  [fetch fire] fire 2014 MODIS_SP 2014-10-08+5d  1/7  2006.5s
+  [fetch fire] fire 2014 MODIS_SP 2014-10-13+5d  1/7  2007.5s
+  [fetch fire] fire 2014 MODIS_SP 2014-10-18+5d  1/7  2008.6s
+  [fetch fire] fire 2014 MODIS_SP 2014-10-23+5d  1/7  2009.4s
+  [fetch fire] fire 2014 MODIS_SP 2014-10-23  2009.4s
+  [fetch fire] fire 2014 MODIS_SP 2014-10-28+5d  1/7  2010.2s
+  [fetch fire] fire 2014 MODIS_SP 2014-11-02+5d  1/7  2011.1s
+  [fetch fire] fire 2014 MODIS_SP 2014-11-07+5d  1/7  2011.9s
+  [fetch fire] fire 2014 MODIS_SP 2014-11-12+5d  1/7  2012.5s
+  [fetch fire] fire 2014 MODIS_SP 2014-11-17+5d  1/7  2013.3s
+  [fetch fire] fire 2014 MODIS_SP 2014-11-22+5d  1/7  2014.0s
+  [fetch fire] fire 2014 MODIS_SP 2014-11-27+5d  1/7  2014.7s
+  [fetch fire] fire 2014 MODIS_SP 2014-12-02+5d  1/7  2015.6s
+  [fetch fire] fire 2014 MODIS_SP 2014-12-07+5d  1/7  2016.3s
+  [fetch fire] fire 2014 MODIS_SP 2014-12-12+5d  1/7  2017.1s
+  [fetch fire] fire 2014 MODIS_SP 2014-12-12  2017.1s
+  ::warning::fire: https://firms.modaps.eosdis.nasa.gov/api/area/csv/<MAP_KEY>/MODIS_SP/world/5/2014-12-17: the FIRMS transaction limit is exceeded (1/8); the documented window is ten minutes, waiting 130s
+  ::warning::fire: https://firms.modaps.eosdis.nasa.gov/api/area/csv/<MAP_KEY>/MODIS_SP/world/5/2014-12-17: the FIRMS transaction limit is exceeded (2/8); the documented window is ten minutes, waiting 130s
