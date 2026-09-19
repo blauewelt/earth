@@ -274,6 +274,23 @@ handover note for the next agent
 and the deck's build scripts (`ml/plans/E080_build/`) are added in the same
 commit.
 
+**Revision 4, 19 Sep** (Chris: should the cone shape vary per channel or per
+ocean group — and what about deep currents going the other way?): **every
+geometry number is per channel** — drift, both ellipses, scale and memory —
+stored as a group value plus a per-channel residual under shrinkage and applied
+through the aperture over the same shared dots (zero extra tokens, ≈ 34 M
+nominal parameters, no compute); hardening samples the group's 24 dots from the
+mixture of its channels' ellipses; profile tokens keep no sampling ellipse but
+get a per-level aperture, which gives the deep levels their own direction from
+the same k nearest profiles. The physics behind it — SSH moves west with eddies
+whatever the current does, sea ice moves with the wind, SST switches carrier
+with lag, the Deep Western Boundary Current runs against the upper limb — and
+the literature are in
+[the per-channel note](https://blauewelt.github.io/earth/docs.html?f=ml/plans/E080_cone_per_channel.md).
+The experiment gains an arm **A1g** (learned per group, revision 3 as written)
+beside **A1** (per channel), and R3 becomes per channel with pre-registered
+signs. The design paper (`ml/paper/paper.tex` §3, §8) states this form.
+
 **Slide 21, 16 Sep** (Chris: *"make a one-slide summary of the deck. Leave
 some space to insert a figure with the actual results"*): the whole deck on
 one slide — design, learnable cone, guards, the three-arm experiment and its
