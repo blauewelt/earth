@@ -1,0 +1,56 @@
+store     cat_s2 — Sentinel-2 L2A tile catalogue (10/20/60 m surface reflectance, S2A + S2B + S2C, CDSE), one row per tile-overpass
+family    family1_tf (1.0.tf) · public -> chfrank/earth-tensors:tensors/family1_tf/cat_s2
+axis      2026-01-01 .. 2026-09-30  bins 3214..3268 · time_s int32 (schema 2)
+channels  C=5: cloud, valid, angle, log2_area, sensor
+work      /home/runner/work/earth/earth/ml/cache/family1_tf
+
+=== stage index (cat_s2) ===
+  [index cat_s2] start (1 items)  0/1  0.0s
+  [index cat_s2] plan.json  1/1  15.7s
+  index: cat_s2 — 1 year(s), C=5 (cloud, valid, angle, log2_area, sensor), bins 3214..3268
+=== stage index done in 15.7s ===
+
+=== stage fetch (cat_s2) ===
+  [fetch cat_s2] start (1 items)  0/1  0.0s
+  [fetch cat_s2] cat_s2 2026 rows 0+  1/1  1076.5s
+  [fetch cat_s2] cat_s2 2026 rows 501,454+  1/1  2134.1s
+  [fetch cat_s2] cat_s2 2026 rows 1,008,768+  1/1  3191.0s
+  [fetch cat_s2] cat_s2 2026 rows 1,516,253+  1/1  4148.7s
+  [fetch cat_s2] cat_s2 2026 rows 2,031,533+  1/1  5106.6s
+  [fetch cat_s2] cat_s2 2026 rows 2,533,770+  1/1  6097.1s
+  [fetch cat_s2] cat_s2 2026 rows 3,037,435+  1/1  7127.9s
+Traceback (most recent call last):
+  File "/home/runner/work/earth/earth/ml/build_family1_stores.py", line 1488, in <module>
+    sys.exit(main())
+             ^^^^^^
+  File "/home/runner/work/earth/earth/ml/build_family1_stores.py", line 1483, in main
+    f10b.run_stages(ctx, stages, stage_fn=stage_fns(ad), deps=DEPS)
+  File "/home/runner/work/earth/earth/ml/build_family10_stores.py", line 5331, in run_stages
+    stage_fn[s](ctx)
+  File "/home/runner/work/earth/earth/ml/build_family1_stores.py", line 264, in stage_fetch
+    f10b.stage_fetch(ctx, assemble_store_after=False)
+  File "/home/runner/work/earth/earth/ml/build_family10_stores.py", line 3912, in stage_fetch
+    for label, rows, counts in ad.fetch_year(ctx, y):
+  File "/home/runner/work/earth/earth/ml/family1/adapters/_stac.py", line 1405, in fetch_year
+    for label, rows, c in self._rows(ctx, windows, str(year), ctx.t_lo,
+  File "/home/runner/work/earth/earth/ml/family1/adapters/_stac.py", line 1367, in _rows
+    for scs, c in cm.ordered_map(fn, windows, self.workers(ctx)):
+  File "/home/runner/work/earth/earth/ml/family1/adapters/_common.py", line 188, in ordered_map
+    yield q.popleft().result()
+          ^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/concurrent/futures/_base.py", line 449, in result
+    return self.__get_result()
+           ^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/concurrent/futures/_base.py", line 401, in __get_result
+    raise self._exception
+  File "/usr/lib/python3.12/concurrent/futures/thread.py", line 58, in run
+    result = self.fn(*self.args, **self.kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/work/earth/earth/ml/family1/adapters/_stac.py", line 1366, in <lambda>
+    fn = (lambda w: self.scenes(ctx, w))
+                    ^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/work/earth/earth/ml/family1/adapters/_stac.py", line 1765, in scenes
+    for p in odata_window(fet, CDSE_ODATA,
+  File "/home/runner/work/earth/earth/ml/family1/adapters/_stac.py", line 553, in odata_window
+    raise Refusal(f"{what}: page {pages} returned {len(v)} of {want} "
+family1.adapters._stac.Refusal: cat_s2 l2a 2026-09-19T00:00: page 10 returned 717 of 721 product(s) with 4 still to come — a truncated page
