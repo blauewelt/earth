@@ -1,0 +1,10 @@
+{
+ "at": "2026-09-19T06:34:23+00:00",
+ "done": 17921,
+ "elapsed_s": 9273.6,
+ "eta_s": 0.0,
+ "files": 17921,
+ "item": "store.json",
+ "stage": "publish lossyear",
+ "total": 17921
+}
