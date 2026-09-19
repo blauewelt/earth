@@ -1,0 +1,6 @@
+store     cat_ecostress — ECOSTRESS L2T LSTE tile catalogue (70 m land-surface temperature from the ISS, v002 and v003), one row per granule
+family    family1_tf (1.0.tf) · public -> chfrank/earth-tensors:tensors/family1_tf/cat_ecostress
+axis      2018-01-01 .. 2026-09-30  bins 2629..3268 · time_s int32 (schema 2)
+channels  C=5: cloud, valid, angle, log2_area, sensor
+work      /home/runner/work/earth/earth/ml/cache/family1_tf
+stage 'assemble' needs 'fetch' first (E-079 §4: stage order is fixed) — /home/runner/work/earth/earth/ml/cache/family1_tf/cat_ecostress/fetch.done is missing
