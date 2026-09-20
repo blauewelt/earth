@@ -1,0 +1,80 @@
+  {
+   "unit": "v10h09 2019-08",
+   "why": "https://data.lpdaac.earthdatacloud.nasa.gov/lp-prod-protected/MCD64A1.061/MCD64A1.A2019213.h10v10.061.2021309104838/MCD64A1.A2019213.h10v10.061.2021309104838.hdf: MCD64A1.A2019213.h10v10.061.2021309104838.hdf: the burn-date SDS declares valid_range [0, 366], which cannot hold the classes this adapter stores (-2 water .. 366 day of year). A product whose value scheme changed is refused, never reinterpreted."
+  },
+  {
+   "unit": "v10h18 2019-08",
+   "why": "https://data.lpdaac.earthdatacloud.nasa.gov/lp-prod-protected/MCD64A1.061/MCD64A1.A2019213.h19v10.061.2021309104907/MCD64A1.A2019213.h19v10.061.2021309104907.hdf: MCD64A1.A2019213.h19v10.061.2021309104907.hdf: the burn-date SDS declares valid_range [0, 366], which cannot hold the classes this adapter stores (-2 water .. 366 day of year). A product whose value scheme changed is refused, never reinterpreted."
+  },
+  {
+   "unit": "v10h27 2019-08",
+   "why": "https://data.lpdaac.earthdatacloud.nasa.gov/lp-prod-protected/MCD64A1.061/MCD64A1.A2019213.h27v10.061.2021309104929/MCD64A1.A2019213.h27v10.061.2021309104929.hdf: MCD64A1.A2019213.h27v10.061.2021309104929.hdf: the burn-date SDS declares valid_range [0, 366], which cannot hold the classes this adapter stores (-2 water .. 366 day of year). A product whose value scheme changed is refused, never reinterpreted."
+  },
+  {
+   "unit": "v11h00 2019-08",
+   "why": "https://data.lpdaac.earthdatacloud.nasa.gov/lp-prod-protected/MCD64A1.061/MCD64A1.A2019213.h01v11.061.2021309104831/MCD64A1.A2019213.h01v11.061.2021309104831.hdf: MCD64A1.A2019213.h01v11.061.2021309104831.hdf: the burn-date SDS declares valid_range [0, 366], which cannot hold the classes this adapter stores (-2 water .. 366 day of year). A product whose value scheme changed is refused, never reinterpreted."
+  },
+  {
+   "unit": "v11h09 2019-08",
+   "why": "https://data.lpdaac.earthdatacloud.nasa.gov/lp-prod-protected/MCD64A1.061/MCD64A1.A2019213.h10v11.061.2021309104834/MCD64A1.A2019213.h10v11.061.2021309104834.hdf: MCD64A1.A2019213.h10v11.061.2021309104834.hdf: the burn-date SDS declares valid_range [0, 366], which cannot hold the classes this adapter stores (-2 water .. 366 day of year). A product whose value scheme changed is refused, never reinterpreted."
+  },
+  {
+   "unit": "v11h18 2019-08",
+   "why": "https://data.lpdaac.earthdatacloud.nasa.gov/lp-prod-protected/MCD64A1.061/MCD64A1.A2019213.h19v11.061.2021309104851/MCD64A1.A2019213.h19v11.061.2021309104851.hdf: MCD64A1.A2019213.h19v11.061.2021309104851.hdf: the burn-date SDS declares valid_range [0, 366], which cannot hold the classes this adapter stores (-2 water .. 366 day of year). A product whose value scheme changed is refused, never reinterpreted."
+  },
+  {
+   "unit": "v11h27 2019-08",
+   "why": "https://data.lpdaac.earthdatacloud.nasa.gov/lp-prod-protected/MCD64A1.061/MCD64A1.A2019213.h27v11.061.2021309105231/MCD64A1.A2019213.h27v11.061.2021309105231.hdf: MCD64A1.A2019213.h27v11.061.2021309105231.hdf: the burn-date SDS declares valid_range [0, 366], which cannot hold the classes this adapter stores (-2 water .. 366 day of year). A product whose value scheme changed is refused, never reinterpreted."
+  },
+  {
+   "unit": "v12h09 2019-08",
+   "why": "https://data.lpdaac.earthdatacloud.nasa.gov/lp-prod-protected/MCD64A1.061/MCD64A1.A2019213.h11v12.061.2021309104834/MCD64A1.A2019213.h11v12.061.2021309104834.hdf: MCD64A1.A2019213.h11v12.061.2021309104834.hdf: the burn-date SDS declares valid_range [0, 366], which cannot hold the classes this adapter stores (-2 water .. 366 day of year). A product whose value scheme changed is refused, never reinterpreted."
+  },
+  {
+   "unit": "v12h18 2019-08",
+   "why": "https://data.lpdaac.earthdatacloud.nasa.gov/lp-prod-protected/MCD64A1.061/MCD64A1.A2019213.h19v12.061.2021309104846/MCD64A1.A2019213.h19v12.061.2021309104846.hdf: MCD64A1.A2019213.h19v12.061.2021309104846.hdf: the burn-date SDS declares valid_range [0, 366], which cannot hold the classes this adapter stores (-2 water .. 366 day of year). A product whose value scheme changed is refused, never reinterpreted."
+  },
+  {
+   "unit": "v12h27 2019-08",
+   "why": "https://data.lpdaac.earthdatacloud.nasa.gov/lp-prod-protected/MCD64A1.061/MCD64A1.A2019213.h27v12.061.2021309104930/MCD64A1.A2019213.h27v12.061.2021309104930.hdf: MCD64A1.A2019213.h27v12.061.2021309104930.hdf: the burn-date SDS declares valid_range [0, 366], which cannot hold the classes this adapter stores (-2 water .. 366 day of year). A product whose value scheme changed is refused, never reinterpreted."
+  },
+  {
+   "unit": "v13h00 2019-08",
+   "why": "https://data.lpdaac.earthdatacloud.nasa.gov/lp-prod-protected/MCD64A1.061/MCD64A1.A2019213.h05v13.061.2021309104835/MCD64A1.A2019213.h05v13.061.2021309104835.hdf: MCD64A1.A2019213.h05v13.061.2021309104835.hdf: the burn-date SDS declares valid_range [0, 366], which cannot hold the classes this adapter stores (-2 water .. 366 day of year). A product whose value scheme changed is refused, never reinterpreted."
+  },
+  {
+   "unit": "v13h09 2019-08",
+   "why": "https://data.lpdaac.earthdatacloud.nasa.gov/lp-prod-protected/MCD64A1.061/MCD64A1.A2019213.h12v13.061.2021309104838/MCD64A1.A2019213.h12v13.061.2021309104838.hdf: MCD64A1.A2019213.h12v13.061.2021309104838.hdf: the burn-date SDS declares valid_range [0, 366], which cannot hold the classes this adapter stores (-2 water .. 366 day of year). A product whose value scheme changed is refused, never reinterpreted."
+  },
+  {
+   "unit": "v13h18 2019-08",
+   "why": "https://data.lpdaac.earthdatacloud.nasa.gov/lp-prod-protected/MCD64A1.061/MCD64A1.A2019213.h20v13.061.2021309104849/MCD64A1.A2019213.h20v13.061.2021309104849.hdf: MCD64A1.A2019213.h20v13.061.2021309104849.hdf: the burn-date SDS declares valid_range [0, 366], which cannot hold the classes this adapter stores (-2 water .. 366 day of year). A product whose value scheme changed is refused, never reinterpreted."
+  },
+  {
+   "unit": "v13h27 2019-08",
+   "why": "https://data.lpdaac.earthdatacloud.nasa.gov/lp-prod-protected/MCD64A1.061/MCD64A1.A2019213.h28v13.061.2021309105237/MCD64A1.A2019213.h28v13.061.2021309105237.hdf: MCD64A1.A2019213.h28v13.061.2021309105237.hdf: the burn-date SDS declares valid_range [0, 366], which cannot hold the classes this adapter stores (-2 water .. 366 day of year). A product whose value scheme changed is refused, never reinterpreted."
+  },
+  {
+   "unit": "v14h09 2019-08",
+   "why": "https://data.lpdaac.earthdatacloud.nasa.gov/lp-prod-protected/MCD64A1.061/MCD64A1.A2019213.h13v14.061.2021309104840/MCD64A1.A2019213.h13v14.061.2021309104840.hdf: MCD64A1.A2019213.h13v14.061.2021309104840.hdf: the burn-date SDS declares valid_range [0, 366], which cannot hold the classes this adapter stores (-2 water .. 366 day of year). A product whose value scheme changed is refused, never reinterpreted."
+  }
+ ],
+ "counts": {},
+ "bytes_fetched": 124110552,
+ "bytes_index": 2483022,
+ "bytes_fetched_per_frame": null,
+ "wall_seconds": 55.14,
+ "wall_seconds_index": 0.73,
+ "seconds_per_frame": null,
+ "estimate_store_bytes": null,
+ "note_formula_bytes": null,
+ "note_estimate": {
+  "bytes": 10000000000.0,
+  "what": "family1tf.tex ledger: 'the date each 500 m pixel burned', MCD64A1 v6.1, ~10 GB"
+ },
+ "runner": "GitHub Actions 1000005699",
+ "builder_git_sha": "89056404dfe9a0de45ec4dd6637029d3e3b9d1fb",
+ "at": "2026-09-20T18:07:18+00:00"
+}
+probe -> /home/runner/work/earth/earth/ml/cache/family1_tf/probe/burned500/2019-08.json
+probe burned500 2019-08: ZERO frames — a broken listing or reader, not a measurement (the 2026-09-14 rule)
