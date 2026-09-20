@@ -1,0 +1,19 @@
+store     pace4k — Ocean colour and the phytoplankton community, PACE OCI daily 4 km mapped v3.2: log10 chlorophyll-a, particulate organic carbon, phytoplankton carbon, apparent visible wavelength and the three MOANA cell abundances
+family    family1_gf (1.gf) · public -> chfrank/earth-tensors:tensors/family1_gf/pace4k
+axis      2024-01-01 .. 2024-12-31  bins 3068..3141 · time_s int32 (schema 2)
+channels  C=7: log_chl, poc, carbon_phyto, avw_400, pro_moana, syn_moana, pico_moana
+tier G    sharded, groups ['pace4k'], F=5 x 86400 s, float16, years (by bin start) 2024..2024
+work      /home/runner/work/earth/earth/ml/cache/family1_gf
+
+=== stage index (pace4k) ===
+  [index pace4k] start (1 items)  0/1  0.0s
+  [index pace4k] plan.json  1/1  16.2s
+  index: pace4k — 1 year(s), C=7 (log_chl, poc, carbon_phyto, avw_400, pro_moana, syn_moana, pico_moana), bins 3068..3141
+=== stage index done in 16.2s ===
+
+=== stage fetch (pace4k) ===
+  [fetch pace4k (tier G)] start (1 items)  0/1  0.0s
+  [fetch pace4k (tier G)] pace4k 2024 pace4k bin 3072  0.0s
+  [fetch pace4k (tier G)] pace4k 2024 pace4k bin 3077  0.0s
+  [fetch pace4k (tier G)] pace4k 2024 pace4k bin 3082  93.7s
+  [fetch pace4k (tier G)] pace4k 2024 pace4k bin 3087  344.6s
