@@ -1,0 +1,10 @@
+{
+ "at": "2026-09-20T18:52:48+00:00",
+ "done": 1,
+ "elapsed_s": 219.8,
+ "eta_s": 0.0,
+ "item": "icesat2 2022",
+ "stage": "fetch icesat2",
+ "total": 1,
+ "year_rows": 3743544
+}
