@@ -1,0 +1,410 @@
+{
+ "bins": [
+  2995,
+  3067
+ ],
+ "builder_git_sha": "5805b5cec82dc651e03f4e6b9e6544e027a6ac79",
+ "built_at": "2026-09-20T17:47:17+00:00",
+ "bytes_cmr": 272257047923,
+ "bytes_note": "CMR declares the same 274.756 MB for every granule of this collection, which is a metadata artefact and not a measurement; the probe measures exact bytes",
+ "channels": [
+  {
+   "max": 800.0,
+   "min": -400.0,
+   "name": "greenup",
+   "unit": "day number in the product year"
+  },
+  {
+   "max": 800.0,
+   "min": -400.0,
+   "name": "mid_greenup",
+   "unit": "day number in the product year"
+  },
+  {
+   "max": 800.0,
+   "min": -400.0,
+   "name": "peak",
+   "unit": "day number in the product year"
+  },
+  {
+   "max": 800.0,
+   "min": -400.0,
+   "name": "senescence",
+   "unit": "day number in the product year"
+  },
+  {
+   "max": 800.0,
+   "min": -400.0,
+   "name": "mid_greendown",
+   "unit": "day number in the product year"
+  },
+  {
+   "max": 800.0,
+   "min": -400.0,
+   "name": "dormancy",
+   "unit": "day number in the product year"
+  },
+  {
+   "max": 2.0,
+   "min": -0.5,
+   "name": "evi_minimum",
+   "unit": "NBAR-EVI2 (dimensionless)"
+  },
+  {
+   "max": 2.0,
+   "min": -0.5,
+   "name": "evi_amplitude",
+   "unit": "NBAR-EVI2 (dimensionless)"
+  },
+  {
+   "max": 1000.0,
+   "min": -10.0,
+   "name": "evi_area",
+   "unit": "NBAR-EVI2 x days"
+  },
+  {
+   "max": 3.0,
+   "min": 0.0,
+   "name": "qa_overall",
+   "unit": "0 best, 1 good, 2 fair, 3 poor"
+  }
+ ],
+ "cycle": 0,
+ "dataset": "MCD12Q2 v061 yearly 500 m sinusoidal land-surface phenology (HDF-EOS2)",
+ "date_range": [
+  "2023-01-01",
+  "2023-12-31"
+ ],
+ "first_file": {
+  "bytes": 288102707,
+  "datasets_read": {
+   "Dormancy": {
+    "attributes": {
+     "_FillValue": 32767,
+     "long_name": "Onset_Dormancy\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000",
+     "scale_factor": 1.0,
+     "units": "days since 1-1-1970\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000",
+     "valid_range": [
+      11138,
+      32766
+     ]
+    },
+    "dtype": "int16",
+    "fill_pixels": 5740442,
+    "raw_max": 20266,
+    "raw_min": 19765,
+    "shape": [
+     2400,
+     2400
+    ]
+   },
+   "EVI_Amplitude": {
+    "attributes": {
+     "_FillValue": 32767,
+     "long_name": "EVI_Amplitude\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000",
+     "scale_factor": 0.0001,
+     "units": "NBAR-EVI2\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000",
+     "valid_range": [
+      0,
+      10000
+     ]
+    },
+    "dtype": "int16",
+    "fill_pixels": 5740442,
+    "raw_max": 6488,
+    "raw_min": 1000,
+    "shape": [
+     2400,
+     2400
+    ]
+   },
+   "EVI_Area": {
+    "attributes": {
+     "_FillValue": 32767,
+     "long_name": "EVI_Area\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000",
+     "scale_factor": 0.1,
+     "units": "NBAR-EVI2\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000",
+     "valid_range": [
+      0,
+      3700
+     ]
+    },
+    "dtype": "int16",
+    "fill_pixels": 5740442,
+    "raw_max": 629,
+    "raw_min": 20,
+    "shape": [
+     2400,
+     2400
+    ]
+   },
+   "EVI_Minimum": {
+    "attributes": {
+     "_FillValue": 32767,
+     "long_name": "Minimum_EVI\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000",
+     "scale_factor": 0.0001,
+     "units": "NBAR-EVI2\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000",
+     "valid_range": [
+      0,
+      10000
+     ]
+    },
+    "dtype": "int16",
+    "fill_pixels": 5740442,
+    "raw_max": 8134,
+    "raw_min": 1200,
+    "shape": [
+     2400,
+     2400
+    ]
+   },
+   "Greenup": {
+    "attributes": {
+     "_FillValue": 32767,
+     "long_name": "Onset_Greenness_Increase\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000",
+     "scale_factor": 1.0,
+     "units": "days since 1-1-1970\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000",
+     "valid_range": [
+      11138,
+      32766
+     ]
+    },
+    "dtype": "int16",
+    "fill_pixels": 5740442,
+    "raw_max": 20040,
+    "raw_min": 19545,
+    "shape": [
+     2400,
+     2400
+    ]
+   },
+   "MidGreendown": {
+    "attributes": {
+     "_FillValue": 32767,
+     "long_name": "Middle_Greenness_Decrease\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000",
+     "scale_factor": 1.0,
+     "units": "days since 1-1-1970\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000",
+     "valid_range": [
+      11138,
+      32766
+     ]
+    },
+    "dtype": "int16",
+    "fill_pixels": 5740442,
+    "raw_max": 20252,
+    "raw_min": 19752,
+    "shape": [
+     2400,
+     2400
+    ]
+   },
+   "MidGreenup": {
+    "attributes": {
+     "_FillValue": 32767,
+     "long_name": "Middle_Greenness_Increase\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000",
+     "scale_factor": 1.0,
+     "units": "days since 1-1-1970\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000",
+     "valid_range": [
+      11138,
+      32766
+     ]
+    },
+    "dtype": "int16",
+    "fill_pixels": 5740442,
+    "raw_max": 20059,
+    "raw_min": 19568,
+    "shape": [
+     2400,
+     2400
+    ]
+   },
+   "Peak": {
+    "attributes": {
+     "_FillValue": 32767,
+     "long_name": "Date_of_Peak\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000",
+     "scale_factor": 1.0,
+     "units": "days since 1-1-1970\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000",
+     "valid_range": [
+      11138,
+      32766
+     ]
+    },
+    "dtype": "int16",
+    "fill_pixels": 5740442,
+    "raw_max": 20087,
+    "raw_min": 19723,
+    "shape": [
+     2400,
+     2400
+    ]
+   },
+   "QA_Overall": {
+    "attributes": {
+     "_FillValue": 32767,
+     "long_name": "Quality_Assessment_Overall\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000",
+     "scale_factor": 1.0,
+     "units": "none\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000",
+     "valid_range": [
+      0,
+      3
+     ]
+    },
+    "dtype": "int16",
+    "fill_pixels": 5740442,
+    "raw_max": 3,
+    "raw_min": 0,
+    "shape": [
+     2400,
+     2400
+    ]
+   },
+   "Senescence": {
+    "attributes": {
+     "_FillValue": 32767,
+     "long_name": "Onset_Greenness_Decrease\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000",
+     "scale_factor": 1.0,
+     "units": "days since 1-1-1970\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000",
+     "valid_range": [
+      11138,
+      32766
+     ]
+    },
+    "dtype": "int16",
+    "fill_pixels": 5740442,
+    "raw_max": 20204,
+    "raw_min": 19735,
+    "shape": [
+     2400,
+     2400
+    ]
+   }
+  },
+  "struct_metadata": {
+   "XDim": 2400,
+   "YDim": 2400,
+   "lower_right": [
+    20015109.354,
+    -2223901.039333
+   ],
+   "projection": "GCTP_SNSOID",
+   "upper_left": [
+    18903158.834333,
+    -1111950.519667
+   ]
+  },
+  "tile": "h35v10",
+  "title": "MCD12Q2.A2024001.h35v10.061.2025216140806",
+  "url": "https://data.lpdaac.earthdatacloud.nasa.gov/lp-prod-protected/MCD12Q2.061/MCD12Q2.A2024001.h35v10.061.2025216140806/MCD12Q2.A2024001.h35v10.061.2025216140806.hdf"
+ },
+ "footprint": {
+  "log2_dt": 6.189824558880018,
+  "log2_fp": -5.908510817800209
+ },
+ "frame_seconds": 432000,
+ "frames_per_bin": 1,
+ "granules": 945,
+ "granules_per_year": {
+  "2022": 315,
+  "2023": 315,
+  "2024": 315
+ },
+ "grid": {
+  "H": 2400,
+  "W": 2400,
+  "coordinates": "x = x0 + (col + 0.5) * dx metres and y = y0 + (row + 0.5) * dy with dy NEGATIVE; then lat = degrees(y / R) and lon = degrees(x / (R * cos(lat))) with R = 6371007.181 m. x0/y0 are the tile's WEST and NORTH edges",
+  "crs": "MODLAND Sinusoidal (no EPSG code; GCTP_SNSOID on a sphere)",
+  "dx": 463.3127165693847,
+  "dy": -463.3127165693847,
+  "extent_m": [
+   -20015109.355797417,
+   -6.984919309616089e-10,
+   -18903158.836030893,
+   1111950.5197665226
+  ],
+  "extent_m_note": "[west, south, east, north] in projected metres",
+  "h": 0,
+  "latitude_band": [
+   -0.0,
+   10.0
+  ],
+  "latitude_band_note": "the tile's south and north edges in degrees; its LONGITUDE span widens away from the equator because the projection is sinusoidal",
+  "no_tile_corners": "no lat/lon corner table is stored: the rectangle of a tile near the grid's edge has corners off the projected globe, where the inverse above has no longitude, and a clamped number that looks like a coordinate would be worse than the formula",
+  "pixel_km": 0.463313,
+  "pixel_m": 463.312717,
+  "proj4": "+proj=sinu +lon_0=0 +x_0=0 +y_0=0 +R=6371007.181 +units=m +no_defs",
+  "projection": {
+   "earth_radius": 6371007.181,
+   "false_easting": 0.0,
+   "false_northing": 0.0,
+   "grid_mapping_name": "sinusoidal",
+   "longitude_of_projection_origin": 0.0,
+   "reference": "modis-land.gsfc.nasa.gov/GCTP.html, read 2026-09-20: MODLAND Sinusoidal Grid, sphere 6371007.181 m, central meridian 0, FE = FN = 0"
+  },
+  "row_order": "row 0 is the NORTHERNMOST row and col 0 the westernmost \u2014 the HDF-EOS grid's own orientation (GridOrigin = HDFE_CENTER, upper-left corner first), so nothing is flipped",
+  "tile": "h00v08",
+  "tile_metres": 1111950.5197665233,
+  "tiles_across": 36,
+  "tiles_down": 18,
+  "v": 8,
+  "x0": -20015109.355797417,
+  "y0": 1111950.5197665226
+ },
+ "listing": {
+  "2022": {
+   "cmr_bytes": 1481511,
+   "cmr_hits": 630,
+   "cmr_pages": 2,
+   "cmr_queries": 1,
+   "cmr_seconds": 0.6,
+   "granules_listed": 315
+  },
+  "2023": {
+   "cmr_bytes": 1481531,
+   "cmr_hits": 630,
+   "cmr_pages": 2,
+   "cmr_queries": 1,
+   "cmr_seconds": 0.5,
+   "granules_listed": 315
+  },
+  "2024": {
+   "cmr_bytes": 1433688,
+   "cmr_hits": 630,
+   "cmr_pages": 2,
+   "cmr_queries": 1,
+   "cmr_seconds": 0.3,
+   "granules_listed": 315
+  }
+ },
+ "per_year_resume": true,
+ "qc_policy": "the product's own QA_Overall is CARRIED AS A CHANNEL, unchanged, so the consumer picks the threshold (family1tf.tex 5): 0 best, 1 good, 2 fair, 3 poor, a weighted combination of how much of the year's vegetation index was present rather than filled and how well the spline fitted. Everything else follows the producer: a raw 32767 is the fill value and is NaN; a raw value outside the producer's own valid range -- 11138..32766 for a date, 0..10000 for the two EVI2 levels, 0..3700 for the area, 0..3 for the quality code -- is not a measurement either, becomes NaN and is counted (`outside_valid_range`). The channel bounds are then TRIPWIRES and not filters: a date more than about a year from the product year, an EVI2 outside [-0.5, 2] or an area outside [-10, 1000] is a corrupt file and not a season, and a value outside them becomes NaN and is counted (`out_of_bounds`), never clipped. The second vegetation cycle and the per-phenometric QA_Detailed bits are phase B",
+ "record": [
+  "2022-01-01",
+  "2024-01-01"
+ ],
+ "record_years": [
+  2001,
+  2025
+ ],
+ "short_name": "MCD12Q2",
+ "sources": [
+  "https://data.lpdaac.earthdatacloud.nasa.gov/lp-prod-protected/MCD12Q2.061/<granule>/<granule>.hdf",
+  "https://cmr.earthdata.nasa.gov/search/granules.json?short_name=MCD12Q2&version=061"
+ ],
+ "store": "pheno500",
+ "tiles_built": 315,
+ "tiles_declared": 315,
+ "tiles_declared_and_absent": [],
+ "tiles_in_listing": 315,
+ "title": "Land-surface phenology, MODIS MCD12Q2 v061, yearly, 500 m sinusoidal tiles: six phenometric dates, three EVI2 statistics and quality, first vegetation cycle",
+ "url": "https://cmr.earthdata.nasa.gov/search/granules.json?short_name=MCD12Q2&version=061",
+ "verified": "2026-09-20 from the sandbox, keyless: the CMR collection search (C2484079943-LPCLOUD, MCD12Q2 v061, cloud_hosted, time_start 2001-01-01, no end) and the granule listing for 2001, 2010, 2020, 2024 and 2025 (315 tiles in every one; 2025 carries 626 granules because 311 tiles were reprocessed in September 2026 and the predecessor was not retired; CMR declares the same 274.756 MB for every granule of every year, which is a metadata artefact); the https 'lp-prod-protected' .hdf data link of MCD12Q2.A2020001.h18v04.061.2022117225528; the MODLAND sinusoidal grid parameters on modis-land.gsfc.nasa.gov/GCTP.html (sphere 6371007.181 m, 36 x 18 tiles) checked against the corner polygon CMR publishes for h18v04; and the layer table on lpdaac.usgs.gov/products/mcd12q2v061 plus the v061 user guide (lpdaac.usgs.gov/documents/1417) for the thirteen dataset names, int16, fill 32767, the valid ranges and the 'days since Jan 1, 1970' date convention. The granules themselves are behind Earthdata Login and are opened on a GitHub-hosted runner by the probe, which re-checks the tile's own StructMetadata corners in every file it reads",
+ "version": "061",
+ "years": [
+  2023
+ ],
+ "years_listed": [
+  "2022",
+  "2023",
+  "2024"
+ ]
+}
