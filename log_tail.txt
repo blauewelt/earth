@@ -1,0 +1,57 @@
+store     lst05 — Daily land-surface temperature day and night with quality, MODIS MOD11C1 v061, 0.05 degrees
+family    family1_tf (1.0.tf) · public -> chfrank/earth-tensors:tensors/family1_tf/lst05
+axis      1999-01-01 .. 2026-09-30  bins 1241..3268 · time_s int32 (schema 2)
+lane      d19990101-20260930 — this fetch writes parts/<year>/d19990101-20260930/ and pushes only that folder
+channels  C=4: lst_day, lst_night, qc_day, qc_night
+tier G    sharded, groups ['terra'], F=5 x 86400 s, float16, years (by bin start) 1999..2026
+work      /opt/runner/_work/earth/earth/ml/cache/family1_tf
+stage index: already done — skipping (--force to redo)
+
+=== stage fetch (lst05) ===
+::warning::lst05: no netrc entry for urs.earthdata.nasa.gov was found; the download will fall back to whatever credentials the environment provides and may be refused. family1-build.yml writes that file on hosted runners.
+  [pull lst05 parts] start (28 items)  0/28  0.0s
+  hub: chfrank/earth-tensors with the token from $HF_TOKEN
+Error while downloading from https://huggingface.co/datasets/chfrank/earth-tensors/resolve/main/partials/family1_tf/lst05/2021/terra__bin_2859.idx.npy: _ssl.c:989: The handshake operation timed out
+Trying to resume download...
+  lst05 2021: 148 file(s), 365 row(s) -> /opt/runner/_work/earth/earth/ml/cache/family1_tf/lst05/parts/2021
+  lst05 2022: 148 file(s), 352 row(s) -> /opt/runner/_work/earth/earth/ml/cache/family1_tf/lst05/parts/2022
+  lst05 2023: 148 file(s), 365 row(s) -> /opt/runner/_work/earth/earth/ml/cache/family1_tf/lst05/parts/2023
+  lst05 2024: 150 file(s), 370 row(s) -> /opt/runner/_work/earth/earth/ml/cache/family1_tf/lst05/parts/2024
+  lst05 2025: 148 file(s), 361 row(s) -> /opt/runner/_work/earth/earth/ml/cache/family1_tf/lst05/parts/2025
+  lst05 2026: 104 file(s), 248 row(s) -> /opt/runner/_work/earth/earth/ml/cache/family1_tf/lst05/parts/2026
+  pull: 28 year(s) present in 28 lane(s) (22 already local), 9,227 row(s), 0 missing
+=== stage fetch done in 3035.7s ===
+
+=== stage assemble (lst05) ===
+  [lst05 store (tier G)] start (1 items)  0/1  0.0s
+  ::warning::lst05: year(s) 1999, 2000, 2001, 2002, 2003, 2004, 2005, 2006, 2007, 2008, 2009, 2010, 2011, 2012, 2013, 2014, 2015, 2016, 2017, 2018, 2019, 2020, 2021, 2022, 2023, 2024, 2025, 2026 were assembled from the lanes that happened to be on disk — the build declared no `lanes_expected`, so NOTHING says whether those years are whole. Pass --lanes at `index` to declare them; store.json records `declared: false` either way.
+REFUSING to assemble lst05:
+  1999 lane d19990101-20260930: no parts/1999/d19990101-20260930.done — the year's fetch did not finish
+  2000 lane d19990101-20260930: no parts/2000/d19990101-20260930.done — the year's fetch did not finish
+  2001 lane d19990101-20260930: no parts/2001/d19990101-20260930.done — the year's fetch did not finish
+  2002 lane d19990101-20260930: no parts/2002/d19990101-20260930.done — the year's fetch did not finish
+  2003 lane d19990101-20260930: no parts/2003/d19990101-20260930.done — the year's fetch did not finish
+  2004 lane d19990101-20260930: no parts/2004/d19990101-20260930.done — the year's fetch did not finish
+  2005 lane d19990101-20260930: no parts/2005/d19990101-20260930.done — the year's fetch did not finish
+  2006 lane d19990101-20260930: no parts/2006/d19990101-20260930.done — the year's fetch did not finish
+  2007 lane d19990101-20260930: no parts/2007/d19990101-20260930.done — the year's fetch did not finish
+  2008 lane d19990101-20260930: no parts/2008/d19990101-20260930.done — the year's fetch did not finish
+  2009 lane d19990101-20260930: no parts/2009/d19990101-20260930.done — the year's fetch did not finish
+  2010 lane d19990101-20260930: no parts/2010/d19990101-20260930.done — the year's fetch did not finish
+  2011 lane d19990101-20260930: no parts/2011/d19990101-20260930.done — the year's fetch did not finish
+  2012 lane d19990101-20260930: no parts/2012/d19990101-20260930.done — the year's fetch did not finish
+  2013 lane d19990101-20260930: no parts/2013/d19990101-20260930.done — the year's fetch did not finish
+  2014 lane d19990101-20260930: no parts/2014/d19990101-20260930.done — the year's fetch did not finish
+  2015 lane d19990101-20260930: no parts/2015/d19990101-20260930.done — the year's fetch did not finish
+  2016 lane d19990101-20260930: no parts/2016/d19990101-20260930.done — the year's fetch did not finish
+  2017 lane d19990101-20260930: no parts/2017/d19990101-20260930.done — the year's fetch did not finish
+  2018 lane d19990101-20260930: no parts/2018/d19990101-20260930.done — the year's fetch did not finish
+  2019 lane d19990101-20260930: no parts/2019/d19990101-20260930.done — the year's fetch did not finish
+  2020 lane d19990101-20260930: no parts/2020/d19990101-20260930.done — the year's fetch did not finish
+  2021 lane d19990101-20260930: no parts/2021/d19990101-20260930.done — the year's fetch did not finish
+  2022 lane d19990101-20260930: no parts/2022/d19990101-20260930.done — the year's fetch did not finish
+  2023 lane d19990101-20260930: no parts/2023/d19990101-20260930.done — the year's fetch did not finish
+  2024 lane d19990101-20260930: no parts/2024/d19990101-20260930.done — the year's fetch did not finish
+  2025 lane d19990101-20260930: no parts/2025/d19990101-20260930.done — the year's fetch did not finish
+  2026 lane d19990101-20260930: no parts/2026/d19990101-20260930.done — the year's fetch did not finish
+Re-run the fetch stage with the same --work value, or pass --allow-missing-years for a deliberately short store.
