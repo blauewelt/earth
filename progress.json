@@ -1,0 +1,10 @@
+{
+ "at": "2026-09-20T07:41:01+00:00",
+ "done": 3703,
+ "elapsed_s": 1504.4,
+ "eta_s": 0.0,
+ "files": 3703,
+ "item": "store.json",
+ "stage": "publish oc4k",
+ "total": 3703
+}
