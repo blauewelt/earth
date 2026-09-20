@@ -504,8 +504,15 @@ def test_the_sidecar_round_trips_through_a_npy_and_into_one_parquet(tmp_path):
             self.root = root
             self.adapter = fam.REGISTRY["cat_landsat"]()
 
-        def year_dir(self, y):
-            return os.path.join(self.root, str(y))
+        def year_dir(self, y, lane=None):
+            d = os.path.join(self.root, str(y))
+            return os.path.join(d, lane) if lane else d
+
+        def lanes_of(self, y):
+            # the stub stands in for `Ctx`, which since E-082 wave 7 can
+            # answer with several LANES per year; one unnamed lane is what a
+            # sidecar written by a whole-year fetch has
+            return [""]
     ctx = _Ctx(str(tmp_path / "parts"))
     want = []
     for y in ctx.years:
@@ -548,8 +555,15 @@ def test_an_absent_sidecar_and_a_repeated_hash_are_both_refusals(tmp_path):
             self.root = root
             self.adapter = fam.REGISTRY["cat_landsat"]()
 
-        def year_dir(self, y):
-            return os.path.join(self.root, str(y))
+        def year_dir(self, y, lane=None):
+            d = os.path.join(self.root, str(y))
+            return os.path.join(d, lane) if lane else d
+
+        def lanes_of(self, y):
+            # the stub stands in for `Ctx`, which since E-082 wave 7 can
+            # answer with several LANES per year; one unnamed lane is what a
+            # sidecar written by a whole-year fetch has
+            return [""]
     ctx = _Ctx(str(tmp_path / "empty"))
     os.makedirs(ctx.year_dir(2024))
     with pytest.raises(st.Refusal) as e:

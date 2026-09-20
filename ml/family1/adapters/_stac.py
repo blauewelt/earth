@@ -1116,14 +1116,21 @@ def asset_part_names(d):
 
 
 def read_asset_parts(ctx):
-    """Every year's asset sidecars, as Arrow tables, in year order."""
+    """Every year's asset sidecars, as Arrow tables, in year order.
+
+    Every LANE of every year, in the same merge order the column parts are
+    walked in (E-082 wave 7) — a year fetched by several lanes has a sidecar
+    per lane, and a year fetched by one unnamed lane has exactly the one it
+    always had.
+    """
     pa = _pa()
     for y in ctx.years:
-        d = ctx.year_dir(y)
-        for n in asset_part_names(d):
-            raw = np.load(os.path.join(d, n))
-            with pa.ipc.open_stream(pa.py_buffer(raw.tobytes())) as r:
-                yield y, n, r.read_all()
+        for lane in ctx.lanes_of(y):
+            d = ctx.year_dir(y, lane)
+            for n in asset_part_names(d):
+                raw = np.load(os.path.join(d, n))
+                with pa.ipc.open_stream(pa.py_buffer(raw.tobytes())) as r:
+                    yield y, n, r.read_all()
 
 
 def write_assets_parquet(ctx, dest, expect_rows=None):

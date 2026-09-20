@@ -27,6 +27,36 @@ THE LAYOUT, and it is the whole contract:
     partials/family10_<minor>/<store>/<year>/counts.json the year's own ledger
     partials/family10_<minor>/<store>/<year>/done.json   THE MARKER — last
 
+LANES (E-082 wave 7), and they are an ADDITION to that layout, not a change to
+it. A fetch lane is one GitHub-hosted runner: six hours and about 86 GB. Some
+family-1 stores need more than one lane per year — a year of ICESat-2's ATL08
+is 35 hours of fetching, so it goes as twelve monthly lanes — and one folder
+per year with ONE index, ONE ledger and ONE marker means two such lanes
+overwrite each other and the assembler builds a short store with nothing to say
+so. So a NAMED lane gets a folder of its own inside the year's:
+
+    partials/<family>/<store>/<year>/<lane>/00000.npz    the lane's own parts
+    partials/<family>/<store>/<year>/<lane>/counts.json  the lane's own ledger,
+                                                         carrying `lane`, the
+                                                         window it covers and
+                                                         its group subset
+    partials/<family>/<store>/<year>/<lane>/done.json    THE LANE'S MARKER —
+                                                         last, and carrying
+                                                         `lane`
+
+The lane's NAME says what it covers: `m06` (one month), `q3` (one quarter),
+`d0701-0930` (any other window) or `g-<hash>` (a subset of a tier-G store's
+groups, the list itself in the lane's ledger). A WHOLE-YEAR LANE WITH NO GROUP
+SUBSET IS THE UNNAMED LANE and writes the top-level files above — exactly what
+was written before this existed, which is why every store and every part
+already on the Hub reads unchanged. `push`/`push_many` take `lane=` and upload
+only that lane's folder; `pull` LISTS the year folder and brings back the
+top-level files as the unnamed lane plus every sub-folder that carries a
+`done.json`, so a year can be pushed by twelve machines and pulled by one.
+Merging them into a year is the assembler's job, and its rules (disjoint
+windows, disjoint (group, bin) shards, summed ledgers, declared completeness)
+are in `ml/build_family1_stores.py`.
+
 THE PREFIX CARRIES THE FAMILY VERSION, and that is not decoration. Family 10.1
 stores the time as `time_s` (int32 seconds) where family 10 stored `time_days`
 (float32 days), and a v1 part CANNOT be upgraded — float32 days resolve 21-84 s
@@ -119,19 +149,34 @@ def _download(repo, path_in_repo, token, dest_dir):
 
 
 # --------------------------------------------------------------- the paths --
-def hub_prefix(store, year=None, partials=None):
-    """`partials/<family>/<store>[/<year>]`. `partials` defaults to family
-    10's prefix; family 1 passes its own (E-082)."""
+def hub_prefix(store, year=None, partials=None, lane=None):
+    """`partials/<family>/<store>[/<year>[/<lane>]]`.
+
+    `partials` defaults to family 10's prefix; family 1 passes its own
+    (E-082). `lane` is "" or None for the UNNAMED lane, which is the layout
+    every year on the Hub was written with.
+    """
     p = f"{partials or HF_PARTIALS}/{store}"
-    return p if year is None else f"{p}/{year}"
+    if year is None:
+        return p
+    p = f"{p}/{year}"
+    return f"{p}/{lane}" if lane else p
 
 
 def store_root(work, store):
     return os.path.join(os.path.abspath(work), store)
 
 
-def year_dir(work, store, year):
-    return os.path.join(store_root(work, store), "parts", str(year))
+def year_dir(work, store, year, lane=None):
+    """The local folder one year's (or one lane's) parts live in."""
+    d = os.path.join(store_root(work, store), "parts", str(year))
+    return os.path.join(d, lane) if lane else d
+
+
+def part_key(year, lane=None):
+    """The local marker name for a year's parts — `parts/<year>` unnamed,
+    `parts/<year>/<lane>` named. Same rule as `Ctx.part_key`."""
+    return f"parts/{year}/{lane}" if lane else f"parts/{year}"
 
 
 # What a year directory's parts are. `.npz` is a tier-P column part; `.zst`
@@ -163,9 +208,37 @@ def _by_name(done):
     return {e["name"]: e["sha256"] for e in (done or {}).get("files", [])}
 
 
+def hub_lanes(listing, store, year, partials=None):
+    """Which LANES of one year are done on the Hub, in MERGE ORDER.
+
+    Read out of the repository listing rather than asked of the Hub file by
+    file: a path `<year>/done.json` is the unnamed lane, a path
+    `<year>/<lane>/done.json` is that named lane, and anything deeper is not a
+    lane. The unnamed lane comes first, then the named ones in name order —
+    the same order `Ctx.lanes_of` uses locally, so the parts arrive in the
+    order the assembler will walk them.
+
+    An empty answer means the year has no marker at all, which `pull` reports
+    as missing; it never means "the Hub would not tell us" (`read_done` is
+    where that distinction is made and refused).
+    """
+    pre = hub_prefix(store, year, partials) + "/"
+    named, top = set(), False
+    for p in listing or ():
+        if not p.startswith(pre) or not p.endswith("/" + DONE):
+            continue
+        rest = p[len(pre):].split("/")
+        if len(rest) == 1:
+            top = True
+        elif len(rest) == 2:
+            named.add(rest[0])
+    return ([""] if top else []) + sorted(named)
+
+
 def read_done(api, repo, tok, store, year, scratch, listing=None,
-              partials=None):
-    """The year's `done.json` off the Hub, or None if it is NOT THERE.
+              partials=None, lane=None):
+    """The year's (or the lane's) `done.json` off the Hub, or None if it is
+    NOT THERE.
 
     "Not there" means not there: the repo listing does not carry the path, so
     the year was never pushed (or its push did not finish). It does NOT mean
@@ -182,23 +255,24 @@ def read_done(api, repo, tok, store, year, scratch, listing=None,
     With no `listing` in hand there is no way to tell the two apart, so a 404
     is read out of the error text and anything else raises.
     """
-    path = f"{hub_prefix(store, year, partials)}/{DONE}"
+    what = f"{store} {year}" + (f" lane {lane}" if lane else "")
+    path = f"{hub_prefix(store, year, partials, lane)}/{DONE}"
     if listing is not None and path not in listing:
         return None
-    tmp = os.path.join(scratch, f"done_{year}")
+    tmp = os.path.join(scratch, f"done_{year}{('_' + lane) if lane else ''}")
     shutil.rmtree(tmp, ignore_errors=True)
     try:
         p = _download(repo, path, tok, tmp)
         got = read_json(p, None)
         if got is None:
             raise IOError(f"{repo}:{path} downloaded but does not parse as "
-                          f"JSON — the marker for {store} {year} is corrupt")
+                          f"JSON — the marker for {what} is corrupt")
         return got
     except Exception as e:                                    # noqa: BLE001
         if listing is None and _looks_absent(e):
             return None
         raise IOError(
-            f"cannot read {repo}:{path}, the marker for {store} {year}: "
+            f"cannot read {repo}:{path}, the marker for {what}: "
             f"{type(e).__name__}: {e}. The path IS in the repository listing, "
             f"so this is the Hub refusing to serve it (an outage, a rate "
             f"limit, or an HF_TOKEN without read access) and NOT a year that "
@@ -225,28 +299,35 @@ def _looks_absent(exc):
 
 # ==================================================================== push ===
 def push(store, year, work, scratch=None, partials=None, hub=None,
-         private=False):
+         private=False, lane=None):
     """Upload one fetched year's parts, verify by restore, THEN mark it done.
 
     E-082: `partials` (the prefix), `hub` (a callable returning (api, repo,
     token)) and `private` route a family-1 store; left at None/False they
     are family 10's module defaults, and the `_hub` seam the tests replace.
 
-    Refuses a year the local build has not marked: an unmarked year is a year
+    `lane` (E-082 wave 7) uploads ONE LANE'S folder and nothing else: its own
+    parts, its own ledger and its own `done.json`, under
+    `<year>/<lane>/`. Left at None it is the unnamed lane and this writes the
+    year's top-level files exactly as it always did.
+
+    Refuses a lane the local build has not marked: an unmarked lane is a lane
     whose fetch did not finish, and pushing it would publish an over-claiming
     marker to a machine that cannot tell (§5.21).
     """
     year = int(year)
     root = store_root(work, store)
-    d = year_dir(work, store, year)
+    d = year_dir(work, store, year, lane)
+    what = f"{store} {year}" + (f" lane {lane}" if lane else "")
     scratch = scratch or os.path.join(root, "src", "hub")
-    if not marked(root, f"parts/{year}"):
-        sys.exit(f"push refuses {store} {year}: {root}/parts/{year}.done is "
+    key = part_key(year, lane)
+    if not marked(root, key):
+        sys.exit(f"push refuses {what}: {root}/{key}.done is "
                  f"missing, so the fetch of that year did not finish. Refetch "
                  f"it; a marker may only under-claim (ml/CLAUDE.md §5.21).")
     names = local_part_files(d)
     if COUNTS not in names:
-        sys.exit(f"push refuses {store} {year}: no {COUNTS} in {d}")
+        sys.exit(f"push refuses {what}: no {COUNTS} in {d}")
     # SCHEMA FIRST, before a byte is uploaded: a v1 part on this prefix would
     # be pulled by a box months later and assembled into a store claiming
     # seconds it does not have (§0.3 — check the precondition where the inputs
@@ -256,38 +337,39 @@ def push(store, year, work, scratch=None, partials=None, hub=None,
             try:
                 f10.check_part_schema(os.path.join(d, n))
             except ValueError as e:
-                sys.exit(f"push refuses {store} {year}: {e}")
+                sys.exit(f"push refuses {what}: {e}")
+    led = read_json(os.path.join(d, COUNTS), {})
     entries = _entries(d, names)
-    rows = int(read_json(os.path.join(d, COUNTS), {}).get("rows", 0))
+    rows = int(led.get("rows", 0))
     n_parts = sum(1 for n in names if n.endswith(".npz"))
     total = sum(e["bytes"] for e in entries)
 
     api, repo, tok = (hub or _hub)()
     if bool(private) != str(repo).endswith("-private"):
-        sys.exit(f"push refuses {store} {year}: private={bool(private)} and "
+        sys.exit(f"push refuses {what}: private={bool(private)} and "
                  f"the target repository is {repo!r} — a private store's "
                  f"parts go only to a '-private' repository, and a public "
                  f"store's never do (E-082). Nothing was uploaded.")
     api.create_repo(repo, repo_type="dataset", exist_ok=True,
                     private=bool(private))
-    prefix = hub_prefix(store, year, partials)
+    prefix = hub_prefix(store, year, partials, lane)
 
     have = read_done(api, repo, tok, store, year, scratch,
-                     partials=partials)
+                     partials=partials, lane=lane)
     if have is not None and _by_name(have) == {e["name"]: e["sha256"]
                                                for e in entries}:
-        print(f"  {store} {year}: already on the Hub with matching hashes "
+        print(f"  {what}: already on the Hub with matching hashes "
               f"({len(entries)} file(s), {rows:,} row(s)) — nothing to do")
         return 0
 
-    print(f"  {store} {year}: uploading {len(entries)} file(s), "
+    print(f"  {what}: uploading {len(entries)} file(s), "
           f"{total / 1e6:.1f} MB, {rows:,} row(s) -> {repo}:{prefix}/",
           flush=True)
     for i in range(0, len(names), BATCH):
         chunk = names[i:i + BATCH]
         _upload(api, repo,
                 [(f"{prefix}/{n}", os.path.join(d, n)) for n in chunk],
-                f"family 10 partials ({store} {year}): {len(chunk)} file(s)")
+                f"family 10 partials ({what}): {len(chunk)} file(s)")
 
     # RESTORE-VERIFY, file for file, exactly as `stage_publish` does: an upload
     # that returned 200 is not evidence the bytes are retrievable (§0.2).
@@ -303,18 +385,32 @@ def push(store, year, work, scratch=None, partials=None, hub=None,
                      f"trustworthy and no done.json was written")
 
     # THE MARKER IS LAST.
-    done = {"store": store, "year": year, "rows": rows, "n_parts": n_parts,
-            "bytes": total, "files": entries,
-            "builder_git_sha": git_sha(), "at": utcnow()}
-    dp = os.path.join(scratch, f"{DONE}.{year}")
+    done = _done_record(store, year, rows, n_parts, total, entries, lane, led)
+    dp = os.path.join(scratch, f"{DONE}.{year}{('.' + lane) if lane else ''}")
     os.makedirs(scratch, exist_ok=True)
     atomic_json(dp, done)
     _upload(api, repo, [(f"{prefix}/{DONE}", dp)],
-            f"family 10 partials ({store} {year}): done")
+            f"family 10 partials ({what}): done")
     os.remove(dp)
-    print(f"  {store} {year}: pushed and verified — {rows:,} row(s) in "
+    print(f"  {what}: pushed and verified — {rows:,} row(s) in "
           f"{n_parts} part(s), {total / 1e6:.1f} MB, done.json written last")
     return 0
+
+
+def _done_record(store, year, rows, n_parts, total, entries, lane, led):
+    """The marker. A NAMED LANE also records its own name and the window (or
+    group subset) its ledger says it covers, so the folder on the Hub says
+    what it is without anybody having to open a part. The unnamed lane's
+    record is byte for byte the one every year on the Hub already carries."""
+    done = {"store": store, "year": year, "rows": rows, "n_parts": n_parts,
+            "bytes": total, "files": entries,
+            "builder_git_sha": git_sha(), "at": utcnow()}
+    if lane:
+        done["lane"] = lane
+        for k in ("lane_window", "lane_groups"):
+            if (led or {}).get(k) is not None:
+                done[k] = led[k]
+    return done
 
 
 # Across YEARS, one commit carries at most this many files or this many bytes.
@@ -326,7 +422,8 @@ MANY_BYTES = 4 * 1024 ** 3
 
 
 def push_many(store, years, work, scratch=None, partials=None, hub=None,
-              private=False, max_files=MANY_FILES, max_bytes=MANY_BYTES):
+              private=False, max_files=MANY_FILES, max_bytes=MANY_BYTES,
+              lane=None):
     """`push` for a whole lane: every year's parts in as few commits as the
     batch allows, every file restore-verified, and THEN every year's
     `done.json` in one final commit (per `max_files`).
@@ -337,26 +434,34 @@ def push_many(store, years, work, scratch=None, partials=None, hub=None,
     this call came back with its sha256. A failure anywhere leaves no marker
     for any year of the call — the lane is re-run, and years whose parts did
     land are cheap to re-push. Returns the list of years now marked on the Hub.
+
+    `lane` (E-082 wave 7) is ONE NAME for the whole call, because a lane is
+    one fetch of one window: a monthly lane of 2022 pushes `2022/m06/`, and a
+    lane whose window crosses New Year pushes `<year>/<lane>/` for each year
+    it touched. Left at None every year's top-level folder is written, which
+    is what every year on the Hub already holds.
     """
     years = [int(y) for y in years]
     todo = []
     for year in years:
         root = store_root(work, store)
-        d = year_dir(work, store, year)
-        if not marked(root, f"parts/{year}"):
-            sys.exit(f"push refuses {store} {year}: {root}/parts/{year}.done "
+        d = year_dir(work, store, year, lane)
+        what = f"{store} {year}" + (f" lane {lane}" if lane else "")
+        key = part_key(year, lane)
+        if not marked(root, key):
+            sys.exit(f"push refuses {what}: {root}/{key}.done "
                      f"is missing, so the fetch of that year did not finish. "
                      f"Refetch it; a marker may only under-claim "
                      f"(ml/CLAUDE.md §5.21).")
         names = local_part_files(d)
         if COUNTS not in names:
-            sys.exit(f"push refuses {store} {year}: no {COUNTS} in {d}")
+            sys.exit(f"push refuses {what}: no {COUNTS} in {d}")
         for n in names:
             if n.endswith(".npz"):
                 try:
                     f10.check_part_schema(os.path.join(d, n))
                 except ValueError as e:
-                    sys.exit(f"push refuses {store} {year}: {e}")
+                    sys.exit(f"push refuses {what}: {e}")
         todo.append((year, d, names, _entries(d, names)))
     if not todo:
         return []
@@ -373,7 +478,7 @@ def push_many(store, years, work, scratch=None, partials=None, hub=None,
     pending, skipped = [], []
     for year, d, names, entries in todo:
         have = read_done(api, repo, tok, store, year, scratch, listing,
-                         partials=partials)
+                         partials=partials, lane=lane)
         if have is not None and _by_name(have) == {e["name"]: e["sha256"]
                                                    for e in entries}:
             skipped.append(year)
@@ -383,7 +488,7 @@ def push_many(store, years, work, scratch=None, partials=None, hub=None,
         print(f"  {store}: {len(skipped)} year(s) already on the Hub with "
               f"matching hashes — skipped")
     # the parts, batched across years
-    files = [(f"{hub_prefix(store, y, partials)}/{e['name']}",
+    files = [(f"{hub_prefix(store, y, partials, lane)}/{e['name']}",
               os.path.join(d, e["name"]), e["bytes"], y)
              for y, d, _n, ents in pending for e in ents]
     total = sum(f[2] for f in files)
@@ -425,14 +530,15 @@ def push_many(store, years, work, scratch=None, partials=None, hub=None,
     os.makedirs(scratch, exist_ok=True)
     marks = []
     for year, d, names, entries in pending:
-        rows = int(read_json(os.path.join(d, COUNTS), {}).get("rows", 0))
-        done = {"store": store, "year": year, "rows": rows,
-                "n_parts": sum(1 for n in names if n.endswith(".npz")),
-                "bytes": sum(e["bytes"] for e in entries), "files": entries,
-                "builder_git_sha": git_sha(), "at": utcnow()}
-        dp = os.path.join(scratch, f"{DONE}.{year}")
+        led = read_json(os.path.join(d, COUNTS), {})
+        done = _done_record(
+            store, year, int(led.get("rows", 0)),
+            sum(1 for n in names if n.endswith(".npz")),
+            sum(e["bytes"] for e in entries), entries, lane, led)
+        dp = os.path.join(scratch,
+                          f"{DONE}.{year}{('.' + lane) if lane else ''}")
         atomic_json(dp, done)
-        marks.append((f"{hub_prefix(store, year, partials)}/{DONE}", dp))
+        marks.append((f"{hub_prefix(store, year, partials, lane)}/{DONE}", dp))
     for i in range(0, len(marks), max_files):
         chunk = marks[i:i + max_files]
         _upload(api, repo, chunk,
@@ -453,6 +559,14 @@ def pull(store, years, work, allow_missing=False, scratch=None,
 
     Returns (present, missing). A year already on disk whose marker stands and
     whose hashes match the Hub's `done.json` is skipped without downloading.
+
+    EVERY LANE OF THE YEAR COMES BACK (E-082 wave 7): the repository listing
+    says which lanes are done (`hub_lanes`), each is downloaded into its own
+    folder and marked on its own, and a year with no lane at all is missing.
+    A year that was pushed as one unnamed lane — every year on the Hub before
+    this — has exactly one lane, so this is the loop it always was with one
+    more level in it. Whether those lanes ADD UP to the year is the
+    assembler's question, not this one's (`lanes_preflight`).
     """
     years = [int(y) for y in years]
     root = store_root(work, store)
@@ -460,58 +574,69 @@ def pull(store, years, work, allow_missing=False, scratch=None,
     scratch = scratch or os.path.join(root, "src", "hub")
     api, repo, tok = (hub or _hub)()
     listing = _list_files(api, repo, hub_prefix(store, None, partials))
-    present, missing, skipped, rows_total = [], [], 0, 0
+    present, missing, skipped, rows_total, n_lanes = [], [], 0, 0, 0
     for y in years:
-        done = read_done(api, repo, tok, store, y, scratch, listing,
-                         partials=partials)
-        if done is None:
+        lanes = hub_lanes(listing, store, y, partials)
+        if not lanes:
             missing.append(y)
             continue
-        entries = done.get("files") or []
-        d = year_dir(work, store, y)
-        if marked(root, f"parts/{y}") and _local_matches(d, entries):
-            present.append(y)
+        for lane in lanes:
+            n_lanes += 1
+            what = f"{store} {y}" + (f" lane {lane}" if lane else "")
+            done = read_done(api, repo, tok, store, y, scratch, listing,
+                             partials=partials, lane=lane)
+            if done is None:                              # pragma: no cover
+                missing.append(y)
+                break
+            entries = done.get("files") or []
+            d = year_dir(work, store, y, lane)
+            if marked(root, part_key(y, lane)) and _local_matches(d, entries):
+                rows_total += int(done.get("rows", 0))
+                skipped += 1
+                continue
+            # Download into a scratch dir, verify, and only then move the lane
+            # into place and write the marker. A half-downloaded lane must
+            # never be marked (§5.21).
+            suffix = ("_" + lane) if lane else ""
+            tmp = os.path.join(scratch, f"pull_{y}{suffix}")
+            shutil.rmtree(tmp, ignore_errors=True)
+            os.makedirs(tmp, exist_ok=True)
+            got = []
+            for e in entries:
+                p = _download(
+                    repo,
+                    f"{hub_prefix(store, y, partials, lane)}/{e['name']}", tok,
+                    os.path.join(tmp, "dl"))
+                h = sha256(p)
+                if h != e["sha256"]:
+                    sys.exit(f"PULL MISMATCH {what} {e['name']}: done.json "
+                             f"says {e['sha256']}, the Hub served {h}")
+                got.append((e["name"], p))
+            # THE SCHEMA IS CHECKED ON WHAT ARRIVED, not on what the marker
+            # says. `done.json` records names, bytes and sha256 and knows
+            # nothing about the column layout inside a part, so a year pushed
+            # by an older builder verifies perfectly and is still unusable.
+            # Refusing here, before the lane is moved into place and marked,
+            # keeps it a lane that is simply not present rather than one the
+            # assembler has to discover.
+            for n, p in got:
+                if n.endswith(".npz"):
+                    try:
+                        f10.check_part_schema(p)
+                    except ValueError as ex:
+                        sys.exit(f"pull refuses {what}: {ex}")
+            os.makedirs(d, exist_ok=True)
+            for n, p in got:
+                os.replace(p, os.path.join(d, n))
+            shutil.rmtree(tmp, ignore_errors=True)
+            mark(root, part_key(y, lane))
             rows_total += int(done.get("rows", 0))
-            skipped += 1
-            continue
-        # Download into a scratch dir, verify, and only then move the year into
-        # place and write the marker. A half-downloaded year must never be
-        # marked (§5.21).
-        tmp = os.path.join(scratch, f"pull_{y}")
-        shutil.rmtree(tmp, ignore_errors=True)
-        os.makedirs(tmp, exist_ok=True)
-        got = []
-        for e in entries:
-            p = _download(repo,
-                          f"{hub_prefix(store, y, partials)}/{e['name']}", tok,
-                          os.path.join(tmp, "dl"))
-            h = sha256(p)
-            if h != e["sha256"]:
-                sys.exit(f"PULL MISMATCH {store} {y} {e['name']}: done.json "
-                         f"says {e['sha256']}, the Hub served {h}")
-            got.append((e["name"], p))
-        # THE SCHEMA IS CHECKED ON WHAT ARRIVED, not on what the marker says.
-        # `done.json` records names, bytes and sha256 and knows nothing about
-        # the column layout inside a part, so a year pushed by an older builder
-        # verifies perfectly and is still unusable. Refusing here, before the
-        # year is moved into place and marked, keeps it a year that is simply
-        # not present rather than one the assembler has to discover.
-        for n, p in got:
-            if n.endswith(".npz"):
-                try:
-                    f10.check_part_schema(p)
-                except ValueError as ex:
-                    sys.exit(f"pull refuses {store} {y}: {ex}")
-        os.makedirs(d, exist_ok=True)
-        for n, p in got:
-            os.replace(p, os.path.join(d, n))
-        shutil.rmtree(tmp, ignore_errors=True)
-        mark(root, f"parts/{y}")
-        present.append(y)
-        rows_total += int(done.get("rows", 0))
-        print(f"  {store} {y}: {len(entries)} file(s), "
-              f"{int(done.get('rows', 0)):,} row(s) -> {d}")
-    print(f"  pull: {len(present)} year(s) present ({skipped} already local), "
+            print(f"  {what}: {len(entries)} file(s), "
+                  f"{int(done.get('rows', 0)):,} row(s) -> {d}")
+        else:
+            present.append(y)
+    print(f"  pull: {len(present)} year(s) present in {n_lanes} lane(s) "
+          f"({skipped} already local), "
           f"{rows_total:,} row(s), {len(missing)} missing")
     if missing:
         msg = (f"{len(missing)} year(s) have no {DONE} under "
@@ -553,13 +678,17 @@ def status(store, years=None, scratch=None, partials=None, hub=None):
     scratch = scratch or os.path.join(os.path.abspath("."), ".f10status")
     rows_total = bytes_total = 0
     for y in found:
-        done = read_done(api, repo, tok, store, y, scratch, listing,
-                         partials=partials) or {}
-        r, b = int(done.get("rows", 0)), int(done.get("bytes", 0))
-        rows_total += r
-        bytes_total += b
-        print(f"  {store} {y}: rows={r:,} parts={done.get('n_parts')} "
-              f"bytes={b / 1e6:.1f}M at={done.get('at')}")
+        # A YEAR IS THE SUM OF ITS LANES (E-082 wave 7). A year pushed as one
+        # unnamed lane has exactly one, so this prints what it always printed.
+        for lane in hub_lanes(listing, store, y, partials):
+            done = read_done(api, repo, tok, store, y, scratch, listing,
+                             partials=partials, lane=lane) or {}
+            r, b = int(done.get("rows", 0)), int(done.get("bytes", 0))
+            rows_total += r
+            bytes_total += b
+            print(f"  {store} {y}{(' ' + lane) if lane else ''}: rows={r:,} "
+                  f"parts={done.get('n_parts')} "
+                  f"bytes={b / 1e6:.1f}M at={done.get('at')}")
     shutil.rmtree(scratch, ignore_errors=True)
     # The machine-readable line the fetch workflow greps. Keep the prefix and
     # the space separation: `.github/workflows/family10-slatrack-fetch.yml`
@@ -589,9 +718,15 @@ def main(argv=None):
     p.add_argument("--store", required=True)
     p.add_argument("--year", required=True, type=int)
     p.add_argument("--work", required=True)
+    p.add_argument("--lane", default="",
+                   help="the LANE to push (E-082 wave 7): its folder alone "
+                        "goes to <year>/<lane>/. Empty is the unnamed lane — "
+                        "the whole year at the top of the year folder, which "
+                        "is what every year on the Hub holds")
 
     p = sub.add_parser("pull", help="download every requested year's parts "
-                                    "and write the local markers")
+                                    "and write the local markers (every LANE "
+                                    "of every year)")
     p.add_argument("--store", required=True)
     p.add_argument("--years", required=True,
                    help="1993-2024 / 2003,2007 / 1997-1999,2004")
@@ -606,7 +741,7 @@ def main(argv=None):
 
     a = ap.parse_args(argv)
     if a.cmd == "push":
-        return push(a.store, a.year, a.work)
+        return push(a.store, a.year, a.work, lane=a.lane or None)
     if a.cmd == "pull":
         pull(a.store, parse_years(a.years), a.work,
              allow_missing=a.allow_missing)

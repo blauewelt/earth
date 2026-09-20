@@ -174,3 +174,115 @@ note_estimate = {"bytes": ..., "what": ...}
 - A licence the producer has not confirmed carries
   `"redistribution_confirmed": False`; a PUBLIC publish or parts push is then
   refused unless `--allow-unconfirmed-licence` is passed.
+
+## Lanes — several hosted runners for ONE year (E-082 wave 7, 2026-09-20)
+
+A **fetch lane** is one GitHub-hosted runner: six hours, about 86 GB of disk,
+and the only place the Earthdata credentials exist (`ml/CLAUDE.md` §6), so a
+rented box cannot fetch those sources at all. Some stores need **more than one
+lane per year**: a year of ICESat-2's ATL08 is 35 hours of fetching (twelve
+monthly lanes of about three), `gedi` is the same shape, `lai500` is 17.6 hours
+(four quarter-lanes), and `canopy30` / `lossyear` are a single five-day bin
+over 261 and 280 tiles (11–21 hours, so lanes by **tile subset**).
+
+The parts layout used to be one folder per year with **one** index, **one**
+ledger and **one** `done.json`, so two lanes of a year overwrote each other and
+the assembler built a short store with nothing to say so. A lane now has a
+name, and the name is **derived** — no adapter and no workflow input has to
+know about it.
+
+### The name
+
+| what the lane covers | name |
+|---|---|
+| whole calendar year(s) and every group | **the unnamed lane**, `""` |
+| one calendar month | `m06` |
+| one calendar quarter | `q3` |
+| any other window inside a year | `d0701-0930` |
+| any other window across a New Year | `d20220701-20230331` |
+| a subset of a tier-G store's groups | `g-<first 8 hex of sha1 of the sorted group names>` |
+| both a window and a group subset | `m06-g-1a2b3c4d` |
+
+`build_family1_stores.lane_name(d_lo, d_hi, groups)` computes it from
+`--start/--end` and from the adapter's own `group_subset()`; `main` calls
+`apply_lane(ctx)` and sets `ctx.lane`. A test or a smoke that builds its own
+`Ctx` keeps the unnamed lane.
+
+### Where a lane writes
+
+```
+partials/<family>/<store>/<year>/00000.npz      the UNNAMED lane — unchanged
+partials/<family>/<store>/<year>/counts.json    (every store on the Hub)
+partials/<family>/<store>/<year>/done.json
+
+partials/<family>/<store>/<year>/<lane>/00000.npz      a NAMED lane: its own
+partials/<family>/<store>/<year>/<lane>/counts.json    parts, its own shard
+partials/<family>/<store>/<year>/<lane>/done.json      index (tier G), its
+                                                       own ledger, its own
+                                                       marker LAST
+```
+
+Locally that is `ctx.year_dir(year)` → `parts/<year>/<lane>/`, and the marker
+is `ctx.part_key(year)` → `parts/<year>/<lane>.done`. `--push-parts` pushes
+**only the lane's own folder**; `--parts-from-hub` lists the year folder and
+brings back the top-level files as the unnamed lane plus every sub-folder that
+carries a `done.json`.
+
+### What an adapter has to do
+
+Nothing, for a **window** lane: the framework clips the window and the
+adapter's `fetch_year(ctx, year)` already honours `ctx.d_lo`/`ctx.d_hi` (a
+tier-G adapter honours `ctx.grid_wanted(year)`, which the framework narrows).
+
+For a **group-subset** lane, a tier-G adapter that can be restricted to some
+of its groups implements one hook:
+
+```python
+def group_subset(self):
+    """The groups THIS instance covers, or None for the whole product."""
+    return sorted(self.group_grids()) if self._subset else None
+```
+
+`canopy30` and `lossyear` implement it from `CANOPY30_TILES` /
+`LOSSYEAR_TILES`. It is deliberately **opt-in**: a knob that chooses *which
+product* to build (`LST05_GROUPS` picks a satellite, `LAI500_GROUPS` picks
+Terra or Aqua) selects a whole store rather than a subset of one, and a store
+already on the Hub must not acquire a lane because of one.
+
+### What the assembler does, and what it refuses
+
+- It **merges** the lanes of each year: tier P concatenates their parts in
+  merge order (unnamed first, then named in name order) and the defining
+  `(bin, time_s)` sort does the rest; tier G unions their shard indices.
+- It **refuses** two lanes of a year that cover the same thing — overlapping
+  windows over intersecting group sets, a named lane standing beside the
+  unnamed one (which *is* the whole year), or two lanes holding the same
+  `(group, bin)` shard.
+- It **sums** their ledgers: `rows`, the per-group frame counts, and every
+  counter through `_merge_counts`.
+- It records `lanes_by_year` in `store.json` — the lanes assembled, whether
+  the build declared which to expect, and any declared lane that is missing.
+  The key is **absent** when every year is one unnamed lane, so every store
+  built before this keeps exactly the store.json it had.
+
+### Completeness is declared, never assumed
+
+`--lanes months` (or `quarters`, or a comma list) writes `lanes_expected` into
+`plan.json` at the `index` stage. The assembler then **refuses** a year whose
+declared lanes did not all arrive; `--allow-missing-years` builds it anyway
+and names the missing lanes in `store.json`'s `degraded` and `lanes_by_year`.
+With no declaration the assembler takes the lanes it finds and says so — a
+`::warning::` in the log and `"declared": false` in `store.json`. Never
+silently.
+
+### One rule a tier-G lane has to obey
+
+A five-day bin does not respect a month or a quarter boundary, so a named
+tier-G lane owns **the bins whose FIRST day falls in its window** — the same
+rule a year already follows (`bin_year` is the year of the bin's first day).
+Twelve monthly lanes therefore tile a year exactly once; a window that
+contains no bin start at all is refused rather than fetching nothing. Note
+the consequence: the bin that straddles New Year belongs to the PREVIOUS
+year, so a laned year covers slightly less than an unlaned `--start
+<year>-01-01` build, which reaches back into that bin and files it under the
+previous year.

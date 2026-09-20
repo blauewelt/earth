@@ -1282,3 +1282,28 @@ shape; consolidating them is named in both docstrings.
    so every store on the Hub reads unchanged. That is the next framework
    task; until it lands, `icesat2`, `gedi`, `lai500` beyond one lane-year and
    the single-bin `canopy30` / `lossyear` are box jobs or wait.
+
+### The lane-aware parts layout, landed 2026-09-20 ~19:30Z (E-082 wave 7)
+
+A lane inside a year is now a NAMED lane. `start=2022-06-01 end=2022-06-30`
+writes lane `m06` of 2022 under `partials/<family>/<store>/2022/m06/` — its
+own parts, shard index, `counts.json` (with `lane`, `lane_window`,
+`lane_groups`) and `done.json` last; quarters are `q1`–`q4`, any window
+`d0701-0930`, a group subset `g-<sha1[:8] of the sorted group list>`
+(`CANOPY30_TILES`, `LOSSYEAR_TILES` implement the `group_subset()` hook). A
+whole-year lane is the unnamed lane and writes exactly what was written
+before, so every part and store on the Hub reads unchanged (pinned:
+`tests/test_family1_lanes.py`, 15 tests; the whole suite 624 passed). The
+assembler merges the lanes of a year — union of shard indices, concatenated
+parts, summed ledgers — and REFUSES a declared lane that never arrived
+(`--lanes months|quarters|<list>` declares; without a declaration store.json
+says `declared: false` and the log warns), two lanes holding the same
+(group, bin) shard, overlapping windows over intersecting groups, or a named
+lane beside the unnamed one. `store.json` gains `lanes_by_year` only when a
+year was laned. Two facts the code taught: a five-day bin does not respect a
+month boundary, so a named tier-G lane owns the bins whose FIRST day falls in
+its window (the four 2020 quarters own bins 2776–2848, disjoint, exactly the
+year's 73), and therefore a laned tier-G assembly starts on the year's first
+bin start (`--start 2020-01-02` for 2020) or carries `--allow-missing-years`;
+and a product-selecting knob (`LST05_GROUPS`, `LAI500_GROUPS`) is not a group
+subset and does not name a lane.

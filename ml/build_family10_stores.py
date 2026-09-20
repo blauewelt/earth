@@ -3604,6 +3604,23 @@ class Ctx:
         self.prog = Progress(self.root)
         self._cmems_missions = None
         self.socat_columns = None
+        # THE LANE (E-082 wave 7). A fetch lane is one GitHub-hosted runner:
+        # six hours and about 86 GB. Some stores need MORE THAN ONE LANE PER
+        # YEAR — a year of ICESat-2's ATL08 is 35 hours of fetching, so it goes
+        # as twelve monthly lanes — and until now the parts layout was one
+        # folder per year with one index, one ledger and one `done.json`, so
+        # two lanes writing the same year overwrote each other and the
+        # assembler built a short store with nothing to say so.
+        #
+        # A lane has a NAME derived from what it covers (`m06`, `q3`,
+        # `d0701-0930`, `g-<hash>`; `ml/build_family1_stores.lane_name`), and a
+        # named lane writes under `parts/<year>/<lane>/`. THE UNNAMED LANE —
+        # `lane = ""`, a whole year with no group subset — writes exactly what
+        # was always written, at the top level of the year folder, which is why
+        # every store and every part already on the Hub reads unchanged.
+        # Family 10 never names a lane.
+        self.lane = ""
+        self.lane_groups = []
         # EVERY INPUT AN ADAPTER COULD NOT READ, collected here and answered by
         # `stage_fetch` — the family-7 shape (commit fd3b446). An adapter never
         # decides what a missing input means: it NAMES the unit it could not
@@ -3633,8 +3650,80 @@ class Ctx:
                 out.add(int(m.group(1)))
         return out
 
-    def year_dir(self, year):
-        return os.path.join(self.parts, str(year))
+    def year_dir(self, year, lane=None):
+        """Where one year's parts live.
+
+        `parts/<year>` for the unnamed lane — the path this has always
+        returned — and `parts/<year>/<lane>` for a named one. `lane` defaults
+        to this context's own `self.lane`, so a fetch writes its lane and
+        nothing else has to know about lanes at all.
+        """
+        d = os.path.join(self.parts, str(year))
+        lane = self.lane if lane is None else lane
+        return os.path.join(d, lane) if lane else d
+
+    def part_key(self, year, lane=None):
+        """The MARKER NAME for one year's parts.
+
+        `parts/<year>` unnamed, `parts/<year>/<lane>` named — so the marker
+        file sits beside the directory it describes in both cases
+        (`parts/2022.done` next to `parts/2022/`, `parts/2022/m06.done` next
+        to `parts/2022/m06/`), and a marker still only ever appears after the
+        data it describes (ml/CLAUDE.md §5.21).
+        """
+        lane = self.lane if lane is None else lane
+        return f"parts/{year}/{lane}" if lane else f"parts/{year}"
+
+    def lanes_of(self, year):
+        """The lanes of one year ON DISK, in MERGE ORDER.
+
+        The unnamed lane first — the year folder's own top-level files, which
+        is everything built before E-082 wave 7 — then every named lane in
+        name order. A year folder with no sub-directory answers `[""]`, so a
+        store that never had a lane walks exactly the paths it always walked;
+        and a context that IS one lane (a fetch) answers with that lane alone.
+
+        A sub-directory of a year folder is a lane and nothing else ever
+        writes one there: `PartWriter` writes numbered `.npz` files, the
+        tier-G fetch writes flat shard and index files, and the Hub pull
+        writes whatever `done.json` lists.
+        """
+        if self.lane:
+            return [self.lane]
+        d = os.path.join(self.parts, str(year))
+        if not os.path.isdir(d):
+            return [""]
+        names = sorted(os.listdir(d))
+        named = [n for n in names if os.path.isdir(os.path.join(d, n))]
+        if not named:
+            return [""]
+        # A NAMED LANE'S OWN MARKER (`parts/<year>/<lane>.done`) is a file at
+        # the top of the year folder and is not evidence of the unnamed lane;
+        # the unnamed lane's marker is `parts/<year>.done`, one level up.
+        top = (any(os.path.isfile(os.path.join(d, n)) and
+                   not n.endswith(".done") for n in names)
+               or marked(self.root, f"parts/{year}"))
+        return ([""] if top else []) + named
+
+    def lane_ledger(self, year):
+        """What a NAMED lane adds to its own `counts.json`, and nothing at all
+        for the unnamed one — so every ledger already on the Hub is
+        byte-identical to what this writes today.
+
+        `lane` is the name, `lane_window` is the part of THIS year the lane
+        covers (the build's window clipped to the year), `lane_groups` the
+        group subset where there is one. The assembler reads all three: two
+        lanes' windows may not overlap, two lanes may not hold the same
+        (group, bin) shard, and the list of lanes goes into store.json.
+        """
+        if not self.lane:
+            return {}
+        lo = max(self.d_lo, dt.date(int(year), 1, 1))
+        hi = min(self.d_hi, dt.date(int(year), 12, 31))
+        out = {"lane": self.lane, "lane_window": [str(lo), str(hi)]}
+        if self.lane_groups:
+            out["lane_groups"] = sorted(self.lane_groups)
+        return out
 
     # -- E-082: bytes off the network, for the probe ------------------------
     @property
@@ -3709,10 +3798,13 @@ class PartWriter:
         """Write what is left, the year's counts, and only THEN the marker."""
         self.flush()
         os.makedirs(self.dir, exist_ok=True)
-        atomic_json(os.path.join(self.dir, "counts.json"),
-                    {"year": self.year, "rows": self.n, "parts": self.seq,
-                     "counts": self.counts, "at": utcnow()})
-        mark(self.ctx.root, f"parts/{self.year}")
+        led = {"year": self.year, "rows": self.n, "parts": self.seq,
+               "counts": self.counts, "at": utcnow()}
+        # EMPTY for the unnamed lane, so this ledger is byte for byte the one
+        # every year on the Hub already carries (E-082 wave 7).
+        led.update(self.ctx.lane_ledger(self.year))
+        atomic_json(os.path.join(self.dir, "counts.json"), led)
+        mark(self.ctx.root, self.ctx.part_key(self.year))
         return self.n
 
 
@@ -3754,9 +3846,10 @@ def read_parts(ctx):
             yield y, {k: z[k] for k in ROW_KEYS}
 
 
-def year_part_names(ctx, y):
-    """The `.npz` files a year directory holds, sorted. Never a marker read."""
-    d = ctx.year_dir(y)
+def year_part_names(ctx, y, lane=None):
+    """The `.npz` files a year's LANE directory holds, sorted. Never a marker
+    read. `lane` defaults to the context's own (E-082 wave 7)."""
+    d = ctx.year_dir(y, lane)
     if not os.path.isdir(d):
         return []
     return sorted(n for n in os.listdir(d) if n.endswith(".npz"))
@@ -3790,38 +3883,50 @@ def parts_preflight(ctx):
     rather than assembled into a store that would claim a precision it does not
     have (`f10.check_part_schema`). `--allow-missing-years` does NOT admit it:
     the flag says "a short store is what I want", never "a wrong one".
+
+    AND A FIFTH, ADDED WITH E-082 WAVE 7: every check below is now made PER
+    LANE, because a year can be several lanes (`Ctx.lanes_of`). A year of one
+    unnamed lane — every store built before wave 7 — takes exactly the path it
+    always took; the lanes' own completeness is `lanes_preflight`'s question.
     """
     allow = bool(getattr(ctx.a, "allow_missing_years", False))
-    bad, degraded = [], []
+    bad, degraded = [], list(lanes_preflight(ctx))
     for y in ctx.years:
-        npz = year_part_names(ctx, y)
-        for n in npz:
-            # Reads the npz's zip directory only — a seek, on a part that may
-            # be a gigabyte.
-            f10.check_part_schema(os.path.join(ctx.year_dir(y), n))
-        # `read_json` answers a missing file and an unparseable one with {},
-        # so presence is asked of the filesystem: a counts.json that exists and
-        # does not parse must NOT read as "no ledger here" and be skipped.
-        cp = os.path.join(ctx.year_dir(y), "counts.json")
-        c = read_json(cp, {}) if os.path.exists(cp) else None
-        m = marked(ctx.root, f"parts/{y}")
-        if not npz and c is None and not m:
-            continue                       # never fetched; the stage said so
-        if not m:
-            msg = (f"{y}: {len(npz)} part file(s) in {ctx.year_dir(y)} and no "
-                   f"{marker(ctx.root, f'parts/{y}')} — the fetch of that year "
-                   f"did not finish, so these parts are a PREFIX of the year")
-            (degraded if allow else bad).append(msg)
-            continue
-        if c is None:
-            bad.append(f"{y}: marked done with no counts.json — the marker was "
-                       f"written without the ledger it is supposed to describe")
-            continue
-        want = int(c.get("parts", -1))
-        if want != len(npz):
-            bad.append(f"{y}: counts.json says {want} part(s), "
-                       f"{ctx.year_dir(y)} holds {len(npz)} "
-                       f"({', '.join(npz[:4])}{' …' if len(npz) > 4 else ''})")
+        for lane in ctx.lanes_of(y):
+            where = f"{y} lane {lane}" if lane else f"{y}"
+            npz = year_part_names(ctx, y, lane)
+            for n in npz:
+                # Reads the npz's zip directory only — a seek, on a part that
+                # may be a gigabyte.
+                f10.check_part_schema(os.path.join(ctx.year_dir(y, lane), n))
+            # `read_json` answers a missing file and an unparseable one with
+            # {}, so presence is asked of the filesystem: a counts.json that
+            # exists and does not parse must NOT read as "no ledger here" and
+            # be skipped.
+            cp = os.path.join(ctx.year_dir(y, lane), "counts.json")
+            c = read_json(cp, {}) if os.path.exists(cp) else None
+            key = ctx.part_key(y, lane)
+            m = marked(ctx.root, key)
+            if not npz and c is None and not m:
+                continue                   # never fetched; the stage said so
+            if not m:
+                msg = (f"{where}: {len(npz)} part file(s) in "
+                       f"{ctx.year_dir(y, lane)} and no "
+                       f"{marker(ctx.root, key)} — the fetch of that year did "
+                       f"not finish, so these parts are a PREFIX of the year")
+                (degraded if allow else bad).append(msg)
+                continue
+            if c is None:
+                bad.append(f"{where}: marked done with no counts.json — the "
+                           f"marker was written without the ledger it is "
+                           f"supposed to describe")
+                continue
+            want = int(c.get("parts", -1))
+            if want != len(npz):
+                bad.append(f"{where}: counts.json says {want} part(s), "
+                           f"{ctx.year_dir(y, lane)} holds {len(npz)} "
+                           f"({', '.join(npz[:4])}"
+                           f"{' …' if len(npz) > 4 else ''})")
     if bad:
         sys.exit(
             f"REFUSING to assemble {ctx.adapter.store}: the parts on disk do "
@@ -3837,6 +3942,180 @@ def parts_preflight(ctx):
             print(f"  ::warning::{m} — --allow-missing-years admits it")
         ctx.degraded_years = degraded
     return degraded
+
+
+# ------------------------------------------------------------- the lanes ----
+# E-082 wave 7. A year can be SEVERAL LANES, and the three things that can go
+# wrong with that are the three things checked here. None of them is a
+# judgement the framework makes on its own: the first is answered by what the
+# build DECLARED at `index`, the second by what the lanes' ledgers say they
+# cover, and the third — a year whose completeness nobody declared — is
+# announced rather than assumed, because "whatever lanes happen to be there"
+# is exactly the short store this whole layout exists to make impossible.
+def lanes_preflight(ctx):
+    """The lanes of each year, against the plan and against each other.
+
+    THREE ANSWERS, AND NONE OF THEM IS SILENCE.
+
+      * A year whose `plan.json` carries `lanes_expected` and whose lanes are
+        not all present is REFUSED — unless `--allow-missing-years` names the
+        degrade, and then the missing lanes are recorded BY NAME so store.json
+        says which ones. This is what makes COMPLETENESS A DECLARATION rather
+        than an assumption: a dispatch that says "twelve monthly lanes" cannot
+        assemble eleven of them and call it 2022.
+      * Two lanes of one year whose WINDOWS OVERLAP are REFUSED, because their
+        rows would be counted twice; and a named lane that coexists with the
+        unnamed one is refused for the same reason — the unnamed lane IS the
+        whole year, which is what makes it unnamed.
+      * A year that has named lanes and declares nothing is ACCEPTED and
+        WARNED about, in the log and in store.json's `lanes_by_year`.
+
+    Returns the degrade messages (they join store.json's `degraded`). A year
+    of one unnamed lane declares nothing, overlaps nothing and warns about
+    nothing, so every store built before wave 7 passes through untouched.
+    """
+    allow = bool(getattr(ctx.a, "allow_missing_years", False))
+    declared = (read_json(os.path.join(ctx.root, "plan.json"), {})
+                .get("lanes_expected") or {})
+    bad, degraded, undeclared = [], [], []
+    for y in ctx.years:
+        lanes = ctx.lanes_of(y)
+        want = [str(n) for n in (declared.get(str(y)) or [])]
+        if want:
+            miss = [n for n in want if n not in lanes]
+            extra = [n for n in lanes if n and n not in want]
+            if miss:
+                msg = (f"{y}: the build declared lane(s) {', '.join(want)} and "
+                       f"{len(miss)} of them never arrived: {', '.join(miss)}")
+                (degraded if allow else bad).append(msg)
+            if extra:
+                print(f"  ::warning::{y}: lane(s) {', '.join(extra)} are on "
+                      f"disk and were not declared — they are assembled, and "
+                      f"store.json records both lists")
+        elif any(lanes):
+            undeclared.append(y)
+        if len(lanes) < 2:
+            continue
+        # TWO LANES MAY NOT COVER THE SAME THING. A lane covers a WINDOW and a
+        # set of GROUPS, and it is only a collision when both overlap: two
+        # tile-subset lanes of `canopy30` share a window and are disjoint in
+        # groups, two monthly lanes share every group and are disjoint in
+        # time, and either is fine. A lane with no group list covers all of
+        # them, and the UNNAMED lane has neither a window nor a group list
+        # because it is the whole year — which is why it cannot stand beside a
+        # named one.
+        spans = []
+        for lane in lanes:
+            c = read_json(os.path.join(ctx.year_dir(y, lane), "counts.json"),
+                          {})
+            w = c.get("lane_window")
+            g = c.get("lane_groups")
+            spans.append((lane, tuple(w) if w and len(w) == 2 else None,
+                          set(g) if g else None))
+        for i, (la, wa, ga) in enumerate(spans):
+            for lb, wb, gb in spans[i + 1:]:
+                if ga is not None and gb is not None and not (ga & gb):
+                    continue
+                if wa is None or wb is None:
+                    bad.append(
+                        f"{y}: lane {la or '(the unnamed lane)'} and lane "
+                        f"{lb or '(the unnamed lane)'} are both present and "
+                        f"the unnamed lane covers the WHOLE year — two lanes "
+                        f"whose windows overlap would count the same rows "
+                        f"twice")
+                elif wa[0] <= wb[1] and wb[0] <= wa[1]:
+                    bad.append(f"{y}: lane {la} covers {wa[0]}..{wa[1]} and "
+                               f"lane {lb} covers {wb[0]}..{wb[1]} over the "
+                               f"same group(s) — the two windows overlap, so "
+                               f"their rows would be counted twice")
+    if bad:
+        sys.exit(
+            f"REFUSING to assemble {ctx.adapter.store}: the lanes of a year do "
+            f"not add up to that year.\n  " + "\n  ".join(bad) +
+            f"\nA lane is named after the part of the year it covers "
+            f"(partials/<family>/<store>/<year>/<lane>/); re-run the missing "
+            f"lane with the same --work value, or pass --allow-missing-years "
+            f"to assemble a deliberately short store that names the lanes it "
+            f"is missing.")
+    if undeclared:
+        print(f"  ::warning::{ctx.adapter.store}: year(s) "
+              f"{', '.join(str(y) for y in undeclared)} were assembled from "
+              f"the lanes that happened to be on disk — the build declared no "
+              f"`lanes_expected`, so NOTHING says whether those years are "
+              f"whole. Pass --lanes at `index` to declare them; store.json "
+              f"records `declared: false` either way.")
+    return degraded
+
+
+def lanes_meta(ctx):
+    """store.json's `lanes_by_year`, or None when every year is ONE UNNAMED
+    LANE — which is every store built before E-082 wave 7, so those stores'
+    store.json keeps exactly the keys it had.
+
+    Per year: the lanes assembled, whether the build DECLARED which lanes it
+    expected, the declared list, and the declared lanes that never arrived (a
+    `--allow-missing-years` degrade, named).
+    """
+    declared = (read_json(os.path.join(ctx.root, "plan.json"), {})
+                .get("lanes_expected") or {})
+    per, any_named = {}, False
+    for y in ctx.years:
+        lanes = ctx.lanes_of(y)
+        if any(lanes):
+            any_named = True
+        want = [str(n) for n in (declared.get(str(y)) or [])]
+        rec = {"lanes": list(lanes), "declared": bool(want)}
+        if want:
+            rec["expected"] = want
+            miss = [n for n in want if n not in lanes]
+            if miss:
+                rec["missing"] = miss
+        per[str(y)] = rec
+    if not any_named:
+        return None
+    return per
+
+
+def parse_lanes(spec, years):
+    """`--lanes` -> `{year: [lane names]}`, the build's DECLARATION of which
+    lanes each of its years will be fetched by.
+
+    Three forms, and nothing is guessed from what happens to be on disk:
+      months     m01 … m12 for every year of the build (twelve hosted lanes)
+      quarters   q1 … q4
+      a comma list of lane names, applied to every year of the build.
+
+    An empty spec declares nothing, which is the default and the old
+    behaviour: the assembler then takes the lanes it finds and says in
+    store.json that nobody declared what to expect.
+    """
+    spec = str(spec or "").strip()
+    if not spec:
+        return {}
+    if spec == "months":
+        names = [f"m{m:02d}" for m in range(1, 13)]
+    elif spec == "quarters":
+        names = [f"q{q}" for q in range(1, 5)]
+    else:
+        names = [x.strip() for x in spec.split(",") if x.strip()]
+        bad = [n for n in names if not re.fullmatch(r"[a-z0-9][a-z0-9-]*", n)]
+        if bad or not names:
+            sys.exit(f"--lanes {spec!r}: expected `months`, `quarters`, or a "
+                     f"comma list of lane names made of lower-case letters, "
+                     f"digits and hyphens{f' — {bad} is not one' if bad else ''}")
+    return {str(y): list(names) for y in years}
+
+
+LANES_NOTE = (
+    "E-082 wave 7: a year can be fetched by SEVERAL LANES, one hosted runner "
+    "each, and each lane writes its own parts, index, ledger and done.json "
+    "under partials/<family>/<store>/<year>/<lane>/. `lanes` is what this "
+    "store was assembled from, in merge order; \"\" is the unnamed lane (the "
+    "whole year at the top level of the year folder, the only layout there "
+    "was before this). `declared` says whether the build named the lanes it "
+    "expected (--lanes, plan.json's lanes_expected); where it is false, "
+    "nothing declared that the year is whole. `missing` lists declared lanes "
+    "that never arrived and is only ever written under --allow-missing-years.")
 
 
 # ================================================================== stages ===
@@ -3857,12 +4136,21 @@ def stage_index(ctx):
         "years": ctx.years,
         "builder_git_sha": git_sha(), "built_at": utcnow(),
     })
+    # WHICH LANES THIS BUILD EXPECTS, declared here where the plan is written
+    # and read by the assembler, which refuses a year whose declared lanes did
+    # not all arrive (E-082 wave 7). Absent when nothing was declared, which
+    # is family 10 always and family 1 by default, so plan.json is unchanged.
+    lanes = parse_lanes(getattr(ctx.a, "lanes", ""), ctx.years)
+    if lanes:
+        plan["lanes_expected"] = lanes
     atomic_json(os.path.join(ctx.root, "plan.json"), plan)
     ctx.prog.item("plan.json", 1, {"years": len(ctx.years)})
     mark(ctx.root, "index")
     print(f"  index: {ad.store} — {len(ctx.years)} year(s), C={ad.C} "
           f"({', '.join(ad.channel_names[:8])}"
-          f"{' …' if ad.C > 8 else ''}), bins {ctx.b_lo}..{ctx.b_hi}")
+          f"{' …' if ad.C > 8 else ''}), bins {ctx.b_lo}..{ctx.b_hi}"
+          + (f", lanes expected per year: {', '.join(lanes[str(ctx.years[0])])}"
+             if lanes and ctx.years else ""))
     return plan
 
 
@@ -3892,7 +4180,7 @@ def stage_fetch(ctx, assemble_store_after=True):
     elif ad.per_year:
         ctx.prog.stage_start(f"fetch {ad.store}", len(ctx.years))
         for i, y in enumerate(ctx.years, 1):
-            if marked(ctx.root, f"parts/{y}") and not ctx.a.force:
+            if marked(ctx.root, ctx.part_key(y)) and not ctx.a.force:
                 print(f"  {y}: already fetched — skipping")
                 continue
             # A RE-FETCH STARTS FROM AN EMPTY YEAR. `PartWriter` numbers its
@@ -3903,7 +4191,7 @@ def stage_fetch(ctx, assemble_store_after=True):
             # branch below has always done this; the per-year branch now does
             # too.
             shutil.rmtree(ctx.year_dir(y), ignore_errors=True)
-            mp = marker(ctx.root, f"parts/{y}")
+            mp = marker(ctx.root, ctx.part_key(y))
             if os.path.exists(mp):
                 os.remove(mp)
             t0 = time.time()
@@ -3937,13 +4225,13 @@ def stage_fetch(ctx, assemble_store_after=True):
         # ONE PASS, ALL YEARS. The marker is written for every year only after
         # the stream has run to its end, so an interrupted pass re-reads the
         # file rather than leaving a half-filled year marked done.
-        done = all(marked(ctx.root, f"parts/{y}") for y in ctx.years)
+        done = all(marked(ctx.root, ctx.part_key(y)) for y in ctx.years)
         if done and not ctx.a.force:
             print(f"  {ad.store}: every year already fetched — skipping")
         else:
             for y in ctx.years:
                 shutil.rmtree(ctx.year_dir(y), ignore_errors=True)
-                p = marker(ctx.root, f"parts/{y}")
+                p = marker(ctx.root, ctx.part_key(y))
                 if os.path.exists(p):
                     os.remove(p)
             ctx.prog.stage_start(f"fetch {ad.store} (one stream)", 0)
@@ -4174,29 +4462,42 @@ def _channel_stats(values, channels, N, chunk=STAT_CHUNK):
 
 
 def _part_paths(ctx):
-    """Every part file, in `read_parts` order: years ascending, names sorted.
+    """Every part file, in `read_parts` order: years ascending, lanes in merge
+    order, names sorted.
 
     THE ORDER IS THE CONTRACT — it is the tie-break of the store's defining
     sort, so both assemblers must walk the parts through this one function.
+    Lanes do not disturb it: `lanes_preflight` has already refused two lanes
+    of a year whose windows overlap, so no two lanes can hold rows sharing a
+    (bin, time_s) and the tie-break never has to choose between them.
     """
     out = []
     for y in ctx.years:
-        d = ctx.year_dir(y)
-        if not os.path.isdir(d):
-            continue
-        for n in sorted(os.listdir(d)):
-            if n.endswith(".npz"):
-                out.append((y, os.path.join(d, n)))
+        for lane in ctx.lanes_of(y):
+            d = ctx.year_dir(y, lane)
+            if not os.path.isdir(d):
+                continue
+            for n in sorted(os.listdir(d)):
+                if n.endswith(".npz"):
+                    out.append((y, os.path.join(d, n)))
     return out
 
 
 def _part_ledgers(ctx):
-    """per_year row counts from counts.json (cheap), and the merged counters."""
+    """per_year row counts from counts.json (cheap), and the merged counters.
+
+    A year's number is the SUM over its lanes, and its counters are the lanes'
+    counters merged — `_merge_counts` is what the fetch already uses to fold
+    one part's counters into a year's.
+    """
     per_year, counts_all = {}, {}
     for y in ctx.years:
-        c = read_json(os.path.join(ctx.year_dir(y), "counts.json"), {})
-        per_year[y] = int(c.get("rows", 0))
-        _merge_counts(counts_all, c.get("counts") or {})
+        per_year[y] = 0
+        for lane in ctx.lanes_of(y):
+            c = read_json(os.path.join(ctx.year_dir(y, lane), "counts.json"),
+                          {})
+            per_year[y] += int(c.get("rows", 0))
+            _merge_counts(counts_all, c.get("counts") or {})
     return per_year, counts_all
 
 
@@ -4401,8 +4702,10 @@ def assemble_store(ctx):
         per_year[y] = per_year.get(y, 0) + int(len(d["bin"]))
     for y in ctx.years:
         per_year.setdefault(y, 0)
-        c = read_json(os.path.join(ctx.year_dir(y), "counts.json"), {})
-        _merge_counts(counts_all, c.get("counts") or {})
+        for lane in ctx.lanes_of(y):
+            c = read_json(os.path.join(ctx.year_dir(y, lane), "counts.json"),
+                          {})
+            _merge_counts(counts_all, c.get("counts") or {})
 
     if parts["bin"]:
         cat = {k: np.concatenate(v, axis=0) for k, v in parts.items()}
@@ -4456,13 +4759,23 @@ def _check_year_ledgers(ctx, per_year):
     from the loss, which is why this compares against a record written earlier.
 
     Both assemblers reach this through `_finish_store`, so neither can skip it.
+
+    A LANED YEAR is compared as one number: the sum of its lanes' ledgers
+    against the rows all its lanes' parts hold. A lane with no ledger is
+    `parts_preflight`'s refusal, not this one's, so a year with any ledger at
+    all is compared and a year with none is skipped exactly as before.
     """
     bad = []
     for y in ctx.years:
-        cp = os.path.join(ctx.year_dir(y), "counts.json")
-        if not os.path.exists(cp):
-            continue                       # `parts_preflight` has ruled on it
-        want = int(read_json(cp, {}).get("rows", -1))
+        want, seen = 0, False
+        for lane in ctx.lanes_of(y):
+            cp = os.path.join(ctx.year_dir(y, lane), "counts.json")
+            if not os.path.exists(cp):
+                continue                   # `parts_preflight` has ruled on it
+            seen = True
+            want += int(read_json(cp, {}).get("rows", -1))
+        if not seen:
+            continue
         got = int(per_year.get(y, 0))
         if want != got:
             bad.append(f"{y}: counts.json says {want:,} row(s), the parts hold "
@@ -4605,6 +4918,14 @@ def _finish_store(ctx, dest, files, N, off, bin_first, bin_last, n_bins,
             meta[k if k != "family" else "family_code"] = getattr(ad, k)
     if platforms_meta is not None:
         meta["platforms"] = platforms_meta
+    # WHICH LANES THIS STORE WAS ASSEMBLED FROM, and whether anybody declared
+    # which ones to expect. Absent — and store.json therefore unchanged — when
+    # every year is one unnamed lane, which is every store built before E-082
+    # wave 7.
+    lanes = lanes_meta(ctx)
+    if lanes is not None:
+        meta["lanes_by_year"] = lanes
+        meta["lanes_note"] = LANES_NOTE
     if ad.notes:
         meta["notes"] = ad.notes
     meta.update(ad.extra_meta(ctx, dest, N, values) or {})

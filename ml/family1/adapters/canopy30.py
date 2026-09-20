@@ -474,6 +474,13 @@ class Canopy30Adapter(sh.GridAdapter):
         for t in want:
             tile_corner(t)                       # refuses a bad name
         self.tiles = want or list(TILES_2020)
+        # A TILE SUBSET IS A LANE (E-082 wave 7). One bin, 261 tiles and 11 to
+        # 21 hours of fetching do not fit a six-hour hosted runner, so the
+        # store is fetched as several lanes chosen by `CANOPY30_TILES`, each
+        # writing `partials/<family>/canopy30/<year>/g-<hash>/` and each
+        # recording its own tile list in its ledger. The assembler merges
+        # them and refuses any (group, bin) two lanes both claim.
+        self._subset = list(want) or None
         self._listing = None
         if want:
             self.notes = (
@@ -486,6 +493,13 @@ class Canopy30Adapter(sh.GridAdapter):
             self.notes = (f"{self.notes}\nSMOKE GRID: CANOPY30_SMOKE_PX set "
                           f"each tile to {self.px} x {self.px} instead of "
                           f"{PX} x {PX}. This is a synthetic store.")
+
+    def group_subset(self):
+        """The groups this run covers when `CANOPY30_TILES` restricted it —
+        the framework's lane name comes from this list (E-082 wave 7)."""
+        if not self._subset:
+            return None
+        return sorted(self.group_grids())
 
     # ------------------------------------------------------------ the grid --
     def group_grids(self):

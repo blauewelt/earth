@@ -431,6 +431,11 @@ class LossyearAdapter(sh.GridAdapter):
         for t in want:
             tile_corner(t)                       # refuses a bad name
         self.tiles = want or list(TILES_WITH_LOSSYEAR)
+        # A TILE SUBSET IS A LANE (E-082 wave 7), the same as `canopy30`: one
+        # bin, 280 tiles and far more than a six-hour hosted runner, so the
+        # store is fetched as several lanes chosen by `LOSSYEAR_TILES`, each
+        # writing `partials/<family>/lossyear/<year>/g-<hash>/`.
+        self._subset = list(want) or None
         self._listing = None
         if want:
             self.notes = (
@@ -442,6 +447,13 @@ class LossyearAdapter(sh.GridAdapter):
             self.notes = (f"{self.notes}\nSMOKE GRID: LOSSYEAR_SMOKE_PX set "
                           f"each Hansen tile to {self.px} x {self.px} instead "
                           f"of {PX} x {PX}. This is a synthetic store.")
+
+    def group_subset(self):
+        """The groups this run covers when `LOSSYEAR_TILES` restricted it —
+        the framework's lane name comes from this list (E-082 wave 7)."""
+        if not self._subset:
+            return None
+        return sorted(self.group_grids())
 
     # ------------------------------------------------------------ the grid --
     def group_grids(self):

@@ -21,6 +21,41 @@
 #       year under partials/<family>/<store>/<year>/ on the Hub); a box
 #       assembles them (extra_args=--parts-from-hub) and publishes.
 #
+# LANES -- MORE THAN ONE RUNNER FOR ONE YEAR (E-082 wave 7). A lane is one
+# hosted runner: six hours and ~86 GB. Some stores need several per year (a
+# year of ICESat-2's ATL08 is 35 h of fetching, lai500 is 17.6 h, canopy30 is
+# one bin over 261 tiles). The LANE NAME IS DERIVED FROM start/end AND FROM
+# THE ADAPTER'S GROUP SUBSET, so THERE IS NO NEW WORKFLOW INPUT: a dispatch
+# whose window is one calendar month writes lane `m06`, one calendar quarter
+# writes `q3`, any other window writes `d0701-0930`, and a tier-G adapter
+# restricted by its own environment knob (CANOPY30_TILES, LOSSYEAR_TILES)
+# writes `g-<hash>`. A whole-year window with no group subset is the UNNAMED
+# lane and writes what it always wrote. A named lane parks its parts under
+# partials/<family>/<store>/<year>/<lane>/ and pushes only that folder, so
+# twelve lanes of one year never overwrite each other.
+#
+#   THE FORM, twelve monthly lanes of ICESat-2 2022 and their assembly:
+#     twelve dispatches, one per month, each
+#       {"store":"icesat2","stage":"index,fetch",
+#        "start":"2022-06-01","end":"2022-06-30",
+#        "extra_args":"--push-parts","adapter_env":"ICESAT2_FETCH=whole"}
+#     then ONE assembly (a box, because parts + store is ~150 GB)
+#       {"store":"icesat2","stage":"all","runner":"gpu-box-NNNNN",
+#        "start":"2022-01-01","end":"2022-12-31",
+#        "extra_args":"--parts-from-hub --lanes months --assemble streaming"}
+#   Four quarter-lanes of lai500 2020 are the same with
+#   start/end 2020-01-01..2020-03-31 (lane q1) and so on, and
+#   `--lanes quarters` on the assembly. Tile-subset lanes of canopy30 pass
+#   adapter_env=CANOPY30_TILES=<a few tile names> and the whole-year window.
+#
+#   `--lanes months|quarters|<comma list>` in extra_args DECLARES which lanes
+#   each year is expected to have (it is written into plan.json at `index`).
+#   The assembler then REFUSES a year whose declared lanes did not all arrive,
+#   unless --allow-missing-years names the degrade -- and then store.json
+#   records the missing lanes BY NAME. Without a declaration the assembler
+#   takes the lanes it finds and warns that nothing said the year was whole.
+#   Details: ml/family1/ADAPTER_CONTRACT.md, section "Lanes".
+#
 # CREDENTIALS (ml/CLAUDE.md 6). The source credentials -- Earthdata, FIRMS,
 # FLUXNET, Copernicus Marine -- reach GITHUB-HOSTED runners only: every one of
 # them is gated on `runner == ubuntu-latest` in the env blocks below, so a
@@ -112,7 +147,7 @@ on:
         description: "runner label. ubuntu-latest (default) for probes and fetch lanes; a Vast box's runner name (gpu-box-NNNNN) to assemble a big store from Hub parts -- a box never receives a source credential, so pass extra_args=--parts-from-hub there"
         default: "ubuntu-latest"
       extra_args:
-        description: "extra flags for ml/build_family1_stores.py: --push-parts (a hosted lane parks its years on the Hub), --parts-from-hub (a box assembles from them), --allow-missing-years, --assemble streaming|memory|auto, --qc-keep N, --attempts N, --force. The work directory is the adapter's default (ml/cache/family1_<x>; on a box, /opt/earth-cache). Word-split deliberately"
+        description: "extra flags for ml/build_family1_stores.py: --push-parts (a hosted lane parks its years on the Hub), --parts-from-hub (a box assembles from them), --lanes months|quarters|<comma list> (DECLARE which lanes each year is fetched by; the assembler then refuses a year missing one), --allow-missing-years, --assemble streaming|memory|auto, --qc-keep N, --attempts N, --force. The work directory is the adapter's default (ml/cache/family1_<x>; on a box, /opt/earth-cache). Word-split deliberately"
         default: ""
       probe_month:
         description: "YYYY-MM -- the month stage=probe measures (required for a probe, ignored otherwise)"

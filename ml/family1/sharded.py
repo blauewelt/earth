@@ -857,6 +857,27 @@ class GridAdapter(f10b.SourceAdapter):
         extrapolation. None if the adapter cannot say."""
         return None
 
+    def group_subset(self):
+        """The groups THIS INSTANCE was restricted to, or None for the whole
+        product (E-082 wave 7).
+
+        A store whose groups are tiles and whose one year is far more than a
+        six-hour hosted lane — `canopy30` is 261 tiles and 11 to 21 hours,
+        `lossyear` 280 — is fetched as several TILE-SUBSET LANES, one runner
+        each, and the framework names the lane after the subset
+        (`build_family1_stores.group_lane`). An adapter that answers with a
+        list here is saying "this run is a lane of the product, not the
+        product"; the default answers None, so every other tier-G store keeps
+        the unnamed lane it has always written.
+
+        It is deliberately NOT inferred from whatever environment variable
+        narrowed the groups: a knob that chooses WHICH PRODUCT to build
+        (`LST05_GROUPS` picks a satellite, `LAI500_GROUPS` picks Terra or
+        Aqua) selects a whole store, not a subset of one, and a store already
+        on the Hub must not acquire a lane because of one.
+        """
+        return None
+
     def fetch_frames(self, ctx, wanted):
         raise NotImplementedError
 

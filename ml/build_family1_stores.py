@@ -40,6 +40,18 @@ and family 10 does not:
                 year on the Hub under partials/<family>/<store>/<year>/
                 (done.json last); `--parts-from-hub` replaces the source with
                 that pull on the assembling machine.
+  * LANES (E-082 wave 7): a year can be fetched by SEVERAL hosted runners.
+    A lane is named after the part of the year it covers — `m06` (one month),
+    `q3` (one quarter), `d0701-0930` (any other window) or `g-<hash>` (a
+    subset of a tier-G store's groups) — and a NAMED lane writes
+    `partials/<family>/<store>/<year>/<lane>/` and pushes only that folder.
+    A whole-year lane with no group subset is the UNNAMED lane and writes
+    exactly what it always wrote at the top of the year folder, so every
+    store and every part already on the Hub reads unchanged. The assembler
+    MERGES a year's lanes, refuses two that cover the same thing, sums their
+    ledgers and records the list in store.json's `lanes_by_year`. `--lanes
+    months|quarters|<list>` DECLARES which lanes to expect, and the assembler
+    then refuses a year whose declared lanes did not all arrive.
       assemble  the store, from the parts (streaming above 50 M rows)
       publish   upload, download every file back, compare sha256
       check     the store's sha256 against store.json, E-079 §4's
@@ -78,6 +90,11 @@ Run:
       --start 2020-01-01 --end 2020-12-31 --push-parts          # a hosted lane
   python3 ml/build_family1_stores.py --store ghcnd --stage all \\
       --parts-from-hub --start 1763-01-01                         # the box
+  python3 ml/build_family1_stores.py --store icesat2 --stage index,fetch \\
+      --start 2022-06-01 --end 2022-06-30 --push-parts        # lane m06/2022
+  python3 ml/build_family1_stores.py --store icesat2 --stage all \\
+      --parts-from-hub --start 2022-01-01 --end 2022-12-31 \\
+      --lanes months                                # the box, twelve lanes
   python3 ml/build_family1_stores.py --store seaice_asi --smoke   # tier G
   python3 ml/build_family1_stores.py --store seaice_asi --stage probe \\
       --probe-month 2020-03
@@ -86,6 +103,7 @@ Run:
 import argparse
 import calendar
 import datetime as dt
+import hashlib
 import json
 import os
 import platform as _platform
@@ -222,6 +240,98 @@ def make_ctx(a, adapter_cls):
     return ctx
 
 
+# =================================================================== lanes ==
+# E-082 wave 7. A FETCH LANE is one GitHub-hosted runner: six hours and about
+# 86 GB, and Earthdata credentials live only there (ml/CLAUDE.md §6), so a
+# rented box cannot fetch these sources at all. Some stores need MORE THAN ONE
+# LANE PER YEAR:
+#
+#   icesat2   a year of ATL08 is 35 hours of fetching -> twelve monthly lanes
+#   gedi      the same shape, once its probe reads
+#   lai500    17.6 hours a year -> four quarter-lanes
+#   canopy30  one bin, 261 tiles, 11-21 hours -> lanes by TILE SUBSET
+#             (CANOPY30_TILES); `lossyear` is the same with 280 tiles
+#
+# and the parts layout was one folder per year with one index, one ledger and
+# one `done.json`, so two lanes of a year overwrote each other and the
+# assembler built a short store with nothing to say so (BUILD_LOG, "Two things
+# the first lanes taught", 2026-09-20).
+#
+# A LANE IS NAMED AFTER WHAT IT COVERS, and the name is DERIVED — from
+# `--start/--end` and from the adapter's own group subset — so a dispatch
+# writes lane `m06` of 2022 with no new workflow input. A whole-year window
+# with no group subset earns NO name: it is the unnamed lane, it writes the
+# year folder's top-level files, and that is exactly what every store and
+# every part already on the Hub holds.
+def window_lane(d_lo, d_hi):
+    """The lane name a WINDOW earns: "" for whole calendar years, `m06` for
+    one calendar month, `q3` for one calendar quarter, and `d0701-0930` (or
+    `d20220701-20230331` across a New Year) for any other window."""
+    if (d_lo.month, d_lo.day, d_hi.month, d_hi.day) == (1, 1, 12, 31):
+        return ""
+    if d_lo.year != d_hi.year:
+        return f"d{d_lo:%Y%m%d}-{d_hi:%Y%m%d}"
+    if d_lo.day == 1 and d_hi.day == calendar.monthrange(d_hi.year,
+                                                         d_hi.month)[1]:
+        if d_lo.month == d_hi.month:
+            return f"m{d_lo.month:02d}"
+        if d_lo.month in (1, 4, 7, 10) and d_hi.month == d_lo.month + 2:
+            return f"q{(d_lo.month - 1) // 3 + 1}"
+    return f"d{d_lo:%m%d}-{d_hi:%m%d}"
+
+
+def group_lane(groups):
+    """The lane name a GROUP SUBSET earns: `g-` and the first eight hex digits
+    of the sha1 of the sorted group names, one per line.
+
+    A hash and not the names themselves, because `canopy30`'s lanes are dozens
+    of tile names each and a path is not a place to put them; the list itself
+    goes in the lane's own ledger (`counts.json`'s `lane_groups`) and in its
+    `done.json` on the Hub, where a reader can see exactly what the lane
+    covered.
+    """
+    text = "\n".join(sorted(str(g) for g in groups))
+    return "g-" + hashlib.sha1(text.encode("utf-8")).hexdigest()[:8]
+
+
+def lane_name(d_lo, d_hi, groups=None):
+    """The whole name: the window's part, the group subset's part, or both
+    joined by a hyphen (`m06-g-1a2b3c4d`). "" is the unnamed lane."""
+    parts = [p for p in (window_lane(d_lo, d_hi),
+                         group_lane(groups) if groups else "") if p]
+    return "-".join(parts)
+
+
+def adapter_group_subset(ad):
+    """The groups THIS adapter instance was restricted to, or None.
+
+    A tier-G adapter whose groups are chosen at construction time from an
+    environment variable (`CANOPY30_TILES`, `LOSSYEAR_TILES`) answers with the
+    restricted list through its own `group_subset()`; every other adapter
+    answers None and gets no group lane. It is opt-in on purpose: a knob that
+    selects WHICH PRODUCT to build (`LST05_GROUPS` picks a satellite) is not a
+    subset of one product's groups, and a store already on the Hub must not
+    acquire a lane because of one.
+    """
+    fn = getattr(ad, "group_subset", None)
+    got = fn() if callable(fn) else None
+    return sorted(str(g) for g in got) if got else None
+
+
+def apply_lane(ctx):
+    """Name this context's lane from its window and its adapter, and set it.
+
+    Called from `main` only, so a smoke or a test that builds a `Ctx` of its
+    own keeps the unnamed lane and the paths it always had. The FETCH writes
+    the lane; the ASSEMBLER merges whatever lanes a year holds, except when
+    this context is itself one lane, in which case it assembles that one.
+    """
+    groups = adapter_group_subset(ctx.adapter)
+    ctx.lane = lane_name(ctx.d_lo, ctx.d_hi, groups)
+    ctx.lane_groups = groups or []
+    return ctx.lane
+
+
 def is_grid(ad):
     """A tier-G (sharded) adapter, as opposed to family 10's tier-P rows."""
     return getattr(ad, "tier", "P") == "G"
@@ -273,17 +383,22 @@ def push_parts(ctx):
     kw = f10b.parts_hub_kwargs(ctx)
     kw = {k: v for k, v in kw.items() if k in ("partials", "hub", "private")}
     for y in ctx.years:
-        if not marked(ctx.root, f"parts/{y}"):
-            sys.exit(f"--push-parts: {ctx.adapter.store} {y} is not marked "
+        if not marked(ctx.root, ctx.part_key(y)):
+            sys.exit(f"--push-parts: {ctx.adapter.store} {y}"
+                     f"{f' lane {ctx.lane}' if ctx.lane else ''} is not marked "
                      f"done locally — refusing to push a partial year")
     # ONE batched push for the lane: a lane of 150 early years costs a few
     # commits instead of 300 against the Hub's 256 an hour (E-082 wave 1).
-    pushed = ph.push_many(ctx.adapter.store, ctx.years, ctx.work, **kw)
+    # A NAMED LANE pushes only its own folder (E-082 wave 7), so twelve
+    # monthly lanes of one year never touch each other's files.
+    pushed = ph.push_many(ctx.adapter.store, ctx.years, ctx.work,
+                          lane=ctx.lane or None, **kw)
     if sorted(pushed) != sorted(int(y) for y in ctx.years):
         sys.exit(f"--push-parts: {ctx.adapter.store} pushed {len(pushed)} of "
                  f"{len(ctx.years)} year(s)")
     print(f"  push-parts: {len(pushed)} year(s) on the Hub under "
-          f"{ctx.layout.hf_partials}/{ctx.adapter.store}/")
+          f"{ctx.layout.hf_partials}/{ctx.adapter.store}/"
+          + (f"<year>/{ctx.lane}/" if ctx.lane else ""))
     return pushed
 
 
@@ -431,11 +546,30 @@ SKIP_BIN_REASONS = sh.FRAME_SKIP_REASONS
 
 
 def prepare_grid_ctx(ctx):
-    """Years, bins and wanted frames for a tier-G context."""
+    """Years, bins and wanted frames for a tier-G context.
+
+    A NAMED WINDOW LANE OWNS THE BINS WHOSE FIRST DAY FALLS IN ITS WINDOW
+    (E-082 wave 7), which is the rule a YEAR already follows one level up —
+    `bin_year` is the year of the bin's first day, so a bin straddling New
+    Year belongs to the year it starts in. Without it two monthly lanes would
+    both claim the bin that straddles the end of January (`bins_overlapping`
+    answers with every bin the window touches), both write its shard, and one
+    of them would be thrown away; with it, twelve monthly lanes cover every
+    bin of a year exactly once. The unnamed lane is unaffected and keeps the
+    bins it always had, so every tier-G store on the Hub resumes unchanged.
+    """
     ad = ctx.adapter
     by_year = {}
     for b in sh.bins_overlapping(ctx.t_lo, ctx.t_hi):
+        if ctx.lane and not (ctx.d_lo <= sh.bin_start_date(b) <= ctx.d_hi):
+            continue
         by_year.setdefault(sh.bin_year(b), []).append(b)
+    if ctx.lane and not by_year:
+        sys.exit(f"REFUSING {ad.store} lane {ctx.lane}: no five-day bin "
+                 f"STARTS inside {ctx.d_lo} .. {ctx.d_hi}, so this lane owns "
+                 f"nothing and would fetch nothing while reporting success. A "
+                 f"tier-G lane's window must contain at least one bin start "
+                 f"(bins run from {f10b.START} in five-day steps); widen it.")
     ctx.grid_bins = by_year
     ctx.years = sorted(by_year)
     ctx.grid_specs = ad.specs()
@@ -555,11 +689,14 @@ def fetch_grid_year(ctx, y):
             "bytes": sum(e["nbytes"] for e in es)}
     counts["fetch_seconds"] = round(time.time() - t0, 1)
     rows = sum(v["frames_present"] for v in summary.values())
-    atomic_json(os.path.join(d, "counts.json"),
-                {"year": y, "tier": "G", "rows": rows, "parts": 0,
-                 "groups": summary, "counts": counts,
-                 "grids": json.loads(json.dumps(specs)), "at": utcnow()})
-    mark(ctx.root, f"parts/{y}")
+    led = {"year": y, "tier": "G", "rows": rows, "parts": 0,
+           "groups": summary, "counts": counts,
+           "grids": json.loads(json.dumps(specs)), "at": utcnow()}
+    # EMPTY for the unnamed lane, so this ledger is byte for byte the one
+    # every tier-G year on the Hub already carries (E-082 wave 7).
+    led.update(ctx.lane_ledger(y))
+    atomic_json(os.path.join(d, "counts.json"), led)
+    mark(ctx.root, ctx.part_key(y))
     print(f"  {y}: " + ", ".join(
         f"{g} {v['bins']} bin(s) {v['frames_present']} frame(s) "
         f"{v['bytes'] / 1e6:.1f} MB" for g, v in summary.items())
@@ -580,11 +717,11 @@ def stage_fetch_grid(ctx):
     else:
         ctx.prog.stage_start(f"fetch {ad.store} (tier G)", len(ctx.years))
         for y in ctx.years:
-            if marked(ctx.root, f"parts/{y}") and not ctx.a.force:
+            if marked(ctx.root, ctx.part_key(y)) and not ctx.a.force:
                 print(f"  {y}: already fetched — skipping")
                 continue
             shutil.rmtree(ctx.year_dir(y), ignore_errors=True)
-            mp = marker(ctx.root, f"parts/{y}")
+            mp = marker(ctx.root, ctx.part_key(y))
             if os.path.exists(mp):
                 os.remove(mp)
             fetch_grid_year(ctx, y)
@@ -616,42 +753,82 @@ def stage_assemble_grid(ctx):
     os.makedirs(dest)
     entries = {g: [] for g in specs}
     counts_all, bad, degraded = {}, [], []
+    # THE LANES of every year, and whether they add up to the years the build
+    # declared (E-082 wave 7). This refuses a declared lane that never
+    # arrived, or names the degrade under --allow-missing-years.
+    degraded += list(f10b.lanes_preflight(ctx))
+    # WHICH LANE HOLDS WHICH (group, bin) SHARD, so a shard two lanes both
+    # wrote is a refusal rather than a silent last-one-wins.
+    owner = {}
     for y in ctx.years:
-        yd = ctx.year_dir(y)
-        if not marked(ctx.root, f"parts/{y}"):
-            msg = f"{y}: no parts/{y}.done — the year's fetch did not finish"
-            (degraded if allow else bad).append(msg)
-            continue
-        c = read_json(os.path.join(yd, "counts.json"), None)
-        if not c or c.get("tier") != "G":
-            bad.append(f"{y}: counts.json is missing or not a tier-G ledger")
-            continue
-        if c.get("grids") != want_specs:
-            bad.append(f"{y}: the parts were written for a different grid "
-                       f"declaration than this adapter's — a lane and a box "
-                       f"running different code")
-            continue
-        for g in specs:
-            ip = os.path.join(yd, f"{g}__shard_index.npy")
-            if not os.path.exists(ip):
-                bad.append(f"{y}: no {g}__shard_index.npy")
+        for lane in ctx.lanes_of(y):
+            where = f"{y} lane {lane}" if lane else f"{y}"
+            yd = ctx.year_dir(y, lane)
+            key = ctx.part_key(y, lane)
+            if not marked(ctx.root, key):
+                msg = (f"{where}: no {key}.done — the year's fetch did not "
+                       f"finish")
+                (degraded if allow else bad).append(msg)
                 continue
-            es = sh.array_to_entries(sh.load_shard_index(ip))
-            if len(es) != int(c["groups"][g]["bins"]):
-                bad.append(f"{y} {g}: {len(es)} bin(s) in the index, the "
-                           f"ledger says {c['groups'][g]['bins']}")
-            for e in es:
-                if sh.bin_year(e["bin"]) != y:
-                    bad.append(f"{y} {g}: bin {e['bin']} belongs to "
-                               f"{sh.bin_year(e['bin'])}")
-                for rel in (e["shard"], e["index"]):
-                    src = os.path.join(yd, part_name(g, rel))
-                    if not os.path.exists(src):
-                        bad.append(f"{y} {g}: {part_name(g, rel)} missing")
+            c = read_json(os.path.join(yd, "counts.json"), None)
+            if not c or c.get("tier") != "G":
+                bad.append(f"{where}: counts.json is missing or not a tier-G "
+                           f"ledger")
+                continue
+            # A LANE MAY HOLD A SUBSET OF THE GROUPS — that is what a
+            # tile-subset lane IS — but every group it holds must have been
+            # written for the identical grid, or a lane and a box are running
+            # different code.
+            got_specs = c.get("grids") or {}
+            unknown = sorted(set(got_specs) - set(want_specs))
+            differ = sorted(g for g in got_specs
+                            if g in want_specs
+                            and got_specs[g] != want_specs[g])
+            if unknown or differ:
+                why = []
+                if unknown:
+                    why.append(f"group(s) {unknown[:4]} are not this "
+                               f"adapter's")
+                if differ:
+                    why.append(f"group(s) {differ[:4]} were written for a "
+                               f"different grid")
+                bad.append(f"{where}: the parts were written for a different "
+                           f"grid declaration than this adapter's — a lane "
+                           f"and a box running different code ("
+                           + "; ".join(why) + ")")
+                continue
+            for g in sorted(got_specs):
+                ip = os.path.join(yd, f"{g}__shard_index.npy")
+                if not os.path.exists(ip):
+                    bad.append(f"{where}: no {g}__shard_index.npy")
+                    continue
+                es = sh.array_to_entries(sh.load_shard_index(ip))
+                if len(es) != int(c["groups"][g]["bins"]):
+                    bad.append(f"{where} {g}: {len(es)} bin(s) in the index, "
+                               f"the ledger says {c['groups'][g]['bins']}")
+                for e in es:
+                    if sh.bin_year(e["bin"]) != y:
+                        bad.append(f"{where} {g}: bin {e['bin']} belongs to "
+                                   f"{sh.bin_year(e['bin'])}")
+                    held = owner.get((g, e["bin"]))
+                    if held is not None:
+                        bad.append(
+                            f"{y}: group {g} bin {e['bin']} is held by lane "
+                            f"{held or '(the unnamed lane)'} AND by lane "
+                            f"{lane or '(the unnamed lane)'} — two lanes "
+                            f"wrote the same shard, so one of them would be "
+                            f"silently thrown away")
                         continue
-                    _link(src, os.path.join(dest, g, rel))
-                entries[g].append(e)
-        f10b._merge_counts(counts_all, c.get("counts") or {})
+                    owner[(g, e["bin"])] = lane
+                    for rel in (e["shard"], e["index"]):
+                        src = os.path.join(yd, part_name(g, rel))
+                        if not os.path.exists(src):
+                            bad.append(f"{where} {g}: {part_name(g, rel)} "
+                                       f"missing")
+                            continue
+                        _link(src, os.path.join(dest, g, rel))
+                    entries[g].append(e)
+            f10b._merge_counts(counts_all, c.get("counts") or {})
     if bad:
         sys.exit(f"REFUSING to assemble {ad.store}:\n  " + "\n  ".join(bad)
                  + "\nRe-run the fetch stage with the same --work value, or "
@@ -729,6 +906,13 @@ def stage_assemble_grid(ctx):
         "builder": lay.builder, "builder_git_sha": git_sha(),
         "built_at": utcnow(),
     }
+    # WHICH LANES THIS STORE WAS ASSEMBLED FROM, and whether anybody declared
+    # which ones to expect. Absent — and store.json therefore unchanged — when
+    # every year is one unnamed lane (E-082 wave 7).
+    lanes = f10b.lanes_meta(ctx)
+    if lanes is not None:
+        meta["lanes_by_year"] = lanes
+        meta["lanes_note"] = f10b.LANES_NOTE
     if ad.notes:
         meta["notes"] = ad.notes
     if getattr(ad, "distribution_override", None):
@@ -1488,8 +1672,18 @@ def build_parser():
                     help="after fetch, park every marked year's parts on the "
                          "Hub (the hosted lane), done.json last")
     ap.add_argument("--allow-missing-years", action="store_true",
-                    help="build past an input that could not be read; the "
-                         "store records every such unit in `degraded`")
+                    help="build past an input that could not be read, or past "
+                         "a declared lane that never arrived; the store "
+                         "records every such unit in `degraded`")
+    ap.add_argument("--lanes", default="",
+                    help="DECLARE which lanes each year is fetched by, at "
+                         "`index`: `months` (m01..m12), `quarters` (q1..q4) "
+                         "or a comma list of lane names. The assembler then "
+                         "REFUSES a year whose declared lanes are not all "
+                         "present (--allow-missing-years names the degrade "
+                         "instead). Without it the assembler takes the lanes "
+                         "it finds and store.json says nobody declared what "
+                         "to expect")
     ap.add_argument("--check-chunk-rows", type=int,
                     default=f10b.CHECK_CHUNK_ROWS,
                     help="rows per block in the assertion pass")
@@ -1550,6 +1744,9 @@ def main(argv=None):
     if needs_source(a, stages):
         credentials_preflight(ad)
     ctx = f10b.Ctx(a, adapter=ad, layout=lay)
+    # THE LANE IS NAMED FIRST, because a tier-G lane owns only the bins that
+    # START inside its window and `prepare_grid_ctx` needs to know.
+    apply_lane(ctx)
     if is_grid(ad):
         prepare_grid_ctx(ctx)
     print(f"store     {ad.store} — {ad.title}")
@@ -1557,6 +1754,14 @@ def main(argv=None):
           f"{ad.distribution} -> {lay.repo_id}:{lay.prefix(ad.store)}")
     print(f"axis      {ctx.d_lo} .. {ctx.d_hi}  bins {ctx.b_lo}..{ctx.b_hi} "
           f"· time_s {ctx.time_dtype} (schema {ctx.schema_version})")
+    print("lane      "
+          + (f"{ctx.lane} — this fetch writes parts/<year>/{ctx.lane}/ and "
+             f"pushes only that folder"
+             + (f" ({len(ctx.lane_groups)} group(s))" if ctx.lane_groups
+                else "")
+             if ctx.lane else
+             "(unnamed) — whole calendar year(s), no group subset: the "
+             "year folder's own files, as every store on the Hub holds them"))
     print(f"channels  C={ad.C}: {', '.join(ad.channel_names)}")
     if is_grid(ad):
         print(f"tier G    sharded, groups {sorted(ctx.grid_specs)}, "
