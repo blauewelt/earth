@@ -1,0 +1,269 @@
+{
+ "bins": [
+  2812,
+  2830
+ ],
+ "builder_git_sha": "0822557a2fc635ce1a8503c313d22b912a02397f",
+ "built_at": "2026-09-20T18:56:13+00:00",
+ "channels": [
+  {
+   "max": 15.0,
+   "min": 0.0,
+   "name": "lai",
+   "unit": "m2 of leaf per m2 of ground"
+  },
+  {
+   "max": 1.5,
+   "min": 0.0,
+   "name": "fpar",
+   "unit": "fraction (0-1) of photosynthetically active radiation absorbed"
+  },
+  {
+   "max": 15.0,
+   "min": 0.0,
+   "name": "lai_stddev",
+   "unit": "m2 of leaf per m2 of ground"
+  },
+  {
+   "max": 254.0,
+   "min": 0.0,
+   "name": "fpar_lai_qc",
+   "unit": "bitfield (the producer's own FparLai_QC, 0..254)"
+  }
+ ],
+ "dataset": "MODIS/VIIRS eight-day leaf-area index and FPAR, 500 m sinusoidal tiles",
+ "date_range": [
+  "2020-07-01",
+  "2020-09-30"
+ ],
+ "exception": "E7 (eight-day composites on a five-day axis)",
+ "footprint": {
+  "log2_dt": 0.6780719051126377,
+  "log2_fp": -5.908510817800209
+ },
+ "frame_seconds": 432000,
+ "frames_per_bin": 1,
+ "granules": 39648,
+ "grid": {
+  "H": 2400,
+  "W": 2400,
+  "coordinates": "x = x0 + (col + 0.5) * dx metres and y = y0 + (row + 0.5) * dy with dy NEGATIVE; then lat = degrees(y / R) and lon = degrees(x / (R * cos(lat))) with R = 6371007.181 m. x0/y0 are the tile's WEST and NORTH edges",
+  "crs": "MODLAND Sinusoidal (no EPSG code; GCTP_SNSOID on a sphere)",
+  "dx": 463.3127165693847,
+  "dy": -463.3127165693847,
+  "extent_m": [
+   -20015109.355797417,
+   -6.984919309616089e-10,
+   -18903158.836030893,
+   1111950.5197665226
+  ],
+  "extent_m_note": "[west, south, east, north] in projected metres",
+  "h": 0,
+  "latitude_band": [
+   -0.0,
+   10.0
+  ],
+  "latitude_band_note": "the tile's south and north edges in degrees; its LONGITUDE span widens away from the equator because the projection is sinusoidal",
+  "no_tile_corners": "no lat/lon corner table is stored: the rectangle of a tile near the grid's edge has corners off the projected globe, where the inverse above has no longitude, and a clamped number that looks like a coordinate would be worse than the formula",
+  "pixel_km": 0.463313,
+  "pixel_m": 463.312717,
+  "proj4": "+proj=sinu +lon_0=0 +x_0=0 +y_0=0 +R=6371007.181 +units=m +no_defs",
+  "projection": {
+   "earth_radius": 6371007.181,
+   "false_easting": 0.0,
+   "false_northing": 0.0,
+   "grid_mapping_name": "sinusoidal",
+   "longitude_of_projection_origin": 0.0,
+   "reference": "modis-land.gsfc.nasa.gov/GCTP.html, read 2026-09-20: MODLAND Sinusoidal Grid, sphere 6371007.181 m, central meridian 0, FE = FN = 0"
+  },
+  "row_order": "row 0 is the NORTHERNMOST row and col 0 the westernmost \u2014 the HDF-EOS grid's own orientation (GridOrigin = HDFE_CENTER, upper-left corner first), so nothing is flipped",
+  "tile": "h00v08",
+  "tile_metres": 1111950.5197665233,
+  "tiles_across": 36,
+  "tiles_down": 18,
+  "v": 8,
+  "x0": -20015109.355797417,
+  "y0": 1111950.5197665226
+ },
+ "groups": {
+  "terra": {
+   "bytes_cmr": 147911600860,
+   "bytes_note": "CMR's own `granule_size` in MB, summed; the probe measures exact bytes",
+   "collection_first_a_date": "2000-02-18",
+   "composites_listed": 138,
+   "file_format": "hdf4",
+   "first_file": {
+    "bytes": 324660,
+    "datasets_read": {
+     "FparLai_QC": {
+      "attributes": {
+       "_FillValue": 255,
+       "long_name": "MOD15A2H MODIS/Terra+Aqua QC for FPAR and LAI (8-day composite)",
+       "units": "class-flag",
+       "valid_range": [
+        0,
+        254
+       ]
+      },
+      "dtype": "uint8",
+      "fill_pixels": 0,
+      "raw_max": 157,
+      "raw_min": 0,
+      "shape": [
+       2400,
+       2400
+      ]
+     },
+     "Fpar_500m": {
+      "attributes": {
+       "_FillValue": 255,
+       "add_offset": 0.0,
+       "long_name": "MOD15A2H MODIS/Terra Gridded 500M FPAR (8-day composite)",
+       "scale_factor": 0.01,
+       "units": "Percent",
+       "valid_range": [
+        0,
+        100
+       ]
+      },
+      "dtype": "uint8",
+      "fill_pixels": 3637209,
+      "raw_max": 254,
+      "raw_min": 4,
+      "shape": [
+       2400,
+       2400
+      ]
+     },
+     "LaiStdDev_500m": {
+      "attributes": {
+       "_FillValue": 255,
+       "add_offset": 0.0,
+       "long_name": "MOD15A2H MODIS/Terra Gridded 500M Standard Deviation Leaf Area Index (8-day composite)",
+       "scale_factor": 0.1,
+       "units": "m^2/m^2",
+       "valid_range": [
+        0,
+        100
+       ]
+      },
+      "dtype": "uint8",
+      "fill_pixels": 3637209,
+      "raw_max": 254,
+      "raw_min": 0,
+      "shape": [
+       2400,
+       2400
+      ]
+     },
+     "Lai_500m": {
+      "attributes": {
+       "_FillValue": 255,
+       "add_offset": 0.0,
+       "long_name": "MOD15A2H MODIS/Terra Gridded 500M Leaf Area Index LAI (8-day composite)",
+       "scale_factor": 0.1,
+       "units": "m^2/m^2",
+       "valid_range": [
+        0,
+        100
+       ]
+      },
+      "dtype": "uint8",
+      "fill_pixels": 3637209,
+      "raw_max": 254,
+      "raw_min": 1,
+      "shape": [
+       2400,
+       2400
+      ]
+     }
+    },
+    "struct_metadata": {
+     "XDim": 2400,
+     "YDim": 2400,
+     "lower_right": [
+      20015109.354,
+      -2223901.039333
+     ],
+     "projection": "GCTP_SNSOID",
+     "upper_left": [
+      18903158.834333,
+      -1111950.519667
+     ]
+    },
+    "tile": "h35v10",
+    "title": "MOD15A2H.A2021361.h35v10.061.2022005043525",
+    "url": "https://data.lpdaac.earthdatacloud.nasa.gov/lp-prod-protected/MOD15A2H.061/MOD15A2H.A2021361.h35v10.061.2022005043525/MOD15A2H.A2021361.h35v10.061.2022005043525.hdf"
+   },
+   "granules": 39648,
+   "granules_per_year": {
+    "2019": 13228,
+    "2020": 13192,
+    "2021": 13228
+   },
+   "listing": {
+    "2019": {
+     "cmr_bytes": 69980155,
+     "cmr_hits": 105824,
+     "cmr_pages": 8,
+     "cmr_queries": 1,
+     "cmr_seconds": 7.6,
+     "granules_listed": 13228
+    },
+    "2020": {
+     "cmr_bytes": 69789691,
+     "cmr_hits": 105536,
+     "cmr_pages": 8,
+     "cmr_queries": 1,
+     "cmr_seconds": 5.7,
+     "granules_listed": 13192
+    },
+    "2021": {
+     "cmr_bytes": 69980248,
+     "cmr_hits": 105824,
+     "cmr_pages": 8,
+     "cmr_queries": 1,
+     "cmr_seconds": 5.4,
+     "granules_listed": 13228
+    }
+   },
+   "record_a_dates": [
+    "2019-01-01",
+    "2021-12-27"
+   ],
+   "record_days": [
+    "2019-01-01",
+    "2022-01-03"
+   ],
+   "short_name": "MOD15A2H",
+   "tiles_declared_and_absent": [],
+   "tiles_in_listing": 290,
+   "tiles_per_composite": {
+    "max": 290,
+    "min": 274
+   },
+   "version": "061"
+  }
+ },
+ "per_year_resume": true,
+ "qc_policy": "the producer's own FparLai_QC uint8 bit field is CARRIED AS A CHANNEL, unchanged, so the consumer picks the threshold (family1tf.tex 5). Its bits are: 0 MODLAND_QC (0 main algorithm, 1 back-up or fill), 1 the sensor (0 Terra, 1 Aqua), 2 dead detectors, 3-4 cloud state (0 clear, 1 cloudy, 2 mixed, 3 undefined), 5-7 a five-level confidence score whose value 4 means the pixel was not produced at all. The three physical fields carry the producer's valid_range 0..100 and, above it, a CLASS rather than a number: 255 fill, 254 water, 253 barren or sparse, 252 permanent snow and ice, 251 wetland, 250 urban, 249 unclassified (the product's own file specification). None of those is a leaf-area index, so a raw value outside 0..100 becomes NaN and is counted BY ITS RAW VALUE under `outside_valid_range_codes`, which is what makes 'this pixel is a lake' visible in the probe instead of merely missing. The channel bounds are then tripwires: a leaf-area index above 15 or an FPAR above 1.5 cannot come out of a uint8 times its scale factor and would mean the scaling changed; a value outside them becomes NaN and is counted (`out_of_bounds`), never clipped",
+ "slot_collisions": {},
+ "sources": [
+  "https://data.lpdaac.earthdatacloud.nasa.gov/lp-prod-protected/MOD15A2H.061/<granule>/<granule>.hdf",
+  "https://cmr.earthdata.nasa.gov/search/granules.json?short_name=MOD15A2H&version=061"
+ ],
+ "store": "lai500",
+ "tiles_built": 290,
+ "tiles_declared": 290,
+ "title": "Leaf-area index and FPAR every eight days, MODIS MOD15A2H v061 (Terra) with MYD15A2H (Aqua) and VNP15A2H v002 (VIIRS) as continuation groups, 500 m sinusoidal tiles (exception E7)",
+ "url": "https://cmr.earthdata.nasa.gov/search/granules.json",
+ "verified": "2026-09-20 from the sandbox, keyless: the CMR collection searches for MOD15A2H v061 (C2218777082-LPCLOUD, time_start 2000-02-18), MYD15A2H v061 (C2565794061-LPCLOUD, 2002-07-04) and VNP15A2H v002 (C2545314545-LPCLOUD, 2012-01-01, data link ending .h5 and not .hdf); the full MOD15A2H granule listing of 2020 composite by composite (46 composites, 13,192 granules, 274-290 tiles each, union 290, CMR sizes 0.15-16.3 MB summing to 46.0 GB) and the DOY 1, 185 and 361 composites of 2021-2024 (the same 290-tile union); the time_start/time_end of A2019361 (2019-12-27 -> 2020-01-03) and A2020361 (2020-12-26 -> 2021-01-02), which is how the eight-day composite was shown to cross the year boundary; the MODLAND sinusoidal grid parameters on modis-land.gsfc.nasa.gov/GCTP.html checked against CMR's own corner polygon for h18v04; and the dataset names, uint8 types, fill values, valid ranges and scale factors on lpdaac.usgs.gov/products/mod15a2hv061 and vnp15a2hv002 plus the LAADS file specification MODIS/61/MOD15A2H (which also gives the QC bit legend and the 249-255 non-terrestrial class ladder). The granules themselves are behind Earthdata Login and are opened on a GitHub-hosted runner by the probe, which re-checks the tile's own StructMetadata corners in every file it reads",
+ "years": [
+  2020
+ ],
+ "years_listed": [
+  2019,
+  2020,
+  2021
+ ]
+}
