@@ -1,0 +1,80 @@
+     "read_fraction": 0.180718
+    }
+   }
+  ],
+  "resolved_datasets": [
+   {
+    "L2A": {
+     "degrade": "degrade_flag",
+     "delta_time": "delta_time",
+     "elev": "elev_lowestmode",
+     "lat": "lat_lowestmode",
+     "lon": "lon_lowestmode",
+     "quality": "l2a_quality_flag_rel3",
+     "rh": "rh",
+     "sensitivity": "sensitivity",
+     "shot": "shot_number"
+    },
+    "L2B": {
+     "cover": "cover",
+     "pai": "pai",
+     "quality": "l2b_quality_flag_rel3",
+     "shot": "shot_number"
+    },
+    "L4A": {
+     "agbd": "agbd",
+     "agbd_se": "agbd_se",
+     "quality": "l4a_quality_flag_rel3",
+     "shot": "shot_number"
+    }
+   }
+  ],
+  "storage_and_fetch": [
+   {
+    "measured": {
+     "granules_read": 6,
+     "rows_kept": 1587882,
+     "rows_per_granule": 264647.0,
+     "native_bytes_of_those_granules": 13619212945,
+     "bytes_read": 1514361860,
+     "read_fraction": 0.111193,
+     "fetch_seconds": 761.2,
+     "bytes_per_second": 1989440.2
+    },
+    "extrapolation_basis": {
+     "granules_per_month_2022_06": 1428,
+     "native_bytes_per_month_2022_06": 2642102500000,
+     "note": "1,428 granules of each of L2A, L2B and L4A v3 in 2022-06, 2.64e12 bytes in all, measured from CMR's own granule sizes on 2026-09-20"
+    },
+    "projected_one_year_2022": {
+     "granules": 17136,
+     "rows": 4534990992,
+     "store_bytes": 222214558608,
+     "bytes_to_fetch": 3525401303910,
+     "fetch_hours": 492.24
+    },
+    "bytes_per_row_stored": 49
+   }
+  ]
+ },
+ "counts_scope": "month",
+ "bytes_fetched": 1514361860,
+ "bytes_index": 45261614,
+ "wall_seconds": 761.21,
+ "wall_seconds_index": 4.03,
+ "bytes_per_row": 953.699,
+ "stored_bytes_per_row": 49,
+ "time_dtype": "int32",
+ "schema_version": 2,
+ "platforms": {
+  "entries": 8,
+  "probe_platforms_without_entry": 0
+ },
+ "estimate_rows_per_year": null,
+ "estimate_store_bytes": null,
+ "note_estimate": null,
+ "runner": "GitHub Actions 1000005671",
+ "builder_git_sha": "5805b5cec82dc651e03f4e6b9e6544e027a6ac79",
+ "at": "2026-09-20T18:05:17+00:00"
+}
+probe -> /home/runner/work/earth/earth/ml/cache/family1_tf/probe/gedi/2022-06.json
