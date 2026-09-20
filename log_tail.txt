@@ -1,0 +1,28 @@
+  [index gedi] start (1 items)  0/1  0.0s
+  [index gedi] plan.json  1/1  5.0s
+  index: gedi — 1 year(s), C=11 (elev_lowestmode, rh25, rh50, rh75, rh90, rh98, cover, pai …), bins 2952..2958
+Traceback (most recent call last):
+  File "/home/runner/work/earth/earth/ml/build_family1_stores.py", line 1571, in <module>
+    sys.exit(main())
+             ^^^^^^
+  File "/home/runner/work/earth/earth/ml/build_family1_stores.py", line 1545, in main
+    stage_probe(a, cls, a.probe_month)
+  File "/home/runner/work/earth/earth/ml/build_family1_stores.py", line 1313, in stage_probe
+    for _label, r, c in ad.fetch_month(ctx, y, m):
+  File "/home/runner/work/earth/earth/ml/family1/adapters/gedi.py", line 974, in fetch_month
+    yield from self._rows(ctx, f"{year}-{int(month):02d}",
+  File "/home/runner/work/earth/earth/ml/family1/adapters/gedi.py", line 738, in _rows
+    ops[tag] = self._open(ctx, e[tag], tag)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/work/earth/earth/ml/family1/adapters/gedi.py", line 696, in _open
+    return hr.open_range(self._session, entry["url"],
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/work/earth/earth/ml/family1/adapters/_h5range.py", line 283, in open_range
+    rf = RangeFile(session, url, block=block, cache_blocks=cache_blocks,
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/work/earth/earth/ml/family1/adapters/_h5range.py", line 123, in __init__
+    self._url, self.size = resolve(session, url, attempts=attempts)
+                           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/work/earth/earth/ml/family1/adapters/_h5range.py", line 107, in resolve
+    raise IOError(f"{url}: {type(err).__name__}: {err}")
+OSError: https://data.lpdaac.earthdatacloud.nasa.gov/lp-prod-protected/GEDI02_A.003/GEDI02_A_2022152133202_O19644_01_T00181_02_004_02_V003/GEDI02_A_2022152133202_O19644_01_T00181_02_004_02_V003.h5: ConnectTimeout: HTTPSConnectionPool(host='urs.earthdata.nasa.gov', port=443): Max retries exceeded with url: /oauth/authorize?client_id=FtSFfbOeuxDcdf4px-elGw&response_type=code&redirect_uri=https://data.lpdaac.earthdatacloud.nasa.gov/login&state=%2Flp-prod-protected%2FGEDI02_A.003%2FGEDI02_A_2022152133202_O19644_01_T00181_02_004_02_V003%2FGEDI02_A_2022152133202_O19644_01_T00181_02_004_02_V003.h5&app_type=401 (Caused by ConnectTimeoutError(<urllib3.connection.HTTPSConnection object at 0x7f8d345d1460>, 'Connection to urs.earthdata.nasa.gov timed out. (connect timeout=120)'))
