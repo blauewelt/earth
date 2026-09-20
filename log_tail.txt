@@ -1,0 +1,80 @@
+axis      1999-01-01 .. 2026-09-30  bins 1241..3268 · time_s int32 (schema 2)
+channels  C=4: lst_day, lst_night, qc_day, qc_night
+tier G    sharded, groups ['terra'], F=5 x 86400 s, float16, years (by bin start) 1998..2026
+work      /opt/runner/_work/earth/earth/ml/cache/family1_tf
+
+=== stage index (lst05) ===
+  [index lst05] start (1 items)  0/1  0.0s
+::warning::lst05: the index could not open MOD11C1.A2026262.061.2026263092040 (OSError) — trying another day; a login that does not answer is not a verdict about the product
+::warning::lst05: the index could not open MOD11C1.A2000058.061.2020058191556 (OSError) — trying another day; a login that does not answer is not a verdict about the product
+::warning::lst05: the index could not open MOD11C1.A2013183.061.2021306123108 (OSError) — trying another day; a login that does not answer is not a verdict about the product
+::warning::lst05: NO granule could be opened at index time ([{'date': '2026-09-19', 'error': 'OSError: https://data.lpdaac.earthdatacloud.nasa.gov/lp-prod-protected/MOD11C1.061/MOD11C1.A2026262.061.2026263092040/MOD11C1.A2026262.061.2026263092040.hdf: HTTP 401 after 1 redirect(s), final host urs.earthdata.nasa.gov — Earthdata Login refused this account for this archive. Run the workflow with check_cr'}, {'date': '2000-02-27', 'error': 'OSError: https://data.lpdaac.earthdatacloud.nasa.gov/lp-prod-protected/MOD11C1.061/MOD11C1.A2000058.061.2020058191556/MOD11C1.A2000058.061.2020058191556.hdf: HTTP 401 after 1 redirect(s), final host urs.earthdata.nasa.gov — Earthdata Login refused this account for this archive. Run the workflow with check_cr'}, {'date': '2013-07-02', 'error': 'OSError: https://data.lpdaac.earthdatacloud.nasa.gov/lp-prod-protected/MOD11C1.061/MOD11C1.A2013183.061.2021306123108/MOD11C1.A2013183.061.2021306123108.hdf: HTTP 401 after 1 redirect(s), final host urs.earthdata.nasa.gov — Earthdata Login refused this account for this archive. Run the workflow with check_cr'}]) — the fetch stage meets the same login, where a failure is definite
+  [index lst05] plan.json  1/1  6.6s
+  index: lst05 — 29 year(s), C=4 (lst_day, lst_night, qc_day, qc_night), bins 1241..3268
+=== stage index done in 6.6s ===
+
+=== stage fetch (lst05) ===
+::warning::lst05: no netrc entry for urs.earthdata.nasa.gov was found; the download will fall back to whatever credentials the environment provides and may be refused. family1-build.yml writes that file on hosted runners.
+  [pull lst05 parts] start (29 items)  0/29  0.0s
+  hub: chfrank/earth-tensors with the token from $HF_TOKEN
+  lst05 1999: 2 file(s), 0 row(s) -> /opt/runner/_work/earth/earth/ml/cache/family1_tf/lst05/parts/1999
+  lst05 2000: 126 file(s), 266 row(s) -> /opt/runner/_work/earth/earth/ml/cache/family1_tf/lst05/parts/2000
+  lst05 2001: 148 file(s), 348 row(s) -> /opt/runner/_work/earth/earth/ml/cache/family1_tf/lst05/parts/2001
+  lst05 2002: 148 file(s), 355 row(s) -> /opt/runner/_work/earth/earth/ml/cache/family1_tf/lst05/parts/2002
+  lst05 2003: 148 file(s), 358 row(s) -> /opt/runner/_work/earth/earth/ml/cache/family1_tf/lst05/parts/2003
+  lst05 2004: 150 file(s), 370 row(s) -> /opt/runner/_work/earth/earth/ml/cache/family1_tf/lst05/parts/2004
+  lst05 2005: 148 file(s), 365 row(s) -> /opt/runner/_work/earth/earth/ml/cache/family1_tf/lst05/parts/2005
+  lst05 2006: 148 file(s), 365 row(s) -> /opt/runner/_work/earth/earth/ml/cache/family1_tf/lst05/parts/2006
+  lst05 2007: 4 file(s), 5 row(s) -> /opt/runner/_work/earth/earth/ml/cache/family1_tf/lst05/parts/2007
+  lst05 2008: 148 file(s), 363 row(s) -> /opt/runner/_work/earth/earth/ml/cache/family1_tf/lst05/parts/2008
+  lst05 2009: 148 file(s), 365 row(s) -> /opt/runner/_work/earth/earth/ml/cache/family1_tf/lst05/parts/2009
+  lst05 2010: 148 file(s), 365 row(s) -> /opt/runner/_work/earth/earth/ml/cache/family1_tf/lst05/parts/2010
+  lst05 2011: 148 file(s), 365 row(s) -> /opt/runner/_work/earth/earth/ml/cache/family1_tf/lst05/parts/2011
+  lst05 2012: 148 file(s), 365 row(s) -> /opt/runner/_work/earth/earth/ml/cache/family1_tf/lst05/parts/2012
+  lst05 2013: 148 file(s), 365 row(s) -> /opt/runner/_work/earth/earth/ml/cache/family1_tf/lst05/parts/2013
+  lst05 2014: 148 file(s), 365 row(s) -> /opt/runner/_work/earth/earth/ml/cache/family1_tf/lst05/parts/2014
+  lst05 2015: 148 file(s), 365 row(s) -> /opt/runner/_work/earth/earth/ml/cache/family1_tf/lst05/parts/2015
+  lst05 2016: 148 file(s), 356 row(s) -> /opt/runner/_work/earth/earth/ml/cache/family1_tf/lst05/parts/2016
+  lst05 2017: 148 file(s), 365 row(s) -> /opt/runner/_work/earth/earth/ml/cache/family1_tf/lst05/parts/2017
+  lst05 2018: 148 file(s), 365 row(s) -> /opt/runner/_work/earth/earth/ml/cache/family1_tf/lst05/parts/2018
+  lst05 2019: 148 file(s), 365 row(s) -> /opt/runner/_work/earth/earth/ml/cache/family1_tf/lst05/parts/2019
+  lst05 2020: 148 file(s), 365 row(s) -> /opt/runner/_work/earth/earth/ml/cache/family1_tf/lst05/parts/2020
+/opt/conda/lib/python3.11/site-packages/huggingface_hub/file_download.py:769: UserWarning: Not enough free disk space to download the file. The expected file size is: 75.24 MB. The target location /opt/earth-cache/family1_tf/lst05/src/hub/pull_2021/dl/.cache/huggingface/download/partials/family1_tf/lst05/2021 only has 40.93 MB free disk space.
+  warnings.warn(
+/opt/conda/lib/python3.11/site-packages/huggingface_hub/file_download.py:769: UserWarning: Not enough free disk space to download the file. The expected file size is: 75.24 MB. The target location /opt/earth-cache/family1_tf/lst05/src/hub/pull_2021/dl/partials/family1_tf/lst05/2021 only has 40.93 MB free disk space.
+  warnings.warn(
+Traceback (most recent call last):
+  File "/opt/runner/_work/earth/earth/ml/build_family1_stores.py", line 1529, in <module>
+    sys.exit(main())
+             ^^^^^^
+  File "/opt/runner/_work/earth/earth/ml/build_family1_stores.py", line 1524, in main
+    f10b.run_stages(ctx, stages, stage_fn=stage_fns(ad), deps=DEPS)
+  File "/opt/runner/_work/earth/earth/ml/build_family10_stores.py", line 5331, in run_stages
+    stage_fn[s](ctx)
+  File "/opt/runner/_work/earth/earth/ml/build_family1_stores.py", line 534, in stage_fetch_grid
+    ph.pull(ad.store, ctx.years, ctx.work,
+  File "/opt/runner/_work/earth/earth/ml/family10_parts_hub.py", line 485, in pull
+    p = _download(repo,
+        ^^^^^^^^^^^^^^^
+  File "/opt/runner/_work/earth/earth/ml/family10_parts_hub.py", line 117, in _download
+    return hf_hub_download(repo, path_in_repo, repo_type="dataset",
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/conda/lib/python3.11/site-packages/huggingface_hub/utils/_validators.py", line 91, in _inner_fn
+    return fn(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^
+  File "/opt/conda/lib/python3.11/site-packages/huggingface_hub/utils/_http.py", line 266, in _inner
+    return fn(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^
+  File "/opt/conda/lib/python3.11/site-packages/huggingface_hub/file_download.py", line 1022, in hf_hub_download
+    return _hf_hub_download_to_local_dir(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/conda/lib/python3.11/site-packages/huggingface_hub/file_download.py", line 1501, in _hf_hub_download_to_local_dir
+    _download_to_tmp_and_move(
+  File "/opt/conda/lib/python3.11/site-packages/huggingface_hub/file_download.py", line 2026, in _download_to_tmp_and_move
+    http_get(
+  File "/opt/conda/lib/python3.11/site-packages/huggingface_hub/utils/_validators.py", line 91, in _inner_fn
+    return fn(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^
+  File "/opt/conda/lib/python3.11/site-packages/huggingface_hub/file_download.py", line 462, in http_get
+    temp_file.write(chunk)
+OSError: [Errno 28] No space left on device
