@@ -294,7 +294,7 @@ store & what it is & producer & space & time & record & tier \\
 \midrule
 \code{gedi} & laser relative-height profile, cover, biomass per footprint & NASA GEDI, ISS & 25\,m every 60\,m & per shot & 2019-04-- & P \\
 \code{icesat2} & laser terrain and canopy height per segment & NASA ICESat-2 ATL08 & 100\,m & per pass & 2018-10-- & P \\
-\code{sif} & chlorophyll fluorescence soundings & TROPOMI; OCO-2/3 & $7\times3.5$\,km; $1.3\times2.2$\,km & per sounding & 2018-04--; 2014-09-- & P \\
+\code{sif} & chlorophyll fluorescence soundings & TROPOMI; OCO-2/3 & $7\times3.5$\,km; $1.3\times2.2$\,km & per sounding & 2018-05--; 2014-09-- & P \\
 \code{flux} & tower CO$_2$, water and heat exchange & FLUXNET, 700 sites & tower & half-hourly & 1991-- & P \\
 \code{fire} & active-fire detections & FIRMS, MODIS/VIIRS & 375\,m--1\,km & per overpass & 2000-11-- & P \\
 \code{gbif} & species occurrences, taxon as platform & GBIF snapshot & per-record uncertainty & day or month & 1600s-- & P \\
@@ -303,8 +303,8 @@ store & what it is & producer & space & time & record & tier \\
 \code{canopy30} & canopy height 2020 & GLAD, Landsat fitted to GEDI & 30\,m & one year & 2020 & G \\
 \code{biomass100} & above-ground biomass and its error & ESA CCI v7; GEDI L4B & 100\,m; 1\,km & annual & 2005--2024 & G \\
 \code{lossyear} & the year each pixel lost its forest; tree cover 2000 & Hansen GFC; JRC TMF & 30\,m & annual & 1990/2001-- & G \\
-\code{canopy\_ref} & 10\,m and 1\,m canopy height, catalogued & ETH; Meta/WRI & 10\,m; 1\,m & one year & 2020 & T \\
-\code{cat\_palsar} & L-band radar mosaics, catalogued & JAXA PALSAR-1/2 & 25\,m & annual & 2007-- & T \\
+\code{canopy\_ref} & 10\,m and 1\,m canopy height, catalogued & ETH; Meta/WRI & 10\,m; 1\,m & one year; a decade's composite & 2020; 2009--20 & T \\
+\code{cat\_palsar} & L- and P-band radar, catalogued & JAXA PALSAR-1/2; ESA BIOMASS & 25\,m; 50--200\,m & annual; per pass & 2007--; 2025-- & T \\
 \code{pace4k} & hyperspectral colour and phytoplankton groups & NASA PACE OCI & 4\,km & daily & 2024-03-- & G \\
 \bottomrule
 \end{tabular}
