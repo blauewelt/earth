@@ -1,0 +1,17 @@
+Traceback (most recent call last):
+  File "/home/runner/work/earth/earth/ml/build_family1_stores.py", line 1571, in <module>
+    sys.exit(main())
+             ^^^^^^
+  File "/home/runner/work/earth/earth/ml/build_family1_stores.py", line 1552, in main
+    ctx = f10b.Ctx(a, adapter=ad, layout=lay)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/work/earth/earth/ml/build_family10_stores.py", line 3583, in __init__
+    self.d_hi = parse_date(a.end) if a.end else END
+                ^^^^^^^^^^^^^^^^^
+  File "/home/runner/work/earth/earth/ml/build_family10_stores.py", line 326, in parse_date
+    return dt.date(*(int(x) for x in str(s)[:10].split("-")))
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/work/earth/earth/ml/build_family10_stores.py", line 326, in <genexpr>
+    return dt.date(*(int(x) for x in str(s)[:10].split("-")))
+                     ^^^^^^
+ValueError: invalid literal for int() with base 10: ''
