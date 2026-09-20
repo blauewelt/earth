@@ -1,0 +1,14 @@
+store     icesat2 — ICESat-2 ATL08 release 007: terrain height, canopy height, canopy openness and photon counts per 100 m LAND segment, six ground tracks to 88 degrees
+family    family1_tf (1.0.tf) · public -> chfrank/earth-tensors:tensors/family1_tf/icesat2
+axis      2022-12-01 .. 2022-12-31  bins 2988..2994 · time_s int32 (schema 2)
+channels  C=6: h_te_best_fit, h_canopy, canopy_openness, n_ca_photons, n_te_photons, segment_landcover
+work      /home/runner/work/earth/earth/ml/cache/family1_tf
+
+=== stage index (icesat2) ===
+  [index icesat2] start (1 items)  0/1  0.0s
+  [index icesat2] plan.json  1/1  10.9s
+  index: icesat2 — 1 year(s), C=6 (h_te_best_fit, h_canopy, canopy_openness, n_ca_photons, n_te_photons, segment_landcover), bins 2988..2994
+=== stage index done in 10.9s ===
+
+=== stage fetch (icesat2) ===
+  [fetch icesat2] start (1 items)  0/1  0.0s
