@@ -1,0 +1,338 @@
+{
+ "at": "2026-09-20T17:41:04+00:00",
+ "builder_git_sha": "0d308039070a878224be6182dbfb215c7adf34e2",
+ "bytes_fetched": 1440513444,
+ "bytes_fetched_per_frame": 288102688.8,
+ "bytes_index": 288177175,
+ "counts": {
+  "bytes_files": 1440513444,
+  "fetch_seconds": 73.84,
+  "files_read": 5,
+  "fill_pixels_dormancy": 16608122,
+  "fill_pixels_evi_amplitude": 16608122,
+  "fill_pixels_evi_area": 16608122,
+  "fill_pixels_evi_minimum": 16608122,
+  "fill_pixels_greenup": 16608122,
+  "fill_pixels_mid_greendown": 16608122,
+  "fill_pixels_mid_greenup": 16608122,
+  "fill_pixels_peak": 16608122,
+  "fill_pixels_qa_overall": 16608122,
+  "fill_pixels_senescence": 16608122,
+  "product_year": {
+   "2020": 5
+  },
+  "valid_pixels": 121918780
+ },
+ "distribution": "public",
+ "estimate_store_bytes": 3838120375,
+ "family": "1tf",
+ "frame_seconds": 432000,
+ "frames_fetched": 5,
+ "frames_per_bin": 1,
+ "groups": {
+  "h11v08": {
+   "C": 10,
+   "H": 2400,
+   "W": 2400,
+   "bytes_per_frame": {
+    "max": 26967299,
+    "mean": 26967299.0,
+    "min": 26967299
+   },
+   "bytes_per_stored_tile": {
+    "max": 787692,
+    "mean": 269673.0,
+    "median": 167181.0,
+    "p90": 700630.7000000001
+   },
+   "bytes_per_valid_pixel": 1.3339,
+   "compression_ratio": 4.27,
+   "dtype": "float16",
+   "encode_seconds_per_frame": 4.224,
+   "estimate_store_bytes": 674225675,
+   "frame_present_by_slot": [
+    0,
+    0,
+    0,
+    0,
+    0,
+    1
+   ],
+   "frames_fetched": 1,
+   "frames_missing": {
+    "no_frame_in_bin": 5
+   },
+   "frames_requested": 6,
+   "index_bytes_per_bin": 1728,
+   "note_formula": "pixels x frames x valid fraction x 2C x 1.2",
+   "note_formula_bytes": 1213036200,
+   "raw_bytes_per_frame": 115200000,
+   "record_frames": 25,
+   "tiles_empty": 0,
+   "tiles_per_frame": 100,
+   "tiles_stored": 100,
+   "valid_fraction": {
+    "dormancy": 0.350994,
+    "evi_amplitude": 0.350994,
+    "evi_area": 0.350994,
+    "evi_minimum": 0.350994,
+    "greenup": 0.350994,
+    "mid_greendown": 0.350994,
+    "mid_greenup": 0.350994,
+    "peak": 0.350994,
+    "qa_overall": 0.350994,
+    "senescence": 0.350994
+   },
+   "valid_fraction_per_frame": [
+    0.350994
+   ]
+  },
+  "h12v09": {
+   "C": 10,
+   "H": 2400,
+   "W": 2400,
+   "bytes_per_frame": {
+    "max": 30657196,
+    "mean": 30657196.0,
+    "min": 30657196
+   },
+   "bytes_per_stored_tile": {
+    "max": 624840,
+    "mean": 306572.0,
+    "median": 277592.5,
+    "p90": 458216.10000000003
+   },
+   "bytes_per_valid_pixel": 1.423,
+   "compression_ratio": 3.76,
+   "dtype": "float16",
+   "encode_seconds_per_frame": 4.206,
+   "estimate_store_bytes": 766473100,
+   "frame_present_by_slot": [
+    0,
+    0,
+    0,
+    0,
+    0,
+    1
+   ],
+   "frames_fetched": 1,
+   "frames_missing": {
+    "no_frame_in_bin": 5
+   },
+   "frames_requested": 6,
+   "index_bytes_per_bin": 1728,
+   "note_formula": "pixels x frames x valid fraction x 2C x 1.2",
+   "note_formula_bytes": 1292650200,
+   "raw_bytes_per_frame": 115200000,
+   "record_frames": 25,
+   "tiles_empty": 0,
+   "tiles_per_frame": 100,
+   "tiles_stored": 100,
+   "valid_fraction": {
+    "dormancy": 0.374031,
+    "evi_amplitude": 0.374031,
+    "evi_area": 0.374031,
+    "evi_minimum": 0.374031,
+    "greenup": 0.374031,
+    "mid_greendown": 0.374031,
+    "mid_greenup": 0.374031,
+    "peak": 0.374031,
+    "qa_overall": 0.374031,
+    "senescence": 0.374031
+   },
+   "valid_fraction_per_frame": [
+    0.374031
+   ]
+  },
+  "h18v04": {
+   "C": 10,
+   "H": 2400,
+   "W": 2400,
+   "bytes_per_frame": {
+    "max": 46052586,
+    "mean": 46052586.0,
+    "min": 46052586
+   },
+   "bytes_per_stored_tile": {
+    "max": 778723,
+    "mean": 523324.8,
+    "median": 691165.0,
+    "p90": 766695.0
+   },
+   "bytes_per_valid_pixel": 1.2116,
+   "compression_ratio": 2.5,
+   "dtype": "float16",
+   "encode_seconds_per_frame": 6.629,
+   "estimate_store_bytes": 1151357850,
+   "frame_present_by_slot": [
+    0,
+    0,
+    0,
+    0,
+    0,
+    1
+   ],
+   "frames_fetched": 1,
+   "frames_missing": {
+    "no_frame_in_bin": 5
+   },
+   "frames_requested": 6,
+   "index_bytes_per_bin": 1728,
+   "note_formula": "pixels x frames x valid fraction x 2C x 1.2",
+   "note_formula_bytes": 2280609000,
+   "raw_bytes_per_frame": 115200000,
+   "record_frames": 25,
+   "tiles_empty": 12,
+   "tiles_per_frame": 100,
+   "tiles_stored": 88,
+   "valid_fraction": {
+    "dormancy": 0.659898,
+    "evi_amplitude": 0.659898,
+    "evi_area": 0.659898,
+    "evi_minimum": 0.659898,
+    "greenup": 0.659898,
+    "mid_greendown": 0.659898,
+    "mid_greenup": 0.659898,
+    "peak": 0.659898,
+    "qa_overall": 0.659898,
+    "senescence": 0.659898
+   },
+   "valid_fraction_per_frame": [
+    0.659898
+   ]
+  },
+  "h20v08": {
+   "C": 10,
+   "H": 2400,
+   "W": 2400,
+   "bytes_per_frame": {
+    "max": 49694433,
+    "mean": 49694433.0,
+    "min": 49694433
+   },
+   "bytes_per_stored_tile": {
+    "max": 780890,
+    "mean": 496944.3,
+    "median": 667158.0,
+    "p90": 768519.7000000001
+   },
+   "bytes_per_valid_pixel": 1.1822,
+   "compression_ratio": 2.32,
+   "dtype": "float16",
+   "encode_seconds_per_frame": 7.929,
+   "estimate_store_bytes": 1242404025,
+   "frame_present_by_slot": [
+    0,
+    0,
+    0,
+    0,
+    0,
+    1
+   ],
+   "frames_fetched": 1,
+   "frames_missing": {
+    "no_frame_in_bin": 5
+   },
+   "frames_requested": 6,
+   "index_bytes_per_bin": 1728,
+   "note_formula": "pixels x frames x valid fraction x 2C x 1.2",
+   "note_formula_bytes": 2522057400,
+   "raw_bytes_per_frame": 115200000,
+   "record_frames": 25,
+   "tiles_empty": 0,
+   "tiles_per_frame": 100,
+   "tiles_stored": 100,
+   "valid_fraction": {
+    "dormancy": 0.729762,
+    "evi_amplitude": 0.729762,
+    "evi_area": 0.729762,
+    "evi_minimum": 0.729762,
+    "greenup": 0.729762,
+    "mid_greendown": 0.729762,
+    "mid_greenup": 0.729762,
+    "peak": 0.729762,
+    "qa_overall": 0.729762,
+    "senescence": 0.729762
+   },
+   "valid_fraction_per_frame": [
+    0.729762
+   ]
+  },
+  "h29v11": {
+   "C": 10,
+   "H": 2400,
+   "W": 2400,
+   "bytes_per_frame": {
+    "max": 144661,
+    "mean": 144661.0,
+    "min": 144661
+   },
+   "bytes_per_stored_tile": {
+    "max": 43486,
+    "mean": 5786.4,
+    "median": 1407.0,
+    "p90": 18815.800000000014
+   },
+   "bytes_per_valid_pixel": 1.2813,
+   "compression_ratio": 796.34,
+   "dtype": "float16",
+   "encode_seconds_per_frame": 0.728,
+   "estimate_store_bytes": 3659725,
+   "frame_present_by_slot": [
+    0,
+    0,
+    0,
+    0,
+    0,
+    1
+   ],
+   "frames_fetched": 1,
+   "frames_missing": {
+    "no_frame_in_bin": 5
+   },
+   "frames_requested": 6,
+   "index_bytes_per_bin": 1728,
+   "note_formula": "pixels x frames x valid fraction x 2C x 1.2",
+   "note_formula_bytes": 6774000,
+   "raw_bytes_per_frame": 115200000,
+   "record_frames": 25,
+   "tiles_empty": 75,
+   "tiles_per_frame": 100,
+   "tiles_stored": 25,
+   "valid_fraction": {
+    "dormancy": 0.00196,
+    "evi_amplitude": 0.00196,
+    "evi_area": 0.00196,
+    "evi_minimum": 0.00196,
+    "greenup": 0.00196,
+    "mid_greendown": 0.00196,
+    "mid_greenup": 0.00196,
+    "peak": 0.00196,
+    "qa_overall": 0.00196,
+    "senescence": 0.00196
+   },
+   "valid_fraction_per_frame": [
+    0.00196
+   ]
+  }
+ },
+ "inputs_not_read": [],
+ "layout": "sharded",
+ "licence_redistribution_confirmed": true,
+ "month": "2020-06",
+ "note_estimate": {
+  "bytes": 10000000000.0,
+  "what": "family1tf.tex ledger: '~10 GB a year' for MCD12Q2 v061 at 500 m over 315 tiles"
+ },
+ "note_formula_bytes": 7315126800,
+ "out_of_bounds": {},
+ "out_of_bounds_stored": 0,
+ "runner": "GitHub Actions 1000005645",
+ "seconds_per_frame": 14.96,
+ "source": "https://data.lpdaac.earthdatacloud.nasa.gov/lp-prod-protected/MCD12Q2.061/<granule>/<granule>.hdf",
+ "store": "pheno500",
+ "tier": "G",
+ "wall_seconds": 74.8,
+ "wall_seconds_index": 22.63,
+ "zstd_level": 15
+}

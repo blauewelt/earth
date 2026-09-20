@@ -1242,3 +1242,13 @@ new `no_frame_in_bin` skip reason does not change that arithmetic.
 `_modis_sin.py` (the sinusoidal-tile machinery `pheno500` and `lai500` share)
 and `burned500`'s own grid constants agree to the digit and differ in group
 shape; consolidating them is named in both docstrings.
+
+### The hosted probes, read 2026-09-20 17:41–17:50Z (files in `ml/family1/probes/`)
+
+| store | run | measured | verdict |
+|---|---|---|---|
+| `pheno500` | #293, 2020-06, five tiles | 15.0 s a frame (288 MB fetched a granule — CMR's constant 274.756 MB was close to real), 27–50 MB stored a frame for full tiles (compression 2.3–4.3×), valid fraction 0.35–0.73 on land, 0.002 on a sea tile; ≈ 0.77 GB per tile over the 25-year record → **≈ 240 GB for the store, ≈ 9.7 GB a year** (the ledger's 10 GB a year holds) | 315 frames × 15 s = 79 min a year: **one hosted lane a year**. Lanes #299–#310 (2014–2025) dispatched; 2001–2013 after them |
+| `lai500` | #294, 2020-07, four Terra composites × five tiles | 4.74 s a frame, 11 MB fetched a granule, 3.5–9.5 MB stored a frame (compression 5–13×), valid 0.70–1.00; 0.43 B a valid pixel → **≈ 90 GB a year** (the ledger's 60 GB was low) | 13,340 frames × 4.74 s = 17.6 h a year: **four quarter-lanes a year**. #311–#314 (2020) dispatched; 2021–2024 after their verdict, because 450 GB for five Terra years is a decision, not a default |
+| `pace4k` | #295, 2024-03, 23 frames (the record starts 03-05) | 14.6 s a frame, 20 MB stored a frame (0.2–30 MB), valid 0.068 global channels, 0.017 MOANA; the framework's estimate 5.8 GB for the record | **one lane a year**: #328–#330 (2024, 2025, 2026 to September) dispatched, hosted assembly after |
+| `icesat2` | #297 range mode, #298 whole mode, 2022-06, 12 granules | range: 1.6 MB/s over 20 requests a granule (read fraction 0.18, 105 s) — too slow; **whole: 36.6 MB/s, 25.7 s for 940 MB**, 32,250 rows a granule, 386,995 rows kept of 438,022 segments (23,199 inland water, 13,274 sea, 14,554 outside the window); h_canopy is NaN on 88 % of segments (bare ground), terrain height on none | 2022: 55,692 granules, **1.80 × 10⁹ rows, 70 GB store, 35 h of fetch** → twelve monthly lanes of ≈ 3 h in whole mode, #325–#339 dispatched (nine re-dispatched after a malformed end date cancelled #316–#324); assembly on the box (parts + store ≈ 150 GB) |
+| `gedi` | #296 FAILED: `ConnectTimeout` to `urs.earthdata.nasa.gov` while resolving the first L2A granule's redirect, after the index had listed 1,428 granules a product; re-dispatched as #315 | | if it fails the same way twice, the redirect resolve needs a retry with back-off — URS is the login host every Earthdata download passes through, and the other four Earthdata probes of the same minute succeeded |

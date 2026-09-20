@@ -1,0 +1,402 @@
+{
+ "at": "2026-09-20T17:47:04+00:00",
+ "builder_git_sha": "5805b5cec82dc651e03f4e6b9e6544e027a6ac79",
+ "bytes_fetched": 939524096,
+ "bytes_index": 183140514,
+ "bytes_per_row": 2427.742,
+ "channels": [
+  "h_te_best_fit",
+  "h_canopy",
+  "canopy_openness",
+  "n_ca_photons",
+  "n_te_photons",
+  "segment_landcover"
+ ],
+ "counts": {
+  "fetch_mode": "whole",
+  "fetch_seconds": 25.7,
+  "fill_values": {
+   "canopy_openness": 391461,
+   "h_canopy": 391461,
+   "h_canopy_uncertainty": 395204,
+   "h_te_best_fit": 1
+  },
+  "granules_listed": 4641,
+  "granules_skipped_by_cap": 4629,
+  "granules_wanted": 12,
+  "landcover_no_data": 269469,
+  "landcover_table": [
+   {
+    "0": "No_data",
+    "100": "Moss_and_lichen",
+    "111": "Closed_forest_evergreen_needle_leaf",
+    "112": "Closed_forest_evergreen_broad_leaf",
+    "113": "Closed_forest_deciduous_needle_leaf",
+    "114": "Closed_forest_deciduous_broad_leaf",
+    "115": "Closed_forest_mixed",
+    "116": "Closed_forest_unknown",
+    "121": "Open_forest_evergreen_needle_leaf",
+    "122": "Open_forest_evergreen_broad_leaf",
+    "123": "Open_forest_deciduous_needle_leaf",
+    "124": "Open_forest_deciduous_broad_leaf",
+    "125": "Open_forest_mixed",
+    "126": "Open_forest_unknown",
+    "20": "Shrubs",
+    "200": "Open_sea",
+    "255": "Undetermined",
+    "30": "Herbaceous",
+    "40": "Cultivated_and_managed_vegetation_agriculture",
+    "50": "Urban_built_up",
+    "60": "Bare_sparse_vegetation",
+    "70": "Snow_and_ice",
+    "80": "Permanent_water_bodies",
+    "90": "Herbaceous_wetleand"
+   }
+  ],
+  "landcover_table_source": "the segment_landcover dataset's own flag table",
+  "max_granules_cap": 12,
+  "msw_flag": {
+   "0": 128744,
+   "1": 64474,
+   "2": 20990,
+   "3": 9049,
+   "4": 138556,
+   "5": 25182
+  },
+  "per_granule": [
+   {
+    "bytes_read": 142606336,
+    "granule": "ATL08_20220531235826_10671511_007_01.h5",
+    "granule_bytes": 142606336,
+    "http_requests": 1,
+    "mode": "whole",
+    "read_fraction": 1.0
+   },
+   {
+    "bytes_read": 41943040,
+    "granule": "ATL08_20220603132124_11061512_007_01.h5",
+    "granule_bytes": 41943040,
+    "http_requests": 1,
+    "mode": "whole",
+    "read_fraction": 1.0
+   },
+   {
+    "bytes_read": 58720256,
+    "granule": "ATL08_20220606032025_11461504_007_01.h5",
+    "granule_bytes": 58720256,
+    "http_requests": 1,
+    "mode": "whole",
+    "read_fraction": 1.0
+   },
+   {
+    "bytes_read": 16777216,
+    "granule": "ATL08_20220608112650_11811514_007_01.h5",
+    "granule_bytes": 16777216,
+    "http_requests": 1,
+    "mode": "whole",
+    "read_fraction": 1.0
+   },
+   {
+    "bytes_read": 234881024,
+    "granule": "ATL08_20220611015857_12211511_007_01.h5",
+    "granule_bytes": 234881024,
+    "http_requests": 1,
+    "mode": "whole",
+    "read_fraction": 1.0
+   },
+   {
+    "bytes_read": 16777216,
+    "granule": "ATL08_20220613123410_12591501_007_01.h5",
+    "granule_bytes": 16777216,
+    "http_requests": 1,
+    "mode": "whole",
+    "read_fraction": 1.0
+   },
+   {
+    "bytes_read": 83886080,
+    "granule": "ATL08_20220616004319_12971505_007_01.h5",
+    "granule_bytes": 83886080,
+    "http_requests": 1,
+    "mode": "whole",
+    "read_fraction": 1.0
+   },
+   {
+    "bytes_read": 58720256,
+    "granule": "ATL08_20220618153453_13371505_007_01.h5",
+    "granule_bytes": 58720256,
+    "http_requests": 1,
+    "mode": "whole",
+    "read_fraction": 1.0
+   },
+   {
+    "bytes_read": 41943040,
+    "granule": "ATL08_20220621000415_13731504_007_01.h5",
+    "granule_bytes": 41943040,
+    "http_requests": 1,
+    "mode": "whole",
+    "read_fraction": 1.0
+   },
+   {
+    "bytes_read": 16777216,
+    "granule": "ATL08_20220623130039_00251601_007_01.h5",
+    "granule_bytes": 16777216,
+    "http_requests": 1,
+    "mode": "whole",
+    "read_fraction": 1.0
+   },
+   {
+    "bytes_read": 209715200,
+    "granule": "ATL08_20220626005906_00631603_007_01.h5",
+    "granule_bytes": 209715200,
+    "http_requests": 1,
+    "mode": "whole",
+    "read_fraction": 1.0
+   },
+   {
+    "bytes_read": 16777216,
+    "granule": "ATL08_20220628125241_01011605_007_01.h5",
+    "granule_bytes": 16777216,
+    "http_requests": 1,
+    "mode": "whole",
+    "read_fraction": 1.0
+   }
+  ],
+  "qc_canopy_uncertainty_missing": 344884,
+  "qc_msw_flag_nonzero": 258251,
+  "qc_terrain_flag_nonzero": 119803,
+  "release": "007",
+  "resolved_datasets": [
+   {
+    "gt1l": {
+     "canopy_openness": "land_segments/canopy/canopy_openness",
+     "delta_time": "land_segments/delta_time",
+     "h_canopy": "land_segments/canopy/h_canopy",
+     "h_canopy_uncertainty": "land_segments/canopy/h_canopy_uncertainty",
+     "h_te_best_fit": "land_segments/terrain/h_te_best_fit",
+     "lat": "land_segments/latitude",
+     "lon": "land_segments/longitude",
+     "msw_flag": "land_segments/msw_flag",
+     "n_ca_photons": "land_segments/canopy/n_ca_photons",
+     "n_te_photons": "land_segments/terrain/n_te_photons",
+     "segment_landcover": "land_segments/segment_landcover",
+     "segment_watermask": "land_segments/segment_watermask",
+     "terrain_flg": "land_segments/terrain_flg"
+    },
+    "gt1r": {
+     "canopy_openness": "land_segments/canopy/canopy_openness",
+     "delta_time": "land_segments/delta_time",
+     "h_canopy": "land_segments/canopy/h_canopy",
+     "h_canopy_uncertainty": "land_segments/canopy/h_canopy_uncertainty",
+     "h_te_best_fit": "land_segments/terrain/h_te_best_fit",
+     "lat": "land_segments/latitude",
+     "lon": "land_segments/longitude",
+     "msw_flag": "land_segments/msw_flag",
+     "n_ca_photons": "land_segments/canopy/n_ca_photons",
+     "n_te_photons": "land_segments/terrain/n_te_photons",
+     "segment_landcover": "land_segments/segment_landcover",
+     "segment_watermask": "land_segments/segment_watermask",
+     "terrain_flg": "land_segments/terrain_flg"
+    },
+    "gt2l": {
+     "canopy_openness": "land_segments/canopy/canopy_openness",
+     "delta_time": "land_segments/delta_time",
+     "h_canopy": "land_segments/canopy/h_canopy",
+     "h_canopy_uncertainty": "land_segments/canopy/h_canopy_uncertainty",
+     "h_te_best_fit": "land_segments/terrain/h_te_best_fit",
+     "lat": "land_segments/latitude",
+     "lon": "land_segments/longitude",
+     "msw_flag": "land_segments/msw_flag",
+     "n_ca_photons": "land_segments/canopy/n_ca_photons",
+     "n_te_photons": "land_segments/terrain/n_te_photons",
+     "segment_landcover": "land_segments/segment_landcover",
+     "segment_watermask": "land_segments/segment_watermask",
+     "terrain_flg": "land_segments/terrain_flg"
+    },
+    "gt2r": {
+     "canopy_openness": "land_segments/canopy/canopy_openness",
+     "delta_time": "land_segments/delta_time",
+     "h_canopy": "land_segments/canopy/h_canopy",
+     "h_canopy_uncertainty": "land_segments/canopy/h_canopy_uncertainty",
+     "h_te_best_fit": "land_segments/terrain/h_te_best_fit",
+     "lat": "land_segments/latitude",
+     "lon": "land_segments/longitude",
+     "msw_flag": "land_segments/msw_flag",
+     "n_ca_photons": "land_segments/canopy/n_ca_photons",
+     "n_te_photons": "land_segments/terrain/n_te_photons",
+     "segment_landcover": "land_segments/segment_landcover",
+     "segment_watermask": "land_segments/segment_watermask",
+     "terrain_flg": "land_segments/terrain_flg"
+    },
+    "gt3l": {
+     "canopy_openness": "land_segments/canopy/canopy_openness",
+     "delta_time": "land_segments/delta_time",
+     "h_canopy": "land_segments/canopy/h_canopy",
+     "h_canopy_uncertainty": "land_segments/canopy/h_canopy_uncertainty",
+     "h_te_best_fit": "land_segments/terrain/h_te_best_fit",
+     "lat": "land_segments/latitude",
+     "lon": "land_segments/longitude",
+     "msw_flag": "land_segments/msw_flag",
+     "n_ca_photons": "land_segments/canopy/n_ca_photons",
+     "n_te_photons": "land_segments/terrain/n_te_photons",
+     "segment_landcover": "land_segments/segment_landcover",
+     "segment_watermask": "land_segments/segment_watermask",
+     "terrain_flg": "land_segments/terrain_flg"
+    },
+    "gt3r": {
+     "canopy_openness": "land_segments/canopy/canopy_openness",
+     "delta_time": "land_segments/delta_time",
+     "h_canopy": "land_segments/canopy/h_canopy",
+     "h_canopy_uncertainty": "land_segments/canopy/h_canopy_uncertainty",
+     "h_te_best_fit": "land_segments/terrain/h_te_best_fit",
+     "lat": "land_segments/latitude",
+     "lon": "land_segments/longitude",
+     "msw_flag": "land_segments/msw_flag",
+     "n_ca_photons": "land_segments/canopy/n_ca_photons",
+     "n_te_photons": "land_segments/terrain/n_te_photons",
+     "segment_landcover": "land_segments/segment_landcover",
+     "segment_watermask": "land_segments/segment_watermask",
+     "terrain_flg": "land_segments/terrain_flg"
+    }
+   }
+  ],
+  "rows_kept": 386995,
+  "segment_landcover": {
+   "100": 873,
+   "113": 661,
+   "114": 33,
+   "116": 3350,
+   "123": 24,
+   "124": 9,
+   "126": 2480,
+   "20": 4556,
+   "200": 27268,
+   "255": 277971,
+   "30": 32381,
+   "40": 1,
+   "60": 26,
+   "70": 85648,
+   "80": 623,
+   "90": 2118
+  },
+  "segments_dropped_by_landcover": {
+   "200_Open_sea": 12899,
+   "80_Permanent_water_bodies": 375
+  },
+  "segments_in_granule": 438022,
+  "segments_inland_water": 23199,
+  "segments_no_time_or_position": 0,
+  "segments_outside_window": 14554,
+  "storage_and_fetch": [
+   {
+    "bytes_per_row_stored": 39,
+    "extrapolation_basis": {
+     "granules_per_month_2022_06": 4641,
+     "native_bytes_per_month_2022_06": 385160000000,
+     "note": "4,641 granules and 385,160 MB in 2022-06, measured from CMR's own granule sizes on 2026-09-20"
+    },
+    "measured": {
+     "bytes_per_second": 36557357.8,
+     "bytes_read": 939524096,
+     "fetch_seconds": 25.7,
+     "granules_read": 12,
+     "native_bytes_of_those_granules": 939524096,
+     "read_fraction": 1.0,
+     "rows_kept": 386995,
+     "rows_per_granule": 32249.6
+    },
+    "projected_one_year_2022": {
+     "bytes_to_fetch": 4621920000000,
+     "fetch_hours": 35.12,
+     "granules": 55692,
+     "rows": 1796043795,
+     "store_bytes": 70045708005
+    }
+   }
+  ],
+  "tracks_seen": 70
+ },
+ "counts_scope": "month",
+ "days_with_no_rows": 21,
+ "distinct_platforms": 6,
+ "distribution": "public",
+ "estimate_rows_per_year": null,
+ "estimate_store_bytes": null,
+ "family": "1tf",
+ "month": "2022-06",
+ "nan_fraction": {
+  "canopy_openness": 0.88157,
+  "h_canopy": 0.88157,
+  "h_te_best_fit": 0.0,
+  "n_ca_photons": 0.0,
+  "n_te_photons": 0.0,
+  "segment_landcover": 0.658704
+ },
+ "note_estimate": null,
+ "out_of_bounds": {
+  "canopy_openness": 0,
+  "h_canopy": 0,
+  "h_te_best_fit": 0,
+  "n_ca_photons": 0,
+  "n_te_photons": 0,
+  "segment_landcover": 0
+ },
+ "out_of_bounds_stored": {
+  "canopy_openness": 0,
+  "h_canopy": 0,
+  "h_te_best_fit": 0,
+  "n_ca_photons": 0,
+  "n_te_photons": 0,
+  "segment_landcover": 0
+ },
+ "platforms": {
+  "entries": 6,
+  "probe_platforms_without_entry": 0
+ },
+ "qc": {
+  "0": 10878,
+  "1": 256314,
+  "2": 119803
+ },
+ "rows": 386995,
+ "rows_outside_month_dropped_by_probe": 0,
+ "rows_per_day": [
+  62571,
+  0,
+  12410,
+  0,
+  0,
+  11500,
+  0,
+  0,
+  0,
+  0,
+  137563,
+  0,
+  0,
+  0,
+  0,
+  46323,
+  0,
+  23692,
+  0,
+  0,
+  11220,
+  0,
+  0,
+  0,
+  0,
+  81642,
+  0,
+  74,
+  0,
+  0
+ ],
+ "runner": "GitHub Actions 1000005653",
+ "schema_version": 2,
+ "source": "https://cmr.earthdata.nasa.gov/search/granules.json?collection_concept_id=C3565574177-NSIDC_CPRD (anonymous)",
+ "store": "icesat2",
+ "stored_bytes_per_row": 39,
+ "time_dtype": "int32",
+ "wall_seconds": 25.79,
+ "wall_seconds_index": 8.83
+}
