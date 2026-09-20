@@ -1,0 +1,80 @@
+  },
+  "v14h09": {
+   "H": 2400,
+   "W": 21600,
+   "C": 2,
+   "dtype": "float16",
+   "tiles_per_frame": 850,
+   "frames_requested": 6,
+   "frames_fetched": 1,
+   "frames_missing": {
+    "no_frame_in_bin": 5
+   },
+   "frame_present_by_slot": [
+    0,
+    0,
+    1,
+    0,
+    0,
+    0
+   ],
+   "valid_fraction": {
+    "burn_doy": 0.016872,
+    "qa": 0.016872
+   },
+   "valid_fraction_per_frame": [
+    0.016872
+   ],
+   "bytes_per_frame": {
+    "mean": 209775.0,
+    "min": 209775,
+    "max": 209775
+   },
+   "bytes_per_stored_tile": {
+    "mean": 5244.4,
+    "median": 4200.5,
+    "p90": 10793.600000000002,
+    "max": 15114
+   },
+   "tiles_stored": 40,
+   "tiles_empty": 810,
+   "raw_bytes_per_frame": 207360000,
+   "compression_ratio": 988.49,
+   "bytes_per_valid_pixel": 0.1199,
+   "encode_seconds_per_frame": 2.374,
+   "record_frames": 309,
+   "index_bytes_per_bin": 13728,
+   "estimate_store_bytes": 69062427,
+   "note_formula_bytes": 1297282363,
+   "note_formula": "pixels x frames x valid fraction x 2C x 1.2"
+  }
+ },
+ "out_of_bounds": {},
+ "out_of_bounds_stored": 0,
+ "inputs_not_read": [],
+ "counts": {
+  "granules_read": 268,
+  "pixels_burned": 2207757,
+  "pixels_unburned": 584511871,
+  "pixels_unmapped": 76641527,
+  "pixels_water": 880318845,
+  "tiles_in_frame": 268,
+  "months_read": 46
+ },
+ "bytes_fetched": 970656246,
+ "bytes_index": 2483022,
+ "bytes_fetched_per_frame": 21101222.7,
+ "wall_seconds": 525.04,
+ "wall_seconds_index": 0.85,
+ "seconds_per_frame": 11.414,
+ "estimate_store_bytes": 10140629130,
+ "note_formula_bytes": 870222552233,
+ "note_estimate": {
+  "bytes": 10000000000.0,
+  "what": "family1tf.tex ledger: 'the date each 500 m pixel burned', MCD64A1 v6.1, ~10 GB"
+ },
+ "runner": "GitHub Actions 1000005719",
+ "builder_git_sha": "293f8096b22c8a4c2d83c2d2cdb64d67dd895fcb",
+ "at": "2026-09-20T19:07:38+00:00"
+}
+probe -> /home/runner/work/earth/earth/ml/cache/family1_tf/probe/burned500/2019-08.json
