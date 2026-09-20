@@ -1,0 +1,349 @@
+{
+ "at": "2026-09-20T18:05:17+00:00",
+ "builder_git_sha": "5805b5cec82dc651e03f4e6b9e6544e027a6ac79",
+ "bytes_fetched": 1514361860,
+ "bytes_index": 45261614,
+ "bytes_per_row": 953.699,
+ "channels": [
+  "elev_lowestmode",
+  "rh25",
+  "rh50",
+  "rh75",
+  "rh90",
+  "rh98",
+  "cover",
+  "pai",
+  "agbd",
+  "agbd_se",
+  "sensitivity"
+ ],
+ "counts": {
+  "beams_seen": 48,
+  "degrade_flag": {
+   "0": 994156,
+   "30": 13550,
+   "50": 568457,
+   "70": 11559,
+   "80": 160
+  },
+  "fetch_mode": "range",
+  "fetch_seconds": 761.2,
+  "fill_values_l2a": 0,
+  "fill_values_l2b": 7342060,
+  "fill_values_l4a": 8746736,
+  "granules_listed_l2a": 1428,
+  "granules_listed_l2b": 1428,
+  "granules_listed_l4a": 1428,
+  "granules_skipped_by_cap": 1422,
+  "granules_wanted": 6,
+  "l2b_quality_zero": 4950455,
+  "l4a_quality_zero": 4967463,
+  "l4a_version": "3",
+  "max_granules_cap": 6,
+  "per_granule": [
+   {
+    "granule": "GEDI02_A_2022152133202_O19644_01_T00181_02_004_02_V003",
+    "l2a": {
+     "bytes_read": 135266305,
+     "granule_bytes": 1399093953,
+     "http_requests": 130,
+     "mode": "range",
+     "read_fraction": 0.096681
+    },
+    "l2b": {
+     "bytes_read": 77594625,
+     "granule_bytes": 770448489,
+     "http_requests": 75,
+     "mode": "range",
+     "read_fraction": 0.100714
+    },
+    "l4a": {
+     "bytes_read": 49021349,
+     "granule_bytes": 210502052,
+     "http_requests": 48,
+     "mode": "range",
+     "read_fraction": 0.232878
+    }
+   },
+   {
+    "granule": "GEDI02_A_2022159093408_O19750_01_T04541_02_004_02_V003",
+    "l2a": {
+     "bytes_read": 160432129,
+     "granule_bytes": 1835619734,
+     "http_requests": 154,
+     "mode": "range",
+     "read_fraction": 0.087399
+    },
+    "l2b": {
+     "bytes_read": 90177537,
+     "granule_bytes": 1037066803,
+     "http_requests": 87,
+     "mode": "range",
+     "read_fraction": 0.086954
+    },
+    "l4a": {
+     "bytes_read": 49785431,
+     "granule_bytes": 265792086,
+     "http_requests": 49,
+     "mode": "range",
+     "read_fraction": 0.18731
+    }
+   },
+   {
+    "granule": "GEDI02_A_2022163075742_O19811_01_T10845_02_004_02_V003",
+    "l2a": {
+     "bytes_read": 113246209,
+     "granule_bytes": 1131414057,
+     "http_requests": 109,
+     "mode": "range",
+     "read_fraction": 0.100093
+    },
+    "l2b": {
+     "bytes_read": 80740353,
+     "granule_bytes": 606932246,
+     "http_requests": 78,
+     "mode": "range",
+     "read_fraction": 0.13303
+    },
+    "l4a": {
+     "bytes_read": 47706563,
+     "granule_bytes": 199750082,
+     "http_requests": 47,
+     "mode": "range",
+     "read_fraction": 0.238831
+    }
+   },
+   {
+    "granule": "GEDI02_A_2022167044814_O19871_04_T09727_02_004_02_V003",
+    "l2a": {
+     "bytes_read": 54525953,
+     "granule_bytes": 444253225,
+     "http_requests": 53,
+     "mode": "range",
+     "read_fraction": 0.122736
+    },
+    "l2b": {
+     "bytes_read": 68157441,
+     "granule_bytes": 239978151,
+     "http_requests": 66,
+     "mode": "range",
+     "read_fraction": 0.284015
+    },
+    "l4a": {
+     "bytes_read": 27884936,
+     "granule_bytes": 75070855,
+     "http_requests": 28,
+     "mode": "range",
+     "read_fraction": 0.371448
+    }
+   },
+   {
+    "granule": "GEDI02_A_2022171170809_O19941_01_T09583_02_004_02_V003",
+    "l2a": {
+     "bytes_read": 122683393,
+     "granule_bytes": 1298982853,
+     "http_requests": 118,
+     "mode": "range",
+     "read_fraction": 0.094446
+    },
+    "l2b": {
+     "bytes_read": 87031809,
+     "granule_bytes": 744999031,
+     "http_requests": 84,
+     "mode": "range",
+     "read_fraction": 0.116821
+    },
+    "l4a": {
+     "bytes_read": 49800386,
+     "granule_bytes": 206038209,
+     "http_requests": 49,
+     "mode": "range",
+     "read_fraction": 0.241705
+    }
+   },
+   {
+    "granule": "GEDI02_A_2022176070028_O20012_03_T09746_02_004_02_V003",
+    "l2a": {
+     "bytes_read": 159383553,
+     "granule_bytes": 1765657974,
+     "http_requests": 153,
+     "mode": "range",
+     "read_fraction": 0.090269
+    },
+    "l2b": {
+     "bytes_read": 87031809,
+     "granule_bytes": 1089402859,
+     "http_requests": 84,
+     "mode": "range",
+     "read_fraction": 0.079889
+    },
+    "l4a": {
+     "bytes_read": 53892079,
+     "granule_bytes": 298210286,
+     "http_requests": 53,
+     "mode": "range",
+     "read_fraction": 0.180718
+    }
+   }
+  ],
+  "resolved_datasets": [
+   {
+    "L2A": {
+     "degrade": "degrade_flag",
+     "delta_time": "delta_time",
+     "elev": "elev_lowestmode",
+     "lat": "lat_lowestmode",
+     "lon": "lon_lowestmode",
+     "quality": "l2a_quality_flag_rel3",
+     "rh": "rh",
+     "sensitivity": "sensitivity",
+     "shot": "shot_number"
+    },
+    "L2B": {
+     "cover": "cover",
+     "pai": "pai",
+     "quality": "l2b_quality_flag_rel3",
+     "shot": "shot_number"
+    },
+    "L4A": {
+     "agbd": "agbd",
+     "agbd_se": "agbd_se",
+     "quality": "l4a_quality_flag_rel3",
+     "shot": "shot_number"
+    }
+   }
+  ],
+  "rows_kept": 1587882,
+  "shots_in_granule": 5856172,
+  "shots_no_time_or_position": 0,
+  "shots_outside_window": 0,
+  "shots_quality_flag_zero": 4268290,
+  "shots_without_l2b": 0,
+  "shots_without_l4a": 0,
+  "storage_and_fetch": [
+   {
+    "bytes_per_row_stored": 49,
+    "extrapolation_basis": {
+     "granules_per_month_2022_06": 1428,
+     "native_bytes_per_month_2022_06": 2642102500000,
+     "note": "1,428 granules of each of L2A, L2B and L4A v3 in 2022-06, 2.64e12 bytes in all, measured from CMR's own granule sizes on 2026-09-20"
+    },
+    "measured": {
+     "bytes_per_second": 1989440.2,
+     "bytes_read": 1514361860,
+     "fetch_seconds": 761.2,
+     "granules_read": 6,
+     "native_bytes_of_those_granules": 13619212945,
+     "read_fraction": 0.111193,
+     "rows_kept": 1587882,
+     "rows_per_granule": 264647.0
+    },
+    "projected_one_year_2022": {
+     "bytes_to_fetch": 3525401303910,
+     "fetch_hours": 492.24,
+     "granules": 17136,
+     "rows": 4534990992,
+     "store_bytes": 222214558608
+    }
+   }
+  ]
+ },
+ "counts_scope": "month",
+ "days_with_no_rows": 24,
+ "distinct_platforms": 8,
+ "distribution": "public",
+ "estimate_rows_per_year": null,
+ "estimate_store_bytes": null,
+ "family": "1tf",
+ "month": "2022-06",
+ "nan_fraction": {
+  "agbd": 0.440318,
+  "agbd_se": 0.440318,
+  "cover": 0.429607,
+  "elev_lowestmode": 0.0,
+  "pai": 0.429607,
+  "rh25": 0.0,
+  "rh50": 0.0,
+  "rh75": 0.0,
+  "rh90": 0.0,
+  "rh98": 0.0,
+  "sensitivity": 0.0
+ },
+ "note_estimate": null,
+ "out_of_bounds": {
+  "agbd": 0,
+  "agbd_se": 0,
+  "cover": 0,
+  "elev_lowestmode": 0,
+  "pai": 0,
+  "rh25": 0,
+  "rh50": 0,
+  "rh75": 0,
+  "rh90": 0,
+  "rh98": 0,
+  "sensitivity": 0
+ },
+ "out_of_bounds_stored": {
+  "agbd": 0,
+  "agbd_se": 0,
+  "cover": 0,
+  "elev_lowestmode": 0,
+  "pai": 0,
+  "rh25": 0,
+  "rh50": 0,
+  "rh75": 0,
+  "rh90": 0,
+  "rh98": 0,
+  "sensitivity": 0
+ },
+ "platforms": {
+  "entries": 8,
+  "probe_platforms_without_entry": 0
+ },
+ "qc": {
+  "0": 994156,
+  "1": 593726
+ },
+ "rows": 1587882,
+ "rows_outside_month_dropped_by_probe": 0,
+ "rows_per_day": [
+  152613,
+  0,
+  0,
+  0,
+  0,
+  0,
+  0,
+  437469,
+  0,
+  0,
+  0,
+  194128,
+  0,
+  0,
+  0,
+  125250,
+  0,
+  0,
+  0,
+  320210,
+  0,
+  0,
+  0,
+  0,
+  358212,
+  0,
+  0,
+  0,
+  0,
+  0
+ ],
+ "runner": "GitHub Actions 1000005671",
+ "schema_version": 2,
+ "source": "https://cmr.earthdata.nasa.gov/search/granules.json?collection_concept_id=C3974616071-LPCLOUD (anonymous)",
+ "store": "gedi",
+ "stored_bytes_per_row": 49,
+ "time_dtype": "int32",
+ "wall_seconds": 761.21,
+ "wall_seconds_index": 4.03
+}

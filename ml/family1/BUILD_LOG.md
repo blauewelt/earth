@@ -1307,3 +1307,20 @@ year's 73), and therefore a laned tier-G assembly starts on the year's first
 bin start (`--start 2020-01-02` for 2020) or carries `--allow-missing-years`;
 and a product-selecting knob (`LST05_GROUPS`, `LAI500_GROUPS`) is not a group
 subset and does not name a lane.
+
+### GEDI probe #315 (2022-06, six granules spread over the month, byte-range mode), read 2026-09-20 19:50Z
+
+1,587,882 quality shots from six granules (264,647 a granule), **read
+fraction 0.111 at 2.0 MB/s** — the byte-range reader is latency-bound (one
+request at a time), so 2022 would be 3.5 TB of ranged reads and **492 h of
+fetch**; whole granules would be 31.7 TB. Store for 2022: 4.53 × 10⁹ rows,
+**222 GB**. No NaN in the relative heights, sensitivity or elevation; cover
+and plant-area index NaN on 43 % of shots and biomass on 44 % (the L2B and
+L4A quality flags), `shots_without_l4a` 0 — the three products' granules
+line up shot for shot. Decision: **phase A of `gedi` is ONE MONTH, 2022-06**,
+as ten three-day lanes (`d0601-0603` … `d0628-0630`, ≈ 4 h each) with hosted
+assembly (≈ 18.5 GB store); the year waits for concurrent granule reads in
+`_h5range.py` (four workers would put a year at ≈ 120 h, twenty lanes) or
+for the Harmony Trajectory Subsetter — an Opus task, measured before the year
+is dispatched. Hosted runners on a public repository cost nothing, so the
+bound is wall time and bookkeeping, not money.
