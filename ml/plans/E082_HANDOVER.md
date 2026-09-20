@@ -1,4 +1,4 @@
-# E-082 handover — building families 1.gf, 1.0.tf and 0.9.tf (state on 2026-09-20 18:30Z)
+# E-082 handover — building families 1.gf, 1.0.tf and 0.9.tf (state on 2026-09-20 20:00Z)
 
 *For any agent picking this up. E-082 is the build of three new tensor
 families designed on 2026-09-16: **family 1.gf** — global ocean and
@@ -63,11 +63,18 @@ Twenty-six stores.
 
 ## 2 · Parked or in flight
 
-| store | family | state on 2026-09-20 18:30Z | what remains |
+| store | family | state on 2026-09-20 20:00Z | what remains |
 |---|---|---|---|
 | `lst05` | 1.0.tf, tier G | assembly **in flight** on the box, run #292 (`stage=all --parts-from-hub`, 1999 → 2026-09) | verify its `store.json`, add the row |
 | `snow05` | 1.0.tf, tier G | parts 1999–2026 on the Hub | assembly on the box after `lst05` |
-| `pheno500`, `lai500`, `pace4k`, `gedi`, `icesat2` | wave 6 | hosted **probes** #293–#297 dispatched 17:39Z | read `probe.json` from each run's artefact, write the numbers into BUILD_LOG and the registry, then decide phase-A builds (the thresholds are in BUILD_LOG "wave 6") |
+| `pheno500` | 1.0.tf, tier G | twelve year-lanes 2014–2025 fetching with `--push-parts` (#340–#351) | assemble hosted: `stage=all`, `start=2014-01-01 end=2025-12-31`, `extra_args="--parts-from-hub --assemble streaming"`; then lanes 2001–2013 and a re-assembly of the whole record |
+| `pace4k` | 1.gf, tier G | year-lanes 2024, 2025, 2026 (#352–#354; #354 green in 43 min) | assemble hosted: `stage=all`, `start=2024-03-05 end=2026-09-30`, `--parts-from-hub --assemble streaming` |
+| `lai500` | 1.0.tf, tier G | four quarter-lanes of 2020, `LAI500_GROUPS=terra` (#369–#372, queued) | assemble hosted with `--parts-from-hub --lanes quarters --start 2020-01-02 --end 2020-12-31`, `adapter_env LAI500_GROUPS=terra`; 2021–2024 are a decision (≈ 90 GB a year) |
+| `icesat2` | 1.0.tf | twelve monthly lanes of 2022 in whole-granule mode (re-dispatched on the fixed code, 2026-09-20 19:00–19:40Z) | assemble on the box: `stage=all`, `start=2022-01-01 end=2022-12-31`, `--parts-from-hub --lanes months --assemble streaming`, `ICESAT2_FETCH=whole` (≈ 70 GB store, 150 GB of disk) |
+| `gedi` | 1.0.tf | ten three-day lanes of 2022-06 (`d0601-0603` … `d0628-0630`), byte-range mode | assemble hosted: `stage=all`, `start=2022-06-01 end=2022-06-30`, `--parts-from-hub --lanes d0601-0603,d0604-0606,d0607-0609,d0610-0612,d0613-0615,d0616-0618,d0619-0621,d0622-0624,d0625-0627,d0628-0630 --assemble streaming`; the year waits for concurrent reads (BUILD_LOG, "GEDI probe #315") |
+| `canopy30` | 1.0.tf, tier G | fourteen tile-subset lanes (twenty tiles each, `CANOPY30_TILES=…`, the lists in the dispatch inputs of #389–#402) | assemble on the box with the whole-year window, no `CANOPY30_TILES`, `--parts-from-hub --lanes g-…` (the fourteen lane names are printed by each lane's log line `lane g-…`; or assemble without `--lanes` and accept `declared: false`) |
+| `flux` | 1.0.tf | `stage=all` with `--allow-missing-years` in flight (#355) | verify `store.json`, row |
+| `burned500` | 1.0.tf, tier G | probe #387 (2019-08) queued on the fixed valid-range check | then year-lanes 2000-11 → 2026 with `--push-parts`, hosted assembly (≈ 10 GB) |
 
 The exact assembly form for anything parked: `stage=all` with
 `extra_args: "--parts-from-hub --assemble streaming"` and explicit `start`/`end`
