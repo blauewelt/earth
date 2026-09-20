@@ -1,0 +1,80 @@
+    }
+   }
+  ],
+  "landcover_table": [
+   {
+    "0": "No_data",
+    "111": "Closed_forest_evergreen_needle_leaf",
+    "113": "Closed_forest_deciduous_needle_leaf",
+    "112": "Closed_forest_evergreen_broad_leaf",
+    "114": "Closed_forest_deciduous_broad_leaf",
+    "115": "Closed_forest_mixed",
+    "116": "Closed_forest_unknown",
+    "121": "Open_forest_evergreen_needle_leaf",
+    "123": "Open_forest_deciduous_needle_leaf",
+    "122": "Open_forest_evergreen_broad_leaf",
+    "124": "Open_forest_deciduous_broad_leaf",
+    "125": "Open_forest_mixed",
+    "126": "Open_forest_unknown",
+    "20": "Shrubs",
+    "30": "Herbaceous",
+    "90": "Herbaceous_wetleand",
+    "100": "Moss_and_lichen",
+    "60": "Bare_sparse_vegetation",
+    "40": "Cultivated_and_managed_vegetation_agriculture",
+    "50": "Urban_built_up",
+    "70": "Snow_and_ice",
+    "80": "Permanent_water_bodies",
+    "200": "Open_sea",
+    "255": "Undetermined"
+   }
+  ],
+  "storage_and_fetch": [
+   {
+    "measured": {
+     "granules_read": 12,
+     "rows_kept": 386995,
+     "rows_per_granule": 32249.6,
+     "native_bytes_of_those_granules": 939524096,
+     "bytes_read": 939524096,
+     "read_fraction": 1.0,
+     "fetch_seconds": 25.7,
+     "bytes_per_second": 36557357.8
+    },
+    "extrapolation_basis": {
+     "granules_per_month_2022_06": 4641,
+     "native_bytes_per_month_2022_06": 385160000000,
+     "note": "4,641 granules and 385,160 MB in 2022-06, measured from CMR's own granule sizes on 2026-09-20"
+    },
+    "projected_one_year_2022": {
+     "granules": 55692,
+     "rows": 1796043795,
+     "store_bytes": 70045708005,
+     "bytes_to_fetch": 4621920000000,
+     "fetch_hours": 35.12
+    },
+    "bytes_per_row_stored": 39
+   }
+  ]
+ },
+ "counts_scope": "month",
+ "bytes_fetched": 939524096,
+ "bytes_index": 183140514,
+ "wall_seconds": 25.79,
+ "wall_seconds_index": 8.83,
+ "bytes_per_row": 2427.742,
+ "stored_bytes_per_row": 39,
+ "time_dtype": "int32",
+ "schema_version": 2,
+ "platforms": {
+  "entries": 6,
+  "probe_platforms_without_entry": 0
+ },
+ "estimate_rows_per_year": null,
+ "estimate_store_bytes": null,
+ "note_estimate": null,
+ "runner": "GitHub Actions 1000005653",
+ "builder_git_sha": "5805b5cec82dc651e03f4e6b9e6544e027a6ac79",
+ "at": "2026-09-20T17:47:04+00:00"
+}
+probe -> /home/runner/work/earth/earth/ml/cache/family1_tf/probe/icesat2/2022-06.json
