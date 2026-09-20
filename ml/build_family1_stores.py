@@ -301,7 +301,6 @@ def stage_publish(ctx):
 
 def hub_agrees(ctx, sm, check_name):
     """The Hub's store.json and manifest.json against the local records."""
-    from huggingface_hub import hf_hub_download
     ad = ctx.adapter
     api, repo, tok = ctx.hub()
     f10b.check_publish_target(ad, ctx.layout, repo)
@@ -309,8 +308,7 @@ def hub_agrees(ctx, sm, check_name):
     scratch = os.path.join(ctx.scratch, "check_hub")
     got = {}
     for name in ("store.json", "manifest.json"):
-        p = hf_hub_download(repo, f"{prefix}/{name}", repo_type="dataset",
-                            token=tok, local_dir=scratch)
+        p = _download(repo, f"{prefix}/{name}", tok, scratch)
         got[name] = read_json(p, {})
     if got["store.json"].get("sha256") != sm.get("sha256"):
         sys.exit(f"{check_name} {ad.store}: the Hub's store.json does not "
@@ -751,10 +749,53 @@ def _pick_tiles(dest, groups, k, seed):
     return rng.sample(pool, min(k, len(pool)))
 
 
+DOWNLOAD_ATTEMPTS = 6
+DOWNLOAD_BACKOFF_S = (5, 15, 45, 120, 300)
+
+
+def _transient_download_error(e):
+    """A Hub read that may succeed on retry: a dropped connection, a
+    timeout, a 5xx or a 429 — never a 4xx that names OUR request (a 401 or
+    404 will not change by asking again)."""
+    from huggingface_hub.utils import HfHubHTTPError
+    if isinstance(e, HfHubHTTPError):
+        code = getattr(getattr(e, "response", None), "status_code", None)
+        return code is None or code == 429 or code >= 500
+    name = type(e).__name__
+    mod = type(e).__module__ or ""
+    if mod.startswith(("httpx", "httpcore", "requests", "urllib3")):
+        return not name.endswith(("HTTPStatusError", "InvalidURL"))
+    return isinstance(e, (ConnectionError, TimeoutError, OSError))
+
+
 def _download(repo, rel, tok, dest_dir):
+    """`hf_hub_download` with a retry ladder for transient network failures.
+
+    oc4k's first publish (family1-build #278, 2026-09-20) had uploaded all
+    3,702 files and was 1,220 files into the download-back check when the
+    Hub answered one HEAD with `Server disconnected without sending a
+    response` — an httpx RemoteProtocolError that huggingface_hub's own
+    backoff does not retry — and 7.5 hours of a verified store were thrown
+    away over one dropped connection. A restore check is a loop of
+    thousands of requests; one of them failing transiently is the expected
+    case, not the exceptional one. Six attempts, ~8 minutes of backoff.
+    """
     from huggingface_hub import hf_hub_download
-    return hf_hub_download(repo, rel, repo_type="dataset", token=tok,
-                           local_dir=dest_dir)
+    last = None
+    for i in range(DOWNLOAD_ATTEMPTS):
+        try:
+            return hf_hub_download(repo, rel, repo_type="dataset", token=tok,
+                                   local_dir=dest_dir)
+        except Exception as e:                      # noqa: BLE001
+            if not _transient_download_error(e) or i == DOWNLOAD_ATTEMPTS - 1:
+                raise
+            last = e
+            wait = DOWNLOAD_BACKOFF_S[min(i, len(DOWNLOAD_BACKOFF_S) - 1)]
+            print(f"::warning::{rel}: {type(e).__name__}: {str(e)[:160]} — "
+                  f"attempt {i + 1}/{DOWNLOAD_ATTEMPTS}, retrying in {wait}s",
+                  flush=True)
+            time.sleep(wait)
+    raise last
 
 
 def http_verify(repo, prefix, picks, dest, private):

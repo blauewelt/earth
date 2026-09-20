@@ -882,3 +882,53 @@ def test_a_publish_commits_in_batches_with_store_json_last(tmp_path,
                        ctx.layout.prefix(ctx.adapter.store))
     for n in list(sm["sha256"]) + ["store.json"]:
         assert os.path.exists(os.path.join(hub, n)), n
+
+
+def test_a_restore_download_retries_a_dropped_connection(monkeypatch,
+                                                         tmp_path):
+    """oc4k's first publish (#278) uploaded 3,702 files and died 1,220 files
+    into the download-back check on one `Server disconnected without
+    sending a response` — a transient the Hub client does not retry. The
+    restore's download now retries transient failures and still refuses a
+    4xx that names our own request."""
+    import huggingface_hub
+    from huggingface_hub.utils import HfHubHTTPError
+
+    class Resp:
+        def __init__(self, code):
+            self.status_code = code
+            self.headers = {}
+            self.request = None
+
+    calls = []
+    scripted = [
+        ConnectionError("Server disconnected without sending a response"),
+        HfHubHTTPError("503", response=Resp(503)),
+        "ok",
+    ]
+
+    def fake(repo, rel, **kw):
+        calls.append(rel)
+        nxt = scripted[len(calls) - 1]
+        if isinstance(nxt, Exception):
+            raise nxt
+        return str(tmp_path / "file")
+
+    monkeypatch.setattr(huggingface_hub, "hf_hub_download", fake)
+    monkeypatch.setattr(b1, "DOWNLOAD_BACKOFF_S", (0, 0, 0, 0, 0))
+    assert b1._download("r", "x", "tok", str(tmp_path)) == str(tmp_path / "file")
+    assert calls == ["x", "x", "x"]
+
+    # a 404 is our own bad request: no retry
+    calls.clear()
+    scripted[:] = [HfHubHTTPError("404", response=Resp(404))]
+    with pytest.raises(HfHubHTTPError):
+        b1._download("r", "y", "tok", str(tmp_path))
+    assert calls == ["y"]
+
+    # the ladder gives up after DOWNLOAD_ATTEMPTS transient failures
+    calls.clear()
+    scripted[:] = [ConnectionError("again")] * b1.DOWNLOAD_ATTEMPTS
+    with pytest.raises(ConnectionError):
+        b1._download("r", "z", "tok", str(tmp_path))
+    assert len(calls) == b1.DOWNLOAD_ATTEMPTS
