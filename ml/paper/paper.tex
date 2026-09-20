@@ -25,7 +25,7 @@
 \large a design for a global ocean--land--atmosphere model\\
 that reads the observational record through a learnable space--time cone}
 \author{blauewelt/earth --- design paper}
-\date{19 September 2026}
+\date{20 September 2026}
 
 \begin{document}
 \maketitle
@@ -63,11 +63,12 @@ the value an instrument would read at place $\mathbf{x}$, time $t+\ell$,
 depth or height, and footprint (the area and span the reading averages), for
 any channel the record has contained. A transport through a mooring section,
 an El Ni\~no index, a coastal pixel's chlorophyll, a station's temperature
-and a gauge's sea level are instances of one query, answered by one
+a gauge's sea level, a forest's canopy height at a laser footprint and a
+tower's carbon flux are instances of one query, answered by one
 representation and one decoder. The Atlantic overturning, the ocean carbon
-sink, El Ni\~no and sea-surface temperature are the four read-outs tracked,
-because each has a long truth series; they are properties of the
-instruments, not of the target.
+sink, El Ni\~no, sea-surface temperature and the land biosphere are the five
+read-outs tracked, because each has a long truth series; they are properties
+of the instruments, not of the target.
 
 \paragraph{The cone.} A driver moving at speed $v$ reaches $\mathbf{x}$ at
 time $t$ from within $v\,\Delta t$ at $t-\Delta t$. The points that can bear
@@ -187,8 +188,10 @@ under one registry:
 monthly, near-complete: colour at 4\,km, SST at 5.6\,km per sensor and
 2.2\,km merged, sea ice at 6.25\,km, 4\,km cloud-top temperature,
 $0.1^\circ$ daily rain, the daily $0.05^\circ$ land temperature, snow and
-reflectance. A group finer than $0.25^\circ$ is sharded: one compressed file
-per group and pentad, one frame per day (or three hours), $256\times256$
+reflectance, 500\,m leaf area every eight days, and the annual maps ---
+forest loss, canopy height and biomass, the leaf calendar --- at 30--500\,m.
+A group finer than $0.25^\circ$ is sharded: one compressed file per group and
+pentad, one frame per day (or three hours, or one per year), $256\times256$
 tiles with a byte index, so a read fetches the tiles around the anchor and an
 empty tile costs nothing. Footprint is a constant per group.
 \item \textbf{P, points, profiles, tracks} --- Argo and BGC-Argo, every
@@ -197,13 +200,15 @@ chemistry, drifters, tropical and open-ocean moorings, the overturning
 arrays' instruments, surface CO$_2$, along-track altimetry at 7\,km and SWOT
 swath cells at 2\,km, column CO$_2$ soundings, wave height, scatterometer
 wind cells; on land, stations, balloon soundings, tide gauges, buoys,
-gliders, flux towers, fire detections, rivers, soil probes, LiDAR
-footprints. A store is a set of columns --- time in integer seconds, latitude,
+gliders, flux towers, fire detections, rivers, soil probes, laser
+footprints of the canopy, fluorescence soundings, species occurrences. A
+store is a set of columns --- time in integer seconds, latitude,
 longitude, values, mask, quality, hashed platform, per-row footprint ---
 sorted by pentad with an index per bin, so the $k$ nearest observations in
 space--time are one bounded scan. Pre-1982 rows keep negative bins.
 \item \textbf{T, tiles} --- imagery at ${\le}$1\,km (Sentinel-1/2, Landsat,
-NISAR, OLCI, SLSTR, VIIRS, MODIS) is not stored as values. The store is a
+NISAR, OLCI, SLSTR, VIIRS, MODIS, the L- and P-band radar mosaics) and the
+10\,m and 1\,m canopy-height maps are not stored as values. The store is a
 scene-date catalogue (footprint, sensor, time, cloud fraction, location) and
 a token cache: a local codec turns one tile-date into a few 64-dimensional
 vectors, stored as a tier-P store whose values are those vectors, footprint
@@ -224,14 +229,31 @@ format, listed in the public registry.
 The global fine-granularity family (Table~\ref{tab:gf}) is the instance of
 tiers G and P over the ocean and air at ${\le}$10\,km and ${\le}$5 days; a
 land-and-coast family holds the station networks, gauges, towers, fires,
-rivers, the $0.05^\circ$ land fields, the imagery catalogue and the
-land-change targets; a third is that family with the catalogue replaced by
-the AlphaEarth cache. Admission: raw measurements first, a derived product
-only where it carries measurements nothing else does, no gap-filled
-analyses; three named exceptions slightly coarser than the rule (12.5\,km
-scatterometer wind, 11\,km rain, one 10.5\,km CO$_2$ sounder); and every
-store must lower the error on one of the four read-outs
-(\S\ref{sec:eval-compare}) or be dropped.
+rivers, the $0.05^\circ$ land fields, the imagery catalogue, the
+land-change targets and the biosphere stores of Table~\ref{tab:bio}; a
+third is that family with the catalogue replaced by the AlphaEarth cache.
+Admission: raw measurements first, a derived product only where it carries
+measurements nothing else does or is itself a target a user will ask for
+(the annual maps), no gap-filled analyses; four named exceptions slightly
+coarser than the rule (12.5\,km scatterometer wind, 11\,km rain, one
+10.5\,km CO$_2$ sounder, eight-day leaf area); and every store must lower the
+error on one of the five read-outs (\S\ref{sec:eval-compare}) or be dropped.
+
+\paragraph{The biosphere.} The living surface is observed by few
+instruments and fitted by many maps. The measurements are the laser
+footprints (GEDI \cite{gedi} to $\pm51.6^\circ$, ICESat-2 \cite{atl08}
+beyond), which alone see a canopy in three dimensions; fluorescence
+soundings \cite{tropomisif}, emitted by photosynthesis itself; the towers'
+eddy-covariance carbon flux \cite{fluxnet}, the long in-situ record; leaf
+area every eight days; fire detections; and three billion dated species
+occurrences \cite{gbif} --- sparse and biased, and the only global record of
+where life is. The annual maps --- forest loss \cite{hansen}, canopy height
+\cite{potapov,lang,tolan}, biomass \cite{ccibiomass}, the leaf calendar ---
+are each fitted to one of those measurements and are admitted as targets:
+what a user asks for, at the map's own footprint and year. Nothing on land
+advects; the drivers of every biosphere channel are the atmosphere and the
+soil, which every token already carries.
+
 
 \begin{table}[t]
 \centering\scriptsize\setlength{\tabcolsep}{3pt}
@@ -264,6 +286,33 @@ through the real builder replaces every size estimate before a store is
 built.\label{tab:gf}}
 \end{table}
 
+\begin{table}[t]
+\centering\scriptsize\setlength{\tabcolsep}{3pt}
+\begin{tabular}{@{}L{1.6cm}L{4.4cm}L{2.3cm}L{2.0cm}L{1.6cm}L{1.9cm}c@{}}
+\toprule
+store & what it is & producer & space & time & record & tier \\
+\midrule
+\code{gedi} & laser relative-height profile, cover, biomass per footprint & NASA GEDI, ISS & 25\,m every 60\,m & per shot & 2019-04-- & P \\
+\code{icesat2} & laser terrain and canopy height per segment & NASA ICESat-2 ATL08 & 100\,m & per pass & 2018-10-- & P \\
+\code{sif} & chlorophyll fluorescence soundings & TROPOMI; OCO-2/3 & $7\times3.5$\,km; $1.3\times2.2$\,km & per sounding & 2018-03--; 2014-09-- & P \\
+\code{flux} & tower CO$_2$, water and heat exchange & FLUXNET, 700 sites & tower & half-hourly & 1991-- & P \\
+\code{fire} & active-fire detections & FIRMS, MODIS/VIIRS & 375\,m--1\,km & per overpass & 2000-11-- & P \\
+\code{gbif} & species occurrences, taxon as platform & GBIF snapshot & per-record uncertainty & day or month & 1600s-- & P \\
+\code{lai500} & leaf area, absorbed light & MODIS/VIIRS & 500\,m & 8-day & 2000-02-- & G \\
+\code{pheno500} & green-up to dormancy dates, amplitude & MODIS MCD12Q2 & 500\,m & annual & 2001--2023 & G \\
+\code{canopy30} & canopy height 2020 & GLAD, Landsat fitted to GEDI & 30\,m & one year & 2020 & G \\
+\code{biomass100} & above-ground biomass and its error & ESA CCI v7; GEDI L4B & 100\,m; 1\,km & annual & 2005--2024 & G \\
+\code{lossyear} & the year each pixel lost its forest; tree cover 2000 & Hansen GFC; JRC TMF & 30\,m & annual & 1990/2001-- & G \\
+\code{canopy\_ref} & 10\,m and 1\,m canopy height, catalogued & ETH; Meta/WRI & 10\,m; 1\,m & one year & 2020 & T \\
+\code{cat\_palsar} & L-band radar mosaics, catalogued & JAXA PALSAR-1/2 & 25\,m & annual & 2007-- & T \\
+\code{pace4k} & hyperspectral colour and phytoplankton groups & NASA PACE OCI & 4\,km & daily & 2024-03-- & G \\
+\bottomrule
+\end{tabular}
+\caption{The biosphere stores of the land-and-coast family (\code{pace4k}
+belongs to the ocean family). Same conventions as Table~\ref{tab:gf}; the
+annual maps are targets, the rest inputs.\label{tab:bio}}
+\end{table}
+
 \paragraph{The local codec.} A $64\times64$ tile at 10\,m is 4{,}096 pixels
 of 13 bands and a $0.25^\circ$ cell holds ${\sim}$7{,}000 of them; they
 cannot be sampling points. The local codec is a masked autoencoder over one
@@ -287,7 +336,8 @@ The encoder attends over places at times, each carrying every channel there:
 $\mathbf{v}$: standardised anomalies of the group's channels; $\mathbf{m}$:
 observed flags; offsets from the anchor in km, m and days; footprint
 $\log_2 f_p=\log_2(\text{km}/27.83)$ and $\log_2 f_t=\log_2(\text{days}/5)$,
-clamped to $\pm12$ (a Sentinel-2 pixel $(-11.4,-4)$, an Argo profile
+clamped to $\pm12$ (a Sentinel-2 pixel $(-11.4,-4)$, a laser footprint
+$(-10.1,-12)$, a 30\,m annual map pixel $(-9.9,+6.2)$, an Argo profile
 $(-4,-4)$, a 4\,km daily cell $(-2.8,-2.3)$, an OISST pentad cell $(0,0)$, a
 reanalysis cell at its true support $(+2.9,0)$, a monthly $1^\circ$ Argo
 field $(+2,+2.6)$); $n_R$: how many such observations were within reach;
@@ -363,7 +413,13 @@ currents, height and profiles 130\,km per pentad with a long memory; SST and
 mixed layer $\max(\text{that},500\,\text{km})$ at lags ${\le}$1 then the
 ocean's growth; land 400\,km flat, no drift; $\mathbf{d}=0$ everywhere; the
 waist ellipse at the measured flow anisotropy $0.71$. Step zero is the fixed
-hourglass.
+hourglass. The biosphere channels are land channels: no carrier of their
+own, an aperture that opens over the atmospheric and soil tokens, fire the
+one exception with the wind as its carrier at 5--30\,km a day. Their memories
+--- weeks for leaf area, decades for canopy height --- exceed the cone, so a
+slow channel is read as a state: the previous annual map is an input token
+at lag ${\ge}$73 pentads and next year's map at the same footprint is the
+target; the same hourglass at the annual time footprint.
 
 \paragraph{Aperture, at zero extra tokens.} A token carries all channels of
 its group, so each channel reads the shared points through its own weight
@@ -421,7 +477,11 @@ against the fixed cone, and a drop over 10\% is a flag.
 hidden at the waist; lags ${\le}\ell_0\in\{1,2,3\}$ hidden; a $90^\circ$
 bearing wedge hidden; points hidden at random ($p=0.3$); for the nowcast,
 the whole waist. The task is not signalled by a token; hidden markers and
-the lead in each query suffice. Three rules are not knobs: a target's
+the lead in each query suffice. Point observations --- a profile, a laser
+footprint, a fluorescence sounding, a tower's half-hour --- are hidden and
+predicted like cells; an annual map is a T1 or T4 target at its own
+footprint and year, with the previous year's map visible. Three rules are
+not knobs: a target's
 channel must be visible somewhere in the input (the sampler counts
 violations, required zero); the waist family scores hidden channels only; and
 every (task, family, lead) is reported against the score of predicting the
@@ -555,10 +615,10 @@ two-humped, as an El Ni\~no index at 6--24 months may be.
 
 A prediction is a query in the token's own coordinates: offset in space,
 depth, time; channel; sphere; source; footprint. A $0.25^\circ$ cell over a
-pentad, a 300\,m pixel on a day, a station at an hour and a float at its
-depths are one decoder, because it was trained on targets with those
-coordinates and footprints, each scored against the observation that has
-that support. The domain is what the training targets contained, at the
+pentad, a 300\,m pixel on a day, a station at an hour, a float at its
+depths, a canopy's height at a 25\,m footprint and a 30\,m pixel's loss year
+are one decoder, because it was trained on targets with those coordinates
+and footprints, each scored against the observation that has that support. The domain is what the training targets contained, at the
 footprints they came with; a channel never observed cannot be asked for,
 and a footprint far outside the seen range is an extrapolation and is
 reported as one. A query where the source never covered --- SST over land
@@ -669,9 +729,15 @@ the point families with against without, per read-out --- El Ni\~no by
 Ni\~no-3.4 at six months against warm-water-volume persistence; carbon by
 held-out surface CO$_2$ against a climatological null; overturning by the
 velocity loss with drifter tokens against without; SST by the level-3 cell
-loss with drifter and ship tokens against without --- and per store on the
-read-out it was admitted for; the coastal tile codec with against without
-tile tokens, three seeds; AlphaEarth's cache in place of the tile codec.
+loss with drifter and ship tokens against without; the land biosphere by
+held-out tower carbon flux against a per-site day-of-year climatology and
+damped persistence, and by canopy height at held-out laser footprints
+against the 2020 map and the footprint's previous value, with fluorescence
+at held-out soundings as the dense check --- and per store on the read-out
+it was admitted for; the coastal tile codec with against without tile
+tokens, three seeds; AlphaEarth's cache in place of the tile codec, scored
+on the canopy read-out as well, since that embedding was fitted to the same
+laser.
 
 \textbf{(5) Scale}: the width ladder at L2; sphere-routed experts against a
 dense model of equal active parameters at L3.
@@ -749,10 +815,12 @@ El Ni\~no & Ni\~no-3.4 correlation at six months & warm-water-volume persistence
 carbon sink & held-out surface-CO$_2$ error & climatological null & \tbd & \tbd \\
 overturning & velocity loss / bar; transport $r$ at $26.5^\circ$N & drifter-free cone; damped persistence & \tbd & \tbd \\
 SST & level-3 cell loss / bar & drifter- and ship-free cone & \tbd & \tbd \\
+land biosphere & tower flux error / bar; canopy height error at laser footprints & site climatology, damped persistence; the 2020 map, previous value & \tbd & \tbd \\
 \bottomrule
 \end{tabular}
 \caption{Comparison (4): the stores per read-out, and the footprint fields,
-against the same cone without them.\label{tab:res-readouts}}
+against the same cone without them. The biosphere row is also scored with
+AlphaEarth's cache in place of the tile codec.\label{tab:res-readouts}}
 \end{table}
 
 \begin{table}[H]
@@ -790,7 +858,11 @@ variable is embedded as, not where it is read from. The architecture is a
 masked autoencoder \cite{mae} with Perceiver cross-attention
 \cite{perceiver}; AlphaEarth Foundations \cite{alphaearth} is the closest
 embedding-field model, over land at annual cadence, and enters here as a
-token cache; geospatial tile models \cite{prithvi} embed imagery. Frozen
+token cache; geospatial tile models \cite{prithvi} embed imagery. Global
+canopy-height maps \cite{potapov,lang,tolan} regress one year of laser
+footprints from imagery, one map per year; here the footprints are targets
+in their own coordinates and the maps are one more target, so the forecast
+of a canopy is scored against the laser, not against a map. Frozen
 backbones with shallow read-outs \cite{lehmann} are the evaluation stance,
 judged by what a forecaster predicts from the representation rather than by
 a current-state probe. The LIM \cite{penland,newman} and the
@@ -879,6 +951,35 @@ Oceanography} 130.
 \bibitem{argo} D. Roemmich, J. Gilson (2009). The 2004--2008 mean and
 annual cycle of temperature, salinity, and steric height in the global
 ocean from the Argo Program. \emph{Progress in Oceanography} 82.
+\bibitem{gedi} R. Dubayah et al.\ (2020). The Global Ecosystem Dynamics
+Investigation: high-resolution laser ranging of the Earth's forests and
+topography. \emph{Science of Remote Sensing} 1.
+\bibitem{atl08} A. Neuenschwander, K. Pitts (2019). The ATL08 land and
+vegetation product for the ICESat-2 mission. \emph{Remote Sensing of
+Environment} 221.
+\bibitem{tropomisif} P. K\"ohler et al.\ (2018). Global retrievals of
+solar-induced chlorophyll fluorescence with TROPOMI: first results and
+intersensor comparison to OCO-2. \emph{Geophysical Research Letters} 45.
+\bibitem{fluxnet} G. Pastorello et al.\ (2020). The FLUXNET2015 dataset and
+the ONEFlux processing pipeline for eddy covariance data. \emph{Scientific
+Data} 7.
+\bibitem{gbif} GBIF (2026). Occurrence snapshot, monthly export on the AWS
+Open Data registry. \url{https://www.gbif.org}.
+\bibitem{hansen} M. Hansen et al.\ (2013). High-resolution global maps of
+21st-century forest cover change. \emph{Science} 342.
+\bibitem{potapov} P. Potapov et al.\ (2021). Mapping global forest canopy
+height through integration of GEDI and Landsat data. \emph{Remote Sensing of
+Environment} 253.
+\bibitem{lang} N. Lang, W. Jetz, K. Schindler, J. Wegner (2023). A
+high-resolution canopy height model of the Earth. \emph{Nature Ecology \&
+Evolution} 7.
+\bibitem{tolan} J. Tolan et al.\ (2024). Very high resolution canopy height
+maps from RGB imagery using self-supervised vision transformer and
+convolutional decoder trained on aerial lidar. \emph{Remote Sensing of
+Environment} 300.
+\bibitem{ccibiomass} M. Santoro et al.\ (2021). The global forest
+above-ground biomass pool for 2010 estimated from high-resolution satellite
+observations. \emph{Earth System Science Data} 13.
 \end{thebibliography}
 
 \appendix
@@ -899,8 +1000,11 @@ OISST v2.1 (NOAA NCEI), NCEP/NCAR Reanalysis-1 (NOAA PSL), the
 Roemmich--Gilson Argo climatology (Scripps; Argo data from the International
 Argo Program), OC-CCI v6.0 (ESA CCI, PML), RAPID-MOCHA-WBTS (NERC, NSF,
 NOAA), the Global Drifter Program and GTMBA (NOAA AOML, PMEL), SOCAT,
-Copernicus Marine along-track sea level, and the sources named per store in
-the registries.
+Copernicus Marine along-track sea level, GEDI (NASA LP DAAC, ORNL DAAC),
+ICESat-2 ATL08 (NSIDC), TROPOMI fluorescence (Caltech, ESA), FLUXNET,
+GBIF, MODIS and VIIRS land products (LP DAAC), GLAD, ETH and Meta canopy
+height, ESA CCI Biomass, Hansen GFC, PACE (NASA OB.DAAC), and the sources
+named per store in the registries.
 \end{sloppypar}
 
 \end{document}
