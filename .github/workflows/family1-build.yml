@@ -159,6 +159,9 @@ on:
         description: "true = build nothing; check the Earthdata Login account against LP DAAC, GES DISC and PO.DAAC (hosted runner only) and print what each archive answered"
         type: boolean
         default: false
+      free_cache:
+        description: "self-hosted box only: comma-separated <family1_x>/<store> work directories under the box's persistent cache (/opt/earth-cache) to DELETE before the build, e.g. family1_gf/oc4k,family1_gf/swh. Each is deleted only if it carries publish.done AND check.done -- the store is on the Hub and verified -- and the step refuses otherwise. This is how a box with a 420 GB disk assembles a fourth 150 GB store after three published ones (lst05 #292 died on ENOSPC behind oc4k and swh, 2026-09-20)"
+        default: ""
 
 permissions:
   contents: write
@@ -194,6 +197,36 @@ jobs:
           mkdir -p /opt/earth-cache
           rm -rf ml/cache
           ln -s /opt/earth-cache ml/cache
+
+      - name: Free published stores from the persistent cache (self-hosted box only)
+        if: ${{ github.event.inputs.free_cache != '' && github.event.inputs.runner != 'ubuntu-latest' && github.event.inputs.runner != '' }}
+        env:
+          FREE_CACHE: ${{ github.event.inputs.free_cache }}
+        run: |
+          # A published, verified store's work directory is re-derivable
+          # from the Hub (its parts AND its store are there, byte-identical),
+          # so it is the one thing on a box that is safe to delete -- and the
+          # two markers are the proof, not the run colour (ml/CLAUDE.md §0.2).
+          IFS=',' read -ra items <<< "${FREE_CACHE}"
+          for it in "${items[@]}"; do
+            it="${it// /}"
+            [ -z "${it}" ] && continue
+            case "${it}" in
+              family1_*/[a-z0-9_]*) ;;
+              *) echo "::error::free_cache: '${it}' is not <family1_x>/<store>"; exit 1 ;;
+            esac
+            d="/opt/earth-cache/${it}"
+            if [ ! -d "${d}" ]; then echo "free_cache: ${d} is not there -- nothing to free"; continue; fi
+            if [ ! -f "${d}/publish.done" ] || [ ! -f "${d}/check.done" ]; then
+              echo "::error::free_cache: ${d} has no publish.done + check.done -- not a verified, published store; refusing to delete it"
+              exit 1
+            fi
+            echo "free_cache: ${it} published $(cat "${d}/publish.done") checked $(cat "${d}/check.done")"
+            du -sh "${d}" || true
+            rm -rf "${d}"
+            echo "freed ${d}"
+          done
+          df -h /opt/earth-cache
 
       - name: Install
         run: |
