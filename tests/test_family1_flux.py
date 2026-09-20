@@ -129,15 +129,38 @@ def test_local_standard_time_is_converted_with_the_sites_own_offset():
     assert (d == 1800).all()
 
 
-def test_a_site_without_a_utc_offset_is_refused_not_guessed():
-    bad = fx._bif_csv("ZZ-Bad", None, 0.0, 0.0, 0.0, "WSA", "no_offset")
-    with pytest.raises(fx.FormatError) as e:
-        fx.read_bif(bad.encode(), "ZZ-Bad")
-    assert "UTC_OFFSET" in str(e.value)
-    assert "longitude" in str(e.value)
+def test_a_site_without_a_utc_offset_derives_one_from_its_longitude():
+    """27 AmeriFlux towers ship no BADM UTC_OFFSET row (E-082 wave 4).
+
+    The Earth turns 15 degrees of longitude an hour, so such a tower takes
+    `round(lon / 15)` hours and says so; with no longitude either there is
+    nothing to place its rows on a UTC axis with, and that is still a refusal.
+    """
+    bad = fx._bif_csv("ZZ-Nof", None, 44.0, -121.5, 900.0, "ENF", "no_offset")
+    off, meta = fx.read_bif(bad.encode(), "ZZ-Nof", lon=-121.5)
+    assert off == -8.0                      # round(-121.5 / 15) = round(-8.1)
+    assert meta["_utc_offset_source"] == fx.UTC_OFFSET_LONGITUDE == "longitude"
+    # the two sides of the dateline and the zero meridian
+    assert fx.utc_offset_from_longitude(0.0) == 0.0
+    assert fx.utc_offset_from_longitude(151.2) == 10.0        # Sydney
+    assert fx.utc_offset_from_longitude(-72.2) == -5.0        # Harvard Forest
+    assert fx.utc_offset_from_longitude(179.9) == 12.0
+    assert fx.utc_offset_from_longitude(-179.9) == -12.0
+    # NO offset AND no longitude is still a refusal, not a zero
+    for lon in (None, "", float("nan")):
+        with pytest.raises(fx.FormatError) as e:
+            fx.read_bif(bad.encode(), "ZZ-Nof", lon=lon)
+        assert "UTC_OFFSET" in str(e.value) and "longitude" in str(e.value)
     good = fx._bif_csv("US-Smk", -5, 42.5, -72.2, 340.0, "DBF", None)
     off, meta = fx.read_bif(good.encode(), "US-Smk")
     assert off == -5.0 and meta["IGBP"] == "DBF"
+    assert meta["_utc_offset_source"] == fx.UTC_OFFSET_BADM == "badm"
+    # the BADM row WINS over the longitude wherever it exists: a site whose
+    # legal zone is not its solar one (a tower at 0 E on +1) must not be moved
+    off, meta = fx.read_bif(
+        fx._bif_csv("EU-Pol", 1, 48.0, 0.4, 100.0, "CRO", None).encode(),
+        "EU-Pol", lon=0.4)
+    assert off == 1.0 and meta["_utc_offset_source"] == "badm"
     # an offset outside -14..14 is a refusal too
     with pytest.raises(fx.FormatError):
         fx.read_bif(fx._bif_csv("X", 99, 0, 0, 0, "WSA", None).encode(), "X")
@@ -293,8 +316,11 @@ def test_platforms_json_carries_the_site_metadata(smoke):
     assert us["elev_m"] == 340.0 and us["hub_code"] == 1
     # the cadence and the offset the archive itself declared
     assert us["resolution"] == "HH" and us["utc_offset"] == -5.0
+    # all three smoke towers carry a BADM UTC_OFFSET, so all three say so
+    assert us["utc_offset_source"] == "badm"
     assert by_id["AU-Smk"]["hub"] == "tern"
     assert by_id["IT-Smk"]["hub"] == "icos"
+    assert {v["utc_offset_source"] for v in d.values()} == {"badm"}
 
 
 def test_the_probe_measured_the_month(smoke):
@@ -307,24 +333,58 @@ def test_the_probe_measured_the_month(smoke):
     assert c["sites_read"] == 3
     assert c["channels_absent"] == {"rn": 1}
     assert c["out_of_bounds"]["ta"] > 0     # the 999 degree row
+    # the ledger says where every tower's UTC offset came from
+    assert c["utc_offset_source"] == {"badm": 3}
 
 
-def test_a_site_whose_archive_will_not_read_is_an_absence(tmp_path,
-                                                          monkeypatch):
-    """A listed site whose BADM file has no UTC_OFFSET stops the pass."""
+def test_a_tower_with_no_badm_offset_is_read_with_the_derived_one(tmp_path,
+                                                                  monkeypatch):
+    """The whole fix, end to end on a real synthetic archive.
+
+    ZZ-Nof sits at 44.0 N, 121.5 W and its BADM file has no UTC_OFFSET row.
+    `read_zip` must place its half hours on `round(-121.5 / 15)` = -8 hours
+    and tally the derivation under `counts["utc_offset_source"]` — the ledger
+    entry a build report and the probe both carry.
+    """
     clear_env(monkeypatch)
     root = str(tmp_path)
     fx.make_smoke_sources(root, dt.date(2018, 6, 1), dt.date(2018, 7, 31),
-                          extra=(fx.SMOKE_BAD_SITE,))
+                          extra=(fx.SMOKE_NO_OFFSET_SITE,))
     ad = fx.FluxAdapter()
     ctx = _Ctx(root)
     sites, _ = ad.sites(ctx)
-    assert "ZZ-Bad" in sites
-    raw, why = ad.archive(ctx, sites["ZZ-Bad"])
+    assert "ZZ-Nof" in sites and sites["ZZ-Nof"]["lon"] == -121.5
+    raw, why = ad.archive(ctx, sites["ZZ-Nof"])
     assert raw is not None and why is None
+
+    counts = {}
+    cols, off, meta, counts = fx.read_zip(raw, "ZZ-Nof", "amf", counts,
+                                          lon=sites["ZZ-Nof"]["lon"])
+    assert off == -8.0
+    assert meta["_utc_offset_source"] == "longitude"
+    assert counts["utc_offset_source"] == {"longitude": 1}
+    # 2018-06-01 00:00 LOCAL at -8 is 08:00 UTC — the conversion really used
+    # the derived offset and not zero
+    t0 = int(cols["t"][0])
+    assert (dt.datetime(1982, 1, 1) + dt.timedelta(seconds=t0)) == \
+        dt.datetime(2018, 6, 1, 8, 0)
+
+    # a tower WITH a BADM offset tallies under "badm" in the same counter, so
+    # one ledger line says how many towers took which route
+    with open(os.path.join(root, "flux", "archives", "US-Smk.zip"), "rb") as f:
+        fx.read_zip(f.read(), "US-Smk", "amf", counts, lon=-72.2)
+    assert counts["utc_offset_source"] == {"longitude": 1, "badm": 1}
+
+    # and a site with NO BADM file at all is still a refusal: the derivation
+    # replaces a missing ROW, never a missing file
+    import io as _io
+    buf = _io.BytesIO()
+    with zipfile.ZipFile(buf, "w") as z:
+        z.writestr("XX_A-B_FLUXNET_FLUXMET_HH_2018-2018_v1.3_r1.csv",
+                   fx._hh_csv("A-B", 0, None))
     with pytest.raises(fx.FormatError) as e:
-        fx.read_zip(raw, "ZZ-Bad", "amf", {})
-    assert "UTC_OFFSET" in str(e.value)
+        fx.read_zip(buf.getvalue(), "A-B", "amf", {}, lon=10.0)
+    assert "no BADM" in str(e.value)
 
 
 def test_an_empty_hub_listing_is_a_refusal(tmp_path, monkeypatch):

@@ -71,6 +71,20 @@
 # LST05_GROUPS / SNOW05_GROUPS / REFL05_GROUPS (which satellite's group to
 # build) and STATIC_FINE_FIELDS (which of the static store's fields to build).
 #
+# THE TWO ORBITAL LiDARs (E-082 wave 6): `gedi` and `icesat2` are tier-P
+# stores whose granules are HDF5 (Hierarchical Data Format version 5), so the
+# install step also carries `h5py` -- rasterio's GDAL has an HDF5 driver but
+# these are group-structured swath files, not rasters. Both READ ONLY THE
+# DATASETS THEY NEED, over HTTP byte ranges, because one month of GEDI's three
+# products is 2.58 TB native and one month of ATL08 is 376 GB (both measured
+# on NASA's Common Metadata Repository, 2026-09-20). Both also carry a SIZE
+# GATE: every stage past `probe` refuses a window crossing a calendar-year
+# boundary unless GEDI_ALLOW_BUILD=1 / ICESAT2_ALLOW_BUILD=1 is passed through
+# `adapter_env`, because phase A builds one year (2022) and the probe's
+# measured rows and bytes decide the rest. Their other adapter_env knobs are
+# GEDI_L4A_VERSION (3 or 2.1), GEDI_FETCH / ICESAT2_FETCH (range or whole) and
+# GEDI_MAX_GRANULES / ICESAT2_MAX_GRANULES (how many granules one call reads).
+#
 # workflow_dispatch ONLY. The `runner` input can point this at a rented box;
 # a pull_request / schedule trigger here would hand that box to anyone who
 # opens a PR (ml/CLAUDE.md 6). 9 inputs of the 25 GitHub allows.
@@ -141,8 +155,8 @@ jobs:
 
       - name: Install
         run: |
-          pip install --quiet numpy huggingface_hub zstandard netCDF4 requests rasterio pyhdf scipy pyarrow
-          python3 -c "import importlib.metadata as m, numpy, huggingface_hub, zstandard, netCDF4, requests, rasterio, scipy, pyhdf.SD, pyarrow; print('deps ok', rasterio.__version__, rasterio.__gdal_version__, 'pyhdf', m.version('pyhdf'), 'scipy', scipy.__version__, 'pyarrow', pyarrow.__version__)"
+          pip install --quiet numpy huggingface_hub zstandard netCDF4 requests rasterio pyhdf scipy pyarrow h5py
+          python3 -c "import importlib.metadata as m, numpy, huggingface_hub, zstandard, netCDF4, requests, rasterio, scipy, pyhdf.SD, pyarrow, h5py; print('deps ok', rasterio.__version__, rasterio.__gdal_version__, 'pyhdf', m.version('pyhdf'), 'scipy', scipy.__version__, 'pyarrow', pyarrow.__version__, 'h5py', h5py.__version__)"
 
       - name: Earthdata Login check (hosted runner only)
         if: ${{ github.event.inputs.check_credentials == 'true' }}

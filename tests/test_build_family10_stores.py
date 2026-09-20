@@ -1989,6 +1989,88 @@ def test_58_the_flag_is_the_only_way_through_and_the_store_records_the_hole(
     assert meta["per_year"]["1982"] < meta["per_year"]["1981"]
 
 
+def _socat_stream_ctx(tmp, **over):
+    """A socat build (the ONE-STREAM store) laid out but not run."""
+    src = os.path.join(tmp, "src_socat_stream")
+    work = os.path.join(tmp, "work_socat_stream")
+    os.makedirs(work, exist_ok=True)
+    b10.make_smoke_sources(src, "socat", b10.parse_date(SMOKE_START),
+                           b10.parse_date(SMOKE_END))
+    return b10.Ctx(_ns(store="socat", work=work, source_dir=src,
+                       start=SMOKE_START, end=SMOKE_END, **over))
+
+
+def _absent_after_the_stream(ad, unit, why):
+    """Wrap `fetch_stream` so the pass ends with one input unread.
+
+    An absence inside a one-stream fetch is a property of the SOURCE (a short
+    mirror, a member that would not inflate), and neither is reachable from a
+    synthetic archive without corrupting the file in a way that also changes
+    the rows. The wrapper reports the absence the way an adapter does —
+    `ctx.note_absent` after the rows — so the test exercises the framework's
+    branch and nothing else.
+    """
+    real = ad.fetch_stream
+
+    def wrapped(ctx):
+        for item in real(ctx):
+            yield item
+        ctx.note_absent(unit, why)
+    ad.fetch_stream = wrapped
+    return ad
+
+
+def test_58b_allow_missing_years_is_honoured_for_a_ONE_STREAM_store(tmp_path):
+    """The flag used to be INERT for a store whose fetch is one pass.
+
+    `stage_fetch`'s one-stream branch withheld EVERY year's marker on any
+    absence, unconditionally, and closed no year — so the parts had no
+    counts.json, the assemble admitted them as unmeasured prefixes, and
+    store.json's per-year ledger came out empty while the run reported
+    success. Measured on `flux` (E-082 wave 6), whose 27 towers with no BADM
+    UTC_OFFSET row made the absence routine. The fix is the missing condition
+    in that branch, so the test asserts BOTH sides of it: without the flag
+    nothing is marked and the stage refuses, with it the pass closes the
+    ordinary way and store.json records the degrade.
+    """
+    tmp = str(tmp_path)
+
+    # (1) WITHOUT the flag: unchanged — the whole pass is the resumable unit,
+    # so no year is marked and `fetch_absence_check` refuses.
+    ctx = _socat_stream_ctx(tmp)
+    _absent_after_the_stream(ctx.adapter, "SOCATv2026.tsv",
+                             "the mirror served 12 bytes of 1,411,801,422")
+    b10.run_stages(ctx, ["index"])
+    with pytest.raises(SystemExit) as e:
+        b10.run_stages(ctx, ["fetch"])
+    assert "allow-missing-years" in str(e.value)
+    for y in ctx.years:
+        assert not b10.marked(ctx.root, f"parts/{y}"), y
+    assert not b10.marked(ctx.root, "fetch")
+    assert not os.path.exists(os.path.join(ctx.store, "store.json"))
+
+    # (2) WITH the flag: the pass closes, every year that held rows carries
+    # its counts.json and its marker, the stream's ledger reaches store.json
+    # exactly once (the `ledger` year), and the degrade is written down.
+    ctx2 = _socat_stream_ctx(tmp, allow_missing_years=True)
+    _absent_after_the_stream(ctx2.adapter, "SOCATv2026.tsv",
+                             "the mirror served 12 bytes of 1,411,801,422")
+    b10.run_stages(ctx2, ["index"])
+    b10.run_stages(ctx2, ["fetch"])
+
+    meta = json.load(open(os.path.join(ctx2.store, "store.json")))
+    deg = meta["degraded"]
+    assert deg["allow_missing_years"] is True
+    assert any(e["unit"] == "SOCATv2026.tsv" for e in deg["inputs_not_read"])
+    for y in ctx2.years:
+        assert b10.marked(ctx2.root, f"parts/{y}"), y
+        assert os.path.exists(os.path.join(ctx2.year_dir(y), "counts.json"))
+    # the ledger is the STREAM's, counted once — the bug test 55 pins, with
+    # the flag now taking the same path
+    assert meta["counts"]["rows_read"] >= meta["N"] > 0
+    assert sum(meta["per_year"].values()) == meta["N"]
+
+
 def test_59_fetch_first_tells_an_empty_archive_from_a_moved_one():
     """ERDDAP's "produced no matching results" is the archive saying the year
     is empty; a bare 404 is the dataset id moving under the build. They used

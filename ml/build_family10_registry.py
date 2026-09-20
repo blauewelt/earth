@@ -117,6 +117,28 @@ INHERITED_STORES = ("gdp", "gtmba", "socat", "slatrack")
 STORE_ROOTS = {s: INHERITS_ROOT for s in INHERITED_STORES}
 STORE_ROOTS["fishing"] = HF_ROOT               # tensors/family10_2
 
+# THE SIBLING FAMILIES (E-082), added 2026-09-20. Family 10 is the 0.25°
+# global tensor and its point stores; families 1.gf, 1.0.tf and 0.9.tf are the
+# FINE observation families — everything at 10 km or finer and 5 days or finer
+# that a model reads beside it. Nothing in either registry said the other
+# existed, so a reader who found one had no way to learn of the other. This is
+# the line that fixes that, and it is ONE additive key.
+#
+# It is written here rather than imported from `ml/build_family1_registry.py`
+# (which writes those three files) on purpose: that module imports every
+# family-1 adapter, and making family 10's registry depend on forty adapter
+# modules would buy nothing but a new way for this builder to fail. The three
+# names are the contract between the two builders; `tests/
+# test_family1_registry.py` asserts they are the names family 1 really writes.
+SIBLING_REGISTRIES = (
+    {"family": "family1_gf", "family_version": "1.gf",
+     "registry": "tensors/family1_gf/family1gf.json"},
+    {"family": "family1_tf", "family_version": "1.0.tf",
+     "registry": "tensors/family1_tf/family1tf.json"},
+    {"family": "family09_tf", "family_version": "0.9.tf",
+     "registry": "tensors/family09_tf/family09tf.json"},
+)
+
 
 def store_root(name):
     """The Hub root a tier-P store is published under. One lookup, one place."""
@@ -495,6 +517,18 @@ def build_registry(repo=HUB_REPO_DEFAULT, work=None, stores=F10_STORES,
                              "manifest — the registry never copies a "
                              "tensor's metadata, because a copy is the thing "
                              "that goes stale")},
+        },
+        # THE OTHER FAMILIES OVER THE SAME PLANET (E-082). Not an inheritance
+        # — nothing here is built from them and nothing there from here — but
+        # a reader holding this registry alone would otherwise have no way to
+        # learn that the fine observation families exist at all.
+        "siblings": {
+            "note": ("the FINE observation families (E-082): everything at "
+                     "10 km or finer and 5 days or finer, read beside this "
+                     "family's 0.25° tensor. Different families, one planet; "
+                     "each has its own registry in the same shape as this "
+                     "one, written by ml/build_family1_registry.py."),
+            "registries": [dict(s) for s in SIBLING_REGISTRIES],
         },
         "tier_g": g_meta,
         "readers": {

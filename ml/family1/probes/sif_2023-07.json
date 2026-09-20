@@ -1,0 +1,1248 @@
+{
+ "at": "2026-09-20T17:29:18+00:00",
+ "builder_git_sha": "2154286d29c143feadc3c6e933a2160c59405d16",
+ "bytes_fetched": 12313108712,
+ "bytes_index": 397470602,
+ "bytes_per_row": 121.046,
+ "channels": [
+  "sif_740",
+  "sif_740_daily",
+  "sif_740_error",
+  "cloud_fraction",
+  "solar_zenith",
+  "viewing_zenith"
+ ],
+ "counts": {
+  "days_listed": 33,
+  "days_wanted": 31,
+  "fetch_seconds": 577.5,
+  "fill_valued": 3,
+  "items": 33,
+  "max_days": 0,
+  "note_estimate": [
+   {
+    "bytes": 160000000000.0,
+    "what": "family1tf.tex ledger: '60-160 GB for TROPOMI; the cloud cut decides and the probe measures it', over an estimated 5e8 clear soundings a year"
+   }
+  ],
+  "per_day": [
+   {
+    "bytes": 402064007,
+    "cloud_fraction_cut": {
+     "le_0.1": 0.488735,
+     "le_0.2": 0.610121,
+     "le_0.3": 0.701561,
+     "le_0.5": 0.842965,
+     "le_0.8": 1.0
+    },
+    "day": "2023-07-01",
+    "delta_time_units": "milliseconds since 2023-07-01T00:00:00 UTC",
+    "footprint_km": {
+     "max": 8.537,
+     "median": 5.097,
+     "min": 4.495,
+     "p1": 4.5,
+     "p25": 4.637,
+     "p75": 6.08,
+     "p99": 8.294
+    },
+    "format": "NETCDF4",
+    "has_corners": 4,
+    "log2_fp_measured": -2.4488,
+    "n_elem": 3322606,
+    "processor_version": "01.00.01",
+    "reference_time_s": 1309478400.0,
+    "thresholds": {
+     "cloud": 0.8,
+     "sza": 70.0,
+     "vza": 60.0
+    },
+    "time_units": "seconds since 2010-01-01 00:00:00",
+    "title": "TROPOSIF_L2B",
+    "valid_fraction": 1.0
+   },
+   {
+    "bytes": 407007462,
+    "cloud_fraction_cut": {
+     "le_0.1": 0.516061,
+     "le_0.2": 0.633152,
+     "le_0.3": 0.719988,
+     "le_0.5": 0.851909,
+     "le_0.8": 1.0
+    },
+    "day": "2023-07-02",
+    "delta_time_units": "milliseconds since 2023-07-02T00:00:00 UTC",
+    "footprint_km": {
+     "max": 8.537,
+     "median": 5.083,
+     "min": 4.496,
+     "p1": 4.5,
+     "p25": 4.63,
+     "p75": 6.07,
+     "p99": 8.299
+    },
+    "format": "NETCDF4",
+    "has_corners": 4,
+    "log2_fp_measured": -2.453,
+    "n_elem": 3363461,
+    "processor_version": "01.00.01",
+    "reference_time_s": 1309564800.0,
+    "thresholds": {
+     "cloud": 0.8,
+     "sza": 70.0,
+     "vza": 60.0
+    },
+    "time_units": "seconds since 2010-01-01 00:00:00",
+    "title": "TROPOSIF_L2B",
+    "valid_fraction": 1.0
+   },
+   {
+    "bytes": 401130976,
+    "cloud_fraction_cut": {
+     "le_0.1": 0.515272,
+     "le_0.2": 0.637181,
+     "le_0.3": 0.725503,
+     "le_0.5": 0.856729,
+     "le_0.8": 1.0
+    },
+    "day": "2023-07-03",
+    "delta_time_units": "milliseconds since 2023-07-03T00:00:00 UTC",
+    "footprint_km": {
+     "max": 8.536,
+     "median": 5.113,
+     "min": 4.496,
+     "p1": 4.5,
+     "p25": 4.636,
+     "p75": 6.162,
+     "p99": 8.305
+    },
+    "format": "NETCDF4",
+    "has_corners": 4,
+    "log2_fp_measured": -2.4443,
+    "n_elem": 3314895,
+    "processor_version": "01.00.01",
+    "reference_time_s": 1309651200.0,
+    "thresholds": {
+     "cloud": 0.8,
+     "sza": 70.0,
+     "vza": 60.0
+    },
+    "time_units": "seconds since 2010-01-01 00:00:00",
+    "title": "TROPOSIF_L2B",
+    "valid_fraction": 1.0
+   },
+   {
+    "bytes": 407243775,
+    "cloud_fraction_cut": {
+     "le_0.1": 0.540048,
+     "le_0.2": 0.65147,
+     "le_0.3": 0.736246,
+     "le_0.5": 0.864335,
+     "le_0.8": 1.0
+    },
+    "day": "2023-07-04",
+    "delta_time_units": "milliseconds since 2023-07-04T00:00:00 UTC",
+    "footprint_km": {
+     "max": 8.536,
+     "median": 5.048,
+     "min": 4.495,
+     "p1": 4.5,
+     "p25": 4.622,
+     "p75": 6.033,
+     "p99": 8.294
+    },
+    "format": "NETCDF4",
+    "has_corners": 4,
+    "log2_fp_measured": -2.4629,
+    "n_elem": 3365414,
+    "processor_version": "01.00.01",
+    "reference_time_s": 1309737600.0,
+    "thresholds": {
+     "cloud": 0.8,
+     "sza": 70.0,
+     "vza": 60.0
+    },
+    "time_units": "seconds since 2010-01-01 00:00:00",
+    "title": "TROPOSIF_L2B",
+    "valid_fraction": 1.0
+   },
+   {
+    "bytes": 382365570,
+    "cloud_fraction_cut": {
+     "le_0.1": 0.506094,
+     "le_0.2": 0.632725,
+     "le_0.3": 0.726139,
+     "le_0.5": 0.86152,
+     "le_0.8": 1.0
+    },
+    "day": "2023-07-05",
+    "delta_time_units": "milliseconds since 2023-07-05T00:00:00 UTC",
+    "footprint_km": {
+     "max": 8.535,
+     "median": 5.068,
+     "min": 4.496,
+     "p1": 4.5,
+     "p25": 4.624,
+     "p75": 6.081,
+     "p99": 8.296
+    },
+    "format": "NETCDF4",
+    "has_corners": 4,
+    "log2_fp_measured": -2.4571,
+    "n_elem": 3159809,
+    "processor_version": "01.00.01",
+    "reference_time_s": 1309824000.0,
+    "thresholds": {
+     "cloud": 0.8,
+     "sza": 70.0,
+     "vza": 60.0
+    },
+    "time_units": "seconds since 2010-01-01 00:00:00",
+    "title": "TROPOSIF_L2B",
+    "valid_fraction": 1.0
+   },
+   {
+    "bytes": 412239018,
+    "cloud_fraction_cut": {
+     "le_0.1": 0.497952,
+     "le_0.2": 0.623692,
+     "le_0.3": 0.718735,
+     "le_0.5": 0.857482,
+     "le_0.8": 1.0
+    },
+    "day": "2023-07-06",
+    "delta_time_units": "milliseconds since 2023-07-06T00:00:00 UTC",
+    "footprint_km": {
+     "max": 8.537,
+     "median": 5.097,
+     "min": 4.496,
+     "p1": 4.5,
+     "p25": 4.636,
+     "p75": 6.107,
+     "p99": 8.305
+    },
+    "format": "NETCDF4",
+    "has_corners": 4,
+    "log2_fp_measured": -2.4489,
+    "n_elem": 3406697,
+    "processor_version": "01.00.01",
+    "reference_time_s": 1309910400.0,
+    "thresholds": {
+     "cloud": 0.8,
+     "sza": 70.0,
+     "vza": 60.0
+    },
+    "time_units": "seconds since 2010-01-01 00:00:00",
+    "title": "TROPOSIF_L2B",
+    "valid_fraction": 1.0
+   },
+   {
+    "bytes": 410339197,
+    "cloud_fraction_cut": {
+     "le_0.1": 0.496797,
+     "le_0.2": 0.625995,
+     "le_0.3": 0.719463,
+     "le_0.5": 0.855737,
+     "le_0.8": 1.0
+    },
+    "day": "2023-07-07",
+    "delta_time_units": "milliseconds since 2023-07-07T00:00:00 UTC",
+    "footprint_km": {
+     "max": 8.539,
+     "median": 5.094,
+     "min": 4.495,
+     "p1": 4.5,
+     "p25": 4.636,
+     "p75": 6.107,
+     "p99": 8.306
+    },
+    "format": "NETCDF4",
+    "has_corners": 4,
+    "log2_fp_measured": -2.4499,
+    "n_elem": 3390996,
+    "processor_version": "01.00.01",
+    "reference_time_s": 1309996800.0,
+    "thresholds": {
+     "cloud": 0.8,
+     "sza": 70.0,
+     "vza": 60.0
+    },
+    "time_units": "seconds since 2010-01-01 00:00:00",
+    "title": "TROPOSIF_L2B",
+    "valid_fraction": 1.0
+   },
+   {
+    "bytes": 405072914,
+    "cloud_fraction_cut": {
+     "le_0.1": 0.517245,
+     "le_0.2": 0.641433,
+     "le_0.3": 0.729808,
+     "le_0.5": 0.862728,
+     "le_0.8": 1.0
+    },
+    "day": "2023-07-08",
+    "delta_time_units": "milliseconds since 2023-07-08T00:00:00 UTC",
+    "footprint_km": {
+     "max": 8.536,
+     "median": 5.075,
+     "min": 4.496,
+     "p1": 4.5,
+     "p25": 4.627,
+     "p75": 6.079,
+     "p99": 8.299
+    },
+    "format": "NETCDF4",
+    "has_corners": 4,
+    "log2_fp_measured": -2.4551,
+    "n_elem": 3347473,
+    "processor_version": "01.00.01",
+    "reference_time_s": 1310083200.0,
+    "thresholds": {
+     "cloud": 0.8,
+     "sza": 70.0,
+     "vza": 60.0
+    },
+    "time_units": "seconds since 2010-01-01 00:00:00",
+    "title": "TROPOSIF_L2B",
+    "valid_fraction": 1.0
+   },
+   {
+    "bytes": 403710212,
+    "cloud_fraction_cut": {
+     "le_0.1": 0.539903,
+     "le_0.2": 0.660359,
+     "le_0.3": 0.744225,
+     "le_0.5": 0.871058,
+     "le_0.8": 1.0
+    },
+    "day": "2023-07-09",
+    "delta_time_units": "milliseconds since 2023-07-09T00:00:00 UTC",
+    "footprint_km": {
+     "max": 8.535,
+     "median": 5.089,
+     "min": 4.495,
+     "p1": 4.5,
+     "p25": 4.632,
+     "p75": 6.075,
+     "p99": 8.298
+    },
+    "format": "NETCDF4",
+    "has_corners": 4,
+    "log2_fp_measured": -2.4512,
+    "n_elem": 3336211,
+    "processor_version": "01.00.01",
+    "reference_time_s": 1310169600.0,
+    "thresholds": {
+     "cloud": 0.8,
+     "sza": 70.0,
+     "vza": 60.0
+    },
+    "time_units": "seconds since 2010-01-01 00:00:00",
+    "title": "TROPOSIF_L2B",
+    "valid_fraction": 1.0
+   },
+   {
+    "bytes": 400929148,
+    "cloud_fraction_cut": {
+     "le_0.1": 0.524641,
+     "le_0.2": 0.648143,
+     "le_0.3": 0.735508,
+     "le_0.5": 0.866247,
+     "le_0.8": 1.0
+    },
+    "day": "2023-07-10",
+    "delta_time_units": "milliseconds since 2023-07-10T00:00:00 UTC",
+    "footprint_km": {
+     "max": 8.537,
+     "median": 5.088,
+     "min": 4.496,
+     "p1": 4.5,
+     "p25": 4.631,
+     "p75": 6.111,
+     "p99": 8.298
+    },
+    "format": "NETCDF4",
+    "has_corners": 4,
+    "log2_fp_measured": -2.4514,
+    "n_elem": 3313227,
+    "processor_version": "01.00.01",
+    "reference_time_s": 1310256000.0,
+    "thresholds": {
+     "cloud": 0.8,
+     "sza": 70.0,
+     "vza": 60.0
+    },
+    "time_units": "seconds since 2010-01-01 00:00:00",
+    "title": "TROPOSIF_L2B",
+    "valid_fraction": 1.0
+   },
+   {
+    "bytes": 394163675,
+    "cloud_fraction_cut": {
+     "le_0.1": 0.528547,
+     "le_0.2": 0.655024,
+     "le_0.3": 0.742049,
+     "le_0.5": 0.869598,
+     "le_0.8": 1.0
+    },
+    "day": "2023-07-11",
+    "delta_time_units": "milliseconds since 2023-07-11T00:00:00 UTC",
+    "footprint_km": {
+     "max": 8.536,
+     "median": 5.114,
+     "min": 4.496,
+     "p1": 4.5,
+     "p25": 4.632,
+     "p75": 6.147,
+     "p99": 8.298
+    },
+    "format": "NETCDF4",
+    "has_corners": 4,
+    "log2_fp_measured": -2.444,
+    "n_elem": 3257314,
+    "processor_version": "01.00.01",
+    "reference_time_s": 1310342400.0,
+    "thresholds": {
+     "cloud": 0.8,
+     "sza": 70.0,
+     "vza": 60.0
+    },
+    "time_units": "seconds since 2010-01-01 00:00:00",
+    "title": "TROPOSIF_L2B",
+    "valid_fraction": 1.0
+   },
+   {
+    "bytes": 402113254,
+    "cloud_fraction_cut": {
+     "le_0.1": 0.523825,
+     "le_0.2": 0.646087,
+     "le_0.3": 0.732878,
+     "le_0.5": 0.865342,
+     "le_0.8": 1.0
+    },
+    "day": "2023-07-12",
+    "delta_time_units": "milliseconds since 2023-07-12T00:00:00 UTC",
+    "footprint_km": {
+     "max": 8.536,
+     "median": 5.108,
+     "min": 4.496,
+     "p1": 4.501,
+     "p25": 4.643,
+     "p75": 6.115,
+     "p99": 8.297
+    },
+    "format": "NETCDF4",
+    "has_corners": 4,
+    "log2_fp_measured": -2.4459,
+    "n_elem": 3323013,
+    "processor_version": "01.00.01",
+    "reference_time_s": 1310428800.0,
+    "thresholds": {
+     "cloud": 0.8,
+     "sza": 70.0,
+     "vza": 60.0
+    },
+    "time_units": "seconds since 2010-01-01 00:00:00",
+    "title": "TROPOSIF_L2B",
+    "valid_fraction": 1.0
+   },
+   {
+    "bytes": 356320562,
+    "cloud_fraction_cut": {
+     "le_0.1": 0.522823,
+     "le_0.2": 0.64197,
+     "le_0.3": 0.724353,
+     "le_0.5": 0.857811,
+     "le_0.8": 1.0
+    },
+    "day": "2023-07-13",
+    "delta_time_units": "milliseconds since 2023-07-13T00:00:00 UTC",
+    "footprint_km": {
+     "max": 8.535,
+     "median": 5.088,
+     "min": 4.496,
+     "p1": 4.5,
+     "p25": 4.631,
+     "p75": 6.076,
+     "p99": 8.296
+    },
+    "format": "NETCDF4",
+    "has_corners": 4,
+    "log2_fp_measured": -2.4514,
+    "n_elem": 2944561,
+    "processor_version": "01.00.01",
+    "reference_time_s": 1310515200.0,
+    "thresholds": {
+     "cloud": 0.8,
+     "sza": 70.0,
+     "vza": 60.0
+    },
+    "time_units": "seconds since 2010-01-01 00:00:00",
+    "title": "TROPOSIF_L2B",
+    "valid_fraction": 1.0
+   },
+   {
+    "bytes": 396475380,
+    "cloud_fraction_cut": {
+     "le_0.1": 0.543395,
+     "le_0.2": 0.658174,
+     "le_0.3": 0.73615,
+     "le_0.5": 0.862717,
+     "le_0.8": 1.0
+    },
+    "day": "2023-07-14",
+    "delta_time_units": "milliseconds since 2023-07-14T00:00:00 UTC",
+    "footprint_km": {
+     "max": 8.535,
+     "median": 5.099,
+     "min": 4.496,
+     "p1": 4.5,
+     "p25": 4.634,
+     "p75": 6.112,
+     "p99": 8.306
+    },
+    "format": "NETCDF4",
+    "has_corners": 4,
+    "log2_fp_measured": -2.4484,
+    "n_elem": 3276419,
+    "processor_version": "01.00.01",
+    "reference_time_s": 1310601600.0,
+    "thresholds": {
+     "cloud": 0.8,
+     "sza": 70.0,
+     "vza": 60.0
+    },
+    "time_units": "seconds since 2010-01-01 00:00:00",
+    "title": "TROPOSIF_L2B",
+    "valid_fraction": 1.0
+   },
+   {
+    "bytes": 403835931,
+    "cloud_fraction_cut": {
+     "le_0.1": 0.521193,
+     "le_0.2": 0.633839,
+     "le_0.3": 0.717954,
+     "le_0.5": 0.853828,
+     "le_0.8": 1.0
+    },
+    "day": "2023-07-15",
+    "delta_time_units": "milliseconds since 2023-07-15T00:00:00 UTC",
+    "footprint_km": {
+     "max": 8.537,
+     "median": 5.063,
+     "min": 4.496,
+     "p1": 4.5,
+     "p25": 4.621,
+     "p75": 6.055,
+     "p99": 8.296
+    },
+    "format": "NETCDF4",
+    "has_corners": 4,
+    "log2_fp_measured": -2.4585,
+    "n_elem": 3337250,
+    "processor_version": "01.00.01",
+    "reference_time_s": 1310688000.0,
+    "thresholds": {
+     "cloud": 0.8,
+     "sza": 70.0,
+     "vza": 60.0
+    },
+    "time_units": "seconds since 2010-01-01 00:00:00",
+    "title": "TROPOSIF_L2B",
+    "valid_fraction": 1.0
+   },
+   {
+    "bytes": 418990213,
+    "cloud_fraction_cut": {
+     "le_0.1": 0.524258,
+     "le_0.2": 0.644717,
+     "le_0.3": 0.73182,
+     "le_0.5": 0.864598,
+     "le_0.8": 1.0
+    },
+    "day": "2023-07-16",
+    "delta_time_units": "milliseconds since 2023-07-16T00:00:00 UTC",
+    "footprint_km": {
+     "max": 8.536,
+     "median": 5.061,
+     "min": 4.496,
+     "p1": 4.5,
+     "p25": 4.624,
+     "p75": 6.075,
+     "p99": 8.295
+    },
+    "format": "NETCDF4",
+    "has_corners": 4,
+    "log2_fp_measured": -2.4592,
+    "n_elem": 3462492,
+    "processor_version": "01.00.01",
+    "reference_time_s": 1310774400.0,
+    "thresholds": {
+     "cloud": 0.8,
+     "sza": 70.0,
+     "vza": 60.0
+    },
+    "time_units": "seconds since 2010-01-01 00:00:00",
+    "title": "TROPOSIF_L2B",
+    "valid_fraction": 1.0
+   },
+   {
+    "bytes": 414737305,
+    "cloud_fraction_cut": {
+     "le_0.1": 0.51589,
+     "le_0.2": 0.634092,
+     "le_0.3": 0.722253,
+     "le_0.5": 0.859114,
+     "le_0.8": 1.0
+    },
+    "day": "2023-07-17",
+    "delta_time_units": "milliseconds since 2023-07-17T00:00:00 UTC",
+    "footprint_km": {
+     "max": 8.537,
+     "median": 5.121,
+     "min": 4.496,
+     "p1": 4.501,
+     "p25": 4.643,
+     "p75": 6.11,
+     "p99": 8.296
+    },
+    "format": "NETCDF4",
+    "has_corners": 4,
+    "log2_fp_measured": -2.4422,
+    "n_elem": 3427344,
+    "processor_version": "01.00.01",
+    "reference_time_s": 1310860800.0,
+    "thresholds": {
+     "cloud": 0.8,
+     "sza": 70.0,
+     "vza": 60.0
+    },
+    "time_units": "seconds since 2010-01-01 00:00:00",
+    "title": "TROPOSIF_L2B",
+    "valid_fraction": 1.0
+   },
+   {
+    "bytes": 417851240,
+    "cloud_fraction_cut": {
+     "le_0.1": 0.524269,
+     "le_0.2": 0.646049,
+     "le_0.3": 0.732412,
+     "le_0.5": 0.862651,
+     "le_0.8": 1.0
+    },
+    "day": "2023-07-18",
+    "delta_time_units": "milliseconds since 2023-07-18T00:00:00 UTC",
+    "footprint_km": {
+     "max": 8.535,
+     "median": 5.098,
+     "min": 4.496,
+     "p1": 4.5,
+     "p25": 4.633,
+     "p75": 6.115,
+     "p99": 8.309
+    },
+    "format": "NETCDF4",
+    "has_corners": 4,
+    "log2_fp_measured": -2.4487,
+    "n_elem": 3453079,
+    "processor_version": "01.00.01",
+    "reference_time_s": 1310947200.0,
+    "thresholds": {
+     "cloud": 0.8,
+     "sza": 70.0,
+     "vza": 60.0
+    },
+    "time_units": "seconds since 2010-01-01 00:00:00",
+    "title": "TROPOSIF_L2B",
+    "valid_fraction": 1.0
+   },
+   {
+    "bytes": 417950218,
+    "cloud_fraction_cut": {
+     "le_0.1": 0.516452,
+     "le_0.2": 0.641804,
+     "le_0.3": 0.727087,
+     "le_0.5": 0.860515,
+     "le_0.8": 1.0
+    },
+    "day": "2023-07-19",
+    "delta_time_units": "milliseconds since 2023-07-19T00:00:00 UTC",
+    "footprint_km": {
+     "max": 8.536,
+     "median": 5.095,
+     "min": 4.496,
+     "p1": 4.5,
+     "p25": 4.631,
+     "p75": 6.116,
+     "p99": 8.3
+    },
+    "format": "NETCDF4",
+    "has_corners": 4,
+    "log2_fp_measured": -2.4495,
+    "n_elem": 3453897,
+    "processor_version": "01.00.01",
+    "reference_time_s": 1311033600.0,
+    "thresholds": {
+     "cloud": 0.8,
+     "sza": 70.0,
+     "vza": 60.0
+    },
+    "time_units": "seconds since 2010-01-01 00:00:00",
+    "title": "TROPOSIF_L2B",
+    "valid_fraction": 1.0
+   },
+   {
+    "bytes": 414962728,
+    "cloud_fraction_cut": {
+     "le_0.1": 0.490896,
+     "le_0.2": 0.616789,
+     "le_0.3": 0.712991,
+     "le_0.5": 0.858381,
+     "le_0.8": 1.0
+    },
+    "day": "2023-07-20",
+    "delta_time_units": "milliseconds since 2023-07-20T00:00:00 UTC",
+    "footprint_km": {
+     "max": 8.541,
+     "median": 5.081,
+     "min": 4.496,
+     "p1": 4.5,
+     "p25": 4.628,
+     "p75": 6.086,
+     "p99": 8.302
+    },
+    "format": "NETCDF4",
+    "has_corners": 4,
+    "log2_fp_measured": -2.4535,
+    "n_elem": 3429207,
+    "processor_version": "01.00.01",
+    "reference_time_s": 1311120000.0,
+    "thresholds": {
+     "cloud": 0.8,
+     "sza": 70.0,
+     "vza": 60.0
+    },
+    "time_units": "seconds since 2010-01-01 00:00:00",
+    "title": "TROPOSIF_L2B",
+    "valid_fraction": 1.0
+   },
+   {
+    "bytes": 410034035,
+    "cloud_fraction_cut": {
+     "le_0.1": 0.471289,
+     "le_0.2": 0.604845,
+     "le_0.3": 0.703668,
+     "le_0.5": 0.850916,
+     "le_0.8": 1.0
+    },
+    "day": "2023-07-21",
+    "delta_time_units": "milliseconds since 2023-07-21T00:00:00 UTC",
+    "footprint_km": {
+     "max": 8.537,
+     "median": 5.072,
+     "min": 4.496,
+     "p1": 4.5,
+     "p25": 4.626,
+     "p75": 6.093,
+     "p99": 8.303
+    },
+    "format": "NETCDF4",
+    "has_corners": 4,
+    "log2_fp_measured": -2.4559,
+    "n_elem": 3388474,
+    "processor_version": "01.00.01",
+    "reference_time_s": 1311206400.0,
+    "thresholds": {
+     "cloud": 0.8,
+     "sza": 70.0,
+     "vza": 60.0
+    },
+    "time_units": "seconds since 2010-01-01 00:00:00",
+    "title": "TROPOSIF_L2B",
+    "valid_fraction": 1.0
+   },
+   {
+    "bytes": 413673352,
+    "cloud_fraction_cut": {
+     "le_0.1": 0.504054,
+     "le_0.2": 0.635404,
+     "le_0.3": 0.72839,
+     "le_0.5": 0.864686,
+     "le_0.8": 1.0
+    },
+    "day": "2023-07-22",
+    "delta_time_units": "milliseconds since 2023-07-22T00:00:00 UTC",
+    "footprint_km": {
+     "max": 8.538,
+     "median": 5.12,
+     "min": 4.496,
+     "p1": 4.5,
+     "p25": 4.646,
+     "p75": 6.125,
+     "p99": 8.296
+    },
+    "format": "NETCDF4",
+    "has_corners": 4,
+    "log2_fp_measured": -2.4424,
+    "n_elem": 3418551,
+    "processor_version": "01.00.01",
+    "reference_time_s": 1311292800.0,
+    "thresholds": {
+     "cloud": 0.8,
+     "sza": 70.0,
+     "vza": 60.0
+    },
+    "time_units": "seconds since 2010-01-01 00:00:00",
+    "title": "TROPOSIF_L2B",
+    "valid_fraction": 1.0
+   },
+   {
+    "bytes": 414659139,
+    "cloud_fraction_cut": {
+     "le_0.1": 0.505521,
+     "le_0.2": 0.636953,
+     "le_0.3": 0.729639,
+     "le_0.5": 0.863929,
+     "le_0.8": 1.0
+    },
+    "day": "2023-07-23",
+    "delta_time_units": "milliseconds since 2023-07-23T00:00:00 UTC",
+    "footprint_km": {
+     "max": 8.535,
+     "median": 5.121,
+     "min": 4.495,
+     "p1": 4.5,
+     "p25": 4.645,
+     "p75": 6.145,
+     "p99": 8.31
+    },
+    "format": "NETCDF4",
+    "has_corners": 4,
+    "log2_fp_measured": -2.4422,
+    "n_elem": 3426698,
+    "processor_version": "01.00.01",
+    "reference_time_s": 1311379200.0,
+    "thresholds": {
+     "cloud": 0.8,
+     "sza": 70.0,
+     "vza": 60.0
+    },
+    "time_units": "seconds since 2010-01-01 00:00:00",
+    "title": "TROPOSIF_L2B",
+    "valid_fraction": 1.0
+   },
+   {
+    "bytes": 407760929,
+    "cloud_fraction_cut": {
+     "le_0.1": 0.509485,
+     "le_0.2": 0.641262,
+     "le_0.3": 0.732247,
+     "le_0.5": 0.863974,
+     "le_0.8": 1.0
+    },
+    "day": "2023-07-24",
+    "delta_time_units": "milliseconds since 2023-07-24T00:00:00 UTC",
+    "footprint_km": {
+     "max": 8.537,
+     "median": 5.1,
+     "min": 4.495,
+     "p1": 4.5,
+     "p25": 4.638,
+     "p75": 6.109,
+     "p99": 8.303
+    },
+    "format": "NETCDF4",
+    "has_corners": 4,
+    "log2_fp_measured": -2.4479,
+    "n_elem": 3369688,
+    "processor_version": "01.00.01",
+    "reference_time_s": 1311465600.0,
+    "thresholds": {
+     "cloud": 0.8,
+     "sza": 70.0,
+     "vza": 60.0
+    },
+    "time_units": "seconds since 2010-01-01 00:00:00",
+    "title": "TROPOSIF_L2B",
+    "valid_fraction": 1.0
+   },
+   {
+    "bytes": 382401265,
+    "cloud_fraction_cut": {
+     "le_0.1": 0.51859,
+     "le_0.2": 0.64826,
+     "le_0.3": 0.736327,
+     "le_0.5": 0.866046,
+     "le_0.8": 1.0
+    },
+    "day": "2023-07-25",
+    "delta_time_units": "milliseconds since 2023-07-25T00:00:00 UTC",
+    "footprint_km": {
+     "max": 8.537,
+     "median": 5.111,
+     "min": 4.495,
+     "p1": 4.5,
+     "p25": 4.637,
+     "p75": 6.114,
+     "p99": 8.307
+    },
+    "format": "NETCDF4",
+    "has_corners": 4,
+    "log2_fp_measured": -2.445,
+    "n_elem": 3160104,
+    "processor_version": "01.00.01",
+    "reference_time_s": 1311552000.0,
+    "thresholds": {
+     "cloud": 0.8,
+     "sza": 70.0,
+     "vza": 60.0
+    },
+    "time_units": "seconds since 2010-01-01 00:00:00",
+    "title": "TROPOSIF_L2B",
+    "valid_fraction": 1.0
+   },
+   {
+    "bytes": 383015703,
+    "cloud_fraction_cut": {
+     "le_0.1": 0.52018,
+     "le_0.2": 0.63962,
+     "le_0.3": 0.727588,
+     "le_0.5": 0.862251,
+     "le_0.8": 1.0
+    },
+    "day": "2023-07-26",
+    "delta_time_units": "milliseconds since 2023-07-26T00:00:00 UTC",
+    "footprint_km": {
+     "max": 8.536,
+     "median": 5.06,
+     "min": 4.496,
+     "p1": 4.5,
+     "p25": 4.62,
+     "p75": 6.088,
+     "p99": 8.307
+    },
+    "format": "NETCDF4",
+    "has_corners": 4,
+    "log2_fp_measured": -2.4594,
+    "n_elem": 3165182,
+    "processor_version": "01.00.01",
+    "reference_time_s": 1311638400.0,
+    "thresholds": {
+     "cloud": 0.8,
+     "sza": 70.0,
+     "vza": 60.0
+    },
+    "time_units": "seconds since 2010-01-01 00:00:00",
+    "title": "TROPOSIF_L2B",
+    "valid_fraction": 1.0
+   },
+   {
+    "bytes": 376092567,
+    "cloud_fraction_cut": {
+     "le_0.1": 0.491243,
+     "le_0.2": 0.624598,
+     "le_0.3": 0.720159,
+     "le_0.5": 0.861322,
+     "le_0.8": 1.0
+    },
+    "day": "2023-07-27",
+    "delta_time_units": "milliseconds since 2023-07-27T00:00:00 UTC",
+    "footprint_km": {
+     "max": 8.537,
+     "median": 5.086,
+     "min": 4.497,
+     "p1": 4.5,
+     "p25": 4.625,
+     "p75": 6.133,
+     "p99": 8.299
+    },
+    "format": "NETCDF4",
+    "has_corners": 4,
+    "log2_fp_measured": -2.452,
+    "n_elem": 3107966,
+    "processor_version": "01.00.01",
+    "reference_time_s": 1311724800.0,
+    "thresholds": {
+     "cloud": 0.8,
+     "sza": 70.0,
+     "vza": 60.0
+    },
+    "time_units": "seconds since 2010-01-01 00:00:00",
+    "title": "TROPOSIF_L2B",
+    "valid_fraction": 1.0
+   },
+   {
+    "bytes": 348398813,
+    "cloud_fraction_cut": {
+     "le_0.1": 0.533454,
+     "le_0.2": 0.660873,
+     "le_0.3": 0.744626,
+     "le_0.5": 0.868347,
+     "le_0.8": 1.0
+    },
+    "day": "2023-07-28",
+    "delta_time_units": "milliseconds since 2023-07-28T00:00:00 UTC",
+    "footprint_km": {
+     "max": 8.536,
+     "median": 5.087,
+     "min": 4.496,
+     "p1": 4.501,
+     "p25": 4.638,
+     "p75": 6.106,
+     "p99": 8.298
+    },
+    "format": "NETCDF4",
+    "has_corners": 4,
+    "log2_fp_measured": -2.4518,
+    "n_elem": 2879092,
+    "processor_version": "01.00.01",
+    "reference_time_s": 1311811200.0,
+    "thresholds": {
+     "cloud": 0.8,
+     "sza": 70.0,
+     "vza": 60.0
+    },
+    "time_units": "seconds since 2010-01-01 00:00:00",
+    "title": "TROPOSIF_L2B",
+    "valid_fraction": 1.0
+   },
+   {
+    "bytes": 345792352,
+    "cloud_fraction_cut": {
+     "le_0.1": 0.521994,
+     "le_0.2": 0.648612,
+     "le_0.3": 0.735965,
+     "le_0.5": 0.86724,
+     "le_0.8": 1.0
+    },
+    "day": "2023-07-29",
+    "delta_time_units": "milliseconds since 2023-07-29T00:00:00 UTC",
+    "footprint_km": {
+     "max": 8.535,
+     "median": 5.085,
+     "min": 4.496,
+     "p1": 4.5,
+     "p25": 4.635,
+     "p75": 6.084,
+     "p99": 8.302
+    },
+    "format": "NETCDF4",
+    "has_corners": 4,
+    "log2_fp_measured": -2.4522,
+    "n_elem": 2857551,
+    "processor_version": "01.00.01",
+    "reference_time_s": 1311897600.0,
+    "thresholds": {
+     "cloud": 0.8,
+     "sza": 70.0,
+     "vza": 60.0
+    },
+    "time_units": "seconds since 2010-01-01 00:00:00",
+    "title": "TROPOSIF_L2B",
+    "valid_fraction": 1.0
+   },
+   {
+    "bytes": 349884693,
+    "cloud_fraction_cut": {
+     "le_0.1": 0.505617,
+     "le_0.2": 0.632383,
+     "le_0.3": 0.725666,
+     "le_0.5": 0.863643,
+     "le_0.8": 1.0
+    },
+    "day": "2023-07-30",
+    "delta_time_units": "milliseconds since 2023-07-30T00:00:00 UTC",
+    "footprint_km": {
+     "max": 8.536,
+     "median": 5.119,
+     "min": 4.495,
+     "p1": 4.5,
+     "p25": 4.643,
+     "p75": 6.16,
+     "p99": 8.311
+    },
+    "format": "NETCDF4",
+    "has_corners": 4,
+    "log2_fp_measured": -2.4427,
+    "n_elem": 2891372,
+    "processor_version": "01.00.01",
+    "reference_time_s": 1311984000.0,
+    "thresholds": {
+     "cloud": 0.8,
+     "sza": 70.0,
+     "vza": 60.0
+    },
+    "time_units": "seconds since 2010-01-01 00:00:00",
+    "title": "TROPOSIF_L2B",
+    "valid_fraction": 1.0
+   },
+   {
+    "bytes": 411893079,
+    "cloud_fraction_cut": {
+     "le_0.1": 0.513876,
+     "le_0.2": 0.63823,
+     "le_0.3": 0.728834,
+     "le_0.5": 0.865352,
+     "le_0.8": 1.0
+    },
+    "day": "2023-07-31",
+    "delta_time_units": "milliseconds since 2023-07-31T00:00:00 UTC",
+    "footprint_km": {
+     "max": 8.537,
+     "median": 5.077,
+     "min": 4.495,
+     "p1": 4.5,
+     "p25": 4.63,
+     "p75": 6.108,
+     "p99": 8.311
+    },
+    "format": "NETCDF4",
+    "has_corners": 4,
+    "log2_fp_measured": -2.4545,
+    "n_elem": 3403838,
+    "processor_version": "01.00.01",
+    "reference_time_s": 1312070400.0,
+    "thresholds": {
+     "cloud": 0.8,
+     "sza": 70.0,
+     "vza": 60.0
+    },
+    "time_units": "seconds since 2010-01-01 00:00:00",
+    "title": "TROPOSIF_L2B",
+    "valid_fraction": 1.0
+   }
+  ],
+  "platforms_skipped_no_ges_disc": 2,
+  "qc_grade": {
+   "0": 64953314,
+   "1": 16432559,
+   "2": 20368008
+  },
+  "rows_in_window": 101722256,
+  "rows_kept": 101753881,
+  "rows_outside_window": 31625,
+  "soundings_in_file": 101753881,
+  "soundings_no_sif": 0,
+  "store_projection": [
+   {
+    "basis": "the probe's own days, averaged and carried over the record from the S5P-PAL STAC's first L2B item to the end of the probe's window \u2014 a LOWER bound on the record, because the product is still being produced. The soundings-a-day count is a July figure and the boreal summer is the densest part of the year",
+    "bytes_per_year": 46756728915,
+    "days_measured": 31,
+    "record_bytes_by_cloud_cut": {
+     "le_0.1": {
+      "record_bytes": 126325368414,
+      "share_kept": 0.514503
+     },
+     "le_0.2": {
+      "record_bytes": 156772979153,
+      "share_kept": 0.638511
+     },
+     "le_0.3": {
+      "record_bytes": 178604262416,
+      "share_kept": 0.727427
+     },
+     "le_0.5": {
+      "record_bytes": 211495138487,
+      "share_kept": 0.861386
+     },
+     "le_0.8": {
+      "record_bytes": 245528832470,
+      "share_kept": 1.0
+     }
+    },
+    "record_bytes_no_cloud_cut": 245528832470,
+    "record_days_to_probe_window": 1918,
+    "record_first_day": "2018-05-01",
+    "rows_measured": 101753881,
+    "rows_per_day": 3282383.3,
+    "rows_per_year": 1198890485,
+    "stored_bytes_per_row": 39
+   }
+  ]
+ },
+ "counts_scope": "month",
+ "days_with_no_rows": 0,
+ "distinct_platforms": 1,
+ "distribution": "public",
+ "estimate_rows_per_year": null,
+ "estimate_store_bytes": null,
+ "family": "1tf",
+ "month": "2023-07",
+ "nan_fraction": {
+  "cloud_fraction": 0.0,
+  "sif_740": 0.0,
+  "sif_740_daily": 0.0,
+  "sif_740_error": 0.0,
+  "solar_zenith": 0.0,
+  "viewing_zenith": 0.0
+ },
+ "note_estimate": null,
+ "out_of_bounds": {
+  "cloud_fraction": 0,
+  "sif_740": 0,
+  "sif_740_daily": 0,
+  "sif_740_error": 0,
+  "solar_zenith": 0,
+  "viewing_zenith": 0
+ },
+ "out_of_bounds_stored": {
+  "cloud_fraction": 0,
+  "sif_740": 0,
+  "sif_740_daily": 0,
+  "sif_740_error": 0,
+  "solar_zenith": 0,
+  "viewing_zenith": 0
+ },
+ "platforms": {
+  "entries": 3,
+  "probe_platforms_without_entry": 0
+ },
+ "qc": {
+  "0": 64942887,
+  "1": 16425324,
+  "2": 20354045
+ },
+ "rows": 101722256,
+ "rows_outside_month_dropped_by_probe": 0,
+ "rows_per_day": [
+  3322606,
+  3241520,
+  3400049,
+  3371595,
+  3190415,
+  3406697,
+  3272760,
+  3417680,
+  3349610,
+  3339856,
+  3265315,
+  3275448,
+  2951697,
+  3272938,
+  3340164,
+  3503488,
+  3427344,
+  3358522,
+  3515651,
+  3434149,
+  3416335,
+  3418551,
+  3347161,
+  3417965,
+  3164503,
+  3182026,
+  3117983,
+  2832622,
+  2873925,
+  2894794,
+  3398887
+ ],
+ "runner": "vm",
+ "schema_version": 2,
+ "source": "https://data-portal.s5p-pal.com/api/s5p-l2/collections/L2B_SIF___/items (anonymous STAC)",
+ "store": "sif",
+ "stored_bytes_per_row": 39,
+ "time_dtype": "int32",
+ "wall_seconds": 577.51,
+ "wall_seconds_index": 20.61
+}

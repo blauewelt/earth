@@ -3978,7 +3978,20 @@ def stage_fetch(ctx, assemble_store_after=True):
             # withholds EVERY year's marker, not one year's. There is no
             # cheaper granularity to fall back to: the file is sorted by
             # expocode, so a year is spread across the whole 1.4 GB.
-            if ctx.absent:
+            #
+            # `--allow-missing-years` IS THE CALLER SAYING "a short store is
+            # what I want", and this branch used to ignore it — which is why
+            # the flag was INERT for a one-stream store (E-082 wave 6). Not
+            # inert in a way that refused: `fetch_absence_check` below
+            # downgraded its refusal to a warning as the flag asks, and then
+            # every year was unmarked and counts-less anyway, so the assemble
+            # admitted them as PREFIXES of years nobody had measured and
+            # store.json's per-year ledger was simply empty. The cause is the
+            # missing condition here, not the assembler's admission rule: with
+            # the degrade asked for by name, the pass is closed the ordinary
+            # way (counts written, markers written) and the degrade is
+            # recorded in store.json by `fetch_absence_check`.
+            if ctx.absent and not getattr(ctx.a, "allow_missing_years", False):
                 for year in sorted(writers):
                     writers[year].flush()
                 print(f"  ::warning::{ad.store}: NO year marked — "

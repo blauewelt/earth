@@ -1,0 +1,256 @@
+{
+ "at": "2026-09-20T17:06:59+00:00",
+ "builder_git_sha": "2154286d29c143feadc3c6e933a2160c59405d16",
+ "bytes_fetched": 55202914,
+ "bytes_index": 15514711,
+ "bytes_per_row": 43986.386,
+ "channels": [
+  "kingdom_code",
+  "class_code",
+  "basis_of_record_code",
+  "individual_count"
+ ],
+ "counts": {
+  "class_absent": 276,
+  "fetch_seconds": 45.5,
+  "geospatial_issue_by_name": {
+   "COORDINATE_INVALID": 394,
+   "COUNTRY_COORDINATE_MISMATCH": 1715,
+   "PRESUMED_NEGATED_LATITUDE": 1,
+   "PRESUMED_NEGATED_LONGITUDE": 158,
+   "PRESUMED_SWAPPED_COORDINATE": 2,
+   "ZERO_COORDINATE": 1321
+  },
+  "kingdom_absent": 22,
+  "note_estimate": [
+   {
+    "bytes": 90000000000.0,
+    "what": "family1tf.tex ledger: '~90 GB on the public track' for the GBIF occurrence snapshot, over 3.67e9 records with coordinates, no geospatial issue and a year"
+   }
+  ],
+  "out_of_bounds": {
+   "individual_count": 4
+  },
+  "parts_listed": 9898,
+  "parts_read": 8,
+  "per_part": [
+   {
+    "bytes": 1389534,
+    "net_bytes": 1389534,
+    "part": "000651",
+    "requests": 8,
+    "rows_in_part": 189713,
+    "rows_kept": 2113,
+    "seconds": 3.51
+   },
+   {
+    "bytes": 9821558,
+    "net_bytes": 9821558,
+    "part": "001953",
+    "requests": 8,
+    "rows_in_part": 256087,
+    "rows_kept": 202346,
+    "seconds": 4.74
+   },
+   {
+    "bytes": 7706402,
+    "net_bytes": 7706402,
+    "part": "003256",
+    "requests": 8,
+    "rows_in_part": 385309,
+    "rows_kept": 0,
+    "seconds": 5.16
+   },
+   {
+    "bytes": 4075263,
+    "net_bytes": 4075263,
+    "part": "004558",
+    "requests": 8,
+    "rows_in_part": 237048,
+    "rows_kept": 226339,
+    "seconds": 3.38
+   },
+   {
+    "bytes": 4706938,
+    "net_bytes": 4706938,
+    "part": "005861",
+    "requests": 9,
+    "rows_in_part": 491271,
+    "rows_kept": 11794,
+    "seconds": 6.12
+   },
+   {
+    "bytes": 3459818,
+    "net_bytes": 3459818,
+    "part": "007163",
+    "requests": 6,
+    "rows_in_part": 414997,
+    "rows_kept": 137246,
+    "seconds": 5.05
+   },
+   {
+    "bytes": 11460784,
+    "net_bytes": 11460784,
+    "part": "008466",
+    "requests": 7,
+    "rows_in_part": 494149,
+    "rows_kept": 0,
+    "seconds": 7.74
+   },
+   {
+    "bytes": 12582617,
+    "net_bytes": 12582617,
+    "part": "009768",
+    "requests": 7,
+    "rows_in_part": 559437,
+    "rows_kept": 0,
+    "seconds": 8.24
+   }
+  ],
+  "probe_bytes": 55202914,
+  "probe_month_argument_ignored": "2020-12: the GBIF snapshot is not partitioned by time, so one part holds records from the 1600s to last week and no part is a month. The probe measures the PARTS; the month only selects which rows the framework's own per-day counters describe.",
+  "probe_part": "000651,001953,003256,004558,005861,007163,008466,009768",
+  "probe_part_listed_bytes": 222033302,
+  "probe_parts_n": 8,
+  "probe_projection": [
+   {
+    "basis": "the probe's parts' kept rows, averaged per part and multiplied by the snapshot's part count. Parts differ in size (0.01-102 MB, median 27.2 MB) AND in licence (part 005210 of the 2026-09-01 snapshot is 585,034 CC BY-NC of 585,040 records), so read keep_fraction_per_part before trusting the mean: this is a first order estimate, not a census",
+    "keep_fraction": 0.191491,
+    "keep_fraction_per_part": [
+     0.0,
+     0.0,
+     0.0,
+     0.011138,
+     0.024007,
+     0.330716,
+     0.790146,
+     0.954823
+    ],
+    "kept_per_part": 72479.8,
+    "parts_in_snapshot": 9898,
+    "parts_read": 8,
+    "projected_fetch_bytes": 68299805346,
+    "projected_rows": 717404566,
+    "projected_store_bytes": 27978778054,
+    "rows_per_part": 378501.4,
+    "rows_read": 3028011,
+    "stored_bytes_per_row": 39
+   }
+  ],
+  "probe_rows_by_licence": {
+   "CC_BY_NC_4_0": 579838
+  },
+  "probe_rows_in_part": 3028011,
+  "probe_rows_kept": 579838,
+  "probe_seconds": 45.49,
+  "probe_share_day_precision": 0.99912,
+  "probe_share_with_uncertainty": 0.562119,
+  "records_by_licence": {
+   "CC_BY_NC_4_0": 579838
+  },
+  "records_geospatial_issue": 1876,
+  "records_month_only": 510,
+  "records_no_month": 53531,
+  "records_no_position": 297988,
+  "records_no_uncertainty": 253900,
+  "records_other_track": 2094778,
+  "records_read": 3028011,
+  "records_taxon_unmatched": 20,
+  "records_uncertainty_clamped": 53413,
+  "records_with_time_of_day": 138098,
+  "rows_kept": 579838,
+  "snapshot": "2026-09-01",
+  "track": "private"
+ },
+ "counts_scope": "one_part",
+ "days_with_no_rows": 0,
+ "distinct_platforms": 754,
+ "distribution": "private",
+ "estimate_rows_per_year": null,
+ "estimate_store_bytes": null,
+ "family": "1tf",
+ "month": "2020-12",
+ "nan_fraction": {
+  "basis_of_record_code": 0.0,
+  "class_code": 0.001594,
+  "individual_count": 0.494024,
+  "kingdom_code": 0.0
+ },
+ "note_estimate": null,
+ "out_of_bounds": {
+  "basis_of_record_code": 0,
+  "class_code": 0,
+  "individual_count": 4,
+  "kingdom_code": 0
+ },
+ "out_of_bounds_stored": {
+  "basis_of_record_code": 0,
+  "class_code": 0,
+  "individual_count": 0,
+  "kingdom_code": 0
+ },
+ "platforms": {
+  "entries": 44316,
+  "probe_platforms_without_entry": 0
+ },
+ "qc": {
+  "12": 192,
+  "16": 57,
+  "20": 63,
+  "24": 65,
+  "28": 42,
+  "32": 42,
+  "36": 15,
+  "40": 20,
+  "41": 133,
+  "44": 22,
+  "48": 558,
+  "52": 11,
+  "56": 4,
+  "60": 28,
+  "68": 3
+ },
+ "rows": 1255,
+ "rows_outside_month_dropped_by_probe": 578583,
+ "rows_per_day": [
+  31,
+  36,
+  27,
+  32,
+  56,
+  46,
+  20,
+  38,
+  28,
+  38,
+  35,
+  59,
+  52,
+  37,
+  26,
+  46,
+  25,
+  43,
+  56,
+  72,
+  22,
+  38,
+  30,
+  38,
+  37,
+  44,
+  38,
+  53,
+  38,
+  65,
+  49
+ ],
+ "runner": "vm",
+ "schema_version": 3,
+ "source": "https://gbif-open-data-us-east-1.s3.amazonaws.com/?list-type=2&prefix=occurrence/",
+ "store": "gbif_nc",
+ "stored_bytes_per_row": 39,
+ "time_dtype": "int64",
+ "wall_seconds": 45.51,
+ "wall_seconds_index": 18.05
+}

@@ -1,0 +1,809 @@
+{
+ "at": "2026-09-20T16:13:28+00:00",
+ "builder_git_sha": "2154286d29c143feadc3c6e933a2160c59405d16",
+ "bytes_fetched": 303815710,
+ "bytes_fetched_per_frame": 18988481.9,
+ "bytes_index": 303873904,
+ "counts": {
+  "bands_read": 4,
+  "bytes_files": 303815710,
+  "fetch_seconds": 275.15,
+  "files_read": 1,
+  "pixels_read": 1600000000
+ },
+ "distribution": "public",
+ "estimate_store_bytes": 281381710,
+ "family": "1tf",
+ "frame_seconds": 432000,
+ "frames_fetched": 16,
+ "frames_per_bin": 1,
+ "groups": {
+  "50N_000E_r0c0": {
+   "C": 1,
+   "H": 10000,
+   "W": 10000,
+   "bytes_per_frame": {
+    "max": 14296827,
+    "mean": 14296827.0,
+    "min": 14296827
+   },
+   "bytes_per_stored_tile": {
+    "max": 29612,
+    "mean": 8935.5,
+    "median": 7761.0,
+    "p90": 18187.600000000002
+   },
+   "bytes_per_valid_pixel": 0.143,
+   "compression_ratio": 6.99,
+   "dtype": "uint8",
+   "encode_seconds_per_frame": 10.167,
+   "estimate_store_bytes": 14322555,
+   "frame_present_by_slot": [
+    0,
+    0,
+    0,
+    0,
+    0,
+    1
+   ],
+   "frames_fetched": 1,
+   "frames_missing": {
+    "before_record": 5
+   },
+   "frames_requested": 6,
+   "index_bytes_per_bin": 25728,
+   "note_formula": "pixels x frames x valid fraction x 2C x 1.2",
+   "note_formula_bytes": 240000000,
+   "raw_bytes_per_frame": 100000000,
+   "record_frames": 1,
+   "tiles_empty": 0,
+   "tiles_per_frame": 1600,
+   "tiles_stored": 1600,
+   "valid_fraction": {
+    "canopy_height": 1.0
+   },
+   "valid_fraction_per_frame": [
+    1.0
+   ]
+  },
+  "50N_000E_r0c1": {
+   "C": 1,
+   "H": 10000,
+   "W": 10000,
+   "bytes_per_frame": {
+    "max": 16086218,
+    "mean": 16086218.0,
+    "min": 16086218
+   },
+   "bytes_per_stored_tile": {
+    "max": 29119,
+    "mean": 10053.9,
+    "median": 9452.0,
+    "p90": 19701.40000000001
+   },
+   "bytes_per_valid_pixel": 0.1609,
+   "compression_ratio": 6.22,
+   "dtype": "uint8",
+   "encode_seconds_per_frame": 8.141,
+   "estimate_store_bytes": 16111946,
+   "frame_present_by_slot": [
+    0,
+    0,
+    0,
+    0,
+    0,
+    1
+   ],
+   "frames_fetched": 1,
+   "frames_missing": {
+    "before_record": 5
+   },
+   "frames_requested": 6,
+   "index_bytes_per_bin": 25728,
+   "note_formula": "pixels x frames x valid fraction x 2C x 1.2",
+   "note_formula_bytes": 240000000,
+   "raw_bytes_per_frame": 100000000,
+   "record_frames": 1,
+   "tiles_empty": 0,
+   "tiles_per_frame": 1600,
+   "tiles_stored": 1600,
+   "valid_fraction": {
+    "canopy_height": 1.0
+   },
+   "valid_fraction_per_frame": [
+    1.0
+   ]
+  },
+  "50N_000E_r0c2": {
+   "C": 1,
+   "H": 10000,
+   "W": 10000,
+   "bytes_per_frame": {
+    "max": 25588728,
+    "mean": 25588728.0,
+    "min": 25588728
+   },
+   "bytes_per_stored_tile": {
+    "max": 31179,
+    "mean": 15993.0,
+    "median": 16004.0,
+    "p90": 26234.600000000002
+   },
+   "bytes_per_valid_pixel": 0.2559,
+   "compression_ratio": 3.91,
+   "dtype": "uint8",
+   "encode_seconds_per_frame": 10.047,
+   "estimate_store_bytes": 25614456,
+   "frame_present_by_slot": [
+    0,
+    0,
+    0,
+    0,
+    0,
+    1
+   ],
+   "frames_fetched": 1,
+   "frames_missing": {
+    "before_record": 5
+   },
+   "frames_requested": 6,
+   "index_bytes_per_bin": 25728,
+   "note_formula": "pixels x frames x valid fraction x 2C x 1.2",
+   "note_formula_bytes": 240000000,
+   "raw_bytes_per_frame": 100000000,
+   "record_frames": 1,
+   "tiles_empty": 0,
+   "tiles_per_frame": 1600,
+   "tiles_stored": 1600,
+   "valid_fraction": {
+    "canopy_height": 1.0
+   },
+   "valid_fraction_per_frame": [
+    1.0
+   ]
+  },
+  "50N_000E_r0c3": {
+   "C": 1,
+   "H": 10000,
+   "W": 10000,
+   "bytes_per_frame": {
+    "max": 26672792,
+    "mean": 26672792.0,
+    "min": 26672792
+   },
+   "bytes_per_stored_tile": {
+    "max": 31100,
+    "mean": 16670.5,
+    "median": 17007.0,
+    "p90": 26450.700000000004
+   },
+   "bytes_per_valid_pixel": 0.2667,
+   "compression_ratio": 3.75,
+   "dtype": "uint8",
+   "encode_seconds_per_frame": 11.617,
+   "estimate_store_bytes": 26698520,
+   "frame_present_by_slot": [
+    0,
+    0,
+    0,
+    0,
+    0,
+    1
+   ],
+   "frames_fetched": 1,
+   "frames_missing": {
+    "before_record": 5
+   },
+   "frames_requested": 6,
+   "index_bytes_per_bin": 25728,
+   "note_formula": "pixels x frames x valid fraction x 2C x 1.2",
+   "note_formula_bytes": 240000000,
+   "raw_bytes_per_frame": 100000000,
+   "record_frames": 1,
+   "tiles_empty": 0,
+   "tiles_per_frame": 1600,
+   "tiles_stored": 1600,
+   "valid_fraction": {
+    "canopy_height": 1.0
+   },
+   "valid_fraction_per_frame": [
+    1.0
+   ]
+  },
+  "50N_000E_r1c0": {
+   "C": 1,
+   "H": 10000,
+   "W": 10000,
+   "bytes_per_frame": {
+    "max": 22982028,
+    "mean": 22982028.0,
+    "min": 22982028
+   },
+   "bytes_per_stored_tile": {
+    "max": 31203,
+    "mean": 14363.8,
+    "median": 13319.5,
+    "p90": 26064.1
+   },
+   "bytes_per_valid_pixel": 0.2298,
+   "compression_ratio": 4.35,
+   "dtype": "uint8",
+   "encode_seconds_per_frame": 7.034,
+   "estimate_store_bytes": 23007756,
+   "frame_present_by_slot": [
+    0,
+    0,
+    0,
+    0,
+    0,
+    1
+   ],
+   "frames_fetched": 1,
+   "frames_missing": {
+    "before_record": 5
+   },
+   "frames_requested": 6,
+   "index_bytes_per_bin": 25728,
+   "note_formula": "pixels x frames x valid fraction x 2C x 1.2",
+   "note_formula_bytes": 240000000,
+   "raw_bytes_per_frame": 100000000,
+   "record_frames": 1,
+   "tiles_empty": 0,
+   "tiles_per_frame": 1600,
+   "tiles_stored": 1600,
+   "valid_fraction": {
+    "canopy_height": 1.0
+   },
+   "valid_fraction_per_frame": [
+    1.0
+   ]
+  },
+  "50N_000E_r1c1": {
+   "C": 1,
+   "H": 10000,
+   "W": 10000,
+   "bytes_per_frame": {
+    "max": 20990771,
+    "mean": 20990771.0,
+    "min": 20990771
+   },
+   "bytes_per_stored_tile": {
+    "max": 31114,
+    "mean": 13119.2,
+    "median": 12164.5,
+    "p90": 23824.0
+   },
+   "bytes_per_valid_pixel": 0.2099,
+   "compression_ratio": 4.76,
+   "dtype": "uint8",
+   "encode_seconds_per_frame": 8.561,
+   "estimate_store_bytes": 21016499,
+   "frame_present_by_slot": [
+    0,
+    0,
+    0,
+    0,
+    0,
+    1
+   ],
+   "frames_fetched": 1,
+   "frames_missing": {
+    "before_record": 5
+   },
+   "frames_requested": 6,
+   "index_bytes_per_bin": 25728,
+   "note_formula": "pixels x frames x valid fraction x 2C x 1.2",
+   "note_formula_bytes": 240000000,
+   "raw_bytes_per_frame": 100000000,
+   "record_frames": 1,
+   "tiles_empty": 0,
+   "tiles_per_frame": 1600,
+   "tiles_stored": 1600,
+   "valid_fraction": {
+    "canopy_height": 1.0
+   },
+   "valid_fraction_per_frame": [
+    1.0
+   ]
+  },
+  "50N_000E_r1c2": {
+   "C": 1,
+   "H": 10000,
+   "W": 10000,
+   "bytes_per_frame": {
+    "max": 26704801,
+    "mean": 26704801.0,
+    "min": 26704801
+   },
+   "bytes_per_stored_tile": {
+    "max": 33159,
+    "mean": 16690.5,
+    "median": 17514.5,
+    "p90": 27134.900000000005
+   },
+   "bytes_per_valid_pixel": 0.267,
+   "compression_ratio": 3.74,
+   "dtype": "uint8",
+   "encode_seconds_per_frame": 8.037,
+   "estimate_store_bytes": 26730529,
+   "frame_present_by_slot": [
+    0,
+    0,
+    0,
+    0,
+    0,
+    1
+   ],
+   "frames_fetched": 1,
+   "frames_missing": {
+    "before_record": 5
+   },
+   "frames_requested": 6,
+   "index_bytes_per_bin": 25728,
+   "note_formula": "pixels x frames x valid fraction x 2C x 1.2",
+   "note_formula_bytes": 240000000,
+   "raw_bytes_per_frame": 100000000,
+   "record_frames": 1,
+   "tiles_empty": 0,
+   "tiles_per_frame": 1600,
+   "tiles_stored": 1600,
+   "valid_fraction": {
+    "canopy_height": 1.0
+   },
+   "valid_fraction_per_frame": [
+    1.0
+   ]
+  },
+  "50N_000E_r1c3": {
+   "C": 1,
+   "H": 10000,
+   "W": 10000,
+   "bytes_per_frame": {
+    "max": 25612043,
+    "mean": 25612043.0,
+    "min": 25612043
+   },
+   "bytes_per_stored_tile": {
+    "max": 33726,
+    "mean": 16007.5,
+    "median": 17194.5,
+    "p90": 28884.600000000002
+   },
+   "bytes_per_valid_pixel": 0.2561,
+   "compression_ratio": 3.9,
+   "dtype": "uint8",
+   "encode_seconds_per_frame": 9.846,
+   "estimate_store_bytes": 25637771,
+   "frame_present_by_slot": [
+    0,
+    0,
+    0,
+    0,
+    0,
+    1
+   ],
+   "frames_fetched": 1,
+   "frames_missing": {
+    "before_record": 5
+   },
+   "frames_requested": 6,
+   "index_bytes_per_bin": 25728,
+   "note_formula": "pixels x frames x valid fraction x 2C x 1.2",
+   "note_formula_bytes": 240000000,
+   "raw_bytes_per_frame": 100000000,
+   "record_frames": 1,
+   "tiles_empty": 0,
+   "tiles_per_frame": 1600,
+   "tiles_stored": 1600,
+   "valid_fraction": {
+    "canopy_height": 1.0
+   },
+   "valid_fraction_per_frame": [
+    1.0
+   ]
+  },
+  "50N_000E_r2c0": {
+   "C": 1,
+   "H": 10000,
+   "W": 10000,
+   "bytes_per_frame": {
+    "max": 22932629,
+    "mean": 22932629.0,
+    "min": 22932629
+   },
+   "bytes_per_stored_tile": {
+    "max": 32969,
+    "mean": 14332.9,
+    "median": 12273.0,
+    "p90": 27492.2
+   },
+   "bytes_per_valid_pixel": 0.2293,
+   "compression_ratio": 4.36,
+   "dtype": "uint8",
+   "encode_seconds_per_frame": 6.733,
+   "estimate_store_bytes": 22958357,
+   "frame_present_by_slot": [
+    0,
+    0,
+    0,
+    0,
+    0,
+    1
+   ],
+   "frames_fetched": 1,
+   "frames_missing": {
+    "before_record": 5
+   },
+   "frames_requested": 6,
+   "index_bytes_per_bin": 25728,
+   "note_formula": "pixels x frames x valid fraction x 2C x 1.2",
+   "note_formula_bytes": 240000000,
+   "raw_bytes_per_frame": 100000000,
+   "record_frames": 1,
+   "tiles_empty": 0,
+   "tiles_per_frame": 1600,
+   "tiles_stored": 1600,
+   "valid_fraction": {
+    "canopy_height": 1.0
+   },
+   "valid_fraction_per_frame": [
+    1.0
+   ]
+  },
+  "50N_000E_r2c1": {
+   "C": 1,
+   "H": 10000,
+   "W": 10000,
+   "bytes_per_frame": {
+    "max": 19678408,
+    "mean": 19678408.0,
+    "min": 19678408
+   },
+   "bytes_per_stored_tile": {
+    "max": 34682,
+    "mean": 12299.0,
+    "median": 11412.0,
+    "p90": 28548.300000000003
+   },
+   "bytes_per_valid_pixel": 0.1968,
+   "compression_ratio": 5.08,
+   "dtype": "uint8",
+   "encode_seconds_per_frame": 7.61,
+   "estimate_store_bytes": 19704136,
+   "frame_present_by_slot": [
+    0,
+    0,
+    0,
+    0,
+    0,
+    1
+   ],
+   "frames_fetched": 1,
+   "frames_missing": {
+    "before_record": 5
+   },
+   "frames_requested": 6,
+   "index_bytes_per_bin": 25728,
+   "note_formula": "pixels x frames x valid fraction x 2C x 1.2",
+   "note_formula_bytes": 240000000,
+   "raw_bytes_per_frame": 100000000,
+   "record_frames": 1,
+   "tiles_empty": 0,
+   "tiles_per_frame": 1600,
+   "tiles_stored": 1600,
+   "valid_fraction": {
+    "canopy_height": 1.0
+   },
+   "valid_fraction_per_frame": [
+    1.0
+   ]
+  },
+  "50N_000E_r2c2": {
+   "C": 1,
+   "H": 10000,
+   "W": 10000,
+   "bytes_per_frame": {
+    "max": 19972555,
+    "mean": 19972555.0,
+    "min": 19972555
+   },
+   "bytes_per_stored_tile": {
+    "max": 34406,
+    "mean": 12482.8,
+    "median": 13410.0,
+    "p90": 26914.0
+   },
+   "bytes_per_valid_pixel": 0.1997,
+   "compression_ratio": 5.01,
+   "dtype": "uint8",
+   "encode_seconds_per_frame": 6.031,
+   "estimate_store_bytes": 19998283,
+   "frame_present_by_slot": [
+    0,
+    0,
+    0,
+    0,
+    0,
+    1
+   ],
+   "frames_fetched": 1,
+   "frames_missing": {
+    "before_record": 5
+   },
+   "frames_requested": 6,
+   "index_bytes_per_bin": 25728,
+   "note_formula": "pixels x frames x valid fraction x 2C x 1.2",
+   "note_formula_bytes": 240000000,
+   "raw_bytes_per_frame": 100000000,
+   "record_frames": 1,
+   "tiles_empty": 0,
+   "tiles_per_frame": 1600,
+   "tiles_stored": 1600,
+   "valid_fraction": {
+    "canopy_height": 1.0
+   },
+   "valid_fraction_per_frame": [
+    1.0
+   ]
+  },
+  "50N_000E_r2c3": {
+   "C": 1,
+   "H": 10000,
+   "W": 10000,
+   "bytes_per_frame": {
+    "max": 12344118,
+    "mean": 12344118.0,
+    "min": 12344118
+   },
+   "bytes_per_stored_tile": {
+    "max": 35165,
+    "mean": 7715.1,
+    "median": 19.0,
+    "p90": 30370.60000000001
+   },
+   "bytes_per_valid_pixel": 0.1234,
+   "compression_ratio": 8.1,
+   "dtype": "uint8",
+   "encode_seconds_per_frame": 6.609,
+   "estimate_store_bytes": 12369846,
+   "frame_present_by_slot": [
+    0,
+    0,
+    0,
+    0,
+    0,
+    1
+   ],
+   "frames_fetched": 1,
+   "frames_missing": {
+    "before_record": 5
+   },
+   "frames_requested": 6,
+   "index_bytes_per_bin": 25728,
+   "note_formula": "pixels x frames x valid fraction x 2C x 1.2",
+   "note_formula_bytes": 240000000,
+   "raw_bytes_per_frame": 100000000,
+   "record_frames": 1,
+   "tiles_empty": 0,
+   "tiles_per_frame": 1600,
+   "tiles_stored": 1600,
+   "valid_fraction": {
+    "canopy_height": 1.0
+   },
+   "valid_fraction_per_frame": [
+    1.0
+   ]
+  },
+  "50N_000E_r3c0": {
+   "C": 1,
+   "H": 10000,
+   "W": 10000,
+   "bytes_per_frame": {
+    "max": 13633005,
+    "mean": 13633005.0,
+    "min": 13633005
+   },
+   "bytes_per_stored_tile": {
+    "max": 33242,
+    "mean": 8520.6,
+    "median": 2903.5,
+    "p90": 23707.900000000012
+   },
+   "bytes_per_valid_pixel": 0.1363,
+   "compression_ratio": 7.34,
+   "dtype": "uint8",
+   "encode_seconds_per_frame": 5.678,
+   "estimate_store_bytes": 13658733,
+   "frame_present_by_slot": [
+    0,
+    0,
+    0,
+    0,
+    0,
+    1
+   ],
+   "frames_fetched": 1,
+   "frames_missing": {
+    "before_record": 5
+   },
+   "frames_requested": 6,
+   "index_bytes_per_bin": 25728,
+   "note_formula": "pixels x frames x valid fraction x 2C x 1.2",
+   "note_formula_bytes": 240000000,
+   "raw_bytes_per_frame": 100000000,
+   "record_frames": 1,
+   "tiles_empty": 0,
+   "tiles_per_frame": 1600,
+   "tiles_stored": 1600,
+   "valid_fraction": {
+    "canopy_height": 1.0
+   },
+   "valid_fraction_per_frame": [
+    1.0
+   ]
+  },
+  "50N_000E_r3c1": {
+   "C": 1,
+   "H": 10000,
+   "W": 10000,
+   "bytes_per_frame": {
+    "max": 3226599,
+    "mean": 3226599.0,
+    "min": 3226599
+   },
+   "bytes_per_stored_tile": {
+    "max": 34272,
+    "mean": 2016.6,
+    "median": 19.0,
+    "p90": 401.0
+   },
+   "bytes_per_valid_pixel": 0.0323,
+   "compression_ratio": 30.99,
+   "dtype": "uint8",
+   "encode_seconds_per_frame": 5.631,
+   "estimate_store_bytes": 3252327,
+   "frame_present_by_slot": [
+    0,
+    0,
+    0,
+    0,
+    0,
+    1
+   ],
+   "frames_fetched": 1,
+   "frames_missing": {
+    "before_record": 5
+   },
+   "frames_requested": 6,
+   "index_bytes_per_bin": 25728,
+   "note_formula": "pixels x frames x valid fraction x 2C x 1.2",
+   "note_formula_bytes": 240000000,
+   "raw_bytes_per_frame": 100000000,
+   "record_frames": 1,
+   "tiles_empty": 0,
+   "tiles_per_frame": 1600,
+   "tiles_stored": 1600,
+   "valid_fraction": {
+    "canopy_height": 1.0
+   },
+   "valid_fraction_per_frame": [
+    1.0
+   ]
+  },
+  "50N_000E_r3c2": {
+   "C": 1,
+   "H": 10000,
+   "W": 10000,
+   "bytes_per_frame": {
+    "max": 45515,
+    "mean": 45515.0,
+    "min": 45515
+   },
+   "bytes_per_stored_tile": {
+    "max": 401,
+    "mean": 28.4,
+    "median": 19.0,
+    "p90": 19.0
+   },
+   "bytes_per_valid_pixel": 0.0005,
+   "compression_ratio": 2197.08,
+   "dtype": "uint8",
+   "encode_seconds_per_frame": 3.77,
+   "estimate_store_bytes": 71243,
+   "frame_present_by_slot": [
+    0,
+    0,
+    0,
+    0,
+    0,
+    1
+   ],
+   "frames_fetched": 1,
+   "frames_missing": {
+    "before_record": 5
+   },
+   "frames_requested": 6,
+   "index_bytes_per_bin": 25728,
+   "note_formula": "pixels x frames x valid fraction x 2C x 1.2",
+   "note_formula_bytes": 240000000,
+   "raw_bytes_per_frame": 100000000,
+   "record_frames": 1,
+   "tiles_empty": 0,
+   "tiles_per_frame": 1600,
+   "tiles_stored": 1600,
+   "valid_fraction": {
+    "canopy_height": 1.0
+   },
+   "valid_fraction_per_frame": [
+    1.0
+   ]
+  },
+  "50N_000E_r3c3": {
+   "C": 1,
+   "H": 10000,
+   "W": 10000,
+   "bytes_per_frame": {
+    "max": 10203025,
+    "mean": 10203025.0,
+    "min": 10203025
+   },
+   "bytes_per_stored_tile": {
+    "max": 34631,
+    "mean": 6376.9,
+    "median": 19.0,
+    "p90": 23989.5
+   },
+   "bytes_per_valid_pixel": 0.102,
+   "compression_ratio": 9.8,
+   "dtype": "uint8",
+   "encode_seconds_per_frame": 7.096,
+   "estimate_store_bytes": 10228753,
+   "frame_present_by_slot": [
+    0,
+    0,
+    0,
+    0,
+    0,
+    1
+   ],
+   "frames_fetched": 1,
+   "frames_missing": {
+    "before_record": 5
+   },
+   "frames_requested": 6,
+   "index_bytes_per_bin": 25728,
+   "note_formula": "pixels x frames x valid fraction x 2C x 1.2",
+   "note_formula_bytes": 240000000,
+   "raw_bytes_per_frame": 100000000,
+   "record_frames": 1,
+   "tiles_empty": 0,
+   "tiles_per_frame": 1600,
+   "tiles_stored": 1600,
+   "valid_fraction": {
+    "canopy_height": 1.0
+   },
+   "valid_fraction_per_frame": [
+    1.0
+   ]
+  }
+ },
+ "inputs_not_read": [],
+ "layout": "sharded",
+ "licence_redistribution_confirmed": true,
+ "month": "2020-06",
+ "note_estimate": {
+  "bytes": 80000000000.0,
+  "what": "family1tf.tex ledger: '60-100 GB (dense metres)' for GLAD forest height 2020 at 30 m over 261 tiles"
+ },
+ "note_formula_bytes": 3840000000,
+ "out_of_bounds": {},
+ "out_of_bounds_stored": 0,
+ "runner": "vm",
+ "seconds_per_frame": 17.902,
+ "source": "https://gladxfer.umd.edu/users/Potapov/GLCLUC2020/Forest_height_2020/2020_<TILE>.tif",
+ "store": "canopy30",
+ "tier": "G",
+ "wall_seconds": 286.43,
+ "wall_seconds_index": 7.49,
+ "zstd_level": 6
+}

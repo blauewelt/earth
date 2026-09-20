@@ -79,11 +79,22 @@ never clipped.
 THE TIMESTAMPS ARE LOCAL STANDARD TIME AND ARE CONVERTED WITH THE SITE'S OWN
 OFFSET. `TIMESTAMP_START` is `YYYYMMDDHHMM` in LOCAL STANDARD TIME (no
 daylight saving) — the FLUXNET convention — and the store's time axis is UTC
-seconds since 1982-01-01. The offset is not guessed from the longitude: every
-zip carries a BADM file (`*_FLUXNET_BIF_*.csv`) whose `UTC_OFFSET` row gives
-it (AR-Bal reads -3), and a site whose BIF has no `UTC_OFFSET` is
-`ctx.note_absent` — a REFUSAL that stops the pass — rather than a site placed
-in the wrong hour. The row's time is the START of the half hour.
+seconds since 1982-01-01. Almost every zip carries a BADM file
+(`*_FLUXNET_BIF_*.csv`, BADM = Biological, Ancillary, Disturbance and
+Metadata) whose `UTC_OFFSET` row gives the offset (AR-Bal reads -3). TWENTY-
+SEVEN AMERIFLUX TOWERS SHIP NO SUCH ROW (measured on a runner, E-082 wave 4),
+and the first version of this adapter made each of them an absence that
+stopped the whole pass. It no longer does: a tower with no `UTC_OFFSET` takes
+`round(lon / 15)` hours — the Earth turns 15 degrees an hour, so that is the
+NOMINAL solar zone of the tower's own longitude from the hub's listing — and
+the store says which of the two answered. `platforms.json` carries
+`utc_offset_source`, `"badm"` or `"longitude"`, per site; `counts` carries
+`utc_offset_source` as a tally of the two. The derived value can be an hour
+out where the legal zone is political (Spain on Central European Time, the
+whole of China on Beijing's), which is bounded and recorded, against losing 27
+real towers over a missing metadata row. A site with NEITHER an offset NOR a
+longitude is still a refusal — nothing then places its rows on a UTC axis at
+all. The row's time is the START of the half hour.
 
 `qc`, ONE uint8 PER ROW:
   bits 0-2   NEE_VUT_REF_QC: 0 measured, 1 good-quality gap-fill, 2 medium,
@@ -450,8 +461,15 @@ def _year(s):
 
 
 # ============================================================== one archive =
-def read_zip(raw, site_id, hub, counts):
-    """A site's FLUXNET zip -> (columns, utc offset, counts). Raises."""
+def read_zip(raw, site_id, hub, counts, lon=None):
+    """A site's FLUXNET zip -> (columns, utc offset, meta, counts). Raises.
+
+    `lon` is the site's longitude from the hub's own listing. It is used ONLY
+    when the archive's BADM file carries no `UTC_OFFSET` row, and then the
+    offset is derived from it (see `read_bif`); `meta["_utc_offset_source"]`
+    says which of the two answered, and `counts["utc_offset_source"]` tallies
+    the two.
+    """
     try:
         z = zipfile.ZipFile(io.BytesIO(raw))
     except zipfile.BadZipFile as e:
@@ -466,9 +484,9 @@ def read_zip(raw, site_id, hub, counts):
                           f"expected exactly one")
     if not bif:
         raise FormatError(f"{site_id}: no BADM (BIF) file in the zip "
-                          f"({names[:8]}) — the UTC offset lives there and is "
-                          f"never guessed from the longitude")
-    off, meta = read_bif(z.read(bif[0]), site_id)
+                          f"({names[:8]}) — the UTC offset and the site's own "
+                          f"metadata live there")
+    off, meta = read_bif(z.read(bif[0]), site_id, lon=lon)
     hourly = bool(HR_NAME.search(hh[0]))
     cols, counts = parse_hh(z.read(hh[0]), site_id, hub, off, counts,
                             hourly=hourly)
@@ -477,21 +495,68 @@ def read_zip(raw, site_id, hub, counts):
         counts.get("sites_hourly" if hourly else "sites_half_hourly", 0) + 1
     meta = dict(meta)
     meta["_resolution"] = "HR" if hourly else "HH"
+    src = meta.get("_utc_offset_source") or UTC_OFFSET_BADM
+    counts.setdefault("utc_offset_source", {})
+    counts["utc_offset_source"][src] = \
+        counts["utc_offset_source"].get(src, 0) + 1
     return cols, off, meta, counts
 
 
-def read_bif(raw, site_id):
-    """The BADM file -> (UTC offset in hours, {variable: value})."""
+# WHERE A TOWER'S UTC OFFSET CAME FROM. FLUXNET timestamps are LOCAL STANDARD
+# TIME, so the offset is the difference between a row's stamp and the store's
+# UTC axis, and it decides which hour every half hour of that tower lands in.
+# The BADM file inside the site's own archive is the answer where it has one.
+# MEASURED (E-082 wave 4, and the reason this exists): 27 AmeriFlux towers
+# ship no BADM file with a `UTC_OFFSET` row at all, and refusing them lost 27
+# real towers over a missing metadata row.
+UTC_OFFSET_BADM = "badm"
+UTC_OFFSET_LONGITUDE = "longitude"
+
+
+def utc_offset_from_longitude(lon):
+    """Whole hours of nominal solar time at `lon` — `round(lon / 15)`.
+
+    The Earth turns 15 degrees of longitude an hour, so a place at longitude
+    L keeps a standard time near L/15 hours from UTC. This is the NOMINAL
+    zone, not the legal one: a country may keep a neighbour's clock (Spain on
+    Central European Time, all of China on Beijing's), so a derived offset can
+    be an hour out where the legal zone is political. That error is bounded by
+    one hour and it is recorded per site; refusing the tower instead loses the
+    whole record. Note `round` is Python's — half to EVEN — so a tower at
+    exactly 7.5 degrees of a zone boundary rounds to the even hour rather than
+    away from zero; there is no right answer at a boundary and the rule is
+    stated rather than hidden.
+    """
+    return float(round(float(lon) / 15.0))
+
+
+def read_bif(raw, site_id, lon=None):
+    """The BADM file -> (UTC offset in hours, {variable: value}).
+
+    `meta["_utc_offset_source"]` is `"badm"` when the file carried an
+    `UTC_OFFSET` row and `"longitude"` when it did not and the offset was
+    derived from `lon` (`utc_offset_from_longitude`). A file with no offset
+    AND no usable longitude is still a REFUSAL: there is then nothing to place
+    the rows on a UTC axis with.
+    """
     rows = _csv_rows(raw, ("SITE_ID", "VARIABLE", "DATAVALUE"))
     meta = {}
     for r in rows:
         meta.setdefault(r["VARIABLE"], r["DATAVALUE"])
     if "UTC_OFFSET" not in meta:
-        raise FormatError(
-            f"{site_id}: the BADM file has no UTC_OFFSET row. FLUXNET "
-            f"timestamps are LOCAL STANDARD TIME, so without it the rows "
-            f"cannot be placed on a UTC axis and a longitude guess would put "
-            f"the site in the wrong hour")
+        try:
+            ok = lon is not None and -180.0 <= float(lon) <= 360.0
+        except (TypeError, ValueError):
+            ok = False
+        if not ok:
+            raise FormatError(
+                f"{site_id}: the BADM file has no UTC_OFFSET row and the hub "
+                f"listing gives the site no longitude ({lon!r}). FLUXNET "
+                f"timestamps are LOCAL STANDARD TIME, so with neither of them "
+                f"the rows cannot be placed on a UTC axis at all")
+        meta = dict(meta)
+        meta["_utc_offset_source"] = UTC_OFFSET_LONGITUDE
+        return utc_offset_from_longitude(lon), meta
     try:
         off = float(meta["UTC_OFFSET"])
     except ValueError:
@@ -499,6 +564,8 @@ def read_bif(raw, site_id):
                           f"{meta['UTC_OFFSET']!r}") from None
     if not -14.0 <= off <= 14.0:
         raise FormatError(f"{site_id}: UTC_OFFSET {off} is outside -14..14")
+    meta = dict(meta)
+    meta["_utc_offset_source"] = UTC_OFFSET_BADM
     return off, meta
 
 
@@ -640,13 +707,21 @@ class FluxAdapter(f10b.SourceAdapter):
         "the usual ones, because not every tower has a net radiometer or a "
         "soil probe) leaves that channel NaN for the whole site and is "
         "counted in `channels_absent`. A value outside its physical "
-        "bound becomes NaN and is counted, never clipped. Two things are "
-        "REFUSALS rather than guesses: a site archive whose BADM file has no "
-        "UTC_OFFSET (FLUXNET timestamps are local standard time, and a "
-        "longitude guess would put the site in the wrong hour), and a hub "
-        "body that is not a zip -- ICOS answers its licence page as HTML "
-        "when the accept cookie is missing, and an HTML page parsed as a zip "
-        "would be a silent empty site")
+        "bound becomes NaN and is counted, never clipped. FLUXNET timestamps "
+        "are LOCAL STANDARD TIME: the site's own BADM (Biological, Ancillary, "
+        "Disturbance and Metadata) file gives the UTC offset where it has an "
+        "UTC_OFFSET row, and where it has none -- 27 AmeriFlux towers, "
+        "measured -- the offset is round(lon / 15) hours, the nominal solar "
+        "zone of the tower's longitude. platforms.json records "
+        "`utc_offset_source` per site ('badm' or 'longitude') and the fetch "
+        "counts the two under `utc_offset_source`; the derived value can be "
+        "an hour out where a country keeps a neighbour's clock, which is "
+        "bounded and recorded rather than silent. Two things remain REFUSALS "
+        "rather than guesses: a site with neither an UTC_OFFSET row nor a "
+        "longitude (nothing then places its rows on a UTC axis at all), and "
+        "a hub body that is not a zip -- ICOS answers its licence page as "
+        "HTML when the accept cookie is missing, and an HTML page parsed as a "
+        "zip would be a silent empty site")
     sources = (AMF_SITES, AMF_SHUTTLE, ICOS_SPARQL, TERN_CATALOGUE)
     verified = (
         "2026-09-18 from the sandbox, ANONYMOUSLY -- no FLUXNET credential "
@@ -674,9 +749,10 @@ class FluxAdapter(f10b.SourceAdapter):
         "library that is not on PyPI. ICOS needs a two-step licence accept "
         "whose cookie the adapter keeps, and a body that is not a zip is a "
         "refusal. Timestamps are LOCAL STANDARD TIME and are converted with "
-        "each site's own UTC_OFFSET from the BADM file inside its archive; a "
-        "site without one is an absence, never a guess. The store's time is "
-        "the START of the half hour.")
+        "each site's own UTC_OFFSET from the BADM file inside its archive; "
+        "the 27 AmeriFlux towers that ship no such row take round(lon / 15) "
+        "hours instead and say so in platforms.json's `utc_offset_source`. "
+        "The store's time is the START of the half hour.")
     smoke_window = ("2018-01-01", "2018-12-31")
     smoke_probe_month = "2018-06"
     HUBS_ENV = "FLUX_HUBS"
@@ -899,12 +975,13 @@ class FluxAdapter(f10b.SourceAdapter):
                 continue
             try:
                 cols, off, meta, counts = read_zip(raw, sid, rec["hub"],
-                                                   counts)
+                                                   counts, lon=rec.get("lon"))
             except FormatError as e:
                 ctx.note_absent(sid, str(e))
                 continue
             rec["resolution"] = meta.get("_resolution")
             rec["utc_offset"] = off
+            rec["utc_offset_source"] = meta.get("_utc_offset_source")
             del raw
             t = cols["t"]
             keep = (t >= t_lo) & (t <= t_hi)
@@ -970,6 +1047,9 @@ class FluxAdapter(f10b.SourceAdapter):
                 "hub": s["hub"], "hub_code": HUB_CODE[s["hub"]],
                 "resolution": s.get("resolution"),
                 "utc_offset": s.get("utc_offset"),
+                # "badm" (the site's own archive said so) or "longitude" (it
+                # did not, and round(lon / 15) was used) -- E-082 wave 6
+                "utc_offset_source": s.get("utc_offset_source"),
                 "years_published": s.get("years") or [],
                 "doi": s.get("doi"), "citation": s.get("citation"),
                 "product_bytes": s.get("bytes") or None}
@@ -989,12 +1069,19 @@ SMOKE_SITES = (
     ("IT-Smk", "icos", 45.5, 11.0, 60.0, "GRA", 1, (2018,), "no_netrad"),
     ("AU-Smk", "tern", -33.5, 150.5, 20.0, "SAV", 10, (2018,), None),
 )
-# A SITE WITHOUT A UTC_OFFSET IS AN ABSENCE, which stops the pass — so it is
-# not in the main smoke (the fetch would refuse, correctly). The test writes
-# one explicitly to exercise that path, the way lst05's listed-and-missing
-# granule is exercised.
-SMOKE_BAD_SITE = ("ZZ-Bad", "amf", 0.0, 0.0, 0.0, "WSA", None, (2018,),
-                  "no_offset")
+# A SITE WITHOUT A UTC_OFFSET DERIVES ONE FROM ITS LONGITUDE, and the three
+# sites above all carry one, so the derivation needs a fourth site to be
+# exercised at all. It is kept OUT of the default smoke — adding it would
+# change every other store-wide count for a path the test drives directly —
+# and the test writes it with `extra=(SMOKE_NO_OFFSET_SITE,)`, the way lst05's
+# listed-and-missing granule is exercised. Its longitude is -121.5, so
+# round(-121.5 / 15) = round(-8.1) = -8 hours: a value that is neither zero
+# nor one of the three BADM offsets, so a test asserting it cannot pass by
+# accident.
+SMOKE_NO_OFFSET_SITE = ("ZZ-Nof", "amf", 44.0, -121.5, 900.0, "ENF", None,
+                        (2018,), "no_offset")
+#: the old name, kept because the site is no longer "bad" — it is derived
+SMOKE_BAD_SITE = SMOKE_NO_OFFSET_SITE
 SMOKE_MONTHS = (6, 7)
 HH_HEAD_FULL = (
     "TIMESTAMP_START,TIMESTAMP_END,TA_F,TA_F_QC,VPD_F,P_F,NETRAD,"
@@ -1098,10 +1185,11 @@ def make_smoke_sources(root, d_lo, d_hi, extra=()):
     # smoke rule).
     for (sid, hub, lat, lon, elev, igbp, off, years, quirk) in sorted(
             every, key=lambda r: r[0]):
-        if quirk == "no_offset":
-            continue                       # an absence, not a row
         with open(os.path.join(adir, f"{sid}.zip"), "rb") as fh:
-            cols, _off, _meta, _c = read_zip(fh.read(), sid, hub, {})
+            # `lon` is handed in exactly as `_stream` hands the hub listing's
+            # own longitude, so a site with no UTC_OFFSET row lands on the
+            # derived offset in the truth as well as in the store.
+            cols, _off, _meta, _c = read_zip(fh.read(), sid, hub, {}, lon=lon)
         v = cols["values"]
         ad.mask_bounds(v)
         for i in range(cols["t"].size):

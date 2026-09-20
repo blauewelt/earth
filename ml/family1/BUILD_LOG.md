@@ -1056,3 +1056,189 @@ LP DAAC and PO.DAAC are genuinely fine on the same credentials. **There is no
 throughout, on a 206 whose `final_url` was `disc.gsfc.nasa.gov/earthdata-login`
 — a login page read 1,024 bytes at a time; `3a791df` and `1c67c38` add the
 data host as its own target and make the unapproved application a verdict.
+
+## Notes — E-082 wave 6, the two orbital LiDARs (added 2026-09-20)
+
+`gedi` and `icesat2` are the biosphere wave's two laser stores. Both landed
+with an adapter, a synthetic smoke and a runnable `--stage probe`; NEITHER has
+a `probe.json` yet, so every size below is a listing measurement and every
+per-row number is still the ledger's estimate. Everything here was verified by
+request from the sandbox on 2026-09-20 against NASA's Common Metadata
+Repository, which is anonymous; the granules are Earthdata-Login protected, so
+the bytes are a hosted runner's job.
+
+### What the archives actually hold
+
+| collection | concept id | record | 2022-06 granules | 2022-06 bytes |
+|---|---|---|---:|---:|
+| GEDI02_A v003 | C3974616071-LPCLOUD | 2019-04-04 → ongoing | 1,428 | 1,516,813 MB |
+| GEDI02_B v003 | C3974616135-LPCLOUD | 2019-04-04 → ongoing | 1,428 | 886,429 MB |
+| GEDI L4A **v3** | C4212593885-ORNL_CLOUD | 2019-04-04 → ongoing | 1,428 | 238,860 MB |
+| GEDI L4A v2.1 | C2237824918-ORNL_CLOUD | 2019-04-17 → 2025-07-09 | 1,427 | 271,839 MB |
+| ATL08 release 007 | C3565574177-NSIDC_CPRD | 2018-10-14 → ongoing | 4,641 | 385,160 MB |
+
+So **one month of the three GEDI products this store joins is 2.58 TB** and
+one month of ATL08 is **376 GB** (mean 83.0 MB a granule, smallest 16, largest
+344). One DAY of GEDI, read through the adapter's own index, is 56.0 GB.
+
+**Three things the ledger did not say, each measured.**
+
+- **GEDI L4A has a VERSION 3**, whose record starts 2019-04-04 — the same day
+  as L2A/L2B version 3 — and whose own user guide says it "uses GEDI02_A
+  Version 3 as input". The ledger names v2.1, which was produced from GEDI02_A
+  version 2, so joining v003 shots to it crosses a reprocessing. The adapter
+  defaults to version 3 and `GEDI_L4A_VERSION=2.1` selects the older one.
+- **The granule ids line up one-to-one.** On 2022-06-01 all four products list
+  exactly 27 granules and the key `(acquisition YYYYDDDHHMMSS, orbit,
+  sub-orbit granule, reference track)` matches across all four with nothing
+  missing either way. The adapter's `index` re-measures that on the window's
+  first day and REFUSES if L2A and L2B ever disagree — verified live through
+  the adapter: `{"granules": {"l2a": 27, "l2b": 27, "l4a": 27},
+  "l2a_without_l2b": 0, "l2b_without_l2a": 0}`.
+- **Version 3 renamed the quality flag.** CMR publishes UMM-Var for the three
+  GEDI collections (3,336 variables for L2A v003, 1,672 for L2B, 1,056 for
+  L4A v3) — which is a *contrast* with wave 4's finding that there is "no
+  anonymous route to a NASA file's variable list", and it was used. There is
+  no `/BEAMXXXX/quality_flag` in v003: it is `l2a_quality_flag_rel3`
+  (`quality_flag` survives only under `rx_assess/`), L2B has
+  `l2b_quality_flag_rel3`, and L4A v3 has `l4a_quality_flag_rel3` where v2.1
+  had `l4_quality_flag`. Both adapters resolve every quantity against a
+  candidate list and refuse with the group's own dataset list. ATL08 is the
+  other way round: **zero** variable associations, so its names come from the
+  release-007 data dictionary PDF, fetched anonymously the same day.
+
+### OPeNDAP: available for exactly one of the five collections
+
+Asked of CMR's service associations rather than of a product page:
+
+| collection | services associated |
+|---|---|
+| GEDI02_A v003, GEDI02_B v003, GEDI L4A v3 | Harmony Trajectory Subsetter only |
+| GEDI L4A v2.1 | Harmony Trajectory Subsetter, Harmony OPeNDAP SubSetter (HOSS), **OPeNDAP** |
+| ATL08 007 | Harmony Trajectory Subsetter (generic and NSIDC's), an HTTPS file-system service, an S3 service |
+
+An anonymous GET of
+`opendap.earthdata.nasa.gov/collections/<c>/granules/<g>.dmr` answers **HTTP
+401 after two redirects to Earthdata Login** for all five, so the endpoint
+cannot be probed further from here; the service association is the part that
+can be read anonymously and it says variable subsetting over OPeNDAP is not
+offered for the collections these stores read.
+
+### The fetch chosen, and why
+
+Whole-granule downloading is impossible for `gedi` (31 TB for 2022 against a
+hosted lane's ~86 GB of disk and six hours) and merely tight for `icesat2`
+(4.6 TB, about 31 h at 40 MB/s, i.e. twelve monthly lanes with no margin). So
+both adapters read **only the datasets they need, over HTTP byte ranges**:
+`ml/family1/adapters/_h5range.py` gives `h5py` a seekable file-like object
+whose reads are `Range:` requests behind a 1 MiB block cache, resolving the
+Earthdata redirect once and reusing the signed url. A host that answers 200 to
+a range request is a REFUSAL, not a slow success — that is the whole granule
+arriving. `GEDI_FETCH=whole` / `ICESAT2_FETCH=whole` is the fallback, and the
+Harmony Trajectory Subsetter is the third option, deliberately not built
+before a probe says it is needed.
+
+**What the probe must come back with.** Both adapters' counts carry
+`storage_and_fetch`, whose `projected_one_year_2022` extrapolates the measured
+`read_fraction` (bytes read against the granules' own sizes) and
+`bytes_per_second` onto the measured 2022-06 listing. One year fits twelve
+hosted monthly lanes when **`fetch_hours` ≤ 72**; equivalently the probe must
+show `read_fraction / bytes_per_second ≤ 8.2e-9 s/byte` for `gedi` (at
+100 MB/s that is a read fraction of 0.82, at 30 MB/s it is 0.25) and
+`≤ 5.6e-8 s/byte` for `icesat2` (whole granules at 18 MB/s already clear it).
+Assembly is the other half: parts plus store is about 2.1× the store, so a
+year whose `store_bytes` passes **≈ 45 GB** — 9.2e8 rows at `gedi`'s 49 B a
+row, 1.15e9 at `icesat2`'s 39 B — goes to a verified box the way `ghcnd`,
+`icoads` and `swh` did.
+
+### The size gate
+
+Phase A builds **one year, 2022**, and both adapters enforce it where the
+inputs are all it has cost: every stage past `probe` refuses a window that
+crosses a calendar-year boundary unless `GEDI_ALLOW_BUILD=1` /
+`ICESAT2_ALLOW_BUILD=1` reaches the build step through `adapter_env`. The
+Earthdata credential guard sits beside it, for the reason run #152 taught.
+
+## Notes — E-082 wave 6, the biosphere: what landed, what was measured, what is dispatched (added 2026-09-20)
+
+Design: `ml/plans/E082_biosphere_wave.md`. Fourteen adapters landed in one
+wave, each with a synthetic smoke and a runnable probe; the tests are
+`tests/test_family1_{sif,gbif,gedi,icesat2,canopy30,pheno500,lai500,pace4k,burned500,cat_biosphere,registry}.py`
+(607 passed, 1 skipped over the whole family-10 + family-1 suite). Three
+probes RAN FROM THE SANDBOX because their sources are anonymous, and their
+numbers replace the notes' estimates now:
+
+| store | probe | measured | projected store |
+|---|---|---|---|
+| `sif` (TROPOMI, S5P-PAL `L2B_SIF___`, one netCDF a day) | 2023-07, all 31 days: 101,722,256 rows, 12.31 GB fetched in 577 s (21.3 MB/s), zero NaN, zero out of bounds, 3 undeclared fills | 121 source bytes a row, 39 stored; footprint median 5.05–5.12 km | **46.8 GB a year uncut**, 245.5 GB for 2018-05-01 → 2023-07-31, ≈ 390 GB to today; 63.9 % kept at cloud ≤ 0.2 (156.8 GB) |
+| `gbif` / `gbif_nc` (2026-09-01 snapshot, eight evenly spaced parts) | 3,028,011 records through 55.2 MB in 54 s (column projection reads 22 % of a part); public keeps 69.18 %, private 19.15 % | 99.98 % of kept rows carry a day, 31.3 % a coordinate uncertainty; 35,206 taxa in the sample; no kingdom or class outside the committed code tables | **2.592e9 rows / 101.1 GB public; 7.174e8 rows / 28.0 GB private**; 68.3 GB of transfer to build either |
+| `canopy30` (GLAD forest height 2020, `gladxfer.umd.edu`) | tile 50N_000E, 16 groups: 303.8 MB fetched, 286 s (17.9 s a frame, 122.6 s of zstd-6), 281.4 MB stored, valid fraction 1.0, compression 9.8× | the 261 tiles are a strict subset of `lossyear`'s 280 (19 Hansen tiles have no canopy tile); no water or no-data code exists — 0 is "no woody vegetation ≥ 3 m", the store is DENSE | **≈ 33 GB** (stored/native 0.926 over the listing's 35.95 GB; the by-pixel projection says 73 GB and is the worse estimate); ≈ 11–21 h for 261 tiles in one bin → a box, or `CANOPY30_TILES` lanes once a shared-year parts merge exists |
+
+`pace4k` was measured on three real days through the adapter's own code
+path (the framework's probe needs ~6 GB for its float64 bounds check at
+C = 7 and was OOM-killed here): 46.6–53.5 MB fetched a day through OB.DAAC's
+**anonymous** OPeNDAP (no credential at all — the per-variable file paths
+404 there, so the adapter reads the CMR-listed bundles with variable
+subsetting), 25.4–27.0 MB stored a frame, compression 19–21×, valid fraction
+0.084–0.091 for the four global channels and 0.0235 for the three MOANA
+channels, whose file is REGIONAL (70 S–70 N, 85 W–25 E; a sub-block at global
+row 480, column 2280, verified on every file read). Projected **≈ 9.3 GB a
+year**, ≈ 23 GB for the record — five times below the note's 50 GB.
+
+Hosted probes dispatched 2026-09-20 (`check_credentials:"false"` — with
+`"true"` the workflow runs only the Earthdata check and no probe):
+
+| store | dispatch | what the number must be for phase A to fit hosted lanes |
+|---|---|---|
+| `pheno500` | `probe_month 2020-06`, `PHENO500_TILES=h18v04,h12v09,h29v11,h20v08,h11v08` (5 frames) | ≤ 68 s and ≤ 273 MB stored a frame (315 frames a year in one 6 h lane; 25 lanes) |
+| `lai500` | `probe_month 2020-07`, `LAI500_TILES=…` `LAI500_GROUPS=terra` (20 frames) | ≤ 1.6 s a frame for one year a lane (13,340 frames), else split the year or use a box |
+| `pace4k` | `probe_month 2024-03` (27 frames) | already fits: 35 s a frame → 3.4 h a year, one lane a year |
+| `gedi` | `probe_month 2022-06`, `GEDI_FETCH=range GEDI_L4A_VERSION=3 GEDI_MAX_GRANULES=6` | `read_fraction / bytes_per_second ≤ 8.2e-9 s/byte` (a quarter of the granule at 30 MB/s); whole granules need a box whatever happens (2.58 TB a month for the three products, 31.7 TB for 2022) |
+| `icesat2` | `probe_month 2022-06`, `ICESAT2_FETCH=range ICESAT2_MAX_GRANULES=12` | `≤ 5.6e-8 s/byte`; whole granules already clear it above 18 MB/s (376 GB a month) |
+
+Assembly of either laser year goes to a verified box above ≈ 45 GB of store
+(9.2e8 GEDI rows, 1.15e9 ATL08 segments), which both ledgers' estimates
+exceed.
+
+**What the sources contradicted in the design, in one place** (each is
+already in the adapter's docstring): GEDI L4A is now **version 3** (from
+2019-04-04, built from L2A v003; v2.1 selectable) and v003 has no
+`quality_flag` — the flags are `l2a_quality_flag_rel3`, `l2b_quality_flag_rel3`,
+`l4a_quality_flag_rel3`; GEDI's eleventh channel is `sensitivity` (a flag
+cannot be a float16 channel); OPeNDAP is offered for none of the collections
+read; the daily TROPOMI record starts **2018-05-01** (04-30 is the per-orbit
+product); TROPOSIF ships no per-sounding quality flag, so `qc` grades cloud
+fraction against the file's own thresholds; GBIF's `taxonkey` is a string,
+a geospatial issue is **seven** issue names, and the snapshot's kingdom
+names (`Pseudomonadati`, `Bacillati`, …) disagree with GBIF's own species
+API, so the code tables are measured from the snapshot and falsified at
+`index`; `lai500` composites hold 274–290 tiles (union 290), not 293, and
+VNP15A2H v002 is HDF5 with unsuffixed dataset names; MCD12Q2 2025
+double-lists 311 tiles (highest production kept) and CMR declares a constant
+274.756 MB for every granule; MOANA data run past the producer's `valid_max`
+(kept and counted) and carry an undocumented int32-minimum sentinel (NaN,
+counted); ESA BIOMASS **is** publicly listed (FedEO: 27 collections, L1A
+417,521 · L1B 313,329 · L1C 126,785 · L2A 25,792 · L2B 0 products on
+2026-09-20 — `eocat.esa.int` resets, `biomass-pdgs` 502s, CDSE has no BIOMASS
+collection); ETH's 10 m tile index is public (2,651 tiles of 3° × 3°); the
+Meta 1 m maps are decade composites (2009–2020, measured from their per-tile
+sidecars), so their rows carry the collection's reference epoch; JAXA's
+ScanSAR L2.2 archive is anonymous on AWS Open Data with STAC items already
+written (5,716 for 2025), and only the 25 m mosaics need the JAXA account
+(their directory answers 401).
+
+**Two framework facts worth keeping.** (1) Tier P has no per-row footprint or
+per-row `log2_dt`: both assemblers fill `fp.npy` from the adapter's constants
+and `check_store` asserts the columns are constant. `gbif` therefore puts each
+row's own footprint in `qc`'s upper six bits (`k = round(log2 metres)`, real
+`log2_fp = k − 14.7639`; bit 0 uncertainty unknown, bit 1 month-only date)
+and `sif` stores the nominal −2.49 while the probe measures the corner
+distribution. A `row_fp` hook is the right follow-up; it touches `ROW_KEYS`,
+`_pack`, `PartWriter`, both assemblers and every part on the Hub, so it is not
+a wave-6 change. (2) `burned500`'s groups are blocks of nine sinusoidal tiles
+in one row (46 groups, 28,520 files, a 0.83 GB probe array): one group per
+tile is 166,160 files, past the Hub's 100,000-per-repository limit, and the
+new `no_frame_in_bin` skip reason does not change that arithmetic.
+`_modis_sin.py` (the sinusoidal-tile machinery `pheno500` and `lai500` share)
+and `burned500`'s own grid constants agree to the digit and differ in group
+shape; consolidating them is named in both docstrings.

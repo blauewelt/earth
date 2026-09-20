@@ -394,7 +394,40 @@ STAGE_FN = {"index": f10b.stage_index, "fetch": stage_fetch,
 GRID_UPLOAD_BATCH = 500
 GRID_RESTORE_SAMPLE = 50
 GRID_HTTP_SAMPLE = 5
-OUTSIDE_RECORD = ("before_record", "after_record")
+
+# WHY A BIN CAN BE SKIPPED ALTOGETHER — the three reasons that write no shard.
+#
+# A tier-G store's unit of storage is the (group, bin) shard, and the bin axis
+# is five days. A bin all of whose frames are missing still gets a shard and an
+# index — two files saying "nothing here" — unless every one of its frames is
+# missing for a reason on this list, which are the reasons that carry no
+# information at all: the bin is outside the product's record, or the product
+# simply has no frame with that bin's dates.
+#
+# `OUTSIDE_RECORD` is the first two and is what the layout has always skipped.
+# `NO_FRAME_IN_BIN` is the third, added in E-082 wave 6 for `burned500`, and it
+# is what makes a COARSER-THAN-FIVE-DAY product filable on this axis at all. A
+# monthly map filed under the bin holding its month's 15th puts about 310
+# frames on about 1,890 bins: five bins in six hold no frame of their own, and
+# without this reason each of them wrote a shard and an index. Measured in the
+# wave-4 design (BUILD_LOG, "burned500 IS HDF4 AND THE TIER-G BIN AXIS IS THE
+# PROBLEM"): ~57,000 empty files with one group per MODIS tile row, and 166,000
+# — past the Hub's 100,000-per-repository limit — with one group per tile.
+#
+# The DISTINCTION from `absent_upstream` is the whole point and it must not be
+# blurred: `absent_upstream` is a frame the product SHOULD have and does not,
+# which is a hole a reader must be told about; `no_frame_in_bin` is a bin the
+# product was never going to have a frame for, because its cadence is coarser
+# than the axis. An adapter that answered a genuinely missing month with
+# `no_frame_in_bin` would be hiding a hole, so the reasons stay separate and
+# both are counted by name in store.json's `frames_missing_by_reason`.
+#
+# The names themselves live in `family1.sharded` — an adapter must be able to
+# say `sh.FRAME_NO_FRAME_IN_BIN` without importing this module, which imports
+# the adapters. These are the aliases this module and its tests already use.
+OUTSIDE_RECORD = sh.FRAME_OUTSIDE_RECORD
+NO_FRAME_IN_BIN = sh.FRAME_NO_FRAME_IN_BIN
+SKIP_BIN_REASONS = sh.FRAME_SKIP_REASONS
 
 
 def prepare_grid_ctx(ctx):
@@ -447,8 +480,17 @@ def fetch_grid_year(ctx, y):
     def flush(g, b):
         frames, reasons = buf.pop((g, b))
         if all(fr is None for fr in frames) and \
-                all(r in OUTSIDE_RECORD for r in reasons):
-            f10b._merge_counts(counts, {"bins_outside_record": 1})
+                all(r in SKIP_BIN_REASONS for r in reasons):
+            # `bins_outside_record` keeps its exact old meaning — every frame
+            # outside the record — so a store built before this change and one
+            # built after it report the same number. A bin skipped because the
+            # product has no frame for it, in whole or in part (a bin that
+            # straddles the record's start can hold both reasons), is the new
+            # counter, and neither is ever incremented for the same bin twice.
+            if all(r in OUTSIDE_RECORD for r in reasons):
+                f10b._merge_counts(counts, {"bins_outside_record": 1})
+            else:
+                f10b._merge_counts(counts, {"bins_no_frame_in_bin": 1})
             return
         e = writers[g].write_bin(
             b, frames, os.path.join(d, part_name(g, sh.shard_relpath(b))),
@@ -1143,7 +1185,7 @@ def check_grid_smoke(ctx, truth):
             if why:
                 by_reason[why] = by_reason.get(why, 0) + 1
             if b not in bins:
-                assert all(truth[(g, b, ff)][1] in OUTSIDE_RECORD
+                assert all(truth[(g, b, ff)][1] in SKIP_BIN_REASONS
                            for ff in range(ad.frames_per_bin)), (g, b)
                 n_skipped += 1
                 continue

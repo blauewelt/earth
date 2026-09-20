@@ -105,6 +105,17 @@ FRAME_ABSENT = -1
 DEFAULT_LEVEL = 15        # measured on a real ASI frame: 0.15 s, 5 % under level 9
 MAX_FRAMES_BITMASK = 64
 
+# THE REASONS A MISSING FRAME CAN GIVE, and the three of them that let a whole
+# bin be skipped rather than stored as an empty shard. They live here, in the
+# layout module, because they are a property of the layout and because an
+# adapter can import this module without the circular import that naming them
+# in `build_family1_stores` would cost (that module imports the adapters).
+# `build_family1_stores` re-exports them under its own older names.
+FRAME_ABSENT_UPSTREAM = "absent_upstream"
+FRAME_OUTSIDE_RECORD = ("before_record", "after_record")
+FRAME_NO_FRAME_IN_BIN = "no_frame_in_bin"
+FRAME_SKIP_REASONS = FRAME_OUTSIDE_RECORD + (FRAME_NO_FRAME_IN_BIN,)
+
 
 class ShardError(ValueError):
     """A shard, an index or a tile that does not match its declaration."""
@@ -779,10 +790,24 @@ class GridAdapter(f10b.SourceAdapter):
     projection text, the affine coordinate generator). Implements
     `fetch_frames(ctx, wanted)` — `wanted` is a list of (group, bin, frame) —
     yielding `(group, bin, frame, array_or_None, counts)`. A None array is a
-    frame that is not in the source; `counts["frame_missing"]` names why
-    ("absent_upstream", "before_record", "after_record"). An input the
-    adapter could not READ is `ctx.note_absent(...)`, never a None frame —
-    that is a refusal, and the year is not marked.
+    frame that is not in the source; `counts["frame_missing"]` names why:
+
+      absent_upstream   the product SHOULD have this frame and does not — a
+                        hole, and the reader must be told about it
+      before_record     the bin is earlier than the product's first frame
+      after_record      the bin is later than its last
+      no_frame_in_bin   the product's CADENCE IS COARSER than the five-day
+                        bin, so this bin was never going to have a frame of
+                        its own (a monthly map filed under the bin holding its
+                        month's 15th leaves five bins in six empty). Never a
+                        substitute for `absent_upstream`: one says "there is
+                        nothing to have", the other "what should be here is
+                        missing".
+
+    A bin ALL of whose frames are missing for one of the last three writes no
+    shard at all and is counted by name (`build_family1_stores.SKIP_BIN_REASONS`).
+    An input the adapter could not READ is `ctx.note_absent(...)`, never a None
+    frame — that is a refusal, and the year is not marked.
 
     `fetch_year(ctx, year)` is the framework's call and is defined here: it
     hands `fetch_frames` every frame of the year's bins (build_family1_stores
