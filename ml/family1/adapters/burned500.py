@@ -438,13 +438,21 @@ def read_tile(path, px=TILE_PX):
             lo, hi = float(vr[0]), float(vr[1])
         except (TypeError, ValueError, IndexError):
             lo = hi = None
-        if lo is not None and (lo > BURN_WATER or hi < BURN_DOY_MAX):
+        # MEASURED on the first probe (#356, 2026-09-20, 268 granules of
+        # 2019-08): the real SDS declares valid_range [0, 366] — the DAY
+        # codes — and the water (-2) and unmapped (-1) classes sit OUTSIDE
+        # it by the product's own design (the user guide lists them beside
+        # the range, not inside it). So the range must hold the days,
+        # 0 .. 366, and nothing else; the negative classes are counted below
+        # whatever the range says. The first draft demanded the range hold
+        # -2 as well and refused every real granule.
+        if lo is not None and (lo > BURN_UNBURNED or hi < BURN_DOY_MAX):
             raise FormatError(
                 f"{os.path.basename(path)}: the burn-date SDS declares "
-                f"valid_range {list(vr)}, which cannot hold the classes this "
-                f"adapter stores ({BURN_WATER} water .. {BURN_DOY_MAX} day of "
-                f"year). A product whose value scheme changed is refused, "
-                f"never reinterpreted.")
+                f"valid_range {list(vr)}, which cannot hold the day codes "
+                f"this adapter stores ({BURN_UNBURNED} unburned .. "
+                f"{BURN_DOY_MAX} day of year). A product whose value scheme "
+                f"changed is refused, never reinterpreted.")
 
     b = burn.astype(np.int32)
     out = np.full((int(px), int(px), 2), np.nan, np.float16)
@@ -1049,6 +1057,10 @@ def _write_hdf(path, arrays):
             s = f.create(name, t, tuple(int(x) for x in a.shape))
             try:
                 s[:] = a
+                if a.dtype == np.dtype("int16"):
+                    # the REAL product's declaration, measured on probe #356:
+                    # the day codes only; water and unmapped sit outside it
+                    s.valid_range = [0, BURN_DOY_MAX]
             finally:
                 s.endaccess()
     finally:

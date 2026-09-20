@@ -187,7 +187,10 @@ def test_smoke_all_stages_and_the_probe(tmp_path):
     assert p["bytes_fetched"] > 0
     c = p["counts"]
     assert c["granules_wanted"] == MONTH_GRANULES
-    assert c["tracks_seen"] == MONTH_GRANULES * TRACKS
+    # every granule carries a third track that crossed no land (the shape the
+    # first build lane met on 2022-01-01): seen, counted, zero rows
+    assert c["tracks_seen"] == MONTH_GRANULES * (TRACKS + 1)
+    assert c["tracks_without_land_segments"] == MONTH_GRANULES
     assert c["segments_in_granule"] == MONTH_GRANULES * TRACKS * SEGMENTS
     assert c["rows_kept"] == PROBE_ROWS
     # LAND ONLY — one drop by the product's own inland-water mask, one per

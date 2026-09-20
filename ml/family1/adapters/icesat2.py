@@ -435,6 +435,18 @@ def read_track(h5, track, counts):
     g = h5.get(track)
     if g is None:
         return None
+    if LAND not in g:
+        # A GROUND TRACK WITH NO LAND SEGMENTS AT ALL. Measured on the first
+        # build lane (2026-09-20, ATL08_20220101035648_01511403_007_01.h5,
+        # gt1r): the group holds `signal_photons` and nothing else — the
+        # track crossed no land in that granule, so the product wrote no
+        # land-segment group for it. That is zero rows, counted by name, not
+        # a refusal: a refusal is for a file whose land segments are laid
+        # out differently from the dictionary, and this file's other tracks
+        # read fine.
+        counts["tracks_without_land_segments"] = \
+            counts.get("tracks_without_land_segments", 0) + 1
+        return None
     where = f"{track}"
     name = {k: resolve_path(g, v, k, where) for k, v in NEEDED.items()}
     out = {"resolved": {k: name[k] for k in sorted(name)}}
@@ -1053,6 +1065,13 @@ def make_smoke_sources(root, d_lo, d_hi, seed=20260920):
         with h5py.File(path, "w") as f:
             oi = f.create_group("orbit_info")
             oi.create_dataset("sc_orient", data=np.ones(1, np.int8))
+            # a third track that crossed no land: `signal_photons` only, the
+            # shape the first build lane met in the real archive — it must
+            # read as zero rows, counted, never as a refusal
+            gt3 = f.create_group("gt3l")
+            gt3.attrs["atlas_beam_type"] = "weak"
+            gt3.create_group("signal_photons").create_dataset(
+                "d_flag", data=np.zeros(4, np.int8))
             for ti, track in enumerate(SMOKE_TRACKS):
                 n = SMOKE_SEGMENTS
                 gt = f.create_group(track)
