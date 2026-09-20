@@ -1,0 +1,80 @@
+    0.984344,
+    0.984344,
+    0.984344
+   ],
+   "bytes_per_frame": {
+    "mean": 9092357.5,
+    "min": 8587362,
+    "max": 9532412
+   },
+   "bytes_per_stored_tile": {
+    "mean": 90923.6,
+    "median": 98854.5,
+    "p90": 123666.8,
+    "max": 135969
+   },
+   "tiles_stored": 400,
+   "tiles_empty": 0,
+   "raw_bytes_per_frame": 46080000,
+   "compression_ratio": 5.07,
+   "bytes_per_valid_pixel": 0.4349,
+   "encode_seconds_per_frame": 4.496,
+   "record_frames": 1006,
+   "index_bytes_per_bin": 1728,
+   "estimate_store_bytes": 9148650013,
+   "note_formula_bytes": 50481126879,
+   "note_formula": "pixels x frames x valid fraction x 2C x 1.2"
+  }
+ },
+ "out_of_bounds": {},
+ "out_of_bounds_stored": 0,
+ "inputs_not_read": [],
+ "counts": {
+  "outside_valid_range": {
+   "lai": 8596944,
+   "fpar": 8596944,
+   "lai_stddev": 23487845
+  },
+  "outside_valid_range_codes": {
+   "lai:250": 636968,
+   "lai:253": 235860,
+   "lai:254": 7704900,
+   "lai:255": 19216,
+   "fpar:250": 636968,
+   "fpar:253": 235860,
+   "fpar:254": 7704900,
+   "fpar:255": 19216,
+   "lai_stddev:248": 14890901,
+   "lai_stddev:250": 636968,
+   "lai_stddev:253": 235860,
+   "lai_stddev:254": 7704900,
+   "lai_stddev:255": 19216
+  },
+  "composite": {
+   "(2020, 185)": 5,
+   "(2020, 193)": 5,
+   "(2020, 201)": 5,
+   "(2020, 209)": 5
+  },
+  "files_read": 20,
+  "valid_pixels": 420118267,
+  "bytes_files": 220150207,
+  "fetch_seconds": 90.01999999999998
+ },
+ "bytes_fetched": 220150207,
+ "bytes_index": 9741667,
+ "bytes_fetched_per_frame": 11007510.3,
+ "wall_seconds": 94.76,
+ "wall_seconds_index": 8.95,
+ "seconds_per_frame": 4.738,
+ "estimate_store_bytes": 34094564553,
+ "note_formula_bytes": 253583385959,
+ "note_estimate": {
+  "bytes": 60000000000.0,
+  "what": "family1tf.tex ledger: '~60 GB per sensor-year' for MOD15A2H v061 at 500 m, 46 composites of 290 tiles"
+ },
+ "runner": "GitHub Actions 1000005646",
+ "builder_git_sha": "0d308039070a878224be6182dbfb215c7adf34e2",
+ "at": "2026-09-20T17:41:11+00:00"
+}
+probe -> /home/runner/work/earth/earth/ml/cache/family1_tf/probe/lai500/2020-07.json
