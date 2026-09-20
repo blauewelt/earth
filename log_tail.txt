@@ -1,0 +1,80 @@
+    0.098055,
+    0.0963,
+    0.095757,
+    0.085765,
+    0.097181,
+    0.091984,
+    0.087692,
+    0.092521,
+    0.096553,
+    0.000863,
+    0.004316,
+    0.002736,
+    0.002362,
+    0.071283
+   ],
+   "bytes_per_frame": {
+    "mean": 20124160.4,
+    "min": 217611,
+    "max": 29798708
+   },
+   "bytes_per_stored_tile": {
+    "mean": 66886.7,
+    "median": 38340.5,
+    "p90": 173254.5,
+    "max": 626824
+   },
+   "tiles_stored": 6920,
+   "tiles_empty": 6374,
+   "raw_bytes_per_frame": 522547200,
+   "compression_ratio": 25.97,
+   "bytes_per_valid_pixel": 1.6586,
+   "encode_seconds_per_frame": 6.776,
+   "record_frames": 289,
+   "index_bytes_per_bin": 46368,
+   "estimate_store_bytes": 5818562436,
+   "note_formula_bytes": 8415760015,
+   "note_formula": "pixels x frames x valid fraction x 2C x 1.2"
+  }
+ },
+ "out_of_bounds": {},
+ "out_of_bounds_stored": 0,
+ "inputs_not_read": [],
+ "counts": {
+  "files_read": 64,
+  "bytes_files": 865109669,
+  "product_version": {
+   "3.2": 64
+  },
+  "moana_window": {
+   "row 480 col 2280 size 3360x2640": 18
+  },
+  "negative_cells": {
+   "prococcus_moana": 85224
+  },
+  "above_producer_valid_max": {
+   "prococcus_moana": 13641,
+   "syncoccus_moana": 7715,
+   "picoeuk_moana": 290157
+  },
+  "valid_pixels": 58613503,
+  "fetch_seconds": 327.74,
+  "moana_not_published": 5
+ },
+ "bytes_fetched": 865109669,
+ "bytes_index": 53469000,
+ "bytes_fetched_per_frame": 37613463.9,
+ "wall_seconds": 336.1,
+ "wall_seconds_index": 16.99,
+ "seconds_per_frame": 14.613,
+ "estimate_store_bytes": 5818562436,
+ "note_formula_bytes": 8415760015,
+ "note_estimate": {
+  "bytes": 50000000000.0,
+  "what": "family1gf.tex ledger: '~50 GB a year, ~0.13 TB so far' for PACE OCI daily 4 km, 37.3 M px at v ~ 0.10-0.15"
+ },
+ "runner": "GitHub Actions 1000005647",
+ "builder_git_sha": "0d308039070a878224be6182dbfb215c7adf34e2",
+ "at": "2026-09-20T17:45:28+00:00"
+}
+probe -> /home/runner/work/earth/earth/ml/cache/family1_gf/probe/pace4k/2024-03.json
