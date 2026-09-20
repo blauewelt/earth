@@ -59,6 +59,7 @@ went on memory, which the measurement justified: ghcnd's streaming assembly
 peaked at **48.90 GB RSS**.
 
 | `chirps05` | 1.0.tf (tier G, sharded) | lanes #95 (1981–1990), #96 (1991–2000), #97 (2001–2010), #98 (2011–2020), #99 (2021–2026), 15–33 min each; assembly #127 (hosted, `--parts-from-hub`, 66 min) | 3,288 pentad frames in 3,336 bins (628,008 tiles) | 19,064,019,352 (19.06 GB, 6,674 files) | 1981-01 → 2026-08 (bins −73–3262) | 2026-09-18 | CHIRPS v3.0 pentad precipitation, 0.05°, land 60°S–60°N; public; CC BY 4.0, confirmed from chc.ucsb.edu. Exception E4: **F = 2** half-bins of 2.5 days, the pentad filed by its MIDPOINT — F = 1 is impossible because 14 bins of the record hold two pentad midpoints (measured, all in February) — and a `frame_table` in tile_grid.json gives every (bin, frame) its pentad's own dates. 3,384 half-bins hold no pentad and are counted `no_pentad_in_slot`; nothing is absent upstream. Pentad lengths came out 2,922 × 5 days, 320 × 6, 35 × 3, 11 × 4, which is the producer's calendar exactly. 57.68 GB of GeoTIFF read; valid fraction 0.28056. The probe projected 21.18 GB and the store is **10 % under** it |
+| `fire` | 1.0.tf | hosted year lanes #233 (2000–2006), **#264 (2007–2013), #284 (2014–2017), #286 (2018–2020), #288 (2021–2023), #289 (2024-01-01..2026-09-30)** — the last five run one at a time on 2026-09-19/20, 26.0 h of fetch in all; assembly **#291** (hosted, `stage=all --parts-from-hub --assemble streaming` 2000-01-01..2026-09-30, 43 min: 27 years pulled, 631.8 M rows scattered in 209 s, 22 GB published and restore-verified) | 631,836,727 | 22,114,314,679 (22.11 GB, 11 files) | 2000–2026 (bins 1375–3266, 1,889 of 1,892 live; 27 years with rows) | 2026-09-20 | NASA FIRMS active-fire detections; public; schema 2, C = 4. `rows_read` = `rows_kept` = N, from 50.26 GB of source CSV over 3,792 windows, 14 of which held no detection. **Five satellites, and the record's shape is their launch dates**: Terra 40,799,565 rows and Aqua 73,853,160 (MODIS, 2000 →), Suomi-NPP 294,864,805 (VIIRS, 2012 →, which is why the year count jumps from 4.7 M in 2011 to 26.0 M in 2012), NOAA-20 170,628,082 (2018 →) and NOAA-21 51,691,115 (2024 →, which is why 2024 is the largest year at 69.2 M). Each satellite's own spelling in the source is mapped by name and counted in `rows_by_spelling`, never guessed. Every day belongs to exactly ONE source — Standard Processing where it exists, Near-Real-Time after SP's own `max_date`, both read from the `data_availability` endpoint — so no detection is fetched twice and a gap between the two is a refusal. `confidence` is MODIS-only by design (VIIRS publishes three classes, which live in `qc`), and `log2_fp` is the MODIS 1 km pixel (−4.798) with each platform's own value, satellite, instrument and nominal pixel size in `platforms.json` — a VIIRS detection is 375 m (−6.214). 143 rows have a `brightness` and 77 an `frp` outside bounds; both are NaN and counted. **The lane length is set by the source count, not the year count**: 7 years fit one lane in the MODIS era (#233, 3 h 03 m) and only 3 fit once four sources overlap (#289, 5 h 29 m for 2024–2026) — see the wave-5 notes |
 
 ## Notes
 
@@ -695,6 +696,9 @@ needs an account**: every listing endpoint answers anonymously.*
 | `cat_olci` | 1.0.tf (tier T) | the sandbox, `--stage all` 2016-04-01..2026-09-30, 11 years in 43 min | 1,591,637 | 126,776,002 (126.8 MB; `assets.parquet` 64.7 MB) | 2016-04 → 2026-09 (bins 2506–3266) | 2026-09-18 | Sentinel-3 OLCI L2 WFR, CDSE; public; schema 2; **C = 6** — the only catalogue with a sixth channel, `coastal`. **From 2026 every overpass is published twice**, once NR and once NT, and the store keeps ONE row per overpass (measured on 2026-09: 15,033 products → 7,766 rows). Every WFR granule is catalogued, not only the coastal ones, because the GSHHG ±100 km band static the note's "coastal band" refers to is not built yet; `coastal` is a coarse stand-in computed from the repository's own `data/family7_sphere.json`, and store.json says so |
 | `cat_landsat` | 1.0.tf (tier T) | built and published **from the sandbox** (`--stage all`, 1982-08-01..2026-09-30; 16,132 day-windows, 127,084 USGS STAC pages, 63 request retries, 2.85 h of fetch) — the hosted pool was saturated | 10,315,132 | 544,580,767 (544.6 MB; `assets.parquet` 162.9 MB, 45 row groups) | 1982-08 → 2026-09 (bins 46–3265; 3,131 of 3,220 bins live) | 2026-09-18 | Landsat Collection 2 Level-2, USGS STAC (`landsatlook.usgs.gov`); public; schema 2. The catalogue walked exactly the producer's count (`producer_count` = rows = 10,315,132). Five cameras carry their own sensor codes (Landsat 4, 5, 7, 8, 9); `qc` is the USGS processing level and tier (L2SP/L2SR × T1/T2/RT). Per year: 1,177 scenes in 1982, ~120 k a year through the 1990s, ~380 k a year 2014–2021, ~600 k in 2022–2023 (Landsat 9 fully on), 337,608 in 2026 to date. `angle` is filled for every row (mean 45.9°, range 20–76°) |
 | `cat_s1` | 1.0.tf (tier T) | built and published **from the sandbox** (`--stage all`, 2014-10-01..2026-09-30; 9,978 CDSE OData pages, 2.54 h of fetch) — same reason | 6,203,597 | 464,222,496 (464.2 MB; `assets.parquet` 234.7 MB, 13 row groups) | 2014-10 → 2026-09 (bins 2392–3266, all 875 live) | 2026-09-18 | Sentinel-1 IW GRDH **and** SLC, CDSE (`catalogue.dataspace.copernicus.eu`); public; schema 2. Walked exactly the producer's count. Sensor codes name satellite × product (S1A/S1B/S1C/S1D × GRDH/SLC); the polarisation and processing baseline are kept under `counts.qc_unlisted` (VV+VH dominates at 3.65 M strips). The per-year curve is the constellation's own history: 28,671 strips in the 2014 quarter, 734 k in 2020, the fall to ~396 k in 2022–2024 after Sentinel-1B failed (2021-12), back to 628 k in 2025 with Sentinel-1C. Three sampled rows were re-read against CDSE and match |
+| `cat_ecostress` | 1.0.tf (tier T) | hosted year lanes #200 (2018-07-01..2019-12-31) and #201–#207 (one per year 2020–2026), each `--push-parts`; assembly **#267** (hosted, `stage=all --parts-from-hub --assemble streaming` 2018-01-01..2026-09-30, **3 min**: 54 s to pull the 9 years, 77 s to assemble streaming at 2.89 GB peak RSS, 40 s to publish 11 files, 3.5 s to check) | 19,525,578 | 1,009,092,509 (1.01 GB, 11 files; `assets.parquet` 286.6 MB) | 2018-07 → 2026-09 (bins 2667–3266, 571 of 600 live; 9 years with rows) | 2026-09-19 | ECOSTRESS L2T LSTE 70 m thermal tiles from the ISS, LP DAAC via CMR; public; schema 2, C = 5. **Both processing versions are catalogued and `qc` says which** — v002 15,617,001 rows, v003 3,908,577; they do not overlap in time today because v003 is working backwards from the present, so an overpass that appears twice is a reprocessing rather than a duplicate and a consumer selects on `qc`. The walk accounts for the producer exactly: `producer_count` 19,534,789 − `granule_starts_outside_window` 9,211 = N, over 6,028 windows and 56,414 pages with 4 retries and 12.5 h of fetch across the lanes. 876 rows MORE than the whole-archive count taken from the producer's per-year numbers on 2026-09-18 (19,524,702) — the mission is live and the archive grew between the count and the build. `cloud`, `valid` and `angle` are NaN for every row: ECOSTRESS ships a cloud RASTER rather than a scene cloud fraction, and publishes no valid fraction and no mean angle. One sensor code, ISS/ECOSTRESS. The footprint is a rectangle, not a polygon, and the store has no cadence at all — the ISS orbit drifts through the local day, which is the reason to catalogue it |
+| `cat_hls` | 1.0.tf (tier T) | hosted year lanes #219 (2013-04-01..2015-12-31), #220 (2016–2017), #240 (2019), #249 (2020), #251 (2021), #252 (2018), #226 (2023), #227 (2024) from wave 3, plus **#261 (2022), #262 (2025), #263 (2026)** re-run on 2026-09-19 after the three failures below; assembly **#274** (hosted, `stage=all --parts-from-hub --assemble streaming` 2013-01-01..2026-09-30, **9 min**: 233 s to pull 14 years, 1.40 GB of arrays assembled streaming, publish and check) | 37,951,341 | 1,941,103,957 (1.94 GB, 11 files; `assets.parquet` 536.9 MB) | 2013-04 → 2026-09 (bins 2284–3266, all 983 live; 14 years with rows) | 2026-09-19 | NASA's harmonised Landsat and Sentinel-2 30 m tiles (HLS v2.0), LP DAAC via CMR, listed anonymously; public; schema 2, C = 5. S30 21,934,730 rows + L30 16,016,611 = N, and `producer_count` 37,951,343 − 2 `granule_starts_outside_window` = N exactly, over 9,862 windows and 90,150 pages with 5 retries and 15.7 h of fetch across the eleven lanes. Five sensor codes: S2A, S2B, S2C, Landsat-8, Landsat-9. **The only one of the eight catalogues whose producer publishes a valid fraction** — `valid` is SPATIAL_COVERAGE, `cloud` is CLOUD_COVERAGE and `angle` is MEAN_SUN_ZENITH_ANGLE. 204 rows have a `log2_area` outside its channel bounds and are NaN, never clipped. **The two wave-3 adapter fixes are measured here**: 30 granules have no download url at all and are kept as rows with an empty asset entry (`granules_without_asset_url`, `c7cab20`) and 108 asset urls are published under a data type AND a browse/metadata type and are excluded from the template (`asset_urls_also_browse_or_metadata`, `bd7f666`). Either one, before those commits, killed a whole year lane |
+| `cat_s2` | 1.0.tf (tier T) | hosted year lanes #245 (2015-07-01..2016-12-31), #246 (2017), #248 (2019), #254 (2020) from wave 3, plus **#268 (2018), #269 (2021), #272 (2022), #276 (2023), #277 (2024), #279 (2025), #283 (2026-01-01..2026-09-15)** on 2026-09-19 — the six lanes the concurrency group had cancelled, plus 2018, whose #247 died on a CDSE HTTP 429; assembly **#285** (hosted, `stage=all --parts-from-hub --assemble streaming` 2015-01-01..2026-09-15, 11 min) | 41,197,086 | 2,906,157,640 (2.91 GB, 11 files; `assets.parquet` 1.38 GB — the largest sidecar of the eight) | 2015-01 → **2026-09-15** (bins 2447–3265, 816 of 819 live; 12 years with rows) | 2026-09-19 | Sentinel-2 L2A tiles from the CDSE OData catalogue; public; schema 2, C = 5. `producer_count` = `rows_kept` = N exactly, over 4,095 windows and 44,282 pages in 21.9 h of fetch across the eleven lanes. **Hour windows, and 2,197 of them had to be halved again**: a day cannot be paged inside CDSE's `$skip` cap of 10,000, and a window whose own count exceeds the reach is split until it fits. **The record stops 2026-09-15, not 2026-09-30**, and that is a deliberate cut: the lane that ran to 09-30 (#281) died on TODAY's day window with `page 10 returned 717 of 721 product(s) with 4 still to come — a truncated page`, the OData form of the CMR-Hits race, because CDSE was ingesting into the window while the walk paged it. A top-up lane extends it once those days settle. **Four sensor codes** — S2A, S2B, S2C and S2D — and the ledger's 'S2A retired 2026-03' stays wrong: the index re-measures it on every build. 3,163 rows carry no `cloudCover` attribute, 701 have a `log2_area` outside bounds and are NaN, and only 15,080 rows (0.04 %) fall outside the qc table. `asset_sets` is empty for the same reason as `cat_s1`: a CDSE product is one `Products({id})/$value` URL, so `assets.parquet` carries `base_url` and no template |
 
 **What each store is, in one line.** `cat_landsat` every Landsat Collection 2
 Level-2 scene since 1982 (all five cameras) · `cat_hls` NASA's harmonised
@@ -886,3 +890,168 @@ either a lane collision or the record's own end — the record's ends are
 legitimately short (snow05's 2000 holds 63 bins of 73 because MOD10C1 starts
 on 2000-02-24, and 2026 holds 51 because the record ends in September), and
 everything between them should be exact.
+
+## Notes — E-082 wave 5, the hosted assemblies and what the live tail of a record does to a lane (added 2026-09-19)
+
+*Four stores landed from hosted runners on 2026-09-19/20: the three tier-T
+catalogues `cat_ecostress` (#267), `cat_hls` (#274) and `cat_s2` (#285) —
+98.7 million catalogue rows between them — and `fire` (#291), 631.8 million
+active-fire detections over 27 years, the largest 1.0.tf store after `ghcnd`
+and `tide`. Their rows are in the tables above. What follows is what the wave measured
+about OPERATING the builder, which is the part a later wave pays for twice
+if it is not written down.*
+
+### The assembly form is `stage=all`, never `stage=assemble,…`
+
+A dispatch of `{"stage":"assemble,publish,check","extra_args":"--parts-from-hub …"}`
+dies in one minute:
+
+    stage 'assemble' needs 'fetch' first (E-079 §4: stage order is fixed) —
+    …/ml/cache/family1_tf/cat_ecostress/fetch.done is missing
+
+`--parts-from-hub` is read INSIDE the fetch stage — it is the branch of
+`build_family10_stores.py::stage_fetch` that calls `family10_parts_hub.pull`
+— so a stage list without `fetch` never pulls the parts and never writes the
+marker `assemble` demands. Every assembly that has ever worked used
+`stage=all`: #41 `igra`, #75 `wod`, #82 `tide`, #84 `bgcargo`, #88
+`oceansites`, #89 `ghcnd`, #93 `icoads`, #127 `chirps05`, #161 `snow05`, and
+now #267, #274 and #285. And **`start` and `end` must both be passed**: the
+workflow defaults `end` to `2024-12-31` and `ctx.years` is
+`range(start.year, end.year + 1)`, so an assembly dispatched without them
+silently drops 2025 and 2026 from the store.
+
+A hosted assembly is cheap. `cat_ecostress`, 19.5 M rows: 54 s to pull nine
+years of parts, 77 s to assemble streaming at 2.89 GB peak RSS, 40 s to
+publish eleven files, 3.5 s to check — three minutes end to end. `cat_hls`,
+38.0 M rows: nine minutes. `cat_s2`, 41.2 M rows and a 1.38 GB sidecar:
+eleven minutes. Nothing about these needed a box.
+
+### THE LIVE TAIL OF A RECORD REFUSES A LANE, and both dialects say so
+
+A catalogue that is still being ingested cannot be walked to today. Measured
+twice, on two different producers, with the same shape:
+
+    cat_hls  S30 2026-09-14T00:  CMR-Hits changed from 7920 to 7921 on page 8
+                                 — the catalogue moved under the walk        (#243)
+    cat_s2   l2a 2026-09-19T00:00: page 10 returned 717 of 721 product(s)
+                                 with 4 still to come — a truncated page     (#281)
+
+Both guards are right: a listing whose total moves under a paged walk has not
+been walked completely, and neither adapter may pretend otherwise. The rule
+that follows is about the WINDOW, not the code: **a lane's `end` must be
+several days behind the producer's ingest front.** `cat_hls`' 2026 lane
+re-ran to 2026-09-30 cleanly at 11:53Z (#263) because those days had settled
+overnight; `cat_s2`' 2026 lane died on TODAY and was re-cut to
+`end 2026-09-15` (#283), which is why that store's record stops on 09-15
+where the other two reach 09-30. A top-up lane extends it once the days
+settle; what must not happen is a lane that cannot finish.
+
+### One key, one lane: FIRMS counts transactions per MAP_KEY
+
+`fire` fetches through `firms.modaps.eosdis.nasa.gov/api/area/csv/<MAP_KEY>/…`
+and the transaction limit is per KEY, not per job. Two lanes dispatched
+together (#264, #265) both reported
+`the FIRMS transaction limit is exceeded (2/8); … waiting 130s` within the
+same minute; the adapter gives up at 8. A SOLO lane reaches 5/8 on its own
+(#233, 2000–2006). So `fire` lanes run **one at a time**, and #265 was
+cancelled at 12:32Z to let #264 have the whole budget — which it then used,
+finishing 2007–2013 in 5 h 00 m.
+
+### A `fire` lane is four years from 2014 on, because the sources multiply
+
+FIRMS gains a source part-way through the record — `MODIS_SP`, then
+`VIIRS_SNPP_SP` (2012 →), then `VIIRS_NOAA20_SP` (2018 →) — so a year costs
+about 1.5× once the third one appears, and the seven-year lane that worked
+for 2000–2006 does not fit 2014–2020. #282 was at three of seven years in
+2 h 18 m with its own ETA at 22:29Z against a hard 23:05Z deadline, and was
+cancelled rather than allowed to run into it. **A lane pushes its parts only
+after the whole fetch stage finishes**, so an overrun loses every year in the
+lane, not the tail: the cancellation cost three fetched years and the
+alternative risked seven.
+
+**The lane length is set by the SOURCE COUNT, not the year count.** FIRMS
+windows are per (source, five days), so a year costs a window per source and
+the whole record was fetched in six lanes of shrinking span:
+
+| lane | sources | windows a year | wall clock | run |
+|---|---|---|---|---|
+| 2000–2006 | MODIS | 73 | 3 h 03 m for 7 years | #233 |
+| 2007–2013 | + SNPP from 2012 | 73 → 146 | 5 h 00 m for 7 years | #264 |
+| 2014–2017 | MODIS + SNPP | 146 | 4 h 01 m for 4 years | #284 |
+| 2018–2020 | + NOAA-20 | 201 | 4 h 17 m for 3 years | #286 |
+| 2021–2023 | three | 219 | 4 h 29 m for 3 years | #288 |
+| 2024–2026 | **+ NOAA-21** | 292 | 5 h 29 m for 2.75 years | #289 |
+
+The fourth source appears in 2024 and was not anticipated by the split; #289
+was given an explicit tripwire before it ran (if 2024 were not complete by
+10:35Z the lane could not fit six hours and would be cancelled and halved),
+it cleared it at 09:55Z, and it finished with 27 minutes to spare. Write the
+deadline down before the evidence closes — ml/CLAUDE.md §4.13.
+
+### `flux` cannot be built: 27 towers publish no BADM file at all
+
+`flux`'s fetch is ONE stream over all 806 site archives, and its resumable
+unit is therefore the whole pass. Two runs (#266, #275) each spent ~90
+minutes and ~90 GB of download, read 779 of the 806 towers and 108,292,080
+rows, and kept nothing. The 27 that could not be read all fail the same way:
+
+    CA-ER1: no BADM (BIF) file in the zip
+            (['AMF_CA-ER1_FLUXNET_FULLSET_HH_2015-2021_4-7.csv', …])
+
+and it is **not** the naming regex `2850b90` fixed for the data file. Measured
+against AmeriFlux directly, anonymously, on 2026-09-19 — `POST
+amfcdn.lbl.gov/api/v2/amf_shuttle_data_files_and_manifest` with
+`data_product: "FLUXNET"`, `data_variant: "FULLSET"`:
+
+| site | files in the archive | of `file_type` BADM |
+|---|---|---|
+| `US-Ha1` (ONEFlux v1.3) | 18 | **6**, incl. `AMF_US-Ha1_FLUXNET_BIF_1991-2025_v1.3_r1.csv` |
+| `CA-ER1` (FULLSET 4-7) | 12 | **0** |
+| `US-Wi0` (FULLSET 5-7) | 12 | **0** |
+
+The same three sites under `data_product: "FLUXNET2015"` also ship twelve
+files with no BADM, and the enum accepts only those two products. Nor is the
+offset in the site metadata: `api/v2/site_info_display/AmeriFlux` carries
+`grp_location` (lat / lon / elev) and no offset, `api/v1/site_display/AmeriFlux`
+carries `GRP_LOCATION`, `IGBP` and `TOWER_BEGAN`/`TOWER_END` and no offset,
+and `api/v{1,2}/badm/AmeriFlux` is 404. The adapter needs `UTC_OFFSET`
+because FLUXNET timestamps are LOCAL STANDARD TIME and it refuses — rightly —
+to derive one from the longitude. One of the 27, `ID-PaD`, fails differently:
+it HAS a BADM file and that file has no `UTC_OFFSET` row.
+
+**And `--allow-missing-years` cannot rescue it, because a one-stream store
+never marks its years.** #275 passed the absence check and still stopped:
+
+    ::warning::flux: 27 input(s) could not be read (CA-ER1, CA-NS1, …) —
+    --allow-missing-years says that is deliberate; the degrade goes into store.json
+    --push-parts: flux 1991 is not marked done locally — refusing to push a partial year
+
+`build_family10_stores.py`'s one-stream fetch branch decides on `ctx.absent`
+alone and never consults `allow_missing_years`: with any absence it FLUSHES
+every writer and marks nothing, where the clean path CLOSES them and writes
+`parts/<year>.done`. So for a one-stream adapter (`flux`, `socat`) the flag
+stops the stage exiting non-zero and changes nothing else — no year is
+marked, `--push-parts` refuses the first one, and an `assemble` would find
+nothing either. That is not what the flag's own refusal message promises, and
+it is the second thing to fix here. Neither fix was made in this wave: the
+first needs a second source for those sites' UTC offsets, and the second is
+framework code that four waves and every family-10 store run through.
+
+### `xco2` and `irtb` are blocked on ONE Earthdata click
+
+Both probes fail on the same host with the same status, and did so again when
+re-run on 2026-09-19 (#259, #260):
+
+    REFUSING irtb: the first file GPM_MERGIR.1:merg_2015010100_4km-pixel.nc4 could not be read:
+    https://data.gesdisc.earthdata.nasa.gov/data/MERGED_IR/GPM_MERGIR.1/2015/001/merg_2015010100_4km-pixel.nc4:
+    HTTP 401 after 2 redirect(s) — Earthdata Login refused this account for this archive.
+
+The 401 comes from URS's own `/oauth/authorize` for client
+`e2WVk8Pw6weeLUKZYOxvTQ` — the GES DISC application — which is the signature
+of an account that has not approved that application, not of a bad password.
+LP DAAC and PO.DAAC are genuinely fine on the same credentials. **There is no
+`probe.json` for either store**, so every size in the notes for `xco2` and
+`irtb` is still the ledger's estimate. The credential check said `ges_disc ok`
+throughout, on a 206 whose `final_url` was `disc.gsfc.nasa.gov/earthdata-login`
+— a login page read 1,024 bytes at a time; `3a791df` and `1c67c38` add the
+data host as its own target and make the unapproved application a verdict.
