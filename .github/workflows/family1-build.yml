@@ -171,7 +171,14 @@ permissions:
 # lane each time a new one is dispatched. Two dispatches with the SAME window
 # still serialise, which is the collision that matters.
 concurrency:
-  group: family1-build-${{ github.event.inputs.store }}-${{ github.event.inputs.stage }}-${{ github.event.inputs.start }}-${{ github.event.inputs.end }}-${{ github.event.inputs.probe_month }}-${{ github.event.inputs.check_credentials }}
+  # The key names the WORK, so two dispatches of the same work queue behind
+  # each other and different work runs side by side. `adapter_env` is part of
+  # the work: a tile-subset lane (`CANOPY30_TILES=...`) or a sensor group
+  # (`LST05_GROUPS=...`) with the same window is a different lane, and on
+  # 2026-09-20 fourteen canopy30 tile lanes with one window cancelled each
+  # other down to one because the key did not know it. A group name is
+  # limited in length and in characters, so the env goes in as its hash.
+  group: family1-build-${{ github.event.inputs.store }}-${{ github.event.inputs.stage }}-${{ github.event.inputs.start }}-${{ github.event.inputs.end }}-${{ github.event.inputs.probe_month }}-${{ github.event.inputs.check_credentials }}-${{ github.event.inputs.adapter_env }}
   cancel-in-progress: false
 
 jobs:
