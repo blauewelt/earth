@@ -1,0 +1,289 @@
+{
+ "access": "OB.DAAC OPeNDAP (Hyrax) DAP4 variable subsetting, anonymous \u2014 measured 2026-09-20; the `getfile` and cumulus download hosts answer 302 to Earthdata Login for the same files",
+ "bins": [
+  3141,
+  3214
+ ],
+ "builder_git_sha": "abc9a4789c8ad443b3679862a5b9c4bceb5e9c35",
+ "built_at": "2026-09-20T18:03:24+00:00",
+ "channels": [
+  {
+   "max": 2.5,
+   "min": -4.0,
+   "name": "log_chl",
+   "unit": "log10(mg m-3) \u2014 the base-10 LOGARITHM of chlorophyll-a, not the concentration"
+  },
+  {
+   "max": 5000.0,
+   "min": 0.0,
+   "name": "poc",
+   "unit": "mg m-3"
+  },
+  {
+   "max": 5000.0,
+   "min": 0.0,
+   "name": "carbon_phyto",
+   "unit": "mg m-3"
+  },
+  {
+   "max": 400.0,
+   "min": -50.0,
+   "name": "avw_400",
+   "unit": "nm above 400 \u2014 the apparent visible wavelength MINUS 400 nm; add 400 to get nanometres"
+  },
+  {
+   "max": 60000.0,
+   "min": 0.0,
+   "name": "pro_moana",
+   "unit": "thousands of cells per mL (level-4 derived)"
+  },
+  {
+   "max": 60000.0,
+   "min": 0.0,
+   "name": "syn_moana",
+   "unit": "thousands of cells per mL (level-4 derived)"
+  },
+  {
+   "max": 60000.0,
+   "min": 0.0,
+   "name": "pico_moana",
+   "unit": "thousands of cells per mL (level-4 derived)"
+  }
+ ],
+ "dataset": "PACE OCI daily 4 km mapped v3.2 (BGC, AOP and MOANA)",
+ "date_range": [
+  "2025-01-01",
+  "2025-12-31"
+ ],
+ "days_absent_upstream": [
+  "2024-03-13",
+  "2024-03-14",
+  "2024-03-26",
+  "2024-03-27",
+  "2024-05-25",
+  "2024-05-26",
+  "2024-05-27",
+  "2024-05-28",
+  "2024-05-29",
+  "2024-09-09",
+  "2024-09-10",
+  "2024-10-17",
+  "2024-12-04",
+  "2025-01-02",
+  "2025-05-08"
+ ],
+ "days_in_record": 667,
+ "days_without_moana": 21,
+ "days_without_moana_sample": [
+  "2024-03-15",
+  "2024-03-25",
+  "2024-03-28",
+  "2024-03-29",
+  "2024-03-30",
+  "2024-06-08",
+  "2024-06-09",
+  "2024-10-16",
+  "2024-10-18",
+  "2024-10-28",
+  "2024-12-05",
+  "2024-12-23",
+  "2025-01-03",
+  "2025-03-31",
+  "2025-04-07",
+  "2025-05-09",
+  "2025-06-17",
+  "2025-06-18",
+  "2025-08-23",
+  "2025-09-13",
+  "2025-12-16"
+ ],
+ "derived_channels": [
+  "pro_moana",
+  "syn_moana",
+  "pico_moana"
+ ],
+ "first_file": {
+  "above_producer_valid_max": {
+   "picoeuk_moana": 9653,
+   "prococcus_moana": 505,
+   "syncoccus_moana": 625
+  },
+  "bytes_files": 49990458,
+  "day": "2024-03-05",
+  "files_read": 3,
+  "moana_window": {
+   "row 480 col 2280 size 3360x2640": 1
+  },
+  "negative_cells": {
+   "prococcus_moana": 9440
+  },
+  "product_version": {
+   "3.2": 3
+  },
+  "products": [
+   "aop",
+   "bgc",
+   "moana"
+  ],
+  "range": {
+   "avw_400": [
+    0.678772,
+    299.955017
+   ],
+   "carbon_phyto": [
+    0.596548,
+    999.786072
+   ],
+   "log_chl": [
+    -2.687737,
+    1.996739
+   ],
+   "pico_moana": [
+    0.003,
+    58861.597656
+   ],
+   "poc": [
+    5.199707,
+    1983.799805
+   ],
+   "pro_moana": [
+    0.0,
+    1097.984985
+   ],
+   "syn_moana": [
+    0.0,
+    4802.091797
+   ]
+  },
+  "valid_fraction": {
+   "avw_400": 0.091041,
+   "carbon_phyto": 0.090969,
+   "log_chl": 0.09107,
+   "pico_moana": 0.023132,
+   "poc": 0.090938,
+   "pro_moana": 0.022879,
+   "syn_moana": 0.023132
+  },
+  "valid_pixels": 3399170
+ },
+ "footprint": {
+  "log2_dt": -2.321928094887362,
+  "log2_fp": -2.584969110280591
+ },
+ "frame_seconds": 86400,
+ "frames_per_bin": 5,
+ "grid": {
+  "H": 4320,
+  "W": 8640,
+  "coordinates": "lon = x0 + (col + 0.5) * dx, lat = y0 + (row + 0.5) * dy with dy NEGATIVE; x0/y0 are the grid's WEST and NORTH edges, and the source's `lat`/`lon` are the pixel CENTRES those edges imply",
+  "crs": "EPSG:4326",
+  "dx": 0.041666666666666664,
+  "dy": -0.041666666666666664,
+  "extent": [
+   -180.0,
+   -90.0,
+   180.0,
+   90.0
+  ],
+  "extent_note": "[west, south, east, north] in degrees; ocean only",
+  "no_tile_corners": "a plain geographic grid: the affine rule above IS the lat/lon of every pixel and every tile corner, so no corner table is stored",
+  "pixel_deg": 0.041666666666666664,
+  "pixel_km_equator": 4.6383,
+  "proj4": "+proj=longlat +datum=WGS84 +no_defs",
+  "projection": {
+   "grid_mapping_name": "latitude_longitude",
+   "inverse_flattening": 298.257223563,
+   "semi_major_axis": 6378137.0
+  },
+  "row_order": "row 0 is the NORTHERNMOST row (the source netCDF's DESCENDING `lat` axis, 89.97917 .. -89.97917, checked on the real 2025-07-01 files); col 0 is the westernmost, lon -179.97917",
+  "same_grid_as": "oc4k \u2014 the two ocean-colour stores share this grid exactly, so one tile scheme reads both",
+  "source_variables": "chlor_a (float32 mg m-3, stored as log10), poc (int16 with scale_factor 0.2 and add_offset 6400, mg m-3), carbon_phyto (float32 mg m-3) and avw (float32 nm, stored minus 400) on this grid; the three MOANA cell abundances (int32 cells per mL, stored in thousands) on a REGIONAL sub-block of it, 70 S..70 N and 85 W..25 E, placed at its exact offset and NaN elsewhere",
+  "x0": -180.0,
+  "y0": 90.0
+ },
+ "per_year_resume": true,
+ "products": {
+  "aop": {
+   "bytes_cmr": 512910357030,
+   "bytes_note": "CMR's own `granule_size` in MB, summed over the WHOLE bundle; this store fetches only the variables above, through OPeNDAP, and the probe measures what that really costs",
+   "days": 652,
+   "days_per_year": {
+    "2024": 289,
+    "2025": 363
+   },
+   "record": [
+    "2024-03-05",
+    "2025-12-31"
+   ],
+   "required": true,
+   "short_name": "PACE_OCI_L3M_AOP",
+   "variables": [
+    "avw"
+   ],
+   "version": "3.2"
+  },
+  "bgc": {
+   "bytes_cmr": 24897395088,
+   "bytes_note": "CMR's own `granule_size` in MB, summed over the WHOLE bundle; this store fetches only the variables above, through OPeNDAP, and the probe measures what that really costs",
+   "days": 652,
+   "days_per_year": {
+    "2024": 289,
+    "2025": 363
+   },
+   "record": [
+    "2024-03-05",
+    "2025-12-31"
+   ],
+   "required": true,
+   "short_name": "PACE_OCI_L3M_BGC",
+   "variables": [
+    "chlor_a",
+    "poc",
+    "carbon_phyto"
+   ],
+   "version": "3.2"
+  },
+  "moana": {
+   "bytes_cmr": 4143868774,
+   "bytes_note": "CMR's own `granule_size` in MB, summed over the WHOLE bundle; this store fetches only the variables above, through OPeNDAP, and the probe measures what that really costs",
+   "days": 631,
+   "days_per_year": {
+    "2024": 277,
+    "2025": 354
+   },
+   "record": [
+    "2024-03-05",
+    "2025-12-31"
+   ],
+   "required": false,
+   "short_name": "PACE_OCI_L4M_MOANA",
+   "variables": [
+    "prococcus_moana",
+    "syncoccus_moana",
+    "picoeuk_moana"
+   ],
+   "version": "3.2"
+  }
+ },
+ "qc_policy": "THE LAST THREE CHANNELS ARE A LEVEL-4 DERIVED PRODUCT. `pro_moana`, `syn_moana` and `pico_moana` are not radiances or a retrieval of one: they are cell abundances inferred from the SHAPE of the reflectance spectrum with sea-surface temperature as an ancillary input (the MOANA algorithm, Lange et al. 2020), and they are admitted -- against this family's preference for measurements -- because nothing else carries the phytoplankton community at all (E-082 wave 6 2.2). They are flagged `derived: true` in every tile_grid.json, and a reader that wants measurements only takes the first four channels. They are also REGIONAL: the source file covers 70 S..70 N and 85 W..25 E, an exact sub-block of the global grid, and the three channels are NaN outside it. EVERYTHING ELSE follows the producer. The only per-pixel flag in these files is the fill value: chlor_a, carbon_phyto and avw carry float -32767 and poc and the MOANA fields int -32767, and all become NaN. A chlorophyll at or below 1e-4 mg m-3 is NaN too, because log10 of it is not a measurement, and it is counted (`chl_below_floor`). A NEGATIVE cell abundance is NaN and counted (`negative_cells`): the measured files carry a second, undocumented sentinel at int32's minimum and a few other negative values, and a cell count is never negative. A value ABOVE the producer's own valid_max for a MOANA field is KEPT and counted (`above_producer_valid_max`) -- 0.014 % to 0.58 % of valid pixels, measured -- because half a per cent of a bloom signal is not noise and the fact belongs in the open. A value outside a channel's bounds becomes NaN and is counted (`out_of_bounds`), never clipped. The AOP bundle's 172-wavelength Rrs cube, nflh, aot_865 and angstrom, and the BGC bundle's pic, are in the same files and are NOT stored: they are phase B",
+ "record": [
+  "2024-03-05",
+  "2025-12-31"
+ ],
+ "record_start_declared": "2024-03-05",
+ "sources": [
+  "https://oceandata.sci.gsfc.nasa.gov/opendap/PACE_OCI/L3SMI/<YYYY>/<MMDD>/PACE_OCI.<YYYYMMDD>.L3m.DAY.BGC.V3_2.4km.nc",
+  "https://oceandata.sci.gsfc.nasa.gov/opendap/PACE_OCI/L3SMI/<YYYY>/<MMDD>/PACE_OCI.<YYYYMMDD>.L3m.DAY.AOP.V3_2.4km.nc",
+  "https://oceandata.sci.gsfc.nasa.gov/opendap/PACE_OCI/L4SMI/<YYYY>/<MMDD>/PACE_OCI.<YYYYMMDD>.L4m.DAY.MOANA.V3_2.4km.nc",
+  "https://cmr.earthdata.nasa.gov/search/granules.json"
+ ],
+ "store": "pace4k",
+ "title": "Ocean colour and the phytoplankton community, PACE OCI daily 4 km mapped v3.2: log10 chlorophyll-a, particulate organic carbon, phytoplankton carbon, apparent visible wavelength and the three MOANA cell abundances",
+ "url": "https://oceandata.sci.gsfc.nasa.gov/opendap/PACE_OCI/",
+ "verified": "2026-09-20 from the sandbox, anonymously: the CMR collection search for PACE_OCI_L3M_BGC, PACE_OCI_L3M_AOP and PACE_OCI_L4M_MOANA (C4184125847 / C4184125822 / C4124891014-OB_CLOUD, all version 3.2, all time_start 2024-03-05); the granule listing of each for 2024 by name pattern (BGC 289 days 9.97 GB, AOP 289 days 205.4 GB, MOANA **277** days 1.64 GB by CMR's declared sizes, all 2024-03-05..2024-12-31); a 302 to urs.earthdata.nasa.gov from both `getfile` and the cumulus bucket for all three files of 2025-07-01, against HTTP 200 and real data from OB.DAAC's OPeNDAP for the same files with no credential; the DMRs of all three (BGC lat 4320 lon 8640 with poc/pic int16 and chlor_a/carbon_phyto float32; AOP wavelength 172 x lat x lon with Rrs/nflh int16, avw float32; MOANA lat **3360** lon **2640** with three int32 fields); the three DAP4 subsets of 2025-07-01 downloaded and opened (28.7 + 11.0 + 6.5 MB, 9.9 s, valid fractions 8.34 % / 8.34 % / 9.06 %, chlor_a 0.0052..99.19, poc 15.0..1999.2, carbon_phyto 0.60..999.57, avw 400.39..699.65, and the MOANA fields' negative sentinels and above-valid_max tails); the MOANA window shown to sit at global row 480, column 2280 exactly; and THREE REAL DAYS (2024-03-05, 2024-03-06, 2024-07-15) fetched and written through this adapter's own code path \u2014 46.6-53.5 MB a day through OPeNDAP, 20 s to read and 15 s to encode a frame, a 25.4-27.0 MB shard of 387-410 stored tiles of 578 (19.4-20.6x over the raw float16 frame), valid fractions 0.084-0.091 for the four global channels and 0.0229-0.0235 for the three regional MOANA ones, and the MOANA window measured at row 480, column 2280, 3360 x 2640 in every one of them",
+ "version": "3.2",
+ "years": [
+  2024,
+  2025
+ ]
+}
