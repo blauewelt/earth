@@ -1,0 +1,41 @@
+store     icesat2 — ICESat-2 ATL08 release 007: terrain height, canopy height, canopy openness and photon counts per 100 m LAND segment, six ground tracks to 88 degrees
+family    family1_tf (1.0.tf) · public -> chfrank/earth-tensors:tensors/family1_tf/icesat2
+axis      2022-01-01 .. 2022-01-31  bins 2922..2928 · time_s int32 (schema 2)
+lane      m01 — this fetch writes parts/<year>/m01/ and pushes only that folder
+channels  C=6: h_te_best_fit, h_canopy, canopy_openness, n_ca_photons, n_te_photons, segment_landcover
+work      /home/runner/work/earth/earth/ml/cache/family1_tf
+
+=== stage index (icesat2) ===
+  [index icesat2] start (1 items)  0/1  0.0s
+  [index icesat2] plan.json  1/1  8.4s
+  index: icesat2 — 1 year(s), C=6 (h_te_best_fit, h_canopy, canopy_openness, n_ca_photons, n_te_photons, segment_landcover), bins 2922..2928
+=== stage index done in 8.4s ===
+
+=== stage fetch (icesat2) ===
+  [fetch icesat2] start (1 items)  0/1  0.0s
+Traceback (most recent call last):
+  File "/home/runner/work/earth/earth/ml/build_family1_stores.py", line 1776, in <module>
+    sys.exit(main())
+             ^^^^^^
+  File "/home/runner/work/earth/earth/ml/build_family1_stores.py", line 1771, in main
+    f10b.run_stages(ctx, stages, stage_fn=stage_fns(ad), deps=DEPS)
+  File "/home/runner/work/earth/earth/ml/build_family10_stores.py", line 5665, in run_stages
+    stage_fn[s](ctx)
+  File "/home/runner/work/earth/earth/ml/build_family1_stores.py", line 374, in stage_fetch
+    f10b.stage_fetch(ctx, assemble_store_after=False)
+  File "/home/runner/work/earth/earth/ml/build_family10_stores.py", line 4200, in stage_fetch
+    for label, rows, counts in ad.fetch_year(ctx, y):
+  File "/home/runner/work/earth/earth/ml/family1/adapters/icesat2.py", line 895, in fetch_year
+    yield from self._rows(ctx, str(year), lo, hi, cap=cap)
+  File "/home/runner/work/earth/earth/ml/family1/adapters/icesat2.py", line 694, in _rows
+    op = self._open(ctx, e)
+         ^^^^^^^^^^^^^^^^^^
+  File "/home/runner/work/earth/earth/ml/family1/adapters/icesat2.py", line 673, in _open
+    return hr.open_whole(self._session, entry["url"], dest,
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/work/earth/earth/ml/family1/adapters/_h5range.py", line 313, in open_whole
+    n, why = cm.earthdata_download(session, url, dest, attempts=attempts)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/work/earth/earth/ml/family1/adapters/_common.py", line 365, in earthdata_download
+    raise IOError(f"{url}: {type(err).__name__}: {err}")
+OSError: https://data.nsidc.earthdatacloud.nasa.gov/nsidc-cumulus-prod-protected/ATLAS/ATL08/007/2021/12/31/ATL08_20211231235831_01481410_007_01.h5: ConnectTimeout: HTTPSConnectionPool(host='urs.earthdata.nasa.gov', port=443): Max retries exceeded with url: /oauth/authorize?client_id=ntD0YGC_SM3Bjs-Tnxd7bg&response_type=code&redirect_uri=https://data.nsidc.earthdatacloud.nasa.gov/login&state=%2Fnsidc-cumulus-prod-protected%2FATLAS%2FATL08%2F007%2F2021%2F12%2F31%2FATL08_20211231235831_01481410_007_01.h5&app_type=401 (Caused by ConnectTimeoutError(<urllib3.connection.HTTPSConnection object at 0x7f4def0b5b20>, 'Connection to urs.earthdata.nasa.gov timed out. (connect timeout=300)'))
