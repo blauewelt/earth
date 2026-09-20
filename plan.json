@@ -1,0 +1,206 @@
+{
+ "bins": [
+  657,
+  3268
+ ],
+ "builder_git_sha": "89056404dfe9a0de45ec4dd6637029d3e3b9d1fb",
+ "built_at": "2026-09-20T18:06:37+00:00",
+ "bytes_products": 58745910325,
+ "channels": [
+  {
+   "max": 100.0,
+   "min": -100.0,
+   "name": "nee",
+   "unit": "umolCO2/m2/s"
+  },
+  {
+   "max": 200.0,
+   "min": -50.0,
+   "name": "gpp",
+   "unit": "umolCO2/m2/s"
+  },
+  {
+   "max": 100.0,
+   "min": -20.0,
+   "name": "reco",
+   "unit": "umolCO2/m2/s"
+  },
+  {
+   "max": 1000.0,
+   "min": -200.0,
+   "name": "le",
+   "unit": "W/m2"
+  },
+  {
+   "max": 1000.0,
+   "min": -500.0,
+   "name": "h",
+   "unit": "W/m2"
+  },
+  {
+   "max": 1500.0,
+   "min": -500.0,
+   "name": "rn",
+   "unit": "W/m2"
+  },
+  {
+   "max": 60.0,
+   "min": -90.0,
+   "name": "ta",
+   "unit": "degC"
+  },
+  {
+   "max": 200.0,
+   "min": 0.0,
+   "name": "vpd",
+   "unit": "hPa"
+  },
+  {
+   "max": 100.0,
+   "min": 0.0,
+   "name": "swc",
+   "unit": "percent"
+  },
+  {
+   "max": 500.0,
+   "min": 0.0,
+   "name": "p",
+   "unit": "mm"
+  }
+ ],
+ "columns": {
+  "gpp": "GPP_NT_VUT_REF",
+  "h": "H_F_MDS",
+  "le": "LE_F_MDS",
+  "nee": "NEE_VUT_REF",
+  "p": "P_F",
+  "reco": "RECO_NT_VUT_REF",
+  "rn": "NETRAD",
+  "swc": "SWC_F_MDS_1",
+  "ta": "TA_F",
+  "vpd": "VPD_F"
+ },
+ "dataset": "FLUXNET Shuttle FULLSET half-hourly, 2026-04-30",
+ "date_range": [
+  "1991-01-01",
+  "2026-09-30"
+ ],
+ "first_archive": {
+  "bytes": 19108982,
+  "counts": {
+   "rows_read": 17520,
+   "site_years": 1,
+   "site_zip_members": 18,
+   "sites_half_hourly": 1,
+   "utc_offset_source": {
+    "badm": 1
+   }
+  },
+  "first_time_utc": "2019-01-01 06:00:00",
+  "hub": "amf",
+  "igbp": "WET",
+  "rows": 17520,
+  "site_id": "US-PFr",
+  "utc_offset": -6.0
+ },
+ "footprint": {
+  "log2_dt": -7.906890595608519,
+  "log2_fp": -4.0
+ },
+ "hubs": [
+  "amf",
+  "icos",
+  "tern"
+ ],
+ "listing": {
+  "amf_bytes_listing": 3133808,
+  "amf_bytes_products": 29986627803,
+  "amf_publish_fluxnet": 407,
+  "amf_sites_listed": 844,
+  "amf_with_download": 407,
+  "icos_bytes_listing": 612614,
+  "icos_bytes_products": 28759282522,
+  "icos_not_oneflux": 4,
+  "icos_not_oneflux_names": [
+   "FLX_DE-Dgw_FLUXNET2015_FULLSET_2015-2018_beta-3.zip",
+   "FLX_DE-SfN_FLUXNET2015_FULLSET_2012-2014_beta-3.zip",
+   "FLX_JP-Ozm_FLUXNET2015_FULLSET_2015-2016_beta-3.zip",
+   "FLX_SE-Lnn_FLUXNET2015_FULLSET_2014-2018_beta-3.zip"
+  ],
+  "icos_objects": 352,
+  "icos_sites": 347,
+  "sites": 806,
+  "tern_bif_sites": 54,
+  "tern_bytes_listing": 55712,
+  "tern_sites": 52
+ },
+ "per_year_resume": false,
+ "qc_columns": {
+  "le": "LE_F_MDS_QC",
+  "nee": "NEE_VUT_REF_QC"
+ },
+ "qc_policy": "qc is one uint8 per row: bits 0-2 NEE_VUT_REF_QC (0 measured, 1 good-quality gap-fill, 2 medium, 3 poor, 7 not reported by this file), bits 3-5 LE_F_MDS_QC on the same scale, and bit 6 set when the site averages HOURLY rather than half-hourly (some towers publish _FLUXMET_HR_ and no HH file; the store's log2_dt is the half-hourly value and platforms.json carries each site's own `resolution`). The hub is NOT in qc -- it is a property of the site and platforms.json is where a site's properties belong. The product's own -9999 becomes NaN; a column a site's file does not carry (NETRAD and SWC_F_MDS_1 are the usual ones, because not every tower has a net radiometer or a soil probe) leaves that channel NaN for the whole site and is counted in `channels_absent`. A value outside its physical bound becomes NaN and is counted, never clipped. FLUXNET timestamps are LOCAL STANDARD TIME: the site's own BADM (Biological, Ancillary, Disturbance and Metadata) file gives the UTC offset where it has an UTC_OFFSET row, and where it has none -- 27 AmeriFlux towers, measured -- the offset is round(lon / 15) hours, the nominal solar zone of the tower's longitude. platforms.json records `utc_offset_source` per site ('badm' or 'longitude') and the fetch counts the two under `utc_offset_source`; the derived value can be an hour out where a country keeps a neighbour's clock, which is bounded and recorded rather than silent. Two things remain REFUSALS rather than guesses: a site with neither an UTC_OFFSET row nor a longitude (nothing then places its rows on a UTC axis at all), and a hub body that is not a zip -- ICOS answers its licence page as HTML when the accept cookie is missing, and an HTML page parsed as a zip would be a silent empty site",
+ "record": [
+  "1991",
+  "2026"
+ ],
+ "site_years_listed": 6803,
+ "sites": 806,
+ "sites_by_hub": {
+  "amf": 407,
+  "icos": 347,
+  "tern": 52
+ },
+ "sources": [
+  "https://amfcdn.lbl.gov/api/v2/site_info_display/AmeriFlux",
+  "https://amfcdn.lbl.gov/api/v2/amf_shuttle_data_files_and_manifest",
+  "https://meta.icos-cp.eu/sparql",
+  "https://dap.tern.org.au/thredds/fileServer/ecosystem_process/fluxnet/TERN_THREDDS_catalogue.csv"
+ ],
+ "store": "flux",
+ "title": "Half-hourly land-air CO2, water and heat exchange from eddy-covariance towers, FLUXNET Shuttle (2026-04-30)",
+ "url": "https://data.fluxnet.org/",
+ "verified": "2026-09-18 from the sandbox, ANONYMOUSLY -- no FLUXNET credential was used or needed: the AmeriFlux site_info endpoint (200, 1.69 MB, 844 sites of which 407 carry grp_publish_fluxnet), the AmeriFlux shuttle POST with the library's own fixed user_id 'fluxnetshuttle' (200, per-site zip URLs on ftp.fluxdata.org with sizes and MD5s; AMF_AR-Bal_FLUXNET_2012-2013_v1.3_r1.zip downloaded whole, 22,077,723 bytes, MD5 96c666d12987ddcc1ec64a992e90ad10 matching the API's, and its FLUXMET_HH member read for the column list); the ICOS SPARQL endpoint (200, 3,012 bindings over 352 FLUXNET archive products) and its two-step licence-accept download (the accept URL sets CpLicenseAcceptedFor, after which the object answers 206 application/zip, PK magic, 29,093,732 bytes); and TERN's two published CSVs (200, 53 sites in the catalogue, BADM for all of them). The Shuttle library's own config.yaml and ameriflux.py were read to get the endpoints and to confirm there is no credential in the code path",
+ "years": [
+  1991,
+  1992,
+  1993,
+  1994,
+  1995,
+  1996,
+  1997,
+  1998,
+  1999,
+  2000,
+  2001,
+  2002,
+  2003,
+  2004,
+  2005,
+  2006,
+  2007,
+  2008,
+  2009,
+  2010,
+  2011,
+  2012,
+  2013,
+  2014,
+  2015,
+  2016,
+  2017,
+  2018,
+  2019,
+  2020,
+  2021,
+  2022,
+  2023,
+  2024,
+  2025,
+  2026
+ ],
+ "years_listed": [
+  1991,
+  2026
+ ]
+}
