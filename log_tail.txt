@@ -1,0 +1,80 @@
+    1
+   ],
+   "valid_fraction": {
+    "greenup": 0.350994,
+    "mid_greenup": 0.350994,
+    "peak": 0.350994,
+    "senescence": 0.350994,
+    "mid_greendown": 0.350994,
+    "dormancy": 0.350994,
+    "evi_minimum": 0.350994,
+    "evi_amplitude": 0.350994,
+    "evi_area": 0.350994,
+    "qa_overall": 0.350994
+   },
+   "valid_fraction_per_frame": [
+    0.350994
+   ],
+   "bytes_per_frame": {
+    "mean": 26967299.0,
+    "min": 26967299,
+    "max": 26967299
+   },
+   "bytes_per_stored_tile": {
+    "mean": 269673.0,
+    "median": 167181.0,
+    "p90": 700630.7000000001,
+    "max": 787692
+   },
+   "tiles_stored": 100,
+   "tiles_empty": 0,
+   "raw_bytes_per_frame": 115200000,
+   "compression_ratio": 4.27,
+   "bytes_per_valid_pixel": 1.3339,
+   "encode_seconds_per_frame": 4.224,
+   "record_frames": 25,
+   "index_bytes_per_bin": 1728,
+   "estimate_store_bytes": 674225675,
+   "note_formula_bytes": 1213036200,
+   "note_formula": "pixels x frames x valid fraction x 2C x 1.2"
+  }
+ },
+ "out_of_bounds": {},
+ "out_of_bounds_stored": 0,
+ "inputs_not_read": [],
+ "counts": {
+  "fill_pixels_greenup": 16608122,
+  "fill_pixels_mid_greenup": 16608122,
+  "fill_pixels_peak": 16608122,
+  "fill_pixels_senescence": 16608122,
+  "fill_pixels_mid_greendown": 16608122,
+  "fill_pixels_dormancy": 16608122,
+  "fill_pixels_evi_minimum": 16608122,
+  "fill_pixels_evi_amplitude": 16608122,
+  "fill_pixels_evi_area": 16608122,
+  "fill_pixels_qa_overall": 16608122,
+  "product_year": {
+   "2020": 5
+  },
+  "files_read": 5,
+  "valid_pixels": 121918780,
+  "bytes_files": 1440513444,
+  "fetch_seconds": 73.84
+ },
+ "bytes_fetched": 1440513444,
+ "bytes_index": 288177175,
+ "bytes_fetched_per_frame": 288102688.8,
+ "wall_seconds": 74.8,
+ "wall_seconds_index": 22.63,
+ "seconds_per_frame": 14.96,
+ "estimate_store_bytes": 3838120375,
+ "note_formula_bytes": 7315126800,
+ "note_estimate": {
+  "bytes": 10000000000.0,
+  "what": "family1tf.tex ledger: '~10 GB a year' for MCD12Q2 v061 at 500 m over 315 tiles"
+ },
+ "runner": "GitHub Actions 1000005645",
+ "builder_git_sha": "0d308039070a878224be6182dbfb215c7adf34e2",
+ "at": "2026-09-20T17:41:04+00:00"
+}
+probe -> /home/runner/work/earth/earth/ml/cache/family1_tf/probe/pheno500/2020-06.json
