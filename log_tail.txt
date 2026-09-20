@@ -1,0 +1,46 @@
+store     lai500 — Leaf-area index and FPAR every eight days, MODIS MOD15A2H v061 (Terra) with MYD15A2H (Aqua) and VNP15A2H v002 (VIIRS) as continuation groups, 500 m sinusoidal tiles (exception E7)
+family    family1_tf (1.0.tf) · public -> chfrank/earth-tensors:tensors/family1_tf/lai500
+axis      2020-07-01 .. 2020-09-30  bins 2812..2830 · time_s int32 (schema 2)
+channels  C=4: lai, fpar, lai_stddev, fpar_lai_qc
+tier G    sharded, groups ['terra_h00v08', 'terra_h00v09', 'terra_h00v10', 'terra_h01v07', 'terra_h01v08', 'terra_h01v09', 'terra_h01v10', 'terra_h01v11', 'terra_h02v06', 'terra_h02v08', 'terra_h02v09', 'terra_h02v10', 'terra_h02v11', 'terra_h03v06', 'terra_h03v07', 'terra_h03v09', 'terra_h03v10', 'terra_h03v11', 'terra_h04v09', 'terra_h04v10', 'terra_h04v11', 'terra_h05v10', 'terra_h05v11', 'terra_h05v13', 'terra_h06v03', 'terra_h06v11', 'terra_h07v03', 'terra_h07v05', 'terra_h07v06', 'terra_h07v07', 'terra_h08v03', 'terra_h08v04', 'terra_h08v05', 'terra_h08v06', 'terra_h08v07', 'terra_h08v08', 'terra_h08v09', 'terra_h08v11', 'terra_h09v02', 'terra_h09v03', 'terra_h09v04', 'terra_h09v05', 'terra_h09v06', 'terra_h09v07', 'terra_h09v08', 'terra_h09v09', 'terra_h10v02', 'terra_h10v03', 'terra_h10v04', 'terra_h10v05', 'terra_h10v06', 'terra_h10v07', 'terra_h10v08', 'terra_h10v09', 'terra_h10v10', 'terra_h10v11', 'terra_h11v02', 'terra_h11v03', 'terra_h11v04', 'terra_h11v05', 'terra_h11v06', 'terra_h11v07', 'terra_h11v08', 'terra_h11v09', 'terra_h11v10', 'terra_h11v11', 'terra_h11v12', 'terra_h12v01', 'terra_h12v02', 'terra_h12v03', 'terra_h12v04', 'terra_h12v05', 'terra_h12v07', 'terra_h12v08', 'terra_h12v09', 'terra_h12v10', 'terra_h12v11', 'terra_h12v12', 'terra_h12v13', 'terra_h13v01', 'terra_h13v02', 'terra_h13v03', 'terra_h13v04', 'terra_h13v08', 'terra_h13v09', 'terra_h13v10', 'terra_h13v11', 'terra_h13v12', 'terra_h13v13', 'terra_h13v14', 'terra_h14v01', 'terra_h14v02', 'terra_h14v03', 'terra_h14v04', 'terra_h14v09', 'terra_h14v10', 'terra_h14v11', 'terra_h14v14', 'terra_h15v01', 'terra_h15v02', 'terra_h15v03', 'terra_h15v05', 'terra_h15v07', 'terra_h15v11', 'terra_h15v14', 'terra_h16v00', 'terra_h16v01', 'terra_h16v02', 'terra_h16v05', 'terra_h16v06', 'terra_h16v07', 'terra_h16v08', 'terra_h16v09', 'terra_h16v12', 'terra_h16v14', 'terra_h17v00', 'terra_h17v01', 'terra_h17v02', 'terra_h17v03', 'terra_h17v04', 'terra_h17v05', 'terra_h17v06', 'terra_h17v07', 'terra_h17v08', 'terra_h17v10', 'terra_h17v12', 'terra_h17v13', 'terra_h18v00', 'terra_h18v01', 'terra_h18v02', 'terra_h18v03', 'terra_h18v04', 'terra_h18v05', 'terra_h18v06', 'terra_h18v07', 'terra_h18v08', 'terra_h18v09', 'terra_h18v14', 'terra_h19v00', 'terra_h19v01', 'terra_h19v02', 'terra_h19v03', 'terra_h19v04', 'terra_h19v05', 'terra_h19v06', 'terra_h19v07', 'terra_h19v08', 'terra_h19v09', 'terra_h19v10', 'terra_h19v11', 'terra_h19v12', 'terra_h20v01', 'terra_h20v02', 'terra_h20v03', 'terra_h20v04', 'terra_h20v05', 'terra_h20v06', 'terra_h20v07', 'terra_h20v08', 'terra_h20v09', 'terra_h20v10', 'terra_h20v11', 'terra_h20v12', 'terra_h20v13', 'terra_h21v01', 'terra_h21v02', 'terra_h21v03', 'terra_h21v04', 'terra_h21v05', 'terra_h21v06', 'terra_h21v07', 'terra_h21v08', 'terra_h21v09', 'terra_h21v10', 'terra_h21v11', 'terra_h21v13', 'terra_h22v01', 'terra_h22v02', 'terra_h22v03', 'terra_h22v04', 'terra_h22v05', 'terra_h22v06', 'terra_h22v07', 'terra_h22v08', 'terra_h22v09', 'terra_h22v10', 'terra_h22v11', 'terra_h22v13', 'terra_h22v14', 'terra_h23v01', 'terra_h23v02', 'terra_h23v03', 'terra_h23v04', 'terra_h23v05', 'terra_h23v06', 'terra_h23v07', 'terra_h23v08', 'terra_h23v09', 'terra_h23v10', 'terra_h23v11', 'terra_h24v02', 'terra_h24v03', 'terra_h24v04', 'terra_h24v05', 'terra_h24v06', 'terra_h24v07', 'terra_h24v12', 'terra_h25v02', 'terra_h25v03', 'terra_h25v04', 'terra_h25v05', 'terra_h25v06', 'terra_h25v07', 'terra_h25v08', 'terra_h25v09', 'terra_h26v02', 'terra_h26v03', 'terra_h26v04', 'terra_h26v05', 'terra_h26v06', 'terra_h26v07', 'terra_h26v08', 'terra_h27v03', 'terra_h27v04', 'terra_h27v05', 'terra_h27v06', 'terra_h27v07', 'terra_h27v08', 'terra_h27v09', 'terra_h27v10', 'terra_h27v11', 'terra_h27v12', 'terra_h27v14', 'terra_h28v03', 'terra_h28v04', 'terra_h28v05', 'terra_h28v06', 'terra_h28v07', 'terra_h28v08', 'terra_h28v09', 'terra_h28v10', 'terra_h28v11', 'terra_h28v12', 'terra_h28v13', 'terra_h28v14', 'terra_h29v03', 'terra_h29v05', 'terra_h29v06', 'terra_h29v07', 'terra_h29v08', 'terra_h29v09', 'terra_h29v10', 'terra_h29v11', 'terra_h29v12', 'terra_h29v13', 'terra_h30v05', 'terra_h30v06', 'terra_h30v07', 'terra_h30v08', 'terra_h30v09', 'terra_h30v10', 'terra_h30v11', 'terra_h30v12', 'terra_h30v13', 'terra_h31v06', 'terra_h31v07', 'terra_h31v08', 'terra_h31v09', 'terra_h31v10', 'terra_h31v11', 'terra_h31v12', 'terra_h31v13', 'terra_h32v07', 'terra_h32v08', 'terra_h32v09', 'terra_h32v10', 'terra_h32v11', 'terra_h32v12', 'terra_h33v07', 'terra_h33v08', 'terra_h33v09', 'terra_h33v10', 'terra_h33v11', 'terra_h34v07', 'terra_h34v08', 'terra_h34v09', 'terra_h34v10', 'terra_h35v08', 'terra_h35v09', 'terra_h35v10'], F=1 x 432000 s, float16, years (by bin start) 2020..2020
+work      /home/runner/work/earth/earth/ml/cache/family1_tf
+
+=== stage index (lai500) ===
+  [index lai500] start (1 items)  0/1  0.0s
+  [index lai500] plan.json  1/1  19.8s
+  index: lai500 — 1 year(s), C=4 (lai, fpar, lai_stddev, fpar_lai_qc), bins 2812..2830
+=== stage index done in 19.8s ===
+
+=== stage fetch (lai500) ===
+  [fetch lai500 (tier G)] start (1 items)  0/1  0.0s
+  [fetch lai500 (tier G)] lai500 2020 terra_h00v09 bin 2817  123.3s
+  [fetch lai500 (tier G)] lai500 2020 terra_h00v10 bin 2823  134.8s
+  [fetch lai500 (tier G)] lai500 2020 terra_h01v07 bin 2829  146.4s
+  [fetch lai500 (tier G)] lai500 2020 terra_h01v09 bin 2816  156.8s
+  [fetch lai500 (tier G)] lai500 2020 terra_h01v10 bin 2822  167.6s
+  [fetch lai500 (tier G)] lai500 2020 terra_h01v11 bin 2828  179.0s
+  [fetch lai500 (tier G)] lai500 2020 terra_h02v08 bin 2815  189.7s
+  [fetch lai500 (tier G)] lai500 2020 terra_h02v09 bin 2821  200.9s
+  [fetch lai500 (tier G)] lai500 2020 terra_h02v10 bin 2827  220.6s
+  [fetch lai500 (tier G)] lai500 2020 terra_h03v06 bin 2814  230.6s
+  [fetch lai500 (tier G)] lai500 2020 terra_h03v07 bin 2820  242.7s
+  [fetch lai500 (tier G)] lai500 2020 terra_h03v09 bin 2826  254.2s
+  [fetch lai500 (tier G)] lai500 2020 terra_h03v11 bin 2813  265.2s
+  [fetch lai500 (tier G)] lai500 2020 terra_h04v09 bin 2819  276.7s
+  [fetch lai500 (tier G)] lai500 2020 terra_h04v10 bin 2825  287.7s
+  [fetch lai500 (tier G)] lai500 2020 terra_h05v10 bin 2812  298.1s
+  [fetch lai500 (tier G)] lai500 2020 terra_h05v11 bin 2818  309.3s
+  [fetch lai500 (tier G)] lai500 2020 terra_h05v13 bin 2824  320.8s
+  [fetch lai500 (tier G)] lai500 2020 terra_h06v03 bin 2830  331.5s
+  [fetch lai500 (tier G)] lai500 2020 terra_h07v03 bin 2817  342.0s
+  [fetch lai500 (tier G)] lai500 2020 terra_h07v05 bin 2823  353.6s
+  [fetch lai500 (tier G)] lai500 2020 terra_h07v06 bin 2829  369.1s
+  [fetch lai500 (tier G)] lai500 2020 terra_h08v03 bin 2816  380.2s
+  [fetch lai500 (tier G)] lai500 2020 terra_h08v04 bin 2822  394.7s
+  [fetch lai500 (tier G)] lai500 2020 terra_h08v05 bin 2828  451.2s
+  [fetch lai500 (tier G)] lai500 2020 terra_h08v07 bin 2815  519.9s
+  [fetch lai500 (tier G)] lai500 2020 terra_h08v08 bin 2821  543.6s
+  [fetch lai500 (tier G)] lai500 2020 terra_h08v09 bin 2827  555.4s
+  [fetch lai500 (tier G)] lai500 2020 terra_h09v02 bin 2814  565.6s
+  [fetch lai500 (tier G)] lai500 2020 terra_h09v03 bin 2820  579.5s
+  [fetch lai500 (tier G)] lai500 2020 terra_h09v04 bin 2826  627.0s
