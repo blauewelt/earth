@@ -418,3 +418,31 @@ def test_the_l4a_version_knob(monkeypatch):
 
 if __name__ == "__main__":
     sys.exit(pytest.main([__file__, "-q"]))
+
+
+def test_the_cap_is_the_probes_and_a_build_reads_every_granule(monkeypatch, tmp_path):
+    """On 2026-09-20 the first build lanes ran with the probe's default cap
+    of the probe's default cap (the ICESat-2 twin read twelve of 4,884 granules), and marked 2022 done with a
+    fraction of it in 38 seconds. The cap now reaches `fetch_month` (the
+    probe) only; `fetch_year` (the build) reads every granule, and a cap set
+    by name for a build is a refusal unless the partial year is asked for."""
+    monkeypatch.setenv("GEDI_MAX_GRANULES", "1")
+    monkeypatch.delenv("GEDI_ALLOW_CAPPED_BUILD", raising=False)
+    # a build under a cap it was given by name REFUSES, before its first row
+    with pytest.raises(SystemExit, match="set for a BUILD"):
+        b1.run_smoke("gedi", root=str(tmp_path / "s1"), keep=True)
+    # asked for by name, the adapter carries the intention (the smoke's
+    # row-for-row check would then rightly refuse a store short of its truth,
+    # so the partial build is not run here; the attributes are what a lane's
+    # store.json records)
+    monkeypatch.setenv("GEDI_ALLOW_CAPPED_BUILD", "1")
+    ad = gedi.ADAPTER()
+    assert ad.cap_was_set and ad.max_granules == 1 and ad.allow_capped_build
+    # with no cap named, the build reads EVERY granule and the probe keeps
+    # its own default
+    monkeypatch.delenv("GEDI_MAX_GRANULES", raising=False)
+    monkeypatch.delenv("GEDI_ALLOW_CAPPED_BUILD", raising=False)
+    res3 = b1.run_smoke("gedi", root=str(tmp_path / "s3"), keep=True)
+    assert len(res3["truth"]) == TRUTH_ROWS
+    assert res3["probe"]["counts"]["max_granules_cap"] == 6
+    assert res3["probe"]["counts"]["granules_wanted"] == MONTH_STEMS

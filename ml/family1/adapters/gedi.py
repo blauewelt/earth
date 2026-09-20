@@ -600,16 +600,31 @@ class GEDIAdapter(f10b.SourceAdapter):
         if self.fetch_mode not in ("range", "whole"):
             sys.exit("GEDI_FETCH must be 'range' (HDF5 byte-range subset) or "
                      "'whole' (download the granule)")
+        # THE CAP IS THE PROBE'S, NEVER THE BUILD'S. `GEDI_MAX_GRANULES` bounds
+        # how many granules ONE PROBE reads (spread over the month), so a
+        # probe costs minutes; a build reads every granule in its window. On
+        # 2026-09-20 the first ICESat-2 build lanes ran with the probe's
+        # default cap, read twelve granules of 4,884, and MARKED THE YEAR DONE
+        # with a fraction of it in 38 seconds -- a short store that reported
+        # success (ml/CLAUDE.md 0.2). So `fetch_year` never applies a cap, and
+        # a cap set explicitly for a build is a refusal unless
+        # GEDI_ALLOW_CAPPED_BUILD=1 names the intention.
+        raw_cap = (os.environ.get("GEDI_MAX_GRANULES") or "").strip()
         try:
-            self.max_granules = int(os.environ.get("GEDI_MAX_GRANULES") or 6)
+            self.max_granules = int(raw_cap) if raw_cap else 6
         except ValueError:
             sys.exit("GEDI_MAX_GRANULES must be an integer")
+        self.cap_was_set = bool(raw_cap)
+        self.allow_capped_build = (
+            os.environ.get("GEDI_ALLOW_CAPPED_BUILD") or "") == "1"
         self.allow_build = (os.environ.get("GEDI_ALLOW_BUILD") or "") == "1"
         self.notes = (
             f"L4A version {self.l4a_version} ({self.l4a['concept']}); fetch "
             f"mode {self.fetch_mode!r}"
-            + (f"; at most {self.max_granules} granule(s) per call"
-               if self.max_granules else "; every granule in the window")
+            + (f"; a probe reads at most {self.max_granules} granule(s), "
+               f"spread over its month; a build reads every granule in its "
+               f"window" if self.max_granules else "; every granule in the "
+               f"window")
             + ". PHASE A IS ONE YEAR (2022): a window crossing a calendar-year "
               "boundary is refused past `probe` unless GEDI_ALLOW_BUILD=1, "
               "because one month of the three products is 2.58 TB native and "
@@ -705,7 +720,7 @@ class GEDIAdapter(f10b.SourceAdapter):
         return st
 
     # ----------------------------------------------------------------- rows --
-    def _rows(self, ctx, label, t_lo, t_hi):
+    def _rows(self, ctx, label, t_lo, t_hi, cap=0):
         merged, got = self.listing(ctx, t_lo, t_hi)
         keys = [k for k in sorted(merged)
                 if in_window(merged[k]["l2a"], k, t_lo, t_hi)]
@@ -714,10 +729,10 @@ class GEDIAdapter(f10b.SourceAdapter):
                   "granules_listed_l4a": len(got["l4a"]),
                   "l4a_version": self.l4a_version,
                   "fetch_mode": self.fetch_mode,
-                  "max_granules_cap": self.max_granules}
-        if self.max_granules and len(keys) > self.max_granules:
-            counts["granules_skipped_by_cap"] = len(keys) - self.max_granules
-            keys = spread(keys, self.max_granules)
+                  "max_granules_cap": cap}
+        if cap and len(keys) > cap:
+            counts["granules_skipped_by_cap"] = len(keys) - cap
+            keys = spread(keys, cap)
         counts["granules_wanted"] = len(keys)
         per_granule = []
         t0 = time.time()
@@ -967,12 +982,21 @@ class GEDIAdapter(f10b.SourceAdapter):
         lo = max(f10b.seconds_since_epoch(dt.date(int(year), 1, 1)), ctx.t_lo)
         hi = min(f10b.seconds_since_epoch(dt.date(int(year), 12, 31)) + 86399,
                  ctx.t_hi)
-        yield from self._rows(ctx, str(year), lo, hi)
+        if self.cap_was_set and self.max_granules and not self.allow_capped_build:
+            sys.exit(f"{self.store}: GEDI_MAX_GRANULES={self.max_granules} is "
+                     f"set for a BUILD. A capped build marks the year done "
+                     f"with a fraction of its granules and reports success; "
+                     f"the cap is the probe's. Unset it, or say "
+                     f"GEDI_ALLOW_CAPPED_BUILD=1 if a partial year is what "
+                     f"is wanted (it is recorded in store.json).")
+        cap = self.max_granules if self.allow_capped_build else 0
+        yield from self._rows(ctx, str(year), lo, hi, cap=cap)
 
     def fetch_month(self, ctx, year, month):
         lo, hi = f10b.month_bounds_s(year, month)
         yield from self._rows(ctx, f"{year}-{int(month):02d}",
-                              max(lo, ctx.t_lo), min(hi, ctx.t_hi))
+                              max(lo, ctx.t_lo), min(hi, ctx.t_hi),
+                              cap=self.max_granules)
 
     # ------------------------------------------------------------ platforms --
     def platforms(self, ctx):

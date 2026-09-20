@@ -144,7 +144,8 @@ built, or drop); the CCI Biomass track (public with attribution is the pick).
 
 ## 7 · How to operate
 
-- Dispatch: `node scripts/family1_dispatch.mjs family1-build.yml '<inputs json>'` — inputs `store`, `stage`, `start`, `end`, `runner`, `extra_args`, `probe_month`, `check_credentials`, `adapter_env`. **`check_credentials:"true"` runs ONLY the Earthdata check and no probe or build.**
+- Dispatch: `node scripts/family1_dispatch.mjs family1-build.yml '<inputs json>'` — inputs `store`, `stage`, `start`, `end`, `runner`, `extra_args`, `probe_month`, `check_credentials`, `adapter_env`. **`check_credentials:"true"` runs ONLY the Earthdata check and no probe or build.** **A fetch lane parks nothing unless `extra_args` carries `--push-parts`** (fifteen lanes were dispatched without it on 2026-09-20 and had to be cancelled and re-dispatched). **A lane is one YEAR or more, never part of a year**: the parts layout is one folder per year with one index, one ledger and one `done.json`, so two lanes writing the same year overwrite each other's index and the assembler would build a short store (ICESat-2's monthly lanes of 2022-09-20, cancelled). Splitting a year across lanes needs the lane-aware parts layout (below) first.
+- **The laser stores' granule cap is the probe's, never the build's** (`GEDI_MAX_GRANULES` / `ICESAT2_MAX_GRANULES`, defaults 6 / 12): a build reads every granule in its window, and a cap set by name for a build refuses unless `*_ALLOW_CAPPED_BUILD=1`. The first ICESat-2 lanes ran under the probe's default cap, read twelve granules of 4,884 and marked 2022 done in 38 seconds — fixed the same evening, with a test.
 - Watch: `node scripts/family1_runs.mjs [--n 40] [--status in_progress|queued]`; parked parts: `node scripts/family1_runs.mjs --parts <family> <store>`.
 - Verify a landing by its `store.json` on the Hub, never by the run's colour; then add the BUILD_LOG.md row and re-run `python3 ml/build_family1_registry.py --check`.
 - Concurrency: ~20 jobs for the whole account; lanes with the same store are in one concurrency group keyed by window, so a new lane with the SAME window cancels the pending one.
@@ -154,7 +155,8 @@ built, or drop); the CCI Biomass track (public with attribution is the pick).
 
 ## 8 · Order of work for the next agent
 
-1. Read probes #293–#297 (artefact `probe.json`); write their numbers into BUILD_LOG "wave 6" and re-run the registry; dispatch the phase-A builds of §5 that fit hosted lanes.
+1. Probes read and dispatched (see BUILD_LOG "the hosted probes"): `pheno500` 2014–2025 year-lanes (#340–#351) and `pace4k` 2024–2026 (#352–#354) are fetching with `--push-parts`; assemble each with `stage=all --parts-from-hub --assemble streaming` when its lanes are green (pheno500 2001–2013 lanes after that); `gedi` probe #315.
+1b. **The lane-aware parts layout** (an Opus task, specified in BUILD_LOG "wave 6" and the handover §7): `partials/<family>/<store>/<year>/<lane>/` with the lane named by its window or its group subset, each lane its own parts, index, ledger and `done.json`, and an assembler that merges the lanes of a year, asserts their bins or groups are disjoint, sums their ledgers and refuses when a declared lane is missing. It unblocks `icesat2` 2022 (twelve monthly lanes of three hours), `gedi`, `lai500` (four quarter-lanes a year) and `canopy30` / `lossyear` tile lanes on hosted runners. Until it lands, those stores are box jobs or wait.
 2. When `lst05` (#292) verifies: `snow05` assembly on the box, then `canopy30` (`stage=all`, runner `gpu-box-31947967`), then the wave-6 assemblies as their lanes finish; BUILD_LOG rows from each `store.json`.
 3. `flux` `stage=all` (hosted); `burned500` probe then build; the `cat_s2` top-up lane 2026-09-16..30 and re-assembly.
 4. Write `biomass100` (CCI v7 2020 + GEDI L4B) and `alerts` (DIST-ANN) adapters — Opus.

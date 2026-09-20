@@ -1252,3 +1252,33 @@ shape; consolidating them is named in both docstrings.
 | `pace4k` | #295, 2024-03, 23 frames (the record starts 03-05) | 14.6 s a frame, 20 MB stored a frame (0.2–30 MB), valid 0.068 global channels, 0.017 MOANA; the framework's estimate 5.8 GB for the record | **one lane a year**: #328–#330 (2024, 2025, 2026 to September) dispatched, hosted assembly after |
 | `icesat2` | #297 range mode, #298 whole mode, 2022-06, 12 granules | range: 1.6 MB/s over 20 requests a granule (read fraction 0.18, 105 s) — too slow; **whole: 36.6 MB/s, 25.7 s for 940 MB**, 32,250 rows a granule, 386,995 rows kept of 438,022 segments (23,199 inland water, 13,274 sea, 14,554 outside the window); h_canopy is NaN on 88 % of segments (bare ground), terrain height on none | 2022: 55,692 granules, **1.80 × 10⁹ rows, 70 GB store, 35 h of fetch** → twelve monthly lanes of ≈ 3 h in whole mode, #325–#339 dispatched (nine re-dispatched after a malformed end date cancelled #316–#324); assembly on the box (parts + store ≈ 150 GB) |
 | `gedi` | #296 FAILED: `ConnectTimeout` to `urs.earthdata.nasa.gov` while resolving the first L2A granule's redirect, after the index had listed 1,428 granules a product; re-dispatched as #315 | | if it fails the same way twice, the redirect resolve needs a retry with back-off — URS is the login host every Earthdata download passes through, and the other four Earthdata probes of the same minute succeeded |
+
+### Two things the first lanes taught, 2026-09-20 18:00Z
+
+1. **A fetch lane parks nothing without `--push-parts`.** Fifteen lanes
+   (pheno500 2014–2025, pace4k 2024–2026) were dispatched with `stage=index,fetch`
+   and no `extra_args`, fetched, and discarded; cancelled and re-dispatched
+   with `extra_args: "--push-parts"` (#340–#354).
+2. **A lane is a year, never part of one — and the laser adapters' probe
+   cap must not reach the build.** ICESat-2 2022 was dispatched as twelve
+   monthly lanes; two "succeeded" in 38 s, having read twelve granules of
+   4,884 under `ICESAT2_MAX_GRANULES`'s default of 12 (the probe's cap) and
+   marked 2022 done — and even without the cap, the parts layout is one
+   folder per year with one index, one ledger and one `done.json`, so the
+   twelve lanes would have overwritten each other's index and the assembler
+   would have built a short year with nothing to say so. Cancelled; nothing
+   reached the Hub (no `--push-parts`). Fixed in the adapters the same hour:
+   the cap applies in `fetch_month` (the probe) only, `fetch_year` reads every
+   granule, and a cap set by name for a build refuses unless
+   `*_ALLOW_CAPPED_BUILD=1` (tests in `test_family1_icesat2.py` /
+   `test_family1_gedi.py`). The lai500 quarter-lanes were cancelled for the
+   same layout reason. What unblocks sub-year lanes is a **lane-aware parts
+   layout**: `partials/<family>/<store>/<year>/<lane>/` with the lane named by
+   its window (`m06`, `q3`) or its group subset (`tiles-50N_000E`), each lane
+   its own parts, shard index, ledger and `done.json`; the assembler merges the
+   lanes of a year, asserts their bins (tier G) or their time windows (tier P)
+   are disjoint, sums their ledgers, and refuses when a lane the plan declares
+   is missing; a year folder with parts at its top level stays a single lane,
+   so every store on the Hub reads unchanged. That is the next framework
+   task; until it lands, `icesat2`, `gedi`, `lai500` beyond one lane-year and
+   the single-bin `canopy30` / `lossyear` are box jobs or wait.
