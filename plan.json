@@ -1,0 +1,141 @@
+{
+ "bin": 2812,
+ "bin_days": [
+  "2020-06-30",
+  "2020-07-04"
+ ],
+ "bins": [
+  2775,
+  2848
+ ],
+ "builder_git_sha": "6e638c88fd8ac625634f961313f8662693b4db44",
+ "built_at": "2026-09-20T19:12:19+00:00",
+ "bytes_approx": 3157262336,
+ "bytes_approx_whole_product": 37696307200,
+ "bytes_note": "the listing's size column is rounded to three characters (\"303M\"); the probe measures exact bytes",
+ "channels": [
+  {
+   "max": 100.0,
+   "min": 0.0,
+   "name": "canopy_height",
+   "unit": "m (whole metres of woody vegetation 3 m or taller; 0 = none)"
+  }
+ ],
+ "dataset": "GLAD Global Land Cover and Land Use Change 2000-2020: forest height 2020, 30 m",
+ "date_range": [
+  "2020-01-01",
+  "2020-12-31"
+ ],
+ "first_file": {
+  "block_shapes": [
+   [
+    1,
+    40000
+   ]
+  ],
+  "bounds": [
+   -70.0,
+   -50.0,
+   -60.0,
+   -40.0
+  ],
+  "bytes": 13379575,
+  "compress": "lzw",
+  "crs": "EPSG:4326",
+  "dtype": "uint8",
+  "height": 40000,
+  "max_first_rows": 12,
+  "nodata_declared": null,
+  "rows_histogrammed": 1024,
+  "tile": "40S_070W",
+  "transform": [
+   0.00025,
+   0.0,
+   -70.0,
+   0.0,
+   -0.00025,
+   -40.0
+  ],
+  "values_first_rows": {
+   "0": 40959918,
+   "3": 7,
+   "4": 2,
+   "5": 39,
+   "6": 13,
+   "7": 8,
+   "8": 2,
+   "9": 3,
+   "10": 3,
+   "11": 3,
+   "12": 2
+  },
+  "width": 40000
+ },
+ "footprint": {
+  "log2_dt": 6.189824558880018,
+  "log2_fp": -9.965790894221522
+ },
+ "grid": {
+  "H": 10000,
+  "W": 10000,
+  "coordinates": "lon = x0 + (col + 0.5) * dx, lat = y0 + (row + 0.5) * dy with dy NEGATIVE; x0/y0 are this sub-tile's WEST and NORTH edges, so the grid is exactly the source GeoTIFF's affine transform offset by the sub-tile's own origin",
+  "crs": "EPSG:4326",
+  "dx": 0.00025,
+  "dy": -0.00025,
+  "extent": [
+   -70.0,
+   -42.5,
+   -67.5,
+   -40.0
+  ],
+  "extent_note": "[west, south, east, north] in degrees",
+  "no_tile_corners": "a plain geographic grid: the affine rule above IS the lat/lon of every pixel and every tile corner, so no corner table is stored",
+  "pixel_m": 27.83,
+  "pixel_window_in_tile": [
+   0,
+   10000,
+   0,
+   10000
+  ],
+  "proj4": "+proj=longlat +datum=WGS84 +no_defs",
+  "projection": {
+   "grid_mapping_name": "latitude_longitude",
+   "inverse_flattening": 298.257223563,
+   "semi_major_axis": 6378137.0
+  },
+  "row_order": "row 0 is the NORTHERNMOST row (the source GeoTIFF's own order: transform = (dx, 0, west edge; 0, -dx, north edge), read off the real 2020_50N_000E.tif); col 0 is the westernmost",
+  "source_variable": "the single uint8 band of 2020_40S_070W.tif: the height in whole metres of woody vegetation 3 m or taller, 0 where there is none",
+  "sub_col": 0,
+  "sub_row": 0,
+  "sub_tiles_per_side": 4,
+  "tile_10deg": "40S_070W",
+  "x0": -70.0,
+  "y0": -40.0
+ },
+ "group_pixels": 10000,
+ "groups": 320,
+ "listing": {},
+ "per_year_resume": true,
+ "qc_policy": "the product publishes ONE number a pixel and no flag of any kind: no water code, no no-data code and no fill value, measured here on three whole tiles (France, the Namib, Svalbard: 4.8e9 pixels, all of them 0..35). A 0 is therefore a MEASUREMENT -- 'no woody vegetation 3 m or taller' -- over ocean, ice and bare ground alike, and the store is dense. A value above 100 m is not a height (the tallest tree ever measured is 116 m and a Landsat model saturates far below it), so it becomes missing and is counted (`out_of_bounds`), never clipped, with the raw values listed in `height_codes` -- which is where the 2019 map's class codes (101 water, 102 no data) would appear if a future release adopted them",
+ "record_period": [
+  "2020-01-01",
+  "2020-12-31"
+ ],
+ "redirects_from": "https://glad.umd.edu/users/Potapov/GLCLUC2020/Forest_height_2020/",
+ "sources": [
+  "https://gladxfer.umd.edu/users/Potapov/GLCLUC2020/Forest_height_2020/2020_<TILE>.tif"
+ ],
+ "store": "canopy30",
+ "sub_tiles_per_side": 4,
+ "tiles_absent_upstream": [],
+ "tiles_declared": 20,
+ "tiles_in_product_grid": 504,
+ "tiles_listed": 261,
+ "title": "Forest canopy height 2020, GLAD Global Land Cover and Land Use Change (Potapov et al. 2022), 30 m, 261 ten-degree tiles as 4,176 2.5-degree groups (annual map)",
+ "url": "https://gladxfer.umd.edu/users/Potapov/GLCLUC2020/Forest_height_2020/",
+ "verified": "2026-09-20 from the sandbox, anonymously: the whole directory listing of https://gladxfer.umd.edu/users/Potapov/GLCLUC2020/Forest_height_2020/ (261 files, every one a 2020_<TILE>.tif, no other object, sizes 13 MB .. 616 MB summing to 35.95 GB on the listing's own size column); the 301 redirect from https://glad.umd.edu/users/Potapov/GLCLUC2020/Forest_height_2020/; 2020_50N_000E.tif (303,815,710 bytes) opened with rasterio (40000 x 40000 uint8, EPSG:4326, transform (0.00025, 0, 0; 0, -0.00025, 50), LZW, one row a strip) and histogrammed whole (values 0..35 only, 71.5 % zero); 2020_20S_010E.tif and 2020_80N_010E.tif histogrammed whole as well (0..14 and 0..27, no code above 100 in any of the three); zstd levels 1/6/9/15 timed on a 1,024-row strip of the French tile; and the licence sentence on glad.umd.edu/dataset/GLCLUC2020",
+ "version": "Forest_height_2020",
+ "years": [
+  2020
+ ]
+}
