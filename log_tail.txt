@@ -1,0 +1,78 @@
+store     canopy30 — Forest canopy height 2020, GLAD Global Land Cover and Land Use Change (Potapov et al. 2022), 30 m, 261 ten-degree tiles as 4,176 2.5-degree groups (annual map)
+family    family1_tf (1.0.tf) · public -> chfrank/earth-tensors:tensors/family1_tf/canopy30
+axis      2020-01-01 .. 2020-12-31  bins 2775..2848 · time_s int32 (schema 2)
+lane      g-b1af2a1a — this fetch writes parts/<year>/g-b1af2a1a/ and pushes only that folder (16 group(s))
+channels  C=1: canopy_height
+tier G    sharded, groups ['80N_170W_r0c0', '80N_170W_r0c1', '80N_170W_r0c2', '80N_170W_r0c3', '80N_170W_r1c0', '80N_170W_r1c1', '80N_170W_r1c2', '80N_170W_r1c3', '80N_170W_r2c0', '80N_170W_r2c1', '80N_170W_r2c2', '80N_170W_r2c3', '80N_170W_r3c0', '80N_170W_r3c1', '80N_170W_r3c2', '80N_170W_r3c3'], F=1 x 432000 s, uint8, years (by bin start) 2020..2020
+work      /home/runner/work/earth/earth/ml/cache/family1_tf
+
+=== stage index (canopy30) ===
+  [index canopy30] start (1 items)  0/1  0.0s
+  [index canopy30] plan.json  1/1  1.3s
+  index: canopy30 — 1 year(s), C=1 (canopy_height), bins 2775..2848
+=== stage index done in 1.3s ===
+
+=== stage fetch (canopy30) ===
+  [fetch canopy30 (tier G)] start (1 items)  0/1  0.0s
+  [fetch canopy30 (tier G)] canopy30 2020 80N_170W_r0c0 bin 2800  0.0s
+  [fetch canopy30 (tier G)] canopy30 2020 80N_170W_r0c0 bin 2826  0.0s
+  [fetch canopy30 (tier G)] canopy30 2020 80N_170W_r0c1 bin 2778  0.0s
+  [fetch canopy30 (tier G)] canopy30 2020 80N_170W_r0c1 bin 2803  0.0s
+  [fetch canopy30 (tier G)] canopy30 2020 80N_170W_r0c1 bin 2829  0.0s
+  [fetch canopy30 (tier G)] canopy30 2020 80N_170W_r0c2 bin 2781  0.0s
+  [fetch canopy30 (tier G)] canopy30 2020 80N_170W_r0c2 bin 2806  0.0s
+  [fetch canopy30 (tier G)] canopy30 2020 80N_170W_r0c2 bin 2832  0.0s
+  [fetch canopy30 (tier G)] canopy30 2020 80N_170W_r0c3 bin 2784  0.0s
+  [fetch canopy30 (tier G)] canopy30 2020 80N_170W_r0c3 bin 2809  0.0s
+  [fetch canopy30 (tier G)] canopy30 2020 80N_170W_r0c3 bin 2835  0.0s
+  [fetch canopy30 (tier G)] canopy30 2020 80N_170W_r1c0 bin 2787  0.0s
+  [fetch canopy30 (tier G)] canopy30 2020 80N_170W_r1c0 bin 2813  0.0s
+  [fetch canopy30 (tier G)] canopy30 2020 80N_170W_r1c0 bin 2838  0.0s
+  [fetch canopy30 (tier G)] canopy30 2020 80N_170W_r1c1 bin 2790  0.0s
+  [fetch canopy30 (tier G)] canopy30 2020 80N_170W_r1c1 bin 2816  0.0s
+  [fetch canopy30 (tier G)] canopy30 2020 80N_170W_r1c1 bin 2841  0.0s
+  [fetch canopy30 (tier G)] canopy30 2020 80N_170W_r1c2 bin 2793  0.0s
+  [fetch canopy30 (tier G)] canopy30 2020 80N_170W_r1c2 bin 2819  0.0s
+  [fetch canopy30 (tier G)] canopy30 2020 80N_170W_r1c2 bin 2844  0.0s
+  [fetch canopy30 (tier G)] canopy30 2020 80N_170W_r1c3 bin 2796  0.0s
+  [fetch canopy30 (tier G)] canopy30 2020 80N_170W_r1c3 bin 2822  0.0s
+  [fetch canopy30 (tier G)] canopy30 2020 80N_170W_r1c3 bin 2847  0.0s
+  [fetch canopy30 (tier G)] canopy30 2020 80N_170W_r2c0 bin 2799  0.0s
+  [fetch canopy30 (tier G)] canopy30 2020 80N_170W_r2c0 bin 2825  0.0s
+  [fetch canopy30 (tier G)] canopy30 2020 80N_170W_r2c1 bin 2777  0.0s
+  [fetch canopy30 (tier G)] canopy30 2020 80N_170W_r2c1 bin 2802  0.0s
+  [fetch canopy30 (tier G)] canopy30 2020 80N_170W_r2c1 bin 2828  0.0s
+  [fetch canopy30 (tier G)] canopy30 2020 80N_170W_r2c2 bin 2780  0.0s
+  [fetch canopy30 (tier G)] canopy30 2020 80N_170W_r2c2 bin 2805  0.0s
+  [fetch canopy30 (tier G)] canopy30 2020 80N_170W_r2c2 bin 2831  0.0s
+  [fetch canopy30 (tier G)] canopy30 2020 80N_170W_r2c3 bin 2783  0.0s
+  [fetch canopy30 (tier G)] canopy30 2020 80N_170W_r2c3 bin 2808  0.0s
+  [fetch canopy30 (tier G)] canopy30 2020 80N_170W_r2c3 bin 2834  0.0s
+  [fetch canopy30 (tier G)] canopy30 2020 80N_170W_r3c0 bin 2786  0.0s
+  [fetch canopy30 (tier G)] canopy30 2020 80N_170W_r3c0 bin 2811  0.0s
+  [fetch canopy30 (tier G)] canopy30 2020 80N_170W_r3c0 bin 2837  0.0s
+  [fetch canopy30 (tier G)] canopy30 2020 80N_170W_r3c1 bin 2789  0.0s
+  [fetch canopy30 (tier G)] canopy30 2020 80N_170W_r3c1 bin 2815  0.0s
+  [fetch canopy30 (tier G)] canopy30 2020 80N_170W_r3c1 bin 2840  0.0s
+  [fetch canopy30 (tier G)] canopy30 2020 80N_170W_r3c2 bin 2792  0.0s
+  [fetch canopy30 (tier G)] canopy30 2020 80N_170W_r3c2 bin 2818  0.0s
+  [fetch canopy30 (tier G)] canopy30 2020 80N_170W_r3c2 bin 2843  0.0s
+  [fetch canopy30 (tier G)] canopy30 2020 80N_170W_r3c3 bin 2795  0.0s
+  [fetch canopy30 (tier G)] canopy30 2020 80N_170W_r3c3 bin 2821  0.0s
+  [fetch canopy30 (tier G)] canopy30 2020 80N_170W_r3c3 bin 2846  0.0s
+  2020: 80N_170W_r0c0 1 bin(s) 1 frame(s) 0.0 MB, 80N_170W_r0c1 1 bin(s) 1 frame(s) 0.0 MB, 80N_170W_r0c2 1 bin(s) 1 frame(s) 0.0 MB, 80N_170W_r0c3 1 bin(s) 1 frame(s) 0.0 MB, 80N_170W_r1c0 1 bin(s) 1 frame(s) 0.0 MB, 80N_170W_r1c1 1 bin(s) 1 frame(s) 0.0 MB, 80N_170W_r1c2 1 bin(s) 1 frame(s) 0.0 MB, 80N_170W_r1c3 1 bin(s) 1 frame(s) 0.0 MB, 80N_170W_r2c0 1 bin(s) 1 frame(s) 0.0 MB, 80N_170W_r2c1 1 bin(s) 1 frame(s) 0.0 MB, 80N_170W_r2c2 1 bin(s) 1 frame(s) 0.0 MB, 80N_170W_r2c3 1 bin(s) 1 frame(s) 0.0 MB, 80N_170W_r3c0 1 bin(s) 1 frame(s) 0.0 MB, 80N_170W_r3c1 1 bin(s) 1 frame(s) 0.0 MB, 80N_170W_r3c2 1 bin(s) 1 frame(s) 0.0 MB, 80N_170W_r3c3 1 bin(s) 1 frame(s) 0.0 MB (36.2s)
+  hub: chfrank/earth-tensors with the token from $HF_TOKEN
+  canopy30: uploading 49 file(s) of 1 year(s), 1.4 MB -> chfrank/earth-tensors:partials/family1_tf/canopy30/
+Upload 3 LFS files:   0%|          | 0/3 [00:00<?, ?it/s]
+80N_170W_r3c3__bin_2812.idx.npy:   0%|          | 0.00/25.7k [00:00<?, ?B/s][A
+
+80N_170W_r3c3__bin_2812.zst:   0%|          | 0.00/45.6k [00:00<?, ?B/s][A[A
+
+
+80N_170W_r3c3__shard_index.npy:   0%|          | 0.00/746 [00:00<?, ?B/s][A[A[A80N_170W_r3c3__bin_2812.idx.npy: 100%|██████████| 25.7k/25.7k [00:00<00:00, 184kB/s]
+80N_170W_r3c3__shard_index.npy: 100%|██████████| 746/746 [00:00<00:00, 5.35kB/s]
+80N_170W_r3c3__bin_2812.zst: 100%|██████████| 45.6k/45.6k [00:00<00:00, 312kB/s]
+Upload 3 LFS files:  33%|███▎      | 1/3 [00:00<00:00,  4.72it/s]Upload 3 LFS files: 100%|██████████| 3/3 [00:00<00:00, 13.02it/s]
+  canopy30: 1 year(s) pushed and verified in 1 part commit(s), done.json written last (0 already present)
+  push-parts: 1 year(s) on the Hub under partials/family1_tf/canopy30/<year>/g-b1af2a1a/
+=== stage fetch done in 76.2s ===
