@@ -1,0 +1,188 @@
+{
+ "beams_expected": [
+  "BEAM0000",
+  "BEAM0001",
+  "BEAM0010",
+  "BEAM0011",
+  "BEAM0101",
+  "BEAM0110",
+  "BEAM1000",
+  "BEAM1011"
+ ],
+ "bins": [
+  2954,
+  2954
+ ],
+ "builder_git_sha": "6e638c88fd8ac625634f961313f8662693b4db44",
+ "built_at": "2026-09-20T19:38:44+00:00",
+ "bytes": {
+  "l2a": 200466679263,
+  "l2b": 116812832916,
+  "l4a": 31352706096
+ },
+ "bytes_per_granule_mean": {
+  "l2a": 1066312123.7,
+  "l2b": 621344855.9,
+  "l4a": 166769713.3
+ },
+ "bytes_total": 348632218275,
+ "channels": [
+  {
+   "max": 25000.0,
+   "min": -1000.0,
+   "name": "elev_lowestmode",
+   "unit": "m"
+  },
+  {
+   "max": 213.0,
+   "min": -213.0,
+   "name": "rh25",
+   "unit": "m"
+  },
+  {
+   "max": 213.0,
+   "min": -213.0,
+   "name": "rh50",
+   "unit": "m"
+  },
+  {
+   "max": 213.0,
+   "min": -213.0,
+   "name": "rh75",
+   "unit": "m"
+  },
+  {
+   "max": 213.0,
+   "min": -213.0,
+   "name": "rh90",
+   "unit": "m"
+  },
+  {
+   "max": 213.0,
+   "min": -213.0,
+   "name": "rh98",
+   "unit": "m"
+  },
+  {
+   "max": 1.0,
+   "min": 0.0,
+   "name": "cover",
+   "unit": "1"
+  },
+  {
+   "max": 50.0,
+   "min": 0.0,
+   "name": "pai",
+   "unit": "m2/m2"
+  },
+  {
+   "max": 10000.0,
+   "min": 0.0,
+   "name": "agbd",
+   "unit": "Mg/ha"
+  },
+  {
+   "max": 10000.0,
+   "min": 0.0,
+   "name": "agbd_se",
+   "unit": "Mg/ha"
+  },
+  {
+   "max": 1.0,
+   "min": 0.0,
+   "name": "sensitivity",
+   "unit": "1"
+  }
+ ],
+ "collections": {
+  "l2a": {
+   "concept": "C3974616071-LPCLOUD",
+   "record": [
+    "2019-04-04",
+    null
+   ],
+   "short": "GEDI02_A",
+   "version": "003"
+  },
+  "l2b": {
+   "concept": "C3974616135-LPCLOUD",
+   "record": [
+    "2019-04-04",
+    null
+   ],
+   "short": "GEDI02_B",
+   "version": "003"
+  },
+  "l4a": {
+   "concept": "C4212593885-ORNL_CLOUD",
+   "record": [
+    "2019-04-04",
+    null
+   ],
+   "short": "GEDI_L4A_AGB_Density_V3_2508",
+   "version": "3"
+  }
+ },
+ "dataset": "GEDI L2A + L2B version 3 (LP DAAC) joined to GEDI L4A version 3 (ORNL DAAC) by shot number",
+ "date_range": [
+  "2022-06-10",
+  "2022-06-12"
+ ],
+ "fetch_mode": "range",
+ "footprint": {
+  "log2_dt": -12.0,
+  "log2_fp": -10.120497098444245
+ },
+ "granule_alignment": {
+  "date": "2022-06-10",
+  "granules": {
+   "l2a": 67,
+   "l2b": 67,
+   "l4a": 67
+  },
+  "l2a_without_l2b": 0,
+  "l2a_without_l4a": 0,
+  "l2b_without_l2a": 0,
+  "l4a_without_l2a": 0
+ },
+ "granules": {
+  "l2a": 188,
+  "l2b": 188,
+  "l4a": 188
+ },
+ "granules_joined": 188,
+ "granules_per_day": {
+  "2022-06-09": 4,
+  "2022-06-10": 63,
+  "2022-06-11": 59,
+  "2022-06-12": 62
+ },
+ "l4a_version": "3",
+ "max_granules": 6,
+ "one_year_only": true,
+ "per_year_resume": true,
+ "qc_policy": "A row is a QUALITY SHOT. The L2A quality flag (`l2a_quality_flag_rel3` in version 3, `quality_flag` in version 2 \u2014 resolved against a candidate list and refused if none matches) must be 1; a shot with 0 is dropped and counted (`shots_quality_flag_zero`), which is what the ledger's 4-10 x 10^9 'quality rows' means. `qc` then carries 0 for a shot with `degrade_flag` 0 and 1 for one taken during a degraded pointing or trajectory period, with the whole degrade histogram recorded. A shot with no finite time or position is dropped and counted. The L2B and L4A channels are NaN where that product's own quality flag is 0 (`l2b_quality_zero`, `l4a_quality_zero`) and where the shot has no partner at all (`shots_without_l2b`, `shots_without_l4a`, `granules_without_l4a`) \u2014 an absence is never a zero. A value outside its channel's bounds becomes NaN for that channel alone and is counted, never clipped. The eleventh channel is `sensitivity`, not the quality flag: float16 cannot carry a flag, so the flag is in `qc` and the number is in the channel.",
+ "record": [
+  "2022-06-09T22:42:26.000Z",
+  "2022-06-13T00:58:59.000Z"
+ ],
+ "sources": [
+  "https://cmr.earthdata.nasa.gov/search/granules.json?collection_concept_id=C3974616071-LPCLOUD (anonymous)",
+  "https://cmr.earthdata.nasa.gov/search/granules.json?collection_concept_id=C3974616135-LPCLOUD (anonymous)",
+  "https://cmr.earthdata.nasa.gov/search/granules.json?collection_concept_id=C4212593885-ORNL_CLOUD (anonymous)",
+  "https://data.lpdaac.earthdatacloud.nasa.gov/lp-prod-protected/GEDI02_A.003/<granule>/<granule>.h5",
+  "https://data.lpdaac.earthdatacloud.nasa.gov/lp-prod-protected/GEDI02_B.003/<granule>/<granule>.h5",
+  "https://data.ornldaac.earthdata.nasa.gov/ornl-cumulus-prod-protected/gedi/GEDI_L4A_AGB_Density_V3/data/<granule>.h5"
+ ],
+ "store": "gedi",
+ "title": "GEDI laser footprints: L2A relative heights joined to L2B cover and plant-area index and to L4A biomass by shot number, one row per quality shot",
+ "url": "https://cmr.earthdata.nasa.gov/search/granules.json?collection_concept_id=C3974616071-LPCLOUD",
+ "verified": "2026-09-20 from this sandbox, anonymously against NASA CMR (the granules are Earthdata-protected, so the bytes are a hosted runner's job). Collections: GEDI02_A 003 C3974616071-LPCLOUD and GEDI02_B 003 C3974616135-LPCLOUD, both 2019-04-04 -> ongoing; GEDI L4A version 3 C4212593885-ORNL_CLOUD, 2019-04-04 -> ongoing; GEDI L4A version 2.1 C2237824918-ORNL_CLOUD, 2019-04-17 -> 2025-07-09. 2022-06 IN FULL: 1,428 granules each of L2A (1,516,813 MB), L2B (886,429 MB) and L4A v3 (238,860 MB), 1,427 of L4A v2.1 (271,839 MB) \u2014 2.58 TB for the three products read. 2022-06-01: all four products list 27 granules and the (stamp, orbit, sub-orbit granule, track) key matches one-to-one across all four. Dataset names from CMR's own variable listing (3,336 variables for L2A v003, 1,672 for L2B, 1,056 for L4A v3): eight beam groups BEAM0000..BEAM1011, and version 3 has NO `/BEAMXXXX/quality_flag` \u2014 it is `l2a_quality_flag_rel3`. Service associations: the Harmony Trajectory Subsetter for all three, and OPeNDAP for L4A v2.1 ONLY. NOT MEASURED HERE, and what the runner probe is for: whether these hosts serve HTTP 206 for a range read, what fraction of a granule the eleven datasets cost, shots a granule, the quality and degrade histograms, the join rates, and therefore rows and bytes a year.",
+ "window": [
+  "2022-06-10",
+  "2022-06-12"
+ ],
+ "years": [
+  2022
+ ]
+}

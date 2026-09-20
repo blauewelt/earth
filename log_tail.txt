@@ -1,0 +1,44 @@
+store     gedi — GEDI laser footprints: L2A relative heights joined to L2B cover and plant-area index and to L4A biomass by shot number, one row per quality shot
+family    family1_tf (1.0.tf) · public -> chfrank/earth-tensors:tensors/family1_tf/gedi
+axis      2022-06-10 .. 2022-06-12  bins 2954..2954 · time_s int32 (schema 2)
+lane      d0610-0612 — this fetch writes parts/<year>/d0610-0612/ and pushes only that folder
+channels  C=11: elev_lowestmode, rh25, rh50, rh75, rh90, rh98, cover, pai, agbd, agbd_se, sensitivity
+work      /home/runner/work/earth/earth/ml/cache/family1_tf
+
+=== stage index (gedi) ===
+  [index gedi] start (1 items)  0/1  0.0s
+  [index gedi] plan.json  1/1  2.8s
+  index: gedi — 1 year(s), C=11 (elev_lowestmode, rh25, rh50, rh75, rh90, rh98, cover, pai …), bins 2954..2954
+=== stage index done in 2.8s ===
+
+=== stage fetch (gedi) ===
+  [fetch gedi] start (1 items)  0/1  0.0s
+Traceback (most recent call last):
+  File "/home/runner/work/earth/earth/ml/build_family1_stores.py", line 1776, in <module>
+    sys.exit(main())
+             ^^^^^^
+  File "/home/runner/work/earth/earth/ml/build_family1_stores.py", line 1771, in main
+    f10b.run_stages(ctx, stages, stage_fn=stage_fns(ad), deps=DEPS)
+  File "/home/runner/work/earth/earth/ml/build_family10_stores.py", line 5665, in run_stages
+    stage_fn[s](ctx)
+  File "/home/runner/work/earth/earth/ml/build_family1_stores.py", line 374, in stage_fetch
+    f10b.stage_fetch(ctx, assemble_store_after=False)
+  File "/home/runner/work/earth/earth/ml/build_family10_stores.py", line 4200, in stage_fetch
+    for label, rows, counts in ad.fetch_year(ctx, y):
+  File "/home/runner/work/earth/earth/ml/family1/adapters/gedi.py", line 993, in fetch_year
+    yield from self._rows(ctx, str(year), lo, hi, cap=cap)
+  File "/home/runner/work/earth/earth/ml/family1/adapters/gedi.py", line 753, in _rows
+    ops[tag] = self._open(ctx, e[tag], tag)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/work/earth/earth/ml/family1/adapters/gedi.py", line 711, in _open
+    return hr.open_range(self._session, entry["url"],
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/work/earth/earth/ml/family1/adapters/_h5range.py", line 283, in open_range
+    rf = RangeFile(session, url, block=block, cache_blocks=cache_blocks,
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/work/earth/earth/ml/family1/adapters/_h5range.py", line 123, in __init__
+    self._url, self.size = resolve(session, url, attempts=attempts)
+                           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/work/earth/earth/ml/family1/adapters/_h5range.py", line 107, in resolve
+    raise IOError(f"{url}: {type(err).__name__}: {err}")
+OSError: https://data.lpdaac.earthdatacloud.nasa.gov/lp-prod-protected/GEDI02_A.003/GEDI02_A_2022160224226_O19774_01_T07916_02_004_02_V003/GEDI02_A_2022160224226_O19774_01_T07916_02_004_02_V003.h5: ConnectTimeout: HTTPSConnectionPool(host='urs.earthdata.nasa.gov', port=443): Max retries exceeded with url: /oauth/authorize?client_id=FtSFfbOeuxDcdf4px-elGw&response_type=code&redirect_uri=https://data.lpdaac.earthdatacloud.nasa.gov/login&state=%2Flp-prod-protected%2FGEDI02_A.003%2FGEDI02_A_2022160224226_O19774_01_T07916_02_004_02_V003%2FGEDI02_A_2022160224226_O19774_01_T07916_02_004_02_V003.h5&app_type=401 (Caused by ConnectTimeoutError(<urllib3.connection.HTTPSConnection object at 0x7f616e9367e0>, 'Connection to urs.earthdata.nasa.gov timed out. (connect timeout=120)'))
