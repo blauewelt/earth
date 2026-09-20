@@ -1,0 +1,80 @@
+store     icesat2 — ICESat-2 ATL08 release 007: terrain height, canopy height, canopy openness and photon counts per 100 m LAND segment, six ground tracks to 88 degrees
+family    family1_tf (1.0.tf) · public -> chfrank/earth-tensors:tensors/family1_tf/icesat2
+axis      2022-10-01 .. 2022-10-31  bins 2976..2982 · time_s int32 (schema 2)
+channels  C=6: h_te_best_fit, h_canopy, canopy_openness, n_ca_photons, n_te_photons, segment_landcover
+work      /home/runner/work/earth/earth/ml/cache/family1_tf
+
+=== stage index (icesat2) ===
+  [index icesat2] start (1 items)  0/1  0.0s
+  [index icesat2] plan.json  1/1  7.7s
+  index: icesat2 — 1 year(s), C=6 (h_te_best_fit, h_canopy, canopy_openness, n_ca_photons, n_te_photons, segment_landcover), bins 2976..2982
+=== stage index done in 7.7s ===
+
+=== stage fetch (icesat2) ===
+  [fetch icesat2] start (1 items)  0/1  0.0s
+  [fetch icesat2] icesat2 2022  1/1  4.1s
+  [fetch icesat2] icesat2 2022  1/1  4.1s
+  [fetch icesat2] icesat2 2022  1/1  4.1s
+  [fetch icesat2] icesat2 2022  1/1  4.1s
+  [fetch icesat2] icesat2 2022  1/1  4.1s
+  [fetch icesat2] icesat2 2022  1/1  4.1s
+  [fetch icesat2] icesat2 2022  1/1  9.1s
+  [fetch icesat2] icesat2 2022  1/1  9.1s
+  [fetch icesat2] icesat2 2022  1/1  9.1s
+  [fetch icesat2] icesat2 2022  1/1  9.1s
+  [fetch icesat2] icesat2 2022  1/1  9.2s
+  [fetch icesat2] icesat2 2022  1/1  9.2s
+  [fetch icesat2] icesat2 2022  1/1  10.7s
+  [fetch icesat2] icesat2 2022  1/1  10.7s
+  [fetch icesat2] icesat2 2022  1/1  10.7s
+  [fetch icesat2] icesat2 2022  1/1  12.6s
+  [fetch icesat2] icesat2 2022  1/1  12.6s
+  [fetch icesat2] icesat2 2022  1/1  12.6s
+  [fetch icesat2] icesat2 2022  1/1  12.7s
+  [fetch icesat2] icesat2 2022  1/1  12.7s
+  [fetch icesat2] icesat2 2022  1/1  12.7s
+  [fetch icesat2] icesat2 2022  1/1  18.3s
+  [fetch icesat2] icesat2 2022  1/1  18.4s
+  [fetch icesat2] icesat2 2022  1/1  18.4s
+  [fetch icesat2] icesat2 2022  1/1  18.4s
+  [fetch icesat2] icesat2 2022  1/1  18.4s
+  [fetch icesat2] icesat2 2022  1/1  18.4s
+  [fetch icesat2] icesat2 2022  1/1  23.2s
+  [fetch icesat2] icesat2 2022  1/1  23.2s
+  [fetch icesat2] icesat2 2022  1/1  23.2s
+  [fetch icesat2] icesat2 2022  1/1  23.2s
+  [fetch icesat2] icesat2 2022  1/1  23.2s
+  [fetch icesat2] icesat2 2022  1/1  23.3s
+  [fetch icesat2] icesat2 2022  1/1  29.6s
+  [fetch icesat2] icesat2 2022  1/1  29.6s
+  [fetch icesat2] icesat2 2022  1/1  29.6s
+  [fetch icesat2] icesat2 2022  1/1  29.6s
+  [fetch icesat2] icesat2 2022  1/1  29.6s
+  [fetch icesat2] icesat2 2022  1/1  29.7s
+  [fetch icesat2] icesat2 2022  1/1  31.1s
+  [fetch icesat2] icesat2 2022  1/1  31.1s
+  [fetch icesat2] icesat2 2022  1/1  31.2s
+  [fetch icesat2] icesat2 2022  1/1  31.2s
+  [fetch icesat2] icesat2 2022  1/1  31.2s
+  [fetch icesat2] icesat2 2022  1/1  31.2s
+  [fetch icesat2] icesat2 2022  1/1  33.4s
+  [fetch icesat2] icesat2 2022  1/1  33.4s
+  [fetch icesat2] icesat2 2022  1/1  33.4s
+  [fetch icesat2] icesat2 2022  1/1  33.4s
+  [fetch icesat2] icesat2 2022  1/1  33.5s
+  [fetch icesat2] icesat2 2022  1/1  33.5s
+  [fetch icesat2] icesat2 2022  1/1  34.9s
+  [fetch icesat2] icesat2 2022  1/1  34.9s
+  [fetch icesat2] icesat2 2022  1/1  34.9s
+  [fetch icesat2] icesat2 2022  1/1  34.9s
+  [fetch icesat2] icesat2 2022  1/1  34.9s
+  [fetch icesat2] icesat2 2022  1/1  34.9s
+  [fetch icesat2] icesat2 2022  1/1  37.7s
+  [fetch icesat2] icesat2 2022  1/1  37.7s
+  [fetch icesat2] icesat2 2022  1/1  37.7s
+  [fetch icesat2] icesat2 2022  1/1  37.7s
+  [fetch icesat2] icesat2 2022  1/1  37.7s
+  [fetch icesat2] icesat2 2022  1/1  37.8s
+  [fetch icesat2] icesat2 2022  1/1  37.8s
+  2022: 506,689 row(s) in 1 part(s) (37.8s)
+=== stage fetch done in 37.8s ===
