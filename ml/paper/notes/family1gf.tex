@@ -15,7 +15,7 @@
 a dataset design note --- what is measured at ten kilometres and five days or finer, and how it is stored\\
 \large raw observations first; derived products only where they carry raw observations nothing else does}
 \author{blauewelt/earth --- design note}
-\date{16 September 2026}
+\date{20 September 2026}
 
 \begin{document}
 \maketitle
@@ -30,7 +30,10 @@ ship CO$_2$ and 2.03 billion along-track sea-level samples (satellite altimeter 
 fishing-effort store (E-081, the experiment that built it: the fishing fleet as a distributed sensor) --- with the fine-scale
 measurements the programme's four prediction goals (El Ni\~no, the ocean
 carbon sink, the AMOC --- the Atlantic Meridional Overturning Circulation, the Atlantic's northward heat-carrying flow --- and sea-surface temperature, SST) can each be argued to
-need: daily 4\,km ocean colour, daily 5\,km and 2\,km sea-surface temperature
+need: daily 4\,km ocean colour --- merged across the older sensors, and
+hyperspectral from PACE (NASA's 2024 ocean-colour satellite, whose
+instrument resolves the whole visible spectrum and with it which kinds of
+phytoplankton are there) --- daily 5\,km and 2\,km sea-surface temperature
 from the instruments rather than the analyses fitted to them, 6\,km sea-ice
 concentration, 2\,km swath sea level from SWOT (the Surface Water and Ocean Topography radar satellite, which maps sea level across two 50\,km-wide strips), 4\,km cloud-top temperature
 every 30 minutes, ship reports back to 1662, every non-Argo ocean profile since
@@ -217,9 +220,13 @@ concentration, and NASA stopped updating it on 2025-09-01; \code{AU\_SI12} is
 2016 $\to$, CC BY 4.0 --- the public-track companion for sea ice; if Bremen's terms
 refuse redistribution, \code{seaice\_asi} is built on the private track and
 OSI SAF beside it publicly. NASA OB.DAAC (the ocean-biology data centre) single-sensor 4\,km chlorophyll (MODIS-Aqua,
-VIIRS, PACE OCI --- NASA's hyperspectral ocean-colour instrument --- from 2024-03): each is inside OC-CCI's merge except PACE,
-which OC-CCI v6 does not yet include --- a future \code{oc4k} channel, not a
-store. GDP (Global Drifter Program) hourly drifters v2.01.1 (197\,M rows, 1987 $\to$ 2022-10): four
+VIIRS): each is inside OC-CCI's merge. PACE OCI --- NASA's hyperspectral
+ocean-colour instrument, 2024-03 $\to$ --- is the exception OC-CCI v6 does
+not yet merge, and it is built as its own store \code{pace4k} (\S5) rather
+than as a future \code{oc4k} channel, because what it adds is a spectrum and
+a phytoplankton community rather than one more estimate of chlorophyll; it
+is served by OB.DAAC under NASA's open terms and needs the Earthdata login
+the family already holds. GDP (Global Drifter Program) hourly drifters v2.01.1 (197\,M rows, 1987 $\to$ 2022-10): four
 times the rows of the held 6-hourly store, ends four years earlier, adds a
 diurnal SST decomposition; not now. Copernicus CORA (its quality-controlled temperature and salinity profile collection; T/S profiles, 1950 $\to$
 2025-06, $\approx 90$\,GB): cleaner delayed-mode QC than WOD but T/S only and
@@ -412,6 +419,7 @@ store & tier & channels ($C$) & footprint $(\log_2 f_p, \log_2 f_t)$ & rows or f
 \midrule
 \code{seaice\_asi} & G-fine & \emph{sea ice.} 1: \code{sic} (\%) on two polar grids as two sub-groups N/S & $(-2.15, -2.32)$ & $3.86$\,M px $\times$ 8,700 d; $v \approx 0.4$ of the polar grids & $\approx 30$\,GB & AMOC, SST & A \\
 \code{oc4k} & G-fine & \emph{ocean colour.} 3: \code{log\_chl}, \code{kd\_490}, \code{nobs}; +6 Rrs bands in phase B & $(-2.58, -2.32)$ & 37.3\,M px $\times$ 10,500 d; $v \approx 0.10$--$0.15$ & 0.3--0.4\,TB ($C = 3$); $\approx 1.1$\,TB with Rrs & carbon, SST, El Ni\~no & A \\
+\code{pace4k} & G-fine & \emph{hyperspectral colour and the phytoplankton community.} 7: \code{chlor\_a} (chlorophyll), \code{avw} (apparent visible wavelength --- the single colour the whole spectrum averages to), \code{poc} (particulate organic carbon), \code{carbon\_phyto} (phytoplankton carbon), and MOANA's three cell concentrations (\emph{Prochlorococcus}, \emph{Synechococcus}, picoeukaryotes); the daily 4\,km mapped files of PACE OCI v3.2, measured in NASA's catalogue on 2026-09-20 & $(-2.80, -2.32)$ & 37.3\,M px $\times \approx 930$\,d; $v \approx 0.10$--$0.15$ & $\approx 50$\,GB$^\dagger$ a year, $\approx 0.13$\,TB$^\dagger$ so far & carbon, SST, El Ni\~no & A \\
 \code{icoads} & P & \emph{ship reports.} 8: \code{sst}, \code{airt}, \code{slp}, \code{wind\_u}, \code{wind\_v}, \code{dewpt}, \code{wave\_h}, \code{cloud} & $(-4, -4)$ & $\approx 1.5$\,B$^\dagger$ (455\,M to 2014 + NRT, near-real-time) & $\approx 75$\,GB & SST, El Ni\~no, AMOC & A \\
 \code{wod} & P & \emph{ocean profiles.} 48: T, S, O$_2$ at the 16 RG (Roemmich--Gilson) pressures; \code{platform} = cast id, instrument in \code{qc} bits & $(-4, -4)$ & 15.9\,M casts (WOD without PFL) & 2\,GB & AMOC, SST & A \\
 \code{glodap} & P & \emph{bottle chemistry.} 9: \code{depth}, DIC, TA (total alkalinity), pH, O$_2$, NO$_3$, PO$_4$, SiO$_4$, CFC-12 & $(-4, -4)$ & 1.50\,M bottles & 80\,MB & carbon, AMOC & A \\
@@ -431,7 +439,7 @@ store & tier & channels ($C$) & footprint $(\log_2 f_p, \log_2 f_t)$ & rows or f
 \code{irtb} full & G-fine & \emph{cloud-top temperature, whole record:} 60$^\circ$S--60$^\circ$N, half-hourly ($F = 240$) & & 32.6\,M px $\times$ 48 $\times$ 10,500 d & $\approx 8$\,TB & & C \\
 \bottomrule
 \end{tabular}
-\caption{Estimated size of every store in the layout of \S4, and the phase it is proposed for. Phase A totals $\approx 0.5$\,TB; phase B $\approx 3.5$\,TB more; phase C is where the Hub's ``contact us for terabytes'' threshold is certainly crossed.}
+\caption{Estimated size of every store in the layout of \S4, and the phase it is proposed for. Phase A totals $\approx 0.6$\,TB with \code{pace4k}; phase B $\approx 3.5$\,TB more; phase C is where the Hub's ``contact us for terabytes'' threshold is certainly crossed.}
 \label{tab:sizes}
 \end{table}
 
@@ -451,6 +459,25 @@ highest quality level per pixel per pass --- a super-collation, which is what
 NOAA's ACSPO L3S does at 0.02$^\circ$ from 2000; the CCI route is taken first
 because it reaches 1979 and is CC BY 4.0, and \code{sst\_acspo02} follows for
 the 2\,km detail.
+
+\paragraph{Why \code{pace4k} is the 4\,km daily bins and not the 1.2\,km
+swath.} PACE's level-2 swath at 1.2\,km is about a terabyte a year of cells
+--- $2.5 \times 10^8$ ocean cells a day, a quarter of them clear --- for a
+product whose value is the \emph{spectrum} and the \emph{community} rather
+than the last kilometre of detail, and the 4\,km daily bins keep both. The
+swath is therefore a phase-C row, \code{pace1k}, to be built only if a
+verdict says the finer grain matters; the 4\,km store is phase A. This is
+the one daily \emph{binned} product admitted beside \code{oc4k}, and it is
+admitted because OC-CCI v6 does not merge PACE, so nothing else in the
+family carries the spectrum. Two honest notes on what it is. Its three
+community channels come from MOANA, which NASA labels \emph{level 4} rather
+than level 3 (measured in the catalogue on 2026-09-20), so those three are a
+retrieval of a retrieval and are stored with the rest but flagged in
+\code{qc}; and its apparent visible wavelength comes from the optical
+product while chlorophyll and carbon come from the biogeochemical one, three
+files a day joined on one grid by the builder. Marine species records are
+not here: they ride \code{gbif}, family 1.0.tf's store of dated, located
+occurrence records, which is global and holds the sea as well as the land.
 
 \clearpage
 \section{The exceptions, named --- three sources admitted although slightly coarser than the rule}
@@ -481,12 +508,14 @@ coarse; no monthly source is critical to this family.
 
 \section{The build ladder, the probe, and the falsifier --- the order of building, the one-month test fetch, and the test each store must pass to be kept}
 
-\paragraph{Phase A --- eight stores, $\approx 0.5$\,TB, keyless or
+\paragraph{Phase A --- nine stores, $\approx 0.6$\,TB, keyless or
 hosted-runner credentials only.} \code{seaice\_asi}, \code{oc4k},
-\code{icoads}, \code{wod}, \code{glodap}, \code{bgcargo}, \code{oceansites},
+\code{pace4k}, \code{icoads}, \code{wod}, \code{glodap}, \code{bgcargo},
+\code{oceansites},
 \code{xco2}, plus the registry and the \code{siblings} line in family 10.2's.
-Seven of the eight fetch without any account; \code{xco2} needs an Earthdata
-login on a hosted runner; \code{oc4k} is the one G-fine build large enough to
+Seven of the nine fetch without any account; \code{xco2} and \code{pace4k}
+need an Earthdata login on a hosted runner (GES DISC for the first, OB.DAAC
+--- already verified --- for the second); \code{oc4k} is the one G-fine build large enough to
 need a box for assembly. Expected cost, from the 10.1 precedent (a \emph{verified} box is a rented machine whose host the marketplace has vetted): the P stores
 \$0 on hosted runners; \code{oc4k} one verified box for a few hours, \$2--5;
 the whole phase under \$10 if nothing is re-fetched.
@@ -499,8 +528,9 @@ should be asked about a terabyte-scale public repository before this phase
 (the docs say ``contact us for large repos'').
 
 \paragraph{Phase C --- decisions, not builds, until A and B have verdicts.}
-\code{sst\_acspo02}, \code{wind12}, the full \code{irtb}, PACE into
-\code{oc4k}.
+\code{sst\_acspo02}, \code{wind12}, the full \code{irtb}, and \code{pace1k},
+PACE's 1.2\,km level-2 swath ($\approx 1$\,TB a year) if the 4\,km bins of
+\code{pace4k} turn out to be too coarse for the carbon read-out.
 
 \paragraph{The probe, before any build.} For each source, one month
 (January 2015, as E-079 --- family 10's first data pull --- used) fetched on a hosted runner through the real
@@ -566,7 +596,7 @@ Pick: yes, with phase A's measured sizes in hand.
 
 \section*{Terms used above, in one line each}
 \footnotesize
-\textbf{AMOC} the Atlantic Meridional Overturning Circulation, the Atlantic's northward heat-carrying flow, read out as transport at 26.5$^\circ$N (RAPID). \textbf{Tier G / P / T} family 10's three storage tiers: gridded dense fields; points, profiles and tracks; tiles of imagery. \textbf{CSR} compressed sparse row --- an offsets array saying where each five-day bin's rows start. \textbf{zstd} Zstandard, a fast lossless compressor. \textbf{STAC} SpatioTemporal Asset Catalog, the metadata standard producers publish scene listings in. \textbf{L2 / L3 / L3C / L3S / L4} processing levels: retrievals on the instrument's swath; binned onto a grid; collated per sensor; super-collated across sensors; gap-filled analysis (derived). \textbf{Rrs} remote-sensing reflectance, the water-leaving colour per wavelength. \textbf{Kd\_490} the diffuse attenuation of light at 490\,nm, a water-clarity measure. \textbf{OC-CCI} ESA's Ocean Colour Climate Change Initiative merged record (PML, Plymouth). \textbf{CEDA / THREDDS / OPeNDAP} the UK atmospheric data archive, and two protocols for reading subsets of netCDF files over HTTP. \textbf{AVHRR / SLSTR / VIIRS / MODIS} infrared radiometers on NOAA and MetOp, Sentinel-3, JPSS and Terra/Aqua satellites. \textbf{ACSPO} NOAA's SST processing system. \textbf{ASI} the ARTIST sea-ice algorithm using 89\,GHz microwave channels (AMSR-E, AMSR2, AMSR3 radiometers). \textbf{KaRIn} SWOT's Ka-band radar interferometer that measures sea level across two 50\,km swaths. \textbf{GES DISC / PO.DAAC / NCEI / AOML / NDBC / BODC} NASA's, NOAA's and the UK's data centres. \textbf{ICOADS / IMMA1} the ship-and-buoy marine report archive and its record format. \textbf{WOD} the World Ocean Database; its instrument codes: OSD bottle casts, CTD conductivity-temperature-depth profiles, MBT/XBT mechanical and expendable bathythermographs, MRB/DRB moored and drifting buoys, PFL profiling floats (Argo), UOR undulating recorders, APB tagged animals, GLD gliders. \textbf{GLODAP} the Global Ocean Data Analysis Project bottle-data synthesis; \textbf{DIC / TA} dissolved inorganic carbon and total alkalinity; \textbf{CFC} chlorofluorocarbon tracers that date water masses. \textbf{BGC-Argo / Sprof / DOXY / BBP700} biogeochemical Argo floats, their merged profile files, dissolved oxygen, and particle backscatter at 700\,nm. \textbf{GDAC} the Argo global data-assembly centre. \textbf{OceanSITES / TAO} the open-ocean moored-time-series network and the tropical Pacific mooring array (held in family 10.1's \code{gtmba}). \textbf{OCO-2/3 / GOSAT / ACOS} NASA's and Japan's column-CO$_2$ satellites and NASA's retrieval of GOSAT. \textbf{TROPOMI} the trace-gas imager on Sentinel-5P. \textbf{OSI SAF / ASCAT} EUMETSAT's ocean-and-ice facility and the MetOp scatterometer. \textbf{OSTIA / MUR / DUACS / GLORYS} gap-filled SST analyses (Met Office, JPL), the gridded altimetry analysis, and the ocean reanalysis --- all derived. \textbf{DPR / GMI} GPM's precipitation radar and microwave imager. \textbf{CORA} Copernicus' quality-controlled T/S profile collection. \textbf{PACE OCI} NASA's 2024 hyperspectral ocean-colour instrument. \textbf{Public / private track} a store anyone may read from the public repository, or one held for this project's own use because its licence forbids redistribution (\S4). \textbf{E-077 / E-079} the experiments that built ocean colour into family 7.1 and family 10's first four stores. \textbf{g025 / g100 / rg100 / oc025} family 7.2's four gridded groups: $0.25^\circ$ ocean surface, $1^\circ$ atmosphere and land, $1^\circ$ monthly interior, $0.25^\circ$ ocean colour.
+\textbf{AMOC} the Atlantic Meridional Overturning Circulation, the Atlantic's northward heat-carrying flow, read out as transport at 26.5$^\circ$N (RAPID). \textbf{Tier G / P / T} family 10's three storage tiers: gridded dense fields; points, profiles and tracks; tiles of imagery. \textbf{CSR} compressed sparse row --- an offsets array saying where each five-day bin's rows start. \textbf{zstd} Zstandard, a fast lossless compressor. \textbf{STAC} SpatioTemporal Asset Catalog, the metadata standard producers publish scene listings in. \textbf{L2 / L3 / L3C / L3S / L4} processing levels: retrievals on the instrument's swath; binned onto a grid; collated per sensor; super-collated across sensors; gap-filled analysis (derived). \textbf{Rrs} remote-sensing reflectance, the water-leaving colour per wavelength. \textbf{Kd\_490} the diffuse attenuation of light at 490\,nm, a water-clarity measure. \textbf{OC-CCI} ESA's Ocean Colour Climate Change Initiative merged record (PML, Plymouth). \textbf{CEDA / THREDDS / OPeNDAP} the UK atmospheric data archive, and two protocols for reading subsets of netCDF files over HTTP. \textbf{AVHRR / SLSTR / VIIRS / MODIS} infrared radiometers on NOAA and MetOp, Sentinel-3, JPSS and Terra/Aqua satellites. \textbf{ACSPO} NOAA's SST processing system. \textbf{ASI} the ARTIST sea-ice algorithm using 89\,GHz microwave channels (AMSR-E, AMSR2, AMSR3 radiometers). \textbf{KaRIn} SWOT's Ka-band radar interferometer that measures sea level across two 50\,km swaths. \textbf{GES DISC / PO.DAAC / NCEI / AOML / NDBC / BODC} NASA's, NOAA's and the UK's data centres. \textbf{ICOADS / IMMA1} the ship-and-buoy marine report archive and its record format. \textbf{WOD} the World Ocean Database; its instrument codes: OSD bottle casts, CTD conductivity-temperature-depth profiles, MBT/XBT mechanical and expendable bathythermographs, MRB/DRB moored and drifting buoys, PFL profiling floats (Argo), UOR undulating recorders, APB tagged animals, GLD gliders. \textbf{GLODAP} the Global Ocean Data Analysis Project bottle-data synthesis; \textbf{DIC / TA} dissolved inorganic carbon and total alkalinity; \textbf{CFC} chlorofluorocarbon tracers that date water masses. \textbf{BGC-Argo / Sprof / DOXY / BBP700} biogeochemical Argo floats, their merged profile files, dissolved oxygen, and particle backscatter at 700\,nm. \textbf{GDAC} the Argo global data-assembly centre. \textbf{OceanSITES / TAO} the open-ocean moored-time-series network and the tropical Pacific mooring array (held in family 10.1's \code{gtmba}). \textbf{OCO-2/3 / GOSAT / ACOS} NASA's and Japan's column-CO$_2$ satellites and NASA's retrieval of GOSAT. \textbf{TROPOMI} the trace-gas imager on Sentinel-5P. \textbf{OSI SAF / ASCAT} EUMETSAT's ocean-and-ice facility and the MetOp scatterometer. \textbf{OSTIA / MUR / DUACS / GLORYS} gap-filled SST analyses (Met Office, JPL), the gridded altimetry analysis, and the ocean reanalysis --- all derived. \textbf{DPR / GMI} GPM's precipitation radar and microwave imager. \textbf{CORA} Copernicus' quality-controlled T/S profile collection. \textbf{PACE OCI} NASA's 2024 ocean-colour satellite and its Ocean Color Instrument, which resolves the whole visible spectrum instead of a handful of bands; \textbf{\code{pace4k} / \code{pace1k}} its daily 4\,km bins, built in phase A, and its 1.2\,km swath, a phase-C decision; \textbf{AVW} the apparent visible wavelength, the single colour a whole spectrum averages to; \textbf{MOANA} the product that turns that spectrum into concentrations of \emph{Prochlorococcus}, \emph{Synechococcus} and picoeukaryotes, the three groups of small phytoplankton. \textbf{GBIF} the Global Biodiversity Information Facility, whose species-occurrence records --- marine ones included --- are family 1.0.tf's \code{gbif} store. \textbf{Public / private track} a store anyone may read from the public repository, or one held for this project's own use because its licence forbids redistribution (\S4). \textbf{E-077 / E-079} the experiments that built ocean colour into family 7.1 and family 10's first four stores. \textbf{g025 / g100 / rg100 / oc025} family 7.2's four gridded groups: $0.25^\circ$ ocean surface, $1^\circ$ atmosphere and land, $1^\circ$ monthly interior, $0.25^\circ$ ocean colour.
 \normalsize
 
 \begin{thebibliography}{9}\small

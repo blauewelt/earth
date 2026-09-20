@@ -14,7 +14,7 @@
 \title{Family 0.9.tf: land and coast through a published embedding\\
 \large a dataset design note --- family 1.0.tf with its raw imagery replaced by Google's AlphaEarth annual 10\,m embeddings}
 \author{blauewelt/earth --- design note}
-\date{16 September 2026}
+\date{20 September 2026}
 
 \begin{document}
 \maketitle
@@ -101,7 +101,11 @@ family 10.1's: the 0.9.tf registry (\S\ref{sec:stores}) lists each inherited
 store with its 1.0.tf path and the sha256 checksum of every file as 1.0.tf
 published it, and nothing is re-fetched, rebuilt, re-hashed or re-uploaded.
 An inherited store is therefore the same bytes in both families, and a model
-trained on either reads it from the same file. Source, channels, cadence,
+trained on either reads it from the same file. That includes the whole of
+family 1.0.tf's biosphere --- the canopy-height map, the canopy and biomass
+catalogues, fluorescence, leaf area, the leaf calendar and the species
+records: every one of them reaches this family through the \code{inherits}
+block, and this family builds nothing new for the living surface. Source, channels, cadence,
 size and licence of each inherited store are in the family 1.0.tf note
 (\S4 there) and are not repeated here.
 
@@ -113,11 +117,12 @@ group (tier) & stores & what they are & 1.0.tf \\
 \midrule
 point networks (P) & \code{ghcnd}, \code{igra}, \code{tide}, \code{tide\_private}$^{*}$, \code{ndbc}, \code{gliders}, \code{flux}, \code{fire}, \code{river}, \code{river\_grdc}$^{*}$, \code{ismn}$^{*}$, \code{ecad}$^{*}$, \code{ghcnh}, \code{hfr}, \code{alticap} & weather stations, radiosonde balloons, tide gauges, buoys, gliders, flux towers, fire detections, river gauges, soil-moisture probes, coastal radar and coastal altimetry & \S4.1 \\
 LiDAR footprints (P) & \code{gedi}, \code{icesat2} & laser measurements of canopy and terrain height from orbit & \S4.2 \\
-daily fields at 0.05$^\circ$ (G sharded) & \code{lst05}, \code{snow05}, \code{refl05}, \code{ims1k}, \code{chirps05} & land-surface temperature, snow cover, surface reflectance, snow-and-ice charts, five-day rainfall & \S4.3 \\
-read-out targets & \code{alerts}, \code{lossyear}, \code{burned500}, \code{cat\_gfm}, \code{biomass100}, \code{landcover10} & forest-clearing alerts and loss years, burned area, flood maps, biomass, land and crop cover & \S4.5 \\
-statics & \code{static\_fine} & elevation and sea-floor depth, land-cover fractions, distance to coast & \S4.6 \\
+biosphere (G, P and T) & \code{canopy30}, \code{canopy\_ref}, \code{sif}, \code{lai500}, \code{pheno500}, \code{gbif}, \code{cat\_biomass\_esa} & the 2020 canopy-height map and the finer canopy maps catalogued; fluorescence, the satellite's view of photosynthesis; eight-day leaf area; the yearly leaf calendar; species-occurrence records; ESA's P-band radar products catalogued & \S4.3 \\
+daily fields at 0.05$^\circ$ (G sharded) & \code{lst05}, \code{snow05}, \code{refl05}, \code{ims1k}, \code{chirps05} & land-surface temperature, snow cover, surface reflectance, snow-and-ice charts, five-day rainfall & \S4.4 \\
+read-out targets & \code{alerts}, \code{lossyear}, \code{burned500}, \code{cat\_gfm}, \code{biomass100}, \code{landcover10} & forest-clearing alerts and loss years, burned area, flood maps, biomass, land and crop cover & \S4.6 \\
+statics & \code{static\_fine} & elevation and sea-floor depth, land-cover fractions, distance to coast & \S4.7 \\
 \midrule
-\emph{not inherited} --- replaced by \S\ref{sec:stores} here & \code{cat\_landsat}, \code{cat\_hls}, \code{cat\_s2}, \code{cat\_s1}, \code{cat\_nisar}, \code{cat\_palsar}, \code{cat\_olci}, \code{cat\_viirs}, \code{cat\_ecostress}, \code{cat\_submetre}; the tile tokens computed from them; \code{oc300\_coast} & the tier-T image catalogue --- the raw satellite imagery and the sub-metre orthophotos --- and what is derived from it & \S4.4 \\
+\emph{not inherited} --- replaced by \S\ref{sec:stores} here & \code{cat\_landsat}, \code{cat\_hls}, \code{cat\_s2}, \code{cat\_s1}, \code{cat\_nisar}, \code{cat\_palsar}, \code{cat\_olci}, \code{cat\_viirs}, \code{cat\_ecostress}, \code{cat\_submetre}; the tile tokens computed from them; \code{oc300\_coast} & the tier-T image catalogue --- the raw satellite imagery and the sub-metre orthophotos --- and what is derived from it & \S4.5 \\
 \bottomrule
 \end{tabular}
 \caption{Family 1.0.tf's stores as family 0.9.tf uses them. $^{*}$ on 1.0.tf's
@@ -126,9 +131,13 @@ private repository and 0.9.tf's registry lists it there with
 \code{distribution: private}.}
 \end{table}
 
-Two boundary cases. \code{cat\_gfm} has a catalogue's prefix because it is
+Three boundary cases. \code{cat\_gfm} has a catalogue's prefix because it is
 one, but of flood maps --- a read-out target, not imagery --- so it is
-inherited. The phase-C tile tokens and \code{oc300\_coast} (the 300\,m
+inherited. \code{canopy\_ref} and \code{cat\_biomass\_esa} are catalogues
+too, of canopy-height maps and of radar biomass products rather than of raw
+imagery, so they are inherited for the same reason: what the AlphaEarth
+embedding replaces is the pixels of the optical and radar archives, not
+somebody else's measurement of a canopy. The phase-C tile tokens and \code{oc300\_coast} (the 300\,m
 gridded form of \code{cat\_olci}) are made from the imagery and go with it.
 An inherited store appears in 0.9.tf's registry when 1.0.tf publishes it,
 with the same checksums; 0.9.tf never waits on, re-runs or patches a 1.0.tf
@@ -490,7 +499,11 @@ E-078c's $\approx 300$ coastal cells, tokens from \code{aef\_dots} and
 \code{aef1k} against the local codec's cached tokens, on the \emph{annual}
 land targets in the band (loss year, land cover, biomass) --- not on E-078c's
 own pentad ocean targets, which the embedding does not cover and whose
-cadence it cannot match. If AlphaEarth matches or beats the codec there,
+cadence it cannot match. The sharpest of those targets is the canopy: the
+AlphaEarth embedding was itself trained against GEDI, so canopy height at
+held-out laser footprints is exactly where this family's cache and the
+programme's own tile codec are compared with everything else held fixed. If
+AlphaEarth matches or beats the codec there,
 the codec is not needed for land at annual cadence and E-078c's scope
 narrows to what the embedding cannot see.
 \item \textbf{Against the coarse tensor, on the land targets.} Next year's

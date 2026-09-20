@@ -16,17 +16,21 @@
 \begin{document}
 {\LARGE\bfseries Family 1.0.tf in two pages\par}
 \vspace{2pt}{\large the land and its coasts, measured finer than 10\,km and 5 days\par}
-\vspace{2pt}{\small blauewelt/earth --- two-page summary of the design note, 17 September 2026. A glossary of every term follows the two pages.\par}
+\vspace{2pt}{\small blauewelt/earth --- two-page summary of the design note, 20 September 2026. A glossary of every term follows the two pages.\par}
 \vspace{4pt}
 
 \textbf{What it is.} Family 1.0.tf is a proposed set of datasets (``stores'') that gives the programme's
 forecasting model the continents and a 100\,km coastal band at \textbf{10\,km or finer, every 5 days or finer}:
 weather stations and balloons, tide gauges, buoys, gliders, flux towers, fire detections, rivers and soil
-probes; laser measurements of forests from orbit; daily satellite land temperature, snow and surface colour; a
+probes; laser measurements of forests from orbit; daily satellite land temperature, snow and surface colour;
+fluorescence, leaf area and the leaf calendar; three billion species records; a
 list of every satellite and aerial image of the land since 1982; and the land-change maps the model should learn
 to predict. \textbf{What it is for:} predicting land change --- where forest will be cleared, how much carbon a
 canopy holds and how fast it changes, floods, fire, crops, cities --- and giving the four ocean goals (El Ni\~no,
 the carbon sink, the Atlantic overturning, sea-surface temperature) the land and coast that border the sea.
+\textbf{The land biosphere is the programme's fifth read-out} beside those four, scored on two held-out
+measurements: the carbon flux of flux towers the model was not trained on, and canopy height at laser footprints
+the model was not trained on.
 \textbf{What it is not:} not an archive of pixels --- the imagery (petabytes a year) is listed, not copied, until a
 small learned encoder turns image tiles into tokens; not gap-filled analyses; and not the embedding route, which is
 family 0.9.tf. Sources whose licences forbid republishing are built on a private track and never redistributed.
@@ -59,8 +63,16 @@ store & what it is & producer & space & time & record & stored size & track & ph
 \code{alticap} & satellite sea level close to the coast & ALTICAP (AVISO/ODATIS), Jason-3 & $\approx 350$\,m along track & $\approx 10$-day repeat & 2016-02 $\to$ 2021-07 & 3\,GB & public & B \\
 \code{ecad} & European station weather missing from GHCN-Daily & ECA\&D (KNMI) & point & daily & 1800s $\to$ & $\le 20$\,GB$^\dagger$ & private & C \\
 \multicolumn{9}{@{}l}{\emph{LiDAR: laser heights of forests, ground and sea ice from orbit}} \\
-\code{gedi} & laser canopy height, cover and biomass & NASA GEDI (LP DAAC, ORNL) & 25\,m footprints & per orbit pass & 2019-04 $\to$ 2023-03; 2024-04 $\to$ 2025-07 & 0.2--0.5\,TB & public & B \\
-\code{icesat2} & laser terrain, canopy and sea-ice height & NASA ICESat-2 (NSIDC) & 100\,m segments ($\approx 11$\,m spots) & per orbit pass & 2018-10 $\to$ & $\approx 1.1$\,TB & public & C \\
+\code{gedi} & laser canopy height, cover and biomass & NASA GEDI (LP DAAC, ORNL) & 25\,m footprints & per orbit pass & 2019-04 $\to$ 2023-03; 2024-04 $\to$ 2025-07 & 0.2--0.5\,TB for the record & public & A (one year, 2022) / B \\
+\code{icesat2} & laser terrain, canopy and sea-ice height & NASA ICESat-2 (NSIDC) & 100\,m segments ($\approx 11$\,m spots) & per orbit pass & 2018-10 $\to$ & $\approx 1.1$\,TB for the record & public & A (one year, 2022) / B \\
+\multicolumn{9}{@{}l}{\emph{the biosphere: photosynthesis, leaf area and its calendar, canopy and biomass maps, species records}} \\
+\code{canopy30} & how tall the canopy is, one map at 30\,m & UMD GLAD (forest height 2020) & 30\,m & one year & 2020 & 60--100\,GB$^\dagger$; 261 tiles, 0.33--0.61\,GB each, measured & public & A \\
+\code{canopy\_ref} & the finer canopy maps, listed not copied & ETH Zurich (10\,m); Meta/WRI (1\,m, on AWS) & 10\,m and 1\,m & annual & 2020 (ETH); 2018--2020 (Meta) & catalogue $<1$\,GB & public & A \\
+\code{sif} & fluorescence: photosynthesis seen from orbit & TROPOMI (Caltech; ESA S5P-PAL); NASA OCO-2, OCO-3 & $7\times3.5$\,km; OCO $1.3\times2.25$\,km & per sounding & 2018-04 $\to$; OCO-2 2014-09 $\to$ & 60--160\,GB$^\dagger$ (TROPOMI) & public & A \\
+\code{lai500} (E7) & leaf area, and the light the canopy absorbs & NASA MODIS Terra and Aqua, VIIRS & 500\,m & 8-day composite (E7) & Terra 2000-02 $\to$; VIIRS 2012 $\to$ & $\approx 60$\,GB$^\dagger$ per sensor-year & public & A (Terra 2020--2024) / B \\
+\code{pheno500} & the leaf calendar: green-up, peak, dormancy & NASA MODIS (MCD12Q2 v061) & 500\,m & annual & 2001 $\to$ 2025 & $\approx 10$\,GB$^\dagger$ a year & public & A \\
+\code{gbif} & dated, located records of species & GBIF snapshot (AWS Open Data) & point; each row's own uncertainty & per record, day or month & 1600s $\to$; 3.67\,B records measured & $\approx 90$\,GB$^\dagger$ public; the 2026-09 snapshot is 285.3\,GB & public (83.2\,\%); private (CC BY-NC, 16.8\,\%) & A \\
+\code{cat\_\allowbreak biomass\_\allowbreak esa} & list of ESA's P-band radar products & ESA BIOMASS (launched 2025-04-29) & --- & per product & 2025 $\to$ & catalogue & terms unverified & A if public, else C \\
 \multicolumn{9}{@{}l}{\emph{daily fields on a 0.05$^\circ$ (5.6\,km) grid}} \\
 \code{lst05} & land-surface temperature, day and night (Terra in phase A) & NASA MODIS Terra (+ Aqua, VIIRS) & 5.6\,km ($0.05^\circ$) & daily & 2000-02 $\to$ & $\approx 350$\,GB per satellite & public & A / B \\
 \code{snow05} & snow-cover fraction & NASA MODIS (NSIDC) & $0.05^\circ$ & daily & 2000-02 $\to$ & $\approx 60$\,GB & public & A \\
@@ -73,7 +85,7 @@ store & what it is & producer & space & time & record & stored size & track & ph
 \code{cat\_s2} & list of Sentinel-2 optical scenes & ESA / CDSE & 10 / 20 / 60\,m & 12.7--15.5\,k scenes a day & 2015-07 $\to$ & catalogue & public & A \\
 \code{cat\_s1} & list of Sentinel-1 C-band radar scenes & ESA / CDSE & 10\,m & 982 scenes a day & 2014-10 $\to$ & catalogue & public & A \\
 \code{cat\_nisar} & list of NISAR L-band radar scenes & NASA--ISRO (ASF) & 10 / 20 / 80\,m & 28,456 granules in Aug 2026 & 2026-06 $\to$ & catalogue & public & A \\
-\code{cat\_palsar} (E5) & list of Japanese L-band radar mosaics and scenes & JAXA & 25\,m & yearly mosaics and scenes & 2007--2010, 2015--2025; 2014-08 $\to$ & catalogue & public & B \\
+\code{cat\_palsar} (E5) & list of Japanese L-band radar mosaics and scenes & JAXA & 25\,m & yearly mosaics and scenes & 2007--2010, 2015--2025; 2014-08 $\to$ & catalogue & public & A, once a JAXA account exists \\
 \code{cat\_olci} & list of 300\,m coastal ocean-colour scenes & Copernicus Sentinel-3 OLCI & 300\,m & 457 scenes a day & 2016-04 $\to$ & catalogue & public & A \\
 \code{cat\_viirs} & list of VIIRS imager scenes & NASA LAADS & 375\,m & 225--242 granules a day & 2012 / 2018 $\to$ & catalogue & public & A \\
 \code{cat\_ecostress} & list of thermal images from the Space Station & NASA ECOSTRESS & 70\,m & irregular & 2018-07 $\to$ & catalogue & public & A \\
@@ -83,7 +95,7 @@ store & what it is & producer & space & time & record & stored size & track & ph
 \code{lossyear} & year each 30\,m pixel lost its forest & UMD Hansen GFC; EU JRC TMF & 30\,m & annual & 1990 / 2001 $\to$ 2025 & $\approx 30$\,GB & public & A \\
 \code{burned500} & date each pixel burned & NASA MODIS MCD64A1 & 500\,m & monthly & 2000-11 $\to$ & $\approx 10$\,GB & public & A \\
 \code{cat\_gfm} & list of flood and surface-water maps & Copernicus GFM; NASA OPERA DSWx & 20--30\,m & per pass & 2015 / 2016 $\to$ & $<1$\,GB & public & A \\
-\code{biomass100} & yearly above-ground biomass & ESA CCI Biomass; GEDI L4B & 100\,m (GEDI 1\,km) & annual & 2005--2012, 2015--2024 & $\approx 0.4$\,TB & public & C \\
+\code{biomass100} & yearly above-ground biomass & ESA CCI Biomass; GEDI L4B & 100\,m (GEDI 1\,km) & annual & 2005--2012, 2015--2024; L4B 2019--2023 & $\approx 0.4$\,TB & public (terms read 2026-09-20) & A (2020 and all of L4B) / B \\
 \code{landcover10} & yearly land-cover and crop-type maps & Esri/IO, ESA, MapBiomas, USDA, JRC & 10--30\,m & annual & 1985 / 2017 $\to$ & $\approx 0.2$\,TB$^\dagger$ & public & C \\
 \multicolumn{9}{@{}l}{\emph{statics}} \\
 \code{static\_fine} & fixed maps: elevation and depth, land cover, distance to coast & GEBCO, ESA WorldCover, GSHHG & 15$''$ ($\approx 460$\,m); $0.05^\circ$ & fixed & --- & $\approx 8$\,GB & public & A \\
@@ -105,9 +117,9 @@ The coastal band ($\pm 100$\,km) is a recorded build setting. Private stores (\c
 
 \subsection*{The ladder}
 \begin{tabular}{@{}L{1.2cm}L{16.6cm}@{}}
-\textbf{A} & $\approx 0.7$\,TB, under \$10: the point stores \code{ghcnd}, \code{igra}, \code{tide} + \code{tide\_private}, \code{ndbc}, \code{gliders}, \code{flux}, \code{fire}; Terra \code{lst05} and \code{snow05}; nine catalogues; targets \code{alerts}, \code{lossyear}, \code{burned500}, \code{cat\_gfm}; \code{static\_fine}. Six of the point stores have run their one-month probes. \\
-\textbf{B} & 2.3--2.7\,TB, \$20--30: \code{gedi}, \code{ghcnh}, \code{hfr}, \code{river}, \code{river\_grdc}, \code{ismn}, \code{alticap}, \code{refl05}, \code{ims1k}, \code{chirps05}, \code{cat\_palsar}, the Aqua and VIIRS continuations. \\
-\textbf{C} & $\approx 3$\,TB, after the image-codec experiment E-078c: \code{icesat2}, \code{biomass100}, \code{landcover10}, \code{ecad}, the tile tokens, \code{oc300\_coast}. \\
+\textbf{A} & $\approx 0.7$\,TB, under \$10: the point stores \code{ghcnd}, \code{igra}, \code{tide} + \code{tide\_private}, \code{ndbc}, \code{gliders}, \code{flux}, \code{fire}; Terra \code{lst05} and \code{snow05}; all ten catalogues (\code{cat\_palsar} once a JAXA account exists); targets \code{alerts}, \code{lossyear}, \code{burned500}, \code{cat\_gfm}; \code{static\_fine}. Six of the point stores have run their one-month probes. \emph{Plus the biosphere wave, $\approx 1$\,TB$^\dagger$}: \code{canopy30}, \code{canopy\_ref}, \code{sif} (TROPOMI), \code{pheno500}, \code{gbif}, \code{cat\_biomass\_esa}, \code{biomass100} for 2020 and all of GEDI L4B, and one year each of \code{gedi}, \code{icesat2} and \code{lai500} (Terra 2020--2024) --- every new store probed before it is built. \\
+\textbf{B} & 2.3--2.7\,TB, \$20--30: \code{ghcnh}, \code{hfr}, \code{river}, \code{river\_grdc}, \code{ismn}, \code{alticap}, \code{refl05}, \code{ims1k}, \code{chirps05}, the Aqua and VIIRS continuations; and, on the probes' measured numbers, the rest of \code{gedi}, \code{icesat2}, \code{lai500} and \code{biomass100}. \\
+\textbf{C} & $\approx 3$\,TB, after the image-codec experiment E-078c: \code{landcover10}, \code{ecad}, the tile tokens, \code{oc300\_coast}. \\
 \end{tabular}
 
 \clearpage
@@ -134,12 +146,16 @@ Every term, acronym, producer, instrument and code name used in this summary and
 \gl{AWS, AWS Open Data}{Amazon Web Services, and its programme that hosts public datasets at no cost to readers.}
 \gl{bathymetry}{The depth of the sea floor.}
 \gl{bin (pentad)}{The five-day time step every family uses, counted from 1 January 1982; a bin before 1982 has a negative number.}
+\gl{BIOMASS (the satellite), P band}{ESA's radar satellite, launched 29 April 2025; its 70\,cm (P band) wavelength reaches through a canopy to the trunks, which is why it measures woody biomass directly. Its products are listed in \code{cat\_biomass\_esa}.}
 \gl{\code{biomass100}}{Family 1.0.tf target store of yearly above-ground biomass maps at 100\,m.}
 \gl{box (rented, verified)}{A machine hired by the hour from a marketplace; it holds no credentials, and a verified one runs on a host the marketplace has vetted.}
 \gl{B/row (bytes per row)}{Stored size of one row of a point store; a row costs 27 + 2 bytes per channel (31 + 2 per channel with the 64-bit time).}
 \gl{\code{burned500}}{Family 1.0.tf target store of the date each 500\,m pixel burned.}
+\gl{\code{canopy30}}{Family 1.0.tf target store: GLAD's 2020 forest-height map at 30\,m, 261 tiles, the canopy read-out's annual target.}
+\gl{\code{canopy\_ref}}{Family 1.0.tf catalogue of the finer canopy-height maps --- ETH Zurich's 10\,m and Meta/WRI's 1\,m --- listed with their tile footprints and download links, pixels left at the source.}
 \gl{Caravan}{An open (CC BY 4.0) collection of catchment discharge and weather data, including a GRDC subset.}
 \gl{\code{cat\_*}}{The family 1.0.tf image-catalogue stores: one row per satellite or aerial scene (time, place, cloud and valid fraction, sun or radar angle, area, sensor code), without the pixels.}
+\gl{\code{cat\_biomass\_esa}}{Family 1.0.tf catalogue of the released products of ESA's BIOMASS radar satellite.}
 \gl{\code{cat\_ecostress}}{Catalogue of ECOSTRESS 70\,m thermal scenes.}
 \gl{\code{cat\_gfm}}{Target catalogue of flood and surface-water maps (Copernicus GFM, OPERA DSWx); a read-out, not imagery.}
 \gl{\code{cat\_hls}}{Catalogue of NASA's harmonised Landsat and Sentinel-2 scenes.}
@@ -178,8 +194,8 @@ Every term, acronym, producer, instrument and code name used in this summary and
 \gl{Dynamic World}{Google's 10\,m land-cover classification of each Sentinel-2 scene, available only inside Earth Engine.}
 \gl{E-078, E-078c}{The design study that gave family 10 one schema for every granularity, and its first experiment training a local image codec on about 300 coastal cells.}
 \gl{E-081}{The experiment that built family 10.2's fishing-effort store and its globe layer.}
-\gl{E-082}{The build plan for families 1.gf, 1.0.tf and 0.9.tf; its first wave wrote and probed the phase-A point-store adapters.}
-\gl{E1--E6 (exceptions)}{Sources admitted although they break the 10\,km / 5-day rule: E1 scatterometer wind at 12.5\,km, E2 IMERG rain at 11\,km, E3 GOSAT at 10.5\,km, E4 CHIRPS rain, E5 PALSAR yearly mosaics, E6 sub-metre photos.}
+\gl{E-082}{The build plan for families 1.gf, 1.0.tf and 0.9.tf; its first wave wrote and probed the phase-A point-store adapters, and its sixth adds the biosphere stores.}
+\gl{E1--E7 (exceptions)}{Sources admitted although they break the 10\,km / 5-day rule: E1 scatterometer wind at 12.5\,km, E2 IMERG rain at 11\,km, E3 GOSAT at 10.5\,km, E4 CHIRPS rain, E5 PALSAR yearly mosaics, E6 sub-metre photos, E7 the eight-day leaf-area composite \code{lai500}.}
 \gl{Earthdata login}{NASA's free user account, needed to download most NASA data.}
 \gl{Earth Engine}{Google's hosted geospatial analysis platform (account required).}
 \gl{\code{ecad}}{Private family 1.0.tf store of ECA\&D European station series missing from GHCN-Daily.}
@@ -193,6 +209,7 @@ Every term, acronym, producer, instrument and code name used in this summary and
 \gl{ESA CCI}{ESA's Climate Change Initiative, which builds long consistent climate records from satellites.}
 \gl{Esri, Impact Observatory}{The companies that produce a yearly 10\,m global land-cover map.}
 \gl{EUCROPMAP}{The JRC's crop-type map of the European Union.}
+\gl{EVI}{The enhanced vegetation index, a greenness measure computed from red, near-infrared and blue reflectance; the phenology dates of \code{pheno500} are read off its yearly curve.}
 \gl{falsifier}{The test, fixed before building, that can show a store is not worth keeping.}
 \gl{family}{A numbered set of datasets built to one storage design and read by the programme's forecasting model.}
 \gl{family 0.9.tf}{Family 1.0.tf with its raw-imagery catalogue replaced by Google's AlphaEarth embedding, everything else inherited.}
@@ -205,11 +222,15 @@ Every term, acronym, producer, instrument and code name used in this summary and
 \gl{\code{flux}}{Family 1.0.tf store of half-hourly flux-tower measurements.}
 \gl{footprint; $\log_2 f_p$, $\log_2 f_t$ (\code{log2\_fp}, \code{log2\_dt}, \code{fp})}{The area and time span a value averages over, stored as base-2 logarithms relative to 27.83\,km and 5 days; $-4$ is the label for a point measurement with no area.}
 \gl{forcing}{An input that drives the system being predicted, such as wind over the ocean or rain over land.}
+\gl{FPAR}{The fraction of photosynthetically active radiation a canopy absorbs --- the share of usable sunlight the leaves catch, a channel of \code{lai500}.}
 \gl{frame; \code{frames\_per\_bin}, \code{frame\_seconds}, $F$}{One time slice of a gridded field; a five-day bin holds $F$ of them (5 for daily, 40 for three-hourly), each lasting \code{frame\_seconds}.}
 \gl{freeboard}{The height of sea ice above the waterline, from which its thickness is estimated.}
+\gl{\code{gbif}}{Family 1.0.tf store of dated, located species-occurrence records, built from GBIF's monthly snapshot; the records whose licence forbids commercial use go to the private track.}
+\gl{GBIF}{The Global Biodiversity Information Facility, the pooled open archive of species-occurrence records (about four billion); \emph{taxon key} is its identifier for a species or higher group and \emph{basis of record} says how an occurrence was observed --- a specimen, a person, or a machine.}
 \gl{GEBCO}{The General Bathymetric Chart of the Oceans, a global elevation and sea-floor-depth grid.}
 \gl{\code{gedi}}{Family 1.0.tf store of GEDI laser footprints: canopy height profile, cover and biomass.}
 \gl{GEDI; L2A, L2B, L4A, L4B}{The Global Ecosystem Dynamics Investigation, a laser on the Space Station measuring canopy height; its products for height profiles, cover, footprint biomass and gridded biomass.}
+\gl{GES DISC}{NASA's Earth-science data centre for the atmosphere; it serves the OCO fluorescence and column-CO$_2$ products and needs its own approval on an Earthdata account.}
 \gl{GESLA, GESLA-4}{The Global Extreme Sea Level Analysis compilation of hourly tide-gauge records, version 4.}
 \gl{GFM}{Copernicus' Global Flood Monitoring service, flood extent from every Sentinel-1 pass.}
 \gl{\code{ghcnd}}{Family 1.0.tf store of GHCN-Daily station records.}
@@ -217,7 +238,7 @@ Every term, acronym, producer, instrument and code name used in this summary and
 \gl{\code{ghcnh}}{Family 1.0.tf store of GHCN-hourly station reports.}
 \gl{GHSL}{The EU's Global Human Settlement Layer of built-up areas.}
 \gl{GitHub, hosted runner}{The code-hosting service the project uses; a hosted runner is one of GitHub's own build machines, the only place credentials are used.}
-\gl{GLAD, GLAD-L, GLAD-S2}{The University of Maryland's forest-loss alerts from Landsat and from Sentinel-2.}
+\gl{GLAD, GLAD-L, GLAD-S2}{The University of Maryland's Global Land Analysis and Discovery laboratory, and its forest-loss alerts from Landsat and from Sentinel-2; it also publishes the Hansen loss maps and the 2020 forest-height map behind \code{canopy30}.}
 \gl{\code{gliders}}{Family 1.0.tf store of glider profiles at 16 depths.}
 \gl{GlobColour}{Copernicus' merged ocean-colour product.}
 \gl{GPP, NEE, Reco, LE, H, Rn, Ta, VPD, SWC, P}{Flux-tower variables: photosynthesis, net ecosystem exchange of CO$_2$, ecosystem respiration, latent and sensible heat, net radiation, air temperature, vapour-pressure deficit, soil water content, precipitation.}
@@ -251,9 +272,11 @@ Every term, acronym, producer, instrument and code name used in this summary and
 \gl{Kelvin wave}{An equatorial ocean wave that carries a bump of sea level eastward across the Pacific in about two months, a precursor of El Ni\~no.}
 \gl{KNMI}{The Royal Netherlands Meteorological Institute, which runs ECA\&D.}
 \gl{LAADS}{NASA's Level-1 and Atmosphere Archive and Distribution System.}
+\gl{\code{lai500}}{Family 1.0.tf store of eight-day leaf area and FPAR at 500\,m from MODIS and VIIRS (exception E7).}
 \gl{\code{landcover10}}{Family 1.0.tf target store of yearly land-cover and crop-type maps.}
 \gl{Landsat 4, 5, 7, 8, 9; TM, ETM+, OLI, TIRS}{The US optical Earth-observation satellites since 1982, and their cameras: Thematic Mapper, Enhanced Thematic Mapper Plus, Operational Land Imager and Thermal Infrared Sensor; Collection 2 is the current reprocessing.}
 \gl{\code{lat}, \code{lon}, \code{values}, \code{qc}, \code{platform}, \code{time\_s}}{Arrays of a point store: position, the measured values, a quality code, a hashed instrument identity, and the time in seconds since 1982.}
+\gl{leaf-area index (LAI)}{The area of leaf above a square metre of ground; two and a half means two and a half square metres of leaf over each square metre of land.}
 \gl{level 1B, 2, 3, 3C, 3S, 4 (L1B, L2, L3, L3C, L3S, L4)}{Processing stages of satellite data: calibrated signals; measurements on the instrument's own swath; measurements binned onto a grid; binned per sensor; merged across sensors; and gap-filled analyses, which are derived.}
 \gl{LiDAR}{Laser ranging: a pulse's return time gives the height of the ground and of each layer of a canopy.}
 \gl{\code{lossyear}}{Family 1.0.tf target store of the year each 30\,m pixel lost its forest.}
@@ -261,6 +284,7 @@ Every term, acronym, producer, instrument and code name used in this summary and
 \gl{MapBiomas}{Brazil's annual 30\,m land-cover mapping project.}
 \gl{masked-token loss}{The model's error when asked to predict tokens hidden from it; lower means the inputs helped.}
 \gl{MOD09CMG, MOD10C1, MOD11C1, MYD11C1, MCD64A1}{MODIS product names: daily 0.05$^\circ$ reflectance, snow cover and land-surface temperature (MOD for Terra, MYD for Aqua), and monthly burned area (MCD, both).}
+\gl{MOD15A2H, MYD15A2H, VNP15A2H; MCD12Q2}{More MODIS and VIIRS product names: the eight-day 500\,m leaf-area and FPAR products from Terra, Aqua and VIIRS, and the yearly 500\,m land-surface phenology product behind \code{pheno500}.}
 \gl{MODIS; Terra, Aqua}{The Moderate Resolution Imaging Spectroradiometer on NASA's Terra (1999) and Aqua (2002) satellites, both near the end of their lives.}
 \gl{MSWEP}{A merged global precipitation product (non-commercial licence).}
 \gl{NAIP}{The USDA's National Agriculture Imagery Program of 0.6--1\,m aerial photographs.}
@@ -279,11 +303,16 @@ Every term, acronym, producer, instrument and code name used in this summary and
 \gl{O$_2$, NO$_3$, PO$_4$, SiO$_4$, pH}{Dissolved oxygen, nitrate, phosphate and silicate, and the acidity of seawater.}
 \gl{\code{oc300\_coast}}{A possible phase-C gridded store of 300\,m OLCI ocean colour over the coastal band.}
 \gl{OceanGliders}{The international glider programme and its data centre.}
+\gl{OCO-2, OCO-3; SIF Lite}{NASA's two Orbiting Carbon Observatories and their per-sounding fluorescence files, the second and third platforms of \code{sif}.}
 \gl{OGD}{Open government data licence.}
 \gl{OLCI; WFR}{Sentinel-3's Ocean and Land Colour Instrument, and its full-resolution water product.}
 \gl{OPERA}{NASA's Observational Products for End-Users from Remote Sensing Analysis: disturbance and surface-water maps from HLS and Sentinel-1.}
 \gl{orthophoto}{An aerial photograph corrected so that it lines up with a map.}
+\gl{PACE, OCI}{NASA's 2024 ocean-colour satellite and its Ocean Color Instrument; family 1.gf's \code{pace4k} store holds its daily 4\,km bins.}
+\gl{Parquet}{A columnar table file format, the form GBIF publishes its snapshots in.}
 \gl{phase A, B, C}{The three build waves of each family: A cheap and first, B the terabyte stores, C decisions taken after A and B have verdicts.}
+\gl{\code{pheno500}}{Family 1.0.tf target store of the yearly leaf calendar at 500\,m: the dates of green-up, peak, senescence and dormancy.}
+\gl{phenology}{The calendar of a plant's year --- when it leafs out, peaks, dies back and goes dormant.}
 \gl{\code{platforms.json}}{A file beside each station store giving every station's identifier, elevation and the source's metadata.}
 \gl{polarisation (HH, HV, VH, VV; dual, quad, compact)}{The orientation of a radar's transmitted and received waves (H horizontal, V vertical); dual-pol records two combinations, quad-pol all four, compact-pol a circular mix.}
 \gl{probe}{A one-month (or one-zone) test run of a store's real fetch code, measuring rows, bytes and speed before any full build.}
@@ -300,12 +329,15 @@ Every term, acronym, producer, instrument and code name used in this summary and
 \gl{\code{river}}{Family 1.0.tf store of public daily river discharge (USGS and Caravan).}
 \gl{\code{river\_grdc}}{Private family 1.0.tf store of GRDC daily river discharge.}
 \gl{S3 (\code{s3://})}{Amazon's object-storage service and its address form; many archives serve files through it.}
+\gl{S5P-PAL, TROPOSIF}{The ESA service that publishes extra Sentinel-5P products, and its fluorescence product, the open counterpart of the Caltech archive.}
 \gl{SANHO}{The South African Navy Hydrographic Office.}
 \gl{ScanSAR}{A wide-swath radar mode that trades resolution for coverage.}
 \gl{schema 2, schema 3}{The column layout of a point store: schema 3 widens the time column to 64 bits so records before 1914 fit.}
 \gl{seed}{One independent training run; three seeds means the same test run three times with different random starts.}
 \gl{Sentinel-1, -2, -3, -5P, -6A (S1A, S1C, S1D, S2A, S2B, S2C)}{The EU Copernicus satellites: C-band radar, 10\,m optical, ocean colour and temperature, trace gases, and sea-level altimetry; the letters are individual satellites of a series.}
 \gl{shard, tile; \code{shard\_index.npy}, \code{tile\_grid.json}, \code{n\_tiles}}{In the G-fine layout, one compressed file per group and bin, cut into $256 \times 256$-pixel tiles; the index gives each tile's byte position and the grid file each tile's corners.}
+\gl{\code{sif}}{Family 1.0.tf store of solar-induced chlorophyll fluorescence soundings from TROPOMI and from OCO-2 and OCO-3.}
+\gl{SIF (solar-induced chlorophyll fluorescence)}{The faint red light a leaf re-emits while photosynthesising; because the light is emitted by the process itself, it is the closest thing to a direct measurement of photosynthesis from orbit.}
 \gl{SLC, GRD, GRDH, IW}{Sentinel-1 product forms: single-look complex (keeps the radar phase), ground-range detected (intensity only; H for high resolution), from the Interferometric Wide-swath mode.}
 \gl{\code{snow05}}{Family 1.0.tf store of daily 0.05$^\circ$ snow cover.}
 \gl{SST}{Sea-surface temperature.}
@@ -324,7 +356,7 @@ Every term, acronym, producer, instrument and code name used in this summary and
 \gl{tile tokens}{The codec's vectors for each image tile, a later store sized by E-078c.}
 \gl{TMAX, TMIN, PRCP, SNOW, SNWD}{GHCN-Daily element codes: maximum and minimum temperature, precipitation, snowfall and snow depth.}
 \gl{token}{The unit the model reads: a value, its offset in space and time from the anchor, and its footprint.}
-\gl{TROPOMI}{The trace-gas imager on Sentinel-5P, measuring NO$_2$, CO and CH$_4$ (nitrogen dioxide, carbon monoxide, methane).}
+\gl{TROPOMI}{The trace-gas imager on Sentinel-5P, measuring NO$_2$, CO and CH$_4$ (nitrogen dioxide, carbon monoxide, methane) --- and, through the Caltech and S5P-PAL retrievals, solar-induced chlorophyll fluorescence at 740\,nm.}
 \gl{T, S, $u$, $v$}{Temperature, salinity, and the east and north components of velocity or wind.}
 \gl{TU Wien}{The Technical University of Vienna, which hosts ISMN.}
 \gl{UCSB CHC}{The Climate Hazards Center at the University of California, Santa Barbara, producer of CHIRPS.}

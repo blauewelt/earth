@@ -245,8 +245,8 @@ footprints (GEDI \cite{gedi} to $\pm51.6^\circ$, ICESat-2 \cite{atl08}
 beyond), which alone see a canopy in three dimensions; fluorescence
 soundings \cite{tropomisif}, emitted by photosynthesis itself; the towers'
 eddy-covariance carbon flux \cite{fluxnet}, the long in-situ record; leaf
-area every eight days; fire detections; and three billion dated species
-occurrences \cite{gbif} --- sparse and biased, and the only global record of
+area every eight days; fire detections; and 3.7 billion dated, located
+species occurrences \cite{gbif} --- sparse and biased, and the only global record of
 where life is. The annual maps --- forest loss \cite{hansen}, canopy height
 \cite{potapov,lang,tolan}, biomass \cite{ccibiomass}, the leaf calendar ---
 are each fitted to one of those measurements and are admitted as targets:
@@ -294,12 +294,12 @@ store & what it is & producer & space & time & record & tier \\
 \midrule
 \code{gedi} & laser relative-height profile, cover, biomass per footprint & NASA GEDI, ISS & 25\,m every 60\,m & per shot & 2019-04-- & P \\
 \code{icesat2} & laser terrain and canopy height per segment & NASA ICESat-2 ATL08 & 100\,m & per pass & 2018-10-- & P \\
-\code{sif} & chlorophyll fluorescence soundings & TROPOMI; OCO-2/3 & $7\times3.5$\,km; $1.3\times2.2$\,km & per sounding & 2018-03--; 2014-09-- & P \\
+\code{sif} & chlorophyll fluorescence soundings & TROPOMI; OCO-2/3 & $7\times3.5$\,km; $1.3\times2.2$\,km & per sounding & 2018-04--; 2014-09-- & P \\
 \code{flux} & tower CO$_2$, water and heat exchange & FLUXNET, 700 sites & tower & half-hourly & 1991-- & P \\
 \code{fire} & active-fire detections & FIRMS, MODIS/VIIRS & 375\,m--1\,km & per overpass & 2000-11-- & P \\
 \code{gbif} & species occurrences, taxon as platform & GBIF snapshot & per-record uncertainty & day or month & 1600s-- & P \\
 \code{lai500} & leaf area, absorbed light & MODIS/VIIRS & 500\,m & 8-day & 2000-02-- & G \\
-\code{pheno500} & green-up to dormancy dates, amplitude & MODIS MCD12Q2 & 500\,m & annual & 2001--2023 & G \\
+\code{pheno500} & green-up to dormancy dates, amplitude & MODIS MCD12Q2 & 500\,m & annual & 2001--2025 & G \\
 \code{canopy30} & canopy height 2020 & GLAD, Landsat fitted to GEDI & 30\,m & one year & 2020 & G \\
 \code{biomass100} & above-ground biomass and its error & ESA CCI v7; GEDI L4B & 100\,m; 1\,km & annual & 2005--2024 & G \\
 \code{lossyear} & the year each pixel lost its forest; tree cover 2000 & Hansen GFC; JRC TMF & 30\,m & annual & 1990/2001-- & G \\
@@ -969,7 +969,8 @@ Open Data registry. \url{https://www.gbif.org}.
 21st-century forest cover change. \emph{Science} 342.
 \bibitem{potapov} P. Potapov et al.\ (2021). Mapping global forest canopy
 height through integration of GEDI and Landsat data. \emph{Remote Sensing of
-Environment} 253.
+Environment} 253; the 2020 map is in P. Potapov et al.\ (2022), \emph{Frontiers
+in Remote Sensing} 3.
 \bibitem{lang} N. Lang, W. Jetz, K. Schindler, J. Wegner (2023). A
 high-resolution canopy height model of the Earth. \emph{Nature Ecology \&
 Evolution} 7.

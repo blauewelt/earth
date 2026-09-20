@@ -16,7 +16,7 @@
 \begin{document}
 {\LARGE\bfseries Family 1.gf in two pages\par}
 \vspace{2pt}{\large the world's ocean and air, measured finer than 10\,km and 5 days\par}
-\vspace{2pt}{\small blauewelt/earth --- two-page summary of the design note, 17 September 2026. A glossary of every term follows the two pages.\par}
+\vspace{2pt}{\small blauewelt/earth --- two-page summary of the design note, 20 September 2026. A glossary of every term follows the two pages.\par}
 \vspace{4pt}
 
 \textbf{What it is.} Family 1.gf is a proposed set of datasets (``stores'') that gives the programme's
@@ -27,7 +27,7 @@ open-ocean moorings, and satellite fields kept at their own resolution --- ocean
 programme's four prediction goals --- El Ni\~no, the ocean carbon sink, the Atlantic overturning circulation
 (AMOC) and SST --- each of which has a mechanism at these scales (wind bursts, fronts, blooms, the ice edge,
 boundary currents); every store must lower the model's error on one of them or be dropped. \textbf{What it is
-not:} not a land dataset (that is family 1.0.tf); not a replacement for the coarser global tensor (family 7.2,
+not:} not a land dataset (that is family 1.0.tf --- marine species records ride its \code{gbif} store, which is global); not a replacement for the coarser global tensor (family 7.2,
 $0.25^\circ$), which stays unchanged; and not gap-filled analyses --- raw measurements first, a derived product
 only where it carries measurements nothing else does. Three sources slightly coarser than the rule are admitted as
 named exceptions (E1--E3). A source whose licence forbids republishing is used privately and never redistributed.
@@ -45,6 +45,7 @@ store & what it is & producer & space & time & record & stored size & track & ph
 \endhead
 \code{seaice\_asi} & daily sea-ice cover from microwave radiometers & Univ.\ Bremen (ASI, AMSR-E/AMSR2) & 6.25\,km polar grids (3.125\,km exists) & daily & 2002-06 $\to$ 2011-10; 2012-07 $\to$ now & $\approx 30$\,GB & public if Bremen agrees, else private & A \\
 \code{oc4k} & daily ocean colour: chlorophyll, water clarity, reflectance & ESA OC-CCI v6.0 (PML) & 4.6\,km ($1/24^\circ$) & daily & 1997-09 $\to$ 2026-06 & 0.3--0.4\,TB; $\approx 1.1$\,TB with the 6 Rrs bands (B) & public & A \\
+\code{pace4k} & hyperspectral colour: chlorophyll, carbon, and which phytoplankton are there & NASA PACE OCI (OB.DAAC) & 4\,km & daily & 2024-03 $\to$ & $\approx 50$\,GB$^\dagger$ a year & public & A \\
 \code{icoads} & ship and buoy weather reports & NOAA NCEI / NCAR (ICOADS 3.0) & point & per report & 1662 $\to$ 2026-08 & note $\approx 75$\,GB. \textbf{Probe} (2010-07): 2.02\,M reports, 47\,B/row $\Rightarrow$ $\approx 1.37$\,B rows, $\approx 64$\,GB & public & A \\
 \code{wod} & ocean temperature, salinity and oxygen profiles, Argo excluded & NOAA NCEI (WOD 2023) & point profile & per cast & 1772 $\to$ 2026 & note 2\,GB. \textbf{Probe} (2005-03): 40,541 casts, 287\,B/row $\Rightarrow$ $\approx 14.7$\,M casts, $\approx 4.2$\,GB & public & A \\
 \code{glodap} & ship bottle samples of carbon, nutrients and oxygen at depth & GLODAPv3 (NOAA NCEI) & point bottle & per cruise & 1972--2023 & note 80\,MB. \textbf{Probe} (whole archive): 1,460,215 bottles, 53\,B/row, $\approx 77$\,MB & public & A \\
@@ -75,9 +76,9 @@ and are listed in the public registry. Credentials stay on GitHub's build machin
 
 \subsection*{The ladder}
 \begin{tabular}{@{}L{1.2cm}L{16.6cm}@{}}
-\textbf{A} & 8 stores, $\approx 0.5$\,TB, no account or a hosted runner's login, under \$10: \code{seaice\_asi}, \code{oc4k}, \code{icoads}, \code{wod}, \code{glodap}, \code{bgcargo}, \code{oceansites}, \code{xco2}; the registry. Five of the point stores have run their one-month probes. \\
+\textbf{A} & 9 stores, $\approx 0.6$\,TB, no account or a hosted runner's login, under \$10: \code{seaice\_asi}, \code{oc4k}, \code{pace4k}, \code{icoads}, \code{wod}, \code{glodap}, \code{bgcargo}, \code{oceansites}, \code{xco2}; the registry. Five of the point stores have run their one-month probes. \\
 \textbf{B} & the terabyte stores, $\approx 3.5$\,TB, \$20--40: \code{swot}, \code{sst\_cci05}, \code{irtb} (tropics, 3-hourly), \code{precip01}, \code{swh}, \code{deep\_arrays}, and \code{oc4k}'s six reflectance bands. \\
-\textbf{C} & decisions once A and B have verdicts: \code{sst\_acspo02}, \code{wind12}, the full half-hourly \code{irtb}, PACE colour into \code{oc4k}. \\
+\textbf{C} & decisions once A and B have verdicts: \code{sst\_acspo02}, \code{wind12}, the full half-hourly \code{irtb}, and \code{pace1k} --- PACE's 1.2\,km swath, $\approx 1$\,TB a year --- if the 4\,km bins prove too coarse. \\
 \end{tabular}
 
 \clearpage
@@ -166,6 +167,7 @@ Every term, acronym, producer, instrument and code name used in this summary and
 \gl{frame; \code{frames\_per\_bin}, \code{frame\_seconds}, $F$}{One time slice of a gridded field; a five-day bin holds $F$ of them (5 for daily, 40 for three-hourly), each lasting \code{frame\_seconds}.}
 \gl{FTP}{File Transfer Protocol, an old way of serving files.}
 \gl{\code{g025}, \code{g100}, \code{rg100}, \code{oc025}}{Family 7.2's four gridded groups: $0.25^\circ$ ocean surface, $1^\circ$ atmosphere and land, $1^\circ$ monthly ocean interior, $0.25^\circ$ ocean colour.}
+\gl{GBIF}{The Global Biodiversity Information Facility, the pooled open archive of species-occurrence records; its marine records reach the model through family 1.0.tf's \code{gbif} store.}
 \gl{GDEX}{NCAR's Geoscience Data Exchange archive.}
 \gl{GDP}{NOAA's Global Drifter Program of free-drifting surface buoys.}
 \gl{geostationary}{Orbiting at the Earth's rotation rate, so a satellite watches the same half of the globe continuously.}
@@ -198,6 +200,7 @@ Every term, acronym, producer, instrument and code name used in this summary and
 \gl{masked-token loss}{The model's error when asked to predict tokens hidden from it; lower means the inputs helped.}
 \gl{MetOp}{Europe's polar-orbiting weather satellites (A, B, C).}
 \gl{\code{ml/CLAUDE.md}, \code{ml/family10\_store.py}}{The project's rules for machine-learning work (security, replication), and the code that reads a store.}
+\gl{MOANA; AVW}{PACE's product giving the concentrations of \emph{Prochlorococcus}, \emph{Synechococcus} and picoeukaryotes --- three groups of small phytoplankton --- and the apparent visible wavelength, the single colour a whole spectrum averages to.}
 \gl{MOCHA, MOVE, OSNAP, RAPID, SAMBA}{The four Atlantic overturning arrays: RAPID/MOCHA at 26.5$^\circ$N, MOVE at 16$^\circ$N, OSNAP in the subpolar North Atlantic, SAMBA at 34.5$^\circ$S.}
 \gl{MODIS; Terra, Aqua}{The Moderate Resolution Imaging Spectroradiometer on NASA's Terra (1999) and Aqua (2002) satellites, both near the end of their lives.}
 \gl{MUR, OSTIA}{Gap-filled daily SST analyses from NASA JPL and the Met Office.}
@@ -222,7 +225,9 @@ Every term, acronym, producer, instrument and code name used in this summary and
 \gl{OPeNDAP, THREDDS}{Two server protocols for reading subsets of scientific files over HTTP.}
 \gl{OSI-408-a}{OSI SAF's sea-ice concentration product on a 10\,km grid, computed from an 18\,km footprint.}
 \gl{OSI SAF}{EUMETSAT's Ocean and Sea Ice Satellite Application Facility.}
-\gl{PACE, OCI}{NASA's Plankton, Aerosol, Cloud, ocean Ecosystem satellite (2024) and its hyperspectral Ocean Color Instrument.}
+\gl{\code{pace1k}}{A possible phase-C store of PACE's 1.2\,km level-2 swath, about a terabyte a year; built only if the 4\,km bins prove too coarse.}
+\gl{\code{pace4k}}{Family 1.gf store of PACE's daily 4\,km mapped bins: chlorophyll, apparent visible wavelength, particulate organic and phytoplankton carbon, and the three MOANA cell concentrations.}
+\gl{PACE, OCI}{NASA's Plankton, Aerosol, Cloud, ocean Ecosystem satellite (2024) and its hyperspectral Ocean Color Instrument, which resolves the whole visible spectrum instead of a handful of bands.}
 \gl{Pathfinder}{NOAA's 4\,km AVHRR SST record, 1981--2023, no longer updated.}
 \gl{phase A, B, C}{The three build waves of each family: A cheap and first, B the terabyte stores, C decisions taken after A and B have verdicts.}
 \gl{PML}{Plymouth Marine Laboratory, producer of OC-CCI.}

@@ -16,7 +16,7 @@
 \begin{document}
 {\LARGE\bfseries Family 0.9.tf in two pages\par}
 \vspace{2pt}{\large family 1.0.tf with its raw imagery replaced by Google's AlphaEarth embedding\par}
-\vspace{2pt}{\small blauewelt/earth --- two-page summary of the design note, 17 September 2026. A glossary of every term follows the two pages.\par}
+\vspace{2pt}{\small blauewelt/earth --- two-page summary of the design note, 20 September 2026. A glossary of every term follows the two pages.\par}
 \vspace{4pt}
 
 \textbf{What it is.} Family 0.9.tf is family 1.0.tf (the land-and-coast stores) with \textbf{one substitution}:
@@ -24,11 +24,15 @@ instead of the list of raw satellite and aerial images --- and the small learned
 tokens --- it uses Google DeepMind's published \textbf{AlphaEarth Satellite Embedding}: 64 numbers describing each
 10\,m of land, once a year, 2017--2025, computed from Sentinel-1, Sentinel-2 and Landsat and trained against radar,
 LiDAR, climate and land-cover sources; free under CC BY 4.0, 577\,TB in all. \textbf{Everything else is inherited
-from 1.0.tf by reference} --- the stations and gauges, the LiDAR, the daily fields, the prediction targets and the
-fixed maps --- exactly as family 10.2 inherits family 10.1: the registry lists them with their 1.0.tf locations
-and checksums, and not one byte is rebuilt. \textbf{What it is for:} testing land prediction now, and measuring
+from 1.0.tf by reference} --- the stations and gauges, the LiDAR, the daily fields, the prediction targets, the
+fixed maps, and the whole of 1.0.tf's biosphere (canopy height and the canopy catalogues, fluorescence, leaf area,
+the leaf calendar, the species records) --- exactly as family 10.2 inherits family 10.1: the registry lists them
+with their 1.0.tf locations and checksums, not one byte is rebuilt, and this family builds nothing new for the
+living surface. \textbf{What it is for:} testing land prediction now, and measuring
 exactly whether the programme's own image encoder is worth its compute --- the two families differ only in the
-imagery. \textbf{What it is not:} not sub-annual (one vector per year, so a five-day event is averaged away), not
+imagery. The canopy is where that measurement is sharpest: the AlphaEarth embedding was itself trained against
+GEDI, so canopy height at held-out laser footprints is where this family's cache and the programme's own tile
+codec meet with everything else held fixed. \textbf{What it is not:} not sub-annual (one vector per year, so a five-day event is averaged away), not
 extensible to new sensors (NISAR) or to years before 2017, and not a copy of Google's 577\,TB, which is read in place.
 
 \vspace{-4pt}
@@ -63,8 +67,15 @@ store & what it is & producer & space & time & record & stored size & track & ph
 \code{hfr} & surface currents from shore-based radar & HFRNet (US); European HFR Node & 6 / 2 / 1\,km cells & hourly & US 2012 $\to$; EU $\approx$2009 $\to$ & 110--155\,GB & \emph{inherited from 1.0.tf}; public & B \\
 \code{alticap} & satellite sea level close to the coast & ALTICAP (AVISO/ODATIS), Jason-3 & $\approx 350$\,m along track & $\approx 10$-day repeat & 2016-02 $\to$ 2021-07 & 3\,GB & \emph{inherited from 1.0.tf}; public & B \\
 \code{ecad} & European station weather missing from GHCN-Daily & ECA\&D (KNMI) & point & daily & 1800s $\to$ & $\le 20$\,GB$^\dagger$ & \emph{inherited from 1.0.tf}; private & C \\
-\code{gedi} & laser canopy height, cover and biomass & NASA GEDI (LP DAAC, ORNL) & 25\,m footprints & per orbit pass & 2019-04 $\to$ 2023-03; 2024-04 $\to$ 2025-07 & 0.2--0.5\,TB & \emph{inherited from 1.0.tf}; public & B \\
-\code{icesat2} & laser terrain, canopy and sea-ice height & NASA ICESat-2 (NSIDC) & 100\,m segments ($\approx 11$\,m spots) & per orbit pass & 2018-10 $\to$ & $\approx 1.1$\,TB & \emph{inherited from 1.0.tf}; public & C \\
+\code{gedi} & laser canopy height, cover and biomass & NASA GEDI (LP DAAC, ORNL) & 25\,m footprints & per orbit pass & 2019-04 $\to$ 2023-03; 2024-04 $\to$ 2025-07 & 0.2--0.5\,TB & \emph{inherited from 1.0.tf}; public & A (one year) / B \\
+\code{icesat2} & laser terrain, canopy and sea-ice height & NASA ICESat-2 (NSIDC) & 100\,m segments ($\approx 11$\,m spots) & per orbit pass & 2018-10 $\to$ & $\approx 1.1$\,TB & \emph{inherited from 1.0.tf}; public & A (one year) / B \\
+\code{canopy30} & how tall the canopy is, one map at 30\,m & UMD GLAD (forest height 2020) & 30\,m & one year & 2020 & 60--100\,GB$^\dagger$ (261 tiles measured) & \emph{inherited from 1.0.tf}; public & A \\
+\code{canopy\_ref} & the finer canopy maps, listed not copied & ETH Zurich (10\,m); Meta/WRI (1\,m) & 10\,m and 1\,m & annual & 2020; 2018--2020 & catalogue $<1$\,GB & \emph{inherited from 1.0.tf}; public & A \\
+\code{sif} & fluorescence: photosynthesis seen from orbit & TROPOMI (Caltech, ESA); NASA OCO-2, OCO-3 & $7\times3.5$\,km; $1.3\times2.25$\,km & per sounding & 2018-04 $\to$; 2014-09 $\to$ & 60--160\,GB$^\dagger$ & \emph{inherited from 1.0.tf}; public & A \\
+\code{lai500} (E7) & leaf area, and the light the canopy absorbs & NASA MODIS, VIIRS & 500\,m & 8-day composite & 2000-02 $\to$ & $\approx 60$\,GB$^\dagger$ per sensor-year & \emph{inherited from 1.0.tf}; public & A / B \\
+\code{pheno500} & the leaf calendar: green-up, peak, dormancy & NASA MODIS (MCD12Q2) & 500\,m & annual & 2001 $\to$ 2025 & $\approx 10$\,GB$^\dagger$ a year & \emph{inherited from 1.0.tf}; public & A \\
+\code{gbif} & dated, located records of species & GBIF snapshot (AWS Open Data) & point & per record & 1600s $\to$; 3.67\,B measured & $\approx 90$\,GB$^\dagger$ public & \emph{inherited from 1.0.tf}; public + private & A \\
+\code{cat\_\allowbreak biomass\_\allowbreak esa} & list of ESA's P-band radar products & ESA BIOMASS (2025) & --- & per product & 2025 $\to$ & catalogue & \emph{inherited from 1.0.tf}; terms unverified & A if public \\
 \code{lst05} & land-surface temperature, day and night (Terra in phase A) & NASA MODIS Terra (+ Aqua, VIIRS) & 5.6\,km ($0.05^\circ$) & daily & 2000-02 $\to$ & $\approx 350$\,GB per satellite & \emph{inherited from 1.0.tf}; public & A / B \\
 \code{snow05} & snow-cover fraction & NASA MODIS (NSIDC) & $0.05^\circ$ & daily & 2000-02 $\to$ & $\approx 60$\,GB & \emph{inherited from 1.0.tf}; public & A \\
 \code{refl05} & surface reflectance: the colour of the ground & NASA MODIS (+ VIIRS) & $0.05^\circ$ & daily & 2000-02 $\to$ & $\approx 700$\,GB (+330\,GB VIIRS) & \emph{inherited from 1.0.tf}; public & B \\
@@ -74,7 +85,7 @@ store & what it is & producer & space & time & record & stored size & track & ph
 \code{lossyear} & year each 30\,m pixel lost its forest & UMD Hansen GFC; EU JRC TMF & 30\,m & annual & 1990 / 2001 $\to$ 2025 & $\approx 30$\,GB & \emph{inherited from 1.0.tf}; public & A \\
 \code{burned500} & date each pixel burned & NASA MODIS MCD64A1 & 500\,m & monthly & 2000-11 $\to$ & $\approx 10$\,GB & \emph{inherited from 1.0.tf}; public & A \\
 \code{cat\_gfm} & list of flood and surface-water maps & Copernicus GFM; NASA OPERA DSWx & 20--30\,m & per pass & 2015 / 2016 $\to$ & $<1$\,GB & \emph{inherited from 1.0.tf}; public & A \\
-\code{biomass100} & yearly above-ground biomass & ESA CCI Biomass; GEDI L4B & 100\,m (GEDI 1\,km) & annual & 2005--2012, 2015--2024 & $\approx 0.4$\,TB & \emph{inherited from 1.0.tf}; public & C \\
+\code{biomass100} & yearly above-ground biomass & ESA CCI Biomass; GEDI L4B & 100\,m (GEDI 1\,km) & annual & 2005--2012, 2015--2024 & $\approx 0.4$\,TB & \emph{inherited from 1.0.tf}; public & A (2020 and GEDI L4B) / B \\
 \code{landcover10} & yearly land-cover and crop-type maps & Esri/IO, ESA, MapBiomas, USDA, JRC & 10--30\,m & annual & 1985 / 2017 $\to$ & $\approx 0.2$\,TB$^\dagger$ & \emph{inherited from 1.0.tf}; public & C \\
 \code{static\_fine} & fixed maps: elevation and depth, land cover, distance to coast & GEBCO, ESA WorldCover, GSHHG & 15$''$ ($\approx 460$\,m); $0.05^\circ$ & fixed & --- & $\approx 8$\,GB & \emph{inherited from 1.0.tf}; public & A \\
 \bottomrule
@@ -122,11 +133,15 @@ Every term, acronym, producer, instrument and code name used in this summary and
 \gl{AVISO, ODATIS}{French services that distribute satellite altimetry and ocean data.}
 \gl{AWS, AWS Open Data}{Amazon Web Services, and its programme that hosts public datasets at no cost to readers.}
 \gl{bin (pentad)}{The five-day time step every family uses, counted from 1 January 1982; a bin before 1982 has a negative number.}
+\gl{BIOMASS (the satellite), P band}{ESA's radar satellite, launched 29 April 2025; its 70\,cm wavelength reaches through a canopy to the trunks, so it measures woody biomass directly. \code{cat\_biomass\_esa} catalogues its products.}
 \gl{\code{biomass100}}{Family 1.0.tf target store of yearly above-ground biomass maps at 100\,m.}
 \gl{box (rented, verified)}{A machine hired by the hour from a marketplace; it holds no credentials, and a verified one runs on a host the marketplace has vetted.}
 \gl{B/row (bytes per row)}{Stored size of one row of a point store; a row costs 27 + 2 bytes per channel (31 + 2 per channel with the 64-bit time).}
 \gl{\code{burned500}}{Family 1.0.tf target store of the date each 500\,m pixel burned.}
+\gl{\code{canopy30}}{Family 1.0.tf target store: GLAD's 2020 forest-height map at 30\,m, the canopy read-out's annual target.}
+\gl{\code{canopy\_ref}}{Family 1.0.tf catalogue of the finer canopy-height maps, ETH Zurich's 10\,m and Meta/WRI's 1\,m, listed with their download links.}
 \gl{Caravan}{An open (CC BY 4.0) collection of catchment discharge and weather data, including a GRDC subset.}
+\gl{\code{cat\_biomass\_esa}}{Family 1.0.tf catalogue of the released products of ESA's BIOMASS radar satellite.}
 \gl{\code{cat\_ecostress}}{Catalogue of ECOSTRESS 70\,m thermal scenes.}
 \gl{\code{cat\_gfm}}{Target catalogue of flood and surface-water maps (Copernicus GFM, OPERA DSWx); a read-out, not imagery.}
 \gl{\code{cat\_hls}}{Catalogue of NASA's harmonised Landsat and Sentinel-2 scenes.}
@@ -188,6 +203,8 @@ Every term, acronym, producer, instrument and code name used in this summary and
 \gl{GBIF}{The Global Biodiversity Information Facility, an open database of species occurrences.}
 \gl{GCS (\code{gs://})}{Google Cloud Storage, Google's object store; \code{gs://} addresses a file in it.}
 \gl{GDAL, VRT}{GDAL is the standard open library for geospatial rasters; a VRT is its small text file that describes how to read another raster.}
+\gl{\code{gbif}}{Family 1.0.tf store of dated, located species-occurrence records from GBIF's monthly snapshot.}
+\gl{GBIF}{The Global Biodiversity Information Facility, the pooled open archive of species-occurrence records --- and one of AlphaEarth's own training targets.}
 \gl{GEBCO}{The General Bathymetric Chart of the Oceans, a global elevation and sea-floor-depth grid.}
 \gl{\code{gedi}}{Family 1.0.tf store of GEDI laser footprints: canopy height profile, cover and biomass.}
 \gl{GEDI; L2A, L2B, L4A, L4B}{The Global Ecosystem Dynamics Investigation, a laser on the Space Station measuring canopy height; its products for height profiles, cover, footprint biomass and gridded biomass.}
@@ -223,11 +240,13 @@ Every term, acronym, producer, instrument and code name used in this summary and
 \gl{JRC TMF}{The JRC's Tropical Moist Forest map of yearly forest change since 1990.}
 \gl{KB, MB, GB, TB, PB}{Kilo-, mega-, giga-, tera- and petabytes: each a thousand times the last.}
 \gl{KNMI}{The Royal Netherlands Meteorological Institute, which runs ECA\&D.}
+\gl{\code{lai500}}{Family 1.0.tf store of eight-day leaf area and absorbed light at 500\,m from MODIS and VIIRS (exception E7).}
 \gl{\code{landcover10}}{Family 1.0.tf target store of yearly land-cover and crop-type maps.}
 \gl{Landsat 4, 5, 7, 8, 9; TM, ETM+, OLI, TIRS}{The US optical Earth-observation satellites since 1982, and their cameras: Thematic Mapper, Enhanced Thematic Mapper Plus, Operational Land Imager and Thermal Infrared Sensor; Collection 2 is the current reprocessing.}
 \gl{\code{lat}, \code{lon}, \code{values}, \code{qc}, \code{platform}, \code{time\_s}}{Arrays of a point store: position, the measured values, a quality code, a hashed instrument identity, and the time in seconds since 1982.}
 \gl{\code{layout}, \code{prefix}, \code{path}, \code{cadence}, \code{footprint}, \code{tier}}{Registry fields per group: storage layout, folder, the group's own location, time step, footprint and tier.}
 \gl{LiDAR}{Laser ranging: a pulse's return time gives the height of the ground and of each layer of a canopy.}
+\gl{leaf-area index (LAI), FPAR}{The area of leaf above a square metre of ground, and the fraction of usable sunlight the canopy absorbs.}
 \gl{\code{lossyear}}{Family 1.0.tf target store of the year each 30\,m pixel lost its forest.}
 \gl{\code{lst05}}{Family 1.0.tf store of daily 0.05$^\circ$ land-surface temperature, day and night.}
 \gl{Major-TOM}{An open Earth-observation dataset project whose Hugging Face sample of the AlphaEarth embedding is used as a test fixture.}
@@ -251,6 +270,8 @@ Every term, acronym, producer, instrument and code name used in this summary and
 \gl{OPERA}{NASA's Observational Products for End-Users from Remote Sensing Analysis: disturbance and surface-water maps from HLS and Sentinel-1.}
 \gl{orthophoto}{An aerial photograph corrected so that it lines up with a map.}
 \gl{phase A, B, C}{The three build waves of each family: A cheap and first, B the terabyte stores, C decisions taken after A and B have verdicts.}
+\gl{\code{pheno500}}{Family 1.0.tf target store of the yearly leaf calendar at 500\,m: green-up, peak, senescence and dormancy dates.}
+\gl{phenology}{The calendar of a plant's year --- when it leafs out, peaks, dies back and goes dormant.}
 \gl{probe}{A one-month (or one-zone) test run of a store's real fetch code, measuring rows, bytes and speed before any full build.}
 \gl{public track, private track}{Where a store lives: the public Hugging Face repository that anyone can read, or a private one used only by this project because the source's licence forbids republishing.}
 \gl{RADD}{Radar for Detecting Deforestation, Wageningen's Sentinel-1 forest-loss alerts.}
@@ -272,6 +293,8 @@ Every term, acronym, producer, instrument and code name used in this summary and
 \gl{\code{snow05}}{Family 1.0.tf store of daily 0.05$^\circ$ snow cover.}
 \gl{Source Cooperative (\code{tge-labs/aef})}{A public data host where the Taylor Geospatial Engine keeps a complete mirror of the AlphaEarth embedding.}
 \gl{spot instance}{A discounted cloud machine that the provider may reclaim at short notice.}
+\gl{\code{sif}}{Family 1.0.tf store of solar-induced chlorophyll fluorescence soundings from TROPOMI, OCO-2 and OCO-3.}
+\gl{SIF (solar-induced chlorophyll fluorescence)}{The faint red light a leaf re-emits while photosynthesising --- the closest thing to a direct measurement of photosynthesis from orbit.}
 \gl{SST}{Sea-surface temperature.}
 \gl{\code{static\_fine}}{Family 1.0.tf store of fixed fields: elevation and bathymetry, land-cover fractions, distance to coast.}
 \gl{store}{One dataset of a family, published as a small set of arrays plus a description file.}
