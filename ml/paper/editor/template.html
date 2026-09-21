@@ -1,0 +1,493 @@
+<title>Earth Paper Editor</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Literata:opsz,wght@7..72,500;7..72,600&display=swap">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<style>
+:root{
+  --ground:#F2F5F4; --surface:#FFFFFF; --ink:#16232A; --muted:#5A6A70; --faint:#8A989C;
+  --rule:#D5DEDD; --accent:#0B6A87; --accent-ink:#FFFFFF; --accent-soft:#E2EFF3;
+  --math:#8A4B1F; --key:#2F7556; --env:#6A4C93; --comment:#7F8C8F;
+  --edit:#A86400; --edit-soft:#FFF4DF; --sel:#DCEBF1; --danger:#A33B2B;
+  --shadow:0 1px 2px rgba(22,35,42,.08),0 4px 18px rgba(22,35,42,.07);
+  --mono:"JetBrains Mono",ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  --serif:"Literata",Georgia,"Times New Roman",serif;
+  --ui:system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",sans-serif;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --ground:#0E1517; --surface:#141D20; --ink:#E1E8E9; --muted:#95A5A9; --faint:#6D7D81;
+  --rule:#243238; --accent:#5DB6D5; --accent-ink:#06171D; --accent-soft:#16303A;
+  --math:#E2A26D; --key:#86C6A1; --env:#B79BE0; --comment:#7B8B8F;
+  --edit:#E7A845; --edit-soft:#2A2213; --sel:#1C3842; --danger:#E0806F;
+  --shadow:0 1px 2px rgba(0,0,0,.4),0 6px 22px rgba(0,0,0,.35);
+}}
+:root[data-theme="dark"]{
+  --ground:#0E1517; --surface:#141D20; --ink:#E1E8E9; --muted:#95A5A9; --faint:#6D7D81;
+  --rule:#243238; --accent:#5DB6D5; --accent-ink:#06171D; --accent-soft:#16303A;
+  --math:#E2A26D; --key:#86C6A1; --env:#B79BE0; --comment:#7B8B8F;
+  --edit:#E7A845; --edit-soft:#2A2213; --sel:#1C3842; --danger:#E0806F;
+  --shadow:0 1px 2px rgba(0,0,0,.4),0 6px 22px rgba(0,0,0,.35);
+}
+html,body{background:var(--ground);color:var(--ink)}
+body{font-family:var(--ui);font-size:15px;line-height:1.5;padding-inline:16px;padding-block:0 96px}
+.wrap{max-width:860px;margin:0 auto}
+button{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+
+header.top{position:sticky;top:env(safe-area-inset-top,0px);z-index:5;background:var(--ground);
+  border-bottom:1px solid var(--rule);margin-inline:-16px;padding:12px 16px 10px}
+.top .row{max-width:860px;margin:0 auto;display:flex;flex-wrap:wrap;gap:8px 14px;align-items:center}
+.brand{display:flex;flex-direction:column;min-width:0;flex:1 1 260px}
+.brand h1{font-family:var(--serif);font-weight:600;font-size:19px;line-height:1.2;margin:0;text-wrap:balance}
+.brand .sub{font-size:12.5px;color:var(--muted);font-variant-numeric:tabular-nums}
+.tabs{display:inline-flex;border:1px solid var(--rule);border-radius:8px;overflow:hidden;background:var(--surface)}
+.tabs button{border:0;background:transparent;padding:6px 12px;font-size:13.5px;cursor:pointer}
+.tabs button[aria-selected="true"]{background:var(--accent);color:var(--accent-ink)}
+select#jump{font:inherit;font-size:13.5px;max-width:100%;padding:6px 8px;border:1px solid var(--rule);
+  border-radius:8px;background:var(--surface);color:var(--ink);flex:1 1 150px;min-width:0}
+.controls{display:flex;gap:10px;align-items:center;flex:1 1 320px;min-width:0}
+
+.how{margin:18px 0 8px;padding:12px 14px;border:1px solid var(--rule);border-radius:10px;background:var(--surface);
+  font-size:14px;color:var(--muted)}
+.how b{color:var(--ink);font-weight:600}
+.how p{margin:0}
+.how p+p{margin-top:6px}
+
+.blk{display:grid;grid-template-columns:3.1rem minmax(0,1fr);gap:0 10px;padding:6px 8px 6px 0;
+  border-radius:8px;position:relative;scroll-margin-top:130px;cursor:pointer}
+.blk:hover{background:color-mix(in srgb,var(--accent-soft) 45%,transparent)}
+.blk.on{background:var(--accent-soft)}
+.blk .ln{font-family:var(--mono);font-size:11.5px;color:var(--faint);text-align:right;padding-top:3px;
+  font-variant-numeric:tabular-nums;user-select:none}
+.blk.edited{background:var(--edit-soft)}
+.blk.edited .ln{color:var(--edit);font-weight:600}
+.blk.edited::before{content:"";position:absolute;left:0;top:6px;bottom:6px;width:3px;border-radius:2px;background:var(--edit)}
+.src{margin:0;font-family:var(--mono);font-size:13px;line-height:1.55;white-space:pre-wrap;overflow-wrap:anywhere;
+  word-break:normal;color:var(--ink)}
+.pill{display:inline-block;font-family:var(--ui);font-size:11px;letter-spacing:.04em;text-transform:uppercase;
+  color:var(--edit);border:1px solid color-mix(in srgb,var(--edit) 55%,transparent);border-radius:999px;padding:0 7px;margin:0 0 4px}
+h2.sec,h3.sec{font-family:var(--serif);margin:26px 0 4px;text-wrap:balance;cursor:default}
+h2.sec{font-size:21px;font-weight:600}
+h3.sec{font-size:17px;font-weight:600}
+h2.sec .num,h3.sec .num{color:var(--accent);margin-right:.45em;font-variant-numeric:tabular-nums}
+.part{font-family:var(--serif);font-size:14px;color:var(--muted);margin:28px 0 4px;letter-spacing:.02em}
+
+.t-cmd{color:var(--accent)}
+.t-sec{color:var(--accent);font-weight:600}
+.t-env{color:var(--env)}
+.t-key{color:var(--key)}
+.t-m{color:var(--math)}
+.t-c{color:var(--comment);font-style:italic}
+.t-b{color:var(--faint)}
+
+.editor textarea{width:100%;box-sizing:border-box;font-family:var(--mono);font-size:13px;line-height:1.55;
+  color:var(--ink);background:var(--surface);border:1px solid var(--accent);border-radius:8px;padding:8px 10px;
+  resize:vertical;min-height:6em}
+.editor .acts{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:8px}
+.btn{border:1px solid var(--rule);background:var(--surface);border-radius:8px;padding:6px 12px;font-size:13.5px;cursor:pointer}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-ink);font-weight:600}
+.btn.warn{color:var(--danger)}
+.btn:disabled{opacity:.5;cursor:default}
+.note{font-size:12.5px;color:var(--muted)}
+
+.orphans{margin-top:30px;padding:12px 14px;border:1px dashed var(--edit);border-radius:10px}
+.orphans h3{font-family:var(--serif);font-size:16px;margin:0 0 6px}
+
+.pages{display:flex;flex-direction:column;gap:18px;margin-top:18px;align-items:center}
+.pages figure{margin:0;width:100%;max-width:760px}
+.pages img{display:block;width:100%;height:auto;background:#fff;border-radius:3px;box-shadow:var(--shadow)}
+.pages figcaption{font-size:12px;color:var(--muted);text-align:center;margin-top:6px;font-variant-numeric:tabular-nums}
+.pdfnote{font-size:13.5px;color:var(--muted);margin:18px 0 0}
+
+.bar{position:fixed;left:0;right:0;bottom:0;z-index:6;background:var(--surface);border-top:1px solid var(--rule);
+  box-shadow:0 -4px 18px rgba(0,0,0,.06);padding:10px 16px calc(10px + env(safe-area-inset-bottom,0px))}
+.bar .row{max-width:860px;margin:0 auto;display:flex;flex-wrap:wrap;gap:8px 12px;align-items:center}
+.bar .ctx{flex:1 1 150px;min-width:0;font-size:13px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.bar .ctx b{color:var(--ink);font-weight:600}
+.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(76px + env(safe-area-inset-bottom,0px));
+  background:var(--ink);color:var(--ground);padding:8px 14px;border-radius:8px;font-size:13.5px;z-index:7;max-width:calc(100% - 32px)}
+@media (max-width:520px){
+  .brand h1{font-size:16px}
+  header.top{padding-block:10px 8px}
+  .bar .btn{padding:6px 10px}
+  .blk{grid-template-columns:2.4rem minmax(0,1fr);gap:0 8px}
+  .src,.editor textarea{font-size:12.5px}
+}
+@media (prefers-reduced-motion:reduce){*{scroll-behavior:auto!important}}
+</style>
+
+<header class="top">
+  <div class="row">
+    <div class="brand">
+      <h1>Predicting any observed quantity of the Earth</h1>
+      <span class="sub" id="sub">paper.tex</span>
+    </div>
+    <div class="controls">
+      <div class="tabs" role="tablist">
+        <button id="tab-src" role="tab" aria-selected="true">Source</button>
+        <button id="tab-pdf" role="tab" aria-selected="false">PDF</button>
+      </div>
+      <select id="jump" aria-label="Jump to section"></select>
+    </div>
+  </div>
+</header>
+
+<main class="wrap">
+  <section id="view-src">
+    <div class="how">
+      <p><b>Edit:</b> tap a block, then <b>Edit</b>. Saved edits stay on this page for Claude, who folds them into <code>paper.tex</code> and rebuilds the PDF when you ask.</p>
+      <p><b>Comment:</b> select any text, or tap a block, then <b>Comment</b>.</p>
+      <p>Edits and comments wait on this page. When you are done, say so in the chat and Claude reads both, changes <code>paper.tex</code>, rebuilds and republishes this page.</p>
+    </div>
+    <div id="blocks"></div>
+    <div id="orphans"></div>
+  </section>
+  <section id="view-pdf" hidden>
+    <p class="pdfnote" id="pdfnote"></p>
+    <div class="pages" id="pages"></div>
+  </section>
+</main>
+
+<div class="bar" id="bar"><div class="row">
+  <div class="ctx" id="ctx"></div>
+  <button class="btn" id="b-comment" hidden>Comment</button>
+  <button class="btn primary" id="b-edit" hidden>Edit</button>
+  <button class="btn" id="b-zip">Download project</button>
+</div></div>
+<div class="toast" id="toast" hidden></div>
+
+<script type="application/json" id="paper-data">__PAPER_DATA__</script>
+<script>
+(function(){
+"use strict";
+const D = JSON.parse(document.getElementById("paper-data").textContent);
+const blocks = D.blocks;
+const byId = new Map(blocks.map(b => [b.id, b]));
+const edits = new Map();              // id -> edit doc body
+let db = null, comments = null, downloads = null;
+let canWrite = true;
+let selected = null;                  // block id
+let editing = null;                   // block id
+let selRange = null;                  // saved text Range inside the source
+
+const $ = id => document.getElementById(id);
+const esc = s => s.replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+
+$("sub").textContent = `paper.tex · ${D.lines} lines · commit ${D.commit}`;
+
+// ---------------------------------------------------------------- highlighter
+const SEC = new Set(["section","subsection","paragraph","title","caption","maketitle","appendix","bibitem"]);
+const KEYARG = new Set(["cite","ref","label","eqref","includegraphics","bibitem","url","path","code","begin","end"]);
+function hl(src){
+  let out = "", i = 0, plain = "";
+  const n = src.length;
+  const flush = () => { if (plain){ out += esc(plain); plain = ""; } };
+  while (i < n){
+    const c = src[i];
+    if (c === "%"){
+      flush();
+      let j = src.indexOf("\n", i); if (j < 0) j = n;
+      out += `<span class="t-c">${esc(src.slice(i, j))}</span>`; i = j; continue;
+    }
+    if (c === "\\"){
+      flush();
+      const m = /^\\([A-Za-z@]+\*?|[^A-Za-z@])/.exec(src.slice(i, i + 40));
+      const tok = m ? m[0] : "\\";
+      const name = m ? m[1] : "";
+      out += `<span class="${SEC.has(name) ? "t-sec" : "t-cmd"}">${esc(tok)}</span>`;
+      i += tok.length;
+      if (KEYARG.has(name)){
+        while (src[i] === "["){ const k = src.indexOf("]", i); if (k < 0) break; out += `<span class="t-b">${esc(src.slice(i, k + 1))}</span>`; i = k + 1; }
+        if (src[i] === "{"){
+          const k = src.indexOf("}", i);
+          if (k > 0){
+            const cls = (name === "begin" || name === "end") ? "t-env" : "t-key";
+            out += `<span class="t-b">{</span><span class="${cls}">${esc(src.slice(i + 1, k))}</span><span class="t-b">}</span>`;
+            i = k + 1;
+          }
+        }
+      }
+      continue;
+    }
+    if (c === "$"){
+      flush();
+      let j = i + 1;
+      while (j < n && !(src[j] === "$" && src[j - 1] !== "\\")) j++;
+      out += `<span class="t-m">${esc(src.slice(i, Math.min(j + 1, n)))}</span>`; i = j + 1; continue;
+    }
+    if (c === "{" || c === "}" || c === "&"){ flush(); out += `<span class="t-b">${c === "&" ? "&amp;" : c}</span>`; i++; continue; }
+    plain += c; i++;
+  }
+  flush();
+  return out;
+}
+
+// ---------------------------------------------------------------- drafts (per viewer, this browser only)
+function draftGet(id){ try { return localStorage.getItem("draft:" + id); } catch(e){ return null; } }
+function draftSet(id, v){ try { if (v == null) localStorage.removeItem("draft:" + id); else localStorage.setItem("draft:" + id, v); } catch(e){} }
+
+// ---------------------------------------------------------------- render
+function currentText(b){ const e = edits.get(b.id); return e ? e.text : b.text; }
+
+function blockHTML(b){
+  const e = edits.get(b.id);
+  let head = "";
+  if (b.kind === "section") head = `<h2 class="sec" data-uncommentable><span class="num">${esc(b.number)}</span>${esc(b.title)}</h2>`;
+  else if (b.kind === "subsection") head = `<h3 class="sec" data-uncommentable><span class="num">${esc(b.number)}</span>${esc(b.title)}</h3>`;
+  const pill = e ? `<div class="pill">edited · not in the PDF yet</div>` : "";
+  let body;
+  if (editing === b.id){
+    const val = draftGet(b.id) ?? currentText(b);
+    body = `<div class="editor" data-uncommentable>
+      <textarea id="ta-${b.id}" spellcheck="false" aria-label="LaTeX of the block at line ${b.line}">${esc(val)}</textarea>
+      <div class="acts">
+        <button class="btn primary" data-act="save">Save</button>
+        <button class="btn" data-act="cancel">Cancel</button>
+        ${e ? `<button class="btn warn" data-act="revert">Revert to paper.tex</button>` : ""}
+        <span class="note">⌘/Ctrl+Enter saves · Esc cancels</span>
+      </div></div>`;
+  } else {
+    body = `<pre class="src">${hl(currentText(b))}</pre>`;
+  }
+  return `${head}<div class="blk${e ? " edited" : ""}${selected === b.id ? " on" : ""}" id="b-${b.id}" data-id="${b.id}" data-comment-target>
+    <div class="ln">${b.line}</div><div>${pill}${body}</div></div>`;
+}
+
+function renderAll(){
+  let html = "", lastKind = null;
+  for (const b of blocks){
+    if (b.kind === "preamble") html += `<div class="part">Preamble</div>`;
+    if (b.kind === "bib" && lastKind !== "bib") html += `<div class="part">References</div>`;
+    html += blockHTML(b);
+    lastKind = b.kind;
+  }
+  $("blocks").innerHTML = html;
+  renderOrphans();
+  updateBar();
+}
+
+function renderBlock(id){
+  const b = byId.get(id); if (!b) return;
+  const el = $("b-" + id); if (!el) return renderAll();
+  const tmp = document.createElement("div");
+  tmp.innerHTML = blockHTML(b);
+  // the heading (if any) is the block's previous sibling and does not change
+  el.replaceWith(tmp.querySelector(".blk"));
+  if (editing === id){
+    const ta = $("ta-" + id); if (ta){ autosize(ta); ta.focus({preventScroll:true}); }
+  }
+}
+
+function renderOrphans(){
+  const orphans = [...edits.entries()].filter(([id]) => !byId.has(id));
+  if (!orphans.length){ $("orphans").innerHTML = ""; return; }
+  $("orphans").innerHTML = `<div class="orphans"><h3>Edits made against an earlier version</h3>
+    <p class="note">These blocks have changed in paper.tex since the edit was saved. Claude reconciles them by hand.</p>
+    ${orphans.map(([id, e]) => `<p class="note">Line ${e.line ?? "?"} · ${esc(e.where || "")}</p><pre class="src">${hl(e.text || "")}</pre>`).join("")}</div>`;
+}
+
+function populateJump(){
+  const opts = [`<option value="">Jump to…</option>`];
+  for (const b of blocks){
+    if (b.kind === "section") opts.push(`<option value="${b.id}">${esc(b.number + " " + b.title)}</option>`);
+    else if (b.kind === "subsection") opts.push(`<option value="${b.id}"> ${esc(b.number + " " + b.title)}</option>`);
+  }
+  const bib = blocks.find(b => b.kind === "bib");
+  if (bib) opts.push(`<option value="${bib.id}">References</option>`);
+  $("jump").innerHTML = opts.join("");
+}
+
+function autosize(ta){ ta.style.height = "auto"; ta.style.height = Math.min(ta.scrollHeight + 4, window.innerHeight * 0.7) + "px"; }
+
+// ---------------------------------------------------------------- bottom bar
+function updateBar(){
+  const n = [...edits.keys()].length;
+  let ctx;
+  if (selRange){
+    const t = selRange.toString().replace(/\s+/g, " ").trim();
+    ctx = `<b>Selected:</b> “${esc(t.slice(0, 60))}${t.length > 60 ? "…" : ""}”`;
+  } else if (selected){
+    const b = byId.get(selected);
+    ctx = `<b>Line ${b.line}</b> · ${esc(b.where)}`;
+  } else {
+    ctx = n ? `<b>${n} edited block${n > 1 ? "s" : ""}</b> saved for Claude` : `Tap a block or select text`;
+  }
+  $("ctx").innerHTML = ctx;
+  $("b-comment").hidden = !(comments && (selRange || selected));
+  $("b-comment").textContent = selRange ? "Comment on selection" : "Comment";
+  $("b-edit").hidden = !(selected && !selRange && editing !== selected);
+  $("b-edit").disabled = !(db && canWrite);
+  $("b-edit").title = db && canWrite ? "" : "Editing is available when this page is open in claude.ai with edit access";
+}
+
+let toastTimer = null;
+function toast(msg){
+  const t = $("toast"); t.textContent = msg; t.hidden = false;
+  clearTimeout(toastTimer); toastTimer = setTimeout(() => { t.hidden = true; }, 2600);
+}
+
+// ---------------------------------------------------------------- interactions
+$("blocks").addEventListener("click", ev => {
+  const act = ev.target.closest("[data-act]");
+  if (act){ ev.stopPropagation(); return onAct(act.dataset.act); }
+  if (ev.target.closest(".editor")) return;
+  const blk = ev.target.closest(".blk"); if (!blk) return;
+  const s = window.getSelection();
+  if (s && !s.isCollapsed) return;           // a text selection, not a tap
+  selectBlock(blk.dataset.id);
+});
+
+function selectBlock(id){
+  const prev = selected; selected = (selected === id) ? null : id; selRange = null;
+  if (prev && $("b-" + prev)) $("b-" + prev).classList.remove("on");
+  if (selected && $("b-" + selected)) $("b-" + selected).classList.add("on");
+  updateBar();
+}
+
+document.addEventListener("selectionchange", () => {
+  const s = window.getSelection();
+  if (!s || s.isCollapsed || !s.rangeCount){ if (selRange){ selRange = null; updateBar(); } return; }
+  const r = s.getRangeAt(0);
+  const host = r.commonAncestorContainer.nodeType === 1 ? r.commonAncestorContainer : r.commonAncestorContainer.parentElement;
+  if (!host || !host.closest("#blocks") || host.closest(".editor")){ return; }
+  selRange = r.cloneRange();
+  updateBar();
+});
+
+// keep a text selection alive while the bar's button is pressed
+for (const id of ["b-comment","b-edit"]) $(id).addEventListener("pointerdown", ev => ev.preventDefault());
+
+$("b-comment").addEventListener("click", async () => {
+  if (!comments) return;
+  try {
+    let target;
+    if (selRange) target = { range: selRange };
+    else if (selected) target = { element: $("b-" + selected) };
+    else return;
+    const r = await comments.openComposer(target);
+    if (!r.opened) toast("Finish or close the open comment first");
+  } catch (e){
+    if (e && (e.code === "unavailable" || e.code === "not_granted" || e.code === "capability_disabled")){
+      comments = null; updateBar(); toast("Commenting is not available in this view");
+    } else if (e && e.code === "rate_limited") toast("One moment — too many comment boxes at once");
+    else toast("The comment box did not open");
+  }
+});
+
+$("b-edit").addEventListener("click", () => { if (selected) startEdit(selected); });
+
+function startEdit(id){
+  if (!(db && canWrite)) return;
+  const prev = editing; editing = id; selRange = null;
+  if (prev && prev !== id) renderBlock(prev);
+  renderBlock(id); updateBar();
+}
+
+document.addEventListener("input", ev => {
+  if (ev.target.matches(".editor textarea")){ autosize(ev.target); draftSet(editing, ev.target.value); }
+});
+document.addEventListener("keydown", ev => {
+  if (!editing || !ev.target.matches(".editor textarea")) return;
+  if (ev.key === "Enter" && (ev.metaKey || ev.ctrlKey)){ ev.preventDefault(); onAct("save"); }
+  if (ev.key === "Escape"){ ev.preventDefault(); onAct("cancel"); }
+});
+
+async function onAct(act){
+  const id = editing; if (!id) return;
+  const b = byId.get(id);
+  if (act === "cancel"){ draftSet(id, null); editing = null; renderBlock(id); updateBar(); return; }
+  if (act === "revert"){
+    try { await db.collection("edits").doc(id).delete(); draftSet(id, null); edits.delete(id); editing = null; renderBlock(id); updateBar(); toast("Reverted to paper.tex"); }
+    catch (e){ writeFailed(e); }
+    return;
+  }
+  if (act === "save"){
+    const ta = $("ta-" + id); const text = ta.value;
+    if (text === b.text){
+      if (edits.has(id)) return onAct("revert");
+      draftSet(id, null); editing = null; renderBlock(id); updateBar(); return;
+    }
+    const btn = document.querySelector(`#b-${id} [data-act="save"]`); if (btn){ btn.disabled = true; btn.textContent = "Saving…"; }
+    const body = { block: id, line: b.line, where: b.where, original: b.text, text, base: D.commit, at: new Date().toISOString() };
+    try {
+      await db.collection("edits").doc(id).set(body);
+      edits.set(id, body); draftSet(id, null); editing = null; renderBlock(id); renderOrphans(); updateBar();
+      toast("Saved for Claude");
+    } catch (e){ if (btn){ btn.disabled = false; btn.textContent = "Save"; } writeFailed(e); }
+  }
+}
+
+function writeFailed(e){
+  const code = e && e.code;
+  if (code === "invalid_argument" || code === "revoked" || code === "not_granted"){
+    canWrite = false; editing = null; renderAll(); toast("This view can read but not save edits");
+  } else if (code === "resource_exhausted") toast("Saving too fast — try again in a moment");
+  else toast("Not saved — try again (your text is kept as a draft)");
+}
+
+$("jump").addEventListener("change", ev => {
+  const id = ev.target.value; if (!id) return;
+  showTab("src");
+  const el = $("b-" + id); if (!el) return;
+  const target = el.previousElementSibling && el.previousElementSibling.matches("h2,h3,.part") ? el.previousElementSibling : el;
+  target.scrollIntoView({ behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth", block: "start" });
+  ev.target.value = "";
+});
+
+function showTab(t){
+  $("tab-src").setAttribute("aria-selected", t === "src");
+  $("tab-pdf").setAttribute("aria-selected", t === "pdf");
+  $("view-src").hidden = t !== "src"; $("view-pdf").hidden = t !== "pdf";
+  if (t === "pdf" && !$("pages").children.length) renderPages();
+  try { localStorage.setItem("tab", t); } catch(e){}
+}
+$("tab-src").addEventListener("click", () => showTab("src"));
+$("tab-pdf").addEventListener("click", () => showTab("pdf"));
+
+function renderPages(){
+  const n = D.pages.length;
+  $("pdfnote").textContent = `The last build of paper.pdf (${n} pages, commit ${D.commit}, ${D.built}). Edits made here appear after Claude folds them in and rebuilds.`;
+  $("pages").innerHTML = D.pages.map((src, i) =>
+    `<figure><img src="${src}" alt="Page ${i + 1} of ${n}" loading="lazy" width="794" height="1123"><figcaption>Page ${i + 1} of ${n}</figcaption></figure>`).join("");
+}
+
+// ---------------------------------------------------------------- download: an Overleaf-ready project
+function fullTex(){ return D.lead + blocks.map(b => currentText(b) + b.sep).join(""); }
+$("b-zip").addEventListener("click", async () => {
+  if (!downloads){ toast("Downloads are not available in this view"); return; }
+  if (typeof JSZip === "undefined"){ toast("The zip library did not load"); return; }
+  try {
+    const z = new JSZip();
+    z.file("paper.tex", fullTex());
+    for (const [path, b64] of Object.entries(D.figs)) z.file(path, b64, { base64: true });
+    z.file("README.txt", `paper.tex as on this page (commit ${D.commit}${edits.size ? `, with ${edits.size} edited block(s) not yet in the repository` : ""}).\nOverleaf: New Project > Upload Project > this zip. Compile with pdfLaTeX.\n`);
+    const blob = await z.generateAsync({ type: "blob" });
+    await downloads.save({ filename: "earth-paper.zip", data: blob });
+  } catch (e){
+    if (e && e.code === "declined") return;
+    toast("The download did not go through");
+  }
+});
+
+// ---------------------------------------------------------------- boot
+populateJump();
+renderAll();
+try { if (localStorage.getItem("tab") === "pdf") showTab("pdf"); } catch(e){}
+
+if (window.claude && typeof window.claude.use === "function"){
+  window.claude.use("comments").then(c => { comments = c; updateBar(); });
+  window.claude.use("downloads").then(d => { downloads = d; });
+  window.claude.use("db").then(d => {
+    db = d; updateBar();
+    if (!db) return;
+    db.collection("edits").onSnapshot(snap => {
+      const changed = new Set([...edits.keys()]);
+      edits.clear();
+      for (const doc of snap.docs){ const v = doc.data(); if (v) edits.set(doc.id, v); changed.add(doc.id); }
+      for (const id of changed) if (byId.has(id) && id !== editing) renderBlock(id);
+      renderOrphans(); updateBar();
+    }, err => { if (err && (err.code === "revoked" || err.code === "not_granted")){ canWrite = false; updateBar(); } });
+  });
+}
+})();
+</script>
