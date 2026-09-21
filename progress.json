@@ -1,0 +1,10 @@
+{
+ "at": "2026-09-21T01:41:38+00:00",
+ "done": 1,
+ "elapsed_s": 21554.0,
+ "eta_s": 0.0,
+ "item": "gedi 2022",
+ "stage": "fetch gedi",
+ "total": 1,
+ "year_rows": 43190176
+}
