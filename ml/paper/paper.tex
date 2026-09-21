@@ -722,10 +722,14 @@ block-bootstrap intervals over (year, start) \cite{goddard}. The null ladder
 beside every read-out: climatology, persistence, damped persistence (per-cell
 AR(1) on training years), the LIM in data and in embedding space
 \cite{penland,newman}, an analogue forecast, the previous rung. On the
-atmospheric channels at leads up to fifteen days the external baseline is a
-state-of-the-art data-driven ensemble, FGN \cite{fgn}, scored by fair CRPS
-\cite{crps}, spread--skill ratio and spatially pooled CRPS on its own test
-year, 2023, which is a held-out year here.
+atmospheric channels at leads up to fifteen days the external baseline is
+FGN \cite{fgn}, a data-driven ensemble whose released checkpoints
+(WeatherNext~2) are run here from ERA5 initial conditions over 2023, its own
+test year and a held-out year here; its 6-hourly $0.25^\circ$ members are
+averaged to the pentad bins and the $1^\circ$ cells the atmospheric group
+holds, so both models are scored on the same support. Scores: fair CRPS
+\cite{crps} of the ensemble, ensemble-mean RMSE and spread--skill ratio, per
+channel and lead, and CRPS pooled over $10^\circ$ blocks.
 Configurations are compared on the dense field; the read-outs are checks. A
 winner is replicated with a second seed before it is written up; a negative
 result is reported like a positive one.
@@ -779,6 +783,15 @@ laser.
 
 \textbf{(5) Scale}: the width ladder at L2; sphere-routed experts against a
 dense model of equal active parameters at L3.
+
+\textbf{(6) Weather}: the shared atmospheric channels --- 2\,m temperature,
+10\,m wind, surface pressure, precipitation --- at leads of one, two and
+three pentads against FGN on 2023, with damped persistence and climatology
+beside both. The forecaster is not a weather model: it reads pentad means
+and predicts pentad means, and FGN is scored on the same means. The
+comparison says how much of the medium-range atmosphere a model built for
+the coupled system at pentad cadence gives up, and whether the ocean, land
+and biosphere stores buy any of it back (arms with and without them).
 
 Build order: geometry, task mix, aperture, maps and harden step, forecaster,
 tiers; no comparison changes it.
@@ -882,6 +895,38 @@ width & held-out minimum step & one-step ratio & mean ACC, leads 1--73 & mean $\
 \end{tabular}
 \caption{Comparison (5): the width ladder at L2, one row per
 width.\label{tab:res-width}}
+\end{table}
+
+\subsection{Weather against FGN}
+
+\begin{table}[H]
+\centering\footnotesize\setlength{\tabcolsep}{4pt}
+\begin{tabular}{@{}L{2.6cm}c ccc ccc@{}}
+\toprule
+ & & \multicolumn{3}{c}{fair CRPS} & \multicolumn{3}{c}{ensemble-mean RMSE} \\
+\cmidrule(lr){3-5}\cmidrule(lr){6-8}
+channel & lead & FGN & ours & damped & FGN & ours & damped \\
+\midrule
+2\,m temperature & 1 & \tbd & \tbd & \tbd & \tbd & \tbd & \tbd \\
+ & 2 & \tbd & \tbd & \tbd & \tbd & \tbd & \tbd \\
+ & 3 & \tbd & \tbd & \tbd & \tbd & \tbd & \tbd \\
+10\,m wind speed & 1 & \tbd & \tbd & \tbd & \tbd & \tbd & \tbd \\
+ & 2 & \tbd & \tbd & \tbd & \tbd & \tbd & \tbd \\
+ & 3 & \tbd & \tbd & \tbd & \tbd & \tbd & \tbd \\
+surface pressure & 1 & \tbd & \tbd & \tbd & \tbd & \tbd & \tbd \\
+ & 2 & \tbd & \tbd & \tbd & \tbd & \tbd & \tbd \\
+ & 3 & \tbd & \tbd & \tbd & \tbd & \tbd & \tbd \\
+precipitation & 1 & \tbd & \tbd & \tbd & \tbd & \tbd & \tbd \\
+ & 2 & \tbd & \tbd & \tbd & \tbd & \tbd & \tbd \\
+ & 3 & \tbd & \tbd & \tbd & \tbd & \tbd & \tbd \\
+\bottomrule
+\end{tabular}
+\caption{Comparison (6): the atmospheric channels on 2023, pentad means on
+the $1^\circ$ cells, leads in pentads (5, 10, 15 days). FGN: the released
+WeatherNext~2 checkpoints from ERA5 initial conditions, 64 members; ours: the
+seed ensemble of \S\ref{sec:stage2}; damped: per-cell AR(1). The same table
+for spread--skill ratio and $10^\circ$-pooled CRPS, and the arms with and
+without the fine stores.\label{tab:res-weather}}
 \end{table}
 
 \section{Related work}\label{sec:related}
