@@ -1,0 +1,80 @@
+  [fetch gedi] gedi 2022  1/1  19884.6s
+  [fetch gedi] gedi 2022  1/1  19892.7s
+  [fetch gedi] gedi 2022  1/1  19900.1s
+  [fetch gedi] gedi 2022  1/1  19908.4s
+  [fetch gedi] gedi 2022  1/1  19916.0s
+  [fetch gedi] gedi 2022  1/1  19948.9s
+  [fetch gedi] gedi 2022  1/1  19966.0s
+  [fetch gedi] gedi 2022  1/1  19982.4s
+  [fetch gedi] gedi 2022  1/1  19999.5s
+  [fetch gedi] gedi 2022  1/1  20015.8s
+  [fetch gedi] gedi 2022  1/1  20032.4s
+  [fetch gedi] gedi 2022  1/1  20050.0s
+  [fetch gedi] gedi 2022  1/1  20066.8s
+  [fetch gedi] gedi 2022  1/1  20082.0s
+  [fetch gedi] gedi 2022  1/1  20091.5s
+  [fetch gedi] gedi 2022  1/1  20101.1s
+  [fetch gedi] gedi 2022  1/1  20111.8s
+  [fetch gedi] gedi 2022  1/1  20121.0s
+  [fetch gedi] gedi 2022  1/1  20132.2s
+  [fetch gedi] gedi 2022  1/1  20141.3s
+  [fetch gedi] gedi 2022  1/1  20151.2s
+  [fetch gedi] gedi 2022  1/1  20172.8s
+  [fetch gedi] gedi 2022  1/1  20188.2s
+  [fetch gedi] gedi 2022  1/1  20204.6s
+  [fetch gedi] gedi 2022  1/1  20222.0s
+  [fetch gedi] gedi 2022  1/1  20238.2s
+  [fetch gedi] gedi 2022  1/1  20258.0s
+  [fetch gedi] gedi 2022  1/1  20276.4s
+  [fetch gedi] gedi 2022  1/1  20293.5s
+  [fetch gedi] gedi 2022  1/1  20307.5s
+  [fetch gedi] gedi 2022  1/1  20315.7s
+  [fetch gedi] gedi 2022  1/1  20324.6s
+  [fetch gedi] gedi 2022  1/1  20332.9s
+  [fetch gedi] gedi 2022  1/1  20341.2s
+  [fetch gedi] gedi 2022  1/1  20351.1s
+Traceback (most recent call last):
+  File "/home/runner/work/earth/earth/ml/build_family1_stores.py", line 1776, in <module>
+    sys.exit(main())
+             ^^^^^^
+  File "/home/runner/work/earth/earth/ml/build_family1_stores.py", line 1771, in main
+    f10b.run_stages(ctx, stages, stage_fn=stage_fns(ad), deps=DEPS)
+  File "/home/runner/work/earth/earth/ml/build_family10_stores.py", line 5665, in run_stages
+    stage_fn[s](ctx)
+  File "/home/runner/work/earth/earth/ml/build_family1_stores.py", line 374, in stage_fetch
+    f10b.stage_fetch(ctx, assemble_store_after=False)
+  File "/home/runner/work/earth/earth/ml/build_family10_stores.py", line 4200, in stage_fetch
+    for label, rows, counts in ad.fetch_year(ctx, y):
+  File "/home/runner/work/earth/earth/ml/family1/adapters/gedi.py", line 993, in fetch_year
+    yield from self._rows(ctx, str(year), lo, hi, cap=cap)
+  File "/home/runner/work/earth/earth/ml/family1/adapters/gedi.py", line 764, in _rows
+    for out in self._granule_rows(ctx, e, ops, counts, t_lo, t_hi):
+  File "/home/runner/work/earth/earth/ml/family1/adapters/gedi.py", line 811, in _granule_rows
+    self._merge_partner(ops.get("l2b"), beam, L2B_NEEDED, "L2B",
+  File "/home/runner/work/earth/earth/ml/family1/adapters/gedi.py", line 854, in _merge_partner
+    got = read_partner_beam(op.h5, beam, needed, label, counts)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/work/earth/earth/ml/family1/adapters/gedi.py", line 481, in read_partner_beam
+    v, n = _as_float(g[name[k]], g[name[k]][:])
+                                 ~~~~~~~~~~^^^
+  File "h5py/_objects.pyx", line 54, in h5py._objects.with_phil.wrapper
+  File "h5py/_objects.pyx", line 55, in h5py._objects.with_phil.wrapper
+  File "/home/runner/.local/lib/python3.12/site-packages/h5py/_hl/dataset.py", line 872, in __getitem__
+    return self._fast_reader.read(args)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "h5py/_objects.pyx", line 54, in h5py._objects.with_phil.wrapper
+  File "h5py/_objects.pyx", line 55, in h5py._objects.with_phil.wrapper
+  File "h5py/_selector.pyx", line 393, in h5py._selector.Reader.read
+  File "h5py/h5fd.pyx", line 159, in h5py.h5fd.H5FD_fileobj_read
+  File "/home/runner/work/earth/earth/ml/family1/adapters/_h5range.py", line 180, in readinto
+    b = self.read(len(buf))
+        ^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/work/earth/earth/ml/family1/adapters/_h5range.py", line 168, in read
+    blk = self._block_bytes(b)
+          ^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/work/earth/earth/ml/family1/adapters/_h5range.py", line 196, in _block_bytes
+    body = self._get(lo, hi)
+           ^^^^^^^^^^^^^^^^^
+  File "/home/runner/work/earth/earth/ml/family1/adapters/_h5range.py", line 220, in _get
+    raise RangeError(
+family1.adapters._h5range.RangeError: https://data.lpdaac.earthdatacloud.nasa.gov/lp-prod-protected/GEDI02_B.003/GEDI02_B_2022175153158_O20002_04_T00234_02_004_01_V003/GEDI02_B_2022175153158_O20002_04_T00234_02_004_01_V003.h5: range 147849216-148897791 answered HTTP 503, not 206
