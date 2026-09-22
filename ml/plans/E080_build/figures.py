@@ -863,7 +863,8 @@ def _style3d(ax, th, xy_lim, xy_ticks, z_lim, z_ticks, z_ticklabels,
         axis.line.set_color(th["mut"])
         axis._axinfo["grid"]["color"] = th["grid"]
     ax.set_xlim(-xy_lim, xy_lim); ax.set_ylim(-xy_lim, xy_lim)
-    ax.set_zlim(-z_lim, z_lim)
+    # z_lim: a number (symmetric, the deck) or a (low, high) pair
+    ax.set_zlim(*(z_lim if isinstance(z_lim, (tuple, list)) else (-z_lim, z_lim)))
     ax.set_xticks(xy_ticks); ax.set_yticks(xy_ticks); ax.set_zticks(z_ticks)
     ax.set_xticklabels(xy_ticklabels, fontsize=8.5 * fs, color=th["axis"])
     ax.set_yticklabels(xy_ticklabels, fontsize=8.5 * fs, color=th["axis"])
@@ -880,14 +881,21 @@ def _style3d(ax, th, xy_lim, xy_ticks, z_lim, z_ticks, z_ticklabels,
     ax.set_box_aspect((1, 1, 1.05))
 
 
-def two_scales_3d(th=THEME_DARK):
+def two_scales_3d(th=THEME_DARK, past_lags=None, future_lags=None,
+                  z_lim=None, z_ticks=None, z_ticklabels=None):
     """Slide 22: the mirrored double cone in 3-D, at stage 1's and stage 2's
     scale. Same sunflower, same golden-angle phase and same three colours as
     slides 8 and 21; only the reach and the axis numbers differ.
 
     `th` is one of THEME_DARK (the deck) or THEME_LIGHT (the white-background
     standalone); it changes the background, the ink and nothing else — the
-    geometry, the labels and their places are one definition for both."""
+    geometry, the labels and their places are one definition for both.
+
+    The keywords change stage 2 (right panel) only and default to the deck's
+    symmetric drawing: `past_lags` / `future_lags` are the ring lags of each
+    half (the future is the same point mirror, just truncated), `z_lim` is a
+    number or a (low, high) pair, `z_ticks` / `z_ticklabels` the time axis.
+    The paper (ml/paper/make_hourglass_fig.py) passes a shorter future half."""
     BLUE_, GOLD_, ORANGE_ = th["blue"], th["gold"], th["orange"]
     INK, MUT_, BG_ = th["ink"], th["mut"], th["bg"]
     FS, MS = th.get("fs", 1.0), th.get("ms", 1.0)   # font / mark scale, 1 = deck
@@ -944,14 +952,16 @@ def two_scales_3d(th=THEME_DARK):
     # meets the 4,444 km cap at lag 33, so a uniform "every dozen lags" spacing
     # spends nine of eleven rings on the straight part and the taper vanishes.
     L2 = [7, 12, 18, 24, 33, 72, 143]
+    L2_past = L2 if past_lags is None else list(past_lags)
+    L2_fut = L2 if future_lags is None else list(future_lags)
     K_CAP = 33                                   # 129.6*(1+33) = 4,406 ~ cap
     # the lean is the same FRACTION of the reach as at stage 1 (~25% at the
     # mouth), not the same km per pentad — at 38 km/pentad a 143-pentad cone
     # would sit 5,400 km off its own anchor and read as a shear, not a cone.
     D2 = (-5.4, -5.4)
-    _cone3d(ax, th, L2, outer_reach_km, D2, BLUE_, -1, dot_s=3.5,
+    _cone3d(ax, th, L2_past, outer_reach_km, D2, BLUE_, -1, dot_s=3.5,
             face_alpha=0.085, ms=MS)
-    _cone3d(ax, th, L2, outer_reach_km, D2, ORANGE_, +1, dot_s=3.5,
+    _cone3d(ax, th, L2_fut, outer_reach_km, D2, ORANGE_, +1, dot_s=3.5,
             face_alpha=0.085, ms=MS)
     _waist3d(ax, th, 56.0, ms=MS)
     # where the opening stops: the cap ring, drawn once on each side
@@ -969,8 +979,10 @@ def two_scales_3d(th=THEME_DARK):
                 Poly3DCollection([list(zip(rx, ry,
                                            np.full_like(rx, float(sgn * k))))],
                                  facecolor=BG_, alpha=0.85, edgecolor="none"))
-    _style3d(ax, th, 6300, [-4444, 4444], 178, [-143, 0, 143],
-             ["−143", "0", "+143"], ["−4,444", "+4,444"], fs=FS)
+    _style3d(ax, th, 6300, [-4444, 4444], 178 if z_lim is None else z_lim,
+             [-143, 0, 143] if z_ticks is None else list(z_ticks),
+             ["−143", "0", "+143"] if z_ticklabels is None
+             else list(z_ticklabels), ["−4,444", "+4,444"], fs=FS)
     ax.set_title("stage 2 — the forecaster, embeddings", color=INK,
                  fontsize=11 * FS, fontweight="bold", pad=-2, y=0.97)
     ax.text2D(0.50, P["fut_y"], "future cone — targets", color=ORANGE_,

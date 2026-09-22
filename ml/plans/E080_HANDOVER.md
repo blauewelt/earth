@@ -115,3 +115,35 @@ Do not add Argo ellipses back; do not coarsen the maps to 10°; do not replace t
 ring with a bound without Chris; do not read at interpolated positions in the
 loader; do not let the learned aperture touch the loss weights or the evaluation
 geometry; do not quote a reviewer's numbers as ours without an artefact.
+
+## 7 · Changes required by the 22 September paper review (before any build step)
+
+The review (`PAPER_REVIEW_2026-09-22_feedback.md`) and its response
+(`PAPER_REVIEW_2026-09-22_response.md`) changed the design paper; the build must
+follow the paper, and four items in this handover are superseded by it:
+
+1. **Targets are fixed in every phase.** Target queries (mirrored future cone,
+   hidden waist, fill-in cells and points) are drawn from the fixed hourglass of
+   the initial table and never re-baked from the learned ellipses; the re-bake
+   moves the *input* table only. R5 (the target-variance flag) is dropped; the
+   mirror of the learned cone is a later, separately guarded comparison.
+2. **The decoder-reads-latents path is closed at weight zero**, not 0.25
+   (`cone_codec.py` `aux_latent_w`, `train_cone.py:149`).
+3. **The admissibility certificate is deterministic**: enumerate the boundary
+   cases per anchor bin (earliest input lag, latest target lead, latest point
+   observation time) against the period boundaries of paper §3.5; the random
+   4,096-anchor draw stays as a diagnostic only. The cone trainer also needs the
+   period split of §3.5 (training 1982–2020 less 2009 and 2017; 2021–2024
+   retrospective; 2025– prospective) and the `available_at` rule for as-issued
+   runs.
+4. **The forecasting benchmark, paper comparison (0), runs before the geometry
+   comparison (2)**; A0 is trained first as its fixed codec, and A1/A1g/A2 are
+   dispatched only if (0) locates a limitation geometry can address.
+   Comparison (2) is at equal token budget and adds a coarse-global-summary
+   arm in place of the ring.
+
+Also from the paper: `z` is deterministic (no log-variance head on the latent),
+the growth ellipse is capped at the design reach and not floored at the design
+speed, and the source contract fields (`support_start`, `support_end`,
+`available_at`, `product_version`, `lineage`) are added to the registries
+before a run reads a store under the as-issued mode.

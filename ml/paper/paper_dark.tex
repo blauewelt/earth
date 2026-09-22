@@ -38,26 +38,35 @@ that reads the observational record through a learnable space--time cone}
 We specify a two-stage model that predicts any observed quantity of the Earth
 system --- a grid cell, a station, a float profile, a satellite pixel --- at
 any place, time and footprint, from the whole observational record of ocean,
-land and atmosphere. The design rests on one fact: a quantity at a place and
-time depends on a cone in space--time whose reach grows with the speed of the
-fastest signal carrying information about it and ends with that signal's
-memory, and it influences the mirror of that cone into the future. Both stages
-sample this hourglass. Stage~1 reads raw values over the last thirty days
-through a waist of several cells and writes one embedding per cell and pentad.
-Stage~2 reads those embeddings over two years at log-spaced lags and writes
-the embeddings of the next year as a residual on a contractive linear
-propagator. Every value enters through one token --- value, observed flag,
-offset from the anchor, footprint, source --- so dense $0.25^\circ$ grids,
-kilometre-scale fields, tile catalogues and point observations share one
-encoder without resampling; every prediction leaves through one query-based
-decoder that takes the same coordinates and footprint. The cone's shape --- a
-drift toward the source, a waist ellipse, a growth ellipse, a scale and a
-memory --- is learned per $1^\circ$ cell and per channel under guards that
-stop the model moving its own questions to easy water. We state the data, the
-geometry, both stages, the training ladder, the evaluation protocol with its
-null ladder and the comparisons that decide each choice, with verdict rules
-fixed before any run. A results section is reserved with the tables it will
-hold.
+land and atmosphere. The design rests on one sampling prior: a quantity at a
+place and time is most informed by a cone in space--time whose reach grows
+with the speed of the fastest signal carrying information about it and ends
+with that signal's memory, and it informs the mirror of that cone into the
+future. Both stages sample this hourglass, supplemented by an ungated global
+far field. Stage~1 reads raw values over the last thirty days through a waist
+of several cells and writes one embedding per cell and pentad. Stage~2 reads
+those embeddings over two years at log-spaced lags and writes the embeddings
+of the next year as a residual on an asymptotically stable linear propagator
+fitted as a linear inverse model. Every value enters through one token ---
+value, observed flag, offset from the anchor, footprint, source --- so dense
+$0.25^\circ$ grids, kilometre-scale fields, tile catalogues and point
+observations share one encoder without resampling to a common analysis grid;
+every prediction leaves through one query-based decoder that takes the same
+coordinates and footprint. The cone's shape --- a drift toward the source, a
+waist ellipse, a growth ellipse, a scale and a memory --- is learned per
+$1^\circ$ cell and per channel; what the model reads is learned, what it is
+asked to predict is drawn from a fixed distribution that the learned geometry
+cannot move. The first experiments address initialised forecasts of observed
+Earth-system quantities over five days to one year; long-term forced responses
+and scenario projections are outside the scope and remain unvalidated. We
+state the data, the geometry, both stages, the training ladder, the evaluation
+contract --- which periods are development, retrospective evaluation and
+prospective test, and what each source was available to know at issue time
+--- the null ladder and the comparisons that decide each choice, beginning
+with a fixed-target forecasting benchmark that asks whether the
+representation improves a forecast beyond cheap models given the same
+information. Verdict rules are fixed before any run. A results section is
+reserved with the tables it will hold.
 \end{abstract}
 
 \section{Introduction}\label{sec:intro}
@@ -74,9 +83,12 @@ sink, El Ni\~no, sea-surface temperature and the land biosphere are the five
 read-outs tracked, because each has a long truth series; they are properties
 of the instruments, not of the target.
 
-The design rests on one fact, stated in \S\ref{sec:problem}: what can bear
-on a value at a place and time lies in a cone in space--time, and the value
-bears on the mirror of that cone (Figure~\ref{fig:hourglass}). The record at
+The design rests on one sampling prior, stated in \S\ref{sec:problem}: what
+bears most on a value at a place and time lies in a cone in space--time, and
+the value bears on the mirror of that cone (Figure~\ref{fig:hourglass}). The
+prior is transport-inspired and is not a claim about causation; the model
+also reads an ungated far field, and what its learned geometry represents is
+predictive relevance. The record at
 $0.25^\circ$ and five-day cadence is of order $10^9$ values a year, the kilometre tier a thousand times
 more, and point observations are irregular in every coordinate; no
 transformer attends over that directly. Stage~1, the codec, reads raw values
@@ -89,17 +101,35 @@ Stage~1's hourglass is the small solid at the centre of stage~2's. The split
 is in time, not distance.
 
 \paragraph{Premises.} (i) At one basin's data volume the forecast is
-data-limited --- the held-out optimum arrives early and width does not move
-it --- so the design grows data before parameters, and each rung of the
-ladder is bought on the one below. (ii) A linear inverse model in embedding
-space and damped persistence are strong beyond two weeks, so the learned
-forecaster is a residual on a contractive linear propagator and is reported
-against both. (iii) A read-out with few effective degrees of freedom cannot
-resolve a design choice; comparisons are decided on the dense field. (iv)
-The holdout is terminal and spatial, and the exclusion of held-out data from
-every window the forward pass can see is certified before training. A
-technical report on the North Atlantic pilot \cite{techreport} is the dated
-record behind these premises; this paper does not repeat it.
+insensitive to width and its held-out optimum arrives early. That is
+consistent with a data limit and also with a limit in the representation,
+the objective, the optimisation or the target noise; the design grows data
+before parameters and measures which it is (\S\ref{sec:scale}), each rung of
+the ladder being bought on the one below. (ii) A linear inverse model and
+damped persistence are strong beyond two weeks, so the learned forecaster is
+a residual on a linear propagator fitted as a linear inverse model and is
+reported against both. (iii) A read-out with few effective degrees of freedom
+cannot resolve a design choice; comparisons are decided on the dense field,
+with a fixed panel of decoded physical quantities beside it. (iv) The
+evaluation contract separates development years, a retrospective evaluation
+block that has informed design decisions and is labelled as such, and a
+prospective period that no statistic, model or decision has touched; the
+exclusion of held-out bins from every window the forward pass can see is
+certified before training, and every source carries the time at which it
+became available. A technical report on the North Atlantic pilot
+\cite{techreport} is the dated record behind these premises; this paper does
+not repeat it.
+
+\paragraph{Scope.} The first experiments address initialised forecasts of
+observed Earth-system quantities over five days to one year from the
+observational record up to the issue time. Multi-year rollout is a mode of
+the forecaster, not its objective, and nothing in this design supports a
+claim about scenario-conditioned change, tipping times or century-scale
+behaviour; a scenario-conditioned projection needs a forcing pathway as an
+input and an evaluation of the response under changed forcing, which a longer
+rollout of an observation-conditioned model is not. The query interface is
+broad; demonstrated predictability is whatever \S\ref{sec:results} will
+show.
 
 Section~\ref{sec:method} states the method: the problem, the token every
 observation becomes, the cone and its learnable geometry, the two stages and
@@ -115,10 +145,13 @@ places the design among existing models.
 \caption{The hourglass at both scales. Each lag is a 24-point sunflower
 (phase-rotated by the golden angle per lag) inside an ellipse that grows with
 lag; past half input, waist present, future half target only. Left: stage~1
-over raw values, six pentads each way, ${\approx}$900\,km at six pentads for
-the ocean surface, a thirteen-cell waist. Right: stage~2 over embeddings,
-7--143 pentads each way, to a 4{,}444\,km cap; stage~1's hourglass is the
-small solid at the centre.\label{fig:hourglass}}
+over raw values, lags 1--6 and leads 1--6 pentads, ${\approx}$900\,km at six
+pentads for the ocean surface, a thirteen-cell waist. Right: stage~2 over
+embeddings: past slices at lags 7, 13, 21, 34, 55, 89 and 143 pentads (the
+lag-0 embedding is the waist), future targets at leads up to 73 pentads,
+reach to a 4{,}444\,km cap; the drawing shows the slices the text lists
+(\S\ref{sec:stage2}), and stage~1's hourglass is the small solid at the
+centre.\label{fig:hourglass}}
 \end{figure}
 
 \section{Method}\label{sec:method}
@@ -136,16 +169,26 @@ t})$ --- a mean and a variance in the channel's transformed space
 among the training targets. Lead zero with the value hidden is a nowcast.
 Every stage below serves this one function.
 
-\paragraph{The dependency cone.} A driver moving at speed $v$ reaches $\mathbf{x}$ at
-time $t$ from within $v\,\Delta t$ at $t-\Delta t$. The points that can bear
-on $(\mathbf{x},t)$ form a cone opening into the past, its reach set by the
-fastest mechanism carrying that channel and cut off by the channel's memory:
-wind stress forgets in days, sea-surface temperature anomalies in months, a
-deep water mass in years. Each channel has a family $(v,\tau)$. Run forward,
-the same argument gives the points $(\mathbf{x},t)$ can bear on: the point
-mirror of the past cone. Past cone, waist and future cone are an hourglass
-(Figure~\ref{fig:hourglass}). Advection is what the mirror looks like: water
-came from upstream and goes downstream.
+\paragraph{The dependency cone as a sampling prior.} A driver moving at speed
+$v$ reaches $\mathbf{x}$ at time $t$ from within $v\,\Delta t$ at
+$t-\Delta t$. The points that can carry a signal to $(\mathbf{x},t)$ form a
+cone opening into the past, its reach set by the fastest mechanism carrying
+that channel and cut off by the channel's memory: wind stress forgets in
+days, sea-surface temperature anomalies in months, a deep water mass in
+years. Each channel has a family $(v,\tau)$. Run forward, the same argument
+gives the points $(\mathbf{x},t)$ can carry a signal to: the point mirror of
+the past cone. Past cone, waist and future cone are an hourglass
+(Figure~\ref{fig:hourglass}), and advection is what the mirror looks like:
+water came from upstream and goes downstream. This is a prior on where to
+sample, not a law the model recovers. Predictive relevance is not causal
+influence: a remote observation can reveal a shared driver or a hidden state
+without any parcel travelling to the target, coupled pathways and
+spatially varying flow break the one-channel--one-drift picture, and a
+dissipative forward system does not imply a point-mirrored statistical
+dependency. So the design tests a transport-inspired space--time sampling
+prior, supplemented by a global far field; the geometry it learns represents
+where the predictive information was found and is read as a diagnostic, never
+as a recovered transport law.
 
 \subsection{One token per observation}\label{sec:data-token}
 
@@ -166,12 +209,26 @@ $s$: a learned source embedding; sphere code; day-of-year harmonics. One
 token per location and lag, not per channel: adding a channel adds a vector
 entry, not a token. Footprint is constant per group for dense sources and
 per row for sparse ones; nothing else depends on the storage tier (\S\ref{sec:data-fine}), so the encoder
-never learns which file a value came from. A $1^\circ$ value is one token at
-the cell centre, seen from sixteen offsets by the sixteen anchors in it.
-Point observations enter where and when they were made: the $k$ nearest in
-space--time within the cone, $k$ small (three to eight per depth group),
-one-sided in time, padded with \emph{miss} tokens. A value the encoder may
-not see carries a \emph{hidden} marker, distinct from \emph{never observed}.
+never learns which file a value came from. The two footprint scalars are a
+first approximation: they encode the support's scale, not its shape, and a
+swath cell, a laser footprint and a monthly objective analysis have supports
+a scalar cannot describe. Each source therefore carries its documented support
+assumption in the registry (\S\ref{sec:data-fine}), and consistency between a
+fine and a coarse reading of the same quantity is tested only where the
+coarse measurement is an average of the fine one; the decoder is never asked
+to invent fine-scale information from a coordinate alone. A $1^\circ$ value
+is one token at the cell centre, seen from sixteen offsets by the sixteen
+anchors in it. Point observations enter where and when they were made: the
+$k$ nearest in space--time within the cone, $k$ small (three to eight per
+depth group), one-sided in time. Three absences are kept apart. A slot the
+nearest-neighbour search cannot fill is a whole padded token, excluded from
+attention by the key mask; it is bookkeeping, not evidence. A channel entry
+the source never measured (a land cell's SST, a month without Argo) is a
+learned \emph{never-observed} entry inside an attended token, with its
+observed flag off. A channel entry the encoder may not see during training
+is a learned \emph{hidden} entry, distinct from never-observed, so that
+``this is being withheld'' and ``this was never measured'' are different
+facts to the model.
 
 \subsection{Sampling the space--time cone}\label{sec:geometry}
 
@@ -200,13 +257,20 @@ log-spaced radii from 28\,km to the antipode, read at full weight and never
 gated. The design speed is the fastest measured mechanism of the family
 times $1.5$ (the ocean: 3.6\,m\,s$^{-1}$, so 5.4\,m\,s$^{-1}$ and 2{,}333\,km
 per pentad; wind stress: the atmosphere, global within a pentad). The
-ellipse gives direction and density; the ring guarantees no driver is
-excluded by construction.
+ellipse gives direction and density; the ring keeps a sparse, ungated reach
+to the whole globe at every lag, so that a remote driver is not excluded by
+the cone's shape. Twenty-four points are not exhaustive coverage of the far
+field, and the ring is not a guarantee: a compact coarse global summary of
+equal token budget is the comparator that tests it
+(\S\ref{sec:eval-compare}).
 
 \paragraph{Prediction cone.} The past cone point-mirrored: centre
 $-\ell\,\mathbf{d}$, same $\Sigma(\ell)$, leads $+1$ to $+6$, sampled the
 same way, read by nobody. Each point is a decoder query and a target. The
-anchor column at every lead is always a target.
+anchor column at every lead is always a target. The target positions are
+drawn from the \emph{fixed} hourglass of the initial geometry
+(\S\ref{sec:geometry-learn}) and are shared across arms and seeds: the model
+learns where to read, and what it is asked to predict does not move.
 
 \subsection{Learnable per-channel geometry}\label{sec:geometry-learn}
 
@@ -256,8 +320,16 @@ profiles, with no sampling ellipse for profiles. The ring is not gated.
 $S=\log\Sigma=m\mathbf{I}+k\begin{pmatrix}\cos2\theta&\sin2\theta\\
 \sin2\theta&-\cos2\theta\end{pmatrix}$: no kilometres, no angle to wrap, a
 circle is zero, and an Adam step moves every radius by the same fraction of
-itself \cite{adam}. Floors (waist one cell, $\Sigma_v$ the design speed) are
-softplus offsets in log space, not clips. The numbers live on a $1^\circ$ map
+itself \cite{adam}. Bounds are softplus offsets in log space, not clips, and
+they are of three kinds: a \emph{minimum radius} --- the waist ellipse is
+floored at one cell so a gradient always has a neighbour; a \emph{maximum
+reach} --- the drift is capped at $v_{\text{design}}\Delta t$ by the $\tanh$
+above and the growth ellipse's standard deviation at lag $\ell$ is capped so
+that the cone at the longest lag stays inside the design reach; and a
+\emph{default growth rate} --- the initial $\Sigma_v$, 130\,km per pentad for
+the ocean's carried channels, which is a starting value and not a bound. The
+design speed is a ceiling on how fast the cone may spread, never a floor on
+how fast it must. The numbers live on a $1^\circ$ map
 per channel (64{,}800 cells; bilinear blend at the anchor; ${\approx}$34\,M
 nominal, half live, no compute), because the currents that carry the
 overturning are ${\sim}$100\,km wide and a $10^\circ$ cell would learn a
@@ -276,14 +348,24 @@ Geometry parameters get ten times the codec's learning rate
 \cite{deformable}. Reading at continuous positions was rejected: it ties the
 loader to live weights and its gradient sees four cells.
 
-\paragraph{Guards.} A movable question moves to easy water. So: the loss
-reaches the geometry only through input reads (target positions carry a
-stop-gradient); the future cone is tied to the past cone by the mirror, per
-channel; evaluation geometry is frozen to the fixed hourglass for every arm;
-the aperture never enters the loss weights; the ring stays ungated. The
-residual effect --- mirrored targets move with the input cone --- is
-monitored: every evaluation reports target variance under the learned
-against the fixed cone, and a drop over 10\% is a flag.
+\paragraph{Guards.} A movable question moves to easy water, and a
+stop-gradient on target positions does not stop the target
+\emph{distribution} from changing when the targets are re-drawn from a
+learned cone; nor can a variance statistic detect a move toward cleaner or
+denser observations. So the input geometry is learned and the target
+geometry is not: target queries --- the mirrored future cone, the hidden
+waist, the fill-in cells and points --- are drawn from the fixed hourglass of
+the initial table in every phase, including after each re-bake, and the
+same target set serves every arm and seed of a comparison. The mirror of the
+\emph{learned} cone is not a training target; whether a learned mirrored
+target set buys skill is a separate, later comparison with its own guard.
+The remaining guards are: the aperture never enters the loss weights; the
+ring stays ungated; the evaluation query set is frozen and identical across
+arms (\S\ref{sec:eval-protocol}); and the learned geometry is reported as a
+diagnostic --- agreement between a learned drift and a known current is
+descriptive, since a disagreement can be useful information routing and an
+agreement can be redundant source structure, and neither establishes a
+causal reading.
 
 \subsection{Stage 1: encoding observations}\label{sec:stage1}
 
@@ -296,11 +378,18 @@ the lead in each query suffice. Point observations --- a profile, a laser
 footprint, a fluorescence sounding, a tower's half-hour --- are hidden and
 predicted like cells; an annual map is a T1 or T4 target at its own
 footprint and year, with the previous year's map visible. Three rules are
-not knobs: a target's
-channel must be visible somewhere in the input (the sampler counts
-violations, required zero); the waist family scores hidden channels only; and
-every (task, family, lead) is reported against the score of predicting the
-mean, and is called learned only where the ratio is below one held out.
+not knobs: in the main tasks a target's channel must be visible somewhere in
+the input (the sampler counts violations, required zero), which keeps a copy
+or persistence control inside every example; the waist family scores hidden
+channels only; and every (task, family, lead) is reported against the score
+of predicting the mean, and is called learned only where the ratio is below
+one held out. The first rule also bars the cross-variable inference a
+completion model is often wanted for --- a subsurface profile from the
+surface alone, chlorophyll from physics alone --- so a fourth, small task,
+\textbf{T4c}, scores exactly that: the whole target channel is absent from
+the input, on a fixed list of (target channel, visible channels) pairs, with
+its own predict-the-mean bar. A claim of general observation completion is
+made only from T4c.
 
 \begin{table}[t]
 \centering\footnotesize
@@ -311,25 +400,32 @@ task & input & targets & share & what it teaches \\
 T1 forecast & waist + past cone & future cone & 0.35 & the full problem \\
 T2 snapshot forecast & waist only & future cone & 0.15 & what history buys, inside one model \\
 T3 nowcast & past cone under dropout; waist hidden & waist & 0.25 & the present from the past \\
-T4 fill-in & waist + past cone under dropout & hidden cells and points & 0.25 & reconstruction from partial observation \\
+T4 fill-in & waist + past cone under dropout & hidden cells and points & 0.20 & reconstruction from partial observation \\
+T4c cross-variable & waist + past cone with the target channel absent everywhere & that channel, on a fixed pair list & 0.05 & inference across variables, scored apart \\
 \bottomrule
 \end{tabular}
-\caption{Stage-1 tasks, drawn per example. Shares are a starting point and
+\caption{Stage-1 tasks, drawn per example. Every target position is drawn
+from the fixed hourglass. Shares are a starting point and
 the first thing \S\ref{sec:eval-compare} varies.\label{tab:tasks}}
 \end{table}
 
-\paragraph{Model.} A strict masked autoencoder \cite{mae}: the encoder sees
-visible tokens and entries only, never a placeholder. It is a transformer
-over the example's tokens --- about 900 in the gate phase and 1{,}200 after
-hardening (six lags $\times$ column, ellipse and ring $\times$ four groups,
-plus waist and profiles) --- with Perceiver-style cross-attention into a
-fixed latent set \cite{perceiver}, writing $z$ of width 128--256. The
-bottleneck is the token count, not the width. The decoder reads $z$ alone:
-a query (offset, channel, sphere, depth, lead, footprint) cross-attends to $z$
-and emits a mean and log-variance. A decoder that could read the encoder's
-latents would let $z$ carry nothing; that path is closed. At the larger
-rungs the feed-forward block is a mixture of experts routed by sphere and
-channel group \cite{switch}.
+\paragraph{Model.} A masked autoencoder \cite{mae} over tokens that exist:
+the encoder attends only to tokens that carry at least one observed or
+hidden entry, padded slots are masked out of attention, and within an
+attended token the hidden and never-observed entries are the learned markers
+of \S\ref{sec:data-token} --- so the masking is at the level of entries
+inside a location token, not of whole tokens as in an image MAE. It is a
+transformer over the example's tokens --- about 900 in the gate phase and
+1{,}200 after hardening (six lags $\times$ column, ellipse and ring $\times$
+four groups, plus waist and profiles) --- with Perceiver-style
+cross-attention into a fixed latent set \cite{perceiver}, writing a
+deterministic $z$ of width 128--256. The bottleneck is the token count, not
+the width. The decoder reads $z$ alone: a query (offset, channel, sphere,
+depth, lead, footprint) cross-attends to $z$ and emits a mean and
+log-variance. A decoder that could read the encoder's latents would let $z$
+carry nothing; that path is closed, and its weight is zero rather than
+small. At the larger rungs the feed-forward block is a mixture of experts
+routed by sphere and channel group \cite{switch}.
 
 \paragraph{Objective.} A heteroscedastic Gaussian per channel group in its
 transformed space, decoupled:
@@ -339,32 +435,40 @@ transformed space, decoupled:
 \end{equation}
 so the mean trains by squared error and the variance by the likelihood with
 the mean detached, which removes the variance head's habit of explaining a
-hard target away \cite{betanll}. $s\in[-8,8]$; the first 2{,}000 steps run at
+hard target away. This is the faithful heteroscedastic regression of
+\cite{faithful} (the mean's likelihood gradient replaced by its squared-error
+gradient, the variance keeping the likelihood's), with the variance gradient
+also stopped from reaching the trunk the two heads share; it is not the
+$\beta$-NLL of \cite{betanll}, which re-weights the likelihood by a detached
+power of the variance and never detaches the mean. $s\in[-8,8]$; the first 2{,}000 steps run at
 $\sigma=1$; Gaussian in log space for log-normal channels, a hurdle
 (wet/dry $\times$ log-Gaussian) for rain, logit-Gaussian for fractions.
 Coverage of the $\pm1\sigma$, $\pm2\sigma$ bands is the calibration check.
 
 \paragraph{Weighting across targets.} A plain sum over targets whose residual
 errors differ by orders of magnitude lets the hardest dominate.
-Standardising weights by marginal variance, which conflates \emph{varies a
-lot} with \emph{hard to predict}. The right scale is the irreducible error:
+Standardising weights by marginal variance conflates \emph{varies a lot}
+with \emph{hard to predict}. The scale used is a reference error --- the
+held-out error of a reference model on that class, which is not the
+irreducible error but a fixed, measurable stand-in for it:
 \begin{equation}
 \mathcal{L}_\mu=\sum_k w_k\,\mathrm{MSE}_k,\qquad w_k=1/\mathrm{MSE}_k^{\text{ref}},
-\qquad\text{no gradient through }w_k ,
+\qquad\text{$w_k$ fixed} ,
 \end{equation}
-over classes $k=$ (channel, family, lead). This is the stop-gradient form of
-$\sum_k\log\mathrm{MSE}_k$ --- Gaussian likelihood with one fixed variance per
-class --- so each class contributes its relative improvement, and the
-residual scale stays out of the co-adapting $\sigma$ head. The reference is
-the held-out class error, never the final training error. At a new tier it
-is an exponential moving average under stop-gradient, started from the
-marginal variance and annealed over the first thousands of steps; at a tier
-with a previous run the weights are frozen from it and recomputed after, a
-run being repeated once if any moved by more than $2\times$. Heavy-tailed
-classes (rain, chlorophyll) use a robust scale or a Huber error. Logged per
-class: $w_k\mathrm{MSE}_k$ (near one at convergence) and
-$1-\mathrm{MSE}_k/\mathrm{var}_k$. An explicit multiplier for a class a use
-cares about sits on top, kept separate.
+over classes $k=$ (channel, family, lead). With fixed weights this is a
+Gaussian likelihood with one fixed variance per class; it equals the
+gradient of $\sum_k\log\mathrm{MSE}_k$ only where the reference equals the
+current error, and the objective actually minimised is the weighted sum as
+written. The weights are fitted once, on a calibration fold of training
+years (never a held-out year and never the run's own final training error),
+frozen for the run, and capped at $100\times$ the median weight so that no
+class dominates through a small reference; at the first run of a tier the
+reference is the predict-the-mean error, and at later runs the previous
+run's held-out error. A run is repeated once if a re-fit after it moves any
+weight by more than $2\times$. Heavy-tailed classes (rain, chlorophyll) use a
+robust scale or a Huber error. Logged per class: $w_k\mathrm{MSE}_k$ (near
+one at convergence) and $1-\mathrm{MSE}_k/\mathrm{var}_k$. An explicit
+multiplier for a class a use cares about sits on top, kept separate.
 
 \paragraph{Stability.} Collapse is invisible to reconstruction loss, so the
 effective rank of $z$ on a fixed held-out batch and a scale-invariant probe
@@ -376,25 +480,48 @@ epochs \cite{datacon}.
 
 \subsection{Stage 2: forecasting embeddings}\label{sec:stage2}
 
-\paragraph{Inputs.} Tokens are the codec's embeddings: mean and log-variance
-of $z$, offset, statics and season at each sampled cell and lag. The past
-cone reads lag 0 and lags $1,2,3,5,8,13,21,34,55,89,144$ pentads --- twelve
-slices, not 144 --- each with the anchor column, a 24-point footprint whose
-reach grows at 130\,km per pentad (${\approx}$1{,}000\,km at lag~7, the
-4{,}444\,km cap from lag 33) and a ring to the antipode: about 600 tokens
-against twenty thousand for a dense window, which is the ablation. The same
-per-channel geometry, maps and guards apply.
+\paragraph{Inputs.} Tokens are the codec's embeddings: the deterministic
+$z$, the count of observations that entered it, offset, statics and season
+at each sampled cell and lag. The past cone reads eight slices --- lag 0,
+whose embedding already summarises the raw record over lags 0--6, and lags
+$7,13,21,34,55,89,143$ pentads, log-spaced from the first pentad outside the
+codec's window to the edge of the two-year window --- each with the anchor
+column, a 24-point footprint whose reach grows at 130\,km per pentad
+(${\approx}$1{,}000\,km at lag~7, the 4{,}444\,km cap from lag 33) and a
+24-point ring to the antipode: $8\times49\approx400$ tokens against twenty
+thousand for a dense window, which is the ablation. An embedding token has
+no channel axis, so stage~2's geometry is per sphere rather than per channel:
+one drift, waist, growth and memory per $1^\circ$ cell and sphere, on the
+same maps, under the same fixed-target guard; the per-channel aperture is a
+stage-1 device.
 
 \paragraph{Linear backbone.} For the anchor column,
 \begin{equation}
 \hat z_{t+\ell}=\mathbf{G}_\ell z_t+f_\theta(\text{cone},\ell),\qquad
-\mathbf{G}_\ell=\mathbf{U}\,\mathrm{diag}(e^{-\ell/\tau_j})\,\mathbf{U}^{-1},\ \tau_j>0 ,
+\mathbf{G}_\ell=\exp(\ell\,\mathbf{L}),\quad
+\mathbf{L}=\tfrac{1}{\tau_0}\log\!\big(\mathbf{C}(\tau_0)\,\mathbf{C}(0)^{-1}\big) ,
 \end{equation}
-a contractive propagator with learned time constants, initialised from a
-linear inverse model \cite{penland} on training-year embeddings, plus a
-transformer $f_\theta$ with a zero-initialised output projection. At step
-zero the forecaster is the embedding-space LIM; it must earn its distance
-from it held out. Damped persistence is the diagonal case and its own null.
+the propagator of a linear inverse model \cite{penland,newman} fitted by
+regularised least squares on training-year embeddings at lag
+$\tau_0$ of one pentad, retained unchanged, plus a transformer $f_\theta$
+with a zero-initialised output projection. At step zero the forecaster
+\emph{is} the embedding-space LIM, without projection or approximation, and
+it must earn its distance from it held out; fine-tuning $\mathbf{L}$ is a
+separate arm. $\mathbf{L}$ is a general real matrix: its eigenvalues come in
+complex pairs, so the backbone carries damped oscillatory modes, and it is
+non-normal, so finite-lead amplification $\|\mathbf{G}_\ell\|_2>1$ is
+possible while every mode decays --- the optimal growth of \cite{penland}.
+The backbone is therefore asymptotically stable (spectral radius of
+$\mathbf{G}_1$ below one, checked at fit time) and is not called contractive;
+a parameterisation restricted to a real decay spectrum
+$\mathbf{U}\,\mathrm{diag}(e^{-\ell/\tau_j})\,\mathbf{U}^{-1}$ would drop the
+oscillations and, with non-orthogonal $\mathbf{U}$, would still not bound the
+Euclidean norm. Stability of $\mathbf{G}$ says nothing about the residual
+model or its multi-year roll, which are scored on their own. Reported before
+the residual is trained: the backbone's decoded skill per lead, its
+finite-lead amplification $\max_\ell\|\mathbf{G}_\ell\|_2$, and after
+training whether the residual improved it. Damped persistence is the diagonal
+case and its own null.
 
 \paragraph{Direct multi-lead targets.} The mirrored future cone at leads
 $1,2,3,5,8,13,21,34,55,73$ pentads, each a query to the same head, predicted
@@ -407,25 +534,62 @@ past: the multi-year roll is a mode, not the objective.
 \paragraph{Objective.} The decoupled Gaussian on each target embedding,
 weighted per class by the rule of \S\ref{sec:stage1} starting from the
 predict-the-mean bar; plus a decoded-space squared error through the frozen
-codec decoder at leads 1, 8, 34 for the scoreable channels, because the
-embedding metric is not the scored metric; plus, for the multi-year mode, a
-two-step pushforward with a stop-gradient on the first step. Under a
-squared-error mean the amplitude shrinks with correlation, so calibration is
-a property of the held-out minimum; the identity
-$\mathrm{MSSS}_{\text{clim}}=1-(1+a^2-2a\,\mathrm{ACC})$ is logged per lead as
-the check, and a scaling fitted on training-year starts is a diagnostic only.
+codec decoder at the leads the protocol scores (\S\ref{sec:eval-protocol}),
+because the embedding metric depends on the codec's coordinates, the decoder
+is nonlinear so the decoded mean latent is not the mean decoded forecast,
+and the scored metric is the decoded one; plus, for the multi-year mode, a
+two-step pushforward with a stop-gradient on the first step. Two mismatches
+between training and use are measured on the complete pipeline rather than
+assumed away: the size of the latent-versus-decoded gap per lead, and the
+shift a read-out trained on true embeddings meets when fed forecast
+embeddings (every read-out is scored both ways). If either dominates the
+error, a larger decoded loss at the scored leads is preferred to a larger
+model. Under a squared-error mean the amplitude shrinks with correlation, so
+calibration is a property of the held-out minimum; Murphy's decomposition
+\cite{murphy}
+$\mathrm{MSSS}_{\text{clim}}=1-\big(1+a^2-2a\,\mathrm{ACC}+b^2\big)$, with
+$a$ the amplitude ratio and $b$ the mean bias in units of the verifying
+standard deviation, is logged per lead as the check --- ACC, $a$, $b$ and
+MSSS computed under one set of area weights, the reference being the
+training-year climatology so the identity is approximate to the extent that
+reference differs from the verifying sample's --- and a scaling fitted on
+training-year starts is a diagnostic only.
 
 \paragraph{Regularisation.} The globe supplies every regime; the log-spaced
 cone cuts parameters per example seventyfold; the free part is a residual on
 a backbone the data pin down. Then: Gaussian noise on input embeddings at
 $0.7$ of the persistence scale; dropout of past points; weight decay; early
-stopping; and a seed ensemble of three to five whose spread is the first
-probabilistic forecast. Once the deterministic level exists, a shared
-low-dimensional noise vector conditions the head so samples cohere across
-cells and leads, scored by fair CRPS \cite{crps} --- trained on marginals,
-such an ensemble already reproduces joint spatial structure \cite{fgn}; categorical marginals over
-a quantised embedding are the alternative where the conditional is
-two-humped, as an El Ni\~no index at 6--24 months may be.
+stopping.
+
+\paragraph{Uncertainty.} Three sources are kept apart and never counted
+twice. The decoder's variance head gives a per-query predictive variance in
+the channel's transformed space. A seed ensemble of three to five forecasters
+measures seed sensitivity --- fitting variability, not the conditional
+variability of the Earth system --- and is reported under that name. The
+cheap probabilistic baseline is residual calibration: the distribution of
+decoded residuals by lead and region, fitted on a calibration split of
+training years and applied to the deterministic forecast, evaluated by
+coverage and by proper scores in physical units (or under the channel's
+stated transform, applied consistently; for a transformed channel the
+transformed mean, the physical median and the physical mean are three
+different numbers and each is named). A forecast distribution that beats
+that baseline has earned its machinery. Once the deterministic level exists,
+a shared low-dimensional noise vector conditions the head so samples cohere
+across cells and leads, scored by the fair CRPS of an $M$-member ensemble
+\cite{ferro2008,ferro2014,leutbecher},
+$\frac1M\sum_i|x_i-y|-\frac{1}{2M(M-1)}\sum_{i\ne j}|x_i-x_j|$, which is
+unbiased in $M$ and so comparable across unequal ensembles. Good marginal
+scores do not identify a joint distribution: an ensemble trained on
+marginals reproduced joint spatial structure for one weather architecture
+\cite{fgn}, which is a reason to try the approach and no guarantee for this
+one. The joint structure is therefore scored directly --- the CRPS of an
+area average over $10^\circ$ blocks and of a temporal accumulation or event
+duration, beside the marginal CRPS --- and the diagnostic that shows the
+aggregate scores can see the problem is to permute ensemble members
+independently across cells, which preserves every marginal and destroys the
+dependence. Categorical marginals over a quantised embedding are the
+alternative where the conditional is two-humped, as an El Ni\~no index at
+6--24 months may be.
 
 \subsection{Decoding queries}\label{sec:readout}
 
@@ -434,25 +598,36 @@ depth, time; channel; sphere; source; footprint. A $0.25^\circ$ cell over a
 pentad, a 300\,m pixel on a day, a station at an hour, a float at its
 depths, a canopy's height at a 25\,m footprint and a 30\,m pixel's loss year
 are one decoder, because it was trained on targets with those coordinates
-and footprints, each scored against the observation that has that support. The domain is what the training targets contained, at the
-footprints they came with; a channel never observed cannot be asked for,
-and a footprint far outside the seen range is an extrapolation and is
-reported as one. A query where the source never covered --- SST over land
---- returns a variance that says so, because the variance head was never
-rewarded for confidence there. A functional of many cells --- a transport, an
-area index, a warm-water volume --- is an attention head over the predicted
-embeddings of its cells, trained on training-year true embeddings, never on
-a spatial mean (geostrophic transport is the contrast across a section, and
-a mean cancels it). Read-outs are the cheap end of the system and choose
-between no models. A point store's own record verifies its forecast; where a
-licence forbids redistribution, the score is published and the values are
-not.
+and footprints, each scored against the observation that has that support.
+The domain is what the training targets contained, at the footprints they
+came with, and the model's behaviour outside that support is unconstrained
+--- a variance head never trained on a region has no reason to be large
+there. So support is a flag, not an inference: a query for a channel where
+the source never covered (SST over land) is \emph{invalid} and is refused;
+a query for a valid channel at a footprint, depth or place outside the
+trained range carries an \emph{extrapolation} flag with the answer; and the
+flags are computed from the training-target registry, not from the model.
+A functional of many cells is decoded in the way its definition allows. A
+quantity with a known definition --- Ni\~no-3.4, an area-mean SST, a heat
+content over a stated volume --- is the exact area-weighted integral of the
+decoded field, never a learned read-out. A quantity that is an instrument's
+own aggregate with no closed form in the model's fields --- the transport an
+array measures across its section --- is an attention head over the
+predicted embeddings of its cells, trained on training-year true
+embeddings, scored on forecast embeddings as well, and never on a spatial
+mean (geostrophic transport is the contrast across a section, and a mean
+cancels it). Read-outs are the cheap end of the system and choose between no
+models. A point store's own record verifies its forecast; where a licence
+forbids redistribution, the score is published and the values are not.
 
 \section{Data}\label{sec:data}
 
-Nothing is resampled to a common grid. Each source is stored at its own
-resolution and cadence in one of three tiers; the sampler turns all of them
-into one token at read time; the decoder is queried at a location and a
+No source is resampled to a common analysis grid. Each source is stored at
+its own resolution and cadence in one of three tiers; where a source is
+aggregated at build time --- the pentad mean of a daily field, the block mean
+of 4\,km colour under a $0.25^\circ$ point --- the aggregation is stated with
+the group and is the footprint its token carries; the sampler turns all of
+them into one token at read time; the decoder is queried at a location and a
 footprint.
 
 \subsection{The $0.25^\circ$ pentad grid}\label{sec:data-tensor}
@@ -483,7 +658,11 @@ sensible heat flux, skin temperature (NCEP; ERA5 is the intended
 replacement);
 \item \textbf{ocean interior} (\code{rg100}, thirty-two), $1^\circ$, monthly: temperature and salinity
 at sixteen pressure levels, 10--1{,}900\,dbar (Roemmich--Gilson Argo,
-2004--), each month in the pentad holding its fifteenth, 252 rows;
+2004--), each month stored in the pentad holding its fifteenth, 252 rows.
+The field is an objective analysis of every profile in the calendar month
+and is released after the month ends, so its support is the whole month and
+its availability is the month's end plus about a week; the mid-month bin is
+where it is stored, not when it was known (\S\ref{sec:data-split});
 \item \textbf{ocean colour} (\code{oc025}, two), $0.25^\circ$, 1{,}997 rows on
 an offset axis from bin 1145 (1997-09-04): block mean of
 $\log_{10}$ chlorophyll over the $6\times6$ OC-CCI (the European Space
@@ -586,7 +765,22 @@ it with everything else fixed.
 One time axis (the pentad bin; tier-P rows keep their exact time, so
 $\Delta t$ is fractional); one registry per family (tier, layout, cadence,
 channels, footprint constants, first bin, checksums, sources, licence,
-builder commit --- a consumer dispatches on the tier); one sampler contract
+builder commit --- a consumer dispatches on the tier), in which every group
+also carries its \emph{source contract}: \code{support\_start} and
+\code{support\_end} (the interval of measurements a value summarises,
+relative to its stamp --- zero width for an instantaneous reading, the
+calendar month for a monthly analysis, the fit period for an annual map),
+\code{available\_at} (the earliest time the value could have been used,
+from the producer's release latency; equal to the stamp for a real-time
+source), \code{product\_version}, and \code{lineage} (the measurements a
+derived product was fitted to or assimilated, by store name --- the
+Roemmich--Gilson field to the Argo profiles, the reanalysis to the profiles
+and the altimeter, a canopy map to the laser footprints, a tile cache to the
+imagery and to whatever supervised it). Annual maps, retrospective analyses,
+climatological backgrounds and pre-trained embedding caches carry these
+fields like any other source, since an anomaly climatology recomputed on
+training years does not remove future information already inside an
+upstream product; one sampler contract
 (\code{gather(anchor, family)} returns tokens per group under that group's
 cone family, with a fixed slot count so batches stay rectangular). Licences
 decide the track. Each group's licence block records \code{redistribution}
@@ -613,8 +807,20 @@ Admission: raw measurements first, a derived product only where it carries
 measurements nothing else does or is itself a target a user will ask for
 (the annual maps), no gap-filled analyses; four named exceptions slightly
 coarser than the rule (12.5\,km scatterometer wind, 11\,km rain, one
-10.5\,km CO$_2$ sounder, eight-day leaf area); and every store must lower the
-error on one of the five read-outs (\S\ref{sec:eval-compare}) or be dropped.
+10.5\,km CO$_2$ sounder, eight-day leaf area); and every store is scored on
+the read-out it was admitted for, at equal token budget with and without it,
+with its incremental cost recorded. The verdict has three values, not two:
+\emph{useful} (it lowers the error beyond the paired interval), \emph{not
+useful at this budget}, and \emph{inconclusive} (the read-out lacked the
+power to say). A store that is not useful at this budget or inconclusive is
+deferred --- its registry entry, provenance and cost stay --- and is not
+called uninformative, because an absence of measured benefit on a low-power
+read-out is not an absence of information. An observation count is not
+independent information: a long altimeter track or a dense buoy array can
+dominate a loss or a nearest-neighbour set without adding a regime, so
+sampling and verification of tier-P stores are platform- and track-aware,
+and a store's benefit is inspected conditional on the companion channels
+that make it useful.
 
 \begin{table}[t]
 \centering\scriptsize\setlength{\tabcolsep}{3pt}
@@ -659,8 +865,12 @@ of 13 bands and a $0.25^\circ$ cell holds ${\sim}$7{,}000 of them; they
 cannot be sampling points. The local codec is a masked autoencoder over one
 tile-date, conditioned on sensor metadata (resolution, incidence or sun
 angle) with a learned source embedding so one codec serves optical and
-radar, with a same-place-different-date contrastive term so the token
-carries state, not texture. It emits $k=4$--$8$ tokens of 64 dimensions,
+radar. A same-place--different-date contrastive term would make the token
+invariant to exactly the changes a forecast must retain, so it is not
+switched on by default: the token's sensitivity to real change (a
+clearing, a burn, a green-up) is measured first, on the loss-year and
+phenology targets, and any invariance term is added only with augmentations
+that preserve the state of interest. It emits $k=4$--$8$ tokens of 64 dimensions,
 cached once, reused by every anchor whose cone holds the tile; it sees one
 date, and the cone codec supplies time. Tile size is a knob: 640\,m tiles at
 seventy clear dates a year are ${\sim}$20\,TB of tokens a year globally,
@@ -680,9 +890,17 @@ species occurrences \cite{gbif} --- sparse and biased, and the only global recor
 where life is. The annual maps --- forest loss \cite{hansen}, canopy height
 \cite{potapov,lang,tolan}, biomass \cite{ccibiomass}, the leaf calendar ---
 are each fitted to one of those measurements and are admitted as targets:
-what a user asks for, at the map's own footprint and year. Nothing on land
-advects; the drivers of every biosphere channel are the atmosphere and the
-soil, which every token already carries.
+what a user asks for, at the map's own footprint and year. The first model
+assumes the dominant predictors of a biosphere channel are the local
+atmosphere and soil, which every token already carries, and gives land no
+drift; that is an assumption about the first model, not about land ---
+seed dispersal, river transport, fire spread, hydrology, disturbance and
+management all move signals across land, and fire already has the wind as
+its carrier. Species occurrences enter as a channel only once a model of
+observation effort exists: a record says a species was seen, its absence
+says nothing about whether it was there, and a generic Gaussian channel
+cannot tell absence from lack of reporting; until then \code{gbif} is
+stored and not read.
 
 \begin{table}[t]
 \centering\scriptsize\setlength{\tabcolsep}{3pt}
@@ -758,15 +976,77 @@ started. Everything public is in the Hugging Face dataset
 \path{chfrank/earth-tensors-private}, holds the built \code{seaice\_asi} and
 \code{tide\_private}.
 
-\subsection{Training, validation and test periods}\label{sec:data-split}
+\subsection{The evaluation contract: periods, availability,
+lineage}\label{sec:data-split}
 
-Development years 2009, 2017, 2023 are held out of
-training, climatology and every statistic; the terminal test scores a model
-trained through 2020 once on 2021--2024. An example is admissible only if
-every bin its forward pass can see --- every past token, every future target
---- is a training bin; a brute-force count over a large anchor draw certifies
-this before a run, and a non-zero count refuses it. Longitude holes are held
-out too, so extrapolation is scored apart from interpolation.
+\paragraph{Periods.} The record is divided into three kinds of period, and
+every learned component --- codecs, tile caches, the linear inverse model,
+read-outs, loss weights, calibration --- obeys the same division.
+\emph{Training} is 1982--2020 less the \emph{development} years 2009 and
+2017, which are held out of training, climatology and every statistic and
+are where architecture, sources and training choices are compared.
+\emph{Retrospective evaluation} is 2021--2024: no model is trained on it and
+no statistic is fitted on it, but these years have informed design decisions
+of this programme --- probes and reconstructions were scored on them, and
+2023 served as a development year in the pilot --- so a score on them is
+labelled retrospective and is evidence about skill conditional on the
+reconstructed state, never a first look. \emph{Prospective test} is
+2025-01-01 onward: no statistic, model or decision has touched it, the
+tensors do not yet contain it, and it is scored as issued --- forecasts for
+it are produced and archived with their issue time before the verifying
+observations are ingested, and each is scored once. The prospective record
+grows by one year each year; nothing is promised about a pristine period
+that has already been seen.
+
+\paragraph{Two evaluations, kept apart.} A \emph{retrospective state
+forecast} may read every declared retrospective analysis product at its
+stored bin, with the product's support audited, and establishes skill
+conditional on that reconstructed state. A \emph{forecast as issued at $t$}
+reads only rows with $\code{available\_at}\le t$ and establishes deployable
+skill. Every score names which of the two it is. The difference is not
+small: the monthly Argo analysis (\S\ref{sec:data-tensor}) is stored
+mid-month, summarises the whole month and is released a week after it, so a
+retrospective forecast issued mid-month reads a month of the future's
+profiles that an as-issued forecast does not; the reanalysis ocean
+assimilates observations from after the bin it is stamped with; an annual
+map summarises a year. The size of each such gap on the scored metrics is
+measured on the complete pipeline, not assumed.
+
+\paragraph{Lineage holdouts.} Holding out a measurement does not hold out
+the products fitted to it: a hidden Argo profile still shapes the gridded
+Argo analysis and the assimilating reanalysis of the same month, a hidden
+laser footprint may have supervised a canopy map or a tile cache. For a
+forecast of later independent observations this is not a leak; for a claim
+of independent reconstruction or of generalisation across sources it is.
+Such a claim is therefore scored under a lineage holdout --- the
+\code{lineage} field groups a measurement with every product derived from it
+and the group is withheld together --- and is not made otherwise.
+
+\paragraph{Admissibility and its check.} An example is admissible only if
+every bin its forward pass can see --- every past token, every future
+target, every point observation's exact time --- lies in the training
+period. The check is deterministic, not sampled: for each anchor bin the
+earliest input lag and the latest target lead are compared with the period
+boundaries, and the representative boundary cases (an anchor whose two-year
+window crosses a development year, whose target year crosses the
+retrospective boundary, whose nearest profile falls in a later bin) are
+enumerated and refused before a run. A random draw of anchors is a
+diagnostic that runs beside it, never the certificate.
+
+\paragraph{Longitude holes.} Meridional blocks are withheld from targets and
+from every fitted statistic; inputs inside them are not hidden, and the
+underlying observations of derived products are not touched. What a
+longitude hole measures is therefore the forecast head's generalisation to
+places whose targets it never fitted while it could still read their
+inputs --- one kind of generalisation, named as such and scored apart from
+interpolation --- not source generalisation and not independent
+reconstruction, which are the lineage holdout's.
+
+\paragraph{The manifest.} One machine-readable split manifest per run
+records the period boundaries, the source-contract fields of every group
+read, the lineage groups withheld, the evaluation mode (retrospective or
+as-issued) of every reported score, and the outcome of the admissibility
+check; a result without its manifest is not reported.
 
 \section{Training and scaling}\label{sec:scale}
 
@@ -791,83 +1071,219 @@ daily cadence, all spheres & 455\,B & 7.0\,B & 23\,B & a 1.3\,TB tensor and a st
 kilometre tier & $3.5\times10^{5}$\,B & $5.4\times10^{3}$\,B & --- & the token cache; compute-bound \\
 \bottomrule
 \end{tabular}
-\caption{The data ladder in observed values; tokens at 65 channels each;
-ceiling at one parameter per twenty values \cite{chinchilla}, an upper
-bound because values are correlated.\label{tab:ladder}}
+\caption{The data ladder in observed values; \emph{tokens} counts each
+location--pentad once (at 65 channels each) and bounds the distinct
+information, not the compute (see text); the \emph{ceiling} is one
+parameter per twenty values \cite{chinchilla}, a planning heuristic
+borrowed from language models and an upper bound because values are
+correlated, not a scaling law for this system.\label{tab:ladder}}
 \end{table}
 
 Each rung is bought on the previous rung's read-out under the frozen
-protocol with the null ladder beside it; a rung whose held-out minimum
-arrives inside 2{,}000 steps is over-parameterised and the next is not
-bought. L1: a 7--125\,M codec on the $0.25^\circ$ pentad grid, fixed against learned
-geometry. L2: 0.3--1\,B codec and forecaster with the tier-P stores; the
-width ladder is re-measured here, the one test that separates data-limited
-from compute-limited. L3: 1--4.5\,B, sphere-routed experts, all spheres: do
-land and atmosphere improve the ocean's rolled skill and vice versa. L4:
-daily cadence, the first compute-bound rung. L5: the kilometre tier, after L4
-is positive. Compute is $6NT$ per epoch; a 1\,B codec over the $0.25^\circ$ pentad grid
-is ${\sim}$30 RTX-4090-hours at four epochs, and the aperture and ring cost
-one multiply per token. The gather is host-bound and batched by latitude
-row. Every artefact is written incrementally to durable storage while a run
-lives. A configuration is a named recipe; a resumed run derives its
-architecture from its checkpoint. One seed is a direction, never a level;
-the first result at a new tier buys its replication, and a probe-scored
-claim needs three seeds.
+protocol with the null ladder beside it. The test that a rung is
+over-parameterised is not a step count --- a held-out minimum ``inside
+2{,}000 steps'' depends on batch size and learning-rate schedule and does
+not travel between runs --- but a learning curve: the held-out loss against
+examples processed, and, before any move from millions to billions of
+parameters, a $2\times2$ of two data extents at fixed size and two sizes at
+fixed data and compute, with examples and tokens processed recorded per
+cell. A rung whose larger cell does not beat its smaller one at equal data,
+and whose larger-data cell does beat its smaller one at equal size, is
+data-limited and the next data rung is bought; the reverse buys parameters;
+neither pattern points at the representation, the objective, the
+optimisation or the target noise rather than at scale, and those are tested
+before either is bought. L1: a 7--125\,M codec on the $0.25^\circ$ pentad
+grid, fixed against learned geometry. L2: 0.3--1\,B codec and forecaster
+with the tier-P stores; the width ladder is re-measured here, the one test
+that separates data-limited from compute-limited. L3: 1--4.5\,B,
+sphere-routed experts, all spheres: do land and atmosphere improve the
+ocean's rolled skill and vice versa. L4: daily cadence, the first
+compute-bound rung. L5: the kilometre tier, after L4 is positive.
+
+\paragraph{Cost.} The forward cost of the codec is not $6N$ per tensor token,
+because a cone codec reads each cell--pentad once per anchor whose cone
+contains it. The unit is the \emph{anchor}: an example of ${\approx}$900
+input tokens cross-attended into a latent set of 64--256 vectors. The
+measured anchor is a 7\,M-parameter cone codec of 748 tokens per anchor at
+$20{,}000$ steps $\times$ 256 anchors, 58 minutes on one RTX~4090, or
+$1.1\times10^6$ input tokens a second; at that rate the input projection and
+cross-attention, not the latent stack, set the time. Scaling the latent
+stack to $10^9$ parameters at the same anchor budget ($5.1\times10^6$
+anchors, $4.6\times10^9$ input tokens) costs of order 10--130 RTX-4090-hours
+depending on where the parameters sit --- the lower figure if the latent
+stack alone grows, the upper if $6N$ is spent on every input token --- and a
+sustained 66\,TFLOP\,s$^{-1}$ (40\% of the card's dense bf16 peak) is the
+throughput assumed. That budget touches about $0.3\%$ of the
+${\approx}$$1.8\times10^9$ ocean cell--pentads as anchors; a pass that uses
+every one of them once is $10^4$--$10^5$ RTX-4090-hours and is not planned.
+``Epoch'' below therefore means a pass over the anchor budget, and the
+four-epoch rule \cite{datacon} --- a language-model heuristic for repeated
+data --- is not the binding constraint; the number of distinct observed
+values the anchor budget has seen is, and it is logged. Every stated cost is
+replaced by measured anchor throughput, encoder and decoder token counts,
+loader time and cache-construction time before the rung is bought. The
+aperture and ring cost one multiply per token. The gather is host-bound and
+batched by latitude row. Every artefact is written incrementally to durable
+storage while a run lives. A configuration is a named recipe; a resumed run
+derives its architecture from its checkpoint. One seed is a direction, never
+a level; the first result at a new tier buys its replication, and a
+probe-scored claim needs three seeds.
 
 \section{Evaluation methodology}\label{sec:eval}
 
 \subsection{Protocol and baselines}\label{sec:eval-protocol}
 
-Development holdout as in \S\ref{sec:data-split};
-terminal test once. Per lead: mean-squared skill against climatology, raw
-and damped persistence; anomaly correlation; amplitude ratio; per channel and
-scope (trained and held-out longitudes); three starts per held-out year;
-block-bootstrap intervals over (year, start) \cite{goddard}. The null ladder
-beside every read-out: climatology, persistence, damped persistence (per-cell
-AR(1) on training years), the LIM in data and in embedding space
-\cite{penland,newman}, an analogue forecast, the previous rung. On the
-atmospheric channels at leads up to fifteen days the external baseline is
-FGN \cite{fgn}, a data-driven ensemble whose released checkpoints
-(WeatherNext~2) are run here from ERA5 initial conditions over 2023, its own
-test year and a held-out year here; its 6-hourly $0.25^\circ$ members are
-averaged to the pentad bins and the $1^\circ$ cells the atmospheric group
-holds, so both models are scored on the same support. Scores: fair CRPS
-\cite{crps} of the ensemble, ensemble-mean RMSE and spread--skill ratio, per
-channel and lead, and CRPS pooled over $10^\circ$ blocks.
-Configurations are compared on the dense field; the read-outs are checks. A
+Periods, evaluation modes and lineage as in \S\ref{sec:data-split}; every
+score is labelled retrospective or as-issued. \textbf{Starts.} Forecasts are
+issued from every pentad of an evaluation year where inference cost permits,
+and from no fewer than one start a month; three starts a year under-sample
+the seasons and the dependence on the forecast origin. Overlapping forecasts
+are not independent: intervals come from a block bootstrap over starts with
+blocks that preserve the temporal dependence of the lead being scored
+\cite{goddard}, reported with their sensitivity to block length and with the
+number of distinct years and events behind them, and a paired comparison is
+always paired by start and seed. A few years support no claim about
+multi-year timescales however many pixels they contain, and training seeds
+add optimisation variability, not climate histories. \textbf{Scores.} Per
+lead and channel, under one explicit set of physical area weights and fixed
+channel and region weights: mean-squared skill against climatology, raw and
+damped persistence; anomaly correlation; amplitude ratio and mean bias;
+per scope (trained and held-out longitudes). Beside the dense field, a fixed
+\emph{decoded panel} that the dense score cannot stand in for, because more
+pixels are not more independent El Ni\~no events or overturning transitions:
+area-mean SST over named regions (Ni\~no-3.4, the North Atlantic subpolar
+gyre, the tropical Indian Ocean), upper-ocean heat content to 700\,dbar
+where Argo coverage supports it, the Ni\~no-3.4 index as an exact
+area-weighted integral, each at leads of one, three, six and twelve months;
+and for one supported event class (an El Ni\~no onset, defined by a
+threshold on the index) the probability of exceeding the threshold, the
+event's duration and its accumulated anomaly. The panel is fixed here and
+not extended before the first result. \textbf{Slow background.} For
+seasonal and interannual leads every score is reported twice: against a
+training-only evolving climatology (a linear trend plus the harmonic
+seasonal cycle, fitted through the issue time) and against the stationary
+climatology, so trend reproduction and internal-variability prediction are
+visible separately; the trend is part of the target and is not removed.
+\textbf{Proxies.} A score is named for what it measures: a surface-CO$_2$
+error is not an air--sea flux skill, a velocity or a transport at one
+section is not the overturning, a canopy height at a footprint is not a
+vegetation change; each is scored as the precursor or proxy it is unless the
+named quantity is scored with its own observation and aggregation
+assumptions stated. \textbf{The null ladder} beside every read-out:
+climatology, persistence, damped persistence (per-cell AR(1) on training
+years), the LIM in data and in embedding space \cite{penland,newman}, a
+direct multi-lead regression on compact features, an analogue forecast, the
+previous rung. \textbf{Decision rule.} Each comparison names one primary
+score --- the area-weighted mean over the scored leads and channels of the
+mean-squared skill against damped persistence, unless stated otherwise ---
+with a practical improvement threshold and an equivalence margin fixed in
+advance, and a short list of non-degradation checks on the panel. A
+difference inside the equivalence margin at the paired interval is
+``equivalent''; a difference the interval cannot resolve is
+``inconclusive'', which is not evidence of equality; an inconclusive
+comparison keeps the simpler arm operationally and reports the uncertainty.
+Requiring a win at every lead and every seed is not a rule here: it is
+brittle and biased to the shortest leads. \textbf{Evaluation inputs.} The
+query and target set of an evaluation is frozen and identical across arms;
+each trained model reads it through its own intended, admissible input
+sampler, so a model with a learned cone is evaluated with the cone it
+learned. Forcing every arm through the fixed sampler tests behaviour under
+an input change, not the intended deployment, and is reported as a separate
+diagnostic where it is run. \textbf{External baseline.} On the atmospheric
+channels at leads up to fifteen days the external baseline is FGN
+\cite{fgn}, a data-driven ensemble trained on ERA5 and fine-tuned on the
+ECMWF operational analysis, whose released checkpoints (WeatherNext~2) are
+run here over 2023 from the analysis they were fine-tuned on; its 6-hourly
+$0.25^\circ$ members are averaged to the pentad bins and the $1^\circ$ cells
+the atmospheric group holds, so both models are scored on the same output
+support. Equal output support is not equal input information: FGN starts
+from an instantaneous global analysis, this model from a pentad observation
+stream, so the comparison is a \emph{system benchmark}, not a matched
+comparison, and it is labelled one. Its conventions are fixed: the issue
+time is the end of the input averaging window; each forecast's valid
+interval is the pentad it means; precipitation is the pentad accumulation
+of each system's own rate, averaged the same way. Scores: fair CRPS of the
+ensemble, ensemble-mean RMSE and spread--skill ratio, per channel and lead,
+and CRPS pooled over $10^\circ$ blocks. Configurations are compared on the
+dense field and the panel; the five read-outs are checks with limited power,
+kept without letting an inconclusive read-out veto a representation. A
 winner is replicated with a second seed before it is written up; a negative
 result is reported like a positive one.
 
 \subsection{Pre-registered comparisons}\label{sec:eval-compare}
 
+\textbf{(0) The forecasting benchmark}, first, before any geometry is
+learned or any store admitted, because a reconstruction that works, a
+sampling pattern that is physically plausible and billions of measurements
+do not by themselves show that the representation improves a forecast of
+the quantities of interest beyond cheap models given the same information,
+and the pilot found a current-state read-out from the codec at parity with
+the raw fields and a linear model stronger beyond two weeks
+\cite{techreport}. Existing data, the fixed hourglass, the smallest
+practical model, one common information set --- the same forecast origins,
+variables, history, targets and preprocessing --- and four arms:
+\textbf{B1} damped persistence and a data-space LIM on compressed
+(EOF) features, the skill already available cheaply; \textbf{B2} a direct
+multi-lead regularised regression on compact raw or EOF features over
+selected lags, which says whether reading history and fitting each lead
+directly explains any gain before it is credited to nonlinear dynamics or
+to cone geometry; \textbf{B3} the fixed codec plus an embedding-space LIM,
+which says whether the representation is a better compression for
+forecasting; \textbf{B4} B3 plus a small nonlinear residual, which says
+whether there is predictable nonlinear signal beyond it. Scored in decoded
+physical space, on SST at one, three and six months and one subsurface
+quantity (heat content to 700\,dbar), with the analogue baseline where
+affordable and ENSO and transport as secondary checks; one land task is
+added only where a record long enough exists. Runtime and paired
+uncertainty are part of the table. The decision this buys: if B3 does not
+beat B2 on the primary score, a smaller codec and a modest decoded forecast
+supervision are tried before any source is imported or any geometry
+learned; if B4 does not beat B3, the residual is not grown. One error
+decomposition accompanies the table --- by lead, season, region, slow
+background against anomaly, and on one scientific aggregate --- to say
+whether the limiting factor is the representation, the dynamics, the
+calibration or the data coverage.
+
 \textbf{(1) Hourglass against snapshot codec}, both frozen, same forecaster:
 one-step ratio, future-cone families against their bars, the T1$-$T2 gap.
 
-\textbf{(2) Geometry}, same tensor, codec size and steps, three seeds each:
-\textbf{A0} fixed (control and evaluation geometry); \textbf{A1} learned per
-channel, hierarchical, from A0's initialisation; \textbf{A1g} learned per
-group; \textbf{A2} as A1 with the ocean-surface drift primed at
-$-\mathbf{u}_{\text{clim}}\Delta t$. Read-outs, fixed now: \textbf{R1} T1
-loss per lead against its bar; \textbf{R2} the T1$-$T2 gap; \textbf{R3}
-per-channel drift against its expected carrier over the world ocean where
-the carrier exceeds $0.2$\,m\,s$^{-1}$ --- currents against
-$-\mathbf{u}_{\text{clim}}$, height's zonal drift positive (source to the
-east), ice against the reversed wind turned $5$--$30^\circ$, SST against the
-reversed wind at lags 0--1, deep levels against the reversed reanalysis
-velocity at their depth; \textbf{R4} at an anchor north of the $26.5^\circ$N
-array, surface drift south-west up the Florida Current and the drift of the
+\textbf{(2) Geometry}, run only if (0) shows a limitation that geometry
+can address, at equal token and compute budget, same tensor, codec size and
+steps, three seeds each, the target set fixed and shared: \textbf{A0} fixed
+(the control); \textbf{A1} learned per channel, hierarchical, from A0's
+initialisation; \textbf{A1g} learned per group, which A1 must beat to earn
+its extra estimation burden; \textbf{A2} as A1 with the ocean-surface drift
+primed at $-\mathbf{u}_{\text{clim}}\Delta t$. Read-outs, fixed now:
+\textbf{R1} the primary score of \S\ref{sec:eval-protocol} on T1, with the
+per-lead losses against their bars as the non-degradation checks;
+\textbf{R2} the T1$-$T2 gap; \textbf{R3}, descriptive only, per-channel drift
+against its expected carrier over the world ocean where the carrier exceeds
+$0.2$\,m\,s$^{-1}$ --- currents against $-\mathbf{u}_{\text{clim}}$,
+height's zonal drift positive (source to the east), ice against the reversed
+wind turned $5$--$30^\circ$, SST against the reversed wind at lags 0--1,
+deep levels against the reversed reanalysis velocity at their depth;
+\textbf{R4}, descriptive only, at an anchor north of the $26.5^\circ$N array,
+surface drift south-west up the Florida Current and the drift of the
 ${\ge}1{,}000$\,dbar channels north up the deep western boundary current,
-with attention on deep profiles north and shallow south; \textbf{R5} the
-target-variance flag. Verdict: A1 is adopted if it beats A0 on R1 at every
-lead ${\le}3$, paired at all seeds, with R5 clean; A1 tied with A1g keeps the
-per-group form as the cheaper equal; A2 beating A1 with A1 at A0 means the
-gradient cannot find upstream and the geometry is set from climatology;
-none winning keeps A0 and points to a per-example cone. First ablation
-after: A1 without the ring.
+with attention on deep profiles north and shallow south. Verdict: A1 is
+adopted if it beats A0 on R1 by more than the practical threshold at the
+paired interval with no check degraded; A1 within the equivalence margin of
+A1g keeps the per-group form as the cheaper equal; A2 beating A1 with A1 at
+A0 sets the geometry from climatology and is read as a statement about
+optimisation, regularisation and initialisation, not as proof that gradients
+cannot find upstream; none winning keeps A0. R3 and R4 are reported whatever
+the verdict and decide nothing. First ablations after: A1 without the ring,
+and A1 with the ring replaced by a coarse global summary of equal token
+budget.
 
-\textbf{(3) Forecaster}: backbone plus residual against the transformer
+\textbf{(3) Forecaster}: the LIM backbone alone (its decoded skill and
+finite-lead amplification reported first), backbone plus zero-initialised
+residual, the residual with a fine-tuned $\mathbf{L}$, and the transformer
 alone; direct multi-lead against rolled one-step; log-spaced against dense
-lags.
+lags. A constrained propagator (a real decay spectrum, or damped $2\times2$
+rotation blocks) is an arm only if the unconstrained backbone shows
+transient growth that costs skill, with the trade-off stated: suppressing
+growth or oscillation may remove predictability.
 
 \textbf{(4) Footprint and tiers}: coarse groups as offset tokens with true
 footprints against nearest-cell copies; the stores of Table~\ref{tab:gf} and
@@ -878,8 +1294,10 @@ velocity loss with drifter tokens against without; SST by the level-3 cell
 loss with drifter and ship tokens against without; the land biosphere by
 held-out tower carbon flux against a per-site day-of-year climatology and
 damped persistence, and by canopy height at held-out laser footprints
-against the 2020 map and the footprint's previous value, with fluorescence
-at held-out soundings as the dense check --- and per store on the read-out
+against the 2020 map and the footprint's previous value --- under the
+lineage holdout of \S\ref{sec:data-split}, since the map and the AlphaEarth
+cache were fitted to the same laser --- with fluorescence at held-out
+soundings as the dense check --- and per store on the read-out
 it was admitted for; the coastal tile codec with against without tile
 tokens, three seeds; AlphaEarth's cache in place of the tile codec, scored
 on the canopy read-out as well, since that embedding was fitted to the same
@@ -890,20 +1308,73 @@ dense model of equal active parameters at L3.
 
 \textbf{(6) Weather}: the shared atmospheric channels --- 2\,m temperature,
 10\,m wind, surface pressure, precipitation --- at leads of one, two and
-three pentads against FGN on 2023, with damped persistence and climatology
-beside both. The forecaster is not a weather model: it reads pentad means
+three pentads against FGN on 2023 (a retrospective year here and FGN's own
+test year), with damped persistence and climatology beside both. The forecaster is not a weather model: it reads pentad means
 and predicts pentad means, and FGN is scored on the same means. The
 comparison says how much of the medium-range atmosphere a model built for
 the coupled system at pentad cadence gives up, and whether the ocean, land
 and biosphere stores buy any of it back (arms with and without them).
 
-Build order: geometry, task mix, aperture, maps and harden step, forecaster,
-tiers; no comparison changes it.
+\textbf{(7) Completion}: T4c on its fixed pair list against its
+predict-the-mean bar, the one comparison that licenses a claim of
+cross-variable inference.
+
+Build order: the evaluation contract and its manifest
+(\S\ref{sec:data-split}); the forecasting benchmark (0) with the fixed
+hourglass and the error decomposition; the forecaster's backbone and
+residual (3); then, and only where (0) has located a limitation they
+address, geometry (2), task mix and aperture; then one source family chosen
+against a documented error, with its lineage-safe holdout and its
+incremental cost (4); replication of any promising effect before scale (5);
+tiers and the external benchmark (6) last. A comparison's outcome changes
+what is built next; the contract does not change.
 
 \section{Results}\label{sec:results}
 
 Reserved. Nothing here has been trained; the tables fix the columns now.
-Each cell will carry its seed count and spread.
+Each cell will carry its seed count, its paired interval and the label
+retrospective or as-issued.
+
+\subsection{The forecasting benchmark}
+
+\begin{table}[H]
+\centering\footnotesize\setlength{\tabcolsep}{4pt}
+\begin{tabular}{@{}L{4.6cm}cccccc@{}}
+\toprule
+ & \multicolumn{3}{c}{SST, $\mathrm{MSSS}_{\text{damped}}$} & \multicolumn{2}{c}{heat content 0--700\,dbar} & \\
+\cmidrule(lr){2-4}\cmidrule(lr){5-6}
+arm & 1 mo & 3 mo & 6 mo & 3 mo & 6 mo & runtime \\
+\midrule
+B1 damped persistence & 0 & 0 & 0 & 0 & 0 & --- \\
+B1 LIM, data space (EOF) & \tbd & \tbd & \tbd & \tbd & \tbd & \tbd \\
+B2 direct multi-lead regression, history & \tbd & \tbd & \tbd & \tbd & \tbd & \tbd \\
+B3 fixed codec + embedding-space LIM & \tbd & \tbd & \tbd & \tbd & \tbd & \tbd \\
+B4 B3 + small nonlinear residual & \tbd & \tbd & \tbd & \tbd & \tbd & \tbd \\
+\bottomrule
+\end{tabular}
+\caption{Comparison (0), decoded physical space, identical origins, history
+and targets, paired intervals on the differences between arms; the same
+table for ACC, amplitude and bias, and against the evolving
+climatology.\label{tab:res-benchmark}}
+\end{table}
+
+\begin{table}[H]
+\centering\footnotesize\setlength{\tabcolsep}{4pt}
+\begin{tabular}{@{}L{4.4cm}L{3.0cm}cccc@{}}
+\toprule
+quantity & score & 1 mo & 3 mo & 6 mo & 12 mo \\
+\midrule
+Ni\~no-3.4 index (exact integral) & ACC / RMSE & \tbd & \tbd & \tbd & \tbd \\
+subpolar-gyre SST & ACC / RMSE & \tbd & \tbd & \tbd & \tbd \\
+tropical Indian Ocean SST & ACC / RMSE & \tbd & \tbd & \tbd & \tbd \\
+heat content 0--700\,dbar, Argo-covered & ACC / RMSE & \tbd & \tbd & \tbd & \tbd \\
+El Ni\~no onset & threshold probability, duration, accumulated anomaly & \tbd & \tbd & \tbd & \tbd \\
+\bottomrule
+\end{tabular}
+\caption{The decoded panel of \S\ref{sec:eval-protocol}, reported for every
+arm of every comparison beside the dense-field score, each cell against the
+stationary and the evolving climatology.\label{tab:res-panel}}
+\end{table}
 
 \subsection{Encoder: hourglass against snapshot}
 
@@ -926,18 +1397,21 @@ persistence.\label{tab:res-codec}}
 
 \begin{table}[H]
 \centering\footnotesize
-\begin{tabular}{@{}lcccccc@{}}
+\begin{tabular}{@{}lccccccc@{}}
 \toprule
-arm & R1 lead 1 & R1 lead 2 & R1 lead 3 & R2 & R3 & R5 \\
+arm & R1 primary & R1 lead 1 & R1 lead 2 & R1 lead 3 & R2 & R3 & tokens \\
 \midrule
-A0 fixed & \tbd & \tbd & \tbd & \tbd & 0 by construction & --- \\
-A1 per channel & \tbd & \tbd & \tbd & \tbd & \tbd & \tbd \\
-A1g per group & \tbd & \tbd & \tbd & \tbd & \tbd & \tbd \\
-A2 primed & \tbd & \tbd & \tbd & \tbd & \tbd & \tbd \\
-A1 without ring & \tbd & \tbd & \tbd & \tbd & \tbd & \tbd \\
+A0 fixed & 0 (reference) & \tbd & \tbd & \tbd & \tbd & 0 by construction & \tbd \\
+A1 per channel & \tbd & \tbd & \tbd & \tbd & \tbd & \tbd & \tbd \\
+A1g per group & \tbd & \tbd & \tbd & \tbd & \tbd & \tbd & \tbd \\
+A2 primed & \tbd & \tbd & \tbd & \tbd & \tbd & \tbd & \tbd \\
+A1 without ring & \tbd & \tbd & \tbd & \tbd & \tbd & \tbd & \tbd \\
+A1, coarse global summary for ring & \tbd & \tbd & \tbd & \tbd & \tbd & \tbd & \tbd \\
 \bottomrule
 \end{tabular}
-\caption{Comparison (2), three seeds per arm, paired. R4 is a
+\caption{Comparison (2), three seeds per arm, paired, equal token budget,
+one fixed target set. R1 primary is the difference from A0 on the primary
+score with its paired interval; R3 is descriptive. R4 is a
 figure.\label{tab:res-geometry}}
 \end{table}
 
@@ -952,18 +1426,21 @@ lead (pentads) & 1 & 3 & 8 & 21 & 34 & 55 & 73 \\
 persistence & \tbd & \tbd & \tbd & \tbd & \tbd & \tbd & \tbd \\
 damped persistence & \tbd & \tbd & \tbd & \tbd & \tbd & \tbd & \tbd \\
 LIM, data space & \tbd & \tbd & \tbd & \tbd & \tbd & \tbd & \tbd \\
-LIM, embedding space & \tbd & \tbd & \tbd & \tbd & \tbd & \tbd & \tbd \\
+LIM, embedding space (the backbone alone) & \tbd & \tbd & \tbd & \tbd & \tbd & \tbd & \tbd \\
+direct multi-lead regression & \tbd & \tbd & \tbd & \tbd & \tbd & \tbd & \tbd \\
 analogue & \tbd & \tbd & \tbd & \tbd & \tbd & \tbd & \tbd \\
 forecaster, backbone + residual & \tbd & \tbd & \tbd & \tbd & \tbd & \tbd & \tbd \\
+\quad with fine-tuned $\mathbf{L}$ & \tbd & \tbd & \tbd & \tbd & \tbd & \tbd & \tbd \\
 \quad without backbone & \tbd & \tbd & \tbd & \tbd & \tbd & \tbd & \tbd \\
 \quad one-step, rolled & \tbd & \tbd & \tbd & \tbd & \tbd & \tbd & \tbd \\
 \quad dense lags & \tbd & \tbd & \tbd & \tbd & \tbd & \tbd & \tbd \\
 \bottomrule
 \end{tabular}
 \caption{Comparison (3) and the null ladder: $\mathrm{MSSS}_{\text{clim}}$ on
-the dense field, world ocean, per lead; the same table for
-$\mathrm{MSSS}_{\text{damped}}$, ACC and amplitude, per channel and
-scope.\label{tab:res-forecaster}}
+the dense field, world ocean, area-weighted, per lead; the same table for
+$\mathrm{MSSS}_{\text{damped}}$, ACC, amplitude and bias, per channel and
+scope, and the backbone's $\max_\ell\|\mathbf{G}_\ell\|_2$ beside its
+row.\label{tab:res-forecaster}}
 \end{table}
 
 \subsection{Observation stores per read-out}
@@ -1027,8 +1504,10 @@ precipitation & 1 & \tbd & \tbd & \tbd & \tbd & \tbd & \tbd \\
 \end{tabular}
 \caption{Comparison (6): the atmospheric channels on 2023, pentad means on
 the $1^\circ$ cells, leads in pentads (5, 10, 15 days). FGN: the released
-WeatherNext~2 checkpoints from ERA5 initial conditions, 64 members; ours: the
-seed ensemble of \S\ref{sec:stage2}; damped: per-cell AR(1). The same table
+WeatherNext~2 checkpoints from the operational analysis, its four released
+seeds pooled into one ensemble of at least fifty members; ours: the seed
+ensemble of \S\ref{sec:stage2}; damped: per-cell AR(1). A system benchmark
+with unmatched input information (\S\ref{sec:eval-protocol}). The same table
 for spread--skill ratio and $10^\circ$-pooled CRPS, and the arms with and
 without the fine stores.\label{tab:res-weather}}
 \end{table}
@@ -1064,9 +1543,13 @@ backbones with shallow read-outs \cite{lehmann} are the evaluation stance,
 judged by what a forecaster predicts from the representation rather than by
 a current-state probe. The LIM \cite{penland,newman} and the
 interannual-to-decadal verification framework \cite{goddard} are the nulls
-and scores; the decoupled objective follows \cite{betanll}, fair CRPS
-\cite{crps}, the four-epoch rule \cite{datacon}, sparse experts
-\cite{switch}. The physics of the per-channel carriers is from
+and scores, with Murphy's decomposition \cite{murphy} as the calibration
+check; the decoupled objective is the faithful heteroscedastic regression of
+\cite{faithful}, distinct from $\beta$-NLL \cite{betanll}; the fair CRPS is
+Ferro's estimator \cite{ferro2008,ferro2014,leutbecher} within the proper
+scoring rules of \cite{crps}; the four-epoch rule \cite{datacon} and the
+compute-optimal ratio \cite{chinchilla} are planning heuristics; sparse
+experts \cite{switch}. The physics of the per-channel carriers is from
 \cite{chelton,thorndike,sutton,meinen}; the overturning array
 \cite{mccarthy2015} and Argo \cite{argo} enter as observations in their own
 coordinates.
@@ -1075,6 +1558,7 @@ coordinates.
 \bibitem{techreport} blauewelt/earth (2026). Earth-state embeddings: a
 self-supervised codec of the North Atlantic, its transport read-out, and
 what a transformer forecasts from it. Technical report, 2 September 2026,
+revised 16 September 2026 (archived 18 September 2026),
 \url{https://github.com/blauewelt/earth/tree/main/ml/paper/archive/v8-2026-09-18-north-atlantic-results}.
 \bibitem{alphaearth} C. Brown, M. Kazmierski, V. Pasquarella et al.\ (2025).
 AlphaEarth Foundations: an embedding field model for accurate and efficient
@@ -1100,6 +1584,19 @@ Vinyals, J. Carreira (2021). Perceiver. \emph{ICML}.
 \bibitem{betanll} M. Seitzer, A. Tavakoli, D. Antic, G. Martius (2022). On
 the pitfalls of heteroscedastic uncertainty estimation with probabilistic
 neural networks. \emph{ICLR}.
+\bibitem{faithful} A. Stirn, H.-H. Wessels, M. Schertzer, L. Pereira, N. E.
+Sanjana, D. A. Knowles (2023). Faithful heteroscedastic regression with
+neural networks. \emph{AISTATS}, PMLR 206.
+\bibitem{murphy} A. H. Murphy (1988). Skill scores based on the mean square
+error and their relationships to the correlation coefficient. \emph{Monthly
+Weather Review} 116.
+\bibitem{ferro2008} C. A. T. Ferro, D. S. Richardson, A. P. Weigel (2008).
+On the effect of ensemble size on the discrete and continuous ranked
+probability scores. \emph{Meteorological Applications} 15.
+\bibitem{ferro2014} C. A. T. Ferro (2014). Fair scores for ensemble
+forecasts. \emph{QJRMS} 140.
+\bibitem{leutbecher} M. Leutbecher (2019). Ensemble size: how suboptimal is
+less than infinity? \emph{QJRMS} 145.
 \bibitem{datacon} N. Muennighoff et al.\ (2023). Scaling data-constrained
 language models. \emph{NeurIPS}.
 \bibitem{chinchilla} J. Hoffmann et al.\ (2022). Training compute-optimal
