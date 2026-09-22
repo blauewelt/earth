@@ -25,7 +25,7 @@
 \large a design for a global ocean--land--atmosphere model\\
 that reads the observational record through a learnable space--time cone}
 \author{blauewelt/earth --- design paper}
-\date{20 September 2026}
+\date{22 September 2026}
 
 \begin{document}
 \maketitle
@@ -455,33 +455,43 @@ footprint.
 
 \paragraph{Grid and time.} A point-aligned $0.25^\circ$ grid, $721\times
 1{,}440$ cells, rows south first, longitude wrapping; a five-day bin (pentad)
-from 1982-01-01, bin $b$ covering days $[5b,5b+5)$; 3{,}142 bins to 2024-12.
+from 1982-01-01, bin $b$ covering days $[5b,5b+5)$; 3{,}142 bins, the last
+opening 2024-12-31 and holding one day of source data rather than five.
 A bin is an averaging window, not a date. A coarse $1^\circ$ grid
 ($181\times360$) is defined the same way; a coarse channel is read at its
 nearest coarse point, so sixteen fine cells see one number. That is the
 model's honest view and is not interpolated.
 
 \paragraph{Groups.} Each group is an array $[T,H,W,C]$ in float16, bin-major,
-at its native grid and cadence:
+at its native grid and cadence, so one bin of one group is one contiguous
+byte range of one file (14.5\,MB for the ocean surface, 2.0\,MB for the
+atmosphere) and a reader fetches a pentad with a single HTTP range request.
+Four groups carry 56 channels:
 \begin{itemize}
-\item \textbf{ocean surface}, $0.25^\circ$, every pentad: current speed and
+\item \textbf{ocean surface} (\code{g025}, seven channels), $0.25^\circ$, every pentad: current speed and
 its two components, sea-surface height and log mixed-layer depth (GLORYS,
 1993--), sea-surface temperature and sea-ice concentration (OISST, 1982--);
-\item \textbf{atmosphere and land}, $1^\circ$, every pentad, every surface:
+\item \textbf{atmosphere and land} (\code{g100}, fifteen), $1^\circ$, every pentad, every surface:
 wind stress and its within-pentad standard deviation (four), 2\,m air
 temperature, 10\,m wind (two), surface pressure, log precipitation rate, log
 snow water equivalent, soil moisture and temperature (0--10\,cm), latent and
 sensible heat flux, skin temperature (NCEP; ERA5 is the intended
 replacement);
-\item \textbf{ocean interior}, $1^\circ$, monthly: temperature and salinity
+\item \textbf{ocean interior} (\code{rg100}, thirty-two), $1^\circ$, monthly: temperature and salinity
 at sixteen pressure levels, 10--1{,}900\,dbar (Roemmich--Gilson Argo,
-2004--), each month in the pentad holding its fifteenth;
-\item \textbf{ocean colour}, $0.25^\circ$, from 1997-09: block mean of
-$\log_{10}$ chlorophyll over the $6\times6$ OC-CCI 4\,km cells under a point,
-and the observed fraction of cell-days --- the evidence behind the value;
+2004--), each month in the pentad holding its fifteenth, 252 rows;
+\item \textbf{ocean colour} (\code{oc025}, two), $0.25^\circ$, 1{,}997 rows on
+an offset axis from bin 1145 (1997-09-04): block mean of
+$\log_{10}$ chlorophyll over the $6\times6$ OC-CCI (the European Space
+Agency's Ocean Colour Climate Change Initiative) 4\,km cells under a point,
+per day and then over the pentad's days, and the observed fraction of
+cell-days --- the evidence behind the value, missing exactly where the value
+is, never zero; 855{,}742{,}985 finite values per channel, 41.3\,\% of the
+group, colour over estuaries and lagoons the land mask calls land kept and
+counted;
 \item \textbf{statics}: surface class (702{,}642 ocean, 226{,}495 land,
 107{,}074 ice sheet, 2{,}029 inland water; ice over ocean on a shelf) and
-elevation.
+cell-mean elevation from ETOPO 2022, both complete in all 1{,}038{,}240 cells.
 \end{itemize}
 No channel is masked by sphere: a land cell reads its skin and air
 temperature and soil, an ocean cell its surface fields, every cell the
@@ -499,7 +509,13 @@ bounded fractions (sea ice, soil moisture) go through a logit. A value that
 does not exist --- a land cell's SST, a month without Argo, a cell under
 cloud --- is not zero: every token carries an observed flag per channel, and
 an unobserved entry is masked from loss and input. Holes in the grid are
-holes in the sources, counted per channel and bin at build time.
+holes in the sources, counted per channel and bin at build time and again by
+streaming every published file: $1.554\times10^{10}$ observed values; every
+channel full over its own record, except where a source is empty --- the
+reanalysis ocean before bin 804 (1993-01-03), sea ice in bins 433--439 (a
+change of microwave sensor), 2846 and 3090, colour in bin 1153 --- and the
+one-day last bin, empty in the two groups that require three days of a
+pentad.
 
 \subsection{Finer sources in three storage tiers}\label{sec:data-fine}
 
@@ -517,10 +533,17 @@ monthly, near-complete: colour at 4\,km, SST at 5.6\,km per sensor and
 $0.1^\circ$ daily rain, the daily $0.05^\circ$ land temperature, snow and
 reflectance, 500\,m leaf area every eight days, and the annual maps ---
 forest loss, canopy height and biomass, the leaf calendar --- at 30--500\,m.
-A group finer than $0.25^\circ$ is sharded: one compressed file per group and
-pentad, one frame per day (or three hours, or one per year), $256\times256$
-tiles with a byte index, so a read fetches the tiles around the anchor and an
-empty tile costs nothing. Footprint is a constant per group.
+A group finer than $0.25^\circ$ is sharded: one file per group and
+pentad holding $F$ frames (one per day, or three hours, or one per year), each
+frame cut into $256\times256$-pixel tiles of the native grid, each tile
+compressed on its own with zstandard; beside the shard an index of (byte
+offset, length) per frame and tile, where an empty tile has length zero and is
+never stored and a frame absent from the source has offset $-1$, so a missing
+day is recorded, not silently skipped. Tiles are written frame by frame
+without gaps, so a frame is two range reads --- its slab of the index, then
+one contiguous span of the shard --- and a cone decodes only the tiles it
+touches (578 tiles a frame for the 4\,km colour grid, 11.6\,\% of its
+pixel-days valid). Footprint is a constant per group.
 \item \textbf{P, points, profiles, tracks} --- Argo and BGC-Argo, every
 non-Argo profile since 1772, ship and buoy reports since 1662, bottle
 chemistry, drifters, tropical and open-ocean moorings, the overturning
@@ -530,9 +553,21 @@ wind cells; on land, stations, balloon soundings, tide gauges, buoys,
 gliders, flux towers, fire detections, rivers, soil probes, laser
 footprints of the canopy, fluorescence soundings, species occurrences. A
 store is a set of columns --- time in integer seconds, latitude,
-longitude, values, mask, quality, hashed platform, per-row footprint ---
-sorted by pentad with an index per bin, so the $k$ nearest observations in
-space--time are one bounded scan. Pre-1982 rows keep negative bins.
+longitude, values in raw units, mask, quality, hashed platform, per-row
+footprint --- sorted by (bin, time) with a compressed-sparse-row index of
+row offsets per bin, so the $k$ nearest observations in space--time are one
+bounded scan that stops at the anchor's own bin and never reads the future.
+The bin is derived in integers, $b=\lfloor t_s/432{,}000\rfloor$ with $t_s$
+the seconds since 1982-01-01T00:00\,UTC, floored toward minus infinity, so
+pre-1982 rows keep negative bins (drifters from 1979, carbon from 1957, ship
+reports from 1662) and the loader, not the store, clips to a tensor's axis;
+each store's index runs over its own first bin, which is not zero. The
+seconds are int32 (1913 to 2050), or int64 in a store whose record begins
+before 1914 (schema 3 against schema 2). They replaced float32 days, which
+resolve 21\,s in 1993 and 84\,s by 2015 --- up to 316 consecutive one-second
+altimeter samples shared one timestamp, 550\,km of track inside which
+$\Delta t$ ordered nothing, and 908 carbon rows within 84\,s of a pentad
+boundary were filed one bin late; integer seconds cost the same four bytes.
 \item \textbf{T, tiles} --- imagery at ${\le}$1\,km (Sentinel-1/2, Landsat,
 NISAR, OLCI, SLSTR, VIIRS, MODIS, the L- and P-band radar mosaics) and the
 10\,m and 1\,m canopy-height maps are not stored as values. The store is a
@@ -549,16 +584,27 @@ $\Delta t$ is fractional); one registry per family (tier, layout, cadence,
 channels, footprint constants, first bin, checksums, sources, licence,
 builder commit --- a consumer dispatches on the tier); one sampler contract
 (\code{gather(anchor, family)} returns tokens per group under that group's
-cone family, with a fixed slot count so batches stay rectangular). Stores
-whose licences forbid redistribution live on a private track in the same
-format, listed in the public registry.
+cone family, with a fixed slot count so batches stay rectangular). Licences
+decide the track. Each group's licence block records \code{redistribution}
+(yes, with attribution, or no) and \code{derived\_works} (free,
+non-commercial or restricted) from the licence's own clause, and
+\code{distribution} is public by default and private whenever redistribution
+is not granted: a private store keeps the same arrays and layout in a private
+repository, is listed in the public registry with its sizes and checks so a
+reader without access skips it by the field rather than by a failed fetch,
+and is pulled for a job and never kept on a rented machine. What may leave the
+private track is a trained model and its scores where \code{derived\_works}
+allows, never the values, and a result resting on a private store names it. A
+non-commercial source whose licence permits redistribution stays public and
+carries the restriction in its fields.
 
-The global fine-granularity family (Table~\ref{tab:gf}) is the instance of
+The global fine-granularity family (1.gf, Table~\ref{tab:gf}) is the instance of
 tiers G and P over the ocean and air at ${\le}$10\,km and ${\le}$5 days; a
-land-and-coast family holds the station networks, gauges, towers, fires,
+land-and-coast family (1.0.tf) holds the station networks, gauges, towers, fires,
 rivers, the $0.05^\circ$ land fields, the imagery catalogue, the
 land-change targets and the biosphere stores of Table~\ref{tab:bio}; a
-third is that family with the catalogue replaced by the AlphaEarth cache.
+third (0.9.tf) is that family with the catalogue replaced by the AlphaEarth
+cache (\S\ref{sec:data-built} gives what is built).
 Admission: raw measurements first, a derived product only where it carries
 measurements nothing else does or is itself a target a user will ask for
 (the annual maps), no gap-filled analyses; four named exceptions slightly
@@ -594,7 +640,14 @@ store & what it is & producer & space & time & record & tier \\
 resolution and cadence and enters through the token of
 \S\ref{sec:data-token} with its own footprint. A one-month test fetch
 through the real builder replaces every size estimate before a store is
-built.\label{tab:gf}}
+built. State on 22 September 2026 (\S\ref{sec:data-built}): \code{glodap},
+\code{wod}, \code{icoads}, \code{bgcargo}, \code{oceansites}, \code{swh} and
+\code{oc4k} (to 2022-12) are built and public; \code{seaice\_asi} is built on
+the private track (from 2012-07, redistribution not yet granted);
+\code{pace4k}'s parts are parked; \code{sst\_acspo02} and \code{swot} are
+probed and not built; \code{irtb} and \code{xco2} wait on a data-access
+approval; \code{sst\_cci05}, \code{precip01}, \code{wind12} and
+\code{deep\_arrays} are designed and not in the registry.\label{tab:gf}}
 \end{table}
 
 \paragraph{The local codec.} A $64\times64$ tile at 10\,m is 4{,}096 pixels
@@ -636,7 +689,7 @@ store & what it is & producer & space & time & record & tier \\
 \code{gedi} & laser relative-height profile, cover, biomass per footprint & NASA GEDI, ISS & 25\,m every 60\,m & per shot & 2019-04-- & P \\
 \code{icesat2} & laser terrain and canopy height per segment & NASA ICESat-2 ATL08 & 100\,m & per pass & 2018-10-- & P \\
 \code{sif} & chlorophyll fluorescence soundings & TROPOMI; OCO-2/3 & $7\times3.5$\,km; $1.3\times2.2$\,km & per sounding & 2018-05--; 2014-09-- & P \\
-\code{flux} & tower CO$_2$, water and heat exchange & FLUXNET, 700 sites & tower & half-hourly & 1991-- & P \\
+\code{flux} & tower CO$_2$, water and heat exchange & FLUXNET, 806 towers & tower & half-hourly & 1991-- & P \\
 \code{fire} & active-fire detections & FIRMS, MODIS/VIIRS & 375\,m--1\,km & per overpass & 2000-11-- & P \\
 \code{gbif} & species occurrences, taxon as platform & GBIF snapshot & per-record uncertainty & day or month & 1600s-- & P \\
 \code{lai500} & leaf area, absorbed light & MODIS/VIIRS & 500\,m & 8-day & 2000-02-- & G \\
@@ -651,8 +704,55 @@ store & what it is & producer & space & time & record & tier \\
 \end{tabular}
 \caption{The biosphere stores of the land-and-coast family (\code{pace4k}
 belongs to the ocean family). Same conventions as Table~\ref{tab:gf}; the
-annual maps are targets, the rest inputs.\label{tab:bio}}
+annual maps are targets, the rest inputs. State on 22 September 2026:
+\code{fire}, \code{flux} (26 of 806 towers unread) and \code{lossyear} are
+built and public; \code{gedi}, \code{icesat2}, \code{lai500},
+\code{pheno500}, \code{canopy30} and \code{pace4k} have parts parked and no
+assembled store; \code{sif}, \code{gbif}, \code{canopy\_ref} and
+\code{cat\_palsar} are registered and not built (\code{gbif}'s
+non-commercial part is registered on the private track, unbuilt);
+\code{biomass100} is designed and not in the registry.\label{tab:bio}}
 \end{table}
+
+\subsection{The families as built}\label{sec:data-built}
+
+The design is built as numbered families, each a set of stores under one
+registry of the same shape; this is their state on 22 September 2026. Family
+7.2 is the grid of \S\ref{sec:data-tensor}
+(\code{family7\_global025\_pentad\_l2}): the groups \code{g025},
+\code{g100}, \code{rg100} and \code{oc025}, 3{,}142 pentads from 1982-01-01
+to 2024-12-31, 61.16\,GB. Family 8 is the Argo profiles themselves,
+2{,}678{,}439 from 2004 to 2024 with $C=32$ (temperature and salinity at the
+sixteen Roemmich--Gilson pressures). Family 10.2 is five tier-P stores with
+the integer-second time column: \code{gdp}, 48{,}480{,}798 six-hourly fixes
+of the Global Drifter Program; \code{gtmba}, 1{,}001{,}282 daily rows of the
+tropical moored buoy arrays; \code{socat}, 41{,}830{,}675 underway
+measurements of surface-water CO$_2$ fugacity from the Surface Ocean CO$_2$
+Atlas; \code{slatrack}, 2{,}030{,}800{,}176 one-second along-track altimeter
+samples of sea-level anomaly from 29 mission datasets; and \code{fishing},
+617{,}164{,}038 vessel-cell-days of apparent fishing effort that Global
+Fishing Watch derives from the Automatic Identification System, the
+collision-avoidance radio of large vessels --- under a Creative Commons
+Attribution-NonCommercial licence (CC BY-NC 4.0), its fishing-hours channel
+the one value in the family that is a classifier's output rather than a
+measurement. With Argo
+that is 2{,}741{,}955{,}408 tier-P observations. The registry
+\path{tensors/family10_2/family10.json} lists these ten groups --- the grid's
+four referenced by its manifest's hashes, never copied, and six point stores
+--- with an empty list of groups it could not read, and a \code{siblings}
+block naming the three fine families, so a consumer that dispatches on the
+tier discovers them from the one entry point. Family 1.gf is
+Table~\ref{tab:gf}: 13 stores, 7 built and public, 1.1 billion ship and buoy
+reports (\code{icoads}) and 1.7 billion wave-height samples (\code{swh})
+the largest. Family 1.0.tf is the land-and-coast family: 33 stores, 17 built
+and public --- stations, balloon soundings, tide gauges, buoys, gliders,
+fires, towers, $0.05^\circ$ pentad rain, 30\,m forest loss and eight scene
+catalogues. Family 0.9.tf inherits every 1.0.tf store but the catalogues by
+reference and adds four stores of the AlphaEarth embedding, none of them
+started. Everything public is in the Hugging Face dataset
+\path{chfrank/earth-tensors}; the private track,
+\path{chfrank/earth-tensors-private}, holds the built \code{seaice\_asi} and
+\code{tide\_private}.
 
 \subsection{Training, validation and test periods}\label{sec:data-split}
 
@@ -1085,18 +1185,33 @@ Code: \url{https://github.com/blauewelt/earth} --- geometry
 (\path{ml/cone.py}), sampler (\path{ml/cone_sampler.py}), codec and masking
 plan (\path{ml/cone_codec.py}, \path{ml/train_cone.py}), point-store reader
 (\path{ml/family10_store.py}), builders (\path{ml/build_family7.py},
-\path{ml/build_family8_argo.py}, \path{ml/build_family10_stores.py}). Data:
-the $0.25^\circ$ pentad grid (\path{family7_global025_pentad_l2}), the Argo store, the
-point-and-track stores and the fine-granularity families as built, in the
-Hugging Face dataset \path{chfrank/earth-tensors}, each with a registry of
-checksums, sources and licences; private-track stores are listed there and
-held privately. Design notes: \path{ml/paper/notes/}; plans and verdict
-rules: \path{ml/plans/}. Sources: GLORYS12 and GREP (Copernicus Marine),
+\path{ml/build_family8_argo.py}, \path{ml/build_family10_stores.py},
+\path{ml/build_family1_stores.py}), registry writers
+(\path{ml/build_family10_registry.py}, \path{ml/build_family1_registry.py}).
+Data, in the Hugging Face dataset \path{chfrank/earth-tensors} under
+\path{tensors/}: the $0.25^\circ$ pentad grid
+(\path{family7_global025_pentad_l2/manifest.json}), the Argo store
+(\path{family8_argo_l0/}), and four registries of checksums, sources,
+licences and build state --- \path{family10_2/family10.json} (the grid's
+groups and the six point stores, with the \code{siblings} block),
+\path{family1_gf/family1gf.json}, \path{family1_tf/family1tf.json} and
+\path{family09_tf/family09tf.json}; private-track stores are listed there
+and held in \path{chfrank/earth-tensors-private}. Handovers, each
+self-contained and measured against the published bytes:
+\path{docs/FAMILY7_DATA_HANDOVER.md}, \path{docs/FAMILY71_INGEST_HANDOVER.md},
+\path{docs/FAMILY8_DATA_HANDOVER.md}, \path{docs/FAMILY10_DATA_HANDOVER.md},
+\path{docs/FAMILY1GF_DATA_HANDOVER.md}, \path{docs/FAMILY1TF_DATA_HANDOVER.md},
+\path{docs/FAMILY09TF_DATA_HANDOVER.md}. Design notes, one per family, in
+\path{ml/paper/notes/}: \path{family7.tex}, \path{family71.tex},
+\path{family72.tex}, \path{family10.tex}, \path{family1gf.tex},
+\path{family1tf.tex}, \path{family09tf.tex}; plans and verdict rules:
+\path{ml/plans/}. Sources: GLORYS12 and GREP (Copernicus Marine),
 OISST v2.1 (NOAA NCEI), NCEP/NCAR Reanalysis-1 (NOAA PSL), the
 Roemmich--Gilson Argo climatology (Scripps; Argo data from the International
 Argo Program), OC-CCI v6.0 (ESA CCI, PML), RAPID-MOCHA-WBTS (NERC, NSF,
 NOAA), the Global Drifter Program and GTMBA (NOAA AOML, PMEL), SOCAT,
-Copernicus Marine along-track sea level, GEDI (NASA LP DAAC, ORNL DAAC),
+Copernicus Marine along-track sea level, Global Fishing Watch apparent
+fishing effort v3.0 (CC BY-NC 4.0), GEDI (NASA LP DAAC, ORNL DAAC),
 ICESat-2 ATL08 (NSIDC), TROPOMI fluorescence (Caltech, ESA), FLUXNET,
 GBIF, MODIS and VIIRS land products (LP DAAC), GLAD, ETH and Meta canopy
 height, ESA CCI Biomass, Hansen GFC, PACE (NASA OB.DAAC), and the sources
