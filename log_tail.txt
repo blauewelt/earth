@@ -1,0 +1,34 @@
+  [index irtb] start (1 items)  0/1  0.0s
+  [index irtb] plan.json  1/1  4.1s
+  index: irtb — 2 year(s), C=1 (tb), bins 2410..2416
+Traceback (most recent call last):
+  File "/home/runner/.local/lib/python3.12/site-packages/numpy/ma/core.py", line 510, in _check_fill_value
+    fill_value = np.asarray(fill_value, dtype=ndtype)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+ValueError: cannot convert float NaN to integer
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/home/runner/work/earth/earth/ml/build_family1_stores.py", line 1776, in <module>
+    sys.exit(main())
+             ^^^^^^
+  File "/home/runner/work/earth/earth/ml/build_family1_stores.py", line 1737, in main
+    stage_probe_grid(a, cls, a.probe_month)
+  File "/home/runner/work/earth/earth/ml/build_family1_stores.py", line 1218, in stage_probe_grid
+    for item in ad.fetch_frames(ctx, wanted):
+  File "/home/runner/work/earth/earth/ml/family1/adapters/irtb.py", line 687, in fetch_frames
+    arr = read_frame(path, sub, self.band, counts,
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/work/earth/earth/ml/family1/adapters/irtb.py", line 320, in read_frame
+    a = np.asarray(np.ma.filled(tb[int(sub), r0:r0 + h, :], np.nan),
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/.local/lib/python3.12/site-packages/numpy/ma/core.py", line 682, in filled
+    return a.filled(fill_value)
+           ^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/.local/lib/python3.12/site-packages/numpy/ma/core.py", line 3916, in filled
+    fill_value = _check_fill_value(fill_value, self.dtype)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/.local/lib/python3.12/site-packages/numpy/ma/core.py", line 516, in _check_fill_value
+    raise TypeError(err_msg % (fill_value, ndtype)) from e
+TypeError: Cannot convert fill_value nan to dtype int16
