@@ -1,0 +1,80 @@
+    0.891226,
+    0.968075,
+    0.96637,
+    0.968308,
+    0.966014,
+    0.968599,
+    0.965856,
+    0.968327,
+    0.890209,
+    0.968302
+   ],
+   "bytes_per_frame": {
+    "mean": 5962139.1,
+    "min": 5414193,
+    "max": 6342418
+   },
+   "bytes_per_stored_tile": {
+    "mean": 22106.5,
+    "median": 20877.0,
+    "p90": 36068.600000000006,
+    "max": 51171
+   },
+   "tiles_stored": 64998,
+   "tiles_empty": 795,
+   "raw_bytes_per_frame": 16318504,
+   "compression_ratio": 2.74,
+   "bytes_per_valid_pixel": 0.3778,
+   "encode_seconds_per_frame": 0.446,
+   "record_frames": 240,
+   "index_bytes_per_bin": 174848,
+   "estimate_store_bytes": 1431962464,
+   "note_formula_bytes": 9091166297,
+   "note_formula": "pixels x frames x valid fraction x 2C x 1.2"
+  }
+ },
+ "out_of_bounds": {
+  "tb": 1316
+ },
+ "out_of_bounds_stored": 0,
+ "inputs_not_read": [],
+ "counts": {
+  "resolution": {
+   "tb=Tb": 241,
+   "lat=lat": 241,
+   "lon=lon": 241,
+   "time=time": 241
+  },
+  "time_steps_per_file": {
+   "2": 241
+  },
+  "grid_checked": 241,
+  "grid_meta": {
+   "{\"band_lat\": [-30.0, 29.963611602783203], \"band_rows\": [824, 2473], \"lat_first\": -59.981807708740234, \"lat_last\": 59.981807708740234, \"lon_first\": -179.9818115234375, \"lon_last\": 179.9818115234375}": 241
+  },
+  "pixels_valid": 3803770548,
+  "pixels_in_frame": 3932759464,
+  "files_read": 241,
+  "bytes_files": 6732458952,
+  "fetch_seconds": 213.25999999999962,
+  "out_of_bounds": {
+   "tb": 1316
+  }
+ },
+ "bytes_fetched": 7059495009,
+ "bytes_index": 33894577,
+ "bytes_fetched_per_frame": 29292510.4,
+ "wall_seconds": 213.74,
+ "wall_seconds_index": 4.04,
+ "seconds_per_frame": 0.887,
+ "estimate_store_bytes": 1431962464,
+ "note_formula_bytes": 9091166297,
+ "note_estimate": {
+  "bytes": 700000000000.0,
+  "what": "family1gf.tex: 16.3 M px x 8 frames/day x ~10,500 days, 'v = 1 but Tb compresses ~2x' -> ~0.7 TB for the tropics three-hourly, whole 1998 -> record"
+ },
+ "runner": "GitHub Actions 1000005877",
+ "builder_git_sha": "61579cfe48e78767351afc26a31cee3adc96d68d",
+ "at": "2026-09-22T16:06:25+00:00"
+}
+probe -> /home/runner/work/earth/earth/ml/cache/family1_gf/probe/irtb/2015-01.json
