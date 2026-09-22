@@ -2,7 +2,7 @@
 
 A claude.ai Artifact that shows `ml/paper/paper.tex` as blocks Chris can edit
 and comment on, with the last compiled PDF beside it:
-[Earth Paper Editor](https://claude.ai/artifact/SjEDUHmfHuo3SvHQH2d9BJ)
+[Earth Paper Editor](https://claude.ai/artifact/SPvZD9iAb1mwQpydjCvTuY)
 (private to Chris; the link opens only for people he shares it with).
 
 - **Build**: `python3 ml/paper/editor/build_editor.py --out <path>` after every
