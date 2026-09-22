@@ -1,0 +1,80 @@
+  83496,
+  69303,
+  694,
+  679,
+  620,
+  642,
+  5901,
+  75889,
+  89559
+ ],
+ "days_with_no_rows": 0,
+ "distinct_platforms": 2,
+ "channels": [
+  "xco2",
+  "xco2_uncertainty",
+  "surface"
+ ],
+ "nan_fraction": {
+  "xco2": 0.0,
+  "xco2_uncertainty": 0.0,
+  "surface": 0.009669
+ },
+ "out_of_bounds": {
+  "xco2": 0,
+  "xco2_uncertainty": 0,
+  "surface": 22040
+ },
+ "out_of_bounds_stored": {
+  "xco2": 0,
+  "xco2_uncertainty": 0,
+  "surface": 0
+ },
+ "rows_outside_month_dropped_by_probe": 0,
+ "qc": {
+  "0": 961340,
+  "1": 1318202
+ },
+ "counts": {
+  "files_wanted": 56,
+  "files_read": 56,
+  "soundings_in_file": 3835542,
+  "resolution": {
+   "xco2=xco2": 56,
+   "xco2_uncertainty=xco2_uncertainty": 56,
+   "latitude=latitude": 56,
+   "longitude=longitude": 56,
+   "time=time": 56,
+   "quality=xco2_quality_flag": 56,
+   "surface=Sounding/land_fraction": 30,
+   "surface=Sounding/land_water_indicator": 26
+  },
+  "soundings_bad_quality": 1556000,
+  "soundings_kept": 2279542,
+  "soundings_per_sensor": {
+   "GOSAT-ACOS": 20805,
+   "OCO-2": 2258737
+  },
+  "out_of_bounds": {
+   "surface": 22040
+  },
+  "fetch_seconds": 32.2
+ },
+ "counts_scope": "month",
+ "bytes_fetched": 1612717384,
+ "bytes_index": 109965615,
+ "wall_seconds": 32.24,
+ "wall_seconds_index": 9.56,
+ "bytes_per_row": 707.474,
+ "stored_bytes_per_row": 33,
+ "time_dtype": "int32",
+ "schema_version": 2,
+ "platforms": null,
+ "estimate_rows_per_year": null,
+ "estimate_store_bytes": null,
+ "note_estimate": null,
+ "runner": "GitHub Actions 1000005874",
+ "builder_git_sha": "fc6766bac8dd6da270c55911a027b4fdc9343368",
+ "at": "2026-09-22T15:57:55+00:00"
+}
+probe -> /home/runner/work/earth/earth/ml/cache/family1_gf/probe/xco2/2019-06.json
