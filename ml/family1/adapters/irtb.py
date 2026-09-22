@@ -317,8 +317,11 @@ def read_frame(path, sub, band, counts, full_h=FULL_H,
         lon = np.asarray(ds.variables[names["lon"]][:], np.float64)
         gmeta = grid_check(lat, lon, band, full_h, full_w)
         r0, h = band_rows(band, full_h)
-        a = np.asarray(np.ma.filled(tb[int(sub), r0:r0 + h, :], np.nan),
-                       np.float64)
+        # MERGIR stores Tb as a masked int16 (a fill value, no scale factor);
+        # widen to float64 BEFORE filling, because an int16 cannot hold NaN
+        # (probe #427, the first read after the GES DISC approval, 2026-09-22).
+        a = np.ma.filled(np.ma.asarray(tb[int(sub), r0:r0 + h, :])
+                         .astype(np.float64), np.nan)
         res = counts.setdefault("resolution", {})
         for q, pth in names.items():
             res[f"{q}={pth}"] = res.get(f"{q}={pth}", 0) + 1
