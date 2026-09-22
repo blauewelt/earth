@@ -18,6 +18,11 @@ shipped an **empty elevation static** — every one of its
 it. **That workaround is gone: take `f7l2` (19:58Z) and nothing is missing.**
 If you already ingested `f7l1`, §1.1 says exactly what to re-fetch (the 5.4 MB
 small file, and the 1° atmosphere group only if you key caches by hash).
+**`f7l1` will be deleted from the Hub on 2026-10-15** (its folder is still
+there on 2026-09-22); `f7l2` is the current family-7 tensor, and this
+document with `docs/FAMILY7_DATA_HANDOVER.md` is the pair to read. §1's sizes
+and hashes and §6's items 1–5 were re-measured against the Hub on 2026-09-22
+and all hold.
 
 **One paragraph.** Family 7.1 is family 7 with a fourth channel group,
 `oc025` — satellite chlorophyll-a (ESA OC-CCI v6.0) on the same 0.25° grid
@@ -33,6 +38,22 @@ logarithmic channels evaluated in float64, so it now REPRODUCES — at the cost
 of differing from both `f7l0` and `f7l1` at the last float16 bit in about ten
 cells of each 65,160-cell bin (§2.2). Everything else is either
 byte-identical or differs at the last float16 bit.
+
+> **Rules for the reader — read-only, everywhere.**
+>
+> 1. **Copy what you need into your own storage and work from your copy.** The
+>    source is the public Hugging Face dataset repository
+>    [`chfrank/earth-tensors`](https://huggingface.co/datasets/chfrank/earth-tensors),
+>    read anonymously over plain HTTPS. No account and no token are needed for
+>    anything on this page.
+> 2. **Never write to anything public.** Not to the Hugging Face dataset, not to
+>    the GitHub repository
+>    [`blauewelt/earth`](https://github.com/blauewelt/earth), not to the globe
+>    site. No uploads, no pull requests, no issues, no discussion posts, no
+>    comments. Report what you find to the person who gave you this document.
+> 3. **Read-only applies to tokens too.** If you hold any Hugging Face token for
+>    any reason, do not use it against these repositories for anything but a
+>    read.
 
 ---
 

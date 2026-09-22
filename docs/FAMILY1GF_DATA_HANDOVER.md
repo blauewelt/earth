@@ -851,16 +851,17 @@ excludes exactly the tropical sites family 10.1's `gtmba` holds, and `swh` is
 the wave-height companion of family 10.1's `slatrack` sea-level store from the
 same altimeters.
 
-**The `siblings` line.** The design is that family 10.2's registry gains one
-additive key, `siblings`, naming the three family-1 registries
+**The `siblings` line.** Family 10.2's registry carries one additive key,
+`siblings`, naming the three family-1 registries
 (`tensors/family1_gf/family1gf.json`, `tensors/family1_tf/family1tf.json`,
 `tensors/family09_tf/family09tf.json`), so a consumer that knows only family 10
-discovers these. The code that writes it is in the repository and tested.
-**Measured today, the published family-10.2 registry does not carry it yet:**
-`tensors/family10_2/family10.json` is 54,052 bytes, sha256
-`0fbffc3fb54014cf6f6456409c861a581a6ca4da13f2cd16864e456a1d3a590a`,
-`generated_utc` 2026-09-16T19:49:38Z, and has no `siblings` key. Until it is
-regenerated, reach this family through its own registry path above.
+discovers these. **Measured 2026-09-22 10:10Z:** `tensors/family10_2/family10.json`
+is 54,478 bytes, sha256
+`07bbb4c1` (prefix), `generated_utc` 2026-09-22T10:09:04Z, and its
+`siblings.registries` list is exactly those three paths; no group entry of the
+registry changed when the block was added (the earlier copy of 2026-09-16,
+54,052 bytes, lacked the key). Either entry point works: family 10's registry
+or this family's own path above.
 
 ### 7.2 · Family 7.2 — the 0.25° grid, and the two stores that have a coarse twin in it
 

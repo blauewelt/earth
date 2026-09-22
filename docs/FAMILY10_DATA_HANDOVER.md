@@ -48,6 +48,22 @@ family unchanged** — §7 says how (optional background:
 `docs/FAMILY8_DATA_HANDOVER.md`). The gridded tensor it sits beside has one too
 (`docs/FAMILY7_DATA_HANDOVER.md`).
 
+> **Rules for the reader — read-only, everywhere.**
+>
+> 1. **Copy what you need into your own storage and work from your copy.** The
+>    source is the public Hugging Face dataset repository
+>    [`chfrank/earth-tensors`](https://huggingface.co/datasets/chfrank/earth-tensors),
+>    read anonymously over plain HTTPS. No account and no token are needed for
+>    anything on this page.
+> 2. **Never write to anything public.** Not to the Hugging Face dataset, not to
+>    the GitHub repository
+>    [`blauewelt/earth`](https://github.com/blauewelt/earth), not to the globe
+>    site. No uploads, no pull requests, no issues, no discussion posts, no
+>    comments. Report what you find to the person who gave you this document.
+> 3. **Read-only applies to tokens too.** If you hold any Hugging Face token for
+>    any reason, do not use it against these repositories for anything but a
+>    read.
+
 ---
 
 ## 1 · What this is, in one paragraph
@@ -244,6 +260,48 @@ still `docs/FAMILY7_DATA_HANDOVER.md`. (The `fallback_note` field exists
 because an earlier registry was written while that manifest was still a 404 and
 fell back to `f7l0`, the same tensor without ocean colour — it **said so** in
 that field rather than silently describing a different tensor.)
+
+**The `siblings` block (added 2026-09-22).** The 10.2 registry gained one
+top-level key on 2026-09-22, and no group entry was rebuilt for it. Measured
+from the Hub that day: `tensors/family10_2/family10.json` is 54,478 bytes,
+sha256 `07bbb4c19387272927985603c056e9c861a0f8d7722125a647b962d15aa6ec2a`,
+`generated_utc` 2026-09-22T10:09:04Z, still ten groups with
+`groups_missing: []` and the same tier-P total of 2,741,955,408, and it now
+carries
+
+```json
+"siblings": {
+  "note": "the FINE observation families (E-082): everything at 10 km or finer and 5 days or finer, read beside this family's 0.25° tensor. Different families, one planet; each has its own registry in the same shape as this one, written by ml/build_family1_registry.py. Added to this registry on 2026-09-22T10:09:04Z without rebuilding any group entry.",
+  "registries": [
+    {"family": "family1_gf",  "family_version": "1.gf",   "registry": "tensors/family1_gf/family1gf.json"},
+    {"family": "family1_tf",  "family_version": "1.0.tf", "registry": "tensors/family1_tf/family1tf.json"},
+    {"family": "family09_tf", "family_version": "0.9.tf", "registry": "tensors/family09_tf/family09tf.json"}
+  ],
+  "added_utc": "2026-09-22T10:09:04Z"
+}
+```
+
+Those three are the fine-scale families — family 1.gf (global ocean and
+atmosphere observations at 10 km or finer and 5 days or finer), family 1.0.tf
+(the same for land and coasts) and family 0.9.tf (1.0.tf with its raw
+satellite imagery replaced by Google's AlphaEarth embedding). They reuse this
+family's tier-P contract — the epoch, the bin rule
+`bin = floor_divide(time_s, 432000)`, the CSR `bin_offsets`, the nine arrays of
+§2.1 and dispatch on `tier` — with `time_s` as **schema 2 (int32 seconds)** or,
+for a store whose record starts before 1914, **schema 3 (int64 seconds)**, and
+they add a **sharded tier-G layout** for their own gridded stores (compressed
+tiles per group and bin, located through a shard index, read by two range
+reads) and, in 1.0.tf, a tier-T scene catalogue. Each has its own self-contained
+handover: `docs/FAMILY1GF_DATA_HANDOVER.md`,
+`docs/FAMILY1TF_DATA_HANDOVER.md` and `docs/FAMILY09TF_DATA_HANDOVER.md`. The
+same download shows that today's `inherits` block carries three keys, not the
+one quoted above: `"10.1"` as shown, `"7.1"` (the four tier-G groups, root
+`tensors/family7_global025_pentad_l2`) and `"8"` (`argo`, root
+`tensors/family8_argo_l0`, "family 8's Argo store, schema 1, joined
+unchanged"). The four 10.1 entries still carry sha256 values and file lists
+identical to the 10.1 registry's; the 10.2 copies add three fields the 10.1
+ones lack (`path`, `inherited_from`, `family_version`), so "byte-identical"
+holds for every digest and shared field, not for the entry as a whole.
 
 ### 2.3 · 10.1 supersedes 10.0, and the 10.0 directories stay on the Hub
 

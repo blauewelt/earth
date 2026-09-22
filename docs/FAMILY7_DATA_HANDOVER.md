@@ -18,7 +18,43 @@ sea ice, NCEP/NCAR Reanalysis 1 for the atmosphere and land surface,
 Roemmich–Gilson Argo for the ocean interior, ETOPO 2022 for elevation, Natural
 Earth for the ice-sheet and lake outlines).
 
-**There is a newer version.** `f7l1` ("family 7.1") is this exact tensor plus a fourth group carrying the observed colour of the sea surface — satellite chlorophyll-a, 1997 onward. Its three original group files are BYTE-IDENTICAL to the ones described below, so everything in §§1–9 applies to it unchanged; **§10** describes only what is added. If you are choosing between them, take `f7l1`.
+**The current tensor is `f7l2` ("family 7.2"), and this document is one half
+of a pair.** Read this document for the grid, the time axis, the z-scoring,
+the NaN convention, the statics, the truth series and the reading recipes
+(§§1–9), then **`docs/FAMILY71_INGEST_HANDOVER.md`** for what `f7l2` changes:
+a fourth group `oc025` (satellite chlorophyll-a, 1997 onward), calendar 1989
+filled in `g025`'s `sst` and `sea_ice` (all-NaN in `f7l0`, so `g025` and its
+`norm_g025` must be replaced, not reused), and `g100` rebuilt so that it
+reproduces. `f7l2` lives at `tensors/family7_global025_pentad_l2/`; its
+`manifest.json`, downloaded from the Hub on 2026-09-22 (3,280 bytes, recipe
+`f7l2`, builder `f25f1a6`, `built_at` 2026-09-14T19:58:44Z), lists five files
+totalling **61,161,857,262 bytes** — the npz 5,412,430, `g025` 45,670,101,248,
+`g100` 6,141,981,728, `rg100` 1,050,900,608, `oc025` 8,293,461,248, each size
+and sha256 equal to the Hub's own listing that day — and the four `.npy`
+headers, range-read the same day, give **3,142 pentad frames** for `g025` and
+`g100`, 252 monthly frames for `rg100` and 1,997 pentad frames for `oc025`
+(bins 1,145 → 3,141). The earlier build `f7l1` (folder
+`tensors/family7_global025_pentad_l1/`, still on the Hub today) is
+superseded — it shipped an all-NaN elevation static — and **will be deleted
+from the Hub on 2026-10-15**; do not start an ingest from it. `f7l0`,
+described below, stays on the Hub and its §1 sizes and sha256 values were
+re-checked against the Hub's listing on 2026-09-22 and still hold.
+
+> **Rules for the reader — read-only, everywhere.**
+>
+> 1. **Copy what you need into your own storage and work from your copy.** The
+>    source is the public Hugging Face dataset repository
+>    [`chfrank/earth-tensors`](https://huggingface.co/datasets/chfrank/earth-tensors),
+>    read anonymously over plain HTTPS. No account and no token are needed for
+>    anything on this page.
+> 2. **Never write to anything public.** Not to the Hugging Face dataset, not to
+>    the GitHub repository
+>    [`blauewelt/earth`](https://github.com/blauewelt/earth), not to the globe
+>    site. No uploads, no pull requests, no issues, no discussion posts, no
+>    comments. Report what you find to the person who gave you this document.
+> 3. **Read-only applies to tokens too.** If you hold any Hugging Face token for
+>    any reason, do not use it against these repositories for anything but a
+>    read.
 
 ---
 
@@ -378,6 +414,14 @@ numbers to be comparable with the ones in `ml/EXPERIMENTS.md`.
 
 *Added 2026-09-11. Everything in §§1–9 above describes `f7l0`, and all of it
 still holds. This section describes the one thing that is different.*
+
+*Superseded 2026-09-14, noted 2026-09-22: this section describes the DESIGN of
+family 7.1. The published builds did not keep the three older groups
+byte-identical to `f7l0`'s (1989 was filled in `g025`, and `g100` was rebuilt
+in `f7l2`), `f7l1` shipped an empty elevation static, and `f7l1` will be
+deleted from the Hub on 2026-10-15. Ingest `f7l2` with
+`docs/FAMILY71_INGEST_HANDOVER.md`; read what follows for the colour group's
+meaning only.*
 
 **What it is.** Family 7.1 is family 7 with a **fourth group**, `oc025`,
 carrying the observed colour of the sea surface: chlorophyll-a concentration

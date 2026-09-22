@@ -12,6 +12,32 @@ used in training. The family-7 tensor has its own self-contained handover
 (optional background: `docs/FAMILY7_DATA_HANDOVER.md` in the same
 repository).
 
+**Checked 2026-09-22.** The store's `store.json` on the Hub still reads
+**N = 2,678,439** (builder `30aafcc`, `built_at` 2026-09-07T19:21:29Z), and
+the family-10.2 registry (`tensors/family10_2/family10.json`, downloaded the
+same day) inherits it unchanged as its tier-P group `argo` — `path`
+`tensors/family8_argo_l0`, `schema_version` 1, `N` 2,678,439, and an
+`inherits` entry `"8": {"groups": ["argo"], "root":
+"tensors/family8_argo_l0", "note": "family 8's Argo store, schema 1, joined
+unchanged"}`. Nothing was rebuilt; the files described below are the ones
+family 10.2 reads (optional background: `docs/FAMILY10_DATA_HANDOVER.md` §7).
+
+> **Rules for the reader — read-only, everywhere.**
+>
+> 1. **Copy what you need into your own storage and work from your copy.** The
+>    source is the public Hugging Face dataset repository
+>    [`chfrank/earth-tensors`](https://huggingface.co/datasets/chfrank/earth-tensors),
+>    read anonymously over plain HTTPS. No account and no token are needed for
+>    anything on this page.
+> 2. **Never write to anything public.** Not to the Hugging Face dataset, not to
+>    the GitHub repository
+>    [`blauewelt/earth`](https://github.com/blauewelt/earth), not to the globe
+>    site. No uploads, no pull requests, no issues, no discussion posts, no
+>    comments. Report what you find to the person who gave you this document.
+> 3. **Read-only applies to tokens too.** If you hold any Hugging Face token for
+>    any reason, do not use it against these repositories for anything but a
+>    read.
+
 ---
 
 ## 1 · What this is, in one paragraph
@@ -25,7 +51,7 @@ profiles themselves** — every profile from 2004-01-01 to 2024-12-31, quality
 controlled, interpolated onto sixteen fixed pressure levels, sorted by
 five-day bin — so that a model can ask, for any place and time, *"what are
 the k nearest measurements, and how far away are they?"* rather than *"is
-there a value in this cell?"*. The store is **2,678,439 profiles**, 234 MB,
+there a value in this cell?"*. The store is **2,678,439 profiles**, 238.4 MB,
 raw units (°C, PSU), and every one of the 1,535 five-day bins from 2004 has
 between 395 and 2,642 profiles in it.
 
@@ -52,7 +78,9 @@ https://huggingface.co/datasets/chfrank/earth-tensors/resolve/main/tensors/famil
 ```
 
 (`resolve/main/...` answers a 302 redirect to a CDN URL — follow redirects.)
-Thirteen files, 234 MB in total:
+Thirteen files, 238,415,387 bytes (238.4 MB) in total — the sum of the
+sizes below, re-measured from the Hub's listing on 2026-09-22 (earlier
+versions of this page said 234 MB):
 
 | file | dtype · shape | bytes | what |
 |---|---|---|---|

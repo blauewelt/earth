@@ -1135,10 +1135,13 @@ before 1914: int64 `time_s`), a Parquet sidecar for the catalogues and the
 sharded reader for tier G. `gliders` uses family 8's 16 Argo pressures;
 `ndbc` excludes the tropical moorings family 10.1's `gtmba` holds.
 
-**The `siblings` line.** Family 10.2's registry is designed to gain a
-`siblings` key naming the three family-1 registries. **Measured today, the
-published family-10.2 registry does not carry it** (`generated_utc`
-2026-09-16T19:49:38Z); reach this family through its own registry path.
+**The `siblings` line.** Family 10.2's registry carries a `siblings` key
+naming the three family-1 registries. **Measured 2026-09-22 10:10Z:** the
+published `tensors/family10_2/family10.json` (`generated_utc`
+2026-09-22T10:09:04Z, 54,478 bytes) lists `tensors/family1_gf/family1gf.json`,
+`tensors/family1_tf/family1tf.json` and `tensors/family09_tf/family09tf.json`
+under `siblings.registries`; the copy of 2026-09-16 lacked the key. Either
+entry point works.
 
 ### 7.2 · Family 1.gf — the ocean-and-atmosphere sibling at the same scale
 
