@@ -1,0 +1,16 @@
+store     swot — SWOT L2 LR sea-surface height, Expert (version D): the 2 km KaRIn swath, one row per valid pixel (tier P)
+family    family1_gf (1.gf) · public -> chfrank/earth-tensors:tensors/family1_gf/swot
+axis      2026-03-01 .. 2026-03-31  bins 3226..3232 · time_s int32 (schema 2)
+lane      m03 — this fetch writes parts/<year>/m03/ and pushes only that folder
+channels  C=3: ssha_karin, sig0_karin, ssh_karin_uncert
+work      /home/runner/work/earth/earth/ml/cache/family1_gf
+
+=== stage index (swot) ===
+  [index swot] start (1 items)  0/1  0.0s
+  [index swot] plan.json  1/1  148.4s
+  index: swot — 1 year(s), C=3 (ssha_karin, sig0_karin, ssh_karin_uncert), bins 3226..3232
+=== stage index done in 148.4s ===
+
+=== stage fetch (swot) ===
+  [fetch swot] start (1 items)  0/1  0.0s
+REFUSING to continue this lane: https://archive.swot.podaac.earthdata.nasa.gov/podaac-swot-ops-cumulus-protected/SWOT_L2_LR_SSH_D/SWOT_L2_LR_SSH_Expert_046_417_20260301T000419_20260301T005505_PID0_01.nc: ConnectTimeout: HTTPSConnectionPool(host='urs.earthdata.nasa.gov', port=443): Max retries exceeded with url: /oauth/authorize?client_id=YW7gqWudlIG9X4pcwYNn-g&response_type=code&redirect_uri=https://archive.swot.podaac.earthdata.nasa.gov/login&state=%2Fpodaac-swot-ops-cumulus-protected%2FSWOT_L2_LR_SSH_D%2FSWOT_L2_LR_SSH_Expert_046_417_20260301T000419_20260301T005505_PID0_01.nc&app_type=401 (Caused by ConnectTimeoutError(<urllib3.connection.HTTPSConnection object at 0x7f7cfdfb49b0>, 'Connection to urs.earthdata.nasa.gov timed out. (connect timeout=30)')) — after 3 attempts this runner cannot reach the host; a lane on a runner that cannot connect must fail so it is re-dispatched, not note every remaining granule absent (family1-build #498/#516, 2026-09-23)
