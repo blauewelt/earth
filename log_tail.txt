@@ -1,0 +1,11 @@
+store     irtb — NCEP/CPC merged infrared brightness temperature (GPM_MERGIR v1), 4 km — cloud-top temperature; phase A is the tropics three-hourly
+family    family1_gf (1.gf) · public -> chfrank/earth-tensors:tensors/family1_gf/irtb
+axis      2003-07-01 .. 2003-09-30  bins 1571..1588 · time_s int32 (schema 2)
+lane      q3 — this fetch writes parts/<year>/q3/ and pushes only that folder
+channels  C=1: tb
+tier G    sharded, groups ['irtb'], F=40 x 10800 s, uint8, years (by bin start) 2003..2003
+work      /home/runner/work/earth/earth/ml/cache/family1_gf
+
+=== stage index (irtb) ===
+  [index irtb] start (1 items)  0/1  0.0s
+REFUSING irtb: the first file GPM_MERGIR.1:merg_2003070100_4km-pixel.nc4 could not be read: https://data.gesdisc.earthdata.nasa.gov/data/MERGED_IR/GPM_MERGIR.1/2003/182/merg_2003070100_4km-pixel.nc4: ConnectTimeout: HTTPSConnectionPool(host='urs.earthdata.nasa.gov', port=443): Max retries exceeded with url: /oauth/authorize?client_id=e2WVk8Pw6weeLUKZYOxvTQ&response_type=code&redirect_uri=https://data.gesdisc.earthdata.nasa.gov/login&state=%2Fdata%2FMERGED_IR%2FGPM_MERGIR.1%2F2003%2F182%2Fmerg_2003070100_4km-pixel.nc4&app_type=401 (Caused by ConnectTimeoutError(<urllib3.connection.HTTPSConnection object at 0x7fdd4eb4a7b0>, 'Connection to urs.earthdata.nasa.gov timed out. (connect timeout=300)'))
