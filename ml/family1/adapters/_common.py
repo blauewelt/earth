@@ -310,7 +310,7 @@ def earthdata_session(env=None):
     return s
 
 
-def earthdata_download(session, url, path, attempts=4, sleep=3.0,
+def earthdata_download(session, url, path, attempts=6, sleep=5.0,
                        timeout=300):
     """GET `url` -> `path`, size-verified. (bytes, None) or (None, "notfound").
 
@@ -319,6 +319,13 @@ def earthdata_download(session, url, path, attempts=4, sleep=3.0,
     once with the check to run; anything else retries and then raises. A short
     or empty body is a refusal, never a smaller record (ml/CLAUDE.md, the
     2026-09-14 rule).
+
+    Six attempts with 5-second doubling backoff (2026-09-23): with sixteen
+    hosted lanes in flight, Earthdata Login (URS) answers an occasional
+    ConnectTimeout that outlasts the old 3/6/12 s ladder (21 s) — irtb lane
+    #509 refused on its first file for exactly that. 5 + 10 + 20 + 40 + 80 s
+    rides out a two-minute wobble; a real refusal (401/403) still raises at
+    once.
     """
     os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
     part = f"{path}.part{os.getpid()}"
