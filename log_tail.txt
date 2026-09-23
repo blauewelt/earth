@@ -1,0 +1,80 @@
+  [verify lst05 before publish] check: check terra 800/1940  15.1s
+  [verify lst05 before publish] check: check terra 900/1940  15.2s
+  [verify lst05 before publish] check: check terra 1000/1940  15.3s
+  [verify lst05 before publish] check: check terra 1100/1940  15.4s
+  [verify lst05 before publish] check: check terra 1200/1940  15.6s
+  [verify lst05 before publish] check: check terra 1300/1940  15.7s
+  [verify lst05 before publish] check: check terra 1400/1940  15.8s
+  [verify lst05 before publish] check: check terra 1500/1940  15.9s
+  [verify lst05 before publish] check: check terra 1600/1940  16.1s
+  [verify lst05 before publish] check: check terra 1700/1940  16.2s
+  [verify lst05 before publish] check: check terra 1800/1940  16.3s
+  [verify lst05 before publish] check: check terra 1900/1940  16.4s
+  [verify lst05 before publish] check: check terra 1940/1940  16.5s
+  hub: chfrank/earth-tensors with the token from $HF_TOKEN
+  [publish lst05] start (3883 items)  0/3883  0.0s
+Upload 0 LFS files: 0it [00:00, ?it/s]Upload 0 LFS files: 0it [00:00, ?it/s]
+Upload 0 LFS files: 0it [00:00, ?it/s]Upload 0 LFS files: 0it [00:00, ?it/s]
+Upload 0 LFS files: 0it [00:00, ?it/s]Upload 0 LFS files: 0it [00:00, ?it/s]
+Upload 0 LFS files: 0it [00:00, ?it/s]Upload 0 LFS files: 0it [00:00, ?it/s]
+Upload 0 LFS files: 0it [00:00, ?it/s]Upload 0 LFS files: 0it [00:00, ?it/s]
+Upload 0 LFS files: 0it [00:00, ?it/s]Upload 0 LFS files: 0it [00:00, ?it/s]
+Upload 0 LFS files: 0it [00:00, ?it/s]Upload 0 LFS files: 0it [00:00, ?it/s]
+shard_index.npy:   0%|          | 0.00/773k [00:00<?, ?B/s]shard_index.npy:  51%|█████     | 393k/773k [00:00<00:00, 3.72MB/s]shard_index.npy: 100%|██████████| 773k/773k [00:00<00:00, 3.11MB/s]
+  [publish lst05] terra  2/3883  83.6s
+  [publish lst05] terra/2000  126/3883  111.2s
+  [publish lst05] terra/2001  272/3883  150.2s
+  [publish lst05] terra/2002  418/3883  192.0s
+  [publish lst05] terra/2003  564/3883  242.4s
+  [publish lst05] terra/2004  712/3883  286.3s
+  [publish lst05] terra/2005  858/3883  333.3s
+  [publish lst05] terra/2006  1004/3883  373.8s
+  [publish lst05] terra/2007  1150/3883  416.2s
+  [publish lst05] terra/2008  1296/3883  457.9s
+  [publish lst05] terra/2009  1442/3883  505.4s
+  [publish lst05] terra/2010  1588/3883  544.2s
+  [publish lst05] terra/2011  1734/3883  585.9s
+  [publish lst05] terra/2012  1880/3883  626.5s
+  [publish lst05] terra/2013  2026/3883  659.2s
+  [publish lst05] terra/2014  2172/3883  698.1s
+  [publish lst05] terra/2015  2318/3883  737.0s
+  [publish lst05] terra/2016  2464/3883  778.7s
+  [publish lst05] terra/2017  2610/3883  821.4s
+  [publish lst05] terra/2018  2756/3883  859.5s
+  [publish lst05] terra/2019  2902/3883  899.1s
+  [publish lst05] terra/2020  3048/3883  935.3s
+  [publish lst05] terra/2021  3194/3883  973.9s
+  [publish lst05] terra/2022  3340/3883  1013.2s
+  [publish lst05] terra/2023  3486/3883  1050.8s
+  [publish lst05] terra/2024  3634/3883  1089.5s
+  [publish lst05] terra/2025  3780/3883  1124.1s
+  [publish lst05] terra/2026  3882/3883  1148.9s
+  [publish lst05] store.json  3883/3883  1149.1s
+  publish: 3883 file(s) verified by restore, 50 tile(s) decompressed, HTTP range {'checked': 5} -> https://huggingface.co/datasets/chfrank/earth-tensors/tree/main/tensors/family1_tf/lst05
+=== stage publish done in 1175.4s ===
+
+=== stage check (lst05) ===
+  [check lst05 (tier G)] start  0/0  0.0s
+  [check lst05 (tier G)] check: sha256 200/3882  0.6s
+  [check lst05 (tier G)] check: sha256 400/3882  1.3s
+  [check lst05 (tier G)] check: sha256 600/3882  2.1s
+  [check lst05 (tier G)] check: sha256 800/3882  2.8s
+  [check lst05 (tier G)] check: sha256 1000/3882  3.6s
+  [check lst05 (tier G)] check: sha256 1200/3882  4.3s
+  [check lst05 (tier G)] check: sha256 1400/3882  5.1s
+  [check lst05 (tier G)] check: sha256 1600/3882  5.8s
+  [check lst05 (tier G)] check: sha256 1800/3882  6.6s
+  [check lst05 (tier G)] check: sha256 2000/3882  7.6s
+  [check lst05 (tier G)] check: sha256 2200/3882  8.4s
+  [check lst05 (tier G)] check: sha256 2400/3882  9.1s
+  [check lst05 (tier G)] check: sha256 2600/3882  9.9s
+  [check lst05 (tier G)] check: sha256 2800/3882  10.7s
+  [check lst05 (tier G)] check: sha256 3000/3882  11.5s
+  [check lst05 (tier G)] check: sha256 3200/3882  12.3s
+  [check lst05 (tier G)] check: sha256 3400/3882  13.0s
+  [check lst05 (tier G)] check: sha256 3600/3882  13.8s
+  [check lst05 (tier G)] check: sha256 3800/3882  14.5s
+  [check lst05 (tier G)] check: sha256 3882/3882  14.8s
+  [check lst05 (tier G)] check: check terra 100/1940  631.9s
+  [check lst05 (tier G)] check: check terra 200/1940  1322.6s
+  [check lst05 (tier G)] check: check terra 300/1940  2016.2s
