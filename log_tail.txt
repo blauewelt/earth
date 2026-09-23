@@ -1,0 +1,51 @@
+store     irtb — NCEP/CPC merged infrared brightness temperature (GPM_MERGIR v1), 4 km — cloud-top temperature; phase A is the tropics three-hourly
+family    family1_gf (1.gf) · public -> chfrank/earth-tensors:tensors/family1_gf/irtb
+axis      2001-07-01 .. 2001-09-30  bins 1425..1442 · time_s int32 (schema 2)
+lane      q3 — this fetch writes parts/<year>/q3/ and pushes only that folder
+channels  C=1: tb
+tier G    sharded, groups ['irtb'], F=40 x 10800 s, uint8, years (by bin start) 2001..2001
+work      /home/runner/work/earth/earth/ml/cache/family1_gf
+
+=== stage index (irtb) ===
+  [index irtb] start (1 items)  0/1  0.0s
+  [index irtb] plan.json  1/1  4.4s
+  index: irtb — 1 year(s), C=1 (tb), bins 1425..1442
+=== stage index done in 4.4s ===
+
+=== stage fetch (irtb) ===
+  [fetch irtb (tier G)] start (1 items)  0/1  0.0s
+  [fetch irtb (tier G)] irtb 2001 irtb bin 1425  10.9s
+  [fetch irtb (tier G)] irtb 2001 irtb bin 1426  58.9s
+  [fetch irtb (tier G)] irtb 2001 irtb bin 1426  68.6s
+  [fetch irtb (tier G)] irtb 2001 irtb bin 1427  189.7s
+  [fetch irtb (tier G)] irtb 2001 irtb bin 1428  245.9s
+  [fetch irtb (tier G)] irtb 2001 irtb bin 1428  254.9s
+  [fetch irtb (tier G)] irtb 2001 irtb bin 1429  284.6s
+  [fetch irtb (tier G)] irtb 2001 irtb bin 1429  316.6s
+  [fetch irtb (tier G)] irtb 2001 irtb bin 1430  325.4s
+  [fetch irtb (tier G)] irtb 2001 irtb bin 1431  355.8s
+  [fetch irtb (tier G)] irtb 2001 irtb bin 1431  365.2s
+  [fetch irtb (tier G)] irtb 2001 irtb bin 1432  394.7s
+  [fetch irtb (tier G)] irtb 2001 irtb bin 1433  425.5s
+  [fetch irtb (tier G)] irtb 2001 irtb bin 1433  434.4s
+  [fetch irtb (tier G)] irtb 2001 irtb bin 1434  464.4s
+  [fetch irtb (tier G)] irtb 2001 irtb bin 1434  494.9s
+  [fetch irtb (tier G)] irtb 2001 irtb bin 1435  525.2s
+  [fetch irtb (tier G)] irtb 2001 irtb bin 1436  554.0s
+  [fetch irtb (tier G)] irtb 2001 irtb bin 1436  563.2s
+  [fetch irtb (tier G)] irtb 2001 irtb bin 1437  592.6s
+  [fetch irtb (tier G)] irtb 2001 irtb bin 1438  625.1s
+  [fetch irtb (tier G)] irtb 2001 irtb bin 1438  634.1s
+  [fetch irtb (tier G)] irtb 2001 irtb bin 1439  707.4s
+  [fetch irtb (tier G)] irtb 2001 irtb bin 1439  738.2s
+  [fetch irtb (tier G)] irtb 2001 irtb bin 1440  747.1s
+  [fetch irtb (tier G)] irtb 2001 irtb bin 1441  776.8s
+  [fetch irtb (tier G)] irtb 2001 irtb bin 1441  786.1s
+  [fetch irtb (tier G)] irtb 2001 irtb bin 1442  845.3s
+  2001: irtb 18 bin(s) 720 frame(s) 3818.3 MB (875.0s)
+  hub: chfrank/earth-tensors with the token from $HF_TOKEN
+  irtb: uploading 38 file(s) of 1 year(s), 3821.4 MB -> chfrank/earth-tensors:partials/family1_gf/irtb/
+Upload 0 LFS files: 0it [00:00, ?it/s]Upload 0 LFS files: 0it [00:00, ?it/s]
+  irtb: 1 year(s) pushed and verified in 1 part commit(s), done.json written last (0 already present)
+  push-parts: 1 year(s) on the Hub under partials/family1_gf/irtb/<year>/q3/
+=== stage fetch done in 1131.4s ===
