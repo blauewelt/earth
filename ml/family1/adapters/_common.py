@@ -12,6 +12,7 @@ import collections
 import os
 import re
 import concurrent.futures as cf
+import sys
 import time
 import urllib.error
 import urllib.request
@@ -311,7 +312,7 @@ def earthdata_session(env=None):
 
 
 def earthdata_download(session, url, path, attempts=6, sleep=5.0,
-                       timeout=300):
+                       timeout=(30, 300)):
     """GET `url` -> `path`, size-verified. (bytes, None) or (None, "notfound").
 
     A definite 404 is a legitimate absence the caller counts. A 401/403 after
@@ -326,7 +327,33 @@ def earthdata_download(session, url, path, attempts=6, sleep=5.0,
     #509 refused on its first file for exactly that. 5 + 10 + 20 + 40 + 80 s
     rides out a two-minute wobble; a real refusal (401/403) still raises at
     once.
+
+    `timeout` is `requests`' (connect, read) pair: 30 s to CONNECT, 300 s
+    between bytes once connected. A healthy Earthdata Login connect takes
+    under a second, so 30 s is generous; the old scalar 300 applied to the
+    connect too, and a host that never answers cost five minutes per attempt.
+    A scalar still works and means both.
+
+    An exhausted CONNECTION-level failure exits the lane; everything else
+    raises. Measured 2026-09-23: family1-build #498 and #516 (swot 2023-09
+    and 2023-12 fetch lanes) lost the route to urs.earthdata.nasa.gov
+    mid-lane — `ConnectTimeout ... (connect timeout=300)` — and every
+    adapter's per-granule `except IOError` turned that into
+    `ctx.note_absent` and moved on. Each remaining granule then cost six
+    300 s connect timeouts plus 155 s of sleep (~33 min, three workers) for
+    five hours, producing nothing; the lane refused to mark at the end
+    (correctly) and the runner was wasted all the same. A runner that cannot
+    connect after six attempts will not connect for the next granule. So a
+    last error that is `requests.exceptions.ConnectionError` (which includes
+    ConnectTimeout) or `Timeout` (ReadTimeout) calls `sys.exit` instead:
+    `SystemExit` is a BaseException, so neither the adapters'
+    `except IOError` nor any `except Exception` catches it, `concurrent.
+    futures` re-raises it from `.result()` in `ordered_map`, and the lane
+    process exits non-zero, so the queue re-dispatches it on another runner.
+    An HTTP status, a truncation or an empty body is about ONE file and
+    still raises IOError for the caller to count.
     """
+    import requests.exceptions as rqe
     os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
     part = f"{path}.part{os.getpid()}"
     err = None
@@ -369,4 +396,12 @@ def earthdata_download(session, url, path, attempts=6, sleep=5.0,
                 raise
             if i < attempts - 1:
                 time.sleep(sleep * (2 ** i))
+    if isinstance(err, (rqe.ConnectionError, rqe.Timeout)):
+        sys.exit(f"REFUSING to continue this lane: {url}: "
+                 f"{type(err).__name__}: {err} — after "
+                 f"{max(1, attempts)} attempts "
+                 f"this runner cannot reach the host; a lane on a runner "
+                 f"that cannot connect must fail so it is re-dispatched, not "
+                 f"note every remaining granule absent (family1-build "
+                 f"#498/#516, 2026-09-23)")
     raise IOError(f"{url}: {type(err).__name__}: {err}")
