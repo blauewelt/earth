@@ -157,6 +157,18 @@ DOWNLOAD_ATTEMPTS = 6
 DOWNLOAD_BACKOFF_S = (5, 15, 45, 120, 300)
 
 
+def _is_404(e):
+    """A Hub 'entry not found' of any spelling (huggingface_hub / httpx)."""
+    try:
+        from huggingface_hub.errors import EntryNotFoundError
+        if isinstance(e, EntryNotFoundError):
+            return True
+    except Exception:                                   # pragma: no cover
+        pass
+    code = getattr(getattr(e, "response", None), "status_code", None)
+    return code == 404 or "404" in str(e)[:80]
+
+
 def transient_download_error(e):
     """A Hub read that may succeed on retry: a dropped connection, a
     timeout, a TLS handshake that timed out, a 5xx or a 429 — never a 4xx
@@ -188,8 +200,15 @@ def transient_download_error(e):
     return isinstance(e, (ConnectionError, TimeoutError, OSError))
 
 
-def _download(repo, path_in_repo, token, dest_dir):
+def _download(repo, path_in_repo, token, dest_dir, just_uploaded=False):
     """Stream one repo file into `dest_dir`; returns the local path.
+
+    `just_uploaded=True` (the restore-verify right after a commit) also
+    retries a 404: measured 2026-09-23 on family1-build #597 (sst_acspo02
+    2017 H2, a 2.9 h lane), the Hub answered 404 for
+    `sst_acspo02__bin_2621.idx.npy` seconds after the commit that carried it
+    and served the same file minutes later — propagation lag, not absence.
+    The lane died with its parts on the Hub and no done.json.
 
     WITH A RETRY LADDER FOR TRANSIENT NETWORK FAILURES, the one
     `build_family1_stores._download` got in 300905a. lst05's box assembly
@@ -208,7 +227,9 @@ def _download(repo, path_in_repo, token, dest_dir):
             return hf_hub_download(repo, path_in_repo, repo_type="dataset",
                                    token=token, local_dir=dest_dir)
         except Exception as e:                          # noqa: BLE001
-            if not transient_download_error(e) or i == DOWNLOAD_ATTEMPTS - 1:
+            fresh_404 = just_uploaded and _is_404(e)
+            if (not transient_download_error(e) and not fresh_404) \
+                    or i == DOWNLOAD_ATTEMPTS - 1:
                 raise
             last = e
             wait = DOWNLOAD_BACKOFF_S[min(i, len(DOWNLOAD_BACKOFF_S) - 1)]
@@ -539,7 +560,7 @@ def push(store, year, work, scratch=None, partials=None, hub=None,
     for e in entries:
         tmp = os.path.join(scratch, "verify")
         shutil.rmtree(tmp, ignore_errors=True)
-        back = _download(repo, f"{prefix}/{e['name']}", tok, tmp)
+        back = _download(repo, f"{prefix}/{e['name']}", tok, tmp, just_uploaded=True)
         got = sha256(back)
         shutil.rmtree(tmp, ignore_errors=True)
         if got != e["sha256"]:
@@ -693,7 +714,7 @@ def push_many(store, years, work, scratch=None, partials=None, hub=None,
                     for e in ents]):
         tmp = os.path.join(scratch, "verify")
         shutil.rmtree(tmp, ignore_errors=True)
-        back = _download(repo, rel, tok, tmp)
+        back = _download(repo, rel, tok, tmp, just_uploaded=True)
         got = sha256(back)
         shutil.rmtree(tmp, ignore_errors=True)
         if got != sha:
