@@ -38,6 +38,7 @@ const LANE_KEYS = ["store", "stage", "start", "end", "runner", "extra_args", "ad
 const FAST_FAIL_MIN = 20;   // a failure younger than this is a connection-level (EDL) failure
 const LOST_AFTER_MIN = 30;  // a dispatch with no run after this long was lost
 const MATCH_SLACK_MIN = 2;  // a run's created_at may precede our `at` by clock skew
+const RETRY_HOLD_MIN = 15;  // a fast-failed lane waits this long before it is re-dispatched (an Earthdata Login outage lasts minutes; three instant retries would burn all three inside one)
 const MAX_RETRIES = 3;
 const FETCH_STORES = ["irtb", "sst_acspo02", "swot", "xco2", "burned500"];
 
@@ -108,7 +109,8 @@ export function reconcile(queue, runs, nowIso) {
         q.failed.push(e);
         events.failed.push(e);
       } else {
-        const back = { ...lane, retries, seen_runs: [...(d.seen_runs || []), run.id].filter((x) => x !== undefined) };
+        const back = { ...lane, retries, seen_runs: [...(d.seen_runs || []), run.id].filter((x) => x !== undefined),
+          not_before: new Date(now + RETRY_HOLD_MIN * 60e3).toISOString() };
         toHead.push(back);
         events.retried.push({ ...back, run_number: run.run_number, mins, conclusion: run.conclusion });
       }
@@ -139,9 +141,11 @@ export function reconcile(queue, runs, nowIso) {
 }
 
 // The lanes to dispatch now, in queue order: as many as there are free slots.
-export function toDispatch(queue, inflight, max) {
+export function toDispatch(queue, inflight, max, nowIso) {
   const free = Math.max(0, max - inflight);
-  return normalize(queue).pending.slice(0, free);
+  const now = nowIso ? ms(nowIso) : Date.now();
+  // a held-back retry is skipped, not blocking: the lanes behind it go first
+  return normalize(queue).pending.filter((l) => !l.not_before || ms(l.not_before) <= now).slice(0, free);
 }
 
 // Record dispatches that were actually sent: remove each from pending (first
@@ -256,7 +260,7 @@ async function tick() {
   const inflight = active.length + unseen;
 
   const sent = [];
-  for (const lane of toDispatch(queue, inflight, MAX)) {
+  for (const lane of toDispatch(queue, inflight, MAX, nowIso)) {
     if (sent.length) await sleep(2.5);
     const at = new Date().toISOString();
     let res;
@@ -269,14 +273,14 @@ async function tick() {
       // appears, the lost-dispatch rule puts it back after 30 min; the other
       // choice risks a duplicate lane.
       console.log(`dispatch ${titleNeedle(lane)}: ${e.message} -- recorded, stopping this tick`);
-      sent.push({ ...lane, at });
+      sent.push({ ...lane, not_before: undefined, at });
       break;
     }
     if (res.status !== 204) {
       console.log(`dispatch ${titleNeedle(lane)}: HTTP ${res.status} ${res.text.slice(0, 200)} -- left in pending, stopping this tick`);
       break;
     }
-    sent.push({ ...lane, at });
+    sent.push({ ...lane, not_before: undefined, at });
   }
   unsaved = [...carry, ...sent];
   queue = applySent(queue, sent);
@@ -428,6 +432,12 @@ function selftest() {
   check("toDispatch: 16 in flight -> 0", toDispatch(many, 16, 16).length === 0);
   check("toDispatch: 20 in flight -> 0", toDispatch(many, 20, 16).length === 0);
   check("toDispatch: 0 in flight, 10 pending -> 10", toDispatch(many, 0, 16).length === 10);
+  {
+    const held = { pending: [{ ...many.pending[0], not_before: "2026-09-23T12:20:00Z" }, many.pending[1]], dispatched: [], done: [], failed: [] };
+    check("toDispatch: a held-back retry is skipped, the next lane goes", toDispatch(held, 15, 16, "2026-09-23T12:10:00Z")[0].start === many.pending[1].start);
+    check("toDispatch: the hold expires", toDispatch(held, 15, 16, "2026-09-23T12:21:00Z")[0].start === many.pending[0].start);
+    check("retry carries not_before 15 min after now", (() => { const b = has(q.pending, B); return b && b.not_before && Math.round((ms(b.not_before) - ms(now)) / 60e3) === 15; })());
+  }
 
   // applySent moves the lanes and is idempotent on a re-apply.
   const sent = [{ ...many.pending[0], at: now }, { ...many.pending[1], at: now }];
