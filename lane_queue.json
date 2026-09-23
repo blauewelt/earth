@@ -3,11 +3,16 @@
   {
    "store": "swot",
    "stage": "index,fetch",
-   "start": "2026-01-01",
-   "end": "2026-01-31",
+   "start": "2025-12-01",
+   "end": "2025-12-31",
    "runner": "ubuntu-latest",
    "extra_args": "--push-parts",
-   "adapter_env": "SWOT_ALLOW_BUILD=1"
+   "adapter_env": "SWOT_ALLOW_BUILD=1",
+   "retries": 1,
+   "seen_runs": [
+    35918969579
+   ],
+   "not_before": "2026-09-23T21:17:49.234Z"
   },
   {
    "store": "swot",
@@ -906,12 +911,12 @@
   {
    "store": "swot",
    "stage": "index,fetch",
-   "start": "2025-12-01",
-   "end": "2025-12-31",
+   "start": "2026-01-01",
+   "end": "2026-01-31",
    "runner": "ubuntu-latest",
    "extra_args": "--push-parts",
    "adapter_env": "SWOT_ALLOW_BUILD=1",
-   "at": "2026-09-23T20:53:38.963Z"
+   "at": "2026-09-23T21:02:52.931Z"
   }
  ],
  "done": [
