@@ -1,0 +1,80 @@
+
+values.npy:  84%|████████▍ | 2.58G/3.07G [00:36<00:06, 73.4MB/s][A[A
+
+values.npy:  84%|████████▍ | 2.59G/3.07G [00:37<00:06, 74.1MB/s][A[A
+
+values.npy:  85%|████████▍ | 2.61G/3.07G [00:37<00:06, 74.8MB/s][A[A
+
+values.npy:  85%|████████▌ | 2.62G/3.07G [00:37<00:06, 73.5MB/s][A[A
+
+values.npy:  86%|████████▌ | 2.64G/3.07G [00:37<00:05, 72.6MB/s][A[A
+
+values.npy:  87%|████████▋ | 2.66G/3.07G [00:37<00:05, 70.3MB/s][A[A
+
+values.npy:  87%|████████▋ | 2.67G/3.07G [00:38<00:05, 68.0MB/s][A[A
+
+values.npy:  88%|████████▊ | 2.69G/3.07G [00:38<00:05, 70.5MB/s][A[A
+
+values.npy:  88%|████████▊ | 2.70G/3.07G [00:38<00:05, 71.0MB/s][A[A
+
+values.npy:  89%|████████▊ | 2.72G/3.07G [00:38<00:04, 71.4MB/s][A[A
+
+values.npy:  89%|████████▉ | 2.74G/3.07G [00:39<00:04, 70.3MB/s][A[A
+
+values.npy:  90%|████████▉ | 2.75G/3.07G [00:39<00:04, 71.9MB/s][A[A
+
+values.npy:  90%|█████████ | 2.77G/3.07G [00:39<00:04, 72.4MB/s][A[A
+
+values.npy:  91%|█████████ | 2.78G/3.07G [00:39<00:04, 68.8MB/s][A[A
+
+values.npy:  91%|█████████ | 2.80G/3.07G [00:39<00:03, 71.1MB/s][A[A
+
+values.npy:  92%|█████████▏| 2.82G/3.07G [00:40<00:03, 69.1MB/s][A[A
+
+values.npy:  92%|█████████▏| 2.83G/3.07G [00:40<00:03, 71.4MB/s][A[A
+
+values.npy:  93%|█████████▎| 2.85G/3.07G [00:40<00:03, 69.4MB/s][A[A
+
+values.npy:  93%|█████████▎| 2.86G/3.07G [00:40<00:02, 71.9MB/s][A[A
+
+values.npy:  94%|█████████▍| 2.88G/3.07G [00:41<00:02, 69.3MB/s][A[A
+
+values.npy:  94%|█████████▍| 2.90G/3.07G [00:41<00:02, 72.1MB/s][A[A
+
+values.npy:  95%|█████████▍| 2.91G/3.07G [00:41<00:02, 72.5MB/s][A[A
+
+values.npy:  95%|█████████▌| 2.93G/3.07G [00:41<00:01, 71.9MB/s][A[A
+
+values.npy:  96%|█████████▌| 2.94G/3.07G [00:42<00:01, 66.3MB/s][A[A
+
+values.npy:  96%|█████████▋| 2.96G/3.07G [00:42<00:01, 69.5MB/s][A[A
+
+values.npy:  97%|█████████▋| 2.98G/3.07G [00:42<00:01, 69.0MB/s][A[A
+
+values.npy:  97%|█████████▋| 2.99G/3.07G [00:42<00:01, 70.1MB/s][A[A
+
+values.npy:  98%|█████████▊| 3.01G/3.07G [00:42<00:00, 71.9MB/s][A[A
+
+values.npy:  98%|█████████▊| 3.02G/3.07G [00:43<00:00, 72.2MB/s][A[A
+
+values.npy:  99%|█████████▉| 3.04G/3.07G [00:43<00:00, 73.9MB/s][A[A
+
+values.npy: 100%|█████████▉| 3.06G/3.07G [00:43<00:00, 67.5MB/s][A[Avalues.npy: 100%|██████████| 3.07G/3.07G [00:43<00:00, 70.0MB/s]
+Upload 3 LFS files: 100%|██████████| 3/3 [00:44<00:00, 15.30s/it]Upload 3 LFS files: 100%|██████████| 3/3 [00:44<00:00, 14.70s/it]
+  [publish xco2] bin.npy  1/10  195.9s
+  [publish xco2] bin_offsets.npy  2/10  196.0s
+  [publish xco2] fp.npy  3/10  219.4s
+  [publish xco2] lat.npy  4/10  244.0s
+  [publish xco2] lon.npy  5/10  269.0s
+  [publish xco2] platform.npy  6/10  324.0s
+  [publish xco2] qc.npy  7/10  332.1s
+  [publish xco2] time_s.npy  8/10  357.0s
+  [publish xco2] values.npy  9/10  413.7s
+  [publish xco2] store.json  10/10  413.8s
+  publish: 10 file(s) verified by restore -> https://huggingface.co/datasets/chfrank/earth-tensors/tree/main/tensors/family1_gf/xco2
+=== stage publish done in 481.1s ===
+
+=== stage check (xco2) ===
+  hub: chfrank/earth-tensors with the token from $HF_TOKEN
+  check: xco2 — 9 file(s) verified, N=511,716,245, schema 2, Hub chfrank/earth-tensors:tensors/family1_gf/xco2 agrees
+=== stage check done in 84.3s ===

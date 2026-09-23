@@ -1,0 +1,10 @@
+{
+ "at": "2026-09-23T10:47:19+00:00",
+ "done": 10,
+ "elapsed_s": 413.8,
+ "eta_s": 0.0,
+ "item": "store.json",
+ "sha256": "0cb2e8bc5548abaf",
+ "stage": "publish xco2",
+ "total": 10
+}
