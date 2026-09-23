@@ -1,0 +1,80 @@
+sst_acspo02__bin_2627.zst:  96%|█████████▌| 240M/250M [00:03<00:00, 61.9MB/s][A[A
+
+
+
+sst_acspo02__bin_2629.zst:  85%|████████▍ | 208M/246M [00:03<00:00, 59.2MB/s][A[A[A[A
+sst_acspo02__bin_2626.zst:  96%|█████████▌| 240M/250M [00:04<00:00, 62.6MB/s][A
+
+
+
+
+sst_acspo02__bin_2628.zst:  96%|█████████▋| 240M/249M [00:04<00:00, 57.1MB/s][A[A[A[A[Asst_acspo02__bin_2627.zst: 100%|██████████| 250M/250M [00:04<00:00, 61.2MB/s]
+
+
+
+
+sst_acspo02__bin_2629.zst:  91%|█████████ | 224M/246M [00:03<00:00, 61.0MB/s][A[A[A[Asst_acspo02__bin_2626.zst: 100%|██████████| 250M/250M [00:04<00:00, 58.5MB/s]
+sst_acspo02__bin_2628.zst: 100%|██████████| 249M/249M [00:04<00:00, 58.2MB/s]
+Upload 8 LFS files:  62%|██████▎   | 5/8 [00:04<00:03,  1.23s/it]
+
+
+
+sst_acspo02__bin_2629.zst:  98%|█████████▊| 240M/246M [00:04<00:00, 61.5MB/s][A[A[A[AUpload 8 LFS files:  75%|███████▌  | 6/8 [00:04<00:01,  1.12it/s]sst_acspo02__bin_2629.zst: 100%|██████████| 246M/246M [00:04<00:00, 57.7MB/s]
+Upload 8 LFS files: 100%|██████████| 8/8 [00:04<00:00,  1.76it/s]Upload 8 LFS files: 100%|██████████| 8/8 [00:04<00:00,  1.63it/s]
+Traceback (most recent call last):
+  File "/home/runner/.local/lib/python3.12/site-packages/huggingface_hub/utils/_http.py", line 836, in hf_raise_for_status
+    response.raise_for_status()
+  File "/home/runner/.local/lib/python3.12/site-packages/httpx/_models.py", line 829, in raise_for_status
+    raise HTTPStatusError(message, request=request, response=self)
+httpx.HTTPStatusError: Client error '404 Not Found' for url 'https://huggingface.co/datasets/chfrank/earth-tensors/resolve/main/partials/family1_gf/sst_acspo02/2017/d0701-1231/sst_acspo02__bin_2621.idx.npy'
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/404
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/home/runner/work/earth/earth/ml/build_family1_stores.py", line 1877, in <module>
+    sys.exit(main())
+             ^^^^^^
+  File "/home/runner/work/earth/earth/ml/build_family1_stores.py", line 1872, in main
+    f10b.run_stages(ctx, stages, stage_fn=stage_fns(ad), deps=DEPS)
+  File "/home/runner/work/earth/earth/ml/build_family10_stores.py", line 5665, in run_stages
+    stage_fn[s](ctx)
+  File "/home/runner/work/earth/earth/ml/build_family1_stores.py", line 784, in stage_fetch_grid
+    push_parts(ctx)
+  File "/home/runner/work/earth/earth/ml/build_family1_stores.py", line 418, in push_parts
+    pushed = ph.push_many(ctx.adapter.store, ctx.years, ctx.work,
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/work/earth/earth/ml/family10_parts_hub.py", line 647, in push_many
+    back = _download(repo, rel, tok, tmp)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/work/earth/earth/ml/family10_parts_hub.py", line 194, in _download
+    return hf_hub_download(repo, path_in_repo, repo_type="dataset",
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/.local/lib/python3.12/site-packages/huggingface_hub/utils/_validators.py", line 91, in _inner_fn
+    return fn(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/.local/lib/python3.12/site-packages/huggingface_hub/utils/_http.py", line 266, in _inner
+    return fn(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/.local/lib/python3.12/site-packages/huggingface_hub/file_download.py", line 1022, in hf_hub_download
+    return _hf_hub_download_to_local_dir(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/.local/lib/python3.12/site-packages/huggingface_hub/file_download.py", line 1362, in _hf_hub_download_to_local_dir
+    (url_to_download, etag, commit_hash, expected_size, xet_file_data, head_call_error) = _get_metadata_or_catch_error(
+                                                                                          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/.local/lib/python3.12/site-packages/huggingface_hub/file_download.py", line 1758, in _get_metadata_or_catch_error
+    metadata = get_hf_file_metadata(
+               ^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/.local/lib/python3.12/site-packages/huggingface_hub/utils/_validators.py", line 91, in _inner_fn
+    return fn(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/.local/lib/python3.12/site-packages/huggingface_hub/file_download.py", line 1665, in get_hf_file_metadata
+    response = _httpx_follow_hub_redirects_with_backoff(
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/.local/lib/python3.12/site-packages/huggingface_hub/utils/_http.py", line 761, in _httpx_follow_hub_redirects_with_backoff
+    hf_raise_for_status(response)
+  File "/home/runner/.local/lib/python3.12/site-packages/huggingface_hub/utils/_http.py", line 856, in hf_raise_for_status
+    raise _format(RemoteEntryNotFoundError, message, response, repo_type=repo_type, repo_id=repo_id) from e
+huggingface_hub.errors.RemoteEntryNotFoundError: 404 Client Error. (Request ID: Root=1-6ab4592e-6bb15a3c34864965115ac020;7dac4c35-5f1e-47f0-b19f-b0b39595a079)
+
+Entry Not Found for url: https://huggingface.co/datasets/chfrank/earth-tensors/resolve/main/partials/family1_gf/sst_acspo02/2017/d0701-1231/sst_acspo02__bin_2621.idx.npy.
