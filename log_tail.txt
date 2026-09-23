@@ -1,0 +1,55 @@
+store     lst05 — Daily land-surface temperature day and night with quality, MODIS MOD11C1 v061, 0.05 degrees
+family    family1_tf (1.0.tf) · public -> chfrank/earth-tensors:tensors/family1_tf/lst05
+axis      1999-01-01 .. 2026-09-30  bins 1242..3268 · time_s int32 (schema 2)
+lane      (unnamed) — whole calendar year(s), no group subset: the year folder's own files, as every store on the Hub holds them
+channels  C=4: lst_day, lst_night, qc_day, qc_night
+tier G    sharded, groups ['terra'], F=5 x 86400 s, float16, years (by bin start) 1999..2026
+work      /opt/runner/_work/earth/earth/ml/cache/family1_tf
+
+=== stage index (lst05) ===
+  [index lst05] start (1 items)  0/1  0.0s
+::warning::lst05: the index could not open MOD11C1.A2026264.061.2026265092635 (OSError) — trying another day; a login that does not answer is not a verdict about the product
+::warning::lst05: the index could not open MOD11C1.A2000058.061.2020058191556 (OSError) — trying another day; a login that does not answer is not a verdict about the product
+::warning::lst05: the index could not open MOD11C1.A2013184.061.2021306123152 (OSError) — trying another day; a login that does not answer is not a verdict about the product
+::warning::lst05: NO granule could be opened at index time ([{'date': '2026-09-21', 'error': 'OSError: https://data.lpdaac.earthdatacloud.nasa.gov/lp-prod-protected/MOD11C1.061/MOD11C1.A2026264.061.2026265092635/MOD11C1.A2026264.061.2026265092635.hdf: HTTP 401 after 1 redirect(s), final host urs.earthdata.nasa.gov — Earthdata Login refused this account for this archive. Run the workflow with check_cr'}, {'date': '2000-02-27', 'error': 'OSError: https://data.lpdaac.earthdatacloud.nasa.gov/lp-prod-protected/MOD11C1.061/MOD11C1.A2000058.061.2020058191556/MOD11C1.A2000058.061.2020058191556.hdf: HTTP 401 after 1 redirect(s), final host urs.earthdata.nasa.gov — Earthdata Login refused this account for this archive. Run the workflow with check_cr'}, {'date': '2013-07-03', 'error': 'OSError: https://data.lpdaac.earthdatacloud.nasa.gov/lp-prod-protected/MOD11C1.061/MOD11C1.A2013184.061.2021306123152/MOD11C1.A2013184.061.2021306123152.hdf: HTTP 401 after 1 redirect(s), final host urs.earthdata.nasa.gov — Earthdata Login refused this account for this archive. Run the workflow with check_cr'}]) — the fetch stage meets the same login, where a failure is definite
+  [index lst05] plan.json  1/1  7.0s
+  index: lst05 — 28 year(s), C=4 (lst_day, lst_night, qc_day, qc_night), bins 1242..3268
+=== stage index done in 7.0s ===
+
+=== stage fetch (lst05) ===
+::warning::lst05: no netrc entry for urs.earthdata.nasa.gov was found; the download will fall back to whatever credentials the environment provides and may be refused. family1-build.yml writes that file on hosted runners.
+  [pull lst05 parts] start (28 items)  0/28  0.0s
+  hub: chfrank/earth-tensors with the token from $HF_TOKEN
+  lst05 1999: 2 file(s), 0 row(s) -> /opt/runner/_work/earth/earth/ml/cache/family1_tf/lst05/parts/1999
+  lst05 2000: 126 file(s), 266 row(s) -> /opt/runner/_work/earth/earth/ml/cache/family1_tf/lst05/parts/2000
+  lst05 2001: 148 file(s), 348 row(s) -> /opt/runner/_work/earth/earth/ml/cache/family1_tf/lst05/parts/2001
+  lst05 2002: 148 file(s), 355 row(s) -> /opt/runner/_work/earth/earth/ml/cache/family1_tf/lst05/parts/2002
+  lst05 2003: 148 file(s), 358 row(s) -> /opt/runner/_work/earth/earth/ml/cache/family1_tf/lst05/parts/2003
+  lst05 2004: 150 file(s), 370 row(s) -> /opt/runner/_work/earth/earth/ml/cache/family1_tf/lst05/parts/2004
+  lst05 2005: 148 file(s), 365 row(s) -> /opt/runner/_work/earth/earth/ml/cache/family1_tf/lst05/parts/2005
+  lst05 2006: 148 file(s), 365 row(s) -> /opt/runner/_work/earth/earth/ml/cache/family1_tf/lst05/parts/2006
+  lst05 2007: 148 file(s), 365 row(s) -> /opt/runner/_work/earth/earth/ml/cache/family1_tf/lst05/parts/2007
+  lst05 2008: 148 file(s), 363 row(s) -> /opt/runner/_work/earth/earth/ml/cache/family1_tf/lst05/parts/2008
+  lst05 2009: 148 file(s), 365 row(s) -> /opt/runner/_work/earth/earth/ml/cache/family1_tf/lst05/parts/2009
+  lst05 2010: 148 file(s), 365 row(s) -> /opt/runner/_work/earth/earth/ml/cache/family1_tf/lst05/parts/2010
+  lst05 2011: 148 file(s), 365 row(s) -> /opt/runner/_work/earth/earth/ml/cache/family1_tf/lst05/parts/2011
+  lst05 2012: 148 file(s), 365 row(s) -> /opt/runner/_work/earth/earth/ml/cache/family1_tf/lst05/parts/2012
+  lst05 2013: 148 file(s), 365 row(s) -> /opt/runner/_work/earth/earth/ml/cache/family1_tf/lst05/parts/2013
+  lst05 2014: 148 file(s), 365 row(s) -> /opt/runner/_work/earth/earth/ml/cache/family1_tf/lst05/parts/2014
+  lst05 2015: 148 file(s), 365 row(s) -> /opt/runner/_work/earth/earth/ml/cache/family1_tf/lst05/parts/2015
+  lst05 2016: 148 file(s), 356 row(s) -> /opt/runner/_work/earth/earth/ml/cache/family1_tf/lst05/parts/2016
+  lst05 2017: 148 file(s), 365 row(s) -> /opt/runner/_work/earth/earth/ml/cache/family1_tf/lst05/parts/2017
+  lst05 2018: 148 file(s), 365 row(s) -> /opt/runner/_work/earth/earth/ml/cache/family1_tf/lst05/parts/2018
+  lst05 2019: 148 file(s), 365 row(s) -> /opt/runner/_work/earth/earth/ml/cache/family1_tf/lst05/parts/2019
+  lst05 2020: 148 file(s), 365 row(s) -> /opt/runner/_work/earth/earth/ml/cache/family1_tf/lst05/parts/2020
+  lst05 2021: 148 file(s), 365 row(s) -> /opt/runner/_work/earth/earth/ml/cache/family1_tf/lst05/parts/2021
+  lst05 2022: 148 file(s), 352 row(s) -> /opt/runner/_work/earth/earth/ml/cache/family1_tf/lst05/parts/2022
+  lst05 2023: 148 file(s), 365 row(s) -> /opt/runner/_work/earth/earth/ml/cache/family1_tf/lst05/parts/2023
+  lst05 2024: 150 file(s), 370 row(s) -> /opt/runner/_work/earth/earth/ml/cache/family1_tf/lst05/parts/2024
+  lst05 2025: 148 file(s), 361 row(s) -> /opt/runner/_work/earth/earth/ml/cache/family1_tf/lst05/parts/2025
+  lst05 2026: 104 file(s), 248 row(s) -> /opt/runner/_work/earth/earth/ml/cache/family1_tf/lst05/parts/2026
+  pull: 28 year(s) present in 28 lane(s) (0 already local), 9,587 row(s), 0 missing
+=== stage fetch done in 7428.4s ===
+
+=== stage assemble (lst05) ===
+  [lst05 store (tier G)] start (1 items)  0/1  0.0s
