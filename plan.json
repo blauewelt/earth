@@ -1,0 +1,695 @@
+{
+ "bins": [
+  2666,
+  2702
+ ],
+ "builder_git_sha": "3d8d53fc9dbfcf9b2539e8ea486957456e708b74",
+ "built_at": "2026-09-23T22:50:22+00:00",
+ "bytes": 11571121593,
+ "bytes_per_day_mean": 183668596.7,
+ "channels": [
+  {
+   "max": 40.0,
+   "min": -2.5,
+   "name": "sst",
+   "unit": "degC"
+  },
+  {
+   "max": 5.0,
+   "min": 2.0,
+   "name": "quality_level",
+   "unit": "ACSPO grade 0-5"
+  }
+ ],
+ "collection": "C2805339147-POCLOUD",
+ "collection_key": "DY",
+ "collection_shape": "one granule a day (day and night super-collated together)",
+ "dataset": "NOAA ACSPO L3S-LEO DY daily 0.02 degree SST (L3S_LEO_DY-STAR-v2.81)",
+ "date_range": [
+  "2018-07-01",
+  "2018-12-31"
+ ],
+ "days_absent_in_window": [
+  "2018-07-02",
+  "2018-07-03",
+  "2018-07-04",
+  "2018-07-05",
+  "2018-07-06",
+  "2018-07-07",
+  "2018-07-09",
+  "2018-07-10",
+  "2018-07-11",
+  "2018-07-12",
+  "2018-07-13",
+  "2018-07-14",
+  "2018-07-16",
+  "2018-07-18",
+  "2018-07-19",
+  "2018-07-20",
+  "2018-07-21",
+  "2018-07-22",
+  "2018-07-24",
+  "2018-07-25",
+  "2018-07-26",
+  "2018-07-30",
+  "2018-07-31",
+  "2018-08-01",
+  "2018-08-03",
+  "2018-08-05",
+  "2018-08-06",
+  "2018-08-08",
+  "2018-08-10",
+  "2018-08-11",
+  "2018-08-14",
+  "2018-08-15",
+  "2018-08-17",
+  "2018-08-18",
+  "2018-08-20",
+  "2018-08-22",
+  "2018-08-24",
+  "2018-08-25",
+  "2018-08-26",
+  "2018-08-28",
+  "2018-08-30",
+  "2018-08-31",
+  "2018-09-01",
+  "2018-09-02",
+  "2018-09-03",
+  "2018-09-04",
+  "2018-09-05",
+  "2018-09-06",
+  "2018-09-07",
+  "2018-09-08",
+  "2018-09-09",
+  "2018-09-10",
+  "2018-09-11",
+  "2018-09-12",
+  "2018-09-13",
+  "2018-09-15",
+  "2018-09-16",
+  "2018-09-18",
+  "2018-09-21",
+  "2018-09-22"
+ ],
+ "days_absent_n": 121,
+ "files": 63,
+ "files_per_year": {
+  "2018": 63
+ },
+ "first_file": {
+  "bytes": 420780674,
+  "date": "2018-07-15",
+  "dimensions": {
+   "lat": 9000,
+   "lon": 18000,
+   "time": 1
+  },
+  "format": "NETCDF4",
+  "grid_checked": {
+   "lat_first": 89.98999786376953,
+   "lat_last": -89.98999786376953,
+   "lon_first": -179.99000549316406,
+   "lon_last": 179.99000549316406
+  },
+  "inventory": {
+   "crs": {
+    "add_offset": null,
+    "dims": [],
+    "dtype": "int32",
+    "fill": null,
+    "long_name": "coordinate reference system",
+    "scale_factor": null,
+    "shape": [],
+    "units": ""
+   },
+   "dt_analysis": {
+    "add_offset": 0.0,
+    "dims": [
+     "time",
+     "lat",
+     "lon"
+    ],
+    "dtype": "int16",
+    "fill": -32768.0,
+    "long_name": "deviation from SST reference",
+    "scale_factor": 0.009999999776482582,
+    "shape": [
+     1,
+     9000,
+     18000
+    ],
+    "units": "kelvin"
+   },
+   "l2p_flags": {
+    "add_offset": null,
+    "dims": [
+     "time",
+     "lat",
+     "lon"
+    ],
+    "dtype": "int16",
+    "fill": null,
+    "long_name": "L2P flags",
+    "scale_factor": null,
+    "shape": [
+     1,
+     9000,
+     18000
+    ],
+    "units": ""
+   },
+   "l3s_flags": {
+    "add_offset": null,
+    "dims": [
+     "time",
+     "lat",
+     "lon"
+    ],
+    "dtype": "int16",
+    "fill": -32768.0,
+    "long_name": "L3S flags",
+    "scale_factor": null,
+    "shape": [
+     1,
+     9000,
+     18000
+    ],
+    "units": ""
+   },
+   "lat": {
+    "add_offset": null,
+    "dims": [
+     "lat"
+    ],
+    "dtype": "float32",
+    "fill": null,
+    "long_name": "latitude",
+    "scale_factor": null,
+    "shape": [
+     9000
+    ],
+    "units": "degrees_north"
+   },
+   "lon": {
+    "add_offset": null,
+    "dims": [
+     "lon"
+    ],
+    "dtype": "float32",
+    "fill": null,
+    "long_name": "longitude",
+    "scale_factor": null,
+    "shape": [
+     18000
+    ],
+    "units": "degrees_east"
+   },
+   "measurement_dtime": {
+    "add_offset": 0.0,
+    "dims": [
+     "time",
+     "lat",
+     "lon"
+    ],
+    "dtype": "int32",
+    "fill": -2147483648.0,
+    "long_name": "time difference of highest weighted input SST from reference time. Is equal to sst_dtime for pixels where L3S-LEO-PM_N i",
+    "scale_factor": 0.25,
+    "shape": [
+     1,
+     9000,
+     18000
+    ],
+    "units": "seconds"
+   },
+   "quality_level": {
+    "add_offset": null,
+    "dims": [
+     "time",
+     "lat",
+     "lon"
+    ],
+    "dtype": "int8",
+    "fill": -128.0,
+    "long_name": "quality level of SST pixel",
+    "scale_factor": null,
+    "shape": [
+     1,
+     9000,
+     18000
+    ],
+    "units": ""
+   },
+   "satellite_zenith_angle": {
+    "add_offset": 0.0,
+    "dims": [
+     "time",
+     "lat",
+     "lon"
+    ],
+    "dtype": "int16",
+    "fill": -32768.0,
+    "long_name": "satellite zenith angle",
+    "scale_factor": 0.009999999776482582,
+    "shape": [
+     1,
+     9000,
+     18000
+    ],
+    "units": "degrees"
+   },
+   "sea_ice_fraction": {
+    "add_offset": 0.0,
+    "dims": [
+     "time",
+     "lat",
+     "lon"
+    ],
+    "dtype": "int8",
+    "fill": -128.0,
+    "long_name": "sea ice fraction",
+    "scale_factor": 0.009999999776482582,
+    "shape": [
+     1,
+     9000,
+     18000
+    ],
+    "units": "1"
+   },
+   "sea_surface_temperature": {
+    "add_offset": 273.1499938964844,
+    "dims": [
+     "time",
+     "lat",
+     "lon"
+    ],
+    "dtype": "int16",
+    "fill": -32768.0,
+    "long_name": "sea surface sub-skin temperature",
+    "scale_factor": 0.009999999776482582,
+    "shape": [
+     1,
+     9000,
+     18000
+    ],
+    "units": "kelvin"
+   },
+   "sses_bias": {
+    "add_offset": 0.0,
+    "dims": [
+     "time",
+     "lat",
+     "lon"
+    ],
+    "dtype": "int8",
+    "fill": -128.0,
+    "long_name": "SSES bias estimate",
+    "scale_factor": 0.01600000075995922,
+    "shape": [
+     1,
+     9000,
+     18000
+    ],
+    "units": "kelvin"
+   },
+   "sses_standard_deviation": {
+    "add_offset": 1.0,
+    "dims": [
+     "time",
+     "lat",
+     "lon"
+    ],
+    "dtype": "int8",
+    "fill": -128.0,
+    "long_name": "SSES standard deviation",
+    "scale_factor": 0.009999999776482582,
+    "shape": [
+     1,
+     9000,
+     18000
+    ],
+    "units": "kelvin"
+   },
+   "sst_count": {
+    "add_offset": null,
+    "dims": [
+     "time",
+     "lat",
+     "lon"
+    ],
+    "dtype": "int8",
+    "fill": -128.0,
+    "long_name": "Count of input L3U SST pixels",
+    "scale_factor": null,
+    "shape": [
+     1,
+     9000,
+     18000
+    ],
+    "units": ""
+   },
+   "sst_dtime": {
+    "add_offset": 0.0,
+    "dims": [
+     "time",
+     "lat",
+     "lon"
+    ],
+    "dtype": "int32",
+    "fill": -2147483648.0,
+    "long_name": "time difference from reference time",
+    "scale_factor": 0.25,
+    "shape": [
+     1,
+     9000,
+     18000
+    ],
+    "units": "seconds"
+   },
+   "sst_front_position": {
+    "add_offset": null,
+    "dims": [
+     "time",
+     "lat",
+     "lon"
+    ],
+    "dtype": "int8",
+    "fill": -128.0,
+    "long_name": "Binary SST front position indicator",
+    "scale_factor": null,
+    "shape": [
+     1,
+     9000,
+     18000
+    ],
+    "units": ""
+   },
+   "sst_gradient_magnitude": {
+    "add_offset": 0.0,
+    "dims": [
+     "time",
+     "lat",
+     "lon"
+    ],
+    "dtype": "int16",
+    "fill": -32768.0,
+    "long_name": "SST gradient magnitude value",
+    "scale_factor": 0.0010000000474974513,
+    "shape": [
+     1,
+     9000,
+     18000
+    ],
+    "units": "kelvin/km"
+   },
+   "sst_source": {
+    "add_offset": null,
+    "dims": [
+     "time",
+     "lat",
+     "lon"
+    ],
+    "dtype": "int8",
+    "fill": -128.0,
+    "long_name": "Source of major (highest weight) contribution to sst",
+    "scale_factor": null,
+    "shape": [
+     1,
+     9000,
+     18000
+    ],
+    "units": ""
+   },
+   "time": {
+    "add_offset": null,
+    "dims": [
+     "time"
+    ],
+    "dtype": "int32",
+    "fill": null,
+    "long_name": "reference time of sst file",
+    "scale_factor": null,
+    "shape": [
+     1
+    ],
+    "units": "seconds since 1981-01-01 00:00:00"
+   },
+   "wind_speed": {
+    "add_offset": 19.049999237060547,
+    "dims": [
+     "time",
+     "lat",
+     "lon"
+    ],
+    "dtype": "int8",
+    "fill": -128.0,
+    "long_name": "wind speed",
+    "scale_factor": 0.15000000596046448,
+    "shape": [
+     1,
+     9000,
+     18000
+    ],
+    "units": "m s-1"
+   }
+  },
+  "name": "20180715120000-STAR-L3S_GHRSST-SSTsubskin-LEO_Daily-ACSPO_V2.81-v02.0-fv01.0",
+  "resolution": {
+   "lat": "lat",
+   "lon": "lon",
+   "quality": "quality_level",
+   "sst": "sea_surface_temperature",
+   "time": "time"
+  },
+  "variables": 20
+ },
+ "footprint": {
+  "log2_dt": -2.321928094887362,
+  "log2_fp": -3.6438627993341592
+ },
+ "granules_suspiciously_small": [
+  {
+   "bytes": 108,
+   "date": "2018-07-01",
+   "name": "20180701120000-STAR-L3S_GHRSST-SSTsubskin-LEO_Daily-ACSPO_V2.81-v02.0-fv01.0"
+  },
+  {
+   "bytes": 108,
+   "date": "2018-07-08",
+   "name": "20180708120000-STAR-L3S_GHRSST-SSTsubskin-LEO_Daily-ACSPO_V2.81-v02.0-fv01.0"
+  },
+  {
+   "bytes": 108,
+   "date": "2018-07-17",
+   "name": "20180717120000-STAR-L3S_GHRSST-SSTsubskin-LEO_Daily-ACSPO_V2.81-v02.0-fv01.0"
+  },
+  {
+   "bytes": 108,
+   "date": "2018-07-28",
+   "name": "20180728120000-STAR-L3S_GHRSST-SSTsubskin-LEO_Daily-ACSPO_V2.81-v02.0-fv01.0"
+  },
+  {
+   "bytes": 108,
+   "date": "2018-07-29",
+   "name": "20180729120000-STAR-L3S_GHRSST-SSTsubskin-LEO_Daily-ACSPO_V2.81-v02.0-fv01.0"
+  },
+  {
+   "bytes": 108,
+   "date": "2018-08-09",
+   "name": "20180809120000-STAR-L3S_GHRSST-SSTsubskin-LEO_Daily-ACSPO_V2.81-v02.0-fv01.0"
+  },
+  {
+   "bytes": 108,
+   "date": "2018-08-12",
+   "name": "20180812120000-STAR-L3S_GHRSST-SSTsubskin-LEO_Daily-ACSPO_V2.81-v02.0-fv01.0"
+  },
+  {
+   "bytes": 108,
+   "date": "2018-08-13",
+   "name": "20180813120000-STAR-L3S_GHRSST-SSTsubskin-LEO_Daily-ACSPO_V2.81-v02.0-fv01.0"
+  },
+  {
+   "bytes": 108,
+   "date": "2018-08-16",
+   "name": "20180816120000-STAR-L3S_GHRSST-SSTsubskin-LEO_Daily-ACSPO_V2.81-v02.0-fv01.0"
+  },
+  {
+   "bytes": 108,
+   "date": "2018-08-19",
+   "name": "20180819120000-STAR-L3S_GHRSST-SSTsubskin-LEO_Daily-ACSPO_V2.81-v02.0-fv01.0"
+  },
+  {
+   "bytes": 108,
+   "date": "2018-08-23",
+   "name": "20180823120000-STAR-L3S_GHRSST-SSTsubskin-LEO_Daily-ACSPO_V2.81-v02.0-fv01.0"
+  },
+  {
+   "bytes": 108,
+   "date": "2018-08-27",
+   "name": "20180827120000-STAR-L3S_GHRSST-SSTsubskin-LEO_Daily-ACSPO_V2.81-v02.0-fv01.0"
+  },
+  {
+   "bytes": 108,
+   "date": "2018-08-29",
+   "name": "20180829120000-STAR-L3S_GHRSST-SSTsubskin-LEO_Daily-ACSPO_V2.81-v02.0-fv01.0"
+  },
+  {
+   "bytes": 108,
+   "date": "2018-09-17",
+   "name": "20180917120000-STAR-L3S_GHRSST-SSTsubskin-LEO_Daily-ACSPO_V2.81-v02.0-fv01.0"
+  },
+  {
+   "bytes": 108,
+   "date": "2018-09-24",
+   "name": "20180924120000-STAR-L3S_GHRSST-SSTsubskin-LEO_Daily-ACSPO_V2.81-v02.0-fv01.0"
+  },
+  {
+   "bytes": 108,
+   "date": "2018-09-25",
+   "name": "20180925120000-STAR-L3S_GHRSST-SSTsubskin-LEO_Daily-ACSPO_V2.81-v02.0-fv01.0"
+  },
+  {
+   "bytes": 108,
+   "date": "2018-10-07",
+   "name": "20181007120000-STAR-L3S_GHRSST-SSTsubskin-LEO_Daily-ACSPO_V2.81-v02.0-fv01.0"
+  },
+  {
+   "bytes": 108,
+   "date": "2018-10-21",
+   "name": "20181021120000-STAR-L3S_GHRSST-SSTsubskin-LEO_Daily-ACSPO_V2.81-v02.0-fv01.0"
+  },
+  {
+   "bytes": 108,
+   "date": "2018-10-22",
+   "name": "20181022120000-STAR-L3S_GHRSST-SSTsubskin-LEO_Daily-ACSPO_V2.81-v02.0-fv01.0"
+  },
+  {
+   "bytes": 108,
+   "date": "2018-10-25",
+   "name": "20181025120000-STAR-L3S_GHRSST-SSTsubskin-LEO_Daily-ACSPO_V2.81-v02.0-fv01.0"
+  },
+  {
+   "bytes": 108,
+   "date": "2018-11-07",
+   "name": "20181107120000-STAR-L3S_GHRSST-SSTsubskin-LEO_Daily-ACSPO_V2.81-v02.0-fv01.0"
+  },
+  {
+   "bytes": 108,
+   "date": "2018-11-12",
+   "name": "20181112120000-STAR-L3S_GHRSST-SSTsubskin-LEO_Daily-ACSPO_V2.81-v02.0-fv01.0"
+  },
+  {
+   "bytes": 108,
+   "date": "2018-11-14",
+   "name": "20181114120000-STAR-L3S_GHRSST-SSTsubskin-LEO_Daily-ACSPO_V2.81-v02.0-fv01.0"
+  },
+  {
+   "bytes": 108,
+   "date": "2018-11-17",
+   "name": "20181117120000-STAR-L3S_GHRSST-SSTsubskin-LEO_Daily-ACSPO_V2.81-v02.0-fv01.0"
+  },
+  {
+   "bytes": 108,
+   "date": "2018-11-21",
+   "name": "20181121120000-STAR-L3S_GHRSST-SSTsubskin-LEO_Daily-ACSPO_V2.81-v02.0-fv01.0"
+  },
+  {
+   "bytes": 108,
+   "date": "2018-11-22",
+   "name": "20181122120000-STAR-L3S_GHRSST-SSTsubskin-LEO_Daily-ACSPO_V2.81-v02.0-fv01.0"
+  },
+  {
+   "bytes": 108,
+   "date": "2018-11-23",
+   "name": "20181123120000-STAR-L3S_GHRSST-SSTsubskin-LEO_Daily-ACSPO_V2.81-v02.0-fv01.0"
+  },
+  {
+   "bytes": 108,
+   "date": "2018-11-29",
+   "name": "20181129120000-STAR-L3S_GHRSST-SSTsubskin-LEO_Daily-ACSPO_V2.81-v02.0-fv01.0"
+  },
+  {
+   "bytes": 108,
+   "date": "2018-12-03",
+   "name": "20181203120000-STAR-L3S_GHRSST-SSTsubskin-LEO_Daily-ACSPO_V2.81-v02.0-fv01.0"
+  },
+  {
+   "bytes": 108,
+   "date": "2018-12-07",
+   "name": "20181207120000-STAR-L3S_GHRSST-SSTsubskin-LEO_Daily-ACSPO_V2.81-v02.0-fv01.0"
+  },
+  {
+   "bytes": 108,
+   "date": "2018-12-09",
+   "name": "20181209120000-STAR-L3S_GHRSST-SSTsubskin-LEO_Daily-ACSPO_V2.81-v02.0-fv01.0"
+  },
+  {
+   "bytes": 108,
+   "date": "2018-12-12",
+   "name": "20181212120000-STAR-L3S_GHRSST-SSTsubskin-LEO_Daily-ACSPO_V2.81-v02.0-fv01.0"
+  },
+  {
+   "bytes": 108,
+   "date": "2018-12-13",
+   "name": "20181213120000-STAR-L3S_GHRSST-SSTsubskin-LEO_Daily-ACSPO_V2.81-v02.0-fv01.0"
+  },
+  {
+   "bytes": 108,
+   "date": "2018-12-14",
+   "name": "20181214120000-STAR-L3S_GHRSST-SSTsubskin-LEO_Daily-ACSPO_V2.81-v02.0-fv01.0"
+  },
+  {
+   "bytes": 108,
+   "date": "2018-12-20",
+   "name": "20181220120000-STAR-L3S_GHRSST-SSTsubskin-LEO_Daily-ACSPO_V2.81-v02.0-fv01.0"
+  },
+  {
+   "bytes": 108,
+   "date": "2018-12-30",
+   "name": "20181230120000-STAR-L3S_GHRSST-SSTsubskin-LEO_Daily-ACSPO_V2.81-v02.0-fv01.0"
+  }
+ ],
+ "granules_suspiciously_small_n": 36,
+ "grid": {
+  "H": 9000,
+  "W": 18000,
+  "coordinates": "lon = x0 + (col + 0.5) * dx, lat = y0 + (row + 0.5) * dy with dy NEGATIVE; x0/y0 are the grid's WEST and NORTH edges",
+  "crs": "EPSG:4326",
+  "dx": 0.02,
+  "dy": -0.02,
+  "extent": [
+   -180.0,
+   -90.0,
+   180.0,
+   90.0
+  ],
+  "extent_note": "[west, south, east, north] in degrees; global",
+  "no_tile_corners": "a plain geographic grid: the affine rule above IS the lat/lon of every pixel and tile corner",
+  "pixel_deg": 0.02,
+  "pixel_km_equator": 2.2264,
+  "proj4": "+proj=longlat +datum=WGS84 +no_defs",
+  "row_order": "row 0 is the NORTHERNMOST row \u2014 the GHRSST convention, whose `lat` array DESCENDS, and what `grid_check` refuses a file for not having",
+  "x0": -180.0,
+  "y0": 90.0
+ },
+ "min_granule_bytes": 1000000,
+ "per_year_resume": true,
+ "qc_policy": "QUALITY IS A CHANNEL, NOT A FILTER, above the floor. ACSPO grades every pixel 0 (no data) to 5 (best); a pixel graded 0 or 1 is not a measurement and becomes missing, counted by grade (`quality_grade`), and 2..5 are stored WITH their grade so the consumer picks the threshold rather than inheriting one (family1tf.tex \u00a76). A pixel with an SST and no grade, or a grade and no SST, is missing in both channels. SST is converted from the source's kelvin to degrees Celsius and a file whose `units` is not kelvin is a REFUSAL rather than a guessed offset. A value outside its channel's bounds becomes NaN for that channel and is counted, never clipped. A granule that cannot be opened or whose grid does not check out is `ctx.note_absent` and leaves the year unmarked \u2014 CMR reports at least one granule (2020-01-03) as 114 bytes, and a 114-byte file is not a day of SST.",
+ "record": [
+  "2018-07-01",
+  "2018-12-31"
+ ],
+ "sources": [
+  "https://cmr.earthdata.nasa.gov/search/granules.json?collection_concept_id=C2805339147-POCLOUD (L3S_LEO_DY-STAR-v2.81, anonymous listing)",
+  "https://cmr.earthdata.nasa.gov/search/granules.json?collection_concept_id=C2805331435-POCLOUD (L3S_LEO_PM-STAR-v2.81, anonymous listing)",
+  "https://cmr.earthdata.nasa.gov/search/granules.json?collection_concept_id=C2050135480-POCLOUD (L3S_LEO_AM-STAR-v2.80, anonymous listing)"
+ ],
+ "store": "sst_acspo02",
+ "title": "NOAA ACSPO L3S-LEO daily sea-surface temperature, 0.02 degrees \u2014 the finest satellite SST field; phase C, probed and parked",
+ "url": "https://cmr.earthdata.nasa.gov/search/granules.json?collection_concept_id=C2805339147-POCLOUD",
+ "verified": "2026-09-18 from this sandbox (CMR only \u2014 the granules are Earthdata-protected at PO.DAAC, so the BYTES are a hosted runner's job): the three collections and their records \u2014 L3S_LEO_DY-STAR-v2.81 (C2805339147-POCLOUD, 2000-02-24 ->), L3S_LEO_PM-STAR-v2.81 (C2805331435-POCLOUD, 2002-07-04 ->) and L3S_LEO_AM-STAR-v2.80 (C2050135480-POCLOUD, 2006-12-01 ->) \u2014 and 2020-01's first granules: DY 422.93 MB on 2020-01-01 and 423.51 MB on 2020-01-02 (the note's 408 MB/day), PM publishing a _PM_D and a _PM_N granule of 285.86 and 288.71 MB on 2020-01-01, and **2020-01-03's DY granule reported as 1.09e-4 MB (114 bytes)**, which is why a granule under 1 MB is listed as suspicious at index time and refused at read time. NOT MEASURED HERE, and what the runner probe settles: the granule's internal variable layout (resolved against a candidate list, whole inventory written into plan.json), the lat/lon axes against the declared grid, the valid fraction after the quality floor, and the compressed bytes a tile and a frame \u2014 which is what replaces the note's 2.3 TB.",
+ "version": "2.81",
+ "years": [
+  2018
+ ]
+}
