@@ -65,7 +65,7 @@ export function normalize(q) {
 export function reconcile(queue, runs, nowIso) {
   const q = normalize(structuredClone(queue));
   const now = ms(nowIso);
-  const events = { done: [], retried: [], failed: [], lost: [] };
+  const events = { done: [], retried: [], failed: [], lost: [], dropped: [] };
   const keep = [], toHead = [];
   const claimed = new Set();
   let unseen = 0;
@@ -121,6 +121,20 @@ export function reconcile(queue, runs, nowIso) {
   }
   q.dispatched = keep;
   q.pending = [...toHead, ...q.pending];
+  // A LANE THAT IS ALREADY DONE IS NEVER DISPATCHED AGAIN. Measured 2026-09-23
+  // on the seeded queue: three lanes re-queued by hand after a fast failure
+  // had kept their old `dispatched` entry beside the new one, so the old entry
+  // matched the old failed run and put a lane whose re-run had already parked
+  // its parts back into pending. Dedupe by lane key against done AND within
+  // pending itself (keep the first).
+  const finished = new Set(q.done.map(laneKey));
+  const seenKeys = new Set();
+  q.pending = q.pending.filter((l) => {
+    const k = laneKey(l);
+    if (finished.has(k) || seenKeys.has(k)) { events.dropped.push(l); return false; }
+    seenKeys.add(k);
+    return true;
+  });
   return { queue: q, events, unseen };
 }
 
@@ -289,6 +303,7 @@ async function tick() {
   for (const e of events.retried)
     console.log(`  retry ${e.retries}/${MAX_RETRIES}: ${titleNeedle(e)} (#${e.run_number} ${e.conclusion} after ${e.mins} min)`);
   for (const e of events.lost) console.log(`  lost dispatch, requeued: ${titleNeedle(e)}`);
+  for (const e of events.dropped) console.log(`  dropped from pending (already done or duplicate): ${titleNeedle(e)}`);
   for (const e of events.failed) console.log(`  FAILED: ${titleNeedle(e)} #${e.run_number} ${e.reason} ${e.url || ""}`);
   return queue;
 }
