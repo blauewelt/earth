@@ -1,5 +1,15 @@
 {
- "pending": [],
+ "pending": [
+  {
+   "store": "sst_acspo02",
+   "stage": "index,fetch",
+   "start": "2017-07-01",
+   "end": "2017-12-31",
+   "runner": "ubuntu-latest",
+   "extra_args": "--push-parts",
+   "adapter_env": ""
+  }
+ ],
  "dispatched": [
   {
    "store": "sst_acspo02",
@@ -2385,20 +2395,5 @@
    "finished": "2026-09-23T23:42:50Z"
   }
  ],
- "failed": [
-  {
-   "store": "sst_acspo02",
-   "stage": "index,fetch",
-   "start": "2017-07-01",
-   "end": "2017-12-31",
-   "runner": "ubuntu-latest",
-   "extra_args": "--push-parts",
-   "adapter_env": "",
-   "at": "2026-09-23T20:04:18.831Z",
-   "run_number": 597,
-   "url": "https://github.com/blauewelt/earth/actions/runs/35913491519",
-   "reason": "failed after 173 min — read the log",
-   "finished": "2026-09-23T22:57:09Z"
-  }
- ]
+ "failed": []
 }
