@@ -1,0 +1,80 @@
+  [fetch irtb (tier G)] irtb 2015 irtb bin 2454  213.8s
+  [fetch irtb (tier G)] irtb 2015 irtb bin 2455  237.6s
+  [fetch irtb (tier G)] irtb 2015 irtb bin 2455  244.2s
+  [fetch irtb (tier G)] irtb 2015 irtb bin 2456  268.4s
+  [fetch irtb (tier G)] irtb 2015 irtb bin 2456  292.7s
+  [fetch irtb (tier G)] irtb 2015 irtb bin 2457  299.1s
+  [fetch irtb (tier G)] irtb 2015 irtb bin 2458  323.2s
+  [fetch irtb (tier G)] irtb 2015 irtb bin 2458  329.8s
+  [fetch irtb (tier G)] irtb 2015 irtb bin 2459  353.6s
+  [fetch irtb (tier G)] irtb 2015 irtb bin 2460  377.3s
+  [fetch irtb (tier G)] irtb 2015 irtb bin 2460  384.4s
+  [fetch irtb (tier G)] irtb 2015 irtb bin 2461  408.1s
+  [fetch irtb (tier G)] irtb 2015 irtb bin 2461  434.8s
+  [fetch irtb (tier G)] irtb 2015 irtb bin 2462  441.2s
+  [fetch irtb (tier G)] irtb 2015 irtb bin 2463  465.2s
+  [fetch irtb (tier G)] irtb 2015 irtb bin 2463  472.0s
+  [fetch irtb (tier G)] irtb 2015 irtb bin 2464  496.0s
+  [fetch irtb (tier G)] irtb 2015 irtb bin 2465  519.9s
+  [fetch irtb (tier G)] irtb 2015 irtb bin 2465  526.4s
+  2015: irtb 19 bin(s) 760 frame(s) 4466.3 MB (546.3s)
+  hub: chfrank/earth-tensors with the token from $HF_TOKEN
+  irtb: uploading 40 file(s) of 1 year(s), 4469.7 MB -> chfrank/earth-tensors:partials/family1_gf/irtb/
+irtb__bin_2465.idx.npy:   0%|          | 0.00/175k [00:00<?, ?B/s]irtb__bin_2465.idx.npy: 100%|██████████| 175k/175k [00:00<00:00, 458kB/s]
+Upload 2 LFS files:   0%|          | 0/2 [00:00<?, ?it/s]
+irtb__shard_index.npy:   0%|          | 0.00/7.26k [00:00<?, ?B/s][A
+
+irtb__bin_2465.zst:   0%|          | 0.00/240M [00:00<?, ?B/s][A[Airtb__shard_index.npy: 100%|██████████| 7.26k/7.26k [00:00<00:00, 68.0kB/s]
+
+
+irtb__bin_2465.zst:   3%|▎         | 7.21M/240M [00:00<00:03, 65.0MB/s][A[A
+
+irtb__bin_2465.zst:   6%|▌         | 13.8M/240M [00:00<00:04, 46.8MB/s][A[AUpload 2 LFS files:  50%|█████     | 1/2 [00:00<00:00,  2.35it/s]
+
+irtb__bin_2465.zst:   8%|▊         | 18.8M/240M [00:00<00:07, 28.0MB/s][A[A
+
+irtb__bin_2465.zst:  10%|█         | 24.3M/240M [00:00<00:07, 30.6MB/s][A[A
+
+irtb__bin_2465.zst:  12%|█▏        | 28.0M/240M [00:00<00:07, 27.1MB/s][A[A
+
+irtb__bin_2465.zst:  13%|█▎        | 32.1M/240M [00:01<00:12, 17.3MB/s][A[A
+
+irtb__bin_2465.zst:  20%|██        | 48.1M/240M [00:01<00:06, 28.5MB/s][A[A
+
+irtb__bin_2465.zst:  23%|██▎       | 55.7M/240M [00:01<00:05, 34.1MB/s][A[A
+
+irtb__bin_2465.zst:  27%|██▋       | 64.1M/240M [00:02<00:06, 25.8MB/s][A[A
+
+irtb__bin_2465.zst:  33%|███▎      | 80.1M/240M [00:02<00:04, 36.0MB/s][A[A
+
+irtb__bin_2465.zst:  35%|███▌      | 84.5M/240M [00:02<00:04, 36.9MB/s][A[A
+
+irtb__bin_2465.zst:  37%|███▋      | 88.8M/240M [00:02<00:03, 38.0MB/s][A[A
+
+irtb__bin_2465.zst:  39%|███▉      | 93.2M/240M [00:02<00:04, 32.7MB/s][A[A
+
+irtb__bin_2465.zst:  40%|████      | 96.9M/240M [00:03<00:06, 22.9MB/s][A[A
+
+irtb__bin_2465.zst:  47%|████▋     | 112M/240M [00:03<00:03, 32.7MB/s] [A[A
+
+irtb__bin_2465.zst:  50%|████▉     | 120M/240M [00:03<00:03, 38.1MB/s][A[A
+
+irtb__bin_2465.zst:  52%|█████▏    | 126M/240M [00:03<00:02, 40.3MB/s][A[A
+
+irtb__bin_2465.zst:  54%|█████▍    | 130M/240M [00:04<00:04, 25.2MB/s][A[A
+
+irtb__bin_2465.zst:  60%|██████    | 144M/240M [00:04<00:03, 31.9MB/s][A[A
+
+irtb__bin_2465.zst:  67%|██████▋   | 160M/240M [00:04<00:01, 40.6MB/s][A[A
+
+irtb__bin_2465.zst:  73%|███████▎  | 176M/240M [00:05<00:01, 46.4MB/s][A[A
+
+irtb__bin_2465.zst:  80%|████████  | 192M/240M [00:05<00:00, 51.2MB/s][A[A
+
+irtb__bin_2465.zst:  87%|████████▋ | 208M/240M [00:05<00:00, 51.8MB/s][A[A
+
+irtb__bin_2465.zst:  93%|█████████▎| 224M/240M [00:05<00:00, 55.4MB/s][A[Airtb__bin_2465.zst: 100%|██████████| 240M/240M [00:06<00:00, 38.8MB/s]
+Upload 2 LFS files: 100%|██████████| 2/2 [00:06<00:00,  3.68s/it]Upload 2 LFS files: 100%|██████████| 2/2 [00:06<00:00,  3.19s/it]
+  irtb: 1 year(s) pushed and verified in 2 part commit(s), done.json written last (0 already present)
+  push-parts: 1 year(s) on the Hub under partials/family1_gf/irtb/<year>/q3/
+=== stage fetch done in 697.5s ===
