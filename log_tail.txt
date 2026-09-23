@@ -1,0 +1,45 @@
+store     pace4k — Ocean colour and the phytoplankton community, PACE OCI daily 4 km mapped v3.2: log10 chlorophyll-a, particulate organic carbon, phytoplankton carbon, apparent visible wavelength and the three MOANA cell abundances
+family    family1_gf (1.gf) · public -> chfrank/earth-tensors:tensors/family1_gf/pace4k
+axis      2024-03-05 .. 2026-09-30  bins 3081..3268 · time_s int32 (schema 2)
+lane      (unnamed) — whole calendar year(s), no group subset: the year folder's own files, as every store on the Hub holds them
+channels  C=7: log_chl, poc, carbon_phyto, avw_400, pro_moana, syn_moana, pico_moana
+tier G    sharded, groups ['pace4k'], F=5 x 86400 s, float16, years (by bin start) 2024..2026
+work      /home/runner/work/earth/earth/ml/cache/family1_gf
+
+=== stage index (pace4k) ===
+  [index pace4k] start (1 items)  0/1  0.0s
+  [index pace4k] plan.json  1/1  22.3s
+  index: pace4k — 3 year(s), C=7 (log_chl, poc, carbon_phyto, avw_400, pro_moana, syn_moana, pico_moana), bins 3081..3268
+=== stage index done in 22.3s ===
+
+=== stage fetch (pace4k) ===
+  [pull pace4k parts] start (3 items)  0/3  0.0s
+  hub: chfrank/earth-tensors with the token from $HF_TOKEN
+  pace4k 2024: 126 file(s), 292 row(s) -> /home/runner/work/earth/earth/ml/cache/family1_gf/pace4k/parts/2024
+  pace4k 2025: 148 file(s), 360 row(s) -> /home/runner/work/earth/earth/ml/cache/family1_gf/pace4k/parts/2025
+  pace4k 2026: 86 file(s), 205 row(s) -> /home/runner/work/earth/earth/ml/cache/family1_gf/pace4k/parts/2026
+  pull: 3 year(s) present in 3 lane(s) (0 already local), 857 row(s), 0 missing
+=== stage fetch done in 912.3s ===
+
+=== stage assemble (pace4k) ===
+  [pace4k store (tier G)] start (1 items)  0/1  0.0s
+  [pace4k store (tier G)] store  1/1  1604.9s
+  store: pace4k — pace4k 177 bin(s), 857 frame(s), 325553 tile(s), 21366.1 MB -> /home/runner/work/earth/earth/ml/cache/family1_gf/pace4k/pace4k
+=== stage assemble done in 1604.9s ===
+
+=== stage publish (pace4k) ===
+  hub: chfrank/earth-tensors with the token from $HF_TOKEN
+  [publish pace4k] start (357 items)  0/357  0.0s
+shard_index.npy:   0%|          | 0.00/77.2k [00:00<?, ?B/s]shard_index.npy: 100%|██████████| 77.2k/77.2k [00:00<00:00, 279kB/s]
+  [publish pace4k] pace4k  2/357  59.6s
+  [publish pace4k] pace4k/2024  126/357  99.8s
+  [publish pace4k] pace4k/2025  272/357  154.1s
+  [publish pace4k] pace4k/2026  356/357  184.0s
+  [publish pace4k] store.json  357/357  184.4s
+  publish: 357 file(s) verified by restore, 50 tile(s) decompressed, HTTP range {'checked': 5} -> https://huggingface.co/datasets/chfrank/earth-tensors/tree/main/tensors/family1_gf/pace4k
+=== stage publish done in 1745.1s ===
+
+=== stage check (pace4k) ===
+  hub: chfrank/earth-tensors with the token from $HF_TOKEN
+  check: pace4k — 356 file(s) verified, pace4k: 325553 tile(s) decompressed, Hub chfrank/earth-tensors agrees
+=== stage check done in 1565.2s ===
