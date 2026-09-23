@@ -550,7 +550,7 @@ class FakePartsHub:
             os.makedirs(os.path.dirname(dst), exist_ok=True)
             shutil.copyfile(local, dst)
 
-    def download(self, repo, rel, token, dest_dir):
+    def download(self, repo, rel, token, dest_dir, just_uploaded=False):
         src = os.path.join(self.root, rel)
         if not os.path.exists(src):
             raise FileNotFoundError(rel)
