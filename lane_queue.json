@@ -1,15 +1,5 @@
 {
- "pending": [
-  {
-   "store": "sst_acspo02",
-   "stage": "index,fetch",
-   "start": "2017-07-01",
-   "end": "2017-12-31",
-   "runner": "ubuntu-latest",
-   "extra_args": "--push-parts",
-   "adapter_env": ""
-  }
- ],
+ "pending": [],
  "dispatched": [
   {
    "store": "sst_acspo02",
@@ -154,6 +144,16 @@
     35933097497
    ],
    "at": "2026-09-23T23:45:21.583Z"
+  },
+  {
+   "store": "sst_acspo02",
+   "stage": "index,fetch",
+   "start": "2017-07-01",
+   "end": "2017-12-31",
+   "runner": "ubuntu-latest",
+   "extra_args": "--push-parts",
+   "adapter_env": "",
+   "at": "2026-09-23T23:48:27.271Z"
   }
  ],
  "done": [
