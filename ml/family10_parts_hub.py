@@ -99,6 +99,8 @@ NO CREDENTIAL IS EVER PRINTED OR READ HERE. `HF_TOKEN` reaches the Hub through
 touched by this module at all, which is the point of it.
 """
 import argparse
+import collections
+import concurrent.futures as cf
 import json
 import os
 import shutil
@@ -125,6 +127,10 @@ COUNTS = "counts.json"
 # commits instead of seventy and leaves the lane's other years room in the
 # window.
 BATCH = 64
+
+# Parts of one lane download this many at a time (2026-09-23): serially, 148
+# x ~35 MB took ~3.5 min on #459 (slow disk) AND #593 (NVMe) — latency-bound.
+PULL_WORKERS = 8
 
 
 # ----------------------------------------------------------------- the Hub --
@@ -159,7 +165,15 @@ def transient_download_error(e):
     `hf_hub_download` reports a HEAD that could not reach the Hub as
     `LocalEntryNotFoundError` ("…we cannot find the requested files in the
     local cache"), an OSError; that is a connection failure, not an answer.
+
+    With PULL_WORKERS threads sharing huggingface_hub's one httpx client, a
+    worker that hits a connection error closes that client to recover, and a
+    sibling that picked it up in the same instant raises a plain
+    RuntimeError("Cannot send a request, as the client has been closed.") —
+    a dropped connection seen from the other thread, so it retries too.
     """
+    if isinstance(e, RuntimeError) and "client has been closed" in str(e):
+        return True
     try:
         from huggingface_hub.utils import HfHubHTTPError
     except Exception:                                   # pragma: no cover
@@ -203,6 +217,41 @@ def _download(repo, path_in_repo, token, dest_dir):
                   f"retrying in {wait}s", flush=True)
             time.sleep(wait)
     raise last                                          # pragma: no cover
+
+
+def _ordered_map(fn, items, workers, lookahead=None):
+    """`map(fn, items)` on a thread pool, results IN ORDER, never more than
+    `lookahead` (default 2 x workers) submitted at once — the house pattern
+    (`family1/adapters/_common.ordered_map`), kept local so this module does
+    not import numpy and the family-10 builder for twenty lines.
+
+    ONE DIFFERENCE, and it is the point: when the consumer stops early — a
+    worker raised, or the caller `sys.exit`s on a mismatch — the futures
+    still QUEUED are cancelled rather than run. A plain `with` exit waits
+    for every submitted future, so a failed pull would first sit through up
+    to `lookahead` more downloads, each with its own ~8-minute retry ladder,
+    before it reported anything. Futures already running cannot be stopped;
+    at most `workers` of them finish in the background.
+    """
+    items = list(items)
+    lookahead = lookahead or 2 * workers
+    ex = cf.ThreadPoolExecutor(max(1, workers))
+    q = collections.deque()
+    try:
+        it = iter(items)
+        for x in it:
+            q.append(ex.submit(fn, x))
+            if len(q) >= lookahead:
+                break
+        while q:
+            yield q.popleft().result()
+            for x in it:
+                q.append(ex.submit(fn, x))
+                break
+    finally:
+        for f in q:
+            f.cancel()
+        ex.shutdown(wait=True)
 
 
 # --------------------------------------------------------------- the paths --
@@ -726,17 +775,29 @@ def pull(store, years, work, allow_missing=False, scratch=None,
             tmp = os.path.join(scratch, f"pull_{y}{suffix}")
             shutil.rmtree(tmp, ignore_errors=True)
             os.makedirs(tmp, exist_ok=True)
+            # THE LANE'S PARTS COME DOWN IN PARALLEL (`PULL_WORKERS`), each
+            # worker downloading and hashing one; results arrive in done.json
+            # order, and a worker's exception (a 4xx, or a retry ladder that
+            # ran out) is re-raised here and fails the pull.
+            pre = hub_prefix(store, y, partials, lane)
+            dl = os.path.join(tmp, "dl")
+
+            def fetch(e, pre=pre, dl=dl):
+                p = _download(repo, f"{pre}/{e['name']}", tok, dl)
+                return e["name"], p, sha256(p)
+
             got = []
-            for e in entries:
-                p = _download(
-                    repo,
-                    f"{hub_prefix(store, y, partials, lane)}/{e['name']}", tok,
-                    os.path.join(tmp, "dl"))
-                h = sha256(p)
-                if h != e["sha256"]:
-                    sys.exit(f"PULL MISMATCH {what} {e['name']}: done.json "
-                             f"says {e['sha256']}, the Hub served {h}")
-                got.append((e["name"], p))
+            results = _ordered_map(fetch, entries, PULL_WORKERS)
+            try:
+                for i, (n, p, h) in enumerate(results):
+                    e = entries[i]
+                    if h != e["sha256"]:
+                        sys.exit(f"PULL MISMATCH {what} {e['name']}: "
+                                 f"done.json says {e['sha256']}, the Hub "
+                                 f"served {h}")
+                    got.append((n, p))
+            finally:
+                results.close()      # cancel what is queued, join the rest
             # THE SCHEMA IS CHECKED ON WHAT ARRIVED, not on what the marker
             # says. `done.json` records names, bytes and sha256 and knows
             # nothing about the column layout inside a part, so a year pushed

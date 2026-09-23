@@ -2969,3 +2969,130 @@ def test_83_the_registry_inherits_the_10_1_stores_and_adds_only_fishing(
     assert set(inh["groups"]) == {"gdp", "gtmba", "socat", "slatrack"}
     assert r["inherits"]["8"]["groups"] == ["argo"]
     assert r["groups_missing"] == []
+
+
+# ============================== pull downloads a lane's parts IN PARALLEL ==
+#
+# `pull` fetches one lane's parts on `PULL_WORKERS` threads. What must survive
+# the pool: done.json order (the parts are moved into place in that order),
+# the sha check on every part, a worker's exception failing the pull, and the
+# marker written only after the whole lane verified (§5.21).
+def _parallel_lane(root, store, year, n=20):
+    """A lane of `n` `.npy` parts on the fake Hub, done.json listing them in
+    REVERSE name order so "sorted" and "done.json order" differ."""
+    import hashlib
+    d = os.path.join(root, ph.hub_prefix(store, year))
+    os.makedirs(d, exist_ok=True)
+    files = []
+    for k in reversed(range(n)):
+        name = f"part_{k:03d}.npy"
+        data = f"part {k} of {store} {year}\n".encode() * (k + 1)
+        with open(os.path.join(d, name), "wb") as f:
+            f.write(data)
+        files.append({"name": name, "bytes": len(data),
+                      "sha256": hashlib.sha256(data).hexdigest()})
+    with open(os.path.join(d, ph.DONE), "w") as f:
+        json.dump({"files": files, "rows": 1234}, f)
+    return files
+
+
+class _SlowCountingDownload:
+    """Wraps FakeHub.download: sleeps, and records the peak number of part
+    downloads in flight at once (a lock-protected counter)."""
+
+    def __init__(self, inner, sleep_s=0.05, fail_on=None):
+        import threading
+        self.inner, self.sleep_s, self.fail_on = inner, sleep_s, fail_on
+        self.lock = threading.Lock()
+        self.now = self.peak = 0
+
+    def __call__(self, repo, rel, token, dest_dir):
+        import time
+        if rel.endswith("/" + ph.DONE):
+            return self.inner(repo, rel, token, dest_dir)
+        with self.lock:
+            self.now += 1
+            self.peak = max(self.peak, self.now)
+        try:
+            # later entries in done.json finish FIRST, so completion order
+            # is not done.json order and the test can tell them apart
+            k = int(os.path.basename(rel)[5:8])
+            time.sleep(self.sleep_s * (1 + k / 20))
+            if self.fail_on and rel.endswith(self.fail_on):
+                raise RuntimeError(f"simulated 4xx on {rel}")
+            return self.inner(repo, rel, token, dest_dir)
+        finally:
+            with self.lock:
+                self.now -= 1
+
+
+def _record_moves(monkeypatch, lane_dir):
+    moved, real = [], ph.os.replace
+
+    def replace(src, dst):
+        if os.path.dirname(os.path.abspath(dst)) == os.path.abspath(lane_dir):
+            moved.append(os.path.basename(dst))
+        return real(src, dst)
+    monkeypatch.setattr(ph.os, "replace", replace)
+    return moved
+
+
+def test_pull_downloads_a_lanes_parts_in_parallel_and_keeps_done_json_order(
+        tmp_path, fakehub, monkeypatch):
+    store, year = "gdp", 1993
+    files = _parallel_lane(fakehub.root, store, year, n=20)
+    slow = _SlowCountingDownload(fakehub.download)
+    monkeypatch.setattr(ph, "_download", slow)
+    work = str(tmp_path / "pulled")
+    lane_dir = ph.year_dir(work, store, year)
+    moved = _record_moves(monkeypatch, lane_dir)
+
+    present, missing = ph.pull(store, [year], work)
+
+    assert present == [year] and missing == []
+    assert 1 < slow.peak <= ph.PULL_WORKERS, slow.peak
+    assert moved == [e["name"] for e in files]        # done.json order
+    assert sorted(os.listdir(lane_dir)) == sorted(e["name"] for e in files)
+    for e in files:
+        p = os.path.join(lane_dir, e["name"])
+        assert os.path.getsize(p) == e["bytes"]
+        assert f10.sha256(p) == e["sha256"]
+    assert ph.marked(ph.store_root(work, store), ph.part_key(year))
+
+
+def test_pull_refuses_a_lane_whose_part_hash_differs_and_writes_no_marker(
+        tmp_path, fakehub, monkeypatch):
+    store, year = "gdp", 1993
+    files = _parallel_lane(fakehub.root, store, year, n=20)
+    bad = files[7]["name"]
+    with open(os.path.join(fakehub.root, ph.hub_prefix(store, year), bad),
+              "ab") as f:
+        f.write(b"the Hub served something else")
+    monkeypatch.setattr(ph, "_download",
+                        _SlowCountingDownload(fakehub.download, sleep_s=0.01))
+    work = str(tmp_path / "pulled")
+
+    with pytest.raises(SystemExit, match=f"PULL MISMATCH {store} {year} {bad}"):
+        ph.pull(store, [year], work)
+
+    assert not ph.marked(ph.store_root(work, store), ph.part_key(year))
+    lane_dir = ph.year_dir(work, store, year)
+    assert not os.path.isdir(lane_dir) or os.listdir(lane_dir) == []
+
+
+def test_a_worker_exception_fails_the_pull_and_writes_no_marker(
+        tmp_path, fakehub, monkeypatch):
+    """A `_download` that raises inside the pool (its retry ladder spent, or
+    a 4xx) must reach the caller — never be swallowed into a short lane."""
+    store, year = "gdp", 1993
+    files = _parallel_lane(fakehub.root, store, year, n=20)
+    monkeypatch.setattr(ph, "_download", _SlowCountingDownload(
+        fakehub.download, sleep_s=0.01, fail_on="/" + files[12]["name"]))
+    work = str(tmp_path / "pulled")
+
+    with pytest.raises(RuntimeError, match="simulated 4xx"):
+        ph.pull(store, [year], work)
+
+    assert not ph.marked(ph.store_root(work, store), ph.part_key(year))
+    lane_dir = ph.year_dir(work, store, year)
+    assert not os.path.isdir(lane_dir) or os.listdir(lane_dir) == []
