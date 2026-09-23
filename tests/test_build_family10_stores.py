@@ -1562,7 +1562,7 @@ class FakeHub:
             shutil.copyfile(local, dst)
             self.uploads += 1
 
-    def download(self, repo, rel, token, dest_dir):
+    def download(self, repo, rel, token, dest_dir, just_uploaded=False):
         import shutil
         src = os.path.join(self.root, rel)
         if not os.path.exists(src):
