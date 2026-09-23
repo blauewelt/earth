@@ -1,0 +1,10 @@
+store     xco2 — Satellite column CO2: OCO-2 and OCO-3 L2 Lite XCO2, with GOSAT via ACOS as a third sensor code (exception E3) — one row per good sounding
+family    family1_gf (1.gf) · public -> chfrank/earth-tensors:tensors/family1_gf/xco2
+axis      2022-01-01 .. 2022-12-31  bins 2922..2994 · time_s int32 (schema 2)
+lane      (unnamed) — whole calendar year(s), no group subset: the year folder's own files, as every store on the Hub holds them
+channels  C=3: xco2, xco2_uncertainty, surface
+work      /home/runner/work/earth/earth/ml/cache/family1_gf
+
+=== stage index (xco2) ===
+  [index xco2] start (1 items)  0/1  0.0s
+REFUSING xco2: the first file ACOS_L2_Lite_FP.11.0:acos_LtCO2_220101_v300300_B11.0_260415205352c.nc4 could not be read: https://data.gesdisc.earthdata.nasa.gov/data/GOSAT_TANSO_Level2/ACOS_L2_Lite_FP.11.0/2022/01/01/acos_LtCO2_220101_v300300_B11.0_260415205352c.nc4: ConnectTimeout: HTTPSConnectionPool(host='urs.earthdata.nasa.gov', port=443): Max retries exceeded with url: /oauth/authorize?client_id=e2WVk8Pw6weeLUKZYOxvTQ&response_type=code&redirect_uri=https://data.gesdisc.earthdata.nasa.gov/login&state=%2Fdata%2FGOSAT_TANSO_Level2%2FACOS_L2_Lite_FP.11.0%2F2022%2F01%2F01%2Facos_LtCO2_220101_v300300_B11.0_260415205352c.nc4&app_type=401 (Caused by ConnectTimeoutError(<urllib3.connection.HTTPSConnection object at 0x7fec6ecdf650>, 'Connection to urs.earthdata.nasa.gov timed out. (connect timeout=300)'))
