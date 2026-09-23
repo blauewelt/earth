@@ -1,0 +1,11 @@
+store     sst_acspo02 — NOAA ACSPO L3S-LEO daily sea-surface temperature, 0.02 degrees — the finest satellite SST field; phase C, probed and parked
+family    family1_gf (1.gf) · public -> chfrank/earth-tensors:tensors/family1_gf/sst_acspo02
+axis      2017-01-01 .. 2017-06-30  bins 2557..2592 · time_s int32 (schema 2)
+lane      d0101-0630 — this fetch writes parts/<year>/d0101-0630/ and pushes only that folder
+channels  C=2: sst, quality_level
+tier G    sharded, groups ['sst_acspo02'], F=5 x 86400 s, float16, years (by bin start) 2017..2017
+work      /home/runner/work/earth/earth/ml/cache/family1_gf
+
+=== stage index (sst_acspo02) ===
+  [index sst_acspo02] start (1 items)  0/1  0.0s
+REFUSING to continue this lane: https://archive.podaac.earthdata.nasa.gov/podaac-ops-cumulus-protected/L3S_LEO_DY-STAR-v2.81/20170101120000-STAR-L3S_GHRSST-SSTsubskin-LEO_Daily-ACSPO_V2.81-v02.0-fv01.0.nc: ConnectTimeout: HTTPSConnectionPool(host='urs.earthdata.nasa.gov', port=443): Max retries exceeded with url: /oauth/authorize?client_id=HrBaq4rVeFgp2aOo6PoUxA&response_type=code&redirect_uri=https://archive.podaac.earthdata.nasa.gov/login&state=%2Fpodaac-ops-cumulus-protected%2FL3S_LEO_DY-STAR-v2.81%2F20170101120000-STAR-L3S_GHRSST-SSTsubskin-LEO_Daily-ACSPO_V2.81-v02.0-fv01.0.nc&app_type=401 (Caused by ConnectTimeoutError(<urllib3.connection.HTTPSConnection object at 0x7f3fc4762330>, 'Connection to urs.earthdata.nasa.gov timed out. (connect timeout=30)')) — after 3 attempts this runner cannot reach the host; a lane on a runner that cannot connect must fail so it is re-dispatched, not note every remaining granule absent (family1-build #498/#516, 2026-09-23)
