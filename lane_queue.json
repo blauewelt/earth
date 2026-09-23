@@ -1,24 +1,6 @@
 {
  "pending": [
   {
-   "store": "irtb",
-   "stage": "index,fetch",
-   "start": "2008-10-01",
-   "end": "2008-12-31",
-   "runner": "ubuntu-latest",
-   "extra_args": "--push-parts",
-   "adapter_env": ""
-  },
-  {
-   "store": "irtb",
-   "stage": "index,fetch",
-   "start": "2009-01-01",
-   "end": "2009-03-31",
-   "runner": "ubuntu-latest",
-   "extra_args": "--push-parts",
-   "adapter_env": ""
-  },
-  {
    "store": "swot",
    "stage": "index,fetch",
    "start": "2025-09-01",
@@ -932,16 +914,6 @@
   {
    "store": "sst_acspo02",
    "stage": "index,fetch",
-   "start": "2008-07-01",
-   "end": "2008-12-31",
-   "runner": "ubuntu-latest",
-   "extra_args": "--push-parts",
-   "adapter_env": "",
-   "at": "2026-09-23T16:22:23.784Z"
-  },
-  {
-   "store": "sst_acspo02",
-   "stage": "index,fetch",
    "start": "2010-07-01",
    "end": "2010-12-31",
    "runner": "ubuntu-latest",
@@ -1026,16 +998,6 @@
   {
    "store": "irtb",
    "stage": "index,fetch",
-   "start": "2007-10-01",
-   "end": "2007-12-31",
-   "runner": "ubuntu-latest",
-   "extra_args": "--push-parts",
-   "adapter_env": "",
-   "at": "2026-09-23T18:52:10.522Z"
-  },
-  {
-   "store": "irtb",
-   "stage": "index,fetch",
    "start": "2008-01-01",
    "end": "2008-03-31",
    "runner": "ubuntu-latest",
@@ -1101,6 +1063,26 @@
     35906877624
    ],
    "at": "2026-09-23T19:07:58.362Z"
+  },
+  {
+   "store": "irtb",
+   "stage": "index,fetch",
+   "start": "2008-10-01",
+   "end": "2008-12-31",
+   "runner": "ubuntu-latest",
+   "extra_args": "--push-parts",
+   "adapter_env": "",
+   "at": "2026-09-23T19:11:04.286Z"
+  },
+  {
+   "store": "irtb",
+   "stage": "index,fetch",
+   "start": "2009-01-01",
+   "end": "2009-03-31",
+   "runner": "ubuntu-latest",
+   "extra_args": "--push-parts",
+   "adapter_env": "",
+   "at": "2026-09-23T19:11:08.123Z"
   }
  ],
  "done": [
@@ -1971,6 +1953,30 @@
    "at": "2026-09-23T18:45:52.023Z",
    "run_number": 567,
    "finished": "2026-09-23T19:02:07Z"
+  },
+  {
+   "store": "sst_acspo02",
+   "stage": "index,fetch",
+   "start": "2008-07-01",
+   "end": "2008-12-31",
+   "runner": "ubuntu-latest",
+   "extra_args": "--push-parts",
+   "adapter_env": "",
+   "at": "2026-09-23T16:22:23.784Z",
+   "run_number": 533,
+   "finished": "2026-09-23T19:10:45Z"
+  },
+  {
+   "store": "irtb",
+   "stage": "index,fetch",
+   "start": "2007-10-01",
+   "end": "2007-12-31",
+   "runner": "ubuntu-latest",
+   "extra_args": "--push-parts",
+   "adapter_env": "",
+   "at": "2026-09-23T18:52:10.522Z",
+   "run_number": 570,
+   "finished": "2026-09-23T19:08:26Z"
   }
  ],
  "failed": []
