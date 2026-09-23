@@ -1,0 +1,80 @@
+  [fetch xco2] xco2 2013 GOSAT-ACOS 2013-10-21  1/1  91.6s
+  [fetch xco2] xco2 2013 GOSAT-ACOS 2013-10-22  1/1  91.9s
+  [fetch xco2] xco2 2013 GOSAT-ACOS 2013-10-23  1/1  92.5s
+  [fetch xco2] xco2 2013 GOSAT-ACOS 2013-10-24  1/1  92.5s
+  [fetch xco2] xco2 2013 GOSAT-ACOS 2013-10-25  1/1  92.8s
+  [fetch xco2] xco2 2013 GOSAT-ACOS 2013-10-26  1/1  93.4s
+  [fetch xco2] xco2 2013 GOSAT-ACOS 2013-10-27  1/1  93.5s
+  [fetch xco2] xco2 2013 GOSAT-ACOS 2013-10-28  1/1  93.7s
+  [fetch xco2] xco2 2013 GOSAT-ACOS 2013-10-29  1/1  94.4s
+  [fetch xco2] xco2 2013 GOSAT-ACOS 2013-10-30  1/1  94.5s
+  [fetch xco2] xco2 2013 GOSAT-ACOS 2013-10-31  1/1  94.7s
+  [fetch xco2] xco2 2013 GOSAT-ACOS 2013-11-01  1/1  95.3s
+  [fetch xco2] xco2 2013 GOSAT-ACOS 2013-11-02  1/1  96.3s
+  [fetch xco2] xco2 2013 GOSAT-ACOS 2013-11-03  1/1  96.4s
+  [fetch xco2] xco2 2013 GOSAT-ACOS 2013-11-04  1/1  96.4s
+  [fetch xco2] xco2 2013 GOSAT-ACOS 2013-11-05  1/1  96.5s
+  [fetch xco2] xco2 2013 GOSAT-ACOS 2013-11-06  1/1  97.1s
+  [fetch xco2] xco2 2013 GOSAT-ACOS 2013-11-07  1/1  97.3s
+  [fetch xco2] xco2 2013 GOSAT-ACOS 2013-11-08  1/1  97.4s
+  [fetch xco2] xco2 2013 GOSAT-ACOS 2013-11-09  1/1  98.1s
+  [fetch xco2] xco2 2013 GOSAT-ACOS 2013-11-10  1/1  98.3s
+  [fetch xco2] xco2 2013 GOSAT-ACOS 2013-11-11  1/1  98.4s
+  [fetch xco2] xco2 2013 GOSAT-ACOS 2013-11-12  1/1  99.0s
+  [fetch xco2] xco2 2013 GOSAT-ACOS 2013-11-13  1/1  99.2s
+  [fetch xco2] xco2 2013 GOSAT-ACOS 2013-11-14  1/1  99.2s
+  [fetch xco2] xco2 2013 GOSAT-ACOS 2013-11-15  1/1  99.9s
+  [fetch xco2] xco2 2013 GOSAT-ACOS 2013-11-16  1/1  100.1s
+  [fetch xco2] xco2 2013 GOSAT-ACOS 2013-11-17  1/1  100.2s
+  [fetch xco2] xco2 2013 GOSAT-ACOS 2013-11-18  1/1  100.8s
+  [fetch xco2] xco2 2013 GOSAT-ACOS 2013-11-19  1/1  101.0s
+  [fetch xco2] xco2 2013 GOSAT-ACOS 2013-11-20  1/1  101.2s
+  [fetch xco2] xco2 2013 GOSAT-ACOS 2013-11-21  1/1  101.7s
+  [fetch xco2] xco2 2013 GOSAT-ACOS 2013-11-22  1/1  101.9s
+  [fetch xco2] xco2 2013 GOSAT-ACOS 2013-11-23  1/1  102.0s
+  [fetch xco2] xco2 2013 GOSAT-ACOS 2013-11-24  1/1  102.6s
+  [fetch xco2] xco2 2013 GOSAT-ACOS 2013-11-25  1/1  104.0s
+  [fetch xco2] xco2 2013 GOSAT-ACOS 2013-11-26  1/1  104.1s
+  [fetch xco2] xco2 2013 GOSAT-ACOS 2013-11-27  1/1  104.1s
+  [fetch xco2] xco2 2013 GOSAT-ACOS 2013-11-28  1/1  104.1s
+  [fetch xco2] xco2 2013 GOSAT-ACOS 2013-11-29  1/1  104.5s
+  [fetch xco2] xco2 2013 GOSAT-ACOS 2013-11-30  1/1  104.8s
+  [fetch xco2] xco2 2013 GOSAT-ACOS 2013-12-01  1/1  105.0s
+  [fetch xco2] xco2 2013 GOSAT-ACOS 2013-12-02  1/1  105.5s
+  [fetch xco2] xco2 2013 GOSAT-ACOS 2013-12-03  1/1  105.7s
+  [fetch xco2] xco2 2013 GOSAT-ACOS 2013-12-04  1/1  106.0s
+  [fetch xco2] xco2 2013 GOSAT-ACOS 2013-12-05  1/1  106.4s
+  [fetch xco2] xco2 2013 GOSAT-ACOS 2013-12-06  1/1  106.7s
+  [fetch xco2] xco2 2013 GOSAT-ACOS 2013-12-07  1/1  107.0s
+  [fetch xco2] xco2 2013 GOSAT-ACOS 2013-12-08  1/1  107.4s
+  [fetch xco2] xco2 2013 GOSAT-ACOS 2013-12-09  1/1  107.7s
+  [fetch xco2] xco2 2013 GOSAT-ACOS 2013-12-10  1/1  107.9s
+  [fetch xco2] xco2 2013 GOSAT-ACOS 2013-12-11  1/1  108.3s
+  [fetch xco2] xco2 2013 GOSAT-ACOS 2013-12-12  1/1  108.6s
+  [fetch xco2] xco2 2013 GOSAT-ACOS 2013-12-13  1/1  108.8s
+  [fetch xco2] xco2 2013 GOSAT-ACOS 2013-12-14  1/1  109.3s
+  [fetch xco2] xco2 2013 GOSAT-ACOS 2013-12-15  1/1  109.6s
+  [fetch xco2] xco2 2013 GOSAT-ACOS 2013-12-16  1/1  109.7s
+  [fetch xco2] xco2 2013 GOSAT-ACOS 2013-12-17  1/1  110.2s
+  [fetch xco2] xco2 2013 GOSAT-ACOS 2013-12-18  1/1  110.5s
+  [fetch xco2] xco2 2013 GOSAT-ACOS 2013-12-19  1/1  110.7s
+  [fetch xco2] xco2 2013 GOSAT-ACOS 2013-12-20  1/1  111.1s
+  [fetch xco2] xco2 2013 GOSAT-ACOS 2013-12-21  1/1  111.4s
+  [fetch xco2] xco2 2013 GOSAT-ACOS 2013-12-22  1/1  111.6s
+  [fetch xco2] xco2 2013 GOSAT-ACOS 2013-12-23  1/1  112.1s
+  [fetch xco2] xco2 2013 GOSAT-ACOS 2013-12-24  1/1  112.3s
+  [fetch xco2] xco2 2013 GOSAT-ACOS 2013-12-25  1/1  112.5s
+  [fetch xco2] xco2 2013 GOSAT-ACOS 2013-12-26  1/1  113.1s
+  [fetch xco2] xco2 2013 GOSAT-ACOS 2013-12-27  1/1  113.2s
+  [fetch xco2] xco2 2013 GOSAT-ACOS 2013-12-28  1/1  113.4s
+  [fetch xco2] xco2 2013 GOSAT-ACOS 2013-12-29  1/1  114.0s
+  [fetch xco2] xco2 2013 GOSAT-ACOS 2013-12-30  1/1  114.1s
+  [fetch xco2] xco2 2013 GOSAT-ACOS 2013-12-31  1/1  114.3s
+  [fetch xco2] xco2 2013  1/1  114.3s
+  2013: 194,287 row(s) in 1 part(s) (114.3s)
+  hub: chfrank/earth-tensors with the token from $HF_TOKEN
+  xco2: uploading 2 file(s) of 1 year(s), 5.6 MB -> chfrank/earth-tensors:partials/family1_gf/xco2/
+00000.npz:   0%|          | 0.00/5.64M [00:00<?, ?B/s]00000.npz:  13%|█▎        | 721k/5.64M [00:00<00:00, 7.21MB/s]00000.npz: 100%|██████████| 5.64M/5.64M [00:00<00:00, 14.9MB/s]
+  xco2: 1 year(s) pushed and verified in 1 part commit(s), done.json written last (0 already present)
+  push-parts: 1 year(s) on the Hub under partials/family1_gf/xco2/
+=== stage fetch done in 164.8s ===
