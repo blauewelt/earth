@@ -25,6 +25,11 @@ What each group is FOR:
                   on a fake Hub, assemble (links, no re-compression), check,
                   a fake-Hub publish with its restore check, the licence
                   gate, and the probe.
+  the checks      check_store on threads with a tile sample agrees with the
+                  serial full check and still refuses a flipped byte; it
+                  reports progress; assemble samples the decode
+                  (GRID_ASSEMBLE_SAMPLE), publish samples less
+                  (GRID_RESTORE_SAMPLE), check decodes every tile.
 """
 import argparse
 import functools
@@ -624,6 +629,100 @@ def test_publish_restores_every_file_and_samples_tiles(tmp_path,
     assert len(seen["picks"]) == b1.GRID_HTTP_SAMPLE
     chk = json.load(open(os.path.join(ctx.root, "check.json")))
     assert chk["hub"]["files"] == len(sm["sha256"])
+
+
+def test_check_store_on_threads_with_a_sample_and_refusing_damage(tmp_path):
+    """Four hashing threads and a 3-tile sample return the serial full
+    check's summary (every structural count identical, only tiles_checked
+    and the sample list differ), and a flipped byte is still refused."""
+    ctx = tiny_ctx(str(tmp_path))
+    run(ctx, ["index", "fetch", "assemble"])
+    full = sh.check_store(ctx.store, workers=1)
+    samp = sh.check_store(ctx.store, sample=3, workers=4)
+    assert set(samp) == set(full)
+    assert samp["files"] == full["files"]
+    assert set(samp["groups"]) == set(full["groups"])
+    for g, F in full["groups"].items():
+        S = samp["groups"][g]
+        assert set(S) - set(F) == {"sampled"} and not set(F) - set(S)
+        for k in ("bins", "frames_present", "frames_missing",
+                  "tiles_stored", "bytes", "tile_nbytes"):
+            assert S[k] == F[k], (g, k)
+        assert F["tiles_checked"] == F["tiles_stored"]
+        assert S["tiles_checked"] == len(S["sampled"]) == \
+            min(3, F["tiles_stored"])
+    # one byte flipped in place (same size, so only the hash can see it)
+    sm = json.load(open(os.path.join(ctx.store, "store.json")))
+    p = os.path.join(ctx.store, "b",
+                     sh.shard_relpath(sm["groups"]["b"]["bin_first"]))
+    raw = bytearray(open(p, "rb").read())
+    raw[len(raw) // 2] ^= 0xFF
+    open(p, "wb").write(bytes(raw))
+    for w in (4, 1):
+        with pytest.raises(sh.ShardError, match="sha256"):
+            sh.check_store(ctx.store, sample=3, workers=w)
+
+
+def test_check_store_reports_progress(tmp_path, monkeypatch):
+    ctx = tiny_ctx(str(tmp_path))
+    run(ctx, ["index", "fetch", "assemble"])
+    monkeypatch.setattr(sh, "PROGRESS_EVERY_FILES", 3)
+    monkeypatch.setattr(sh, "PROGRESS_EVERY_BINS", 1)
+    calls = []
+    st = sh.check_store(ctx.store, sample=2, workers=4,
+                        progress=lambda *c: calls.append(c))
+    n = st["files"]
+    hashed = [c for c in calls if c[0] == "sha256"]
+    assert [c[1] for c in hashed] == \
+        [i for i in range(1, n + 1) if i % 3 == 0 or i == n]
+    assert all(c[2] == n for c in hashed)
+    for g, G in st["groups"].items():
+        bins = [c for c in calls if c[0] == f"check {g}"]
+        assert [c[1] for c in bins] == list(range(1, G["bins"] + 1))
+        assert all(c[2] == G["bins"] for c in bins)
+
+
+def test_assemble_samples_the_decode_and_publish_samples_less(tmp_path,
+                                                              monkeypatch):
+    """Assemble hands `check_store` GRID_ASSEMBLE_SAMPLE and publish
+    GRID_RESTORE_SAMPLE; `check` stays full. The parallel sha256 block is the
+    serial one, and the store assembled under the sampled check passes the
+    FULL check afterwards — sampling changed what is verified, not what is
+    written."""
+    real = sh.check_store
+    seen = []
+
+    def spy(store_dir, **kw):
+        seen.append(kw)
+        return real(store_dir, **kw)
+    monkeypatch.setattr(sh, "check_store", spy)
+    ctx = tiny_ctx(str(tmp_path))
+    run(ctx, ["index", "fetch", "assemble"])
+    assert len(seen) == 1
+    assert seen[0]["sample"] == b1.GRID_ASSEMBLE_SAMPLE == 2000
+    assert seen[0]["workers"] == 8 and callable(seen[0]["progress"])
+    sm = json.load(open(os.path.join(ctx.store, "store.json")))
+    assert sm["sha256"] == {n: b10.sha256(os.path.join(ctx.store, n))
+                            for n in sh.store_files(ctx.store,
+                                                    sorted(sm["groups"]))}
+    st = real(ctx.store)
+    for g, G in st["groups"].items():
+        assert G["tiles_checked"] == G["tiles_stored"] > 0
+    prog = json.load(open(os.path.join(ctx.root, "progress.json")))
+    assert prog["item"] == "store"
+    # publish: the restore sample, not the full decode
+    fake = FakeHub(str(tmp_path / "hub"), "chfrank/earth-tensors")
+    install_hub(monkeypatch, fake, ctx)
+    monkeypatch.setattr(b1, "http_verify", lambda *a: {"checked": 0})
+    seen.clear()
+    run(ctx, ["publish"])
+    assert len(seen) == 1
+    assert seen[0]["sample"] == b1.GRID_RESTORE_SAMPLE
+    assert seen[0]["workers"] == 8
+    # check: the full decode
+    seen.clear()
+    run(ctx, ["check"])
+    assert len(seen) == 1 and seen[0]["sample"] is None
 
 
 def test_the_licence_gate(tmp_path, monkeypatch):

@@ -521,9 +521,14 @@ STAGE_FN = {"index": f10b.stage_index, "fetch": stage_fetch,
 #   assemble  LINKS the year parts into <store>/<group>/<yyyy>/ and
 #             concatenates the per-year shard indices — nothing is
 #             re-compressed — then writes tile_grid.json, shard_index.npy and
-#             store.json (sha256 of every file), and runs the full
-#             `sharded.check_store`.
-#   publish   the store's files (from store.json, never a directory listing),
+#             store.json (sha256 of every file, hashed in parallel), and runs
+#             `sharded.check_store` with the tile decode SAMPLED
+#             (GRID_ASSEMBLE_SAMPLE): every file re-hashed and every index's
+#             structure checked in full, GRID_ASSEMBLE_SAMPLE tiles per group
+#             decompressed.
+#   publish   first `sharded.check_store` again — the sha256 block in full,
+#             GRID_RESTORE_SAMPLE tiles per group decompressed — then
+#             the store's files (from store.json, never a directory listing),
 #             store.json LAST, then every file downloaded back and hashed,
 #             50 random tiles decompressed from the downloaded copy and
 #             compared with the local ones, and — for a public repository —
@@ -533,6 +538,35 @@ STAGE_FN = {"index": f10b.stage_index, "fetch": stage_fetch,
 GRID_UPLOAD_BATCH = 500
 GRID_RESTORE_SAMPLE = 50
 GRID_HTTP_SAMPLE = 5
+# HOW MANY TILES PER GROUP THE ASSEMBLE STAGE DECOMPRESSES. Measured
+# 2026-09-23: the full `check_store` at assembly — every file hashed one at a
+# time, then EVERY stored tile decompressed and checked in single-threaded
+# Python — ran 8.8 h on the lst05 store (≈137 GB, ~4,000 files, 28 years of
+# daily 0.05° frames) without finishing and was cancelled (family1-build #459,
+# the lst05 whole-store assembly); the next stores (irtb, sst_acspo02) are
+# ≈500 GB each. The tiles it re-decoded had already been verified once: the
+# lane parts were written by `ShardWriter` from decoded arrays and checked by
+# sha256 per file against done.json when pulled from the Hub. So assembly
+# samples the DECODE only — every file is still hashed, and every index's
+# STRUCTURE is still checked in full (shard sizes, offsets contiguous, absent
+# frames, frame masks, tile counts against shard_index.npy, per-year frame
+# counts against store.json). The full decode of every tile is `--stage
+# check` (`stage_check_grid`), on demand.
+GRID_ASSEMBLE_SAMPLE = 2000
+GRID_CHECK_WORKERS = 8
+
+
+def _grid_progress(ctx, what):
+    """A `progress(label, done, total)` for `sharded.check_store` that writes
+    through `ctx.prog.item`, so a long check shows movement in the live log
+    and in progress.json (ml/CLAUDE.md §5.25). `done` is passed as None — the
+    stage's own total counts something else — and the step's counts ride in
+    `extra`."""
+    def cb(label, done, total):
+        ctx.prog.item(f"{what}: {label} {done}/{total}", None,
+                      {"step": f"{what}: {label}", "step_done": int(done),
+                       "step_total": int(total)})
+    return cb
 
 # WHY A BIN CAN BE SKIPPED ALTOGETHER — the three reasons that write no shard.
 #
@@ -975,9 +1009,13 @@ def stage_assemble_grid(ctx):
                             "inputs_not_read": ctx.absent,
                             "years_admitted_unmarked": degraded}
     names = sh.store_files(dest, sorted(groups))
-    meta["sha256"] = {n: f10b.sha256(os.path.join(dest, n)) for n in names}
+    meta["sha256"] = sh.sha256_block(
+        dest, names, workers=GRID_CHECK_WORKERS,
+        progress=_grid_progress(ctx, "store.json"))
     atomic_json(os.path.join(dest, "store.json"), meta)
-    st = sh.check_store(dest)
+    st = sh.check_store(dest, sample=GRID_ASSEMBLE_SAMPLE,
+                        workers=GRID_CHECK_WORKERS,
+                        progress=_grid_progress(ctx, "check"))
     mark(ctx.root, "assemble")
     ctx.prog.item("store", 1, {"files": st["files"]})
     print(f"  store: {ad.store} — " + ", ".join(
@@ -1111,7 +1149,13 @@ def stage_publish_grid(ctx):
     licence_gate(ctx)
     sm, names = _grid_store_names(ctx)
     groups = sorted(sm["groups"])
-    sh.check_store(dest)
+    # The store was checked at assembly; before uploading, the sha256 block
+    # is re-verified in full (in parallel) and a small tile sample decoded —
+    # seed 1, so it is not the assembly's sample again.
+    ctx.prog.stage_start(f"verify {ad.store} before publish")
+    sh.check_store(dest, sample=GRID_RESTORE_SAMPLE, seed=1,
+                   workers=GRID_CHECK_WORKERS,
+                   progress=_grid_progress(ctx, "check"))
     # the restore check downloads one folder (<group>/<yyyy>) at a time
     folders = {}
     for n in names:
@@ -1207,7 +1251,10 @@ def stage_publish_grid(ctx):
 
 def stage_check_grid(ctx):
     ad = ctx.adapter
-    st = sh.check_store(ctx.store)
+    # the FULL check: every tile decompressed (sample=None)
+    ctx.prog.stage_start(f"check {ad.store} (tier G)")
+    st = sh.check_store(ctx.store, sample=None, workers=GRID_CHECK_WORKERS,
+                        progress=_grid_progress(ctx, "check"))
     sm = read_json(os.path.join(ctx.store, "store.json"), {})
     out = {"store": ad.store, "tier": "G", "files_verified": st["files"],
            "groups": st["groups"], "hub": None}

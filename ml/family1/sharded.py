@@ -83,6 +83,7 @@ import os
 import random
 import sys
 import urllib.parse
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 import numpy as np
 
@@ -104,6 +105,17 @@ INDEX_DTYPE = np.dtype("<i8")
 FRAME_ABSENT = -1
 DEFAULT_LEVEL = 15        # measured on a real ASI frame: 0.15 s, 5 % under level 9
 MAX_FRAMES_BITMASK = 64
+
+# HASHING AND CHECKING A WHOLE STORE. `check_store` hashes every file on a
+# thread pool: hashlib releases the GIL for any update larger than 2 KiB, so
+# HASH_WORKERS threads reading HASH_BUF-sized chunks hash in parallel up to
+# what the disk delivers. `progress(label, done, total)` is called every
+# PROGRESS_EVERY_FILES files hashed and every PROGRESS_EVERY_BINS bins
+# checked, so a live log shows a long check moving (ml/CLAUDE.md §5.25).
+HASH_WORKERS = 8
+HASH_BUF = 1 << 22                                   # 4 MiB per read
+PROGRESS_EVERY_FILES = 200
+PROGRESS_EVERY_BINS = 100
 
 # THE REASONS A MISSING FRAME CAN GIVE, and the three of them that let a whole
 # bin be skipped rather than stored as an empty shard. They live here, in the
@@ -591,7 +603,8 @@ def read_tile(group_dir, b, frame, ty, tx, raw=False, crop=False,
 
 
 # ================================================================= check ===
-def check_sharded(group_dir, sample=None, seed=0, bounds=True):
+def check_sharded(group_dir, sample=None, seed=0, bounds=True,
+                  progress=None):
     """Every index entry against its shard and its declaration.
 
     Full (sample=None): every shard's size, the index's shape, dtype and
@@ -601,6 +614,8 @@ def check_sharded(group_dir, sample=None, seed=0, bounds=True):
     frame counts equal to shard_index.npy's. `sample=k` decompresses only k
     random stored tiles (the publish's restore check) and still checks every
     index's structure. Raises ShardError; returns a summary.
+    `progress(label, done, total)` is called every PROGRESS_EVERY_BINS bins
+    and after the last one.
     """
     g = ShardedGroup(group_dir)
     sp = g.spec
@@ -620,7 +635,8 @@ def check_sharded(group_dir, sample=None, seed=0, bounds=True):
     stored_tiles = []
     tot = {"bins": int(len(arr)), "frames_present": 0, "frames_missing": 0,
            "tiles_stored": 0, "tiles_checked": 0, "bytes": 0}
-    for row in arr:
+    label = f"check {os.path.basename(os.path.normpath(group_dir))}"
+    for i_row, row in enumerate(arr, 1):
         b = int(row["bin"])
         if row["shard"] != shard_relpath(b) or row["index"] != index_relpath(b):
             raise ShardError(f"bin {b}: paths {row['shard']}, {row['index']}")
@@ -689,6 +705,9 @@ def check_sharded(group_dir, sample=None, seed=0, bounds=True):
                                  f"decoded, shard_index.npy says "
                                  f"{row['valid_pixels'].tolist()}")
             stored_tiles = []
+        if progress is not None and (i_row % PROGRESS_EVERY_BINS == 0
+                                     or i_row == len(arr)):
+            progress(label, i_row, len(arr))
     if sample is not None and stored_tiles:
         rng = random.Random(seed)
         pick = rng.sample(stored_tiles, min(int(sample), len(stored_tiles)))
@@ -737,8 +756,56 @@ def store_files(store_dir, groups):
     return out
 
 
-def check_store(store_dir, sample=None, seed=0):
-    """store.json's sha256 block and every group's `check_sharded`."""
+def sha256_block(store_dir, names, workers=HASH_WORKERS, progress=None,
+                 expect=None):
+    """{name: sha256} of every named file under `store_dir`, in `names` order,
+    hashed on `workers` threads (1 or less: serially, in order).
+
+    With `expect` ({name: sha256}) it REFUSES — ShardError — on the first file
+    whose hash differs, and cancels every hash not yet started. `progress
+    (label, done, total)` is called every PROGRESS_EVERY_FILES files and after
+    the last one. The assembler builds store.json's block with this and
+    `check_store` verifies it with this, so both read the files the same way.
+    """
+    total = len(names)
+    out = {}
+
+    def one(n):
+        return n, sha256(os.path.join(store_dir, n), HASH_BUF)
+
+    def got(i, n, h):
+        if expect is not None and h != expect[n]:
+            raise ShardError(f"{store_dir}/{n}: sha256 differs from "
+                             f"store.json")
+        out[n] = h
+        if progress is not None and (i % PROGRESS_EVERY_FILES == 0
+                                     or i == total):
+            progress("sha256", i, total)
+
+    if workers <= 1:
+        for i, n in enumerate(names, 1):
+            got(i, *one(n))
+        return out
+    ex = ThreadPoolExecutor(max_workers=int(workers))
+    try:
+        futs = [ex.submit(one, n) for n in names]
+        for i, fu in enumerate(as_completed(futs), 1):
+            got(i, *fu.result())
+    finally:
+        ex.shutdown(wait=True, cancel_futures=True)
+    return {n: out[n] for n in names}
+
+
+def check_store(store_dir, sample=None, seed=0, workers=HASH_WORKERS,
+                progress=None):
+    """store.json's sha256 block and every group's `check_sharded`.
+
+    Every file is hashed (on `workers` threads) and every index's STRUCTURE
+    is checked in full whatever `sample` is; `sample` is handed to
+    `check_sharded` unchanged, so None decompresses every stored tile and k
+    decompresses k random ones per group. `progress(label, done, total)` —
+    see `sha256_block` and `check_sharded`.
+    """
     meta = read_json(os.path.join(store_dir, "store.json"), {})
     if meta.get("tier") != "G" or meta.get("layout") != "sharded":
         raise ShardError(f"{store_dir}: store.json is not a sharded tier-G "
@@ -752,15 +819,13 @@ def check_store(store_dir, sample=None, seed=0):
         raise ShardError(f"{store_dir}: store.json's sha256 block and the "
                          f"shard indices disagree (only in the block: "
                          f"{extra[:4]}, only in the indices: {miss[:4]})")
-    for n in names:
-        if sha256(os.path.join(store_dir, n)) != block[n]:
-            raise ShardError(f"{store_dir}/{n}: sha256 differs from "
-                             f"store.json")
+    sha256_block(store_dir, names, workers=workers, progress=progress,
+                 expect=block)
     out = {"files": len(names), "groups": {}}
     per_year = {}
     for g in groups:
         s = check_sharded(os.path.join(store_dir, g), sample=sample,
-                          seed=seed)
+                          seed=seed, progress=progress)
         gm = meta["groups"][g]
         for k in ("bins", "frames_present", "frames_missing",
                   "tiles_stored", "bytes"):
