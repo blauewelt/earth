@@ -11,6 +11,9 @@ request to each archive and reports exactly what came back:
             (found by a CMR search, a few kB), a ranged GET.
   ges_disc  GES DISC — the smallest-looking MERGIR `.nc4` of a day listed in
             the archive's own directory page, a ranged GET of its first KB.
+  ges_disc_data  the same product on data.gesdisc.earthdata.nasa.gov (the
+            host irtb and xco2 read), its URL from the granule's CMR entry —
+            that host's directory page is itself behind Earthdata Login.
   podaac    PO.DAAC / Earthdata Cloud — a CMR granule search for MUR SST,
             then one authenticated HEAD on the granule URL (and, when the
             cloud's signed S3 hop refuses a HEAD, a ranged GET of 1 KB).
@@ -56,8 +59,12 @@ GES_BASE = "https://disc2.gesdisc.eosdis.nasa.gov/data/MERGED_IR/GPM_MERGIR.1/"
 GES_DAY = "2020/001/"
 # The host the irtb / xco2 adapters READ (run #259/#260, 2026-09-19: HTTP 401
 # after 2 redirects while disc2.gesdisc answered 206 in run #90) — a second
-# GES DISC target so the check answers for the archive that refused.
-GES_DATA_BASE = "https://data.gesdisc.earthdata.nasa.gov/data/MERGED_IR/GPM_MERGIR.1/"
+# GES DISC target so the check answers for the archive that refused. Its file
+# is found through CMR, not a directory page: the page is login-protected on
+# this host (`check_ges_disc_data`).
+GES_DATA_HOST = "data.gesdisc.earthdata.nasa.gov"
+GES_DATA_SHORT, GES_DATA_VERSION = "GPM_MERGIR", "1"
+GES_DATA_WINDOW = "2020-01-01T00:00:00Z,2020-01-01T00:59:59Z"
 GES_DATA_CLIENT = "e2WVk8Pw6weeLUKZYOxvTQ"   # "NASA GESDISC DATA ARCHIVE" in URS
 PODAAC_SHORT = "MUR-JPL-L4-GLOB-v4.1"
 TIMEOUT = 60
@@ -286,35 +293,48 @@ def check_ges_disc(s):
 
 
 def check_ges_disc_data(s):
-    """Same probe against data.gesdisc.earthdata.nasa.gov (what irtb reads)."""
-    import requests
-    # Even the DIRECTORY LISTING sits behind Earthdata Login on this host, and
-    # an unapproved application answers HTTP 401 straight from URS
-    # (`app_type=401` in the redirect) — measured on run #273, 2026-09-19.
-    # That is a definite verdict about the ACCOUNT, so it carries the
-    # approval URL rather than surfacing as an "error" nobody can act on.
-    page = s.get(GES_DATA_BASE + GES_DAY, timeout=TIMEOUT,
-                 headers={"User-Agent": UA})
-    if page.status_code == 401 and URS_HOST in page.url:
-        client = (CLIENT_RE.search(page.url) or CLIENT_RE.search(page.text))
-        cid = client.group(1) if client else GES_DATA_CLIENT
-        return {"listing": GES_DATA_BASE + GES_DAY, "status": 401,
-                "final_host": URS_HOST, "via_urs": True, "definite": True,
-                "verdict": "needs_approval",
-                "approval_url": f"https://{URS_HOST}/approve_app?client_id={cid}",
-                "why": ("Earthdata Login answered 401 for the GES DISC "
-                        "application — this account has not approved it")}
-    page.raise_for_status()
-    names = sorted(set(re.findall(r'href="(merg_[^"]+\.nc4)"', page.text)))
-    if not names:
-        raise LookupError(f"no .nc4 in the listing {GES_DATA_BASE + GES_DAY}")
-    m = CLIENT_RE.search(page.text) if "approve_app" in page.text else None
-    out = {"listing": GES_DATA_BASE + GES_DAY, "files_listed": len(names),
-           **_request(s, "GET", GES_DATA_BASE + GES_DAY + names[0])}
-    if m and out["verdict"] != "ok" and not out.get("approval_url"):
+    """One KB of a MERGIR `.nc4` on data.gesdisc.earthdata.nasa.gov (what
+    irtb and xco2 read), the URL read out of the granule's OWN CMR entry.
+
+    NOT FROM A DIRECTORY LISTING. This target used to fetch
+    `…/GPM_MERGIR.1/2020/001/` and pick a `merg_*.nc4` out of the page, the
+    way `check_ges_disc` does on disc2. On this host that cannot work in
+    either state of the account: measured anonymously 2026-09-23, the listing
+    is NOT public here (302 to Earthdata Login with `app_type=401`, then
+    `HTTP 401 — HTTP Basic: Access denied.`, where disc2's page answers 200
+    and lists 48 `merg_2020001…` names), and for the APPROVED account run
+    #426 got a page in which the `href="merg_…nc4"` pattern matched nothing,
+    so the check said "could not be checked" — an `error` that is not a
+    verdict. CMR is anonymous and names the file exactly (`GPM_MERGIR` v1,
+    2020-01-01T00 -> `https://data.gesdisc.earthdata.nasa.gov/data/MERGED_IR/
+    GPM_MERGIR.1/2020/001/merg_2020010100_4km-pixel.nc4`, the link the irtb
+    adapter reads too), so the answer is the file's own: 206 through
+    Earthdata Login is `ok`; a 401 from Earthdata Login is a definite
+    refusal carrying the GES DISC approval link.
+    """
+    e = _cmr_first(s, short_name=GES_DATA_SHORT, version=GES_DATA_VERSION,
+                   temporal=GES_DATA_WINDOW)
+    url = _link(e, "data#", lambda h: urllib.parse.urlparse(h).hostname ==
+                GES_DATA_HOST and h.endswith(".nc4"))
+    if not url:
+        raise LookupError(f"no https://{GES_DATA_HOST}/….nc4 link in the "
+                          f"{GES_DATA_SHORT} granule {e.get('title')}")
+    out = {"granule": e.get("title"),
+           "cmr_granule_size_mb": e.get("granule_size"),
+           **_request(s, "GET", url)}
+    if out.get("definite") and out.get("verdict") != "ok" and \
+            not out.get("approval_url"):
         out["approval_url"] = (f"https://{URS_HOST}/approve_app?client_id="
-                               f"{m.group(1)}")
-    return out
+                               f"{GES_DATA_CLIENT}")
+    if out.get("verdict") == "refused" and out.get("final_host") == URS_HOST:
+        # URS answers the same bare 401 ("HTTP Basic: Access denied.") for an
+        # unapproved application (run #273) and for a wrong password, so the
+        # verdict stays `refused` and the sentence names both
+        out["why"] = ("Earthdata Login answered HTTP 401 for the GES DISC "
+                      "application: this account has not approved it (open "
+                      "the approval URL), or the password is wrong (then "
+                      "every other archive refuses too)")
+    return require_urs(out, "ges_disc_data")
 
 
 def check_podaac(s):

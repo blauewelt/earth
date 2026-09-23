@@ -132,6 +132,72 @@ def test_classify_reads_the_answers_earthdata_gives():
     assert s3["verdict"] == "error" and not s3["definite"]
 
 
+def test_ges_disc_data_reads_its_file_from_cmr_not_a_listing(monkeypatch):
+    """Run #426: the approved account's listing of data.gesdisc's
+    `GPM_MERGIR.1/2020/001/` matched no `merg_*.nc4`, and the check said
+    "could not be checked". Measured 2026-09-23: that listing is NOT public
+    on this host (302 to URS, app_type=401, then 401), so the target now
+    takes the file's URL from its CMR entry and asks the FILE — every answer
+    is then ok or a definite refusal, never `error`."""
+    url = ("https://data.gesdisc.earthdata.nasa.gov/data/MERGED_IR/"
+           "GPM_MERGIR.1/2020/001/merg_2020010100_4km-pixel.nc4")
+    seen = {}
+
+    def cmr(s, **params):
+        seen["cmr"] = params
+        return {"title": "GPM_MERGIR.1:merg_2020010100_4km-pixel.nc4",
+                "granule_size": 32.4,
+                "links": [
+                    {"rel": "http://esipfed.org/ns/fedsearch/1.1/data#",
+                     "href": url},
+                    {"rel": "http://esipfed.org/ns/fedsearch/1.1/s3#",
+                     "href": "s3://gesdisc-cumulus-prod-protected/x.nc4"},
+                    {"rel": "http://esipfed.org/ns/fedsearch/1.1/metadata#",
+                     "href": "https://data.gesdisc.earthdata.nasa.gov/"
+                             "s3credentials"}]}
+    answers = {}
+
+    def req(s, method, u, range_bytes=True):
+        seen["url"] = u
+        return dict(answers)
+    monkeypatch.setattr(edc, "_cmr_first", cmr)
+    monkeypatch.setattr(edc, "_request", req)
+    # nothing may fetch a directory page any more
+    requests = pytest.importorskip("requests")
+
+    def no_listing(*a, **k):
+        raise AssertionError(f"a directory page was fetched: {a}")
+    monkeypatch.setattr(requests, "get", no_listing)
+
+    answers.update(edc.classify(206, url, b"\x89HDF", [url, AUTH]),
+                   via_urs=True, status=206)
+    out = edc.check_ges_disc_data(object())
+    assert seen["url"] == url
+    assert seen["cmr"] == {"short_name": "GPM_MERGIR", "version": "1",
+                           "temporal": "2020-01-01T00:00:00Z,"
+                                       "2020-01-01T00:59:59Z"}
+    assert out["verdict"] == "ok" and "listing" not in out
+    assert out["granule"].endswith("merg_2020010100_4km-pixel.nc4")
+    # an unapproved application: Earthdata Login's own 401 is a DEFINITE
+    # refusal with the GES DISC approval link, not an error
+    gauth = ("https://urs.earthdata.nasa.gov/oauth/authorize?client_id="
+             "e2WVk8Pw6weeLUKZYOxvTQ&response_type=code&app_type=401")
+    answers.clear()
+    answers.update(edc.classify(401, gauth, b"HTTP Basic: Access denied.",
+                                [url, gauth]), via_urs=True, status=401)
+    out = edc.check_ges_disc_data(object())
+    assert out["verdict"] == "refused" and out["definite"] is True
+    assert out["approval_url"].endswith("client_id=e2WVk8Pw6weeLUKZYOxvTQ")
+    rep = edc.run("u", "p", targets=(("ges_disc_data",
+                                      edc.check_ges_disc_data),))
+    assert rep["refused"] == ["ges_disc_data"]
+    # a CMR entry without the data host's .nc4 link is a lookup failure
+    monkeypatch.setattr(edc, "_cmr_first", lambda s, **p: {"title": "t",
+                                                            "links": []})
+    with pytest.raises(LookupError, match="data.gesdisc.earthdata.nasa.gov"):
+        edc.check_ges_disc_data(object())
+
+
 # ======================================================== a fake login ====
 USER, PASSWORD = "alice", "s3cret"
 

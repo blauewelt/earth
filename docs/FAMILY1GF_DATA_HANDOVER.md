@@ -496,7 +496,9 @@ visible wavelength **minus 400 nm**), and three MOANA cell abundances
 `pro_moana`, `syn_moana`, `pico_moana` in **thousands** of cells per mL (a
 level-4 derived product, regional 70°S–70°N, 85°W–25°E). `sst_acspo02`: `sst`
 (°C), `quality_level` (ACSPO grade). `swot`: `ssha_karin` (m), `sig0_karin`
-(dB), `ssh_karin_uncert` (m). `irtb`: `tb` (cloud-top brightness temperature,
+(LINEAR backscatter, the product's own unit "1" — not dB; stored bounds
+−1,000 … 65,504, decided 2026-09-23 from the collection's CMR metadata),
+`ssh_karin_uncert` (m). `irtb`: `tb` (cloud-top brightness temperature,
 uint8 as **K − 160**). `xco2`: `xco2` (ppm), `xco2_uncertainty` (ppm),
 `surface` (0 land, 1 water).
 

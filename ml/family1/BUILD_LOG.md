@@ -1361,3 +1361,33 @@ unnamed lane the seven whole-year hosted lanes wrote. `--parts-from-hub` now
 never names a lane. The pull's download retries transient failures (#425 also
 met `_ssl.c:989: The handshake operation timed out` on
 `2021/terra__bin_2859.idx.npy`). Tests: `tests/test_family1_year_boundary.py`.
+
+### 2026-09-23 · `swot` made buildable as tier P; the GES DISC check target
+
+*Code only, nothing dispatched.* **`sig0_karin` is LINEAR, not dB**: CMR's
+UMM-Var for the collection gives units "1" ("not decibels"), valid
+-1000 .. 1e7. So the probe's 47,390 (1.13 %) were values above 16 dB, which
+is ordinary low-wind ocean. The adapter now checks each channel's `units`
+against the file and refuses a mismatch. **Bounds** (the rule and its reasons
+are in the adapter's docstring): ssha ±3 m is kept, because after the tide and
+dynamic-atmosphere corrections a larger open-ocean anomaly is an error. sig0 is
+-1000 .. 65504 (the product's valid_min, and float16's largest finite value,
+48.2 dB). uncert is 0 .. 6 m (the product's range). The probe recorded only
+counts, so each kept row now also carries a `hist_<channel>`. **The reader**
+turns netCDF4's automatic mask and scale off. With them on, a masked uint16
+came back as its raw integer (62,000 "m"). **A build reads every granule of
+its window**, listed by time across all cycles and uncapped (2024-01 is cycles
+008, 009 and 010: 865 granules, 27.9 GB). The probe's `SWOT_CYCLE` and
+`SWOT_MAX_PASSES` refuse in a build. **A row belongs to the lane its own second
+falls in**, so a pass that straddles a month or year boundary is split between
+lanes rather than stored twice. The pager dedups on the page seam. A higher
+product counter supersedes a lower one within the same CRID: 2025-06 lists 76
+passes twice. `--parts-from-hub` passes the preflight with no credential. 2024
+month by month on CMR: 865 · 809 · 857 · 837 · **369** · 835 · 859 · 869 ·
+834 · 859 · 835 · 864 granules. May is short upstream and carries 11 misfiled
+Basic and Unsmoothed granules, which are counted and skipped. **`ges_disc_data`**
+now takes its `.nc4` URL from CMR (GPM_MERGIR v1, 2020-01-01T00). data.gesdisc's
+directory page is itself behind Earthdata Login: measured anonymously, it
+returns a 302 to URS with app_type=401, then a 401. The page therefore gave run
+#426 no parseable names. Measured here with deliberately wrong credentials, the
+file answers a definite `refused` with the GES DISC approval link, not `error`.
