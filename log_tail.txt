@@ -1,0 +1,44 @@
+store     irtb — NCEP/CPC merged infrared brightness temperature (GPM_MERGIR v1), 4 km — cloud-top temperature; phase A is the tropics three-hourly
+family    family1_gf (1.gf) · public -> chfrank/earth-tensors:tensors/family1_gf/irtb
+axis      2015-01-01 .. 2015-12-31  bins 2411..2483 · time_s int32 (schema 2)
+lane      (unnamed) — whole calendar year(s), no group subset: the year folder's own files, as every store on the Hub holds them
+channels  C=1: tb
+tier G    sharded, groups ['irtb'], F=40 x 10800 s, uint8, years (by bin start) 2015..2015
+work      /home/runner/work/earth/earth/ml/cache/family1_gf
+
+=== stage index (irtb) ===
+  [index irtb] start (1 items)  0/1  0.0s
+  [index irtb] plan.json  1/1  7.5s
+  index: irtb — 1 year(s), C=1 (tb), bins 2411..2483, lanes expected per year: q1, q2, q3, q4
+=== stage index done in 7.5s ===
+
+=== stage fetch (irtb) ===
+  [pull irtb parts] start (1 items)  0/1  0.0s
+  hub: chfrank/earth-tensors with the token from $HF_TOKEN
+  irtb 2015 lane q1: 38 file(s), 720 row(s) -> /home/runner/work/earth/earth/ml/cache/family1_gf/irtb/parts/2015/q1
+  irtb 2015 lane q2: 38 file(s), 720 row(s) -> /home/runner/work/earth/earth/ml/cache/family1_gf/irtb/parts/2015/q2
+  irtb 2015 lane q3: 40 file(s), 760 row(s) -> /home/runner/work/earth/earth/ml/cache/family1_gf/irtb/parts/2015/q3
+  irtb 2015 lane q4: 38 file(s), 720 row(s) -> /home/runner/work/earth/earth/ml/cache/family1_gf/irtb/parts/2015/q4
+  pull: 1 year(s) present in 4 lane(s) (0 already local), 2,920 row(s), 0 missing
+=== stage fetch done in 504.0s ===
+
+=== stage assemble (irtb) ===
+  [irtb store (tier G)] start (1 items)  0/1  0.0s
+  [irtb store (tier G)] store  1/1  307.3s
+  store: irtb — irtb 73 bin(s), 2920 frame(s), 786115 tile(s), 17676.9 MB -> /home/runner/work/earth/earth/ml/cache/family1_gf/irtb/irtb
+=== stage assemble done in 307.3s ===
+
+=== stage publish (irtb) ===
+  hub: chfrank/earth-tensors with the token from $HF_TOKEN
+  [publish irtb] start (149 items)  0/149  0.0s
+shard_index.npy:   0%|          | 0.00/26.8k [00:00<?, ?B/s]shard_index.npy: 100%|██████████| 26.8k/26.8k [00:00<00:00, 111kB/s]
+  [publish irtb] irtb  2/149  48.7s
+  [publish irtb] irtb/2015  148/149  125.2s
+  [publish irtb] store.json  149/149  126.6s
+  publish: 149 file(s) verified by restore, 50 tile(s) decompressed, HTTP range {'checked': 5} -> https://huggingface.co/datasets/chfrank/earth-tensors/tree/main/tensors/family1_gf/irtb
+=== stage publish done in 401.3s ===
+
+=== stage check (irtb) ===
+  hub: chfrank/earth-tensors with the token from $HF_TOKEN
+  check: irtb — 148 file(s) verified, irtb: 786115 tile(s) decompressed, Hub chfrank/earth-tensors agrees
+=== stage check done in 268.6s ===
