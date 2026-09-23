@@ -1,0 +1,10 @@
+{
+ "at": "2026-09-23T23:18:56+00:00",
+ "done": 3885,
+ "elapsed_s": 411.8,
+ "eta_s": 0.0,
+ "files": 3885,
+ "item": "store.json",
+ "stage": "publish snow05",
+ "total": 3885
+}

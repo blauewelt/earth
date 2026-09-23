@@ -1,0 +1,80 @@
+  [verify snow05 before publish] check: sha256 400/3884  0.3s
+  [verify snow05 before publish] check: sha256 600/3884  0.3s
+  [verify snow05 before publish] check: sha256 800/3884  0.4s
+  [verify snow05 before publish] check: sha256 1000/3884  0.5s
+  [verify snow05 before publish] check: sha256 1200/3884  0.6s
+  [verify snow05 before publish] check: sha256 1400/3884  0.7s
+  [verify snow05 before publish] check: sha256 1600/3884  0.8s
+  [verify snow05 before publish] check: sha256 1800/3884  0.9s
+  [verify snow05 before publish] check: sha256 2000/3884  1.0s
+  [verify snow05 before publish] check: sha256 2200/3884  1.1s
+  [verify snow05 before publish] check: sha256 2400/3884  1.2s
+  [verify snow05 before publish] check: sha256 2600/3884  1.3s
+  [verify snow05 before publish] check: sha256 2800/3884  1.4s
+  [verify snow05 before publish] check: sha256 3000/3884  1.5s
+  [verify snow05 before publish] check: sha256 3200/3884  1.6s
+  [verify snow05 before publish] check: sha256 3400/3884  1.7s
+  [verify snow05 before publish] check: sha256 3600/3884  1.8s
+  [verify snow05 before publish] check: sha256 3800/3884  1.9s
+  [verify snow05 before publish] check: sha256 3884/3884  1.9s
+  [verify snow05 before publish] check: check terra 100/1941  1.9s
+  [verify snow05 before publish] check: check terra 200/1941  2.0s
+  [verify snow05 before publish] check: check terra 300/1941  2.0s
+  [verify snow05 before publish] check: check terra 400/1941  2.0s
+  [verify snow05 before publish] check: check terra 500/1941  2.0s
+  [verify snow05 before publish] check: check terra 600/1941  2.1s
+  [verify snow05 before publish] check: check terra 700/1941  2.1s
+  [verify snow05 before publish] check: check terra 800/1941  2.1s
+  [verify snow05 before publish] check: check terra 900/1941  2.1s
+  [verify snow05 before publish] check: check terra 1000/1941  2.2s
+  [verify snow05 before publish] check: check terra 1100/1941  2.2s
+  [verify snow05 before publish] check: check terra 1200/1941  2.2s
+  [verify snow05 before publish] check: check terra 1300/1941  2.2s
+  [verify snow05 before publish] check: check terra 1400/1941  2.3s
+  [verify snow05 before publish] check: check terra 1500/1941  2.3s
+  [verify snow05 before publish] check: check terra 1600/1941  2.3s
+  [verify snow05 before publish] check: check terra 1700/1941  2.3s
+  [verify snow05 before publish] check: check terra 1800/1941  2.4s
+  [verify snow05 before publish] check: check terra 1900/1941  2.4s
+  [verify snow05 before publish] check: check terra 1941/1941  2.4s
+  hub: chfrank/earth-tensors with the token from $HF_TOKEN
+  [publish snow05] start (3885 items)  0/3885  0.0s
+Upload 0 LFS files: 0it [00:00, ?it/s]Upload 0 LFS files: 0it [00:00, ?it/s]
+Upload 0 LFS files: 0it [00:00, ?it/s]Upload 0 LFS files: 0it [00:00, ?it/s]
+Upload 0 LFS files: 0it [00:00, ?it/s]Upload 0 LFS files: 0it [00:00, ?it/s]
+Upload 0 LFS files: 0it [00:00, ?it/s]Upload 0 LFS files: 0it [00:00, ?it/s]
+Upload 0 LFS files: 0it [00:00, ?it/s]Upload 0 LFS files: 0it [00:00, ?it/s]
+Upload 0 LFS files: 0it [00:00, ?it/s]Upload 0 LFS files: 0it [00:00, ?it/s]
+Upload 0 LFS files: 0it [00:00, ?it/s]Upload 0 LFS files: 0it [00:00, ?it/s]
+shard_index.npy:   0%|          | 0.00/726k [00:00<?, ?B/s]shard_index.npy:  54%|█████▍    | 393k/726k [00:00<00:00, 3.68MB/s]shard_index.npy: 100%|██████████| 726k/726k [00:00<00:00, 2.33MB/s]
+  [publish snow05] terra  2/3885  56.1s
+  [publish snow05] terra/2000  128/3885  67.1s
+  [publish snow05] terra/2001  274/3885  76.9s
+  [publish snow05] terra/2002  420/3885  87.0s
+  [publish snow05] terra/2003  566/3885  98.6s
+  [publish snow05] terra/2004  714/3885  110.1s
+  [publish snow05] terra/2005  860/3885  121.5s
+  [publish snow05] terra/2006  1006/3885  133.2s
+  [publish snow05] terra/2007  1152/3885  149.1s
+  [publish snow05] terra/2008  1298/3885  163.1s
+  [publish snow05] terra/2009  1444/3885  174.7s
+  [publish snow05] terra/2010  1590/3885  186.3s
+  [publish snow05] terra/2011  1736/3885  198.5s
+  [publish snow05] terra/2012  1882/3885  210.3s
+  [publish snow05] terra/2013  2028/3885  221.3s
+  [publish snow05] terra/2014  2174/3885  232.6s
+  [publish snow05] terra/2015  2320/3885  254.5s
+  [publish snow05] terra/2016  2466/3885  297.0s
+  [publish snow05] terra/2017  2612/3885  312.1s
+  [publish snow05] terra/2018  2758/3885  323.0s
+  [publish snow05] terra/2019  2904/3885  336.7s
+  [publish snow05] terra/2020  3050/3885  347.4s
+  [publish snow05] terra/2021  3196/3885  358.6s
+  [publish snow05] terra/2022  3342/3885  368.6s
+  [publish snow05] terra/2023  3488/3885  380.3s
+  [publish snow05] terra/2024  3636/3885  392.3s
+  [publish snow05] terra/2025  3782/3885  404.0s
+  [publish snow05] terra/2026  3884/3885  411.5s
+  [publish snow05] store.json  3885/3885  411.8s
+  publish: 3885 file(s) verified by restore, 50 tile(s) decompressed, HTTP range {'checked': 5} -> https://huggingface.co/datasets/chfrank/earth-tensors/tree/main/tensors/family1_tf/snow05
+=== stage publish done in 422.1s ===
