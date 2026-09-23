@@ -1,0 +1,11 @@
+repair    lst05 — year(s) 2007 under chfrank/earth-tensors:partials/family1_tf/lst05/
+  hub: chfrank/earth-tensors with the token from $HF_TOKEN
+  lst05 2007: 73 shard(s) in the folder over 1 group(s); done.json lists 1 (rows 5, at 2026-09-18T12:08:46+00:00); 72 orphaned
+    25/73 shard(s) read
+    50/73 shard(s) read
+  lst05 2007: history revision 4becf6f49b — 73 shard-index row(s) agree with the rebuild field for field; 0 missing-frame reason(s) recovered from it
+    terra: 73 bin(s) 1827..1899, 365 frame(s) present, 0 missing, 158775 tile(s), 5657.5 MB
+  lst05 2007: the rebuilt ledger — 73 bin(s), 365 frame(s) present, missing by reason {}; 1 row(s) of the current shard index agree with the rebuild
+Upload 0 LFS files: 0it [00:00, ?it/s]Upload 0 LFS files: 0it [00:00, ?it/s]
+  lst05 2007: REPAIRED — done.json now lists 148 file(s), 365 frame(s), written last
+repair    2007: repaired
