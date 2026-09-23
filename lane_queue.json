@@ -3,6 +3,49 @@
   {
    "store": "irtb",
    "stage": "index,fetch",
+   "start": "2017-07-01",
+   "end": "2017-09-30",
+   "runner": "ubuntu-latest",
+   "extra_args": "--push-parts",
+   "adapter_env": "",
+   "retries": 2,
+   "seen_runs": [
+    35927011707,
+    35929446644
+   ],
+   "not_before": "2026-09-23T23:03:09.384Z"
+  },
+  {
+   "store": "irtb",
+   "stage": "index,fetch",
+   "start": "2024-01-01",
+   "end": "2024-03-31",
+   "runner": "ubuntu-latest",
+   "extra_args": "--push-parts",
+   "adapter_env": "",
+   "retries": 1,
+   "seen_runs": [
+    35929452143
+   ],
+   "not_before": "2026-09-23T23:03:09.384Z"
+  },
+  {
+   "store": "irtb",
+   "stage": "index,fetch",
+   "start": "2024-04-01",
+   "end": "2024-06-30",
+   "runner": "ubuntu-latest",
+   "extra_args": "--push-parts",
+   "adapter_env": "",
+   "retries": 1,
+   "seen_runs": [
+    35929457527
+   ],
+   "not_before": "2026-09-23T23:03:09.384Z"
+  },
+  {
+   "store": "irtb",
+   "stage": "index,fetch",
    "start": "2022-04-01",
    "end": "2022-06-30",
    "runner": "ubuntu-latest",
@@ -170,42 +213,6 @@
    "not_before": "2026-09-23T22:49:54.648Z"
   },
   {
-   "store": "irtb",
-   "stage": "index,fetch",
-   "start": "2026-07-01",
-   "end": "2026-09-15",
-   "runner": "ubuntu-latest",
-   "extra_args": "--push-parts",
-   "adapter_env": ""
-  },
-  {
-   "store": "sst_acspo02",
-   "stage": "index,fetch",
-   "start": "2018-01-01",
-   "end": "2018-06-30",
-   "runner": "ubuntu-latest",
-   "extra_args": "--push-parts",
-   "adapter_env": ""
-  },
-  {
-   "store": "sst_acspo02",
-   "stage": "index,fetch",
-   "start": "2018-07-01",
-   "end": "2018-12-31",
-   "runner": "ubuntu-latest",
-   "extra_args": "--push-parts",
-   "adapter_env": ""
-  },
-  {
-   "store": "sst_acspo02",
-   "stage": "index,fetch",
-   "start": "2019-01-01",
-   "end": "2019-06-30",
-   "runner": "ubuntu-latest",
-   "extra_args": "--push-parts",
-   "adapter_env": ""
-  },
-  {
    "store": "sst_acspo02",
    "stage": "index,fetch",
    "start": "2019-07-01",
@@ -371,50 +378,6 @@
   {
    "store": "irtb",
    "stage": "index,fetch",
-   "start": "2023-10-01",
-   "end": "2023-12-31",
-   "runner": "ubuntu-latest",
-   "extra_args": "--push-parts",
-   "adapter_env": "",
-   "at": "2026-09-23T22:35:20.935Z"
-  },
-  {
-   "store": "irtb",
-   "stage": "index,fetch",
-   "start": "2017-07-01",
-   "end": "2017-09-30",
-   "runner": "ubuntu-latest",
-   "extra_args": "--push-parts",
-   "adapter_env": "",
-   "retries": 1,
-   "seen_runs": [
-    35927011707
-   ],
-   "at": "2026-09-23T22:38:27.630Z"
-  },
-  {
-   "store": "irtb",
-   "stage": "index,fetch",
-   "start": "2024-01-01",
-   "end": "2024-03-31",
-   "runner": "ubuntu-latest",
-   "extra_args": "--push-parts",
-   "adapter_env": "",
-   "at": "2026-09-23T22:38:31.234Z"
-  },
-  {
-   "store": "irtb",
-   "stage": "index,fetch",
-   "start": "2024-04-01",
-   "end": "2024-06-30",
-   "runner": "ubuntu-latest",
-   "extra_args": "--push-parts",
-   "adapter_env": "",
-   "at": "2026-09-23T22:38:34.850Z"
-  },
-  {
-   "store": "irtb",
-   "stage": "index,fetch",
    "start": "2024-07-01",
    "end": "2024-09-30",
    "runner": "ubuntu-latest",
@@ -491,6 +454,46 @@
    "extra_args": "--push-parts",
    "adapter_env": "",
    "at": "2026-09-23T22:45:07.238Z"
+  },
+  {
+   "store": "irtb",
+   "stage": "index,fetch",
+   "start": "2026-07-01",
+   "end": "2026-09-15",
+   "runner": "ubuntu-latest",
+   "extra_args": "--push-parts",
+   "adapter_env": "",
+   "at": "2026-09-23T22:48:13.015Z"
+  },
+  {
+   "store": "sst_acspo02",
+   "stage": "index,fetch",
+   "start": "2018-01-01",
+   "end": "2018-06-30",
+   "runner": "ubuntu-latest",
+   "extra_args": "--push-parts",
+   "adapter_env": "",
+   "at": "2026-09-23T22:48:16.693Z"
+  },
+  {
+   "store": "sst_acspo02",
+   "stage": "index,fetch",
+   "start": "2018-07-01",
+   "end": "2018-12-31",
+   "runner": "ubuntu-latest",
+   "extra_args": "--push-parts",
+   "adapter_env": "",
+   "at": "2026-09-23T22:48:20.286Z"
+  },
+  {
+   "store": "sst_acspo02",
+   "stage": "index,fetch",
+   "start": "2019-01-01",
+   "end": "2019-06-30",
+   "runner": "ubuntu-latest",
+   "extra_args": "--push-parts",
+   "adapter_env": "",
+   "at": "2026-09-23T22:48:23.846Z"
   }
  ],
  "done": [
@@ -2295,6 +2298,18 @@
    "at": "2026-09-23T22:28:33.125Z",
    "run_number": 657,
    "finished": "2026-09-23T22:39:48Z"
+  },
+  {
+   "store": "irtb",
+   "stage": "index,fetch",
+   "start": "2023-10-01",
+   "end": "2023-12-31",
+   "runner": "ubuntu-latest",
+   "extra_args": "--push-parts",
+   "adapter_env": "",
+   "at": "2026-09-23T22:35:20.935Z",
+   "run_number": 668,
+   "finished": "2026-09-23T22:47:06Z"
   }
  ],
  "failed": []
