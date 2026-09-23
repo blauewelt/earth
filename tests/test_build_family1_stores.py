@@ -769,7 +769,7 @@ def test_push_many_batches_years_and_writes_every_marker_last(tmp_path):
         # a restore mismatch writes NO marker for any year of the call
         fake2 = FakePartsHub(str(tmp_path / "hub2"), "chfrank/earth-tensors")
 
-        def bad_download(repo, rel, token, dest_dir):
+        def bad_download(repo, rel, token, dest_dir, just_uploaded=False):
             p = fake2.download(repo, rel, token, dest_dir)
             with open(p, "ab") as fh:
                 fh.write(b"x")
