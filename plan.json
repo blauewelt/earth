@@ -1,0 +1,1962 @@
+{
+ "bins": [
+  2849,
+  2921
+ ],
+ "builder_git_sha": "77dff617a959925b566c06a2c7d415def4bab9ff",
+ "built_at": "2026-09-23T08:19:47+00:00",
+ "bytes": 371160612930,
+ "channels": [
+  {
+   "max": 500.0,
+   "min": 300.0,
+   "name": "xco2",
+   "unit": "ppm"
+  },
+  {
+   "max": 20.0,
+   "min": 0.0,
+   "name": "xco2_uncertainty",
+   "unit": "ppm"
+  },
+  {
+   "max": 1.0,
+   "min": 0.0,
+   "name": "surface",
+   "unit": "0 land / 1 water"
+  }
+ ],
+ "collections": [
+  {
+   "concept_id": "C2912085112-GES_DISC",
+   "footprint_km": 1.6,
+   "granules": 4012,
+   "sensor": "OCO-2",
+   "short_name": "OCO2_L2_Lite_FP",
+   "version": "11.2r"
+  },
+  {
+   "concept_id": "C4203038017-GES_DISC",
+   "footprint_km": 1.6,
+   "granules": 921,
+   "sensor": "OCO-2",
+   "short_name": "OCO2_L2_Lite_FP",
+   "version": "11.3r"
+  },
+  {
+   "concept_id": "C2910086168-GES_DISC",
+   "footprint_km": 1.6,
+   "granules": 2090,
+   "sensor": "OCO-3",
+   "short_name": "OCO3_L2_Lite_FP",
+   "version": "11r"
+  },
+  {
+   "concept_id": "C4106152863-GES_DISC",
+   "footprint_km": 10.5,
+   "granules": 6072,
+   "sensor": "GOSAT-ACOS",
+   "short_name": "ACOS_L2_Lite_FP",
+   "version": "11.0"
+  }
+ ],
+ "dataset": "OCO-2 / OCO-3 L2 Lite XCO2 with GOSAT via ACOS (exception E3)",
+ "date_range": [
+  "2021-01-01",
+  "2021-12-31"
+ ],
+ "files": 12293,
+ "files_per_sensor": {
+  "GOSAT-ACOS": 6072,
+  "OCO-2": 4131,
+  "OCO-3": 2090
+ },
+ "files_per_year": {
+  "2009": {
+   "GOSAT-ACOS": 244
+  },
+  "2010": {
+   "GOSAT-ACOS": 363
+  },
+  "2011": {
+   "GOSAT-ACOS": 365
+  },
+  "2012": {
+   "GOSAT-ACOS": 366
+  },
+  "2013": {
+   "GOSAT-ACOS": 363
+  },
+  "2014": {
+   "GOSAT-ACOS": 342,
+   "OCO-2": 108
+  },
+  "2015": {
+   "GOSAT-ACOS": 333,
+   "OCO-2": 325
+  },
+  "2016": {
+   "GOSAT-ACOS": 366,
+   "OCO-2": 349
+  },
+  "2017": {
+   "GOSAT-ACOS": 365,
+   "OCO-2": 305
+  },
+  "2018": {
+   "GOSAT-ACOS": 319,
+   "OCO-2": 350
+  },
+  "2019": {
+   "GOSAT-ACOS": 365,
+   "OCO-2": 355,
+   "OCO-3": 95
+  },
+  "2020": {
+   "GOSAT-ACOS": 360,
+   "OCO-2": 356,
+   "OCO-3": 359
+  },
+  "2021": {
+   "GOSAT-ACOS": 365,
+   "OCO-2": 357,
+   "OCO-3": 341
+  },
+  "2022": {
+   "GOSAT-ACOS": 365,
+   "OCO-2": 359,
+   "OCO-3": 343
+  },
+  "2023": {
+   "GOSAT-ACOS": 330,
+   "OCO-2": 346,
+   "OCO-3": 273
+  },
+  "2024": {
+   "GOSAT-ACOS": 366,
+   "OCO-2": 366,
+   "OCO-3": 165
+  },
+  "2025": {
+   "GOSAT-ACOS": 323,
+   "OCO-2": 346,
+   "OCO-3": 326
+  },
+  "2026": {
+   "GOSAT-ACOS": 172,
+   "OCO-2": 209,
+   "OCO-3": 188
+  }
+ },
+ "first_file": {
+  "date": "2021-01-01",
+  "dimensions": {
+   "bands": 3,
+   "epoch_dimension": 6,
+   "frames": 9947,
+   "levels": 20,
+   "sounding_id": 1401,
+   "source_files": 15,
+   "vertices": 4
+  },
+  "format": "NETCDF4",
+  "inventory": {
+   "L1b/gain": {
+    "dims": [
+     "frames"
+    ],
+    "dtype": "|S1",
+    "fill": null,
+    "flag_meanings": "",
+    "flag_values": "",
+    "long_name": "GOSAT Gain Mode: H= H Gain, M=M Gain",
+    "shape": [
+     9947
+    ],
+    "units": "none"
+   },
+   "L1b/land_fraction": {
+    "dims": [
+     "frames"
+    ],
+    "dtype": "int8",
+    "fill": null,
+    "flag_meanings": "",
+    "flag_values": "",
+    "long_name": "Land Fraction",
+    "shape": [
+     9947
+    ],
+    "units": "percent (%)"
+   },
+   "L1b/latitude": {
+    "dims": [
+     "frames"
+    ],
+    "dtype": "float32",
+    "fill": null,
+    "flag_meanings": "",
+    "flag_values": "",
+    "long_name": "latitude",
+    "shape": [
+     9947
+    ],
+    "units": "degrees_north"
+   },
+   "L1b/longitude": {
+    "dims": [
+     "frames"
+    ],
+    "dtype": "float32",
+    "fill": null,
+    "flag_meanings": "",
+    "flag_values": "",
+    "long_name": "longitude",
+    "shape": [
+     9947
+    ],
+    "units": "degrees_east"
+   },
+   "L1b/path": {
+    "dims": [
+     "frames"
+    ],
+    "dtype": "uint8",
+    "fill": null,
+    "flag_meanings": "",
+    "flag_values": "",
+    "long_name": "GOSAT Path number (01-44)",
+    "shape": [
+     9947
+    ],
+    "units": "none"
+   },
+   "L1b/selection_bitflag_sel": {
+    "dims": [
+     "frames"
+    ],
+    "dtype": "uint16",
+    "fill": null,
+    "flag_meanings": "",
+    "flag_values": "",
+    "long_name": "L2FP Selection (Bit)Flag",
+    "shape": [
+     9947
+    ],
+    "units": "none"
+   },
+   "L1b/sounding_id": {
+    "dims": [
+     "frames"
+    ],
+    "dtype": "uint64",
+    "fill": null,
+    "flag_meanings": "",
+    "flag_values": "",
+    "long_name": "Sounding ID",
+    "shape": [
+     9947
+    ],
+    "units": "YYMMDDhhmmss"
+   },
+   "Meteorology/windspeed_u_met": {
+    "dims": [
+     "sounding_id"
+    ],
+    "dtype": "float32",
+    "fill": null,
+    "flag_meanings": "",
+    "flag_values": "",
+    "long_name": "Prior Meteorology Surface Wind Speed, U Component",
+    "shape": [
+     1401
+    ],
+    "units": "m/s"
+   },
+   "Meteorology/windspeed_v_met": {
+    "dims": [
+     "sounding_id"
+    ],
+    "dtype": "float32",
+    "fill": null,
+    "flag_meanings": "",
+    "flag_values": "",
+    "long_name": "Prior Meteorology Surface Wind Speed, V Component",
+    "shape": [
+     1401
+    ],
+    "units": "m/s"
+   },
+   "Preprocessors/co2_ratio_bc": {
+    "dims": [
+     "sounding_id"
+    ],
+    "dtype": "float32",
+    "fill": null,
+    "flag_meanings": "",
+    "flag_values": "",
+    "long_name": "CO2 Ratio BC",
+    "shape": [
+     1401
+    ],
+    "units": "dimensionless"
+   },
+   "Preprocessors/dp_abp": {
+    "dims": [
+     "sounding_id"
+    ],
+    "dtype": "float32",
+    "fill": null,
+    "flag_meanings": "",
+    "flag_values": "",
+    "long_name": "delta_surface_pressure_abp",
+    "shape": [
+     1401
+    ],
+    "units": "hPa"
+   },
+   "Preprocessors/h2o_ratio_bc": {
+    "dims": [
+     "sounding_id"
+    ],
+    "dtype": "float32",
+    "fill": null,
+    "flag_meanings": "",
+    "flag_values": "",
+    "long_name": "H2O Ratio BC",
+    "shape": [
+     1401
+    ],
+    "units": "dimensionless"
+   },
+   "Preprocessors/xco2_strong_gbg": {
+    "dims": [
+     "sounding_id"
+    ],
+    "dtype": "float32",
+    "fill": null,
+    "flag_meanings": "",
+    "flag_values": "",
+    "long_name": "xco2_strong",
+    "shape": [
+     1401
+    ],
+    "units": "ppm"
+   },
+   "Preprocessors/xco2_weak_gbg": {
+    "dims": [
+     "sounding_id"
+    ],
+    "dtype": "float32",
+    "fill": null,
+    "flag_meanings": "",
+    "flag_values": "",
+    "long_name": "xco2_weak",
+    "shape": [
+     1401
+    ],
+    "units": "ppm"
+   },
+   "Retrieval/SigmaB": {
+    "dims": [
+     "levels"
+    ],
+    "dtype": "float32",
+    "fill": null,
+    "flag_meanings": "",
+    "flag_values": "",
+    "long_name": "SigmaB_Coefficient",
+    "shape": [
+     20
+    ],
+    "units": "dimensionless"
+   },
+   "Retrieval/albedo_o2a": {
+    "dims": [
+     "sounding_id"
+    ],
+    "dtype": "float32",
+    "fill": null,
+    "flag_meanings": "",
+    "flag_values": "",
+    "long_name": "Band 1 Albedo",
+    "shape": [
+     1401
+    ],
+    "units": "none"
+   },
+   "Retrieval/albedo_quad_o2a": {
+    "dims": [
+     "sounding_id"
+    ],
+    "dtype": "float32",
+    "fill": null,
+    "flag_meanings": "",
+    "flag_values": "",
+    "long_name": "Retrieved Band 1 reflectance quadratic component (land), n/a (ocean)",
+    "shape": [
+     1401
+    ],
+    "units": "per wn^2"
+   },
+   "Retrieval/albedo_quad_sco2": {
+    "dims": [
+     "sounding_id"
+    ],
+    "dtype": "float32",
+    "fill": null,
+    "flag_meanings": "",
+    "flag_values": "",
+    "long_name": "Retrieved Band 3 reflectance quadratic component (land), n/a (ocean)",
+    "shape": [
+     1401
+    ],
+    "units": "per wn^2"
+   },
+   "Retrieval/albedo_quad_wco2": {
+    "dims": [
+     "sounding_id"
+    ],
+    "dtype": "float32",
+    "fill": null,
+    "flag_meanings": "",
+    "flag_values": "",
+    "long_name": "Retrieved Band 2 reflectance quadratic component (land), n/a (ocean)",
+    "shape": [
+     1401
+    ],
+    "units": "per wn^2"
+   },
+   "Retrieval/albedo_sco2": {
+    "dims": [
+     "sounding_id"
+    ],
+    "dtype": "float32",
+    "fill": null,
+    "flag_meanings": "",
+    "flag_values": "",
+    "long_name": "Band 3 Albedo",
+    "shape": [
+     1401
+    ],
+    "units": "none"
+   },
+   "Retrieval/albedo_slope_o2a": {
+    "dims": [
+     "sounding_id"
+    ],
+    "dtype": "float32",
+    "fill": null,
+    "flag_meanings": "",
+    "flag_values": "",
+    "long_name": "Retrieved Band 1 reflectance slope (land), or slope of lambertian albedo equivalent (ocean)",
+    "shape": [
+     1401
+    ],
+    "units": "per wn"
+   },
+   "Retrieval/albedo_slope_sco2": {
+    "dims": [
+     "sounding_id"
+    ],
+    "dtype": "float32",
+    "fill": null,
+    "flag_meanings": "",
+    "flag_values": "",
+    "long_name": "Retrieved Band 3 reflectance slope (land), or slope of lambertian albedo equivalent (ocean)",
+    "shape": [
+     1401
+    ],
+    "units": "per wn"
+   },
+   "Retrieval/albedo_slope_wco2": {
+    "dims": [
+     "sounding_id"
+    ],
+    "dtype": "float32",
+    "fill": null,
+    "flag_meanings": "",
+    "flag_values": "",
+    "long_name": "Retrieved Band 2 reflectance slope (land), or slope of lambertian albedo equivalent (ocean)",
+    "shape": [
+     1401
+    ],
+    "units": "per wn"
+   },
+   "Retrieval/albedo_wco2": {
+    "dims": [
+     "sounding_id"
+    ],
+    "dtype": "float32",
+    "fill": null,
+    "flag_meanings": "",
+    "flag_values": "",
+    "long_name": "Band 2 Albedo",
+    "shape": [
+     1401
+    ],
+    "units": "none"
+   },
+   "Retrieval/aod_bc": {
+    "dims": [
+     "sounding_id"
+    ],
+    "dtype": "float32",
+    "fill": null,
+    "flag_meanings": "",
+    "flag_values": "",
+    "long_name": "Black Carbon Optical Depth",
+    "shape": [
+     1401
+    ],
+    "units": "dimensionless"
+   },
+   "Retrieval/aod_dust": {
+    "dims": [
+     "sounding_id"
+    ],
+    "dtype": "float32",
+    "fill": null,
+    "flag_meanings": "",
+    "flag_values": "",
+    "long_name": "Dust Aerosol Optical Depth",
+    "shape": [
+     1401
+    ],
+    "units": "dimensionless"
+   },
+   "Retrieval/aod_fine": {
+    "dims": [
+     "sounding_id"
+    ],
+    "dtype": "float32",
+    "fill": null,
+    "flag_meanings": "",
+    "flag_values": "",
+    "long_name": "AOD Fine-Mode Optical Depth",
+    "shape": [
+     1401
+    ],
+    "units": "dimensionless"
+   },
+   "Retrieval/aod_fine_apriori": {
+    "dims": [
+     "sounding_id"
+    ],
+    "dtype": "float32",
+    "fill": null,
+    "flag_meanings": "",
+    "flag_values": "",
+    "long_name": "Prior Organic Carbon + Sulfate",
+    "shape": [
+     1401
+    ],
+    "units": "dimensionless"
+   },
+   "Retrieval/aod_ice": {
+    "dims": [
+     "sounding_id"
+    ],
+    "dtype": "float32",
+    "fill": null,
+    "flag_meanings": "",
+    "flag_values": "",
+    "long_name": "Ice Cloud Optical Depth",
+    "shape": [
+     1401
+    ],
+    "units": "dimensionless"
+   },
+   "Retrieval/aod_oc": {
+    "dims": [
+     "sounding_id"
+    ],
+    "dtype": "float32",
+    "fill": null,
+    "flag_meanings": "",
+    "flag_values": "",
+    "long_name": "Organic Carbon Optical Depth",
+    "shape": [
+     1401
+    ],
+    "units": "dimensionless"
+   },
+   "Retrieval/aod_seasalt": {
+    "dims": [
+     "sounding_id"
+    ],
+    "dtype": "float32",
+    "fill": null,
+    "flag_meanings": "",
+    "flag_values": "",
+    "long_name": "Sea Salt Optical Depth",
+    "shape": [
+     1401
+    ],
+    "units": "dimensionless"
+   },
+   "Retrieval/aod_strataer": {
+    "dims": [
+     "sounding_id"
+    ],
+    "dtype": "float32",
+    "fill": null,
+    "flag_meanings": "",
+    "flag_values": "",
+    "long_name": "Stratospheric Aerosol Optical Depth",
+    "shape": [
+     1401
+    ],
+    "units": "dimensionless"
+   },
+   "Retrieval/aod_sulfate": {
+    "dims": [
+     "sounding_id"
+    ],
+    "dtype": "float32",
+    "fill": null,
+    "flag_meanings": "",
+    "flag_values": "",
+    "long_name": "Sulfate Aerosol Optical Depth",
+    "shape": [
+     1401
+    ],
+    "units": "dimensionless"
+   },
+   "Retrieval/aod_total": {
+    "dims": [
+     "sounding_id"
+    ],
+    "dtype": "float32",
+    "fill": null,
+    "flag_meanings": "",
+    "flag_values": "",
+    "long_name": "Total Cloud+Aerosol Optical Depth",
+    "shape": [
+     1401
+    ],
+    "units": "dimensionless"
+   },
+   "Retrieval/aod_total_apriori": {
+    "dims": [
+     "sounding_id"
+    ],
+    "dtype": "float32",
+    "fill": null,
+    "flag_meanings": "",
+    "flag_values": "",
+    "long_name": "Prior Total Cloud+Aerosol Optical Depth",
+    "shape": [
+     1401
+    ],
+    "units": "dimensionless"
+   },
+   "Retrieval/aod_water": {
+    "dims": [
+     "sounding_id"
+    ],
+    "dtype": "float32",
+    "fill": null,
+    "flag_meanings": "",
+    "flag_values": "",
+    "long_name": "Water Cloud Optical Depth",
+    "shape": [
+     1401
+    ],
+    "units": "dimensionless"
+   },
+   "Retrieval/brdf_weight_slope_sco2": {
+    "dims": [
+     "sounding_id"
+    ],
+    "dtype": "float32",
+    "fill": null,
+    "flag_meanings": "",
+    "flag_values": "",
+    "long_name": "Retrieved Band 3 BRDF slope weight",
+    "shape": [
+     1401
+    ],
+    "units": "per wn"
+   },
+   "Retrieval/brdf_weight_slope_wco2": {
+    "dims": [
+     "sounding_id"
+    ],
+    "dtype": "float32",
+    "fill": null,
+    "flag_meanings": "",
+    "flag_values": "",
+    "long_name": "Retrieved Band 2 BRDF slope weight",
+    "shape": [
+     1401
+    ],
+    "units": "per wn"
+   },
+   "Retrieval/chi2_o2a": {
+    "dims": [
+     "sounding_id"
+    ],
+    "dtype": "float32",
+    "fill": null,
+    "flag_meanings": "",
+    "flag_values": "",
+    "long_name": "Band 1 Reduced Chi-Squared of L2 Fit",
+    "shape": [
+     1401
+    ],
+    "units": "dimensionless"
+   },
+   "Retrieval/chi2_sco2": {
+    "dims": [
+     "sounding_id"
+    ],
+    "dtype": "float32",
+    "fill": null,
+    "flag_meanings": "",
+    "flag_values": "",
+    "long_name": "Band 3 Reduced Chi-Squared of L2 Fit",
+    "shape": [
+     1401
+    ],
+    "units": "dimensionless"
+   },
+   "Retrieval/chi2_wco2": {
+    "dims": [
+     "sounding_id"
+    ],
+    "dtype": "float32",
+    "fill": null,
+    "flag_meanings": "",
+    "flag_values": "",
+    "long_name": "Band 2 Reduced Chi-Squared of L2 Fit",
+    "shape": [
+     1401
+    ],
+    "units": "dimensionless"
+   },
+   "Retrieval/co2_grad_del": {
+    "dims": [
+     "sounding_id"
+    ],
+    "dtype": "float32",
+    "fill": null,
+    "flag_meanings": "",
+    "flag_values": "",
+    "long_name": "Change in CO2 vertical gradient (surface minus level 13), retrieved-apriori",
+    "shape": [
+     1401
+    ],
+    "units": "ppm"
+   },
+   "Retrieval/deltaT": {
+    "dims": [
+     "sounding_id"
+    ],
+    "dtype": "float32",
+    "fill": null,
+    "flag_meanings": "",
+    "flag_values": "",
+    "long_name": "Retrieved Offset to Prior Temperature Profile in Kelvin",
+    "shape": [
+     1401
+    ],
+    "units": "Kelvin"
+   },
+   "Retrieval/diverging_steps": {
+    "dims": [
+     "sounding_id"
+    ],
+    "dtype": "int8",
+    "fill": null,
+    "flag_meanings": "",
+    "flag_values": "",
+    "long_name": "diverging_steps",
+    "shape": [
+     1401
+    ],
+    "units": "none"
+   },
+   "Retrieval/dp": {
+    "dims": [
+     "sounding_id"
+    ],
+    "dtype": "float32",
+    "fill": null,
+    "flag_meanings": "",
+    "flag_values": "",
+    "long_name": "Delta Psurf from L2",
+    "shape": [
+     1401
+    ],
+    "units": "hPa"
+   },
+   "Retrieval/dpfrac": {
+    "dims": [
+     "sounding_id"
+    ],
+    "dtype": "float32",
+    "fill": null,
+    "flag_meanings": "",
+    "flag_values": "",
+    "long_name": "dpfrac",
+    "shape": [
+     1401
+    ],
+    "units": "ppm"
+   },
+   "Retrieval/dust_height": {
+    "dims": [
+     "sounding_id"
+    ],
+    "dtype": "float32",
+    "fill": null,
+    "flag_meanings": "",
+    "flag_values": "",
+    "long_name": "Dust Height",
+    "shape": [
+     1401
+    ],
+    "units": "P/Psurf"
+   },
+   "Retrieval/dws": {
+    "dims": [
+     "sounding_id"
+    ],
+    "dtype": "float32",
+    "fill": null,
+    "flag_meanings": "",
+    "flag_values": "",
+    "long_name": "Dust+Water+SeaSalt",
+    "shape": [
+     1401
+    ],
+    "units": "dimensionless"
+   },
+   "Retrieval/dws_apriori": {
+    "dims": [
+     "sounding_id"
+    ],
+    "dtype": "float32",
+    "fill": null,
+    "flag_meanings": "",
+    "flag_values": "",
+    "long_name": "Prior Dust+Water+SeaSalt",
+    "shape": [
+     1401
+    ],
+    "units": "dimensionless"
+   },
+   "Retrieval/eof1_2": {
+    "dims": [
+     "sounding_id"
+    ],
+    "dtype": "float32",
+    "fill": null,
+    "flag_meanings": "",
+    "flag_values": "",
+    "long_name": "Band 1, EOF 2",
+    "shape": [
+     1401
+    ],
+    "units": "dimensionless"
+   },
+   "Retrieval/eof1_3": {
+    "dims": [
+     "sounding_id"
+    ],
+    "dtype": "float32",
+    "fill": null,
+    "flag_meanings": "",
+    "flag_values": "",
+    "long_name": "Band 1, EOF 3",
+    "shape": [
+     1401
+    ],
+    "units": "dimensionless"
+   },
+   "Retrieval/eof2_1": {
+    "dims": [
+     "sounding_id"
+    ],
+    "dtype": "float32",
+    "fill": null,
+    "flag_meanings": "",
+    "flag_values": "",
+    "long_name": "Band 2, EOF 1",
+    "shape": [
+     1401
+    ],
+    "units": "dimensionless"
+   },
+   "Retrieval/eof2_3_rel": {
+    "dims": [
+     "sounding_id"
+    ],
+    "dtype": "float32",
+    "fill": null,
+    "flag_meanings": "",
+    "flag_values": "",
+    "long_name": "Band 2, EOF 3, Relative to Signal",
+    "shape": [
+     1401
+    ],
+    "units": "dimensionless"
+   },
+   "Retrieval/eof3_1_rel": {
+    "dims": [
+     "sounding_id"
+    ],
+    "dtype": "float32",
+    "fill": null,
+    "flag_meanings": "",
+    "flag_values": "",
+    "long_name": "Band 3, EOF 1, Relative to Signal",
+    "shape": [
+     1401
+    ],
+    "units": "dimensionless"
+   },
+   "Retrieval/eof3_3": {
+    "dims": [
+     "sounding_id"
+    ],
+    "dtype": "float32",
+    "fill": null,
+    "flag_meanings": "",
+    "flag_values": "",
+    "long_name": "Band 3, EOF 3",
+    "shape": [
+     1401
+    ],
+    "units": "dimensionless"
+   },
+   "Retrieval/fs": {
+    "dims": [
+     "sounding_id"
+    ],
+    "dtype": "float32",
+    "fill": null,
+    "flag_meanings": "",
+    "flag_values": "",
+    "long_name": "Retrieved Fluorescence at 757 nm",
+    "shape": [
+     1401
+    ],
+    "units": "W/m^2/um/sr"
+   },
+   "Retrieval/fs_rel": {
+    "dims": [
+     "sounding_id"
+    ],
+    "dtype": "float32",
+    "fill": null,
+    "flag_meanings": "",
+    "flag_values": "",
+    "long_name": "Retrieved L2 Fluorescence relative to Band 1 signal",
+    "shape": [
+     1401
+    ],
+    "units": "dimensionless"
+   },
+   "Retrieval/fs_uncert": {
+    "dims": [
+     "sounding_id"
+    ],
+    "dtype": "float32",
+    "fill": null,
+    "flag_meanings": "",
+    "flag_values": "",
+    "long_name": "Uncertainty in Retrieved Fluorescence at 757 nm",
+    "shape": [
+     1401
+    ],
+    "units": "W/m^2/um/sr"
+   },
+   "Retrieval/h2o_scale": {
+    "dims": [
+     "sounding_id"
+    ],
+    "dtype": "float32",
+    "fill": null,
+    "flag_meanings": "",
+    "flag_values": "",
+    "long_name": "Retrieved scale factor to Prior Water Vapor Profile",
+    "shape": [
+     1401
+    ],
+    "units": "dimensionless"
+   },
+   "Retrieval/ice_height": {
+    "dims": [
+     "sounding_id"
+    ],
+    "dtype": "float32",
+    "fill": null,
+    "flag_meanings": "",
+    "flag_values": "",
+    "long_name": "Ice Cloud Height",
+    "shape": [
+     1401
+    ],
+    "units": "P/Psurf"
+   },
+   "Retrieval/iterations": {
+    "dims": [
+     "sounding_id"
+    ],
+    "dtype": "int8",
+    "fill": null,
+    "flag_meanings": "",
+    "flag_values": "",
+    "long_name": "Iterations",
+    "shape": [
+     1401
+    ],
+    "units": "none"
+   },
+   "Retrieval/offset_o2a_rel": {
+    "dims": [
+     "sounding_id"
+    ],
+    "dtype": "float32",
+    "fill": null,
+    "flag_meanings": "",
+    "flag_values": "",
+    "long_name": "Retrieved Band 1 ZLO relative to Band 1 Signal",
+    "shape": [
+     1401
+    ],
+    "units": "dimensionless"
+   },
+   "Retrieval/psurf": {
+    "dims": [
+     "sounding_id"
+    ],
+    "dtype": "float32",
+    "fill": null,
+    "flag_meanings": "",
+    "flag_values": "",
+    "long_name": "Retrieved Surface Pressure",
+    "shape": [
+     1401
+    ],
+    "units": "hPa"
+   },
+   "Retrieval/psurf_apriori": {
+    "dims": [
+     "sounding_id"
+    ],
+    "dtype": "float32",
+    "fill": null,
+    "flag_meanings": "",
+    "flag_values": "",
+    "long_name": "Prior Surface Pressure",
+    "shape": [
+     1401
+    ],
+    "units": "hPa"
+   },
+   "Retrieval/psurf_uncert": {
+    "dims": [
+     "sounding_id"
+    ],
+    "dtype": "float32",
+    "fill": null,
+    "flag_meanings": "",
+    "flag_values": "",
+    "long_name": "Retrieved Surface Pressure Uncertainty",
+    "shape": [
+     1401
+    ],
+    "units": "hPa"
+   },
+   "Retrieval/rms_rel_sco2": {
+    "dims": [
+     "sounding_id"
+    ],
+    "dtype": "float32",
+    "fill": null,
+    "flag_meanings": "",
+    "flag_values": "",
+    "long_name": "relative_rms_strong_co2_band",
+    "shape": [
+     1401
+    ],
+    "units": "percent"
+   },
+   "Retrieval/rms_rel_wco2": {
+    "dims": [
+     "sounding_id"
+    ],
+    "dtype": "float32",
+    "fill": null,
+    "flag_meanings": "",
+    "flag_values": "",
+    "long_name": "relative_rms_weak_co2_band",
+    "shape": [
+     1401
+    ],
+    "units": "percent"
+   },
+   "Retrieval/s21": {
+    "dims": [
+     "sounding_id"
+    ],
+    "dtype": "float32",
+    "fill": null,
+    "flag_meanings": "",
+    "flag_values": "",
+    "long_name": "Signal_band2/Signal_band1",
+    "shape": [
+     1401
+    ],
+    "units": "none"
+   },
+   "Retrieval/s31": {
+    "dims": [
+     "sounding_id"
+    ],
+    "dtype": "float32",
+    "fill": null,
+    "flag_meanings": "",
+    "flag_values": "",
+    "long_name": "Signal_band3/Signal_band1",
+    "shape": [
+     1401
+    ],
+    "units": "none"
+   },
+   "Retrieval/sulfate_height": {
+    "dims": [
+     "sounding_id"
+    ],
+    "dtype": "float32",
+    "fill": null,
+    "flag_meanings": "",
+    "flag_values": "",
+    "long_name": "Sulfate Height",
+    "shape": [
+     1401
+    ],
+    "units": "P/Psurf"
+   },
+   "Retrieval/surface_type": {
+    "dims": [
+     "sounding_id"
+    ],
+    "dtype": "int8",
+    "fill": null,
+    "flag_meanings": "",
+    "flag_values": "",
+    "long_name": "Surface Type",
+    "shape": [
+     1401
+    ],
+    "units": "0=ocean;1=land"
+   },
+   "Retrieval/t700": {
+    "dims": [
+     "sounding_id"
+    ],
+    "dtype": "float32",
+    "fill": null,
+    "flag_meanings": "",
+    "flag_values": "",
+    "long_name": "Temperature_at_700hPa",
+    "shape": [
+     1401
+    ],
+    "units": "K"
+   },
+   "Retrieval/tcwv": {
+    "dims": [
+     "sounding_id"
+    ],
+    "dtype": "float32",
+    "fill": null,
+    "flag_meanings": "",
+    "flag_values": "",
+    "long_name": "Total Column Water Vapor",
+    "shape": [
+     1401
+    ],
+    "units": "kg/m^2"
+   },
+   "Retrieval/tcwv_apriori": {
+    "dims": [
+     "sounding_id"
+    ],
+    "dtype": "float32",
+    "fill": null,
+    "flag_meanings": "",
+    "flag_values": "",
+    "long_name": "Total Column Water Vapor A Priori",
+    "shape": [
+     1401
+    ],
+    "units": "kg/m^2"
+   },
+   "Retrieval/tcwv_uncertainty": {
+    "dims": [
+     "sounding_id"
+    ],
+    "dtype": "float32",
+    "fill": null,
+    "flag_meanings": "",
+    "flag_values": "",
+    "long_name": "Total Column Water Vapor Uncertainty",
+    "shape": [
+     1401
+    ],
+    "units": "kg/m^2"
+   },
+   "Retrieval/water_height": {
+    "dims": [
+     "sounding_id"
+    ],
+    "dtype": "float32",
+    "fill": null,
+    "flag_meanings": "",
+    "flag_values": "",
+    "long_name": "Water Cloud Height",
+    "shape": [
+     1401
+    ],
+    "units": "P/Psurf"
+   },
+   "Retrieval/windspeed": {
+    "dims": [
+     "sounding_id"
+    ],
+    "dtype": "float32",
+    "fill": null,
+    "flag_meanings": "",
+    "flag_values": "",
+    "long_name": "Retrieved Surface Wind Speed",
+    "shape": [
+     1401
+    ],
+    "units": "m/s"
+   },
+   "Retrieval/windspeed_apriori": {
+    "dims": [
+     "sounding_id"
+    ],
+    "dtype": "float32",
+    "fill": null,
+    "flag_meanings": "",
+    "flag_values": "",
+    "long_name": "Prior Surface Wind Speed",
+    "shape": [
+     1401
+    ],
+    "units": "m/s"
+   },
+   "Retrieval/windspeed_uncert": {
+    "dims": [
+     "sounding_id"
+    ],
+    "dtype": "float32",
+    "fill": null,
+    "flag_meanings": "",
+    "flag_values": "",
+    "long_name": "Surface Wind Speed Uncertainty",
+    "shape": [
+     1401
+    ],
+    "units": "m/s"
+   },
+   "Retrieval/xco2_raw": {
+    "dims": [
+     "sounding_id"
+    ],
+    "dtype": "float32",
+    "fill": null,
+    "flag_meanings": "",
+    "flag_values": "",
+    "long_name": "Raw value of Retrieved XCO2",
+    "shape": [
+     1401
+    ],
+    "units": "ppm"
+   },
+   "Sounding/airmass": {
+    "dims": [
+     "sounding_id"
+    ],
+    "dtype": "float32",
+    "fill": null,
+    "flag_meanings": "",
+    "flag_values": "",
+    "long_name": "relative_airmass",
+    "shape": [
+     1401
+    ],
+    "units": "degrees"
+   },
+   "Sounding/altitude": {
+    "dims": [
+     "sounding_id"
+    ],
+    "dtype": "float32",
+    "fill": null,
+    "flag_meanings": "",
+    "flag_values": "",
+    "long_name": "Altitude",
+    "shape": [
+     1401
+    ],
+    "units": "meters"
+   },
+   "Sounding/altitude_stddev": {
+    "dims": [
+     "sounding_id"
+    ],
+    "dtype": "float32",
+    "fill": null,
+    "flag_meanings": "",
+    "flag_values": "",
+    "long_name": "Altitude Stddev",
+    "shape": [
+     1401
+    ],
+    "units": "meters"
+   },
+   "Sounding/at_angle": {
+    "dims": [
+     "sounding_id"
+    ],
+    "dtype": "float32",
+    "fill": null,
+    "flag_meanings": "",
+    "flag_values": "",
+    "long_name": "AT Angle",
+    "shape": [
+     1401
+    ],
+    "units": "degrees"
+   },
+   "Sounding/ct_angle": {
+    "dims": [
+     "sounding_id"
+    ],
+    "dtype": "float32",
+    "fill": null,
+    "flag_meanings": "",
+    "flag_values": "",
+    "long_name": "CT Angle",
+    "shape": [
+     1401
+    ],
+    "units": "degrees"
+   },
+   "Sounding/gain": {
+    "dims": [
+     "sounding_id"
+    ],
+    "dtype": "|S1",
+    "fill": null,
+    "flag_meanings": "",
+    "flag_values": "",
+    "long_name": "Gain",
+    "shape": [
+     1401
+    ],
+    "units": "none"
+   },
+   "Sounding/glint_angle": {
+    "dims": [
+     "sounding_id"
+    ],
+    "dtype": "float32",
+    "fill": null,
+    "flag_meanings": "",
+    "flag_values": "",
+    "long_name": "sounding_glint_angle",
+    "shape": [
+     1401
+    ],
+    "units": "degrees"
+   },
+   "Sounding/l1b_type": {
+    "dims": [
+     "sounding_id"
+    ],
+    "dtype": "int32",
+    "fill": null,
+    "flag_meanings": "",
+    "flag_values": "",
+    "long_name": "JAXA L1B Processing Version",
+    "shape": [
+     1401
+    ],
+    "units": "none"
+   },
+   "Sounding/land_fraction": {
+    "dims": [
+     "sounding_id"
+    ],
+    "dtype": "int8",
+    "fill": null,
+    "flag_meanings": "",
+    "flag_values": "",
+    "long_name": "Land Fraction",
+    "shape": [
+     1401
+    ],
+    "units": "percent"
+   },
+   "Sounding/n_dem_points": {
+    "dims": [
+     "sounding_id"
+    ],
+    "dtype": "int32",
+    "fill": null,
+    "flag_meanings": "",
+    "flag_values": "",
+    "long_name": "n_dem_points_inside_gosat_fov",
+    "shape": [
+     1401
+    ],
+    "units": "none"
+   },
+   "Sounding/n_lwm_points": {
+    "dims": [
+     "sounding_id"
+    ],
+    "dtype": "int16",
+    "fill": null,
+    "flag_meanings": "",
+    "flag_values": "",
+    "long_name": "n_lwm_points_inside_gosat_fov",
+    "shape": [
+     1401
+    ],
+    "units": "none"
+   },
+   "Sounding/path": {
+    "dims": [
+     "sounding_id"
+    ],
+    "dtype": "uint8",
+    "fill": null,
+    "flag_meanings": "",
+    "flag_values": "",
+    "long_name": "GOSAT orbit path number",
+    "shape": [
+     1401
+    ],
+    "units": "none"
+   },
+   "Sounding/sensor_azimuth_angle": {
+    "dims": [
+     "sounding_id"
+    ],
+    "dtype": "float32",
+    "fill": null,
+    "flag_meanings": "",
+    "flag_values": "",
+    "long_name": "sounding_azimuth",
+    "shape": [
+     1401
+    ],
+    "units": "degrees East of North"
+   },
+   "Sounding/snr_o2a": {
+    "dims": [
+     "sounding_id"
+    ],
+    "dtype": "float32",
+    "fill": null,
+    "flag_meanings": "",
+    "flag_values": "",
+    "long_name": "snr_O2_L1b",
+    "shape": [
+     1401
+    ],
+    "units": "none"
+   },
+   "Sounding/snr_sco2": {
+    "dims": [
+     "sounding_id"
+    ],
+    "dtype": "float32",
+    "fill": null,
+    "flag_meanings": "",
+    "flag_values": "",
+    "long_name": "snr_strong_CO2_L1b",
+    "shape": [
+     1401
+    ],
+    "units": "none"
+   },
+   "Sounding/snr_wco2": {
+    "dims": [
+     "sounding_id"
+    ],
+    "dtype": "float32",
+    "fill": null,
+    "flag_meanings": "",
+    "flag_values": "",
+    "long_name": "snr_weak_CO2_L1b",
+    "shape": [
+     1401
+    ],
+    "units": "none"
+   },
+   "Sounding/solar_azimuth_angle": {
+    "dims": [
+     "sounding_id"
+    ],
+    "dtype": "float32",
+    "fill": null,
+    "flag_meanings": "",
+    "flag_values": "",
+    "long_name": "sounding_solar_azimuth",
+    "shape": [
+     1401
+    ],
+    "units": "degrees East of North"
+   },
+   "bands": {
+    "dims": [
+     "bands"
+    ],
+    "dtype": "int16",
+    "fill": null,
+    "flag_meanings": "",
+    "flag_values": "",
+    "long_name": "",
+    "shape": [
+     3
+    ],
+    "units": ""
+   },
+   "co2_profile": {
+    "dims": [
+     "sounding_id",
+     "levels"
+    ],
+    "dtype": "float32",
+    "fill": null,
+    "flag_meanings": "",
+    "flag_values": "",
+    "long_name": "CO2 Retrieved Profile",
+    "shape": [
+     1401,
+     20
+    ],
+    "units": "ppm"
+   },
+   "co2_profile_apriori": {
+    "dims": [
+     "sounding_id",
+     "levels"
+    ],
+    "dtype": "float32",
+    "fill": null,
+    "flag_meanings": "",
+    "flag_values": "",
+    "long_name": "CO2 Apriori Profile",
+    "shape": [
+     1401,
+     20
+    ],
+    "units": "ppm"
+   },
+   "date": {
+    "dims": [
+     "sounding_id",
+     "epoch_dimension"
+    ],
+    "dtype": "int16",
+    "fill": null,
+    "flag_meanings": "",
+    "flag_values": "",
+    "long_name": "Observation date and time matching sounding_id",
+    "shape": [
+     1401,
+     6
+    ],
+    "units": "none"
+   },
+   "file_index": {
+    "dims": [
+     "sounding_id"
+    ],
+    "dtype": "uint8",
+    "fill": null,
+    "flag_meanings": "",
+    "flag_values": "",
+    "long_name": "L2 File Index",
+    "shape": [
+     1401
+    ],
+    "units": "none"
+   },
+   "frames": {
+    "dims": [
+     "frames"
+    ],
+    "dtype": "int32",
+    "fill": null,
+    "flag_meanings": "",
+    "flag_values": "",
+    "long_name": "",
+    "shape": [
+     9947
+    ],
+    "units": ""
+   },
+   "latitude": {
+    "dims": [
+     "sounding_id"
+    ],
+    "dtype": "float32",
+    "fill": null,
+    "flag_meanings": "",
+    "flag_values": "",
+    "long_name": "latitude",
+    "shape": [
+     1401
+    ],
+    "units": "degrees_north"
+   },
+   "levels": {
+    "dims": [
+     "levels"
+    ],
+    "dtype": "int16",
+    "fill": null,
+    "flag_meanings": "",
+    "flag_values": "",
+    "long_name": "",
+    "shape": [
+     20
+    ],
+    "units": ""
+   },
+   "longitude": {
+    "dims": [
+     "sounding_id"
+    ],
+    "dtype": "float32",
+    "fill": null,
+    "flag_meanings": "",
+    "flag_values": "",
+    "long_name": "longitude",
+    "shape": [
+     1401
+    ],
+    "units": "degrees_east"
+   },
+   "pressure_levels": {
+    "dims": [
+     "sounding_id",
+     "levels"
+    ],
+    "dtype": "float32",
+    "fill": null,
+    "flag_meanings": "",
+    "flag_values": "",
+    "long_name": "Pressure_Levels",
+    "shape": [
+     1401,
+     20
+    ],
+    "units": "hPa"
+   },
+   "pressure_weight": {
+    "dims": [
+     "sounding_id",
+     "levels"
+    ],
+    "dtype": "float32",
+    "fill": null,
+    "flag_meanings": "",
+    "flag_values": "",
+    "long_name": "Pressure Weighting Function",
+    "shape": [
+     1401,
+     20
+    ],
+    "units": "none"
+   },
+   "sensor_zenith_angle": {
+    "dims": [
+     "sounding_id"
+    ],
+    "dtype": "float32",
+    "fill": null,
+    "flag_meanings": "",
+    "flag_values": "",
+    "long_name": "sounding_zenith",
+    "shape": [
+     1401
+    ],
+    "units": "degrees"
+   },
+   "solar_zenith_angle": {
+    "dims": [
+     "sounding_id"
+    ],
+    "dtype": "float32",
+    "fill": null,
+    "flag_meanings": "",
+    "flag_values": "",
+    "long_name": "sounding_solar_zenith",
+    "shape": [
+     1401
+    ],
+    "units": "degrees"
+   },
+   "sounding_id": {
+    "dims": [
+     "sounding_id"
+    ],
+    "dtype": "uint64",
+    "fill": null,
+    "flag_meanings": "",
+    "flag_values": "",
+    "long_name": "ACOS Sounding ID",
+    "shape": [
+     1401
+    ],
+    "units": "YYYYMMDDhhmmss"
+   },
+   "source_files": {
+    "dims": [
+     "source_files"
+    ],
+    "dtype": "<class 'str'>",
+    "fill": null,
+    "flag_meanings": "",
+    "flag_values": "",
+    "long_name": "L2 Source File",
+    "shape": [
+     15
+    ],
+    "units": "none"
+   },
+   "time": {
+    "dims": [
+     "sounding_id"
+    ],
+    "dtype": "float64",
+    "fill": null,
+    "flag_meanings": "",
+    "flag_values": "",
+    "long_name": "time",
+    "shape": [
+     1401
+    ],
+    "units": "seconds since 1970-01-01 00:00:00"
+   },
+   "vertex_latitude": {
+    "dims": [
+     "sounding_id",
+     "vertices"
+    ],
+    "dtype": "float32",
+    "fill": null,
+    "flag_meanings": "",
+    "flag_values": "",
+    "long_name": "vertex_latitude",
+    "shape": [
+     1401,
+     4
+    ],
+    "units": "degrees_north"
+   },
+   "vertex_longitude": {
+    "dims": [
+     "sounding_id",
+     "vertices"
+    ],
+    "dtype": "float32",
+    "fill": null,
+    "flag_meanings": "",
+    "flag_values": "",
+    "long_name": "vertex_longitude",
+    "shape": [
+     1401,
+     4
+    ],
+    "units": "degrees_east"
+   },
+   "vertices": {
+    "dims": [
+     "vertices"
+    ],
+    "dtype": "int16",
+    "fill": null,
+    "flag_meanings": "",
+    "flag_values": "",
+    "long_name": "",
+    "shape": [
+     4
+    ],
+    "units": ""
+   },
+   "xco2": {
+    "dims": [
+     "sounding_id"
+    ],
+    "dtype": "float32",
+    "fill": null,
+    "flag_meanings": "",
+    "flag_values": "",
+    "long_name": "Bias-corrected XCO2 on X2007 scale",
+    "shape": [
+     1401
+    ],
+    "units": "ppm"
+   },
+   "xco2_apriori": {
+    "dims": [
+     "sounding_id"
+    ],
+    "dtype": "float32",
+    "fill": null,
+    "flag_meanings": "",
+    "flag_values": "",
+    "long_name": "A priori XCO2 Value",
+    "shape": [
+     1401
+    ],
+    "units": "ppm"
+   },
+   "xco2_averaging_kernel": {
+    "dims": [
+     "sounding_id",
+     "levels"
+    ],
+    "dtype": "float32",
+    "fill": null,
+    "flag_meanings": "",
+    "flag_values": "",
+    "long_name": "XCO2 Column Averaging Kernel",
+    "shape": [
+     1401,
+     20
+    ],
+    "units": "none"
+   },
+   "xco2_qf_bitflag": {
+    "dims": [
+     "sounding_id"
+    ],
+    "dtype": "uint64",
+    "fill": null,
+    "flag_meanings": "",
+    "flag_values": "",
+    "long_name": "ACOS B11 xco2_quality_flag bitflag",
+    "shape": [
+     1401
+    ],
+    "units": "none"
+   },
+   "xco2_quality_flag": {
+    "dims": [
+     "sounding_id"
+    ],
+    "dtype": "int8",
+    "fill": null,
+    "flag_meanings": "",
+    "flag_values": "",
+    "long_name": "XCO2_Quality_Flag",
+    "shape": [
+     1401
+    ],
+    "units": "none"
+   },
+   "xco2_uncertainty": {
+    "dims": [
+     "sounding_id"
+    ],
+    "dtype": "float32",
+    "fill": null,
+    "flag_meanings": "",
+    "flag_values": "",
+    "long_name": "XCO2_Posterior_Error",
+    "shape": [
+     1401
+    ],
+    "units": "ppm"
+   },
+   "xco2_x2019": {
+    "dims": [
+     "sounding_id"
+    ],
+    "dtype": "float32",
+    "fill": null,
+    "flag_meanings": "",
+    "flag_values": "",
+    "long_name": "Bias-corrected XCO2 on X2019 scale",
+    "shape": [
+     1401
+    ],
+    "units": "ppm"
+   }
+  },
+  "name": "ACOS_L2_Lite_FP.11.0:acos_LtCO2_210101_v300300_B11.0_260415195155c.nc4",
+  "resolution": {
+   "latitude": "latitude",
+   "longitude": "longitude",
+   "quality": "xco2_quality_flag",
+   "surface": "Sounding/land_fraction",
+   "time": "time",
+   "xco2": "xco2",
+   "xco2_uncertainty": "xco2_uncertainty"
+  },
+  "sensor": "GOSAT-ACOS",
+  "variables": 123
+ },
+ "footprint": {
+  "log2_dt": -4.0,
+  "log2_fp": -4.120497098444245
+ },
+ "footprint_per_platform": {
+  "GOSAT-ACOS": -1.4063,
+  "OCO-2": -4.1205,
+  "OCO-3": -4.1205
+ },
+ "per_year_resume": true,
+ "qc_policy": "ONLY GOOD SOUNDINGS ARE STORED: a sounding whose `xco2_quality_flag` is not 0 is a FAILED RETRIEVAL rather than a measurement of CO2, and it is dropped and counted (`soundings_bad_quality`), which is also what makes the note's '400 M GOOD soundings, 18 GB' arithmetic true. With the bad ones gone a quality channel would be a column of zeros, so the brief's third channel is the ledger's `surface` (0 land / 1 water) and the flag lives in `qc`: bit 0 the quality flag, bit 1 set over water, bits 2-4 the `warn_level` in three bits where the file has one. A sounding with no xco2, no position or no time is dropped and counted. A value outside its channel's bounds becomes NaN for that channel alone and is counted, never clipped. The sensor is the `platform` (OCO-2, OCO-3 or GOSAT-ACOS), so exception E3's third instrument is a code rather than a second store, and a consumer can hold out an instrument.",
+ "record": [
+  "2009-04-18",
+  "2026-07-31"
+ ],
+ "sources": [
+  "https://cmr.earthdata.nasa.gov/search/granules.json?collection_concept_id=C2912085112-GES_DISC (OCO2_L2_Lite_FP 11.2r, anonymous)",
+  "https://cmr.earthdata.nasa.gov/search/granules.json?collection_concept_id=C4203038017-GES_DISC (OCO2_L2_Lite_FP 11.3r, anonymous)",
+  "https://cmr.earthdata.nasa.gov/search/granules.json?collection_concept_id=C2910086168-GES_DISC (OCO3_L2_Lite_FP 11r, anonymous)",
+  "https://cmr.earthdata.nasa.gov/search/granules.json?collection_concept_id=C4106152863-GES_DISC (ACOS_L2_Lite_FP 11.0, anonymous)"
+ ],
+ "store": "xco2",
+ "title": "Satellite column CO2: OCO-2 and OCO-3 L2 Lite XCO2, with GOSAT via ACOS as a third sensor code (exception E3) \u2014 one row per good sounding",
+ "url": "https://cmr.earthdata.nasa.gov/search/granules.json",
+ "verified": "2026-09-18 from this sandbox (CMR only \u2014 a GES DISC .nc4 and even its .nc4.xml sidecar answer `401 HTTP Basic: Access denied.` anonymously, so the BYTES are a hosted runner's job): the four collections and their records \u2014 OCO2_L2_Lite_FP 11.2r (C2912085112-GES_DISC, 2014-06-01 ->, ~56-63 MB a day), 11.3r (C4203038017-GES_DISC, 2014-06-01 ->), OCO3_L2_Lite_FP 11r (C2910086168-GES_DISC, 2019-08-06 ->, ~47-82 MB a day) and ACOS_L2_Lite_FP 11.0 (C4106152863-GES_DISC, 2009-04-18 ->, exception E3) \u2014 and each granule's own https .nc4 link read from its CMR entry. NOT MEASURED HERE, and what the runner probe settles: the Lite file's INTERNAL variable layout. There is no anonymous route to it, so the adapter resolves each quantity against a candidate list, refuses with the file's WHOLE inventory when a required one matches nothing, and `index` writes that inventory into plan.json \u2014 one round trip settles it either way, and the resolution that was used is recorded in the store.",
+ "version": "OCO-2 11.3r preferred over 11.2r",
+ "version_per_day_sample": {
+  "2009-04-18": {
+   "GOSAT-ACOS": "ACOS_L2_Lite_FP.11.0"
+  },
+  "2009-04-19": {
+   "GOSAT-ACOS": "ACOS_L2_Lite_FP.11.0"
+  },
+  "2009-04-20": {
+   "GOSAT-ACOS": "ACOS_L2_Lite_FP.11.0"
+  },
+  "2009-04-21": {
+   "GOSAT-ACOS": "ACOS_L2_Lite_FP.11.0"
+  },
+  "2009-04-22": {
+   "GOSAT-ACOS": "ACOS_L2_Lite_FP.11.0"
+  }
+ },
+ "years": [
+  2021
+ ]
+}
