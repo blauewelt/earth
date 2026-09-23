@@ -1,20 +1,5 @@
 {
- "pending": [
-  {
-   "store": "sst_acspo02",
-   "stage": "index,fetch",
-   "start": "2024-07-01",
-   "end": "2024-12-31",
-   "runner": "ubuntu-latest",
-   "extra_args": "--push-parts",
-   "adapter_env": "",
-   "retries": 1,
-   "seen_runs": [
-    35933097497
-   ],
-   "not_before": "2026-09-23T23:44:56.546Z"
-  }
- ],
+ "pending": [],
  "dispatched": [
   {
    "store": "sst_acspo02",
@@ -107,21 +92,6 @@
    "at": "2026-09-23T23:17:21.200Z"
   },
   {
-   "store": "irtb",
-   "stage": "index,fetch",
-   "start": "2022-07-01",
-   "end": "2022-09-30",
-   "runner": "ubuntu-latest",
-   "extra_args": "--push-parts",
-   "adapter_env": "",
-   "retries": 2,
-   "seen_runs": [
-    35929135252,
-    35931426414
-   ],
-   "at": "2026-09-23T23:23:33.534Z"
-  },
-  {
    "store": "sst_acspo02",
    "stage": "index,fetch",
    "start": "2025-01-01",
@@ -160,6 +130,20 @@
    "extra_args": "--push-parts",
    "adapter_env": "",
    "at": "2026-09-23T23:26:53.957Z"
+  },
+  {
+   "store": "sst_acspo02",
+   "stage": "index,fetch",
+   "start": "2024-07-01",
+   "end": "2024-12-31",
+   "runner": "ubuntu-latest",
+   "extra_args": "--push-parts",
+   "adapter_env": "",
+   "retries": 1,
+   "seen_runs": [
+    35933097497
+   ],
+   "at": "2026-09-23T23:45:21.583Z"
   }
  ],
  "done": [
@@ -2382,6 +2366,23 @@
    "at": "2026-09-23T22:48:20.286Z",
    "run_number": 683,
    "finished": "2026-09-23T23:40:59Z"
+  },
+  {
+   "store": "irtb",
+   "stage": "index,fetch",
+   "start": "2022-07-01",
+   "end": "2022-09-30",
+   "runner": "ubuntu-latest",
+   "extra_args": "--push-parts",
+   "adapter_env": "",
+   "retries": 2,
+   "seen_runs": [
+    35929135252,
+    35931426414
+   ],
+   "at": "2026-09-23T23:23:33.534Z",
+   "run_number": 713,
+   "finished": "2026-09-23T23:42:50Z"
   }
  ],
  "failed": [
