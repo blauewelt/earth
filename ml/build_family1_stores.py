@@ -72,6 +72,11 @@ and family 10 does not:
   * THE LICENCE GATE: a public adapter whose licence says
     `redistribution_confirmed: False` is refused a publish and a parts push
     unless `--allow-unconfirmed-licence` is passed.
+  * `--stage repair` (tier G, `ml/family1/repair_ledger.py`): rebuild a
+    parked year's `done.json`, `counts.json` and shard indices from the
+    shards actually on the Hub, when a neighbouring lane's push left them
+    describing fewer bins than the folder holds (pace4k/2024, lst05/2007,
+    pheno500/2017 and /2019). `--dry-run` reports without writing.
   * `--check-credentials` (no store): one authenticated request to LP DAAC,
     GES DISC and PO.DAAC with the Earthdata account, and what each answered
     (`ml/family1/earthdata_check.py`).
@@ -120,7 +125,7 @@ sys.path.insert(0, HERE)
 import build_family10_stores as f10b                            # noqa: E402
 import family10_store as f10                                    # noqa: E402
 from build_family7 import (END, atomic_json, git_sha, mark,     # noqa: E402
-                           marked, marker, read_json, utcnow)
+                           marked, marker, parse_years, read_json, utcnow)
 from family1 import sharded as sh                               # noqa: E402
 from family1.adapters import FAMILIES, REGISTRY                 # noqa: E402
 
@@ -325,7 +330,26 @@ def apply_lane(ctx):
     own keeps the unnamed lane and the paths it always had. The FETCH writes
     the lane; the ASSEMBLER merges whatever lanes a year holds, except when
     this context is itself one lane, in which case it assembles that one.
+
+    A BOX THAT ASSEMBLES FROM HUB PARTS IS NEVER A LANE (2026-09-22). It
+    fetches nothing from the source, so its window chooses YEARS, not a lane:
+    lst05's assembly (family1-build #425, `start=1999-01-01
+    end=2026-09-30 --parts-from-hub`) named itself `d19990101-20260930`,
+    looked for `parts/<year>/d19990101-20260930.done` in every year, and
+    REFUSED all 28 — while every year's parts sat on disk under the unnamed
+    lane that seven whole-year hosted lanes had written (the only marker form
+    that existed when they ran). With `--parts-from-hub` the context is the
+    unnamed lane, pulls every lane of every year and merges them, which is
+    what the docstring of `family10_parts_hub.pull` always promised.
+
+    `ctx.bins_by_first_day` is set for EVERY context `main` builds, named or
+    not: `prepare_grid_ctx` then gives a tier-G window only the bins whose
+    first day falls inside it (ADAPTER_CONTRACT.md, "Lanes").
     """
+    ctx.bins_by_first_day = True
+    if getattr(ctx.a, "parts_from_hub", False):
+        ctx.lane, ctx.lane_groups = "", []
+        return ctx.lane
     groups = adapter_group_subset(ctx.adapter)
     ctx.lane = lane_name(ctx.d_lo, ctx.d_hi, groups)
     ctx.lane_groups = groups or []
@@ -555,21 +579,50 @@ def prepare_grid_ctx(ctx):
     both claim the bin that straddles the end of January (`bins_overlapping`
     answers with every bin the window touches), both write its shard, and one
     of them would be thrown away; with it, twelve monthly lanes cover every
-    bin of a year exactly once. The unnamed lane is unaffected and keeps the
-    bins it always had, so every tier-G store on the Hub resumes unchanged.
+    bin of a year exactly once.
+
+    THE UNNAMED LANE OBEYS THE SAME RULE (2026-09-22) — every context `main`
+    builds carries `bins_by_first_day`. It used to keep every bin its window
+    touched, so a whole-year lane `--start 2025-01-01` reached back into bin
+    3141 (2024-12-31 .. 2025-01-04), filed it under 2024 and pushed a ONE-BIN
+    "2024" over the 62 bins the 2024 lane had parked (pace4k; lst05/2007 and
+    pheno500/2017, /2019 are the same). Owning a bin means owning ALL of its
+    frames, so the window in SECONDS is widened to the end of the last owned
+    bin: an adapter that lists its source by `ctx.t_lo/t_hi` (irtb,
+    sst_acspo02) or by the years of the frames (`ctx.grid_frame_days`, pace4k)
+    then fetches the straddling bin's tail instead of calling it
+    `after_record` — the 2025 lane marked 2026-01-01 .. 04 outside the record
+    for exactly that reason. A context built without `main` (a smoke, the
+    probe, a test's own `Ctx`) keeps the bins it always had.
     """
     ad = ctx.adapter
+    by_first_day = bool(ctx.lane or getattr(ctx, "bins_by_first_day", False))
     by_year = {}
     for b in sh.bins_overlapping(ctx.t_lo, ctx.t_hi):
-        if ctx.lane and not (ctx.d_lo <= sh.bin_start_date(b) <= ctx.d_hi):
+        if by_first_day and not (ctx.d_lo <= sh.bin_start_date(b)
+                                 <= ctx.d_hi):
             continue
         by_year.setdefault(sh.bin_year(b), []).append(b)
-    if ctx.lane and not by_year:
-        sys.exit(f"REFUSING {ad.store} lane {ctx.lane}: no five-day bin "
-                 f"STARTS inside {ctx.d_lo} .. {ctx.d_hi}, so this lane owns "
-                 f"nothing and would fetch nothing while reporting success. A "
-                 f"tier-G lane's window must contain at least one bin start "
-                 f"(bins run from {f10b.START} in five-day steps); widen it.")
+    if by_first_day and not by_year:
+        sys.exit(f"REFUSING {ad.store} lane {ctx.lane or '(unnamed)'}: no "
+                 f"five-day bin STARTS inside {ctx.d_lo} .. {ctx.d_hi}, so "
+                 f"this lane owns nothing and would fetch nothing while "
+                 f"reporting success. A tier-G lane's window must contain at "
+                 f"least one bin start (bins run from {f10b.START} in "
+                 f"five-day steps); widen it.")
+    if by_first_day:
+        owned = [b for bs in by_year.values() for b in bs]
+        # the first owned bin starts ON or after d_lo, so t_lo already
+        # covers it; the last one may run up to four days past d_hi
+        b0, bn = min(owned), max(owned)
+        ctx.t_hi = max(ctx.t_hi, (bn + 1) * sh.BIN_SECONDS - 1)
+        ctx.b_lo, ctx.b_hi = b0, bn
+    ctx.grid_frame_days = (
+        (sh.frame_day(min(min(v) for v in by_year.values()), 0,
+                      ad.frame_seconds),
+         sh.frame_day(max(max(v) for v in by_year.values()),
+                      int(ad.frames_per_bin) - 1, ad.frame_seconds))
+        if by_year else None)
     ctx.grid_bins = by_year
     ctx.years = sorted(by_year)
     ctx.grid_specs = ad.specs()
@@ -1640,8 +1693,10 @@ def build_parser():
                          "VALUE TO RESUME.")
     ap.add_argument("--stage", default="all",
                     help="`all` (= index,fetch,assemble,publish,check), a "
-                         "comma list of those, or `probe` (with "
-                         "--probe-month). Order is fixed.")
+                         "comma list of those, `probe` (with --probe-month), "
+                         "or `repair` (tier G: rebuild the window's years' "
+                         "ledgers from the shards on the Hub; with "
+                         "--dry-run it only reports). Order is fixed.")
     ap.add_argument("--probe-month", default="",
                     help="YYYY-MM: the month `--stage probe` measures")
     ap.add_argument("--start", default="",
@@ -1713,7 +1768,48 @@ def build_parser():
     ap.add_argument("--check-credentials-out", default="",
                     help="with --check-credentials: also write the report "
                          "JSON here")
+    ap.add_argument("--repair-year-ledger", default="",
+                    help="YEAR[,YEAR…] (tier G): rebuild each year's "
+                         "done.json, counts.json and <group>__shard_index.npy "
+                         "on the Hub from the shards actually present under "
+                         "partials/<family>/<store>/<year>/ "
+                         "(ml/family1/repair_ledger.py). Same as `--stage "
+                         "repair`, whose years are the window's calendar "
+                         "years. A consistent year is left alone")
+    ap.add_argument("--dry-run", action="store_true",
+                    help="with --stage repair: read and check every shard's "
+                         "index, print the ledger that would be written and "
+                         "save it as <work>/<store>/repair/<year>.plan.json; "
+                         "write nothing to the Hub (an anonymous read is "
+                         "enough for a public store)")
     return ap
+
+
+def stage_repair(a, cls):
+    """`--stage repair` / `--repair-year-ledger`: rebuild damaged years'
+    ledgers from the shards on the Hub. Reads no source, needs no source
+    credential; needs a Hugging Face token only to write."""
+    from family1 import repair_ledger as rl
+    ad = apply_distribution(cls(), a.distribution)
+    if not is_grid(ad):
+        sys.exit(f"--stage repair: {ad.store} is tier {getattr(ad, 'tier', 'P')}"
+                 f"; the repair rebuilds a tier-G year's shard index and "
+                 f"ledger from its shards")
+    if a.repair_year_ledger:
+        years = sorted({int(y) for y in parse_years(a.repair_year_ledger)})
+    else:
+        lo = f10b.parse_date(a.start) if a.start else \
+            dt.date(ad.first_year, 1, 1)
+        years = list(range(lo.year, f10b.parse_date(a.end).year + 1))
+    lay = layout_for(ad)
+    print(f"repair    {ad.store} — {'DRY RUN, ' if a.dry_run else ''}"
+          f"year(s) {', '.join(str(y) for y in years)} under "
+          f"{lay.repo_id}:{lay.hf_partials}/{ad.store}/")
+    out = [rl.repair_year(ad, lay, y, a.work, dry_run=a.dry_run)
+           for y in years]
+    print("repair    " + "; ".join(f"{r['year']}: {r['action']}"
+                                   for r in out))
+    return out
 
 
 def main(argv=None):
@@ -1730,6 +1826,11 @@ def main(argv=None):
         return 0
     if not a.work:
         a.work = default_work(cls)
+    if a.stage.strip() == "repair" or a.repair_year_ledger:
+        stage_repair(a, cls)
+        return 0
+    if a.dry_run:
+        sys.exit("--dry-run applies to --stage repair only")
     if a.stage.strip() == "probe":
         if not a.probe_month:
             sys.exit("--stage probe needs --probe-month YYYY-MM")

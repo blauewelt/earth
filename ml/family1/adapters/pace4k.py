@@ -597,10 +597,25 @@ class Pace4kAdapter(sh.GridAdapter):
         return self._listing[key]
 
     def years(self, ctx):
+        """The calendar years whose listings the window's FRAMES can need.
+
+        A tier-G "year" is the bins whose FIRST day falls in it, so the last
+        bin of a year runs up to four days into the next one: bin 3214 opens
+        2025-12-31 and holds 2026-01-01 .. 04. Listing only `ctx.years` made
+        the 2025 lane (#353) record those four days as `after_record` — the
+        record looked like it ended where the lane's window did. The
+        framework's `ctx.grid_frame_days` is the first and last day of every
+        frame this context owns; without it (an older caller) the years are
+        `ctx.years`, as before.
+        """
         ys = sorted(ctx.years)
         if not ys:
             return []
-        return list(range(max(min(ys), RECORD_START.year), max(ys) + 1))
+        last = max(ys)
+        span = getattr(ctx, "grid_frame_days", None)
+        if span:
+            last = max(last, span[1].year)
+        return list(range(max(min(ys), RECORD_START.year), last + 1))
 
     def record(self, ctx):
         """(first, last) day BOTH REQUIRED products publish in the window."""

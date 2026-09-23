@@ -275,14 +275,76 @@ With no declaration the assembler takes the lanes it finds and says so — a
 `::warning::` in the log and `"declared": false` in `store.json`. Never
 silently.
 
-### One rule a tier-G lane has to obey
+### The one rule for a straddling bin: it belongs to the lane of its FIRST day
 
-A five-day bin does not respect a month or a quarter boundary, so a named
-tier-G lane owns **the bins whose FIRST day falls in its window** — the same
-rule a year already follows (`bin_year` is the year of the bin's first day).
-Twelve monthly lanes therefore tile a year exactly once; a window that
-contains no bin start at all is refused rather than fetching nothing. Note
-the consequence: the bin that straddles New Year belongs to the PREVIOUS
-year, so a laned year covers slightly less than an unlaned `--start
-<year>-01-01` build, which reaches back into that bin and files it under the
-previous year.
+A five-day bin does not respect a month, a quarter or a year boundary. Every
+tier-G lane — **named or unnamed** — owns **exactly the bins whose FIRST day
+falls inside its window**, the rule a year already follows (`bin_year` is the
+year of the bin's first day), and owns them **whole**: all of the bin's
+frames are fetched, including the up to four days past the window's last
+day. So:
+
+- bin 3141 opens 2024-12-31 and holds 2024-12-31 .. 2025-01-04: it belongs
+  to the **2024** lane, which fetches all five days; a lane whose window
+  starts 2025-01-01 does not fetch it at all;
+- twelve monthly lanes, or four quarters, or one whole-year lane tile a year
+  exactly once, and a lane only ever writes parts, a shard index, a ledger
+  and a marker for years its window covers by bin opening date;
+- a window that contains no bin start is refused rather than fetching
+  nothing.
+
+How the framework does it: `main` → `apply_lane` sets
+`ctx.bins_by_first_day`; `prepare_grid_ctx` keeps only the owned bins and
+WIDENS the window in seconds (`ctx.t_hi`, `ctx.b_hi`) to the end of the last
+owned bin, and sets `ctx.grid_frame_days` = (first, last) day of every frame
+the context owns. **An adapter that lists its source by the window** — by
+`ctx.t_lo/t_hi` (`irtb`, `sst_acspo02`) or by the calendar years of
+`ctx.years` (`pace4k`) — **must list through `ctx.t_hi` /
+`ctx.grid_frame_days[1]`**, or it calls the last bin's tail `after_record`.
+A smoke, the probe and a test's own `Ctx` (no `apply_lane`) keep the bins
+their window touches, as before.
+
+Until 2026-09-22 the UNNAMED lane kept every bin its window touched, so a
+whole-year lane `--start 2025-01-01` reached back into bin 3141, filed it
+under 2024 and pushed a one-bin "2024" over the real one (pace4k 2024,
+lst05 2007, pheno500 2017 and 2019; `--stage repair` below).
+
+### A push never replaces a year's ledger with a shorter one
+
+`family10_parts_hub.push` / `push_many` compare the Hub's `done.json` for the
+same (year, lane) with what they are about to push. If the Hub's marker
+vouches for **any shard (`.zst`) this push does not carry**, the whole call
+is **refused before a byte is uploaded** (`ledger_would_shrink`), naming the
+shards. A push that covers at least the same shards (a re-fetch of the year)
+replaces the ledger as before. Tier-P parts are numbered, not named after
+what they cover, and are not compared.
+
+### `--stage repair`: rebuild a damaged year from its own shards
+
+`python3 ml/build_family1_stores.py --store <s> --stage repair --start
+<Y>-01-01 --end <Y>-12-31 [--dry-run]` (or `--repair-year-ledger Y[,Y…]`)
+runs `ml/family1/repair_ledger.py` on each year's UNNAMED lane: it lists
+`partials/<family>/<store>/<year>/`, checks every shard against its own
+`.idx.npy` (tiles contiguous in the writer's order, lengths summing to the
+shard's size on the Hub), decompresses every stored tile for the valid-pixel
+counts, and writes `<group>__shard_index.npy` and `counts.json` (restore-
+verified), then `done.json` last. Missing-frame reasons are kept from the
+current ledger for the shards it describes, recovered from the repository's
+history where that history's shard-index row matches the rebuild field for
+field, and recorded as `unrecorded_ledger_rebuilt` otherwise;
+`counts.json` carries `rebuilt_from_shards`. A year whose marker already
+lists exactly the shards present is left alone. `--dry-run` reads only the
+listing, the markers and the `.idx.npy` files, writes nothing, and saves the
+plan as `<work>/<store>/repair/<year>.plan.json`.
+
+### A box assembling from Hub parts is not a lane
+
+With `--parts-from-hub` the context is always the unnamed lane, whatever its
+window: it pulls every lane of every year its window covers (by bin opening
+date) and merges them. A year pushed as one unnamed lane — every tier-G year
+parked before 2026-09-20 ~19:30Z, e.g. all of `lst05` — is exactly that, so
+no legacy declaration is needed. (Before 2026-09-22 a box window that was not
+whole calendar years, `start=1999-01-01 end=2026-09-30`, named itself
+`d19990101-20260930` and refused every year for want of a marker of that
+name — lst05's #425.) The pull retries a transient Hub failure (a dropped
+connection, a TLS handshake timeout, a 5xx or 429) six times with backoff.

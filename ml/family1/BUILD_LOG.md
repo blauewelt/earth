@@ -1324,3 +1324,40 @@ assembly (≈ 18.5 GB store); the year waits for concurrent granule reads in
 for the Harmony Trajectory Subsetter — an Opus task, measured before the year
 is dispatched. Hosted runners on a public repository cost nothing, so the
 bound is wall time and bookkeeping, not money.
+
+### Two faults read off the Hub, fixed 2026-09-22 (not yet dispatched)
+
+**A year lane wrote its neighbour's year.** The unnamed (whole-year) lane
+kept every bin its window touched, so a lane `--start 2025-01-01` fetched bin
+3141 (2024-12-31 .. 2025-01-04), filed it under 2024, and — finishing after
+the 2024 lane — pushed a one-bin `2024/done.json` and shard index over the
+real one, orphaning the other shards. Same signature on lst05/2007 (from the
+2008–2011 lane) and pheno500/2017, /2019 (from the 2018 and 2020 lanes). The
+2024 lane's own window ended on 2024-12-31, so pace4k (which lists its record
+by calendar year) called 2025-01-01 .. 04 `after_record`. The rule now
+(ADAPTER_CONTRACT.md, "Lanes"): every lane, named or not, owns exactly the
+bins whose first day is in its window and owns them whole (`ctx.t_hi` widened
+to the last owned bin's end, `ctx.grid_frame_days` for adapters that list by
+year); a push that would replace a year's marker with one vouching for fewer
+shards is refused before any upload; `--stage repair` rebuilds a damaged
+year's ledger from the shards present. Dry runs against the Hub, anonymous:
+pace4k 2024 → 62 bins 3080..3141, 292 frames present, 18 missing
+(`before_record` 4, `absent_upstream` 14), 6,987 MB; 61 of the 62 rebuilt
+rows equal, field for field, the 2024 lane's own index as the repository's
+history holds it (revision 9776f637), and the 62nd (bin 3141) is the 2025
+lane's shard now in the folder. lst05 2007 → 73 bins 1827..1899, 365 frames,
+all 73 rows equal to the 2004–2007 lane's history. pheno500 2017 and 2019
+→ 315 bins, 315 frames each, every row equal to its own lane's history.
+Consistent (left alone): pace4k 2025 and 2026, every other lst05 year
+1999–2026, pheno500 2018. Still lost: pace4k 2025's bin 3214 holds
+2026-01-01 .. 04 as `after_record` (the 2025 lane's copy overwrote the 2026
+lane's); recovering those four days is a re-fetch of 2025.
+
+**A box assembly named itself a lane.** lst05 #425 (`start=1999-01-01
+end=2026-09-30 --parts-from-hub`) derived the lane `d19990101-20260930` from
+its window and refused every year for want of
+`parts/<year>/d19990101-20260930.done`, while all 28 years sat on disk as the
+unnamed lane the seven whole-year hosted lanes wrote. `--parts-from-hub` now
+never names a lane. The pull's download retries transient failures (#425 also
+met `_ssl.c:989: The handshake operation timed out` on
+`2021/terra__bin_2859.idx.npy`). Tests: `tests/test_family1_year_boundary.py`.

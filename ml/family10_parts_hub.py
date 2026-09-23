@@ -77,6 +77,12 @@ than reassembling it. A slatrack build under 10.2 would therefore have to
 re-run its fetch lanes; there is no reason to, and the registry's `inherits`
 block records which version each store came from.
 
+A PUSH NEVER SHORTENS A YEAR (2026-09-22). If the Hub's `done.json` for the
+same (year, lane) vouches for a shard this push does not carry, the push is
+refused before any upload (`ledger_would_shrink`) — pace4k's 2025 lane had
+replaced a 62-bin 2024 with a one-bin copy. `pull`'s download retries
+transient Hub failures (`transient_download_error`).
+
 `done.json` is the year's marker and it obeys §5.21: it is uploaded only after
 every part has been uploaded AND DOWNLOADED BACK with a matching sha256. A year
 whose `done.json` is absent is a year nobody may use — `pull` reports it
@@ -97,6 +103,7 @@ import json
 import os
 import shutil
 import sys
+import time
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
@@ -140,12 +147,62 @@ def _upload(api, repo, pairs, message):
     return hub_commit(api, repo, hub_add_ops(pairs), message)
 
 
+DOWNLOAD_ATTEMPTS = 6
+DOWNLOAD_BACKOFF_S = (5, 15, 45, 120, 300)
+
+
+def transient_download_error(e):
+    """A Hub read that may succeed on retry: a dropped connection, a
+    timeout, a TLS handshake that timed out, a 5xx or a 429 — never a 4xx
+    that names OUR request (a 401 or a 404 will not change by asking again).
+
+    `hf_hub_download` reports a HEAD that could not reach the Hub as
+    `LocalEntryNotFoundError` ("…we cannot find the requested files in the
+    local cache"), an OSError; that is a connection failure, not an answer.
+    """
+    try:
+        from huggingface_hub.utils import HfHubHTTPError
+    except Exception:                                   # pragma: no cover
+        HfHubHTTPError = ()
+    if HfHubHTTPError and isinstance(e, HfHubHTTPError):
+        code = getattr(getattr(e, "response", None), "status_code", None)
+        return code is None or code == 429 or code >= 500
+    name = type(e).__name__
+    mod = type(e).__module__ or ""
+    if mod.startswith(("httpx", "httpcore", "requests", "urllib3")):
+        return not name.endswith(("HTTPStatusError", "InvalidURL"))
+    return isinstance(e, (ConnectionError, TimeoutError, OSError))
+
+
 def _download(repo, path_in_repo, token, dest_dir):
-    """Stream one repo file into `dest_dir`; returns the local path."""
+    """Stream one repo file into `dest_dir`; returns the local path.
+
+    WITH A RETRY LADDER FOR TRANSIENT NETWORK FAILURES, the one
+    `build_family1_stores._download` got in 300905a. lst05's box assembly
+    (family1-build #425, 2026-09-21) was pulling thousands of parked parts
+    when one GET died on `_ssl.c:989: The handshake operation timed out`
+    (`2021/terra__bin_2859.idx.npy`); a pull is a loop of thousands of
+    requests, so one of them failing transiently is the expected case, and
+    it must cost a few seconds of backoff rather than the job. Six attempts,
+    ~8 minutes of backoff at most; a 4xx is raised at once.
+    """
     from huggingface_hub import hf_hub_download
     os.makedirs(dest_dir, exist_ok=True)
-    return hf_hub_download(repo, path_in_repo, repo_type="dataset",
-                           token=token, local_dir=dest_dir)
+    last = None
+    for i in range(DOWNLOAD_ATTEMPTS):
+        try:
+            return hf_hub_download(repo, path_in_repo, repo_type="dataset",
+                                   token=token, local_dir=dest_dir)
+        except Exception as e:                          # noqa: BLE001
+            if not transient_download_error(e) or i == DOWNLOAD_ATTEMPTS - 1:
+                raise
+            last = e
+            wait = DOWNLOAD_BACKOFF_S[min(i, len(DOWNLOAD_BACKOFF_S) - 1)]
+            print(f"::warning::{path_in_repo}: {type(e).__name__}: "
+                  f"{str(e)[:160]} — attempt {i + 1}/{DOWNLOAD_ATTEMPTS}, "
+                  f"retrying in {wait}s", flush=True)
+            time.sleep(wait)
+    raise last                                          # pragma: no cover
 
 
 # --------------------------------------------------------------- the paths --
@@ -206,6 +263,51 @@ def _entries(d, names):
 
 def _by_name(done):
     return {e["name"]: e["sha256"] for e in (done or {}).get("files", [])}
+
+
+# A SHARD is the one kind of part whose NAME says what it covers: the
+# (group, bin) of a tier-G year. `.idx.npy` travels with it; `shard_index.npy`
+# and `counts.json` are the year's ledger and are rewritten by every push.
+SHARD_SUFFIX = ".zst"
+
+
+def ledger_would_shrink(have, entries):
+    """The shards the Hub's `done.json` for this (year, lane) already
+    VOUCHES FOR and this push does not carry — [] when the push covers them.
+
+    WHY. `push`/`push_many` used to skip a year only when the Hub's marker
+    matched byte for byte and otherwise OVERWROTE the year's ledger, shard
+    index and marker. pace4k (2026-09-20): the 2025 lane's window reached
+    back into bin 3141 (2024-12-31 .. 2025-01-04), filed it under 2024, and
+    pushed a ONE-BIN "2024" after the 2024 lane had pushed 62 bins — so
+    `2024/done.json` and `pace4k__shard_index.npy` now describe one bin and
+    the other 61 shards sit in the folder indexed by nothing. lst05/2007 and
+    pheno500/2017 and /2019 carry the same signature. A push may REPLACE a
+    ledger with one that covers at least the same shards (a re-fetch of the
+    year); it may never replace it with one that covers fewer.
+    """
+    if not have:
+        return []
+    old = {e["name"] for e in have.get("files", [])
+           if str(e.get("name", "")).endswith(SHARD_SUFFIX)}
+    new = {e["name"] for e in entries if e["name"].endswith(SHARD_SUFFIX)}
+    return sorted(old - new)
+
+
+def shrink_refusal(what, have, lost, n_new):
+    return (f"push refuses {what}: the Hub's done.json for it (written "
+            f"{have.get('at')}, builder {str(have.get('builder_git_sha'))[:8]}"
+            f") vouches for {len(lost)} shard(s) this push does not carry "
+            f"({', '.join(lost[:4])}{' …' if len(lost) > 4 else ''}); this "
+            f"push has {n_new}. Pushing would REPLACE that year's ledger, "
+            f"shard index and marker with a shorter one and orphan those "
+            f"shards — the pace4k/2024 collision (a lane whose window reached "
+            f"into a bin that STARTS in the previous year). Nothing was "
+            f"uploaded. If this lane should not own that year at all, fix its "
+            f"window (a lane owns the bins whose first day falls inside it, "
+            f"ml/family1/ADAPTER_CONTRACT.md 'Lanes'); if the Hub's ledger is "
+            f"itself the damaged one, rebuild it from its shards with "
+            f"`build_family1_stores.py --stage repair`.")
 
 
 def hub_lanes(listing, store, year, partials=None):
@@ -284,7 +386,14 @@ def read_done(api, repo, tok, store, year, scratch, listing=None,
 
 
 def _looks_absent(exc):
-    """Is this exception the Hub saying 404, rather than saying no?"""
+    """Is this exception the Hub saying 404, rather than saying no?
+
+    `LocalEntryNotFoundError` subclasses `EntryNotFoundError`, and it is what
+    `hf_hub_download` raises when its HEAD could not REACH the Hub — a
+    connection failure, which must never read as "that year was never
+    pushed"."""
+    if type(exc).__name__ == "LocalEntryNotFoundError":
+        return False
     try:
         from huggingface_hub.utils import EntryNotFoundError
         if isinstance(exc, EntryNotFoundError):
@@ -361,6 +470,11 @@ def push(store, year, work, scratch=None, partials=None, hub=None,
         print(f"  {what}: already on the Hub with matching hashes "
               f"({len(entries)} file(s), {rows:,} row(s)) — nothing to do")
         return 0
+    lost = ledger_would_shrink(have, entries)
+    if lost:
+        sys.exit(shrink_refusal(what, have, lost,
+                                sum(1 for e in entries
+                                    if e["name"].endswith(SHARD_SUFFIX))))
 
     print(f"  {what}: uploading {len(entries)} file(s), "
           f"{total / 1e6:.1f} MB, {rows:,} row(s) -> {repo}:{prefix}/",
@@ -475,7 +589,7 @@ def push_many(store, years, work, scratch=None, partials=None, hub=None,
     api.create_repo(repo, repo_type="dataset", exist_ok=True,
                     private=bool(private))
     listing = _list_files(api, repo, hub_prefix(store, None, partials))
-    pending, skipped = [], []
+    pending, skipped, refused = [], [], []
     for year, d, names, entries in todo:
         have = read_done(api, repo, tok, store, year, scratch, listing,
                          partials=partials, lane=lane)
@@ -483,7 +597,18 @@ def push_many(store, years, work, scratch=None, partials=None, hub=None,
                                                    for e in entries}:
             skipped.append(year)
             continue
+        lost = ledger_would_shrink(have, entries)
+        if lost:
+            what = f"{store} {year}" + (f" lane {lane}" if lane else "")
+            refused.append(shrink_refusal(
+                what, have, lost,
+                sum(1 for e in entries if e["name"].endswith(SHARD_SUFFIX))))
+            continue
         pending.append((year, d, names, entries))
+    # BEFORE ANY BYTE: a refused year's shard files would otherwise be
+    # overwritten by this call's parts commit even though its marker is not.
+    if refused:
+        sys.exit("\n".join(refused))
     if skipped:
         print(f"  {store}: {len(skipped)} year(s) already on the Hub with "
               f"matching hashes — skipped")
