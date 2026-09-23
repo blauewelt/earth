@@ -1,0 +1,11 @@
+repair    pace4k — year(s) 2024 under chfrank/earth-tensors:partials/family1_gf/pace4k/
+  hub: chfrank/earth-tensors with the token from $HF_TOKEN
+  pace4k 2024: 62 shard(s) in the folder over 1 group(s); done.json lists 1 (rows 4, at 2026-09-20T19:15:48+00:00); 61 orphaned
+    25/62 shard(s) read
+    50/62 shard(s) read
+  pace4k 2024: history revision 9776f637f8 — 61 shard-index row(s) agree with the rebuild field for field; 17 missing-frame reason(s) recovered from it
+    pace4k: 62 bin(s) 3080..3141, 292 frame(s) present, 18 missing, 109551 tile(s), 6987.1 MB
+  pace4k 2024: the rebuilt ledger — 62 bin(s), 292 frame(s) present, missing by reason {'before_record': 4, 'absent_upstream': 14}; 1 row(s) of the current shard index agree with the rebuild
+pace4k__shard_index.npy:   0%|          | 0.00/27.3k [00:00<?, ?B/s]pace4k__shard_index.npy: 100%|██████████| 27.3k/27.3k [00:00<00:00, 150kB/s]
+  pace4k 2024: REPAIRED — done.json now lists 126 file(s), 292 frame(s), written last
+repair    2024: repaired
