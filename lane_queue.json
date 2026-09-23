@@ -1,32 +1,6 @@
 {
  "pending": [
   {
-   "store": "irtb",
-   "stage": "index,fetch",
-   "start": "2002-01-01",
-   "end": "2002-03-31",
-   "runner": "ubuntu-latest",
-   "extra_args": "--push-parts",
-   "adapter_env": "",
-   "retries": 1,
-   "seen_runs": [
-    35873213380
-   ]
-  },
-  {
-   "store": "irtb",
-   "stage": "index,fetch",
-   "start": "2002-10-01",
-   "end": "2002-12-31",
-   "runner": "ubuntu-latest",
-   "extra_args": "--push-parts",
-   "adapter_env": "",
-   "retries": 1,
-   "seen_runs": [
-    35873257315
-   ]
-  },
-  {
    "store": "sst_acspo02",
    "stage": "index,fetch",
    "start": "2012-07-01",
