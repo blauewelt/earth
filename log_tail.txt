@@ -1,0 +1,80 @@
+
+=== stage fetch (irtb) ===
+  [fetch irtb (tier G)] start (1 items)  0/1  0.0s
+  [fetch irtb (tier G)] irtb 2015 irtb bin 2429  13.9s
+  [fetch irtb (tier G)] irtb 2015 irtb bin 2430  48.1s
+  [fetch irtb (tier G)] irtb 2015 irtb bin 2430  59.9s
+  [fetch irtb (tier G)] irtb 2015 irtb bin 2431  93.9s
+  [fetch irtb (tier G)] irtb 2015 irtb bin 2432  127.8s
+  [fetch irtb (tier G)] irtb 2015 irtb bin 2432  139.6s
+  [fetch irtb (tier G)] irtb 2015 irtb bin 2433  173.9s
+  [fetch irtb (tier G)] irtb 2015 irtb bin 2433  210.9s
+  [fetch irtb (tier G)] irtb 2015 irtb bin 2434  222.5s
+  [fetch irtb (tier G)] irtb 2015 irtb bin 2435  256.6s
+  [fetch irtb (tier G)] irtb 2015 irtb bin 2435  268.0s
+  [fetch irtb (tier G)] irtb 2015 irtb bin 2436  302.0s
+  [fetch irtb (tier G)] irtb 2015 irtb bin 2437  336.1s
+  [fetch irtb (tier G)] irtb 2015 irtb bin 2437  348.1s
+  [fetch irtb (tier G)] irtb 2015 irtb bin 2438  382.1s
+  [fetch irtb (tier G)] irtb 2015 irtb bin 2438  416.2s
+  [fetch irtb (tier G)] irtb 2015 irtb bin 2439  428.1s
+  [fetch irtb (tier G)] irtb 2015 irtb bin 2440  463.2s
+  [fetch irtb (tier G)] irtb 2015 irtb bin 2440  474.9s
+  [fetch irtb (tier G)] irtb 2015 irtb bin 2441  508.8s
+  [fetch irtb (tier G)] irtb 2015 irtb bin 2442  542.4s
+  [fetch irtb (tier G)] irtb 2015 irtb bin 2442  554.3s
+  [fetch irtb (tier G)] irtb 2015 irtb bin 2443  587.8s
+  [fetch irtb (tier G)] irtb 2015 irtb bin 2443  621.4s
+  [fetch irtb (tier G)] irtb 2015 irtb bin 2444  632.8s
+  [fetch irtb (tier G)] irtb 2015 irtb bin 2445  666.3s
+  [fetch irtb (tier G)] irtb 2015 irtb bin 2445  677.7s
+  [fetch irtb (tier G)] irtb 2015 irtb bin 2446  711.3s
+  2015: irtb 18 bin(s) 720 frame(s) 4389.7 MB (742.8s)
+  hub: chfrank/earth-tensors with the token from $HF_TOKEN
+  irtb: uploading 38 file(s) of 1 year(s), 4392.9 MB -> chfrank/earth-tensors:partials/family1_gf/irtb/
+irtb__bin_2446.idx.npy:   0%|          | 0.00/175k [00:00<?, ?B/s]irtb__bin_2446.idx.npy: 100%|██████████| 175k/175k [00:00<00:00, 838kB/s]
+Upload 2 LFS files:   0%|          | 0/2 [00:00<?, ?it/s]
+irtb__shard_index.npy:   0%|          | 0.00/6.90k [00:00<?, ?B/s][A
+
+irtb__bin_2446.zst:   0%|          | 0.00/237M [00:00<?, ?B/s][A[Airtb__shard_index.npy: 100%|██████████| 6.90k/6.90k [00:00<00:00, 61.1kB/s]
+
+
+irtb__bin_2446.zst:   3%|▎         | 6.62M/237M [00:00<00:04, 54.7MB/s][A[A
+
+irtb__bin_2446.zst:   7%|▋         | 16.1M/237M [00:00<00:05, 39.5MB/s][A[AUpload 2 LFS files:  50%|█████     | 1/2 [00:00<00:00,  2.47it/s]
+
+irtb__bin_2446.zst:  12%|█▏        | 27.8M/237M [00:00<00:03, 61.3MB/s][A[A
+
+irtb__bin_2446.zst:  15%|█▍        | 35.4M/237M [00:00<00:04, 46.9MB/s][A[A
+
+irtb__bin_2446.zst:  17%|█▋        | 41.3M/237M [00:00<00:04, 46.6MB/s][A[A
+
+irtb__bin_2446.zst:  20%|██        | 48.1M/237M [00:01<00:05, 36.2MB/s][A[A
+
+irtb__bin_2446.zst:  27%|██▋       | 64.1M/237M [00:01<00:03, 49.2MB/s][A[A
+
+irtb__bin_2446.zst:  31%|███       | 72.3M/237M [00:01<00:03, 54.9MB/s][A[A
+
+irtb__bin_2446.zst:  34%|███▍      | 80.1M/237M [00:01<00:03, 45.2MB/s][A[A
+
+irtb__bin_2446.zst:  41%|████      | 96.1M/237M [00:02<00:02, 48.0MB/s][A[A
+
+irtb__bin_2446.zst:  47%|████▋     | 112M/237M [00:02<00:02, 55.2MB/s] [A[A
+
+irtb__bin_2446.zst:  54%|█████▍    | 128M/237M [00:02<00:01, 60.2MB/s][A[A
+
+irtb__bin_2446.zst:  61%|██████    | 144M/237M [00:02<00:01, 64.4MB/s][A[A
+
+irtb__bin_2446.zst:  68%|██████▊   | 160M/237M [00:02<00:01, 65.3MB/s][A[A
+
+irtb__bin_2446.zst:  74%|███████▍  | 176M/237M [00:03<00:00, 69.0MB/s][A[A
+
+irtb__bin_2446.zst:  81%|████████  | 192M/237M [00:03<00:00, 68.6MB/s][A[A
+
+irtb__bin_2446.zst:  88%|████████▊ | 208M/237M [00:03<00:00, 68.6MB/s][A[A
+
+irtb__bin_2446.zst:  95%|█████████▍| 224M/237M [00:03<00:00, 68.2MB/s][A[Airtb__bin_2446.zst: 100%|██████████| 237M/237M [00:04<00:00, 57.1MB/s]
+Upload 2 LFS files: 100%|██████████| 2/2 [00:04<00:00,  2.47s/it]Upload 2 LFS files: 100%|██████████| 2/2 [00:04<00:00,  2.16s/it]
+  irtb: 1 year(s) pushed and verified in 2 part commit(s), done.json written last (0 already present)
+  push-parts: 1 year(s) on the Hub under partials/family1_gf/irtb/<year>/q2/
+=== stage fetch done in 999.6s ===
