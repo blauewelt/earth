@@ -3,11 +3,16 @@
   {
    "store": "sst_acspo02",
    "stage": "index,fetch",
-   "start": "2017-07-01",
-   "end": "2017-12-31",
+   "start": "2017-01-01",
+   "end": "2017-06-30",
    "runner": "ubuntu-latest",
    "extra_args": "--push-parts",
-   "adapter_env": ""
+   "adapter_env": "",
+   "retries": 1,
+   "seen_runs": [
+    35913148391
+   ],
+   "not_before": "2026-09-23T20:19:15.282Z"
   },
   {
    "store": "irtb",
@@ -947,12 +952,12 @@
   {
    "store": "sst_acspo02",
    "stage": "index,fetch",
-   "start": "2017-01-01",
-   "end": "2017-06-30",
+   "start": "2017-07-01",
+   "end": "2017-12-31",
    "runner": "ubuntu-latest",
    "extra_args": "--push-parts",
    "adapter_env": "",
-   "at": "2026-09-23T20:01:12.083Z"
+   "at": "2026-09-23T20:04:18.831Z"
   }
  ],
  "done": [
