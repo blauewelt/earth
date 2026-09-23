@@ -30,6 +30,12 @@ What each group is FOR:
                   reports progress; assemble samples the decode
                   (GRID_ASSEMBLE_SAMPLE), publish samples less
                   (GRID_RESTORE_SAMPLE), check decodes every tile.
+  the walk        check_sharded's per-bin structure pass is array arithmetic
+                  that agrees with the old tile-by-tile walk (kept here as
+                  the reference) on real and corrupted indices, sentence for
+                  sentence; the sample is k distinct stored tiles, the same
+                  for the same seed, all of them when k exceeds the group;
+                  20 bins of 12,800 tiles pass the structure in < 2 s.
 """
 import argparse
 import functools
@@ -225,6 +231,273 @@ def test_check_sharded_refuses_damage(tmp_path):
     np.save(ip, np.load(ip).reshape(5, 12, 2))
     with pytest.raises(sh.ShardError, match="index"):
         sh.check_sharded(gd2)
+
+
+# ======================================================= the check's walk ===
+def old_bin_structure(idx, b):
+    """The tile-by-tile walk `check_sharded` did before 2026-09-23, kept
+    verbatim as the REFERENCE the vectorised `sh.bin_structure` must agree
+    with: same counts, same stored tiles in the same order, same refusal
+    with the same words."""
+    F, nty, ntx = idx.shape[:3]
+    present = mask = 0
+    pos = 0
+    stored = []
+    for f in range(F):
+        o = idx[f, :, :, 0]
+        n = idx[f, :, :, 1]
+        if (o == sh.FRAME_ABSENT).any():
+            if not ((o == sh.FRAME_ABSENT).all() and (n == 0).all()):
+                raise sh.ShardError(f"bin {b} frame {f}: partly absent")
+            continue
+        present += 1
+        mask |= 1 << f
+        for ty in range(nty):
+            for tx in range(ntx):
+                oo, nn = int(o[ty, tx]), int(n[ty, tx])
+                if oo != pos or nn < 0:
+                    raise sh.ShardError(f"bin {b} ({f},{ty},{tx}): offset "
+                                        f"{oo}, expected {pos}")
+                if nn:
+                    stored.append((f, ty, tx, oo, nn))
+                pos += nn
+    return present, mask, len(stored), pos, stored
+
+
+def both(idx, b):
+    """(result or refusal text) of the reference walk and of the new code."""
+    def run_(fn):
+        try:
+            return fn()
+        except sh.ShardError as e:
+            return f"ShardError: {e}"
+    old = run_(lambda: old_bin_structure(idx, b))
+    new = run_(lambda: sh.bin_structure(idx, b) + (sh.stored_tiles_of(idx),))
+    return old, new
+
+
+def mixed_group(root):
+    """A float16 group of four bins: full, one frame absent upstream, all
+    frames absent (a bin with no stored tile, between two that have some),
+    and one with empty tiles."""
+    rng = np.random.default_rng(11)
+    sp = spec()
+    fr = {2300: [field(rng, 40, 50, 2) for _ in range(5)],
+          2301: [field(rng, 40, 50, 2) for _ in range(5)],
+          2302: [None] * 5,
+          2303: [field(rng, 40, 50, 2) for _ in range(5)]}
+    fr[2301][3] = None
+    for a in fr[2303]:
+        a[:16, :16] = np.nan                    # tile (0, 0) never stored
+    return write_group(root, sp, fr)
+
+
+def test_the_structure_walk_agrees_with_the_tile_by_tile_reference(tmp_path):
+    """On every bin of a real group — and on 300 corrupted copies of its
+    indices (a shifted offset, a changed or negative length, a partly absent
+    frame) — the vectorised walk returns what the old walk returned, or
+    refuses with the identical sentence."""
+    gd, es = mixed_group(str(tmp_path))
+    rng = np.random.default_rng(12)
+    idxs = {e["bin"]: np.load(os.path.join(gd, e["index"])) for e in es}
+    for b, idx in idxs.items():
+        old, new = both(idx, b)
+        assert old == new, b
+    assert idxs[2302][..., 0].min() == -1 and both(idxs[2302], 2302)[1][:4] \
+        == (0, 0, 0, 0)
+    refused = 0
+    for trial in range(300):
+        b = [2300, 2301, 2303][trial % 3]
+        idx = idxs[b].copy()
+        f, ty, tx = (int(rng.integers(0, s)) for s in idx.shape[:3])
+        kind = trial % 5
+        if kind == 0:
+            idx[f, ty, tx, 0] += int(rng.integers(1, 50))
+        elif kind == 1:
+            idx[f, ty, tx, 0] -= int(rng.integers(1, 50))
+        elif kind == 2:
+            idx[f, ty, tx, 1] += int(rng.integers(1, 50))
+        elif kind == 3:
+            idx[f, ty, tx, 1] = -int(rng.integers(1, 50))
+        else:
+            idx[f, ty, tx] = (sh.FRAME_ABSENT, 0)
+        old, new = both(idx, b)
+        assert old == new, (trial, b, kind)
+        refused += isinstance(old, str)
+    assert refused > 200                       # the corruptions did bite
+    # the full check's summary is the reference walk's, summed
+    s = sh.check_sharded(gd)
+    ref = [old_bin_structure(idxs[e["bin"]], e["bin"]) for e in es]
+    assert s["bins"] == 4
+    assert s["frames_present"] == sum(r[0] for r in ref) == 5 + 4 + 0 + 5
+    assert s["frames_missing"] == 4 * 5 - s["frames_present"]
+    assert s["tiles_stored"] == s["tiles_checked"] == sum(r[2] for r in ref) \
+        == sum(e["tiles_stored"] for e in es) == 5 * 12 + 4 * 12 + 5 * 11
+    assert s["bytes"] == sum(r[3] for r in ref) == sum(e["nbytes"]
+                                                       for e in es)
+    assert "sampled" not in s
+
+
+def test_check_sharded_refuses_a_bad_offset_a_partly_absent_frame_and_a_short_shard(
+        tmp_path):
+    gd, es = mixed_group(str(tmp_path))
+    sh.check_sharded(gd)
+    ip = os.path.join(gd, sh.index_relpath(2303))
+    good = np.load(ip)
+    # (1) one offset moved: the first offending tile in write order is named
+    idx = good.copy()
+    o = int(idx[1, 1, 2, 0])
+    idx[1, 1, 2, 0] = o + 7
+    np.save(ip, idx)
+    with pytest.raises(sh.ShardError,
+                       match=rf"^bin 2303 \(1,1,2\): offset {o + 7}, "
+                             rf"expected {o}$"):
+        sh.check_sharded(gd, sample=3)
+    with pytest.raises(sh.ShardError, match="offset"):
+        sh.check_sharded(gd)
+    # (2) one entry of a present frame marked absent
+    idx = good.copy()
+    idx[2, 0, 1] = (sh.FRAME_ABSENT, 0)
+    np.save(ip, idx)
+    for sample in (None, 3):
+        with pytest.raises(sh.ShardError,
+                           match=r"^bin 2303 frame 2: partly absent$"):
+            sh.check_sharded(gd, sample=sample)
+    np.save(ip, good)
+    sh.check_sharded(gd)
+    # (3) the shard one byte short: the size refusal, before any index read
+    shard = os.path.join(gd, sh.shard_relpath(2300))
+    raw = open(shard, "rb").read()
+    open(shard, "wb").write(raw[:-1])
+    for sample in (None, 3):
+        with pytest.raises(sh.ShardError,
+                           match=rf"^bin 2300: shard is {len(raw) - 1} bytes, "
+                                 rf"the index row says {len(raw)}$"):
+            sh.check_sharded(gd, sample=sample)
+
+
+def all_stored(gd, es):
+    return sorted([e["bin"], f, ty, tx] for e in es for (f, ty, tx, _, _) in
+                  old_bin_structure(np.load(os.path.join(gd, e["index"])),
+                                    e["bin"])[4])
+
+
+def test_the_sample_is_k_distinct_stored_tiles_and_deterministic(tmp_path):
+    gd, es = mixed_group(str(tmp_path))
+    every = all_stored(gd, es)
+    full = sh.check_sharded(gd)
+    s = sh.check_sharded(gd, sample=3, seed=5)
+    assert s["tiles_checked"] == 3
+    assert len(s["sampled"]) == 3
+    assert all(len(p) == 4 and all(type(v) is int for v in p)
+               for p in s["sampled"])
+    assert len({tuple(p) for p in s["sampled"]}) == 3
+    assert all(p in every for p in s["sampled"])
+    assert s["sampled"] == sorted(s["sampled"])
+    for k in ("bins", "frames_present", "frames_missing", "tiles_stored",
+              "bytes", "tile_nbytes"):
+        assert s[k] == full[k], k
+    again = sh.check_sharded(gd, sample=3, seed=5)
+    assert again["sampled"] == s["sampled"]
+    # other seeds draw other tiles (40 draws of 3 from ~150 all equal: no)
+    others = {tuple(map(tuple, sh.check_sharded(gd, sample=3,
+                                                seed=q)["sampled"]))
+              for q in range(40)}
+    assert len(others) > 1
+    # a sample of 0 checks the structure and decodes nothing
+    z = sh.check_sharded(gd, sample=0)
+    assert z["tiles_checked"] == 0 and z["sampled"] == []
+
+
+def test_a_sample_larger_than_the_group_checks_every_stored_tile(tmp_path):
+    gd, es = mixed_group(str(tmp_path))
+    every = all_stored(gd, es)
+    s = sh.check_sharded(gd, sample=10 ** 6)
+    assert s["tiles_checked"] == s["tiles_stored"] == len(every)
+    assert s["sampled"] == every
+    # and a group with no stored tile at all has nothing to sample
+    gd0, _ = write_group(str(tmp_path / "empty"), spec(), {2400: [None] * 5})
+    s0 = sh.check_sharded(gd0, sample=3)
+    assert s0["tiles_stored"] == s0["tiles_checked"] == 0
+    assert "sampled" not in s0
+
+
+def synthetic_group(gd, nbins, H, W, F, tile, seed=0):
+    """A group whose indices and shard SIZES are real and whose shards hold
+    no tiles (sparse files of the right length) — enough for the structural
+    pass, which never reads a shard, and cheap at 10,000+ tiles a bin."""
+    ch = (("x", "u", -50.0, 50.0),)
+    sp = sh.make_spec("g", grid(H, W), ch, F, 432000 // F, "float16",
+                      tile=tile, level=3)
+    shape = (F, sp["n_tiles_y"], sp["n_tiles_x"])
+    rng = np.random.default_rng(seed)
+    es = []
+    for i in range(nbins):
+        b = 3000 + i
+        n = rng.integers(1, 40000, shape)
+        n[rng.random(shape) < 0.2] = 0
+        absent = i % 7 == 3
+        if absent:
+            n[1] = 0
+        idx = np.zeros(shape + (2,), sh.INDEX_DTYPE)
+        idx[..., 1] = n
+        idx[..., 0] = np.concatenate(([0], np.cumsum(n.ravel())[:-1])) \
+            .reshape(shape)
+        if absent:
+            idx[1, ..., 0] = sh.FRAME_ABSENT
+        for rel, write in ((sh.shard_relpath(b), None),
+                           (sh.index_relpath(b), idx)):
+            p = os.path.join(gd, rel)
+            os.makedirs(os.path.dirname(p), exist_ok=True)
+            if write is None:
+                with open(p, "wb") as fh:
+                    fh.truncate(int(n.sum()))
+            else:
+                np.save(p, write)
+        pres = [f for f in range(F) if not (absent and f == 1)]
+        es.append({"bin": b, "year": sh.bin_year(b),
+                   "frames_present": len(pres),
+                   "frames_missing": F - len(pres),
+                   "frame_mask": sum(1 << f for f in pres),
+                   "tiles_stored": int((n > 0).sum()), "nbytes": int(n.sum()),
+                   "valid_pixels": [0], "valid_fraction": [0.0],
+                   "shard": sh.shard_relpath(b),
+                   "index": sh.index_relpath(b)})
+    with open(os.path.join(gd, "tile_grid.json"), "w") as fh:
+        json.dump(sp, fh)
+    sh.save_shard_index(os.path.join(gd, "shard_index.npy"), es, 1)
+    return es
+
+
+def test_the_structural_pass_is_array_arithmetic_not_a_tile_loop(tmp_path):
+    """20 bins of F = 8 x 40 x 40 = 12,800 tiles each: the whole sampled
+    check with a sample of 0 (the structure, nothing decoded) in well under
+    2 s, where the tile-by-tile walk spends Python time on every tile. The
+    bound is loose; the measured times are printed."""
+    import time
+    gd = str(tmp_path / "big")
+    es = synthetic_group(gd, 20, 40, 40, 8, 1)
+    assert all(e["frames_present"] * 1600 >= 7 * 1600 for e in es)
+    assert np.load(os.path.join(gd, es[0]["index"])).shape == (8, 40, 40, 2)
+    t = time.perf_counter()
+    s = sh.check_sharded(gd, sample=0)
+    new_s = time.perf_counter() - t
+    assert s["tiles_stored"] == sum(e["tiles_stored"] for e in es)
+    assert s["frames_present"] == sum(e["frames_present"] for e in es)
+    idxs = [np.load(os.path.join(gd, e["index"])) for e in es]
+    t = time.perf_counter()
+    for e, idx in zip(es, idxs):
+        old_bin_structure(idx, e["bin"])
+    old_walk = time.perf_counter() - t
+    t = time.perf_counter()
+    for e, idx in zip(es, idxs):
+        sh.bin_structure(idx, e["bin"])
+    new_walk = time.perf_counter() - t
+    print(f"\n20 bins x 12,800 tiles: check_sharded(sample=0) {new_s:.3f} s "
+          f"({1000 * new_s / 20:.1f} ms/bin); the walk alone: tile-by-tile "
+          f"{1000 * old_walk / 20:.1f} ms/bin, vectorised "
+          f"{1000 * new_walk / 20:.2f} ms/bin")
+    assert new_s < 2.0
 
 
 # ================================================================ reader ===

@@ -616,6 +616,18 @@ def check_sharded(group_dir, sample=None, seed=0, bounds=True,
     index's structure. Raises ShardError; returns a summary.
     `progress(label, done, total)` is called every PROGRESS_EVERY_BINS bins
     and after the last one.
+
+    The structure of a bin is checked with array arithmetic
+    (`bin_structure`), not a Python loop over its tiles, and the sampled mode
+    keeps a COUNT of stored tiles per bin rather than a list of every stored
+    tile in the group: the sample is drawn as `min(sample, total)` distinct
+    positions in the group's stored tiles (`random.Random(seed).sample`),
+    each mapped to (bin, k-th stored tile of that bin in write order), and a
+    chosen bin's index is re-read once to find them. The draw is
+    deterministic in `seed`, but WHICH tiles a given seed picks is not the
+    same as before this change (2026-09-23) — the sample is a random check,
+    not a contract. `sampled` lists the picks as [bin, frame, ty, tx] in
+    (bin, write-order) order.
     """
     g = ShardedGroup(group_dir)
     sp = g.spec
@@ -632,7 +644,7 @@ def check_sharded(group_dir, sample=None, seed=0, bounds=True,
                          f"increasing")
     lo = np.array([c["min"] for c in sp["channels"]], np.float64)
     hi = np.array([c["max"] for c in sp["channels"]], np.float64)
-    stored_tiles = []
+    counts_per_bin = []           # sampled mode: stored tiles of each bin
     tot = {"bins": int(len(arr)), "frames_present": 0, "frames_missing": 0,
            "tiles_stored": 0, "tiles_checked": 0, "bytes": 0}
     label = f"check {os.path.basename(os.path.normpath(group_dir))}"
@@ -655,28 +667,7 @@ def check_sharded(group_dir, sample=None, seed=0, bounds=True,
         if os.path.getsize(ip) - idx.nbytes != sp["index_header_bytes"]:
             raise ShardError(f"bin {b}: index header length differs from "
                              f"tile_grid.json's")
-        present = mask = 0
-        pos = 0
-        n_stored = 0
-        for f in range(F):
-            o = idx[f, :, :, 0]
-            n = idx[f, :, :, 1]
-            if (o == FRAME_ABSENT).any():
-                if not ((o == FRAME_ABSENT).all() and (n == 0).all()):
-                    raise ShardError(f"bin {b} frame {f}: partly absent")
-                continue
-            present += 1
-            mask |= 1 << f
-            for ty in range(nty):
-                for tx in range(ntx):
-                    oo, nn = int(o[ty, tx]), int(n[ty, tx])
-                    if oo != pos or nn < 0:
-                        raise ShardError(f"bin {b} ({f},{ty},{tx}): offset "
-                                         f"{oo}, expected {pos}")
-                    if nn:
-                        stored_tiles.append((b, f, ty, tx, oo, nn))
-                        n_stored += 1
-                    pos += nn
+        present, mask, n_stored, pos = bin_structure(idx, b)
         if pos != size:
             raise ShardError(f"bin {b}: index lengths sum to {pos}, the "
                              f"shard is {size} bytes")
@@ -695,8 +686,7 @@ def check_sharded(group_dir, sample=None, seed=0, bounds=True,
             valid = np.zeros(C, np.int64)
             with open(sp_path, "rb") as fh:
                 blob = fh.read()
-            for (_b, f, ty, tx, oo, nn) in [t for t in stored_tiles
-                                            if t[0] == b]:
+            for f, ty, tx, oo, nn in stored_tiles_of(idx):
                 t = g.decode_tile(blob[oo:oo + nn])
                 valid += _check_tile(t, sp, ty, tx, lo, hi, bounds, b, f)
                 tot["tiles_checked"] += 1
@@ -704,22 +694,97 @@ def check_sharded(group_dir, sample=None, seed=0, bounds=True,
                 raise ShardError(f"bin {b}: {valid.tolist()} valid pixels "
                                  f"decoded, shard_index.npy says "
                                  f"{row['valid_pixels'].tolist()}")
-            stored_tiles = []
+            del blob
+        else:
+            counts_per_bin.append(n_stored)
         if progress is not None and (i_row % PROGRESS_EVERY_BINS == 0
                                      or i_row == len(arr)):
             progress(label, i_row, len(arr))
-    if sample is not None and stored_tiles:
+    total = sum(counts_per_bin)
+    if sample is not None and total:
         rng = random.Random(seed)
-        pick = rng.sample(stored_tiles, min(int(sample), len(stored_tiles)))
-        for (b, f, ty, tx, oo, nn) in pick:
-            with open(os.path.join(group_dir, shard_relpath(b)), "rb") as fh:
-                fh.seek(oo)
-                t = g.decode_tile(fh.read(nn))
-            _check_tile(t, sp, ty, tx, lo, hi, bounds, b, f)
-            tot["tiles_checked"] += 1
-        tot["sampled"] = [list(p[:4]) for p in pick]
+        draws = sorted(rng.sample(range(total), min(int(sample), total)))
+        ends = np.cumsum(counts_per_bin)
+        by_bin = {}
+        for i in draws:
+            i_bin = int(np.searchsorted(ends, i, side="right"))
+            k = i - (int(ends[i_bin - 1]) if i_bin else 0)
+            by_bin.setdefault(i_bin, []).append(k)
+        picks = []
+        for i_bin in sorted(by_bin):
+            row = arr[i_bin]
+            b = int(row["bin"])
+            idx = np.load(os.path.join(group_dir, row["index"]),
+                          allow_pickle=False)
+            tiles = stored_tiles_of(idx)
+            if len(tiles) != counts_per_bin[i_bin]:
+                raise ShardError(f"bin {b}: {len(tiles)} stored tiles in "
+                                 f"its index, {counts_per_bin[i_bin]} when "
+                                 f"the structure was checked — the index "
+                                 f"changed during the check")
+            with open(os.path.join(group_dir, row["shard"]), "rb") as fh:
+                for k in by_bin[i_bin]:
+                    f, ty, tx, oo, nn = tiles[k]
+                    fh.seek(oo)
+                    t = g.decode_tile(fh.read(nn))
+                    _check_tile(t, sp, ty, tx, lo, hi, bounds, b, f)
+                    tot["tiles_checked"] += 1
+                    picks.append([b, f, ty, tx])
+        tot["sampled"] = picks
     tot["tile_nbytes"] = T * T * C * dt_.itemsize
     return tot
+
+
+def bin_structure(idx, b):
+    """One bin's index against the write order -> (present, mask, n_stored,
+    nbytes).
+
+    `idx` is the bin's [F, nty, ntx, 2] (offset, length) index. The writer
+    lays tiles down frame by frame, row by row, column by column — C order
+    of [f, ty, tx] — so a present frame's offsets must equal the running sum
+    of the lengths before them, from where the previous present frame ended.
+    An absent frame is (-1, 0) in EVERY entry; anything else carrying a -1 is
+    "partly absent". Refusals name the first offending frame and, within it,
+    the first offending tile in write order — the same as a tile-by-tile walk
+    would. Vectorised per frame: F (<= 64) Python iterations, not F x nty x
+    ntx.
+    """
+    F = idx.shape[0]
+    ntx = idx.shape[2]
+    present = mask = n_stored = 0
+    pos = 0
+    for f in range(F):
+        o = idx[f, :, :, 0].ravel()
+        n = idx[f, :, :, 1].ravel()
+        if (o == FRAME_ABSENT).any():
+            if not ((o == FRAME_ABSENT).all() and (n == 0).all()):
+                raise ShardError(f"bin {b} frame {f}: partly absent")
+            continue
+        present += 1
+        mask |= 1 << f
+        expected = pos + np.concatenate(
+            (np.zeros(1, np.int64), np.cumsum(n[:-1], dtype=np.int64)))
+        bad = (o != expected) | (n < 0)
+        if bad.any():
+            k = int(np.argmax(bad))
+            ty, tx = divmod(k, ntx)
+            raise ShardError(f"bin {b} ({f},{ty},{tx}): offset "
+                             f"{int(o[k])}, expected {int(expected[k])}")
+        n_stored += int((n > 0).sum())
+        pos += int(n.sum())
+    return present, mask, n_stored, pos
+
+
+def stored_tiles_of(idx):
+    """[(f, ty, tx, offset, length)] of every stored tile (length > 0) in one
+    bin's index, in write order. An absent frame's entries are (-1, 0) and
+    never appear."""
+    fyx = np.argwhere(idx[..., 1] > 0)
+    if not len(fyx):
+        return []
+    on = idx[fyx[:, 0], fyx[:, 1], fyx[:, 2]]
+    return [(int(f), int(ty), int(tx), int(oo), int(nn))
+            for (f, ty, tx), (oo, nn) in zip(fyx.tolist(), on.tolist())]
 
 
 def _check_tile(t, sp, ty, tx, lo, hi, bounds, b, f):

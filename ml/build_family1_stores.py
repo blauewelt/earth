@@ -32,7 +32,9 @@ and family 10 does not:
     writes int64 `time_s`; `ml/family10_store.py` reads it.
   * platforms.json, when `adapter.platform_meta` — written beside the arrays
     and hashed into store.json like a column.
-  * FIVE STAGES, `index | fetch | assemble | publish | check` (or `all`),
+  * FIVE STAGES, `index | fetch | assemble | publish | check` (`all` runs the
+    first four for a tier-G store; its `check` decodes every tile and is
+    asked for by name),
     because family 1's big stores fetch on hosted lanes and assemble on a box:
       index     list the archive, read one record, write plan.json
       fetch     per-year column parts, each year marked only after its parts
@@ -1889,6 +1891,16 @@ def main(argv=None):
     stages = f10b.parse_stages(a.stage, STAGES)
     ad = apply_distribution(cls(), a.distribution)
     lay = layout_for(ad)
+    if a.stage.strip() == "all" and getattr(ad, "tier", "P") == "G":
+        # `all` on a tier-G store stops at publish. The check stage decodes
+        # EVERY stored tile in single-threaded Python — measured 2026-09-23
+        # on lst05 (#624, an NVMe box): ~7 s per bin, 1,940 bins, ~4 h for a
+        # 144 GB store whose publish had just verified every file by restore
+        # and 50 decoded tiles, on a box rented by the hour. The full decode
+        # is `--stage check`, asked for by name.
+        stages = [st for st in stages if st != "check"]
+        print("  stage all (tier G): index, fetch, assemble, publish — the "
+              "full-decode `check` stage runs only when named")
     if needs_source(a, stages):
         credentials_preflight(ad)
     ctx = f10b.Ctx(a, adapter=ad, layout=lay)
