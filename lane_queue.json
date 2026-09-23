@@ -156,29 +156,6 @@
    "not_before": "2026-09-23T22:59:46.282Z"
   },
   {
-   "store": "irtb",
-   "stage": "index,fetch",
-   "start": "2020-10-01",
-   "end": "2020-12-31",
-   "runner": "ubuntu-latest",
-   "extra_args": "--push-parts",
-   "adapter_env": "",
-   "retries": 1,
-   "seen_runs": [
-    35928260208
-   ],
-   "not_before": "2026-09-23T22:49:54.648Z"
-  },
-  {
-   "store": "sst_acspo02",
-   "stage": "index,fetch",
-   "start": "2019-07-01",
-   "end": "2019-12-31",
-   "runner": "ubuntu-latest",
-   "extra_args": "--push-parts",
-   "adapter_env": ""
-  },
-  {
    "store": "sst_acspo02",
    "stage": "index,fetch",
    "start": "2021-01-01",
@@ -291,16 +268,6 @@
   {
    "store": "sst_acspo02",
    "stage": "index,fetch",
-   "start": "2017-07-01",
-   "end": "2017-12-31",
-   "runner": "ubuntu-latest",
-   "extra_args": "--push-parts",
-   "adapter_env": "",
-   "at": "2026-09-23T20:04:18.831Z"
-  },
-  {
-   "store": "sst_acspo02",
-   "stage": "index,fetch",
    "start": "2017-01-01",
    "end": "2017-06-30",
    "runner": "ubuntu-latest",
@@ -341,16 +308,6 @@
    "extra_args": "--push-parts",
    "adapter_env": "",
    "at": "2026-09-23T22:44:53.047Z"
-  },
-  {
-   "store": "irtb",
-   "stage": "index,fetch",
-   "start": "2025-07-01",
-   "end": "2025-09-30",
-   "runner": "ubuntu-latest",
-   "extra_args": "--push-parts",
-   "adapter_env": "",
-   "at": "2026-09-23T22:44:56.528Z"
   },
   {
    "store": "irtb",
@@ -472,6 +429,30 @@
     35928254325
    ],
    "at": "2026-09-23T22:54:47.951Z"
+  },
+  {
+   "store": "irtb",
+   "stage": "index,fetch",
+   "start": "2020-10-01",
+   "end": "2020-12-31",
+   "runner": "ubuntu-latest",
+   "extra_args": "--push-parts",
+   "adapter_env": "",
+   "retries": 1,
+   "seen_runs": [
+    35928260208
+   ],
+   "at": "2026-09-23T22:57:54.208Z"
+  },
+  {
+   "store": "sst_acspo02",
+   "stage": "index,fetch",
+   "start": "2019-07-01",
+   "end": "2019-12-31",
+   "runner": "ubuntu-latest",
+   "extra_args": "--push-parts",
+   "adapter_env": "",
+   "at": "2026-09-23T22:57:57.763Z"
   }
  ],
  "done": [
@@ -2324,7 +2305,34 @@
    "at": "2026-09-23T22:48:13.015Z",
    "run_number": 681,
    "finished": "2026-09-23T22:54:22Z"
+  },
+  {
+   "store": "irtb",
+   "stage": "index,fetch",
+   "start": "2025-07-01",
+   "end": "2025-09-30",
+   "runner": "ubuntu-latest",
+   "extra_args": "--push-parts",
+   "adapter_env": "",
+   "at": "2026-09-23T22:44:56.528Z",
+   "run_number": 676,
+   "finished": "2026-09-23T22:57:41Z"
   }
  ],
- "failed": []
+ "failed": [
+  {
+   "store": "sst_acspo02",
+   "stage": "index,fetch",
+   "start": "2017-07-01",
+   "end": "2017-12-31",
+   "runner": "ubuntu-latest",
+   "extra_args": "--push-parts",
+   "adapter_env": "",
+   "at": "2026-09-23T20:04:18.831Z",
+   "run_number": 597,
+   "url": "https://github.com/blauewelt/earth/actions/runs/35913491519",
+   "reason": "failed after 173 min — read the log",
+   "finished": "2026-09-23T22:57:09Z"
+  }
+ ]
 }
