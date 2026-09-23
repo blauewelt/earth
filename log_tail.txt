@@ -1,0 +1,33 @@
+store     irtb — NCEP/CPC merged infrared brightness temperature (GPM_MERGIR v1), 4 km — cloud-top temperature; phase A is the tropics three-hourly
+family    family1_gf (1.gf) · public -> chfrank/earth-tensors:tensors/family1_gf/irtb
+axis      2023-04-01 .. 2023-06-30  bins 3013..3031 · time_s int32 (schema 2)
+lane      q2 — this fetch writes parts/<year>/q2/ and pushes only that folder
+channels  C=1: tb
+tier G    sharded, groups ['irtb'], F=40 x 10800 s, uint8, years (by bin start) 2023..2023
+work      /home/runner/work/earth/earth/ml/cache/family1_gf
+
+=== stage index (irtb) ===
+  [index irtb] start (1 items)  0/1  0.0s
+Traceback (most recent call last):
+  File "/home/runner/work/earth/earth/ml/build_family1_stores.py", line 1924, in <module>
+    sys.exit(main())
+             ^^^^^^
+  File "/home/runner/work/earth/earth/ml/build_family1_stores.py", line 1919, in main
+    f10b.run_stages(ctx, stages, stage_fn=stage_fns(ad), deps=DEPS)
+  File "/home/runner/work/earth/earth/ml/build_family10_stores.py", line 5665, in run_stages
+    stage_fn[s](ctx)
+  File "/home/runner/work/earth/earth/ml/build_family10_stores.py", line 4125, in stage_index
+    plan = ad.index(ctx)
+           ^^^^^^^^^^^^^
+  File "/home/runner/work/earth/earth/ml/family1/adapters/irtb.py", line 589, in index
+    hours = self.hours(ctx)
+            ^^^^^^^^^^^^^^^
+  File "/home/runner/work/earth/earth/ml/family1/adapters/irtb.py", line 539, in hours
+    out = cmr_hours(lo, hi, attempts=ctx.a.attempts,
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/work/earth/earth/ml/family1/adapters/irtb.py", line 149, in cmr_hours
+    raw, why = cm.get_bytes(f"{CMR}?{urllib.parse.urlencode(q)}",
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/work/earth/earth/ml/family1/adapters/_common.py", line 114, in get_bytes
+    raise IOError(f"{url}: {type(err).__name__}: {err}")
+OSError: https://cmr.earthdata.nasa.gov/search/granules.json?collection_concept_id=C1432254058-GES_DISC&page_size=2000&sort_key=start_date&temporal=2023-04-01T00%3A00%3A00Z%2C2023-07-04T23%3A59%3A59Z: TimeoutError: The read operation timed out
