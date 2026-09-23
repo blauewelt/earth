@@ -1,0 +1,59 @@
+repair    pheno500 — year(s) 2017, 2018, 2019 under chfrank/earth-tensors:partials/family1_tf/pheno500/
+  hub: chfrank/earth-tensors with the token from $HF_TOKEN
+  pheno500 2017: 315 shard(s) in the folder over 315 group(s); done.json lists 0 (rows 0, at 2026-09-20T19:16:31+00:00); 315 orphaned
+    25/315 shard(s) read
+    50/315 shard(s) read
+    75/315 shard(s) read
+    100/315 shard(s) read
+    125/315 shard(s) read
+    150/315 shard(s) read
+    175/315 shard(s) read
+    200/315 shard(s) read
+    225/315 shard(s) read
+    250/315 shard(s) read
+    275/315 shard(s) read
+    300/315 shard(s) read
+  pheno500 2017: history revision 9042561b80 — 315 shard-index row(s) agree with the rebuild field for field; 0 missing-frame reason(s) recovered from it
+    h00v08: 1 bin(s) 2593..2593, 1 frame(s) present, 0 missing, 0 tile(s), 0.0 MB
+    h00v09: 1 bin(s) 2593..2593, 1 frame(s) present, 0 missing, 2 tile(s), 0.0 MB
+    h00v10: 1 bin(s) 2593..2593, 1 frame(s) present, 0 missing, 12 tile(s), 0.0 MB
+    h01v08: 1 bin(s) 2593..2593, 1 frame(s) present, 0 missing, 0 tile(s), 0.0 MB
+    h01v09: 1 bin(s) 2593..2593, 1 frame(s) present, 0 missing, 0 tile(s), 0.0 MB
+    h01v10: 1 bin(s) 2593..2593, 1 frame(s) present, 0 missing, 15 tile(s), 0.2 MB
+    h01v11: 1 bin(s) 2593..2593, 1 frame(s) present, 0 missing, 5 tile(s), 0.0 MB
+    h02v06: 1 bin(s) 2593..2593, 1 frame(s) present, 0 missing, 0 tile(s), 0.0 MB
+    … and 307 more group(s)
+  pheno500 2017: the rebuilt ledger — 315 bin(s), 315 frame(s) present, missing by reason {}; 0 row(s) of the current shard index agree with the rebuild
+Upload 0 LFS files: 0it [00:00, ?it/s]Upload 0 LFS files: 0it [00:00, ?it/s]
+  pheno500 2017: REPAIRED — done.json now lists 946 file(s), 315 frame(s), written last
+  hub: chfrank/earth-tensors with the token from $HF_TOKEN
+  pheno500 2018: 315 shard(s) in the folder over 315 group(s); done.json lists 315 (rows 315, at 2026-09-20T19:16:31+00:00); 0 orphaned
+  pheno500 2018: CONSISTENT — done.json lists exactly the shards in the folder; nothing to repair
+  hub: chfrank/earth-tensors with the token from $HF_TOKEN
+  pheno500 2019: 315 shard(s) in the folder over 315 group(s); done.json lists 0 (rows 0, at 2026-09-20T19:11:20+00:00); 315 orphaned
+    25/315 shard(s) read
+    50/315 shard(s) read
+    75/315 shard(s) read
+    100/315 shard(s) read
+    125/315 shard(s) read
+    150/315 shard(s) read
+    175/315 shard(s) read
+    200/315 shard(s) read
+    225/315 shard(s) read
+    250/315 shard(s) read
+    275/315 shard(s) read
+    300/315 shard(s) read
+  pheno500 2019: history revision 9df8ba2ee8 — 315 shard-index row(s) agree with the rebuild field for field; 0 missing-frame reason(s) recovered from it
+    h00v08: 1 bin(s) 2739..2739, 1 frame(s) present, 0 missing, 0 tile(s), 0.0 MB
+    h00v09: 1 bin(s) 2739..2739, 1 frame(s) present, 0 missing, 2 tile(s), 0.0 MB
+    h00v10: 1 bin(s) 2739..2739, 1 frame(s) present, 0 missing, 12 tile(s), 0.0 MB
+    h01v08: 1 bin(s) 2739..2739, 1 frame(s) present, 0 missing, 0 tile(s), 0.0 MB
+    h01v09: 1 bin(s) 2739..2739, 1 frame(s) present, 0 missing, 0 tile(s), 0.0 MB
+    h01v10: 1 bin(s) 2739..2739, 1 frame(s) present, 0 missing, 15 tile(s), 0.1 MB
+    h01v11: 1 bin(s) 2739..2739, 1 frame(s) present, 0 missing, 6 tile(s), 0.0 MB
+    h02v06: 1 bin(s) 2739..2739, 1 frame(s) present, 0 missing, 0 tile(s), 0.0 MB
+    … and 307 more group(s)
+  pheno500 2019: the rebuilt ledger — 315 bin(s), 315 frame(s) present, missing by reason {}; 0 row(s) of the current shard index agree with the rebuild
+Upload 0 LFS files: 0it [00:00, ?it/s]Upload 0 LFS files: 0it [00:00, ?it/s]
+  pheno500 2019: REPAIRED — done.json now lists 946 file(s), 315 frame(s), written last
+repair    2017: repaired; 2018: none (consistent); 2019: repaired
