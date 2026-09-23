@@ -1,5 +1,20 @@
 {
- "pending": [],
+ "pending": [
+  {
+   "store": "sst_acspo02",
+   "stage": "index,fetch",
+   "start": "2024-07-01",
+   "end": "2024-12-31",
+   "runner": "ubuntu-latest",
+   "extra_args": "--push-parts",
+   "adapter_env": "",
+   "retries": 1,
+   "seen_runs": [
+    35933097497
+   ],
+   "not_before": "2026-09-23T23:44:56.546Z"
+  }
+ ],
  "dispatched": [
   {
    "store": "sst_acspo02",
@@ -100,16 +115,6 @@
    "extra_args": "--push-parts",
    "adapter_env": "",
    "at": "2026-09-23T23:17:21.200Z"
-  },
-  {
-   "store": "sst_acspo02",
-   "stage": "index,fetch",
-   "start": "2024-07-01",
-   "end": "2024-12-31",
-   "runner": "ubuntu-latest",
-   "extra_args": "--push-parts",
-   "adapter_env": "",
-   "at": "2026-09-23T23:20:27.452Z"
   },
   {
    "store": "irtb",
