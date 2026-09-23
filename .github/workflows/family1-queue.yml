@@ -1,0 +1,75 @@
+# E-082: the FAMILY 1 FETCH-LANE KEEPER -- keeps at most `max` hosted fetch
+# lanes of family1-build.yml (stage index,fetch, --push-parts) in flight, from
+# a queue of ~190 lanes that lives on the orphan branch `f1-queue` as
+# lane_queue.json (pending / dispatched / done / failed).
+#
+# WHY IT RUNS HERE. Until 2026-09-23 the queue was kept full by a loop in the
+# session sandbox, and a background loop there dies at the end of every turn:
+# the sixteen slots sat idle for most of each hour. A hosted job does not have
+# turns. One job loops for `hours`, and every TICK (180 s) it reads the queue,
+# lists family1-build runs, settles what finished, and dispatches from
+# `pending` until `max` fetch lanes are in flight. The whole logic is
+# scripts/family1_queue.mjs; its --selftest runs the transitions on fixtures,
+# and --once runs one tick by hand.
+#
+# WHAT A FINISHED LANE BECOMES. success -> done. A failure or cancel in under
+# 20 minutes is the fast, connection-level kind (the builder exits early when
+# its runner cannot reach Earthdata Login) -> back to the HEAD of pending,
+# retries+1, and after three of those -> failed. A failure after 20 minutes
+# is real -> failed, with the run number and "read the log". A dispatch that
+# never produced a run in 30 minutes was lost -> back to the head of pending.
+#
+# THE SELF-RE-DISPATCH IS THE RESUME MECHANISM. A hosted job is capped at six
+# hours, and the queue is days long. When the `hours` budget is spent and
+# anything is still pending or dispatched, the job dispatches THIS workflow
+# again (same max and hours) and exits; `concurrency: family1-queue` holds the
+# new run until this one has ended, so there is never more than one keeper.
+# When pending and dispatched are both empty it prints "queue drained" and
+# does NOT re-dispatch -- the chain ends by itself. `hours` is capped at 5.6
+# inside the script so the 350-minute timeout can never kill a keeper before
+# it hands over; a killed keeper would simply end the chain. To stop the chain
+# by hand, cancel the running keeper (and any queued one behind it).
+#
+# THE TOKEN. Only the job's own GITHUB_TOKEN: `actions: write` to dispatch
+# (GitHub's rule that GITHUB_TOKEN events trigger no workflows explicitly
+# excepts workflow_dispatch) and `contents: write` to rewrite lane_queue.json
+# on f1-queue through the contents API. No source credential, no HF token.
+#
+# workflow_dispatch ONLY, on ubuntu-latest ONLY (ml/CLAUDE.md 6). This job can
+# dispatch family1-build.yml, whose `runner` input can point at a rented box;
+# a pull_request / schedule / workflow_run trigger here would hand that to
+# anyone who opens a PR.
+name: Family 1 queue keeper (E-082 fetch lanes)
+run-name: family1-queue max=${{ inputs.max }}
+
+on:
+  workflow_dispatch:
+    inputs:
+      max:
+        description: "at most this many family1-build fetch lanes (index,fetch) in flight on hosted runners"
+        default: "16"
+      hours:
+        description: "loop budget in hours before this keeper re-dispatches itself (capped at 5.6: the job's timeout is 350 min)"
+        default: "5.5"
+
+permissions:
+  actions: write
+  contents: write
+
+concurrency:
+  group: family1-queue
+  cancel-in-progress: false
+
+jobs:
+  keep:
+    runs-on: ubuntu-latest
+    timeout-minutes: 350
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Keep the fetch-lane queue full
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          MAX: ${{ inputs.max }}
+          HOURS: ${{ inputs.hours }}
+        run: node scripts/family1_queue.mjs
