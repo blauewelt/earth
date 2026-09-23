@@ -18,15 +18,6 @@
   {
    "store": "sst_acspo02",
    "stage": "index,fetch",
-   "start": "2024-07-01",
-   "end": "2024-12-31",
-   "runner": "ubuntu-latest",
-   "extra_args": "--push-parts",
-   "adapter_env": ""
-  },
-  {
-   "store": "sst_acspo02",
-   "stage": "index,fetch",
    "start": "2025-01-01",
    "end": "2025-06-30",
    "runner": "ubuntu-latest",
@@ -119,20 +110,6 @@
     35929129330
    ],
    "at": "2026-09-23T23:01:04.258Z"
-  },
-  {
-   "store": "irtb",
-   "stage": "index,fetch",
-   "start": "2024-04-01",
-   "end": "2024-06-30",
-   "runner": "ubuntu-latest",
-   "extra_args": "--push-parts",
-   "adapter_env": "",
-   "retries": 1,
-   "seen_runs": [
-    35929457527
-   ],
-   "at": "2026-09-23T23:07:33.702Z"
   },
   {
    "store": "irtb",
@@ -245,6 +222,16 @@
    "extra_args": "--push-parts",
    "adapter_env": "",
    "at": "2026-09-23T23:17:21.200Z"
+  },
+  {
+   "store": "sst_acspo02",
+   "stage": "index,fetch",
+   "start": "2024-07-01",
+   "end": "2024-12-31",
+   "runner": "ubuntu-latest",
+   "extra_args": "--push-parts",
+   "adapter_env": "",
+   "at": "2026-09-23T23:20:27.452Z"
   }
  ],
  "done": [
@@ -2359,6 +2346,22 @@
    "at": "2026-09-23T23:07:37.618Z",
    "run_number": 701,
    "finished": "2026-09-23T23:14:46Z"
+  },
+  {
+   "store": "irtb",
+   "stage": "index,fetch",
+   "start": "2024-04-01",
+   "end": "2024-06-30",
+   "runner": "ubuntu-latest",
+   "extra_args": "--push-parts",
+   "adapter_env": "",
+   "retries": 1,
+   "seen_runs": [
+    35929457527
+   ],
+   "at": "2026-09-23T23:07:33.702Z",
+   "run_number": 700,
+   "finished": "2026-09-23T23:18:20Z"
   }
  ],
  "failed": [
