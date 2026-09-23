@@ -1,0 +1,80 @@
+
+
+sst_acspo02__bin_2372.zst:   6%|▋         | 16.1M/252M [00:00<00:03, 75.4MB/s][A[A[A
+
+sst_acspo02__bin_2373.zst:   7%|▋         | 16.1M/246M [00:00<00:03, 72.5MB/s][A[A
+
+sst_acspo02__bin_2373.zst:  13%|█▎        | 32.1M/246M [00:00<00:02, 76.1MB/s][A[A
+
+
+sst_acspo02__bin_2372.zst:  13%|█▎        | 32.1M/252M [00:00<00:02, 75.3MB/s][A[A[A
+
+
+sst_acspo02__bin_2372.zst:  19%|█▉        | 48.1M/252M [00:00<00:02, 74.6MB/s][A[A[A
+
+sst_acspo02__bin_2373.zst:  20%|█▉        | 48.1M/246M [00:00<00:02, 73.4MB/s][A[A
+
+
+sst_acspo02__bin_2372.zst:  25%|██▌       | 64.1M/252M [00:00<00:02, 75.0MB/s][A[A[A
+
+sst_acspo02__bin_2373.zst:  26%|██▌       | 64.1M/246M [00:00<00:02, 75.7MB/s][A[A
+
+sst_acspo02__bin_2373.zst:  33%|███▎      | 80.1M/246M [00:01<00:02, 77.5MB/s][A[A
+
+
+sst_acspo02__bin_2372.zst:  32%|███▏      | 80.1M/252M [00:01<00:02, 75.9MB/s][A[A[A
+
+
+sst_acspo02__bin_2372.zst:  38%|███▊      | 96.1M/252M [00:01<00:02, 76.4MB/s][A[A[A
+
+sst_acspo02__bin_2373.zst:  39%|███▉      | 96.1M/246M [00:01<00:02, 74.6MB/s][A[A
+
+
+sst_acspo02__bin_2372.zst:  44%|████▍     | 112M/252M [00:01<00:01, 76.2MB/s] [A[A[A
+
+sst_acspo02__bin_2373.zst:  46%|████▌     | 112M/246M [00:01<00:01, 75.7MB/s] [A[A
+
+sst_acspo02__bin_2373.zst:  52%|█████▏    | 128M/246M [00:01<00:01, 77.1MB/s][A[A
+
+
+sst_acspo02__bin_2372.zst:  51%|█████     | 128M/252M [00:01<00:01, 71.8MB/s][A[A[A
+
+sst_acspo02__bin_2373.zst:  59%|█████▊    | 144M/246M [00:01<00:01, 75.5MB/s][A[A
+
+
+sst_acspo02__bin_2372.zst:  57%|█████▋    | 144M/252M [00:01<00:01, 70.5MB/s][A[A[A
+
+sst_acspo02__bin_2373.zst:  65%|██████▌   | 160M/246M [00:02<00:01, 74.9MB/s][A[A
+
+
+sst_acspo02__bin_2372.zst:  63%|██████▎   | 160M/252M [00:02<00:01, 73.6MB/s][A[A[A
+
+sst_acspo02__bin_2373.zst:  72%|███████▏  | 176M/246M [00:02<00:00, 75.4MB/s][A[A
+
+
+sst_acspo02__bin_2372.zst:  70%|██████▉   | 176M/252M [00:02<00:00, 76.3MB/s][A[A[A
+
+sst_acspo02__bin_2373.zst:  78%|███████▊  | 192M/246M [00:02<00:00, 72.0MB/s][A[A
+
+
+sst_acspo02__bin_2372.zst:  76%|███████▌  | 192M/252M [00:02<00:00, 70.3MB/s][A[A[A
+
+sst_acspo02__bin_2373.zst:  85%|████████▍ | 208M/246M [00:02<00:00, 69.7MB/s][A[A
+
+
+sst_acspo02__bin_2372.zst:  82%|████████▏ | 208M/252M [00:02<00:00, 72.4MB/s][A[A[A
+
+sst_acspo02__bin_2373.zst:  91%|█████████ | 224M/246M [00:03<00:00, 67.2MB/s][A[A
+
+
+sst_acspo02__bin_2372.zst:  89%|████████▉ | 224M/252M [00:03<00:00, 64.4MB/s][A[A[A
+
+sst_acspo02__bin_2373.zst:  98%|█████████▊| 240M/246M [00:03<00:00, 68.7MB/s][A[A
+
+
+sst_acspo02__bin_2372.zst:  95%|█████████▌| 240M/252M [00:03<00:00, 66.0MB/s][A[A[Asst_acspo02__bin_2373.zst: 100%|██████████| 246M/246M [00:03<00:00, 71.6MB/s]
+sst_acspo02__bin_2372.zst: 100%|██████████| 252M/252M [00:03<00:00, 71.3MB/s]
+Upload 4 LFS files:  75%|███████▌  | 3/4 [00:03<00:01,  1.32s/it]Upload 4 LFS files: 100%|██████████| 4/4 [00:03<00:00,  1.09it/s]
+  sst_acspo02: 1 year(s) pushed and verified in 3 part commit(s), done.json written last (0 already present)
+  push-parts: 1 year(s) on the Hub under partials/family1_gf/sst_acspo02/<year>/d0101-0630/
+=== stage fetch done in 10166.0s ===
