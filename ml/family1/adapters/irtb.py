@@ -119,6 +119,13 @@ FIRST_YEAR = 1998
 KELVIN_OFFSET = 160.0               # the note's encoding: uint8 = K - 160
 U8_MAX = 254                        # 255 is `sharded.U8_MISSING`
 WORKERS = 4
+# The epoch as a DATETIME. `f10b.START` is a `date`, and `date + timedelta`
+# drops the seconds: the catalogue window's end came out as 00:00 of its last
+# day, so the last owned bin of every lane lost its last seven three-hourly
+# frames to `after_record` (bins 2428/2446/2465/2483 of the 2015 store, 28
+# frames the archive holds). swot has always used this form.
+EPOCH = dt.datetime(1982, 1, 1)
+assert EPOCH.date() == f10b.START, (EPOCH, f10b.START)
 
 WANT = {
     "tb": (("Tb", "tb", "IRbrightness_temperature"), True),
@@ -524,9 +531,9 @@ class IRTBAdapter(sh.GridAdapter):
                 sys.exit(f"REFUSING irtb: no merg_*.nc4 under {root} — the "
                          f"smoke's synthetic archive is missing")
         else:
-            lo = (f10b.START + dt.timedelta(
+            lo = (EPOCH + dt.timedelta(
                 seconds=int(ctx.t_lo))).strftime("%Y-%m-%dT%H:%M:%SZ")
-            hi = (f10b.START + dt.timedelta(
+            hi = (EPOCH + dt.timedelta(
                 seconds=int(ctx.t_hi))).strftime("%Y-%m-%dT%H:%M:%SZ")
             try:
                 out = cmr_hours(lo, hi, attempts=ctx.a.attempts,

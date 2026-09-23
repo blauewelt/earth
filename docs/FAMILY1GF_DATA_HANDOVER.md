@@ -1000,6 +1000,11 @@ For every not-built store the registry still carries the design row, the
 channels, the licence and the probe (or null), so a consumer can plan around
 it; none has a `store.json` on the Hub (all five answered 404 today).
 
+**To build these five stores yourself**, from the NASA and NOAA source
+archives, on your own infrastructure and with your own Earthdata account, and
+to certify your bytes against the programme's reference years, see
+[the family 1.gf build handover](https://blauewelt.github.io/earth/docs.html?f=docs/FAMILY1GF_BUILD_HANDOVER.md).
+
 ## 10 · Known limits and gotchas
 
 - **`qc` is four different things.** A class in `icoads`, a constant in `swh`,

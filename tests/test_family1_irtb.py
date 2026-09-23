@@ -166,6 +166,68 @@ def test_smoke_all_frames_and_the_probe(tmp_path):
     assert c["resolution"]["tb=Tb"] == 39
 
 
+def test_a_lane_asks_the_catalogue_through_its_last_owned_bin_s_end(
+        tmp_path, monkeypatch):
+    """A lane ending 2015-03-31 owns bin 2428 (2015-03-29 .. 2015-04-02, by
+    its first day — 77dff61), so the window is widened to that bin's last
+    second, and the CATALOGUE must be asked through 2015-04-02T23:59:59.
+
+    `f10b.START` is a `date`, and `date + timedelta(seconds=...)` drops the
+    time of day: the query used to end at 2015-04-02T00:00:00, the listing's
+    last hour was 00Z, and the bin's 03Z .. 21Z frames — seven of them, hours
+    the archive holds — were recorded `after_record` in every lane's last bin.
+    """
+    a = argparse.Namespace(
+        store="irtb", work=str(tmp_path / "w"), source_dir="",
+        start="2015-01-01", end="2015-03-31", stage="fetch", force=False,
+        attempts=1, qc_keep=2, check_chunk_rows=b10.CHECK_CHUNK_ROWS,
+        assemble="auto", parts_from_hub=False, push_parts=False, lanes="",
+        allow_missing_years=False, allow_unconfirmed_licence=False,
+        probe_month="", smoke=False)
+    ad = irtb.IRTBAdapter()
+    ctx = b10.Ctx(a, adapter=ad, layout=b1.layout_for(ad))
+    b1.apply_lane(ctx)
+    b1.prepare_grid_ctx(ctx)
+    last = max(ctx.grid_bins[2015])
+    assert last == 2428
+    assert sh.bin_start_date(last) == dt.date(2015, 3, 29)
+
+    # A catalogue that answers exactly the hours inside the window it is
+    # asked for, from a source that holds every hour well past the lane.
+    asked = []
+
+    def fake_cmr(lo, hi, attempts=4, count=None):
+        asked.append((lo, hi))
+        t0 = dt.datetime.strptime(lo, "%Y-%m-%dT%H:%M:%SZ")
+        t1 = dt.datetime.strptime(hi, "%Y-%m-%dT%H:%M:%SZ")
+        out, h = {}, t0.replace(minute=0, second=0)
+        while h <= min(t1, dt.datetime(2015, 4, 10, 23)):
+            if h >= t0:
+                out[h] = {"name": f"merg_{h:%Y%m%d%H}_4km-pixel.nc4",
+                          "url": f"https://x/{h:%Y%m%d%H}", "bytes": 1}
+            h += dt.timedelta(hours=1)
+        return out
+
+    monkeypatch.setattr(irtb, "cmr_hours", fake_cmr)
+    hours = ad.hours(ctx)
+    assert asked == [("2015-01-01T00:00:00Z", "2015-04-02T23:59:59Z")]
+    assert max(hours) == dt.datetime(2015, 4, 2, 23)
+
+    # Nothing inside the record is `after_record`: every frame of every owned
+    # bin either reaches the download (refused here, so it is noted absent
+    # and not yielded) or has another reason.
+    def no_download(_ctx, entry):
+        raise b10._NotFound(entry["url"])
+
+    monkeypatch.setattr(ad, "_get", no_download)
+    wanted = [("irtb", b, f) for b in ctx.grid_bins[2015]
+              for f in range(ad.frames_per_bin)]
+    why = [m.get("frame_missing")
+           for *_k, arr, m in ad.fetch_frames(ctx, wanted)]
+    assert "after_record" not in why
+    assert "before_record" not in why
+
+
 def test_the_scope_is_in_the_spec_and_in_the_notes(tmp_path):
     os.environ["IRTB_SMOKE_GRID"] = f"{irtb.SMOKE_W},{irtb.SMOKE_H}"
     try:

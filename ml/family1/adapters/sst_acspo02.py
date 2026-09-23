@@ -138,6 +138,13 @@ MIN_GRANULE_BYTES = 1_000_000
 # grades 0 and 1 are "no data" and "bad": not measurements.
 MIN_QUALITY = 2
 WORKERS = 3
+# The epoch as a DATETIME, as swot and irtb use it. `f10b.START` is a `date`,
+# and `date + timedelta` drops the seconds, so the catalogue window's end came
+# out as 00:00 of its last day. Harmless here — a granule is one DAY and CMR's
+# temporal match is inclusive, so the last day's granule still overlaps — but
+# it cost irtb the last seven three-hourly frames of every lane.
+EPOCH = dt.datetime(1982, 1, 1)
+assert EPOCH.date() == f10b.START, (EPOCH, f10b.START)
 
 WANT = {
     "sst": (("sea_surface_temperature",), True),
@@ -545,9 +552,9 @@ class SSTACSPO02Adapter(sh.GridAdapter):
                 sys.exit(f"REFUSING sst_acspo02: no L3S granule under {root} "
                          f"— the smoke's synthetic archive is missing")
         else:
-            lo = (f10b.START + dt.timedelta(
+            lo = (EPOCH + dt.timedelta(
                 seconds=int(ctx.t_lo))).strftime("%Y-%m-%dT%H:%M:%SZ")
-            hi = (f10b.START + dt.timedelta(
+            hi = (EPOCH + dt.timedelta(
                 seconds=int(ctx.t_hi))).strftime("%Y-%m-%dT%H:%M:%SZ")
             try:
                 out = cmr_days(self.cid, lo, hi, attempts=ctx.a.attempts,

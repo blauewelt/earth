@@ -230,7 +230,13 @@ jobs:
 
       - name: Install
         run: |
-          pip install --quiet numpy huggingface_hub zstandard netCDF4 requests rasterio pyhdf scipy pyarrow h5py
+          # A STORE'S ARRAYS MUST BE BYTE-IDENTICAL ACROSS MACHINES
+          # (ml/family1/ADAPTER_CONTRACT.md, "Reproducibility"). zstandard is
+          # PINNED: 0.23.0 bundles zstd 1.5.6, and 0.25.0 compresses ~10 % of
+          # level-15 tiles to different bytes (measured 2026-09-23 against the
+          # published oc4k shards). numpy's AVX-512 path is disabled in the
+          # build step's env for the same reason.
+          pip install --quiet numpy huggingface_hub "zstandard==0.23.0" netCDF4 requests rasterio pyhdf scipy pyarrow h5py
           python3 -c "import importlib.metadata as m, numpy, huggingface_hub, zstandard, netCDF4, requests, rasterio, scipy, pyhdf.SD, pyarrow, h5py; print('deps ok', rasterio.__version__, rasterio.__gdal_version__, 'pyhdf', m.version('pyhdf'), 'scipy', scipy.__version__, 'pyarrow', pyarrow.__version__, 'h5py', h5py.__version__)"
 
       - name: Earthdata Login check (hosted runner only)
@@ -372,6 +378,12 @@ jobs:
           # the Xet content-addressed uploader was not. Classic LFS is the
           # path family 10.1's 67 GB slatrack store went up by.
           HF_HUB_DISABLE_XET: "1"
+          # NUMPY ON THE AVX2 PATH, WHATEVER THE HOST'S CPU. numpy's AVX-512
+          # log10 differs from the AVX2 one by one float16 step in 950 of
+          # 18.9 M values (measured 2026-09-23), and pace4k stores a
+          # logarithm, so an AVX-512 box wrote different bytes from the same
+          # source. ml/family1/ADAPTER_CONTRACT.md, "Reproducibility".
+          NPY_DISABLE_CPU_FEATURES: "X86_V4 AVX512_ICL AVX512_SPR"
           STORE: ${{ github.event.inputs.store }}
           STAGE: ${{ github.event.inputs.stage || 'all' }}
           START: ${{ github.event.inputs.start }}

@@ -348,3 +348,23 @@ whole calendar years, `start=1999-01-01 end=2026-09-30`, named itself
 `d19990101-20260930` and refused every year for want of a marker of that
 name — lst05's #425.) The pull retries a transient Hub failure (a dropped
 connection, a TLS handshake timeout, a 5xx or 429) six times with backoff.
+
+## Reproducibility — a store's arrays are byte-identical across machines
+
+The same source and the same code must write the same bytes on any runner,
+hosted or rented: that is what lets a lane's shards be merged, a straddling
+bin be re-fetched, and a published store be checked against a rebuild. Two
+knobs have broken it, and `.github/workflows/family1-build.yml` pins both:
+
+- **`zstandard==0.23.0`** (bundles zstd 1.5.6), in the Install step. 0.25.0
+  compresses about 10 % of level-15 tiles to different bytes — measured
+  2026-09-23 against the published `oc4k` shards. The decoded values agree;
+  the shard bytes, their `.idx.npy` lengths and every sha do not.
+- **`NPY_DISABLE_CPU_FEATURES="X86_V4 AVX512_ICL AVX512_SPR"`**, in the
+  Build step's env, keeping numpy on its AVX2 path whatever the host CPU.
+  numpy's AVX-512 `log10` differs from the AVX2 one by one float16 step in
+  950 of 18.9 M values (measured 2026-09-23); `pace4k` stores a logarithm,
+  so an AVX-512 box wrote a different store from the same granules.
+
+An adapter that calls a transcendental function, or a new compression
+dependency, is in the same class: pin it in the workflow and record it here.
