@@ -206,7 +206,13 @@ jobs:
           # A published, verified store's work directory is re-derivable
           # from the Hub (its parts AND its store are there, byte-identical),
           # so it is the one thing on a box that is safe to delete -- and the
-          # two markers are the proof, not the run colour (ml/CLAUDE.md §0.2).
+          # marker is the proof, not the run colour (ml/CLAUDE.md §0.2).
+          # publish.done is written only after every file was downloaded back
+          # from the Hub and hashed against store.json (plus decoded tiles and
+          # HTTP range reads), so it alone proves the Hub copy. check.done is
+          # the on-demand full-decode `check` stage (2026-09-23: `stage=all`
+          # stops at publish for a tier-G store; the full decode is hours on a
+          # box rented by the hour) and is reported when present, not required.
           IFS=',' read -ra items <<< "${FREE_CACHE}"
           for it in "${items[@]}"; do
             it="${it// /}"
@@ -217,11 +223,11 @@ jobs:
             esac
             d="/opt/earth-cache/${it}"
             if [ ! -d "${d}" ]; then echo "free_cache: ${d} is not there -- nothing to free"; continue; fi
-            if [ ! -f "${d}/publish.done" ] || [ ! -f "${d}/check.done" ]; then
-              echo "::error::free_cache: ${d} has no publish.done + check.done -- not a verified, published store; refusing to delete it"
+            if [ ! -f "${d}/publish.done" ]; then
+              echo "::error::free_cache: ${d} has no publish.done -- not a published-and-restored store; refusing to delete it"
               exit 1
             fi
-            echo "free_cache: ${it} published $(cat "${d}/publish.done") checked $(cat "${d}/check.done")"
+            echo "free_cache: ${it} published $(cat "${d}/publish.done") checked $(cat "${d}/check.done" 2>/dev/null || echo '(check stage not run)')"
             du -sh "${d}" || true
             rm -rf "${d}"
             echo "freed ${d}"
