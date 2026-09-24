@@ -795,8 +795,11 @@ def fetch_grid_year(ctx, y):
 
 def stage_fetch_grid(ctx):
     ad = ctx.adapter
-    ad.fetch_preflight(ctx)
     if getattr(ctx.a, "parts_from_hub", False):
+        # the parts come from the Hub, so the source archive is not read
+        # and an adapter's credential preflight (Earthdata Login on a box
+        # that has none — irtb #724, 2026-09-24) must not fire: needs_source
+        # made the same call one level up
         import family10_parts_hub as ph
         ctx.prog.stage_start(f"pull {ad.store} parts", len(ctx.years))
         ph.pull(ad.store, ctx.years, ctx.work,
@@ -804,6 +807,7 @@ def stage_fetch_grid(ctx):
                                            False)),
                 **f10b.parts_hub_kwargs(ctx))
     else:
+        ad.fetch_preflight(ctx)
         ctx.prog.stage_start(f"fetch {ad.store} (tier G)", len(ctx.years))
         for y in ctx.years:
             if marked(ctx.root, ctx.part_key(y)) and not ctx.a.force:

@@ -888,6 +888,12 @@ class GEDIAdapter(f10b.SourceAdapter):
             # the smoke's synthetic archive: building THAT is how the code is
             # exercised and is not a build of the store
             return None
+        if getattr(ctx.a, "parts_from_hub", False):
+            # a box assembling parked lanes reads no source: no size gate to
+            # apply and no Earthdata credential to demand (swot's preflight
+            # says the same; irtb's whole-record assembly #724 died on this
+            # guard, 2026-09-24)
+            return None
         stage = getattr(ctx.a, "stage", "")
         if stage != "probe" and not self.allow_build:
             if ctx.d_lo.year != ctx.d_hi.year:
