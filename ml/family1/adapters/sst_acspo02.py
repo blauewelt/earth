@@ -194,6 +194,8 @@ def cmr_days(cid, t_lo, t_hi, attempts=4, count=None):
             raise FormatError(f"{title}: no protected https .nc link in "
                               f"its CMR entry")
         nb = int(float(g.get("granule_size") or 0) * 1e6)
+        if d in out and out[d]["name"] == title:
+            continue                    # the same granule listed twice
         if d in out:
             raise FormatError(
                 f"two granules for {d}: {out[d]['name']} and {title} — "

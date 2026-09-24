@@ -170,3 +170,22 @@ def test_every_adapter_refuses_a_cut_listing(monkeypatch):
         src = open(mod.__file__).read()
         assert "except (FormatError, cm.CMRTruncated) as e:" in src, mod
         assert "cm.get_bytes(f\"{CMR}" not in src, mod
+
+
+def test_sst_acspo02_keeps_one_of_an_identical_granule_listed_twice(monkeypatch):
+    """The whole-record assembly #735 (2026-09-24) refused on 2005-09-30
+    listed twice with the SAME name — the old pager's page seam. Two
+    identical rows are one granule; two DIFFERENT names for a day stay the
+    day/night-split refusal."""
+    from family1.adapters import sst_acspo02 as s
+    n = "20050930120000-STAR-L3S_GHRSST-SSTsubskin-LEO_Daily-ACSPO_V2.81-v02.0-fv01.0"
+    link = [{"href": "https://x/protected/" + n + ".nc"}]
+    rows = [{"title": n, "links": link, "granule_size": "400"},
+            {"title": n, "links": link, "granule_size": "400"}]
+    monkeypatch.setattr(s.cm, "cmr_entries", lambda *a, **k: rows)
+    got = s.cmr_days("C", "2005-09-30T00:00:00Z", "2005-09-30T23:59:59Z")
+    assert list(got) == [__import__("datetime").date(2005, 9, 30)]
+    other = n.replace("LEO_Daily", "LEO_PM_N")
+    rows.append({"title": other, "links": link, "granule_size": "400"})
+    with pytest.raises(s.FormatError, match="two granules"):
+        s.cmr_days("C", "2005-09-30T00:00:00Z", "2005-09-30T23:59:59Z")
