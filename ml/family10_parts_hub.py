@@ -247,6 +247,11 @@ def _download(repo, path_in_repo, token, dest_dir, just_uploaded=False):
                            private=_private_repo(repo))
             os.replace(tmp, dest)
             return dest
+        except StreamRefused:
+            # a definite answer (a plain 4xx, a Range ignored): `hub_stream`
+            # has already declined to retry it, and it is an IOError, so the
+            # ladder below would otherwise sit through six more of them
+            raise
         except Exception as e:                          # noqa: BLE001
             fresh_404 = just_uploaded and _is_404(e)
             if (not transient_download_error(e) and not fresh_404) \

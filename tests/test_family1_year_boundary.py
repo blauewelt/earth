@@ -411,6 +411,203 @@ def test_the_repair_refuses_a_shard_its_index_does_not_describe(
     assert hub.snapshot() == before
 
 
+# ================================== the ledger overwritten under its marker ==
+DONE_REV = "d0e5f00d" + "0" * 32
+
+
+class History:
+    """The repository's history, as far as the repair reads it: the commit
+    that last wrote each file of the year folder (`last_commits`) and a file
+    as it was at a revision (`download_at`). One revision is kept — the one
+    that wrote done.json — as a copy of the folder at that moment."""
+
+    def __init__(self, hub, root, year=2024):
+        self.hub, self.year = hub, year
+        self.rev = {DONE_REV: os.path.join(root, DONE_REV)}
+        import shutil
+        shutil.copytree(os.path.join(hub.root, PREFIX, str(year)),
+                        self.rev[DONE_REV])
+        self.asked = []
+
+    def last_commits(self, api, repo, prefix):
+        from types import SimpleNamespace as NS
+        d = os.path.join(self.hub.root, prefix)
+        out = {n: NS(oid="f" * 40, date=dt.datetime(2026, 9, 20, 19, 2))
+               for n in os.listdir(d)}
+        out["done.json"] = NS(oid=DONE_REV,
+                              date=dt.datetime(2026, 9, 20, 18, 59))
+        return out
+
+    def download_at(self, repo, tok, prefix, name, oid, dest):
+        import shutil
+        self.asked.append((name, oid))
+        src = os.path.join(self.rev[oid], name)
+        if not os.path.exists(src):
+            raise FileNotFoundError(f"{prefix}/{name}@{oid}")
+        shutil.rmtree(dest, ignore_errors=True)
+        os.makedirs(dest)
+        return shutil.copy(src, dest)
+
+
+def overwrite_ledger(tmp, hub, monkeypatch, lfs=False):
+    """THE pheno500 2016 SHAPE: an intact year, then a neighbour's one-bin
+    view of its ledger files pushed over them with done.json left as it was.
+    `lfs=False` lists the ledger files without a digest, as the Hub lists a
+    file that is not in LFS, so the repair has to download and hash them."""
+    a = lane(tmp, "l2024", Y24)
+    hist = History(hub, os.path.join(tmp, "history"))
+    monkeypatch.setattr(rl, "last_commits", hist.last_commits)
+    monkeypatch.setattr(rl, "download_at", hist.download_at)
+    year = os.path.join(hub.root, PREFIX, "2024")
+    si = sh.load_shard_index(os.path.join(year, "a__shard_index.npy"))
+    np.save(os.path.join(year, "a__shard_index.npy"),
+            si[si["bin"] == STRADDLE], allow_pickle=False)
+    led = json.load(open(os.path.join(year, "counts.json")))
+    led["rows"] = 1
+    json.dump(led, open(os.path.join(year, "counts.json"), "w"))
+    if not lfs:
+        tree = hub.tree
+
+        def no_lfs(api, repo, prefix):
+            files, dirs = tree(api, repo, prefix)
+            return {n: {**v, "sha256": v["sha256"] if n.endswith(".zst")
+                        else None} for n, v in files.items()}, dirs
+        monkeypatch.setattr(rl, "hub_tree", no_lfs)
+    return a, hist
+
+
+def test_a_ledger_overwritten_under_an_intact_marker_is_not_consistent(
+        tmp_path, hub, monkeypatch):
+    tmp = str(tmp_path)
+    overwrite_ledger(tmp, hub, monkeypatch)
+    ad = EdgeGrid()
+    before = hub.snapshot()
+    rep = rl.repair_year(ad, b1.layout_for(ad), 2024, os.path.join(tmp, "r"),
+                         dry_run=True, hub=hub.hub)
+    assert hub.snapshot() == before
+    # the shard list alone says consistent — which is what the repair said
+    assert rep["orphaned_shards"] == 0 and rep["listed_but_absent"] == []
+    assert rep["stale_ledger_files"] == ["a__shard_index.npy", "counts.json"]
+    assert rep["action"] == "dry run (restore from history)"
+    plan = json.load(open(rep["plan"]))
+    assert plan["restore_from_history"] == {
+        "revision": DONE_REV, "files": ["a__shard_index.npy", "counts.json"]}
+    assert plan["report"]["stale_ledger_files"] == rep["stale_ledger_files"]
+
+
+def test_the_restore_puts_back_exactly_the_ledger_done_json_describes(
+        tmp_path, hub, monkeypatch):
+    tmp = str(tmp_path)
+    overwrite_ledger(tmp, hub, monkeypatch, lfs=True)
+    ups = []
+    real = ph._upload
+    monkeypatch.setattr(ph, "_upload", lambda api, repo, pairs, msg: (
+        ups.append(([r for r, _ in pairs], msg)), real(api, repo, pairs,
+                                                       msg))[1])
+    done_p = os.path.join(hub.root, PREFIX, "2024", "done.json")
+    done_bytes = open(done_p, "rb").read()
+    ad = EdgeGrid()
+    lay = b1.layout_for(ad)
+    work = os.path.join(tmp, "r")
+    rep = rl.repair_year(ad, lay, 2024, work, dry_run=False, hub=hub.hub)
+    assert rep["action"] == "restored from history"
+    assert rep["restored"] == {"revision": DONE_REV, "files": 2}
+    assert len(ups) == 1
+    assert sorted(ups[0][0]) == [f"{PREFIX}/2024/a__shard_index.npy",
+                                 f"{PREFIX}/2024/counts.json"]
+    assert "restored from history d0e5f00d00" in ups[0][1]
+    assert open(done_p, "rb").read() == done_bytes
+    for e in hub.done(2024)["files"]:
+        p = os.path.join(hub.root, PREFIX, "2024", e["name"])
+        assert b10.sha256(p) == e["sha256"] and os.path.getsize(p) == \
+            e["bytes"]
+    # consistent now, by the shard list AND the ledger hashes
+    again = rl.repair_year(ad, lay, 2024, work, dry_run=True, hub=hub.hub)
+    assert again["action"] == "none (consistent)"
+    assert again["stale_ledger_files"] == []
+
+
+def test_the_restore_refuses_a_history_that_does_not_match_done_json(
+        tmp_path, hub, monkeypatch):
+    tmp = str(tmp_path)
+    _, hist = overwrite_ledger(tmp, hub, monkeypatch)
+    with open(os.path.join(hist.rev[DONE_REV], "counts.json"), "a") as fh:
+        fh.write(" ")
+    ups = []
+    monkeypatch.setattr(ph, "_upload", lambda *a: ups.append(a))
+    before = hub.snapshot()
+    ad = EdgeGrid()
+    for dry in (True, False):
+        with pytest.raises(rl.RepairError,
+                           match="(?s)history does not hold.*counts.json"
+                                 ".*--force"):
+            rl.repair_year(ad, b1.layout_for(ad), 2024,
+                           os.path.join(tmp, "r"), dry_run=dry, hub=hub.hub)
+    assert ups == [] and hub.snapshot() == before
+    # and a history with no record of done.json's commit refuses too
+    monkeypatch.setattr(rl, "last_commits", lambda *a: {})
+    with pytest.raises(rl.RepairError, match="which commit wrote done.json"):
+        rl.repair_year(ad, b1.layout_for(ad), 2024, os.path.join(tmp, "r"),
+                       dry_run=False, hub=hub.hub)
+    assert ups == [] and hub.snapshot() == before
+
+
+def test_force_still_rebuilds_an_overwritten_ledger_from_the_shards(
+        tmp_path, hub, monkeypatch):
+    tmp = str(tmp_path)
+    a, hist = overwrite_ledger(tmp, hub, monkeypatch)
+    monkeypatch.setattr(rl, "history_ledger", lambda *x: pytest.fail(
+        "no orphans: the rebuild has no history to read"))
+    ad = EdgeGrid()
+    rep = rl.repair_year(ad, b1.layout_for(ad), 2024, os.path.join(tmp, "r"),
+                         dry_run=False, hub=hub.hub, force=True)
+    assert rep["action"] == "repaired"
+    assert rep["stale_ledger_files"] == ["a__shard_index.npy", "counts.json"]
+    assert hist.asked == []
+    orig = {int(r["bin"]): r for r in sh.load_shard_index(
+        os.path.join(a.year_dir(2024), "a__shard_index.npy"))}
+    got = {int(r["bin"]): r for r in sh.load_shard_index(
+        os.path.join(hub.root, PREFIX, "2024", "a__shard_index.npy"))}
+    assert sorted(got) == sorted(orig)
+    for x, r in got.items():
+        for k in r.dtype.names:
+            assert np.array_equal(r[k], orig[x][k]), (x, k)
+    done = hub.done(2024)
+    assert "rebuilt_from_shards" in done
+    for e in done["files"]:
+        p = os.path.join(hub.root, PREFIX, "2024", e["name"])
+        assert b10.sha256(p) == e["sha256"]
+
+
+def test_history_ledger_reads_the_orphans_newest_commit(tmp_path, monkeypatch):
+    """`history_ledger` through the two history seams it now shares with the
+    restore: the newest commit among the named files, and the ledger at it."""
+    from types import SimpleNamespace as NS
+    rev = tmp_path / "rev1"
+    rev.mkdir()
+    sh.save_shard_index(str(rev / "a__shard_index.npy"), [
+        {"bin": 3136, "year": 2024, "frames_present": 5, "frames_missing": 0,
+         "frame_mask": 31, "tiles_stored": 4, "nbytes": 10,
+         "valid_pixels": [7], "valid_fraction": [0.5],
+         "shard": sh.shard_relpath(3136), "index": sh.index_relpath(3136)}], 1)
+    json.dump({"groups": {"a": {}}}, open(rev / "counts.json", "w"))
+    monkeypatch.setattr(rl, "last_commits", lambda api, repo, prefix: {
+        "a__bin_3136.zst": NS(oid="rev1", date=2),
+        "a__bin_3131.zst": NS(oid="rev0", date=1),
+        "done.json": NS(oid="rev9", date=9)})
+    seen = []
+
+    def at(repo, tok, prefix, name, oid, dest):
+        seen.append(oid)
+        return str(tmp_path / oid / name)
+    monkeypatch.setattr(rl, "download_at", at)
+    got = rl.history_ledger(None, "r", None, "p",
+                            ["a__bin_3136.zst", "a__bin_3131.zst"],
+                            str(tmp_path / "s"))
+    assert got[0] == "rev1" and set(seen) == {"rev1"}
+    assert int(got[2]["a"][3136]["frames_present"]) == 5
+
+
 def test_the_repair_stage_runs_from_the_command_line(tmp_path, monkeypatch):
     seen = []
     monkeypatch.setattr(rl, "repair_year",
@@ -463,42 +660,64 @@ def test_a_fetch_lane_with_the_same_window_is_still_a_named_lane(tmp_path):
 
 
 # ============================================================== the pull ===
-def test_the_pull_retries_a_handshake_timeout(tmp_path, monkeypatch):
-    import huggingface_hub
-    from huggingface_hub.utils import HfHubHTTPError
+def test_the_pull_retries_a_dropped_connection_and_a_503(tmp_path,
+                                                         monkeypatch):
+    """lst05's box assembly (family1-build #425, 2026-09-21) lost a pull of
+    thousands of parked parts to one `_ssl.c:989: The handshake operation
+    timed out`. The pull's `_download` streams through `ph.hub_stream`
+    since 2026-09-24: a dropped connection and a 5xx are retried, a plain
+    404 is refused at once, and a HEAD that could not reach the Hub is
+    still not "the year is absent"."""
+    import sys as _sys
+    import types
     from huggingface_hub.errors import LocalEntryNotFoundError
 
     class Resp:
-        def __init__(self, code):
-            self.status_code = code
-            self.headers = {}
-            self.request = None
+        def __init__(self, code, body=b""):
+            self.status_code, self._body, self.headers = code, body, {
+                "Content-Length": str(len(body))}
+
+        def iter_content(self, chunk_size):
+            yield self._body
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+    class RequestException(Exception):
+        pass
+
+    class ConnectionError_(RequestException):
+        pass
 
     calls, scripted = [], []
+    fake = types.ModuleType("requests")
+    fake.RequestException = RequestException
+    fake.ConnectionError = ConnectionError_
 
-    def fake(repo, rel, **kw):
-        calls.append(rel)
+    def get(url, headers=None, stream=True, timeout=None,
+            allow_redirects=True):
+        calls.append(url.rsplit("/resolve/main/", 1)[1])
         nxt = scripted[len(calls) - 1]
         if isinstance(nxt, Exception):
             raise nxt
-        return str(tmp_path / "file")
-
-    monkeypatch.setattr(huggingface_hub, "hf_hub_download", fake)
-    monkeypatch.setattr(ph, "DOWNLOAD_BACKOFF_S", (0, 0, 0, 0, 0))
-    scripted[:] = [
-        ssl.SSLError("_ssl.c:989: The handshake operation timed out"),
-        LocalEntryNotFoundError("An error happened while trying to locate "
-                                "the file on the Hub"),
-        HfHubHTTPError("503", response=Resp(503)),
-        "ok"]
+        return nxt
+    fake.get = get
+    monkeypatch.setitem(_sys.modules, "requests", fake)
+    monkeypatch.setattr(ph.time, "sleep", lambda s: None)
+    monkeypatch.setattr(ph, "_PACE_NEXT", [0.0])
+    scripted[:] = [ConnectionError_("handshake operation timed out"),
+                   Resp(503), Resp(200, b"bytes")]
     rel = "partials/family1_tf/lst05/2021/terra__bin_2859.idx.npy"
-    assert ph._download("r", rel, None, str(tmp_path)) == \
-        str(tmp_path / "file")
-    assert calls == [rel] * 4
+    got = ph._download("r", rel, None, str(tmp_path))
+    assert got == str(tmp_path / "terra__bin_2859.idx.npy")
+    assert open(got, "rb").read() == b"bytes" and calls == [rel] * 3
     # a 404 is our own request: no retry
     calls.clear()
-    scripted[:] = [HfHubHTTPError("404", response=Resp(404))]
-    with pytest.raises(HfHubHTTPError):
+    scripted[:] = [Resp(404)]
+    with pytest.raises(IOError, match="HTTP 404"):
         ph._download("r", "y", None, str(tmp_path))
     assert calls == ["y"]
     # and a HEAD that could not reach the Hub is not "the year is absent"

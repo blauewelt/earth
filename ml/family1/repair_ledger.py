@@ -54,10 +54,29 @@ anonymous read is enough for a public store.
   python3 ml/build_family1_stores.py --store pace4k --stage repair \\
       --start 2024-01-01 --end 2024-12-31 --dry-run
 
+THE SECOND DAMAGE CLASS: A LEDGER OVERWRITTEN UNDER AN INTACT MARKER
+(measured 2026-09-24, pheno500 2016). The year's done.json lists every shard
+in the folder with the right hashes, and the shards are fine — but a
+neighbouring lane (window 2016-2017) pushed its own one-bin view of 2016's
+ledger files three minutes after done.json was written, without rewriting
+done.json. All 315 shard indices and counts.json on the Hub now differ from
+the sha256 done.json gives them, so a pull refuses ("PULL MISMATCH …") while
+the folder's shard list looks consistent. The repair measures every ledger
+file done.json lists against the Hub (the listing's LFS digest, or the small
+file downloaded and hashed) and, when only those differ, repairs EXACTLY:
+it fetches each one as it was at the commit that wrote done.json
+(`last_commits`, `download_at`), refuses unless every one matches done.json's
+sha256 and size, uploads them, downloads them back and hashes them. done.json
+is left as it is — once the files are back its hashes are true again. If
+history does not hold that ledger, nothing is uploaded and `--force` rebuilds
+it from the shards instead; with orphans, absent shards or unindexed groups
+beside it, the rebuild above runs and rewrites the ledger files anyway.
+
 Only the UNNAMED lane (the year folder's own top-level files) is repaired;
 every damaged year is one. A year whose marker already lists exactly the
-shards present is reported consistent and left alone, so the repair is
-idempotent and a window may span intact years.
+shards present, and whose ledger files have the hashes it gives them, is
+reported consistent and left alone, so the repair is idempotent and a window
+may span intact years.
 """
 import json
 import os
@@ -120,9 +139,12 @@ def _pmap(fn, items, workers=WORKERS):
         return list(ex.map(fn, items))
 
 
-def _get(repo, rel, tok, dest):
-    """One file off the Hub (the retrying `family10_parts_hub._download`)."""
+def _get(repo, rel, tok, dest, just_uploaded=False):
+    """One file off the Hub (the retrying `family10_parts_hub._download`;
+    `just_uploaded` also retries the 404 of a commit still propagating)."""
     shutil.rmtree(dest, ignore_errors=True)
+    if just_uploaded:
+        return ph._download(repo, rel, tok, dest, just_uploaded=True)
     return ph._download(repo, rel, tok, dest)
 
 
@@ -238,6 +260,40 @@ def shard_entry(spec, b, idx, size, shard_path=None):
     return e
 
 
+def last_commits(api, repo, prefix):
+    """{name: last_commit} for the files directly under `prefix` — the
+    commit (`.oid`, `.date`) that last wrote each one. One expanded listing;
+    the seam the tests replace for the repository's history."""
+    out = {}
+    for it in api.list_repo_tree(repo, path_in_repo=prefix,
+                                 repo_type="dataset", expand=True):
+        lc = getattr(it, "last_commit", None)
+        if lc is not None:
+            out[it.path.rsplit("/", 1)[-1]] = lc
+    return out
+
+
+def download_at(repo, tok, prefix, name, oid, dest):
+    """`<prefix>/<name>` AS IT WAS at revision `oid`, into the directory
+    `dest` (emptied first); returns the local path. Transient failures are
+    retried on `family10_parts_hub`'s ladder; anything else (a 404: the file
+    did not exist at that revision) is raised. The other history seam."""
+    from huggingface_hub import hf_hub_download
+    for i in range(ph.DOWNLOAD_ATTEMPTS):
+        try:
+            shutil.rmtree(dest, ignore_errors=True)
+            return hf_hub_download(repo, f"{prefix}/{name}",
+                                   repo_type="dataset", token=tok,
+                                   revision=oid, local_dir=dest)
+        except Exception as e:                          # noqa: BLE001
+            if not ph.transient_download_error(e) or \
+                    i == ph.DOWNLOAD_ATTEMPTS - 1:
+                raise
+            import time
+            time.sleep(ph.DOWNLOAD_BACKOFF_S[
+                min(i, len(ph.DOWNLOAD_BACKOFF_S) - 1)])
+
+
 def history_ledger(api, repo, tok, prefix, names, scratch):
     """The ledger that last described `names` (orphaned shards), from the
     repository's OWN HISTORY: the newest commit that wrote any of them is a
@@ -248,34 +304,17 @@ def history_ledger(api, repo, tok, prefix, names, scratch):
     before a reason is taken from it, and a failure costs only the reasons.
     """
     try:
-        from huggingface_hub import hf_hub_download
         want = set(names)
         latest = None
-        for it in api.list_repo_tree(repo, path_in_repo=prefix,
-                                     repo_type="dataset", expand=True):
-            n = it.path.rsplit("/", 1)[-1]
-            lc = getattr(it, "last_commit", None)
-            if n in want and lc is not None and \
-                    (latest is None or lc.date > latest.date):
+        for n, lc in last_commits(api, repo, prefix).items():
+            if n in want and (latest is None or lc.date > latest.date):
                 latest = lc
         if latest is None:
             return None
+
         def get(n):
-            dest = os.path.join(scratch, "history", n)
-            for i in range(ph.DOWNLOAD_ATTEMPTS):
-                try:
-                    shutil.rmtree(dest, ignore_errors=True)
-                    return hf_hub_download(repo, f"{prefix}/{n}",
-                                           repo_type="dataset", token=tok,
-                                           revision=latest.oid,
-                                           local_dir=dest)
-                except Exception as e:                  # noqa: BLE001
-                    if not ph.transient_download_error(e) or \
-                            i == ph.DOWNLOAD_ATTEMPTS - 1:
-                        raise
-                    import time
-                    time.sleep(ph.DOWNLOAD_BACKOFF_S[
-                        min(i, len(ph.DOWNLOAD_BACKOFF_S) - 1)])
+            return download_at(repo, tok, prefix, n, latest.oid,
+                               os.path.join(scratch, "history", n))
         counts = read_json(get(ph.COUNTS), None)
         gs = sorted((counts or {}).get("groups") or {})
         arrs = _pmap(lambda g: sh.load_shard_index(
@@ -354,6 +393,130 @@ def build_ledger(year, specs, entries, reasons, frame_seconds, prov):
             "at": utcnow(), "rebuilt_from_shards": prov}
 
 
+# ------------------------------------------------- the ledger vs its marker --
+def is_ledger_file(name):
+    """A shard index or counts.json — what a lane's push rewrites whole."""
+    return name == ph.COUNTS or bool(INDEX_RE.match(name))
+
+
+def stale_ledger_files(repo, tok, prefix, done, files, scratch):
+    """The ledger files done.json lists whose copy on the Hub is not the one
+    it describes: absent, a different size, or a different sha256. The LFS
+    digest from the listing is used where there is one; otherwise the file
+    (a few kilobytes) is downloaded and hashed. Sorted names."""
+    listed = {e["name"]: e for e in (done or {}).get("files", [])
+              if is_ledger_file(e["name"])}
+
+    def check(n):
+        e, live = listed[n], files.get(n)
+        if live is None:
+            return n
+        if e.get("bytes") is not None and int(live["size"]) != int(e["bytes"]):
+            return n
+        got = live.get("sha256")
+        if got is None:
+            got = sha256(_get(repo, f"{prefix}/{n}", tok,
+                              os.path.join(scratch, "current", n)))
+        return n if got != e.get("sha256") else None
+    return sorted(n for n in _pmap(check, sorted(listed)) if n)
+
+
+def restore_from_history(api, repo, tok, prefix, what, done, files, stale,
+                         rep, scratch, work, store, year, dry_run):
+    """THE EXACT REPAIR of a year whose shards and done.json agree and whose
+    ledger files were overwritten after done.json was written: put back the
+    ledger files AS THEY WERE at the commit that wrote done.json, each
+    checked against done.json's own sha256 and size before anything is
+    uploaded. done.json is not rewritten — once they are back its hashes are
+    true again. Refuses (nothing uploaded) if history does not hold exactly
+    the ledger done.json describes; `--force` rebuilds from the shards."""
+    want = {e["name"]: e for e in done.get("files", [])}
+    lc = last_commits(api, repo, prefix).get(ph.DONE)
+    if lc is None:
+        raise RepairError(
+            f"repair refuses {what}: {len(stale)} ledger file(s) differ from "
+            f"done.json, and the repository history does not say which "
+            f"commit wrote done.json — nothing to restore from; --force "
+            f"rebuilds the ledger from the shards instead")
+    oid = lc.oid
+    print(f"  {what}: done.json was written by revision {oid[:10]} "
+          f"({getattr(lc, 'date', None)}); recovering {len(stale)} ledger "
+          f"file(s) as they were there")
+
+    def recover(n):
+        try:
+            p = download_at(repo, tok, prefix, n, oid,
+                            os.path.join(scratch, "restore", n))
+        except Exception as e:                          # noqa: BLE001
+            return n, None, f"{type(e).__name__}: {str(e)[:120]}"
+        got, size = sha256(p), os.path.getsize(p)
+        if got != want[n].get("sha256") or size != int(want[n]["bytes"]):
+            return n, None, (f"{size} bytes sha256 {got[:12]}…, done.json "
+                             f"says {want[n]['bytes']} bytes sha256 "
+                             f"{str(want[n].get('sha256'))[:12]}…")
+        return n, p, None
+    got = _pmap(recover, stale)
+    bad = [(n, why) for n, p, why in got if p is None]
+    if bad:
+        raise RepairError(
+            f"repair refuses {what}: the repository history does not hold "
+            f"the ledger done.json describes — at revision {oid[:10]} (the "
+            f"commit that wrote done.json) {len(bad)} of {len(stale)} stale "
+            f"ledger file(s) do not match it:\n  "
+            + "\n  ".join(f"{n}: {why}" for n, why in bad[:8])
+            + ("\n  …" if len(bad) > 8 else "")
+            + "\nnothing was uploaded; --force rebuilds the ledger from the "
+              "shards instead")
+    local = {n: p for n, p, _ in got}
+    if dry_run:
+        plan = {"report": rep,
+                "restore_from_history": {"revision": oid,
+                                         "files": list(stale)}}
+        pp = os.path.join(os.path.abspath(work), store, "repair",
+                          f"{year}.plan.json")
+        atomic_json(pp, plan)
+        print(f"  {what}: DRY RUN — would restore {len(stale)} ledger "
+              f"file(s) from revision {oid[:10]}, each matching done.json's "
+              f"sha256 ({', '.join(stale[:4])}"
+              + (", …" if len(stale) > 4 else "")
+              + f"); done.json unchanged; plan -> {pp}")
+        rep["action"] = "dry run (restore from history)"
+        rep["plan"] = pp
+        return rep
+
+    # the folder must be what was read: every shard, its index and done.json
+    now, _ = hub_tree(api, repo, prefix)
+    changed = sorted(n for n in set(now) | set(files)
+                     if not is_ledger_file(n)
+                     and (now.get(n) or {}).get("size")
+                     != (files.get(n) or {}).get("size"))
+    if changed:
+        raise RepairError(f"repair refuses {what}: the folder changed while "
+                          f"it was read ({changed[:4]}) — another job is "
+                          f"writing it; nothing was written")
+    pairs = [(f"{prefix}/{n}", local[n]) for n in stale]
+    for i in range(0, len(pairs), ph.MANY_FILES):
+        ph._upload(api, repo, pairs[i:i + ph.MANY_FILES],
+                   f"family 1 partials ({what}): {len(stale)} ledger file(s) "
+                   f"restored from history {oid[:10]}")
+
+    def verify(n):
+        back = _get(repo, f"{prefix}/{n}", tok,
+                    os.path.join(scratch, "verify", n), just_uploaded=True)
+        h = sha256(back)
+        if h != want[n]["sha256"]:
+            raise RepairError(f"RESTORE MISMATCH {prefix}/{n}: uploaded "
+                              f"{want[n]['sha256']}, the Hub served {h} — "
+                              f"done.json was not touched")
+    _pmap(verify, stale)
+    shutil.rmtree(scratch, ignore_errors=True)
+    print(f"  {what}: REPAIRED — {len(stale)} ledger file(s) restored from "
+          f"revision {oid[:10]}; done.json unchanged")
+    rep["action"] = "restored from history"
+    rep["restored"] = {"revision": oid, "files": len(stale)}
+    return rep
+
+
 # ------------------------------------------------------------- the repair --
 def repair_year(adapter, layout, year, work, dry_run=True, hub=None,
                 force=False):
@@ -414,18 +577,29 @@ def repair_year(adapter, layout, year, work, dry_run=True, hub=None,
            "orphaned_shards": len(orphans), "listed_but_absent": gone,
            "previous_done": {k: (done or {}).get(k) for k in
                              ("rows", "bytes", "at", "builder_git_sha")}}
+    # THE LEDGER FILES AGAINST THE MARKER: a neighbour's push over them
+    # leaves done.json listing the right shards with hashes the ledger files
+    # on the Hub no longer have
+    stale = stale_ledger_files(repo, tok, prefix, done, files, scratch)
+    rep["stale_ledger_files"] = stale
     print(f"  {what}: {len(zst)} shard(s) in the folder over {len(groups)} "
           f"group(s); done.json lists {rep['shards_in_done_json']} "
           f"(rows {rep['previous_done']['rows']}, at "
           f"{rep['previous_done']['at']}); {len(orphans)} orphaned"
           + (f"; {len(gone)} listed but ABSENT" if gone else "")
+          + f"; {len(stale)} ledger file(s) differ from done.json"
           + (f"; named lanes beside it (untouched): {lanes}" if lanes else ""))
-    if done is not None and not orphans and not gone and not unindexed \
-            and not force:
+    clean = done is not None and not orphans and not gone and not unindexed
+    if clean and not stale and not force:
         print(f"  {what}: CONSISTENT — done.json lists exactly the shards in "
-              f"the folder; nothing to repair")
+              f"the folder and every ledger file has its hash; nothing to "
+              f"repair")
         rep["action"] = "none (consistent)"
         return rep
+    if clean and not force:
+        return restore_from_history(api, repo, tok, prefix, what, done, files,
+                                    stale, rep, scratch, work, store, year,
+                                    dry_run)
 
     # EVERY SHARD'S INDEX, checked against the shard's size on the Hub —
     # read WORKERS at a time: pheno500 is 315 groups, so a year is about a
