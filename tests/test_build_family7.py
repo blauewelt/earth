@@ -2714,6 +2714,56 @@ def test_33_hub_commit_sleeps_through_the_hub_s_429(tmp_path):
 
 
 # ----------------------------------------------------------------- 34 -----
+def test_33b_create_repo_sleeps_through_the_api_quota_429():
+    """family1-build #880 (burned500 2023, 2026-09-24): 88 minutes of fetch,
+    then `api.create_repo(exist_ok=True)` died on the api bucket's 429 —
+    "you hit the quota of 2500 api requests per 5 minutes period. Retry
+    after 67 seconds". `hub_create_repo` goes through `hub_retry`: the Hub's
+    own 67 s (plus the margin), then again; a 403 raises at once; a
+    connection error is retried on the doubling ladder."""
+    class _Resp:
+        def __init__(self, code):
+            self.status_code = code
+
+    class HfHubHTTPError(Exception):
+        def __init__(self, msg, code):
+            super().__init__(msg)
+            self.response = _Resp(code)
+
+    msg = ("429 Too Many Requests: you have reached your 'api' rate limit. "
+           "Retry after 67 seconds (0/2500 requests remaining in current "
+           "300s window). Url: https://huggingface.co/api/repos/create.")
+    assert b7.hub_retry_after(msg) == 67
+    naps = []
+
+    class Api:
+        def __init__(self, plan):
+            self.plan, self.calls = list(plan), []
+
+        def create_repo(self, repo, repo_type=None, exist_ok=False,
+                        private=False):
+            self.calls.append((repo, repo_type, exist_ok, private))
+            step = self.plan.pop(0) if self.plan else "ok"
+            if step == "ok":
+                return "url"
+            if isinstance(step, int):
+                raise HfHubHTTPError(msg if step == 429 else "no", step)
+            raise ConnectionError("reset")
+
+    api = Api([429, 429])
+    assert b7.hub_create_repo(api, "ns/x-private", True,
+                              sleep=naps.append) == "url"
+    assert naps == [127, 127] and len(api.calls) == 3
+    assert api.calls[0] == ("ns/x-private", "dataset", True, True)
+    naps.clear()
+    api = Api(["conn", "conn"])
+    assert b7.hub_create_repo(api, "ns/x", False, sleep=naps.append) == "url"
+    assert naps == [60, 120]
+    with pytest.raises(HfHubHTTPError):
+        b7.hub_create_repo(Api([403]), "ns/x", False, sleep=naps.append)
+    assert naps == [60, 120]                                  # no sleep on 403
+
+
 def test_34_mirror_psl_batches_files_into_one_commit_each(tmp_path):
     """Five files at --batch-files 2 are THREE commits, and all five verify.
 

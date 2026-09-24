@@ -1488,11 +1488,12 @@ def hub_retry_after(text):
     """Seconds out of the Hub's OWN sentence, or None.
 
     "You can retry this action in about 1 hour." / "… in about 12 minutes."
-    The number is the server's, not ours — an exponential guess would sleep
-    for the wrong hour.
+    and the api-quota spelling, "Retry after 67 seconds (0/2500 requests
+    remaining in current 300s window)". The number is the server's, not ours
+    — an exponential guess would sleep for the wrong hour.
     """
     import re as _re
-    m = _re.search(r"retry this action in about\s+(\d+)\s*"
+    m = _re.search(r"retry (?:this action in about|after)\s+(\d+)\s*"
                    r"(second|minute|hour)s?", str(text), _re.I)
     if not m:
         return None
@@ -1585,6 +1586,55 @@ def hub_commit(api, repo, ops, message, *, repo_type="dataset", sleep=None):
                   f"{HUB_RETRY_CAP_S / 60:.0f} allowed)", flush=True)
             slp(nap)
             waited += nap
+
+
+def hub_retry(fn, what, *, sleep=None):
+    """`fn()` through `hub_commit`'s ladder, for the OTHER Hub calls a job
+    makes: `create_repo`, a listing, a metadata read.
+
+    family1-build #880 (burned500 2023, 2026-09-24) fetched a lane for 88
+    minutes and died on `api.create_repo(..., exist_ok=True)` — a 429 from
+    the Hub's api bucket ("you hit the quota of 2500 api requests per 5
+    minutes period. Retry after 67 seconds") while sibling jobs were pulling
+    parts through the same account. One throttled call that asks nothing of
+    the Hub but "does the repository exist" cost the lane. The same rule as
+    a commit: a 429, a 5xx or a connection error sleeps (the Hub's own
+    number, else 60 s doubling, `HUB_RETRY_CAP_S` in all) and asks again;
+    any other 4xx raises at once.
+    """
+    slp = sleep or time.sleep
+    waited, attempt = 0.0, 0
+    while True:
+        try:
+            return fn()
+        except Exception as e:                                # noqa: BLE001
+            attempt += 1
+            code = hub_http_status(e)
+            if code is not None and 400 <= code < 500 and code != 429:
+                raise
+            hinted = hub_retry_after(e) if code == 429 else None
+            nap = (hinted + HUB_RETRY_MARGIN_S) if hinted is not None else \
+                HUB_RETRY_BASE_S * (2 ** (attempt - 1))
+            left = HUB_RETRY_CAP_S - waited
+            if left <= 0:
+                raise
+            nap = min(nap, left)
+            why = (f"HTTP {code}" if code is not None
+                   else f"{type(e).__name__}")
+            print(f"::warning::hub {what}: {why} — {str(e)[:160]} — sleeping "
+                  f"{nap / 60:.1f} min (attempt {attempt}, {waited / 60:.1f} "
+                  f"min waited of {HUB_RETRY_CAP_S / 60:.0f} allowed)",
+                  flush=True)
+            slp(nap)
+            waited += nap
+
+
+def hub_create_repo(api, repo, private=False, *, sleep=None):
+    """`api.create_repo(exist_ok=True)` through `hub_retry`."""
+    return hub_retry(
+        lambda: api.create_repo(repo, repo_type="dataset", exist_ok=True,
+                                private=bool(private)),
+        f"create_repo {repo}", sleep=sleep)
 
 
 def hub_add_ops(pairs):

@@ -115,8 +115,8 @@ sys.path.insert(0, HERE)
 
 import family10_store as f10                                     # noqa: E402
 from build_family7 import (atomic_json, git_sha, hub_add_ops,    # noqa: E402
-                           hub_commit, hub_repo, mark, marked, parse_years,
-                           read_json, sha256, utcnow)
+                           hub_commit, hub_create_repo, hub_repo, mark, marked,
+                           parse_years, read_json, sha256, utcnow)
 
 # ONE CONSTANT, derived from `family10_store.FAMILY_VERSION` like every other
 # family-10 path. Nothing here spells a prefix out.
@@ -678,8 +678,7 @@ def push(store, year, work, scratch=None, partials=None, hub=None,
                  f"the target repository is {repo!r} — a private store's "
                  f"parts go only to a '-private' repository, and a public "
                  f"store's never do (E-082). Nothing was uploaded.")
-    api.create_repo(repo, repo_type="dataset", exist_ok=True,
-                    private=bool(private))
+    hub_create_repo(api, repo, private)
     prefix = hub_prefix(store, year, partials, lane)
 
     have = read_done(api, repo, tok, store, year, scratch,
@@ -805,8 +804,7 @@ def push_many(store, years, work, scratch=None, partials=None, hub=None,
                  f"target repository is {repo!r} — a private store's parts go "
                  f"only to a '-private' repository, and a public store's "
                  f"never do (E-082). Nothing was uploaded.")
-    api.create_repo(repo, repo_type="dataset", exist_ok=True,
-                    private=bool(private))
+    hub_create_repo(api, repo, private)
     listing = _list_files(api, repo, hub_prefix(store, None, partials))
     pending, skipped, refused = [], [], []
     for year, d, names, entries in todo:

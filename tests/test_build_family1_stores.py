@@ -319,9 +319,23 @@ def _fake_hub(monkeypatch, root, repo):
         shutil.copyfile(os.path.join(root, repo_, rel), dst)
         return dst
 
+    def stream(repo_, rel, token, consume, just_uploaded=False, attempts=12,
+               private=False):
+        # the restore STREAMS the committed copy (`ph.hub_stream`,
+        # 2026-09-24); the private repository is read with the token
+        api.calls.append(("stream", repo_, rel, private))
+        src = os.path.join(root, repo_, rel)
+        if not os.path.exists(src):
+            raise IOError(f"{rel}: HTTP 404")
+        with open(src, "rb") as fh:
+            data = fh.read()
+        consume(data)
+        return len(data)
+
     monkeypatch.setattr(b10, "hub_commit", commit)
     monkeypatch.setattr(b10, "hub_add_ops", lambda pairs: list(pairs))
     monkeypatch.setattr(b10, "hub_upload_with_backoff", upload)
+    monkeypatch.setattr(ph, "hub_stream", stream)
     fake_hf = types.ModuleType("huggingface_hub")
     fake_hf.hf_hub_download = download
     monkeypatch.setitem(sys.modules, "huggingface_hub", fake_hf)
@@ -352,6 +366,7 @@ def test_a_private_store_publishes_only_to_the_private_repository(
     repos = {c[1] for c in api.calls}
     assert repos == {"chfrank/earth-tensors-private"}, api.calls
     assert ("create_repo", "chfrank/earth-tensors-private", True) in api.calls
+    assert {c[3] for c in api.calls if c[0] == "stream"} == {True}
     assert os.path.exists(os.path.join(
         hub, "chfrank/earth-tensors-private",
         "tensors/family1_tf/ghcnd_private_test/platforms.json"))

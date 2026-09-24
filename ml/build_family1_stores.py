@@ -126,8 +126,9 @@ sys.path.insert(0, HERE)
 
 import build_family10_stores as f10b                            # noqa: E402
 import family10_store as f10                                    # noqa: E402
-from build_family7 import (END, atomic_json, git_sha, mark,     # noqa: E402
-                           marked, marker, parse_years, read_json, utcnow)
+from build_family7 import (END, atomic_json, git_sha,           # noqa: E402
+                           hub_create_repo, mark, marked, marker, parse_years,
+                           read_json, utcnow)
 from family1 import sharded as sh                               # noqa: E402
 from family1.adapters import FAMILIES, REGISTRY                 # noqa: E402
 
@@ -1195,8 +1196,7 @@ def stage_publish_grid(ctx):
                  f"{free / 1e9:.2f} GB free. Nothing has been uploaded.")
     api, repo, tok = ctx.hub()
     f10b.check_publish_target(ad, lay, repo)
-    api.create_repo(repo, repo_type="dataset", exist_ok=True,
-                    private=lay.private)
+    hub_create_repo(api, repo, lay.private)
     prefix = lay.prefix(ad.store)
     ctx.prog.stage_start(f"publish {ad.store}", len(names) + 1)
     batches = [names[i:i + GRID_UPLOAD_BATCH]

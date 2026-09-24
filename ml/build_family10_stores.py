@@ -159,8 +159,9 @@ sys.path.insert(0, HERE)
 
 import family10_store as f10                                   # noqa: E402
 from build_family7 import (START, END, Progress, atomic_json,   # noqa: E402
-                           git_sha, hub_add_ops, hub_commit, hub_delete_ops,
-                           hub_repo, hub_upload_with_backoff, mark, marked,
+                           git_sha, hub_add_ops, hub_commit, hub_create_repo,
+                           hub_delete_ops, hub_repo, hub_upload_with_backoff,
+                           mark, marked,
                            marker,
                            read_json, sha256, utcnow)
 
@@ -5586,8 +5587,7 @@ def stage_publish(ctx):
     # (E-082 §1.3) — not on the adapter's intention. It runs after the id is
     # resolved and before the first request that touches the repository.
     check_publish_target(ad, lay, repo)
-    api.create_repo(repo, repo_type="dataset", exist_ok=True,
-                    private=lay.private)
+    hub_create_repo(api, repo, lay.private)
     ctx.prog.stage_start(f"publish {ad.store}", len(names))
     # A FEW COMMITS, NOT ONE PER FILE AND NOT ONE FOR EVERYTHING. The Hub
     # allows 256 commits per repository per hour and `upload_file` is one
