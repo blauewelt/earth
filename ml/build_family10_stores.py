@@ -5751,23 +5751,11 @@ def stage_verify_hub(ctx):
     # the whole files, `hub_split` for the parts (a split file is restored
     # one part at a time). A file the listing does not show is left to the
     # restore, which will say so by name.
-    tree = ph._tree(api, repo, prefix)
-    hub = {}
-    for n in names:
-        if n in hub_split:
-            # a malformed entry is the restore's to refuse, by name
-            parts = [int(p.get("bytes", 0) or 0)
-                     for p in (hub_split[n] or {}).get("parts") or []]
-            if parts:
-                hub[n] = max(parts)
-        elif n in tree:
-            hub[n] = int(tree[n]["size"])
-    if hub:
-        _restore_disk_check(ctx, hub, sorted(n for n in hub if n in hub_split),
-                            uploading=False)
-    else:
-        print(f"  restore: no file of {prefix} is in the Hub listing — no "
-              f"free-space preflight; the restore will name what is missing")
+    # NO FREE-SPACE PREFLIGHT: the restore STREAMS every file and every part
+    # (`ph.hub_stream`, 0d9f656) and writes nothing to disk, so a box — or
+    # the sandbox with 17 GB free — can verify a 300 GB store.
+    print(f"  restore: streamed and hashed as it arrives — no file touches "
+          f"the disk, no free-space preflight")
     print(f"  verify-hub: {len(names)} file(s) named by {repo}:{prefix}/"
           f"store.json, {len(hub_split)} of them split on the Hub "
           f"({sorted(hub_split)}); nothing will be uploaded but "
