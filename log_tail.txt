@@ -1,0 +1,80 @@
+  [publish lai500] terra_h18v04  12316/27261  954.2s
+  [publish lai500] terra_h18v04/2020  12408/27261  960.7s
+  [publish lai500] terra_h18v05  12410/27261  961.2s
+  [publish lai500] terra_h18v05/2020  12502/27261  965.1s
+  [publish lai500] terra_h18v06  12504/27261  965.7s
+  [publish lai500] terra_h18v06/2020  12596/27261  969.5s
+  [publish lai500] terra_h18v07  12598/27261  970.4s
+  [publish lai500] terra_h18v07/2020  12690/27261  974.2s
+  [publish lai500] terra_h18v08  12692/27261  976.9s
+  [publish lai500] terra_h18v08/2020  12784/27261  981.6s
+  [publish lai500] terra_h18v09  12786/27261  982.3s
+  [publish lai500] terra_h18v09/2020  12878/27261  985.7s
+  [publish lai500] terra_h18v14  12880/27261  986.9s
+  [publish lai500] terra_h18v14/2020  12972/27261  989.8s
+  [publish lai500] terra_h19v00  12974/27261  990.8s
+  [publish lai500] terra_h19v00/2020  13066/27261  999.5s
+  [publish lai500] terra_h19v01  13068/27261  1000.1s
+  [publish lai500] terra_h19v01/2020  13160/27261  1004.1s
+  [publish lai500] terra_h19v02  13162/27261  1005.7s
+  [publish lai500] terra_h19v02/2020  13254/27261  1012.8s
+  [publish lai500] terra_h19v03  13256/27261  1013.3s
+Traceback (most recent call last):
+  File "/opt/conda/lib/python3.11/site-packages/huggingface_hub/utils/_http.py", line 836, in hf_raise_for_status
+    response.raise_for_status()
+  File "/opt/conda/lib/python3.11/site-packages/httpx/_models.py", line 829, in raise_for_status
+    raise HTTPStatusError(message, request=request, response=self)
+httpx.HTTPStatusError: Client error '499 unknown' for url 'https://huggingface.co/datasets/chfrank/earth-tensors/resolve/main/tensors/family1_tf/lai500/terra_h19v03/2020/bin_2794.idx.npy'
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/499
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/opt/runner/_work/earth/earth/ml/build_family1_stores.py", line 1981, in <module>
+    sys.exit(main())
+             ^^^^^^
+  File "/opt/runner/_work/earth/earth/ml/build_family1_stores.py", line 1976, in main
+    f10b.run_stages(ctx, stages, stage_fn=stage_fns(ad), deps=deps)
+  File "/opt/runner/_work/earth/earth/ml/build_family10_stores.py", line 5915, in run_stages
+    stage_fn[s](ctx)
+  File "/opt/runner/_work/earth/earth/ml/build_family1_stores.py", line 1228, in stage_publish_grid
+    for n, p in cm.ordered_map(get, rels, 1 if len(rels) < 4 else 8):
+  File "/opt/runner/_work/earth/earth/ml/family1/adapters/_common.py", line 327, in ordered_map
+    yield q.popleft().result()
+          ^^^^^^^^^^^^^^^^^^^^
+  File "/opt/conda/lib/python3.11/concurrent/futures/_base.py", line 456, in result
+    return self.__get_result()
+           ^^^^^^^^^^^^^^^^^^^
+  File "/opt/conda/lib/python3.11/concurrent/futures/_base.py", line 401, in __get_result
+    raise self._exception
+  File "/opt/conda/lib/python3.11/concurrent/futures/thread.py", line 58, in run
+    result = self.fn(*self.args, **self.kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/runner/_work/earth/earth/ml/build_family1_stores.py", line 1227, in get
+    return n, _download(repo, f"{prefix}/{n}", tok, scratch)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/runner/_work/earth/earth/ml/build_family1_stores.py", line 1131, in _download
+    return hf_hub_download(repo, rel, repo_type="dataset", token=tok,
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/conda/lib/python3.11/site-packages/huggingface_hub/utils/_validators.py", line 89, in _inner_fn
+    return fn(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^
+  File "/opt/conda/lib/python3.11/site-packages/huggingface_hub/utils/_http.py", line 266, in _inner
+    return fn(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^
+  File "/opt/conda/lib/python3.11/site-packages/huggingface_hub/file_download.py", line 1026, in hf_hub_download
+    return _hf_hub_download_to_local_dir(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/conda/lib/python3.11/site-packages/huggingface_hub/file_download.py", line 1505, in _hf_hub_download_to_local_dir
+    _download_to_tmp_and_move(
+  File "/opt/conda/lib/python3.11/site-packages/huggingface_hub/file_download.py", line 2032, in _download_to_tmp_and_move
+    http_get(
+  File "/opt/conda/lib/python3.11/site-packages/huggingface_hub/utils/_validators.py", line 89, in _inner_fn
+    return fn(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^
+  File "/opt/conda/lib/python3.11/site-packages/huggingface_hub/file_download.py", line 401, in http_get
+    hf_raise_for_status(response)
+  File "/opt/conda/lib/python3.11/site-packages/huggingface_hub/utils/_http.py", line 966, in hf_raise_for_status
+    raise _format(HfHubHTTPError, str(e), response) from e
+huggingface_hub.errors.HfHubHTTPError: Client error '499 unknown' for url 'https://huggingface.co/datasets/chfrank/earth-tensors/resolve/main/tensors/family1_tf/lai500/terra_h19v03/2020/bin_2794.idx.npy' (Request ID: Root=1-6ab585e0-3bbcbbf50ce02c984c8308bd;3342fd75-0b84-450c-b02d-924b9db9762f)
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/499

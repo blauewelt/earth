@@ -1,0 +1,10 @@
+{
+ "at": "2026-09-24T20:19:43+00:00",
+ "done": 13256,
+ "elapsed_s": 1013.3,
+ "eta_s": 1070.5,
+ "files": 13256,
+ "item": "terra_h19v03",
+ "stage": "publish lai500",
+ "total": 27261
+}
