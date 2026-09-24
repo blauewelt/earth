@@ -18,24 +18,6 @@
   {
    "store": "burned500",
    "stage": "index,fetch",
-   "start": "2016-01-01",
-   "end": "2016-12-31",
-   "runner": "ubuntu-latest",
-   "extra_args": "--push-parts",
-   "adapter_env": ""
-  },
-  {
-   "store": "burned500",
-   "stage": "index,fetch",
-   "start": "2017-01-01",
-   "end": "2017-12-31",
-   "runner": "ubuntu-latest",
-   "extra_args": "--push-parts",
-   "adapter_env": ""
-  },
-  {
-   "store": "burned500",
-   "stage": "index,fetch",
    "start": "2018-01-01",
    "end": "2018-12-31",
    "runner": "ubuntu-latest",
@@ -125,26 +107,6 @@
    "extra_args": "--push-parts",
    "adapter_env": "LAI500_GROUPS=terra",
    "at": "2026-09-24T12:12:44.286Z"
-  },
-  {
-   "store": "burned500",
-   "stage": "index,fetch",
-   "start": "2001-01-01",
-   "end": "2001-12-31",
-   "runner": "ubuntu-latest",
-   "extra_args": "--push-parts",
-   "adapter_env": "",
-   "at": "2026-09-24T13:36:38.821Z"
-  },
-  {
-   "store": "burned500",
-   "stage": "index,fetch",
-   "start": "2002-01-01",
-   "end": "2002-12-31",
-   "runner": "ubuntu-latest",
-   "extra_args": "--push-parts",
-   "adapter_env": "",
-   "at": "2026-09-24T13:39:44.505Z"
   },
   {
    "store": "burned500",
@@ -279,6 +241,26 @@
    "extra_args": "--push-parts",
    "adapter_env": "",
    "at": "2026-09-24T15:25:08.220Z"
+  },
+  {
+   "store": "burned500",
+   "stage": "index,fetch",
+   "start": "2016-01-01",
+   "end": "2016-12-31",
+   "runner": "ubuntu-latest",
+   "extra_args": "--push-parts",
+   "adapter_env": "",
+   "at": "2026-09-24T15:28:14.774Z"
+  },
+  {
+   "store": "burned500",
+   "stage": "index,fetch",
+   "start": "2017-01-01",
+   "end": "2017-12-31",
+   "runner": "ubuntu-latest",
+   "extra_args": "--push-parts",
+   "adapter_env": "",
+   "at": "2026-09-24T15:28:18.597Z"
   }
  ],
  "done": [
@@ -3015,6 +2997,30 @@
    "at": "2026-09-24T12:12:40.591Z",
    "run_number": 830,
    "finished": "2026-09-24T15:20:21Z"
+  },
+  {
+   "store": "burned500",
+   "stage": "index,fetch",
+   "start": "2001-01-01",
+   "end": "2001-12-31",
+   "runner": "ubuntu-latest",
+   "extra_args": "--push-parts",
+   "adapter_env": "",
+   "at": "2026-09-24T13:36:38.821Z",
+   "run_number": 849,
+   "finished": "2026-09-24T15:27:23Z"
+  },
+  {
+   "store": "burned500",
+   "stage": "index,fetch",
+   "start": "2002-01-01",
+   "end": "2002-12-31",
+   "runner": "ubuntu-latest",
+   "extra_args": "--push-parts",
+   "adapter_env": "",
+   "at": "2026-09-24T13:39:44.505Z",
+   "run_number": 850,
+   "finished": "2026-09-24T15:26:00Z"
   }
  ],
  "failed": []
