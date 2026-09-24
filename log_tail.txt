@@ -1,0 +1,12 @@
+  stage all (tier G): index, fetch, assemble, publish — the full-decode `check` stage runs only when named
+store     irtb — NCEP/CPC merged infrared brightness temperature (GPM_MERGIR v1), 4 km — cloud-top temperature; phase A is the tropics three-hourly
+family    family1_gf (1.gf) · public -> chfrank/earth-tensors:tensors/family1_gf/irtb
+axis      1998-01-01 .. 2026-09-15  bins 1169..3265 · time_s int32 (schema 2)
+lane      (unnamed) — whole calendar year(s), no group subset: the year folder's own files, as every store on the Hub holds them
+channels  C=1: tb
+tier G    sharded, groups ['irtb'], F=40 x 10800 s, uint8, years (by bin start) 1998..2026
+work      /opt/runner/_work/earth/earth/ml/cache/family1_gf
+stage index: already done — skipping (--force to redo)
+stage fetch: already done — skipping (--force to redo)
+stage assemble: already done — skipping (--force to redo)
+stage publish: already done — skipping (--force to redo)
