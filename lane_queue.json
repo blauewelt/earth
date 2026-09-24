@@ -84,16 +84,6 @@
   {
    "store": "sst_acspo02",
    "stage": "index,fetch",
-   "start": "2024-07-01",
-   "end": "2024-12-31",
-   "runner": "ubuntu-latest",
-   "extra_args": "--push-parts",
-   "adapter_env": "",
-   "at": "2026-09-24T04:50:46.369Z"
-  },
-  {
-   "store": "sst_acspo02",
-   "stage": "index,fetch",
    "start": "2025-07-01",
    "end": "2025-12-31",
    "runner": "ubuntu-latest",
@@ -2428,6 +2418,18 @@
    "at": "2026-09-24T04:47:28.622Z",
    "run_number": 803,
    "finished": "2026-09-24T07:05:22Z"
+  },
+  {
+   "store": "sst_acspo02",
+   "stage": "index,fetch",
+   "start": "2024-07-01",
+   "end": "2024-12-31",
+   "runner": "ubuntu-latest",
+   "extra_args": "--push-parts",
+   "adapter_env": "",
+   "at": "2026-09-24T04:50:46.369Z",
+   "run_number": 807,
+   "finished": "2026-09-24T07:18:06Z"
   }
  ],
  "failed": []
