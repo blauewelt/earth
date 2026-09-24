@@ -1,22 +1,32 @@
 {
  "pending": [
   {
-   "store": "pheno500",
+   "store": "sif",
    "stage": "index,fetch",
-   "start": "2006-01-01",
-   "end": "2006-12-31",
+   "start": "2022-01-01",
+   "end": "2022-12-31",
    "runner": "ubuntu-latest",
    "extra_args": "--push-parts",
-   "adapter_env": ""
+   "adapter_env": "SIF_OCO=0",
+   "retries": 1,
+   "seen_runs": [
+    35997593029
+   ],
+   "not_before": "2026-09-24T12:31:04.780Z"
   },
   {
-   "store": "pheno500",
+   "store": "sif",
    "stage": "index,fetch",
-   "start": "2007-01-01",
-   "end": "2007-12-31",
+   "start": "2023-01-01",
+   "end": "2023-12-31",
    "runner": "ubuntu-latest",
    "extra_args": "--push-parts",
-   "adapter_env": ""
+   "adapter_env": "SIF_OCO=0",
+   "retries": 1,
+   "seen_runs": [
+    35997599857
+   ],
+   "not_before": "2026-09-24T12:31:04.780Z"
   },
   {
    "store": "pheno500",
@@ -360,26 +370,6 @@
   {
    "store": "sif",
    "stage": "index,fetch",
-   "start": "2022-01-01",
-   "end": "2022-12-31",
-   "runner": "ubuntu-latest",
-   "extra_args": "--push-parts",
-   "adapter_env": "SIF_OCO=0",
-   "at": "2026-09-24T12:12:22.627Z"
-  },
-  {
-   "store": "sif",
-   "stage": "index,fetch",
-   "start": "2023-01-01",
-   "end": "2023-12-31",
-   "runner": "ubuntu-latest",
-   "extra_args": "--push-parts",
-   "adapter_env": "SIF_OCO=0",
-   "at": "2026-09-24T12:12:26.213Z"
-  },
-  {
-   "store": "sif",
-   "stage": "index,fetch",
    "start": "2024-01-01",
    "end": "2024-12-31",
    "runner": "ubuntu-latest",
@@ -476,6 +466,26 @@
    "extra_args": "--push-parts",
    "adapter_env": "",
    "at": "2026-09-24T12:13:02.645Z"
+  },
+  {
+   "store": "pheno500",
+   "stage": "index,fetch",
+   "start": "2006-01-01",
+   "end": "2006-12-31",
+   "runner": "ubuntu-latest",
+   "extra_args": "--push-parts",
+   "adapter_env": "",
+   "at": "2026-09-24T12:16:09.667Z"
+  },
+  {
+   "store": "pheno500",
+   "stage": "index,fetch",
+   "start": "2007-01-01",
+   "end": "2007-12-31",
+   "runner": "ubuntu-latest",
+   "extra_args": "--push-parts",
+   "adapter_env": "",
+   "at": "2026-09-24T12:16:13.422Z"
   }
  ],
  "done": [
