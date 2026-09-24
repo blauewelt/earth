@@ -1,0 +1,10 @@
+{
+ "at": "2026-09-24T03:01:44+00:00",
+ "done": 4185,
+ "elapsed_s": 1816.8,
+ "eta_s": 0.0,
+ "files": 4185,
+ "item": "store.json",
+ "stage": "publish irtb",
+ "total": 4185
+}
