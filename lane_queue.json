@@ -1,15 +1,5 @@
 {
- "pending": [
-  {
-   "store": "gedi",
-   "stage": "index,fetch",
-   "start": "2022-06-28",
-   "end": "2022-06-30",
-   "runner": "ubuntu-latest",
-   "extra_args": "--push-parts",
-   "adapter_env": "GEDI_FETCH=range GEDI_L4A_VERSION=3"
-  }
- ],
+ "pending": [],
  "dispatched": [
   {
    "store": "sst_acspo02",
@@ -30,26 +20,6 @@
    "extra_args": "--push-parts",
    "adapter_env": "",
    "at": "2026-09-23T23:10:54.940Z"
-  },
-  {
-   "store": "sst_acspo02",
-   "stage": "index,fetch",
-   "start": "2022-01-01",
-   "end": "2022-06-30",
-   "runner": "ubuntu-latest",
-   "extra_args": "--push-parts",
-   "adapter_env": "",
-   "at": "2026-09-23T23:14:04.848Z"
-  },
-  {
-   "store": "sst_acspo02",
-   "stage": "index,fetch",
-   "start": "2024-01-01",
-   "end": "2024-06-30",
-   "runner": "ubuntu-latest",
-   "extra_args": "--push-parts",
-   "adapter_env": "",
-   "at": "2026-09-23T23:17:21.200Z"
   },
   {
    "store": "sst_acspo02",
@@ -178,6 +148,16 @@
    "extra_args": "--push-parts",
    "adapter_env": "GEDI_FETCH=range GEDI_L4A_VERSION=3",
    "at": "2026-09-24T00:56:26.156Z"
+  },
+  {
+   "store": "gedi",
+   "stage": "index,fetch",
+   "start": "2022-06-28",
+   "end": "2022-06-30",
+   "runner": "ubuntu-latest",
+   "extra_args": "--push-parts",
+   "adapter_env": "GEDI_FETCH=range GEDI_L4A_VERSION=3",
+   "at": "2026-09-24T01:15:13.794Z"
   }
  ],
  "done": [
@@ -2489,6 +2469,30 @@
    "at": "2026-09-23T23:17:10.513Z",
    "run_number": 708,
    "finished": "2026-09-24T00:46:34Z"
+  },
+  {
+   "store": "sst_acspo02",
+   "stage": "index,fetch",
+   "start": "2022-01-01",
+   "end": "2022-06-30",
+   "runner": "ubuntu-latest",
+   "extra_args": "--push-parts",
+   "adapter_env": "",
+   "at": "2026-09-23T23:14:04.848Z",
+   "run_number": 707,
+   "finished": "2026-09-24T01:12:21Z"
+  },
+  {
+   "store": "sst_acspo02",
+   "stage": "index,fetch",
+   "start": "2024-01-01",
+   "end": "2024-06-30",
+   "runner": "ubuntu-latest",
+   "extra_args": "--push-parts",
+   "adapter_env": "",
+   "at": "2026-09-23T23:17:21.200Z",
+   "run_number": 711,
+   "finished": "2026-09-24T01:14:30Z"
   }
  ],
  "failed": []
