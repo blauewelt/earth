@@ -4,16 +4,6 @@
   {
    "store": "sst_acspo02",
    "stage": "index,fetch",
-   "start": "2023-01-01",
-   "end": "2023-06-30",
-   "runner": "ubuntu-latest",
-   "extra_args": "--push-parts",
-   "adapter_env": "",
-   "at": "2026-09-24T04:47:32.677Z"
-  },
-  {
-   "store": "sst_acspo02",
-   "stage": "index,fetch",
    "start": "2023-07-01",
    "end": "2023-12-31",
    "runner": "ubuntu-latest",
@@ -40,16 +30,6 @@
    "extra_args": "--push-parts",
    "adapter_env": "",
    "at": "2026-09-24T04:53:55.237Z"
-  },
-  {
-   "store": "sst_acspo02",
-   "stage": "index,fetch",
-   "start": "2026-01-01",
-   "end": "2026-06-30",
-   "runner": "ubuntu-latest",
-   "extra_args": "--push-parts",
-   "adapter_env": "",
-   "at": "2026-09-24T04:57:00.906Z"
   },
   {
    "store": "sst_acspo02",
@@ -2440,6 +2420,30 @@
    "at": "2026-09-24T04:47:25.044Z",
    "run_number": 802,
    "finished": "2026-09-24T07:44:20Z"
+  },
+  {
+   "store": "sst_acspo02",
+   "stage": "index,fetch",
+   "start": "2023-01-01",
+   "end": "2023-06-30",
+   "runner": "ubuntu-latest",
+   "extra_args": "--push-parts",
+   "adapter_env": "",
+   "at": "2026-09-24T04:47:32.677Z",
+   "run_number": 804,
+   "finished": "2026-09-24T07:49:20Z"
+  },
+  {
+   "store": "sst_acspo02",
+   "stage": "index,fetch",
+   "start": "2026-01-01",
+   "end": "2026-06-30",
+   "runner": "ubuntu-latest",
+   "extra_args": "--push-parts",
+   "adapter_env": "",
+   "at": "2026-09-24T04:57:00.906Z",
+   "run_number": 810,
+   "finished": "2026-09-24T07:51:54Z"
   }
  ],
  "failed": []
