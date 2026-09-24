@@ -1,0 +1,15 @@
+store     swot — SWOT L2 LR sea-surface height, Expert (version D): the 2 km KaRIn swath, one row per valid pixel (tier P)
+family    family1_gf (1.gf) · public -> chfrank/earth-tensors:tensors/family1_gf/swot
+axis      2023-07-25 .. 2026-09-15  bins 3036..3265 · time_s int32 (schema 2)
+lane      d20230725-20260915 — this fetch writes parts/<year>/d20230725-20260915/ and pushes only that folder
+channels  C=3: ssha_karin, sig0_karin, ssh_karin_uncert
+work      /opt/runner/_work/earth/earth/ml/cache/family1_gf
+
+=== stage publish (swot) ===
+  hub: chfrank/earth-tensors with the token from $HF_TOKEN
+  restore: the largest file is platform.npy's largest Hub part at 42.95 GB; 838.35 GB free under /opt/runner/_work/earth/earth/ml/cache/family1_gf/swot/src; 1.1x margin wants 47.24 GB; split on the Hub at 40 GiB: ['platform.npy', 'values.npy']
+  verify-hub: 9 file(s) named by chfrank/earth-tensors:tensors/family1_gf/swot/store.json, 2 of them split on the Hub (['platform.npy', 'values.npy']); nothing will be uploaded but manifest.json
+  [verify-hub swot] start (9 items)  0/9  0.0s
+  [verify-hub swot] bin.npy  1/9  176.4s
+  [verify-hub swot] bin_offsets.npy  2/9  176.6s
+  [verify-hub swot] fp.npy  3/9  521.6s

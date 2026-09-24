@@ -1,0 +1,10 @@
+{
+ "at": "2026-09-24T11:05:52+00:00",
+ "done": 3,
+ "elapsed_s": 521.6,
+ "eta_s": 1043.1,
+ "item": "fp.npy",
+ "sha256": "41d85da2dbb45ddf",
+ "stage": "verify-hub swot",
+ "total": 9
+}
