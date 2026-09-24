@@ -1,0 +1,80 @@
+fp.npy:  98%|█████████▊| 35.7G/36.5G [13:57<00:19, 43.2MB/s][A[A[A
+
+
+fp.npy:  98%|█████████▊| 35.7G/36.5G [13:58<00:18, 42.9MB/s][A[A[A
+
+
+fp.npy:  98%|█████████▊| 35.7G/36.5G [13:59<00:17, 43.5MB/s][A[A[A
+
+
+fp.npy:  98%|█████████▊| 35.8G/36.5G [14:00<00:16, 43.2MB/s][A[A[A
+
+
+fp.npy:  98%|█████████▊| 35.8G/36.5G [14:00<00:16, 42.6MB/s][A[A[A
+
+
+fp.npy:  98%|█████████▊| 35.8G/36.5G [14:01<00:15, 43.7MB/s][A[A[A
+
+
+fp.npy:  98%|█████████▊| 35.9G/36.5G [14:02<00:14, 43.4MB/s][A[A[A
+
+
+fp.npy:  98%|█████████▊| 35.9G/36.5G [14:03<00:13, 43.8MB/s][A[A[A
+
+
+fp.npy:  99%|█████████▊| 35.9G/36.5G [14:04<00:12, 43.3MB/s][A[A[A
+
+
+fp.npy:  99%|█████████▊| 36.0G/36.5G [14:04<00:11, 44.4MB/s][A[A[A
+
+
+fp.npy:  99%|█████████▊| 36.0G/36.5G [14:05<00:10, 44.0MB/s][A[A[A
+
+
+fp.npy:  99%|█████████▉| 36.1G/36.5G [14:06<00:10, 43.5MB/s][A[A[A
+
+
+fp.npy:  99%|█████████▉| 36.1G/36.5G [14:07<00:09, 44.1MB/s][A[A[A
+
+
+fp.npy:  99%|█████████▉| 36.1G/36.5G [14:08<00:08, 42.7MB/s][A[A[A
+
+
+fp.npy:  99%|█████████▉| 36.2G/36.5G [14:09<00:07, 44.0MB/s][A[A[A
+
+
+fp.npy:  99%|█████████▉| 36.2G/36.5G [14:10<00:06, 44.0MB/s][A[A[A
+
+
+fp.npy:  99%|█████████▉| 36.2G/36.5G [14:10<00:05, 45.0MB/s][A[A[A
+
+
+fp.npy:  99%|█████████▉| 36.3G/36.5G [14:11<00:04, 44.7MB/s][A[A[A
+
+
+fp.npy: 100%|█████████▉| 36.3G/36.5G [14:12<00:04, 44.5MB/s][A[A[A
+
+
+fp.npy: 100%|█████████▉| 36.4G/36.5G [14:13<00:03, 44.4MB/s][A[A[A
+
+
+fp.npy: 100%|█████████▉| 36.4G/36.5G [14:14<00:02, 45.3MB/s][A[A[A
+
+
+fp.npy: 100%|█████████▉| 36.4G/36.5G [14:14<00:01, 45.0MB/s][A[A[A
+
+
+fp.npy: 100%|█████████▉| 36.5G/36.5G [14:15<00:00, 46.0MB/s][A[A[Afp.npy: 100%|██████████| 36.5G/36.5G [14:16<00:00, 42.6MB/s]
+Upload 3 LFS files: 100%|██████████| 3/3 [14:17<00:00, 310.93s/it]Upload 3 LFS files: 100%|██████████| 3/3 [14:17<00:00, 285.79s/it]
+::warning::hub commit (3 op(s), 'family 1.gf (swot): 3 file(s), batch 2/4'): ValueError — LFS batch API returned errors:
+Encountered error for file with OID 102ba3c456f2cb68488aac757e69b3d4fb6d7b8f8167f1dc76eb3e3fb4f42463: `Max individual file size f — sleeping 1.0 min (attempt 1, 0.0 min waited of 75 allowed)
+::warning::hub commit (3 op(s), 'family 1.gf (swot): 3 file(s), batch 2/4'): ValueError — LFS batch API returned errors:
+Encountered error for file with OID 102ba3c456f2cb68488aac757e69b3d4fb6d7b8f8167f1dc76eb3e3fb4f42463: `Max individual file size f — sleeping 2.0 min (attempt 2, 1.0 min waited of 75 allowed)
+::warning::hub commit (3 op(s), 'family 1.gf (swot): 3 file(s), batch 2/4'): ValueError — LFS batch API returned errors:
+Encountered error for file with OID 102ba3c456f2cb68488aac757e69b3d4fb6d7b8f8167f1dc76eb3e3fb4f42463: `Max individual file size f — sleeping 4.0 min (attempt 3, 3.0 min waited of 75 allowed)
+::warning::hub commit (3 op(s), 'family 1.gf (swot): 3 file(s), batch 2/4'): ValueError — LFS batch API returned errors:
+Encountered error for file with OID 102ba3c456f2cb68488aac757e69b3d4fb6d7b8f8167f1dc76eb3e3fb4f42463: `Max individual file size f — sleeping 8.0 min (attempt 4, 7.0 min waited of 75 allowed)
+::warning::hub commit (3 op(s), 'family 1.gf (swot): 3 file(s), batch 2/4'): ValueError — LFS batch API returned errors:
+Encountered error for file with OID 102ba3c456f2cb68488aac757e69b3d4fb6d7b8f8167f1dc76eb3e3fb4f42463: `Max individual file size f — sleeping 16.0 min (attempt 5, 15.0 min waited of 75 allowed)
+::warning::hub commit (3 op(s), 'family 1.gf (swot): 3 file(s), batch 2/4'): ValueError — LFS batch API returned errors:
+Encountered error for file with OID 102ba3c456f2cb68488aac757e69b3d4fb6d7b8f8167f1dc76eb3e3fb4f42463: `Max individual file size f — sleeping 32.0 min (attempt 6, 31.0 min waited of 75 allowed)
