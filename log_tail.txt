@@ -1,0 +1,57 @@
+store     gbif — GBIF occurrence records, CC0 and CC BY 4.0 (the AWS Open Data parquet snapshot): one row per dated, georeferenced record of an organism
+family    family1_tf (1.0.tf) · public -> chfrank/earth-tensors:tensors/family1_tf/gbif
+axis      1600-01-01 .. 2026-12-31  bins -27905..3287 · time_s int64 (schema 3)
+lane      g-f15c395e — this fetch writes parts/<year>/g-f15c395e/ and pushes only that folder (618 group(s))
+channels  C=4: kingdom_code, class_code, basis_of_record_code, individual_count
+work      /home/runner/work/earth/earth/ml/cache/family1_tf
+
+=== stage index (gbif) ===
+  [index gbif] start (1 items)  0/1  0.0s
+  [index gbif] plan.json  1/1  12.9s
+  index: gbif — 427 year(s), C=4 (kingdom_code, class_code, basis_of_record_code, individual_count), bins -27905..3287
+=== stage index done in 12.9s ===
+
+=== stage fetch (gbif) ===
+  [fetch gbif (one stream)] start  0/0  0.0s
+  [fetch gbif (one stream)] gbif 2020  42.6s
+  [fetch gbif (one stream)] gbif 2024  86.7s
+  [fetch gbif (one stream)] gbif 2008  131.3s
+  [fetch gbif (one stream)] gbif 2024  172.9s
+  [fetch gbif (one stream)] gbif 2018  219.8s
+  [fetch gbif (one stream)] gbif 2006  265.6s
+Traceback (most recent call last):
+  File "/home/runner/work/earth/earth/ml/build_family1_stores.py", line 1979, in <module>
+    sys.exit(main())
+             ^^^^^^
+  File "/home/runner/work/earth/earth/ml/build_family1_stores.py", line 1974, in main
+    f10b.run_stages(ctx, stages, stage_fn=stage_fns(ad), deps=deps)
+  File "/home/runner/work/earth/earth/ml/build_family10_stores.py", line 5971, in run_stages
+    stage_fn[s](ctx)
+  File "/home/runner/work/earth/earth/ml/build_family1_stores.py", line 422, in stage_fetch
+    f10b.stage_fetch(ctx, assemble_store_after=False)
+  File "/home/runner/work/earth/earth/ml/build_family10_stores.py", line 4287, in stage_fetch
+    for year, rows, counts in ad.fetch_stream(ctx):
+  File "/home/runner/work/earth/earth/ml/family1/adapters/_gbif.py", line 1331, in fetch_stream
+    for t, lat, lon, vals, plat, qc in self._parts_rows(
+  File "/home/runner/work/earth/earth/ml/family1/adapters/_gbif.py", line 1225, in _parts_rows
+    table, stat = self._read(ctx, (name, key, size))
+                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/work/earth/earth/ml/family1/adapters/_gbif.py", line 1197, in _read
+    return read_part(BASE + urllib.parse.quote(key), size,
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/work/earth/earth/ml/family1/adapters/_gbif.py", line 584, in read_part
+    pf = pq.ParquetFile(f)
+         ^^^^^^^^^^^^^^^^^
+  File "/home/runner/.local/lib/python3.12/site-packages/pyarrow/parquet/core.py", line 331, in __init__
+    self.reader.open(
+  File "pyarrow/_parquet.pyx", line 1676, in pyarrow._parquet.ParquetReader.open
+  File "pyarrow/error.pxi", line 89, in pyarrow.lib.check_status
+  File "/home/runner/work/earth/earth/ml/family1/adapters/_gbif.py", line 529, in read
+    b = r.read()
+        ^^^^^^^^
+  File "/usr/lib/python3.12/http/client.py", line 500, in read
+    s = self._safe_read(self.length)
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/http/client.py", line 650, in _safe_read
+    raise IncompleteRead(data, amt - len(data))
+http.client.IncompleteRead: IncompleteRead(16790 bytes read, 48746 more expected)
