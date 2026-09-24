@@ -1,0 +1,7 @@
+{
+ "at": "2026-09-24T23:17:10+00:00",
+ "elapsed_s": 3339.9,
+ "item": "gbif 2024",
+ "rows": 340114358,
+ "stage": "fetch gbif (one stream)"
+}
