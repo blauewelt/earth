@@ -1,5 +1,20 @@
 {
- "pending": [],
+ "pending": [
+  {
+   "store": "gbif",
+   "stage": "index,fetch",
+   "start": "1600-01-01",
+   "end": "2026-12-31",
+   "runner": "ubuntu-latest",
+   "extra_args": "--push-parts",
+   "adapter_env": "GBIF_SNAPSHOT=2026-09-01 GBIF_PARTS=3708:4326",
+   "retries": 1,
+   "seen_runs": [
+    36066868693
+   ],
+   "not_before": "2026-09-24T22:42:09.768Z"
+  }
+ ],
  "dispatched": [
   {
    "store": "gbif",
@@ -60,16 +75,6 @@
    "extra_args": "--push-parts",
    "adapter_env": "GBIF_SNAPSHOT=2026-09-01 GBIF_PARTS=3090:3708",
    "at": "2026-09-24T22:20:25.466Z"
-  },
-  {
-   "store": "gbif",
-   "stage": "index,fetch",
-   "start": "1600-01-01",
-   "end": "2026-12-31",
-   "runner": "ubuntu-latest",
-   "extra_args": "--push-parts",
-   "adapter_env": "GBIF_SNAPSHOT=2026-09-01 GBIF_PARTS=3708:4326",
-   "at": "2026-09-24T22:20:29.311Z"
   },
   {
    "store": "gbif",
