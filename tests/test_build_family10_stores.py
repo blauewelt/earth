@@ -44,6 +44,7 @@ What each group of tests is FOR:
 """
 import datetime as dt
 import fnmatch
+import hashlib
 import json
 import os
 import sys
@@ -3196,7 +3197,24 @@ class SplitFakeHub:
         fake_hf = types.ModuleType("huggingface_hub")
         fake_hf.hf_hub_download = self.download
         monkeypatch.setitem(sys.modules, "huggingface_hub", fake_hf)
+        # the restore STREAMS (`ph.hub_stream`, 2026-09-24): the fake feeds
+        # the committed copy — corruption included — in small chunks
+        self.streamed = []
+        monkeypatch.setattr(ph, "hub_stream", self.stream)
         return self
+
+    def stream(self, repo, rel, token, consume, just_uploaded=False,
+               attempts=12, private=False):
+        src = self.path(rel)
+        if not os.path.exists(src):
+            raise IOError(f"{rel}: HTTP 404")
+        self.streamed.append((rel, just_uploaded, private))
+        n = 0
+        with open(src, "rb") as fh:
+            for blk in iter(lambda: fh.read(97), b""):
+                consume(blk)
+                n += len(blk)
+        return n
 
 
 def _publishable_gdp(tmp_path, built, monkeypatch, hub):
@@ -3437,10 +3455,12 @@ def test_verify_hub_restores_the_hub_copy_and_uploads_only_the_manifest(
     assert hub.commits[n_commits:] == [
         (f"{ctx.layout.label} (gdp): manifest (--verify-hub)",
          [("add", f"{prefix}/manifest.json")])]
-    # every whole file and store.json fetched once; every split file streamed
-    # part by part as an OLD upload (no 404 retries for propagation lag)
-    assert sorted(fetched) == sorted(
-        [f"{prefix}/store.json"] + [f"{prefix}/{n}" for n in whole]
+    # store.json fetched once; every whole file STREAMED once; every split
+    # file streamed part by part as an OLD upload (no 404 retries for
+    # propagation lag)
+    assert fetched == [f"{prefix}/store.json"]
+    assert sorted(r for r, ju, _p in hub.streamed if not ju) == sorted(
+        [f"{prefix}/{n}" for n in whole]
         + [f"{prefix}/{p['name']}" for n in split
            for p in sj["hub_split"][n]["parts"]])
     assert sorted(n for n, _ in streamed) == split
@@ -3611,3 +3631,129 @@ def test_hub_commit_raises_at_once_on_the_hubs_file_size_refusal(monkeypatch):
     assert api.calls == 2 and slept == [b7.HUB_RETRY_BASE_S]
     # and a stray "413" in a message is not a size refusal by itself
     assert b7.hub_size_refusal(RuntimeError("req id 1-413-ab 500")) is None
+
+
+# ================================================= the streaming restore ==
+# family1-build #734 (Singapore) and #817 (Maryland), 2026-09-24: the
+# restore-verify through hf_hub_download (the hf_xet chunk path) crawled for
+# hours on the swot store's 36.5 GB columns while a plain ranged GET streamed
+# at 7-109 MB/s. `ph.hub_stream` is that plain GET: hashed as it arrives,
+# resumed from the byte reached when the connection drops.
+class _FakeResp:
+    def __init__(self, status, body, headers=None, die_after=None):
+        self.status_code, self._body = status, body
+        self.headers = headers or {}
+        self._die = die_after
+
+    def iter_content(self, chunk_size):
+        sent = 0
+        for i in range(0, len(self._body), chunk_size):
+            blk = self._body[i:i + chunk_size]
+            if self._die is not None and sent + len(blk) > self._die:
+                # deliver a partial chunk, then the connection drops
+                part = blk[:self._die - sent]
+                if part:
+                    yield part
+                raise _fake_requests.ConnectionError("peer closed")
+            sent += len(blk)
+            yield blk
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *a):
+        return False
+
+
+class _fake_requests:
+    class RequestException(Exception):
+        pass
+
+    class ConnectionError(RequestException):
+        pass
+
+    def __init__(self, body, plan):
+        self.body, self.plan, self.calls = body, list(plan), []
+
+    def get(self, url, headers=None, stream=True, timeout=None,
+            allow_redirects=True):
+        self.calls.append(dict(headers or {}))
+        step = self.plan.pop(0) if self.plan else "ok"
+        rng = (headers or {}).get("Range")
+        off = int(rng[len("bytes="):-1]) if rng else 0
+        if step == "404":
+            return _FakeResp(404, b"")
+        if step == "503":
+            return _FakeResp(503, b"")
+        if step == "ignore-range":
+            return _FakeResp(200, self.body,
+                             {"Content-Length": str(len(self.body))})
+        if isinstance(step, int):                    # die after N bytes
+            return _FakeResp(206 if off else 200, self.body[off:],
+                             {"Content-Length": str(len(self.body) - off)},
+                             die_after=step)
+        return _FakeResp(206 if off else 200, self.body[off:],
+                         {"Content-Length": str(len(self.body) - off)})
+
+
+def _stream_env(monkeypatch, body, plan):
+    fr = _fake_requests(body, plan)
+    monkeypatch.setitem(sys.modules, "requests", fr)
+    monkeypatch.setattr(ph.time, "sleep", lambda s: None)
+    monkeypatch.setattr(ph, "STREAM_CHUNK", 1000)
+    return fr
+
+
+def test_hub_stream_hashes_the_whole_file_and_resumes_where_it_dropped(
+        monkeypatch):
+    body = bytes(range(256)) * 40                    # 10,240 bytes
+    fr = _stream_env(monkeypatch, body, [2500, 7100, "ok"])
+    got, n = ph.hub_stream_sha256("r/x", "p/f.npy", "tok")
+    assert n == len(body) and got == hashlib.sha256(body).hexdigest()
+    # three GETs: the first from 0, then Range resumes from the bytes reached
+    # (the second drop is 7,100 bytes into the resumed stream: 9,600 in all)
+    assert [c.get("Range") for c in fr.calls] == \
+        [None, "bytes=2500-", "bytes=9600-"]
+    assert all("Authorization" not in c for c in fr.calls)
+
+
+def test_hub_stream_retries_a_fresh_404_and_a_5xx_but_not_a_plain_4xx(
+        monkeypatch):
+    body = b"abc" * 500
+    fr = _stream_env(monkeypatch, body, ["404", "503", "ok"])
+    got, n = ph.hub_stream_sha256("r/x", "p/f.npy", "tok", just_uploaded=True,
+                                  private=True)
+    assert n == len(body) and len(fr.calls) == 3
+    assert fr.calls[0]["Authorization"] == "Bearer tok"
+    fr = _stream_env(monkeypatch, body, ["404"])
+    with pytest.raises(IOError, match="HTTP 404"):
+        ph.hub_stream_sha256("r/x", "p/f.npy", "tok")   # not just uploaded
+    assert len(fr.calls) == 1
+    # a server that ignores the Range on a resume would hand the file twice
+    fr = _stream_env(monkeypatch, body, [700, "ignore-range"])
+    with pytest.raises(IOError, match="resume is not possible"):
+        ph.hub_stream_sha256("r/x", "p/f.npy", "tok", attempts=2)
+
+
+def test_stream_split_streams_every_part_through_one_hash(monkeypatch):
+    parts = [b"x" * 600, b"y" * 600, b"z" * 300]
+    files = {f"pre/big.npy.part{i:03d}": b for i, b in enumerate(parts)}
+
+    def fake_stream(repo, rel, token, consume, just_uploaded=False,
+                    attempts=12, private=False):
+        consume(files[rel])
+        return len(files[rel])
+    monkeypatch.setattr(ph, "hub_stream", fake_stream)
+    entry = {"bytes": 1500, "chunk_bytes": 600,
+             "parts": [{"name": f"big.npy.part{i:03d}", "bytes": len(b),
+                        "sha256": hashlib.sha256(b).hexdigest()}
+                       for i, b in enumerate(parts)]}
+    import io
+    sink = io.BytesIO()
+    got = ph.stream_split("r/x", "pre", "big.npy", entry, "tok", "/nonexistent",
+                          sink=sink)
+    assert got == hashlib.sha256(b"".join(parts)).hexdigest()
+    assert sink.getvalue() == b"".join(parts)
+    files["pre/big.npy.part001"] = b"y" * 599
+    with pytest.raises(ph.SplitError, match="big.npy.part001"):
+        ph.stream_split("r/x", "pre", "big.npy", entry, "tok", "/nonexistent")

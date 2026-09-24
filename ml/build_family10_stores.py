@@ -5474,7 +5474,7 @@ def _restore_verify(ctx, repo, tok, prefix, names, digests, hub_split,
     are the same number.
     """
     import family10_parts_hub as ph
-    from huggingface_hub import hf_hub_download
+    private = bool(getattr(ctx.layout, "private", False))
     scratch = os.path.join(ctx.scratch, "verify")
     entries = []
     for i, n in enumerate(names, 1):
@@ -5486,7 +5486,8 @@ def _restore_verify(ctx, repo, tok, prefix, names, digests, hub_split,
             # concatenation must be the file store.json's sha256 names
             try:
                 got = ph.stream_split(repo, prefix, n, hub_split[n], tok,
-                                      scratch, just_uploaded=just_uploaded)
+                                      scratch, just_uploaded=just_uploaded,
+                                      private=private)
             except ph.SplitError as e:
                 sys.exit(f"RESTORE MISMATCH {e} — the publish is not "
                          f"trustworthy")
@@ -5502,11 +5503,11 @@ def _restore_verify(ctx, repo, tok, prefix, names, digests, hub_split,
             ctx.prog.item(n, i, {"sha256": src[:16],
                                  "parts": len(hub_split[n]["parts"])})
             continue
-        back = hf_hub_download(repo, f"{prefix}/{n}", repo_type="dataset",
-                               token=tok, local_dir=scratch)
-        got = sha256(back)
-        size = os.path.getsize(back)
-        shutil.rmtree(scratch, ignore_errors=True)
+        # streamed and hashed as it arrives (`ph.hub_stream_sha256`), never
+        # written to disk: the xet download path crawled on the swot columns
+        got, size = ph.hub_stream_sha256(repo, f"{prefix}/{n}", tok,
+                                         just_uploaded=just_uploaded,
+                                         private=private)
         if got != src:
             sys.exit(f"RESTORE MISMATCH {n}: uploaded {src}, downloaded {got} "
                      f"— the publish is not trustworthy")

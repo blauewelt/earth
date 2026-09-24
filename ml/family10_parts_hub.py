@@ -242,6 +242,98 @@ def _download(repo, path_in_repo, token, dest_dir, just_uploaded=False):
     raise last                                          # pragma: no cover
 
 
+STREAM_CHUNK = 8 << 20
+STREAM_ATTEMPTS = 12
+STREAM_TIMEOUT = (30, 120)
+
+
+class StreamRefused(IOError):
+    """A definite answer from the Hub (a plain 4xx, a Range ignored) — not
+    retried, unlike a dropped connection or a 5xx."""
+
+
+def hub_stream(repo, path_in_repo, token, consume, just_uploaded=False,
+               attempts=STREAM_ATTEMPTS, private=False):
+    """Stream one repo file over PLAIN HTTPS, feeding `consume(bytes)`;
+    returns the byte count. Nothing touches the disk.
+
+    WHY NOT hf_hub_download. Since huggingface_hub grew the hf_xet backend a
+    file is fetched as deduplicated chunks from the Xet content store, and on
+    the rented boxes that path crawled on the swot store's big columns:
+    family1-build #734 (Singapore) and #817 (Maryland, 2026-09-24) sat on the
+    36.5 GB `lat.npy` for hours at a few MB/s behind "peer closed connection
+    without sending complete message body" resumes, while a plain ranged GET
+    of the same object from the sandbox streamed at 7–109 MB/s. A restore
+    only needs the bytes once, in order, so it streams them: one GET on the
+    resolve URL, hashed as it arrives, resumed from the byte reached with a
+    Range header when the connection drops.
+
+    A 404 is retried only when `just_uploaded` (Hub propagation lag, see
+    `_download`); any other 4xx raises at once. The token is sent only for a
+    private repository — `requests` drops Authorization on the cross-host
+    redirect to the CDN anyway, and a public object needs none.
+    """
+    import requests
+    url = f"https://huggingface.co/datasets/{repo}/resolve/main/{path_in_repo}"
+    got, total, last = 0, None, None
+    for i in range(max(1, attempts)):
+        hdr = {"User-Agent": "earth-science-pipeline/1.0"}
+        if private and token:
+            hdr["Authorization"] = f"Bearer {token}"
+        if got:
+            hdr["Range"] = f"bytes={got}-"
+        try:
+            with requests.get(url, headers=hdr, stream=True,
+                              timeout=STREAM_TIMEOUT,
+                              allow_redirects=True) as r:
+                if r.status_code == 404 and just_uploaded and i < attempts - 1:
+                    raise IOError(f"HTTP 404 (just uploaded, propagating)")
+                if r.status_code in (429, 500, 502, 503, 504):
+                    raise IOError(f"HTTP {r.status_code}")
+                if r.status_code >= 400:
+                    raise StreamRefused(f"{url}: HTTP {r.status_code}")
+                if got and r.status_code != 206:
+                    # the server ignored the Range: the whole file would come
+                    # again and be hashed twice — refuse, never guess
+                    raise StreamRefused(f"{url}: asked for bytes {got}- and "
+                                        f"got HTTP {r.status_code} without a "
+                                        f"range; a resume is not possible "
+                                        f"here")
+                if total is None:
+                    cl = r.headers.get("Content-Length")
+                    total = int(cl) if cl else None
+                for blk in r.iter_content(chunk_size=STREAM_CHUNK):
+                    if blk:
+                        consume(blk)
+                        got += len(blk)
+            if total is not None and got < total:
+                raise IOError(f"stream ended at {got} of {total} bytes")
+            return got
+        except StreamRefused:
+            raise
+        except (IOError, OSError, requests.RequestException) as e:
+            last = e
+            if i == attempts - 1:
+                break
+            wait = DOWNLOAD_BACKOFF_S[min(i, len(DOWNLOAD_BACKOFF_S) - 1)]
+            print(f"::warning::{path_in_repo}: {type(e).__name__}: "
+                  f"{str(e)[:160]} at byte {got} — attempt {i + 1}/"
+                  f"{attempts}, resuming in {wait}s", flush=True)
+            time.sleep(wait)
+    raise IOError(f"{url}: {type(last).__name__}: {last} (after {attempts} "
+                  f"attempts, {got} bytes)")
+
+
+def hub_stream_sha256(repo, path_in_repo, token, just_uploaded=False,
+                      private=False, attempts=STREAM_ATTEMPTS):
+    """(sha256 hex, bytes) of one repo file, streamed — see `hub_stream`."""
+    h = hashlib.sha256()
+    n = hub_stream(repo, path_in_repo, token, h.update,
+                   just_uploaded=just_uploaded, private=private,
+                   attempts=attempts)
+    return h.hexdigest(), n
+
+
 def _ordered_map(fn, items, workers, lookahead=None):
     """`map(fn, items)` on a thread pool, results IN ORDER, never more than
     `lookahead` (default 2 x workers) submitted at once — the house pattern
@@ -1008,39 +1100,36 @@ def split_parts(name, entry):
 
 
 def stream_split(repo, prefix, name, entry, token, scratch, sink=None,
-                 just_uploaded=False):
+                 just_uploaded=False, private=False):
     """Fetch every part of a split file IN ORDER, one at a time, check each
     part's size and sha256 against `entry`, feed its bytes through ONE
     whole-file sha256 (and into `sink`, a writable binary file, when given)
     and delete it before the next. Returns the concatenation's sha256.
 
-    So the restore of a 73 GB column needs room for one 40 GiB part, never for
-    the column. Raises SplitError naming the first part that disagrees."""
+    The parts are STREAMED (`hub_stream`), so the restore of a 73 GB column
+    needs no disk at all; `scratch` is kept for the signature. Raises
+    SplitError naming the first part that disagrees."""
     parts = split_parts(name, entry)
     whole = hashlib.sha256()
-    d = os.path.join(scratch, f"{name}.parts")
-    try:
-        for p in parts:
-            shutil.rmtree(d, ignore_errors=True)
-            local = _download(repo, f"{prefix}/{p['name']}", token, d,
-                              just_uploaded=just_uploaded)
-            h, n = hashlib.sha256(), 0
-            with open(local, "rb") as fh:
-                for blk in iter(lambda: fh.read(SPLIT_BUF), b""):
-                    h.update(blk)
-                    whole.update(blk)
-                    n += len(blk)
-                    if sink is not None:
-                        sink.write(blk)
-            shutil.rmtree(d, ignore_errors=True)
-            got = h.hexdigest()
-            if n != int(p["bytes"]) or got != p["sha256"]:
-                raise SplitError(
-                    f"{p['name']}: downloaded {n} bytes sha256 {got}, "
-                    f"store.json's hub_split records {p['bytes']} bytes "
-                    f"sha256 {p['sha256']}")
-    finally:
-        shutil.rmtree(d, ignore_errors=True)
+    for p in parts:
+        # streamed, never written to `scratch`: each part's bytes go through
+        # the part hash, the whole-file hash and `sink` as they arrive
+        # (`hub_stream` — the xet download path crawled on these objects)
+        h = hashlib.sha256()
+
+        def feed(blk, h=h):
+            h.update(blk)
+            whole.update(blk)
+            if sink is not None:
+                sink.write(blk)
+        n = hub_stream(repo, f"{prefix}/{p['name']}", token, feed,
+                       just_uploaded=just_uploaded, private=private)
+        got = h.hexdigest()
+        if n != int(p["bytes"]) or got != p["sha256"]:
+            raise SplitError(
+                f"{p['name']}: downloaded {n} bytes sha256 {got}, "
+                f"store.json's hub_split records {p['bytes']} bytes "
+                f"sha256 {p['sha256']}")
     return whole.hexdigest()
 
 
