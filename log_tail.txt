@@ -1,0 +1,80 @@
+  [fetch burned500 (tier G)] burned500 2026-06 v08h09  2386.3s
+  [fetch burned500 (tier G)] burned500 2026-06 v08h18  2399.1s
+  [fetch burned500 (tier G)] burned500 2026-06 v08h27  2410.4s
+  [fetch burned500 (tier G)] burned500 2026-06 v09h00  2420.6s
+  [fetch burned500 (tier G)] burned500 2026-06 v09h09  2430.8s
+  [fetch burned500 (tier G)] burned500 2026-06 v09h18  2441.9s
+  [fetch burned500 (tier G)] burned500 2026-06 v09h27  2453.8s
+  [fetch burned500 (tier G)] burned500 2026-06 v10h00  2461.6s
+  [fetch burned500 (tier G)] burned500 2026-06 v10h09  2470.1s
+  [fetch burned500 (tier G)] burned500 2026-06 v10h18  2478.0s
+  [fetch burned500 (tier G)] burned500 2026-06 v10h27  2489.3s
+  [fetch burned500 (tier G)] burned500 2026-06 v11h00  2498.3s
+  [fetch burned500 (tier G)] burned500 2026-06 v11h09  2506.7s
+  [fetch burned500 (tier G)] burned500 2026-06 v11h18  2514.0s
+  [fetch burned500 (tier G)] burned500 2026-06 v11h27  2523.0s
+  [fetch burned500 (tier G)] burned500 2026-06 v12h09  2531.5s
+  [fetch burned500 (tier G)] burned500 2026-06 v12h18  2536.2s
+  [fetch burned500 (tier G)] burned500 2026-06 v12h27  2544.4s
+  [fetch burned500 (tier G)] burned500 2026-06 v13h00  2547.7s
+  [fetch burned500 (tier G)] burned500 2026-06 v13h09  2553.0s
+  [fetch burned500 (tier G)] burned500 2026-06 v13h18  2558.0s
+  [fetch burned500 (tier G)] burned500 2026-06 v13h27  2563.6s
+  [fetch burned500 (tier G)] burned500 2026 v14h09 bin 3247  2567.9s
+  [fetch burned500 (tier G)] burned500 2026-06 v14h09  2567.9s
+  [fetch burned500 (tier G)] burned500 2026-07 v02h09  2584.1s
+  [fetch burned500 (tier G)] burned500 2026-07 v02h18  2598.7s
+  [fetch burned500 (tier G)] burned500 2026-07 v03h00  2603.3s
+  [fetch burned500 (tier G)] burned500 2026-07 v03h09  2628.3s
+  [fetch burned500 (tier G)] burned500 2026-07 v03h18  2644.0s
+  [fetch burned500 (tier G)] burned500 2026-07 v03h27  2649.0s
+  [fetch burned500 (tier G)] burned500 2026-07 v04h00  2651.9s
+  [fetch burned500 (tier G)] burned500 2026-07 v04h09  2662.9s
+  [fetch burned500 (tier G)] burned500 2026-07 v04h18  2676.1s
+  [fetch burned500 (tier G)] burned500 2026-07 v04h27  2680.3s
+  [fetch burned500 (tier G)] burned500 2026-07 v05h00  2684.3s
+  [fetch burned500 (tier G)] burned500 2026-07 v05h09  2693.6s
+  [fetch burned500 (tier G)] burned500 2026-07 v05h18  2707.7s
+  [fetch burned500 (tier G)] burned500 2026-07 v05h27  2714.4s
+  [fetch burned500 (tier G)] burned500 2026-07 v06h00  2720.3s
+  [fetch burned500 (tier G)] burned500 2026-07 v06h09  2729.0s
+  [fetch burned500 (tier G)] burned500 2026-07 v06h18  2745.9s
+  [fetch burned500 (tier G)] burned500 2026-07 v06h27  2756.2s
+  [fetch burned500 (tier G)] burned500 2026-07 v07h00  2762.3s
+  [fetch burned500 (tier G)] burned500 2026-07 v07h09  2776.0s
+  [fetch burned500 (tier G)] burned500 2026-07 v07h18  2791.3s
+  [fetch burned500 (tier G)] burned500 2026-07 v07h27  2803.3s
+  [fetch burned500 (tier G)] burned500 2026-07 v08h00  2812.0s
+  [fetch burned500 (tier G)] burned500 2026-07 v08h09  2823.9s
+  [fetch burned500 (tier G)] burned500 2026 v08h18 bin 3253  2838.4s
+  [fetch burned500 (tier G)] burned500 2026-07 v08h18  2838.4s
+  [fetch burned500 (tier G)] burned500 2026-07 v08h27  2850.7s
+  [fetch burned500 (tier G)] burned500 2026-07 v09h00  2858.3s
+  [fetch burned500 (tier G)] burned500 2026-07 v09h09  2868.7s
+  [fetch burned500 (tier G)] burned500 2026-07 v09h18  2879.5s
+  [fetch burned500 (tier G)] burned500 2026-07 v09h27  2891.7s
+  [fetch burned500 (tier G)] burned500 2026-07 v10h00  2899.2s
+  [fetch burned500 (tier G)] burned500 2026-07 v10h09  2907.3s
+  [fetch burned500 (tier G)] burned500 2026-07 v10h18  2915.3s
+  [fetch burned500 (tier G)] burned500 2026-07 v10h27  2927.1s
+  [fetch burned500 (tier G)] burned500 2026-07 v11h00  2935.7s
+  [fetch burned500 (tier G)] burned500 2026-07 v11h09  2944.2s
+  [fetch burned500 (tier G)] burned500 2026-07 v11h18  2951.6s
+  [fetch burned500 (tier G)] burned500 2026-07 v11h27  2961.4s
+  [fetch burned500 (tier G)] burned500 2026-07 v12h09  2968.6s
+  [fetch burned500 (tier G)] burned500 2026-07 v12h18  2973.9s
+  [fetch burned500 (tier G)] burned500 2026-07 v12h27  2983.7s
+  [fetch burned500 (tier G)] burned500 2026-07 v13h00  2986.5s
+  [fetch burned500 (tier G)] burned500 2026-07 v13h09  2992.1s
+  [fetch burned500 (tier G)] burned500 2026-07 v13h18  2996.9s
+  [fetch burned500 (tier G)] burned500 2026-07 v13h27  3003.4s
+  [fetch burned500 (tier G)] burned500 2026-07 v14h09  3007.4s
+  2026: v02h09 7 bin(s) 7 frame(s) 20.9 MB, v02h18 7 bin(s) 7 frame(s) 25.3 MB, v03h00 7 bin(s) 7 frame(s) 0.3 MB, v03h09 7 bin(s) 7 frame(s) 18.9 MB, v03h18 7 bin(s) 7 frame(s) 20.9 MB, v03h27 7 bin(s) 7 frame(s) 0.6 MB, v04h00 7 bin(s) 7 frame(s) 0.3 MB, v04h09 7 bin(s) 7 frame(s) 9.4 MB, v04h18 7 bin(s) 7 frame(s) 19.3 MB, v04h27 7 bin(s) 7 frame(s) 1.4 MB, v05h00 7 bin(s) 7 frame(s) 1.0 MB, v05h09 7 bin(s) 7 frame(s) 3.7 MB, v05h18 7 bin(s) 7 frame(s) 17.2 MB, v05h27 7 bin(s) 7 frame(s) 2.8 MB, v06h00 7 bin(s) 7 frame(s) 0.8 MB, v06h09 7 bin(s) 7 frame(s) 3.8 MB, v06h18 7 bin(s) 7 frame(s) 11.3 MB, v06h27 7 bin(s) 7 frame(s) 6.1 MB, v07h00 7 bin(s) 7 frame(s) 0.4 MB, v07h09 7 bin(s) 7 frame(s) 2.8 MB, v07h18 7 bin(s) 7 frame(s) 4.1 MB, v07h27 7 bin(s) 7 frame(s) 2.9 MB, v08h00 7 bin(s) 7 frame(s) 0.0 MB, v08h09 7 bin(s) 7 frame(s) 7.1 MB, v08h18 7 bin(s) 7 frame(s) 7.5 MB, v08h27 7 bin(s) 7 frame(s) 3.1 MB, v09h00 7 bin(s) 7 frame(s) 0.1 MB, v09h09 7 bin(s) 7 frame(s) 9.0 MB, v09h18 7 bin(s) 7 frame(s) 5.0 MB, v09h27 7 bin(s) 7 frame(s) 7.0 MB, v10h00 7 bin(s) 7 frame(s) 0.2 MB, v10h09 7 bin(s) 7 frame(s) 4.0 MB, v10h18 7 bin(s) 7 frame(s) 3.6 MB, v10h27 7 bin(s) 7 frame(s) 2.5 MB, v11h00 7 bin(s) 7 frame(s) 0.0 MB, v11h09 7 bin(s) 7 frame(s) 2.7 MB, v11h18 7 bin(s) 7 frame(s) 2.2 MB, v11h27 7 bin(s) 7 frame(s) 1.2 MB, v12h09 7 bin(s) 7 frame(s) 1.5 MB, v12h18 7 bin(s) 7 frame(s) 0.5 MB, v12h27 7 bin(s) 7 frame(s) 2.1 MB, v13h00 7 bin(s) 7 frame(s) 0.0 MB, v13h09 7 bin(s) 7 frame(s) 1.7 MB, v13h18 7 bin(s) 7 frame(s) 0.1 MB, v13h27 7 bin(s) 7 frame(s) 0.8 MB, v14h09 7 bin(s) 7 frame(s) 1.1 MB (3007.5s)
+  hub: chfrank/earth-tensors with the token from $HF_TOKEN
+  burned500: uploading 691 file(s) of 1 year(s), 242.4 MB -> chfrank/earth-tensors:partials/family1_tf/burned500/
+Upload 0 LFS files: 0it [00:00, ?it/s]Upload 0 LFS files: 0it [00:00, ?it/s]
+No files have been modified since last commit. Skipping to prevent empty commit.
+Upload 0 LFS files: 0it [00:00, ?it/s]Upload 0 LFS files: 0it [00:00, ?it/s]
+  burned500: 1 year(s) pushed and verified in 2 part commit(s), done.json written last (0 already present)
+  push-parts: 1 year(s) on the Hub under partials/family1_tf/burned500/<year>/d0101-0915/
+=== stage fetch done in 3639.3s ===
