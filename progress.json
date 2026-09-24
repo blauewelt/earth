@@ -1,0 +1,10 @@
+{
+ "at": "2026-09-24T23:55:07+00:00",
+ "done": 16381,
+ "elapsed_s": 7322.9,
+ "eta_s": 0.0,
+ "files": 16381,
+ "item": "store.json",
+ "stage": "publish pheno500",
+ "total": 16381
+}
