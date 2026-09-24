@@ -4,46 +4,6 @@
   {
    "store": "sst_acspo02",
    "stage": "index,fetch",
-   "start": "2018-07-01",
-   "end": "2018-12-31",
-   "runner": "ubuntu-latest",
-   "extra_args": "--push-parts",
-   "adapter_env": "",
-   "at": "2026-09-24T04:40:58.437Z"
-  },
-  {
-   "store": "sst_acspo02",
-   "stage": "index,fetch",
-   "start": "2021-01-01",
-   "end": "2021-06-30",
-   "runner": "ubuntu-latest",
-   "extra_args": "--push-parts",
-   "adapter_env": "",
-   "at": "2026-09-24T04:44:13.959Z"
-  },
-  {
-   "store": "sst_acspo02",
-   "stage": "index,fetch",
-   "start": "2021-07-01",
-   "end": "2021-12-31",
-   "runner": "ubuntu-latest",
-   "extra_args": "--push-parts",
-   "adapter_env": "",
-   "at": "2026-09-24T04:47:21.399Z"
-  },
-  {
-   "store": "sst_acspo02",
-   "stage": "index,fetch",
-   "start": "2022-01-01",
-   "end": "2022-06-30",
-   "runner": "ubuntu-latest",
-   "extra_args": "--push-parts",
-   "adapter_env": "",
-   "at": "2026-09-24T04:47:25.044Z"
-  },
-  {
-   "store": "sst_acspo02",
-   "stage": "index,fetch",
    "start": "2023-01-01",
    "end": "2023-06-30",
    "runner": "ubuntu-latest",
@@ -2432,6 +2392,54 @@
    "at": "2026-09-24T04:40:54.883Z",
    "run_number": 796,
    "finished": "2026-09-24T07:38:19Z"
+  },
+  {
+   "store": "sst_acspo02",
+   "stage": "index,fetch",
+   "start": "2018-07-01",
+   "end": "2018-12-31",
+   "runner": "ubuntu-latest",
+   "extra_args": "--push-parts",
+   "adapter_env": "",
+   "at": "2026-09-24T04:40:58.437Z",
+   "run_number": 797,
+   "finished": "2026-09-24T07:45:54Z"
+  },
+  {
+   "store": "sst_acspo02",
+   "stage": "index,fetch",
+   "start": "2021-01-01",
+   "end": "2021-06-30",
+   "runner": "ubuntu-latest",
+   "extra_args": "--push-parts",
+   "adapter_env": "",
+   "at": "2026-09-24T04:44:13.959Z",
+   "run_number": 800,
+   "finished": "2026-09-24T07:45:59Z"
+  },
+  {
+   "store": "sst_acspo02",
+   "stage": "index,fetch",
+   "start": "2021-07-01",
+   "end": "2021-12-31",
+   "runner": "ubuntu-latest",
+   "extra_args": "--push-parts",
+   "adapter_env": "",
+   "at": "2026-09-24T04:47:21.399Z",
+   "run_number": 801,
+   "finished": "2026-09-24T07:44:39Z"
+  },
+  {
+   "store": "sst_acspo02",
+   "stage": "index,fetch",
+   "start": "2022-01-01",
+   "end": "2022-06-30",
+   "runner": "ubuntu-latest",
+   "extra_args": "--push-parts",
+   "adapter_env": "",
+   "at": "2026-09-24T04:47:25.044Z",
+   "run_number": 802,
+   "finished": "2026-09-24T07:44:20Z"
   }
  ],
  "failed": []
