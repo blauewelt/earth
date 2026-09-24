@@ -9,6 +9,7 @@ body, and an ordered thread map with a bounded look-ahead so a pool of
 downloads never holds more than a few files at once.
 """
 import collections
+import http.client
 import json
 import os
 import re
@@ -85,8 +86,12 @@ def fixed_int(a, starts, lo, hi, what="field"):
     return out, ~dig.any(axis=1)
 
 
+# `http.client.HTTPException` is NOT an OSError: `IncompleteRead` (the server
+# closed a range response early — family1-build #907, a gbif part lane,
+# 2026-09-24: "IncompleteRead(16790 bytes read, 48746 more expected)" killed
+# the lane on one read) and `BadStatusLine` are transport failures too.
 RETRY_ERRORS = (urllib.error.URLError, ConnectionError, TimeoutError,
-                OSError)
+                OSError, http.client.HTTPException)
 
 
 def get_bytes(url, attempts=4, sleep=3.0, headers=None, timeout=None):

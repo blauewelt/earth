@@ -689,3 +689,41 @@ def test_lanes_parts_n_is_declared_and_a_missing_lane_is_refused(
                                years=[2022])
     with pytest.raises(SystemExit, match="does not split"):
         b10.declare_lanes(other)
+
+
+def test_an_incomplete_range_read_is_retried_not_fatal(monkeypatch):
+    """family1-build #907 (a gbif part lane, 2026-09-24): S3 closed one
+    range response early — `http.client.IncompleteRead`, which is an
+    HTTPException and not an OSError — and the lane died on that one read.
+    `HttpParquet.read` retries it like any other transport failure."""
+    import http.client
+    import urllib.request
+    from family1.adapters import _gbif as g
+    from family1.adapters import _common as cm
+    assert issubclass(http.client.IncompleteRead, cm.RETRY_ERRORS)
+    body = bytes(range(64))
+    calls = []
+
+    class Resp:
+        def __init__(self, data, cut):
+            self.status, self._d, self._cut = 206, data, cut
+
+        def read(self):
+            if self._cut:
+                raise http.client.IncompleteRead(self._d[:10], len(self._d) - 10)
+            return self._d
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+    def fake_open(req, timeout=None):
+        calls.append(req.get_header("Range"))
+        return Resp(body[:16], cut=(len(calls) == 1))
+    monkeypatch.setattr(urllib.request, "urlopen", fake_open)
+    monkeypatch.setattr(g.time, "sleep", lambda s: None)
+    f = g.HttpParquet("https://x/part.parquet", len(body), attempts=3)
+    assert f.read(16) == body[:16]
+    assert calls == ["bytes=0-15", "bytes=0-15"]
