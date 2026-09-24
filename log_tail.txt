@@ -1,0 +1,80 @@
+  [fetch burned500 (tier G)] burned500 2023-12 v05h09  4932.1s
+  [fetch burned500 (tier G)] burned500 2023 v05h18 bin 3064  4950.3s
+  [fetch burned500 (tier G)] burned500 2023-12 v05h18  4950.3s
+  [fetch burned500 (tier G)] burned500 2023-12 v05h27  4957.6s
+  [fetch burned500 (tier G)] burned500 2023-12 v06h00  4963.8s
+  [fetch burned500 (tier G)] burned500 2023-12 v06h09  4971.2s
+  [fetch burned500 (tier G)] burned500 2023-12 v06h18  4984.4s
+  [fetch burned500 (tier G)] burned500 2023-12 v06h27  4991.7s
+  [fetch burned500 (tier G)] burned500 2023-12 v07h00  5000.7s
+  [fetch burned500 (tier G)] burned500 2023-12 v07h09  5010.5s
+  [fetch burned500 (tier G)] burned500 2023-12 v07h18  5023.2s
+  [fetch burned500 (tier G)] burned500 2023-12 v07h27  5033.7s
+  [fetch burned500 (tier G)] burned500 2023-12 v08h00  5039.3s
+  [fetch burned500 (tier G)] burned500 2023-12 v08h09  5049.8s
+  [fetch burned500 (tier G)] burned500 2023-12 v08h18  5062.0s
+  [fetch burned500 (tier G)] burned500 2023-12 v08h27  5074.6s
+  [fetch burned500 (tier G)] burned500 2023-12 v09h00  5082.1s
+  [fetch burned500 (tier G)] burned500 2023-12 v09h09  5093.4s
+  [fetch burned500 (tier G)] burned500 2023-12 v09h18  5104.5s
+  [fetch burned500 (tier G)] burned500 2023-12 v09h27  5117.6s
+  [fetch burned500 (tier G)] burned500 2023-12 v10h00  5124.8s
+  [fetch burned500 (tier G)] burned500 2023-12 v10h09  5134.0s
+  [fetch burned500 (tier G)] burned500 2023-12 v10h18  5142.3s
+  [fetch burned500 (tier G)] burned500 2023-12 v10h27  5153.8s
+  [fetch burned500 (tier G)] burned500 2023-12 v11h00  5162.6s
+  [fetch burned500 (tier G)] burned500 2023-12 v11h09  5171.1s
+  [fetch burned500 (tier G)] burned500 2023-12 v11h18  5178.2s
+  [fetch burned500 (tier G)] burned500 2023 v11h27 bin 3064  5187.3s
+  [fetch burned500 (tier G)] burned500 2023-12 v11h27  5187.3s
+  [fetch burned500 (tier G)] burned500 2023-12 v12h09  5197.5s
+  [fetch burned500 (tier G)] burned500 2023-12 v12h18  5202.0s
+  [fetch burned500 (tier G)] burned500 2023-12 v12h27  5210.1s
+  [fetch burned500 (tier G)] burned500 2023-12 v13h00  5212.8s
+  [fetch burned500 (tier G)] burned500 2023-12 v13h09  5218.7s
+  [fetch burned500 (tier G)] burned500 2023-12 v13h18  5223.1s
+  [fetch burned500 (tier G)] burned500 2023-12 v13h27  5228.8s
+  [fetch burned500 (tier G)] burned500 2023-12 v14h09  5233.2s
+  2023: v02h09 12 bin(s) 12 frame(s) 32.6 MB, v02h18 12 bin(s) 12 frame(s) 43.0 MB, v03h00 12 bin(s) 12 frame(s) 0.6 MB, v03h09 12 bin(s) 12 frame(s) 29.9 MB, v03h18 12 bin(s) 12 frame(s) 37.5 MB, v03h27 12 bin(s) 12 frame(s) 1.1 MB, v04h00 12 bin(s) 12 frame(s) 0.5 MB, v04h09 12 bin(s) 12 frame(s) 20.9 MB, v04h18 12 bin(s) 12 frame(s) 29.2 MB, v04h27 12 bin(s) 12 frame(s) 3.1 MB, v05h00 12 bin(s) 12 frame(s) 1.6 MB, v05h09 12 bin(s) 12 frame(s) 6.7 MB, v05h18 12 bin(s) 12 frame(s) 28.8 MB, v05h27 12 bin(s) 12 frame(s) 5.3 MB, v06h00 12 bin(s) 12 frame(s) 1.8 MB, v06h09 12 bin(s) 12 frame(s) 5.7 MB, v06h18 12 bin(s) 12 frame(s) 20.6 MB, v06h27 12 bin(s) 12 frame(s) 7.6 MB, v07h00 12 bin(s) 12 frame(s) 0.8 MB, v07h09 12 bin(s) 12 frame(s) 5.6 MB, v07h18 12 bin(s) 12 frame(s) 9.2 MB, v07h27 12 bin(s) 12 frame(s) 6.1 MB, v08h00 12 bin(s) 12 frame(s) 0.0 MB, v08h09 12 bin(s) 12 frame(s) 11.9 MB, v08h18 12 bin(s) 12 frame(s) 13.9 MB, v08h27 12 bin(s) 12 frame(s) 7.0 MB, v09h00 12 bin(s) 12 frame(s) 0.1 MB, v09h09 12 bin(s) 12 frame(s) 13.4 MB, v09h18 12 bin(s) 12 frame(s) 8.9 MB, v09h27 12 bin(s) 12 frame(s) 12.9 MB, v10h00 12 bin(s) 12 frame(s) 0.3 MB, v10h09 12 bin(s) 12 frame(s) 5.9 MB, v10h18 12 bin(s) 12 frame(s) 7.7 MB, v10h27 12 bin(s) 12 frame(s) 3.7 MB, v11h00 12 bin(s) 12 frame(s) 0.1 MB, v11h09 12 bin(s) 12 frame(s) 4.4 MB, v11h18 12 bin(s) 12 frame(s) 2.5 MB, v11h27 12 bin(s) 12 frame(s) 2.7 MB, v12h09 12 bin(s) 12 frame(s) 2.0 MB, v12h18 12 bin(s) 12 frame(s) 0.7 MB, v12h27 12 bin(s) 12 frame(s) 4.0 MB, v13h00 12 bin(s) 12 frame(s) 0.0 MB, v13h09 12 bin(s) 12 frame(s) 3.8 MB, v13h18 12 bin(s) 12 frame(s) 0.1 MB, v13h27 12 bin(s) 12 frame(s) 1.5 MB, v14h09 12 bin(s) 12 frame(s) 1.9 MB (5233.2s)
+  hub: chfrank/earth-tensors with the token from $HF_TOKEN
+Traceback (most recent call last):
+  File "/home/runner/.local/lib/python3.12/site-packages/huggingface_hub/utils/_http.py", line 836, in hf_raise_for_status
+    response.raise_for_status()
+  File "/home/runner/.local/lib/python3.12/site-packages/httpx/_models.py", line 829, in raise_for_status
+    raise HTTPStatusError(message, request=request, response=self)
+httpx.HTTPStatusError: Client error '429 Too Many Requests' for url 'https://huggingface.co/api/repos/create'
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/429
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/home/runner/work/earth/earth/ml/build_family1_stores.py", line 1981, in <module>
+    sys.exit(main())
+             ^^^^^^
+  File "/home/runner/work/earth/earth/ml/build_family1_stores.py", line 1976, in main
+    f10b.run_stages(ctx, stages, stage_fn=stage_fns(ad), deps=deps)
+  File "/home/runner/work/earth/earth/ml/build_family10_stores.py", line 5915, in run_stages
+    stage_fn[s](ctx)
+  File "/home/runner/work/earth/earth/ml/build_family1_stores.py", line 844, in stage_fetch_grid
+    push_parts(ctx)
+  File "/home/runner/work/earth/earth/ml/build_family1_stores.py", line 420, in push_parts
+    pushed = ph.push_many(ctx.adapter.store, ctx.years, ctx.work,
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/work/earth/earth/ml/family10_parts_hub.py", line 753, in push_many
+    api.create_repo(repo, repo_type="dataset", exist_ok=True,
+  File "/home/runner/.local/lib/python3.12/site-packages/huggingface_hub/utils/_deprecation.py", line 101, in inner_f
+    return f(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^
+  File "/home/runner/.local/lib/python3.12/site-packages/huggingface_hub/utils/_validators.py", line 89, in _inner_fn
+    return fn(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/.local/lib/python3.12/site-packages/huggingface_hub/hf_api.py", line 4842, in create_repo
+    hf_raise_for_status(r)
+  File "/home/runner/.local/lib/python3.12/site-packages/huggingface_hub/utils/_http.py", line 957, in hf_raise_for_status
+    raise _format(HfHubHTTPError, message, response) from e
+huggingface_hub.errors.HfHubHTTPError: (Request ID: Root=1-6ab55bfe-3790ae594682b98c5241be9f;8700560f-4adb-41ca-b25e-9419abf754da)
+
+429 Too Many Requests: you have reached your 'api' rate limit.
+Retry after 67 seconds (0/2500 requests remaining in current 300s window).
+Url: https://huggingface.co/api/repos/create.
+We had to rate limit you, you hit the quota of 2500 api requests per 5 minutes period. Upgrade your organization to a Team or Enterprise plan to get higher limits. See https://huggingface.co/docs/hub/rate-limits
