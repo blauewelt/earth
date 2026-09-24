@@ -3685,6 +3685,8 @@ class _fake_requests:
             return _FakeResp(404, b"")
         if step == "503":
             return _FakeResp(503, b"")
+        if step == "429":
+            return _FakeResp(429, b"", {"Retry-After": "7"})
         if step == "ignore-range":
             return _FakeResp(200, self.body,
                              {"Content-Length": str(len(self.body))})
@@ -3699,8 +3701,10 @@ class _fake_requests:
 def _stream_env(monkeypatch, body, plan):
     fr = _fake_requests(body, plan)
     monkeypatch.setitem(sys.modules, "requests", fr)
-    monkeypatch.setattr(ph.time, "sleep", lambda s: None)
+    fr.naps = []
+    monkeypatch.setattr(ph.time, "sleep", fr.naps.append)
     monkeypatch.setattr(ph, "STREAM_CHUNK", 1000)
+    monkeypatch.setattr(ph, "_PACE_NEXT", [0.0])   # no pacing between tests
     return fr
 
 
@@ -3714,7 +3718,7 @@ def test_hub_stream_hashes_the_whole_file_and_resumes_where_it_dropped(
     # (the second drop is 7,100 bytes into the resumed stream: 9,600 in all)
     assert [c.get("Range") for c in fr.calls] == \
         [None, "bytes=2500-", "bytes=9600-"]
-    assert all("Authorization" not in c for c in fr.calls)
+    assert all(c.get("Authorization") == "Bearer tok" for c in fr.calls)
 
 
 def test_hub_stream_retries_a_fresh_404_and_a_5xx_but_not_a_plain_4xx(
@@ -3725,6 +3729,20 @@ def test_hub_stream_retries_a_fresh_404_and_a_5xx_but_not_a_plain_4xx(
                                   private=True)
     assert n == len(body) and len(fr.calls) == 3
     assert fr.calls[0]["Authorization"] == "Bearer tok"
+    # THE TOKEN GOES ON EVERY REQUEST, public repositories included: the
+    # Hub's resolver quota is 3,000 per five minutes anonymous, 12,000 with
+    # a token (family1-build #892, 2026-09-24: an anonymous pull at 9
+    # files/s ran the 3,000 out and sat in 429s). None given, none sent.
+    fr = _stream_env(monkeypatch, body, ["ok"])
+    ph.hub_stream_sha256("r/x", "p/f.npy", "tok")
+    assert fr.calls[0]["Authorization"] == "Bearer tok"
+    fr = _stream_env(monkeypatch, body, ["ok"])
+    ph.hub_stream_sha256("r/x", "p/f.npy", None)
+    assert "Authorization" not in fr.calls[0]
+    # a 429 sleeps the Hub's own Retry-After (+1 s), then asks again
+    fr = _stream_env(monkeypatch, body, ["429", "503", "ok"])
+    ph.hub_stream_sha256("r/x", "p/f.npy", "tok")
+    assert [n for n in fr.naps if n >= 1] == [8.0, 15], fr.naps
     fr = _stream_env(monkeypatch, body, ["404"])
     with pytest.raises(IOError, match="HTTP 404"):
         ph.hub_stream_sha256("r/x", "p/f.npy", "tok")   # not just uploaded
@@ -3792,6 +3810,32 @@ def test_hub_stream_keeps_one_keep_alive_session_per_thread(monkeypatch):
     assert ph._http() is fr
     assert not hasattr(ph._HTTP, "session")
     assert ph.PULL_WORKERS == 16
+
+
+def test_resolves_are_paced_under_the_hub_s_quota(monkeypatch):
+    """12,000 resolves per 300 s per token (40/s) is shared by every job on
+    the token; `_pace` spaces this process's at RESOLVE_PER_S across all
+    its threads, so one pull leaves room for another."""
+    import threading
+    clock = [1000.0]
+    naps = []
+    monkeypatch.setattr(ph.time, "time", lambda: clock[0])
+    monkeypatch.setattr(ph, "_PACE_NEXT", [0.0])
+    monkeypatch.setattr(ph, "RESOLVE_PER_S", 4)
+    assert ph._pace(naps.append) == 0.0                # the first is free
+    # four more at the same instant: 0.25, 0.5, 0.75, 1.0 s of spacing
+    got = [ph._pace(naps.append) for _ in range(4)]
+    assert [round(g, 2) for g in got] == [0.25, 0.5, 0.75, 1.0]
+    clock[0] += 10                                     # the window passed
+    assert ph._pace(naps.append) == 0.0
+    # threads share the one schedule
+    out = []
+    ts = [threading.Thread(target=lambda: out.append(ph._pace(lambda s: None)))
+          for _ in range(3)]
+    [t.start() for t in ts]
+    [t.join() for t in ts]
+    assert sorted(round(o, 2) for o in out) == [0.25, 0.5, 0.75]
+    assert ph.RESOLVE_PER_S == 4 and 0 < ph.STREAM_ATTEMPTS
 
 
 def test_download_streams_the_file_to_its_destination(tmp_path, monkeypatch):

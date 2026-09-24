@@ -267,6 +267,31 @@ STREAM_TIMEOUT = (30, 120)
 
 _HTTP = threading.local()
 
+# THE HUB'S RESOLVER QUOTA IS PER TOKEN, ACROSS EVERY JOB THAT USES IT.
+# Measured 2026-09-24 (the `ratelimit-policy` header on a resolve URL):
+# anonymous 3,000 per 300 s per IP, authenticated 12,000 per 300 s — 40/s.
+# family1-build #892 (lai500 2020, the Ohio box) pulled ~9 files/s
+# anonymously, ran the 3,000 out in five minutes and sat in 429s for the
+# next forty. So every GET carries the token, and each job paces its
+# resolves at RESOLVE_PER_S so two or three pulls on one token stay under
+# the quota together; a 429 that arrives anyway sleeps the Hub's own
+# `Retry-After`.
+RESOLVE_PER_S = 18
+_PACE = threading.Lock()
+_PACE_NEXT = [0.0]
+
+
+def _pace(sleep=None):
+    """Space this process's resolve requests RESOLVE_PER_S apart, across
+    threads; returns the seconds slept."""
+    with _PACE:
+        now = time.time()
+        t = max(now, _PACE_NEXT[0])
+        _PACE_NEXT[0] = t + 1.0 / RESOLVE_PER_S
+    if t > now:
+        (sleep or time.sleep)(t - now)
+    return max(0.0, t - now)
+
 
 def _http():
     """What `hub_stream` GETs with: ONE keep-alive `requests.Session` per
@@ -319,26 +344,38 @@ def hub_stream(repo, path_in_repo, token, consume, just_uploaded=False,
     Range header when the connection drops.
 
     A 404 is retried only when `just_uploaded` (Hub propagation lag, see
-    `_download`); any other 4xx raises at once. The token is sent only for a
-    private repository — `requests` drops Authorization on the cross-host
-    redirect to the CDN anyway, and a public object needs none.
+    `_download`); any other 4xx raises at once. The token goes on EVERY
+    request when there is one (public repositories included): the Hub's
+    resolver quota is 3,000 per five minutes anonymous and 12,000 with a
+    token (RESOLVE_PER_S above), and `requests` drops Authorization on the
+    cross-host redirect to the CDN, so the object itself is fetched without
+    it. `private` is kept for the callers that state it. A 429 sleeps the
+    Hub's `Retry-After` when it sends one.
     """
     import requests
     url = f"https://huggingface.co/datasets/{repo}/resolve/main/{path_in_repo}"
-    got, total, last = 0, None, None
+    got, total, last, hinted = 0, None, None, None
     for i in range(max(1, attempts)):
         hdr = {"User-Agent": "earth-science-pipeline/1.0"}
-        if private and token:
+        if token:
             hdr["Authorization"] = f"Bearer {token}"
         if got:
             hdr["Range"] = f"bytes={got}-"
+        hinted = None
         try:
+            _pace()
             with _http().get(url, headers=hdr, stream=True,
                              timeout=STREAM_TIMEOUT,
                              allow_redirects=True) as r:
                 if r.status_code == 404 and just_uploaded and i < attempts - 1:
                     raise IOError(f"HTTP 404 (just uploaded, propagating)")
-                if r.status_code in (429, 500, 502, 503, 504):
+                if r.status_code == 429:
+                    ra = (r.headers or {}).get("Retry-After")
+                    hinted = float(ra) if ra and str(ra).strip().replace(
+                        ".", "", 1).isdigit() else None
+                    raise IOError(f"HTTP 429" + (f" (Retry-After {ra})"
+                                                 if ra else ""))
+                if r.status_code in (500, 502, 503, 504):
                     raise IOError(f"HTTP {r.status_code}")
                 if r.status_code >= 400:
                     raise StreamRefused(f"{url}: HTTP {r.status_code}")
@@ -366,9 +403,11 @@ def hub_stream(repo, path_in_repo, token, consume, just_uploaded=False,
             if i == attempts - 1:
                 break
             wait = DOWNLOAD_BACKOFF_S[min(i, len(DOWNLOAD_BACKOFF_S) - 1)]
+            if hinted is not None:
+                wait = min(max(hinted + 1.0, 1.0), 600.0)
             print(f"::warning::{path_in_repo}: {type(e).__name__}: "
                   f"{str(e)[:160]} at byte {got} — attempt {i + 1}/"
-                  f"{attempts}, resuming in {wait}s", flush=True)
+                  f"{attempts}, resuming in {wait:.0f}s", flush=True)
             time.sleep(wait)
     raise IOError(f"{url}: {type(last).__name__}: {last} (after {attempts} "
                   f"attempts, {got} bytes)")
