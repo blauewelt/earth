@@ -1,0 +1,157 @@
+{
+ "bins": [
+  2922,
+  2928
+ ],
+ "builder_git_sha": "640844d799aa6624a1ca78489367c22b1b06359e",
+ "built_at": "2026-09-24T00:58:02+00:00",
+ "bytes": 480816000000,
+ "bytes_per_granule_mean": 100631226.5,
+ "channels": [
+  {
+   "max": 9000.0,
+   "min": -1000.0,
+   "name": "h_te_best_fit",
+   "unit": "m"
+  },
+  {
+   "max": 200.0,
+   "min": 0.0,
+   "name": "h_canopy",
+   "unit": "m"
+  },
+  {
+   "max": 200.0,
+   "min": 0.0,
+   "name": "canopy_openness",
+   "unit": "m"
+  },
+  {
+   "max": 60000.0,
+   "min": 0.0,
+   "name": "n_ca_photons",
+   "unit": "1"
+  },
+  {
+   "max": 60000.0,
+   "min": 0.0,
+   "name": "n_te_photons",
+   "unit": "1"
+  },
+  {
+   "max": 254.0,
+   "min": 1.0,
+   "name": "segment_landcover",
+   "unit": "class"
+  }
+ ],
+ "collection": "C3565574177-NSIDC_CPRD",
+ "dataset": "ICESat-2 ATL08 release 007 (ATL08)",
+ "date_range": [
+  "2022-01-01",
+  "2022-01-31"
+ ],
+ "fetch_mode": "whole",
+ "footprint": {
+  "log2_dt": -12.0,
+  "log2_fp": -8.120497098444245
+ },
+ "granules": 4778,
+ "granules_per_day": {
+  "2021-12-31": 1,
+  "2022-01-01": 158,
+  "2022-01-02": 141,
+  "2022-01-03": 158,
+  "2022-01-04": 167,
+  "2022-01-05": 162,
+  "2022-01-06": 152,
+  "2022-01-07": 158,
+  "2022-01-08": 163,
+  "2022-01-09": 166,
+  "2022-01-10": 163,
+  "2022-01-11": 155,
+  "2022-01-12": 159,
+  "2022-01-13": 153,
+  "2022-01-14": 161,
+  "2022-01-15": 156,
+  "2022-01-16": 157,
+  "2022-01-17": 166,
+  "2022-01-18": 159,
+  "2022-01-19": 158,
+  "2022-01-20": 139,
+  "2022-01-21": 160,
+  "2022-01-22": 156,
+  "2022-01-23": 165,
+  "2022-01-24": 152,
+  "2022-01-25": 161,
+  "2022-01-26": 163,
+  "2022-01-27": 152,
+  "2022-01-28": 166,
+  "2022-01-29": 98,
+  "2022-01-30": 164,
+  "2022-01-31": 89
+ },
+ "land_only": true,
+ "landcover_table": {
+  "0": "No_data",
+  "20": "Shrubs",
+  "30": "Herbaceous",
+  "40": "Cultivated",
+  "50": "Urban",
+  "60": "Bare_sparse_vegetation",
+  "70": "Snow_and_ice",
+  "80": "Permanent_water_bodies",
+  "90": "Herbaceous_wetland",
+  "100": "Moss_and_lichen",
+  "111": "Closed_forest_evergreen_needle_leaf",
+  "112": "Closed_forest_evergreen_broad_leaf",
+  "113": "Closed_forest_deciduous_needle_leaf",
+  "114": "Closed_forest_deciduous_broad_leaf",
+  "115": "Closed_forest_mixed",
+  "116": "Closed_forest_unknown",
+  "121": "Open_forest_evergreen_needle_leaf",
+  "122": "Open_forest_evergreen_broad_leaf",
+  "123": "Open_forest_deciduous_needle_leaf",
+  "124": "Open_forest_deciduous_broad_leaf",
+  "125": "Open_forest_mixed",
+  "126": "Open_forest_unknown",
+  "200": "Open_sea",
+  "255": "Undetermined"
+ },
+ "max_granules": 12,
+ "one_year_only": true,
+ "per_year_resume": true,
+ "qc_policy": "LAND ONLY. A segment whose `segment_watermask` is 1 (inland water, from the product's own 250 m Global Raster Water Mask) is dropped and counted; so is one whose `segment_landcover` class is named water or sea by the variable's own flag table \u2014 80 (Permanent_water_bodies) and 200 (Open_sea) in release 007 \u2014 with the drop counted per class and the whole land-cover histogram recorded. Class 70 (Snow_and_ice) is KEPT: an ice sheet is land and its terrain height is a measurement. 0 (No_data) and 255 (Undetermined) become NaN in the land-cover channel and the segment is kept. `qc` is the WORST of three of the product's own conditions, so larger is never better: 2 when `terrain_flg` is non-zero, 1 when `msw_flag` (the multiple-scattering warning: cloud, aerosol or blowing snow) is non-zero or `h_canopy_uncertainty` is missing, 0 otherwise \u2014 each condition counted separately. A segment with no finite time or position is dropped and counted. ATLAS's fill constants become NaN and are counted per channel. A value outside its channel's bounds becomes NaN for that channel alone and is counted, never clipped; the two photon-count channels are bounded at 60,000 because `values` is stored as float16 and a larger number could only be stored as an infinity, which would read as 'never measured'.",
+ "record": [
+  "2021-12-31T23:59:00.989Z",
+  "2022-02-01T00:07:15.149Z"
+ ],
+ "releases_seen": {
+  "007": 4778
+ },
+ "sources": [
+  "https://cmr.earthdata.nasa.gov/search/granules.json?collection_concept_id=C3565574177-NSIDC_CPRD (anonymous)",
+  "https://data.nsidc.earthdatacloud.nasa.gov/nsidc-cumulus-prod-protected/ATLAS/ATL08/007/<YYYY>/<MM>/<DD>/ATL08_<YYYYMMDDhhmmss>_<RGTccrr>_007_<rev>.h5",
+  "https://nsidc.org/sites/default/files/documents/technical-reference/icesat2_atl08_data_dict_v007.pdf"
+ ],
+ "store": "icesat2",
+ "title": "ICESat-2 ATL08 release 007: terrain height, canopy height, canopy openness and photon counts per 100 m LAND segment, six ground tracks to 88 degrees",
+ "tracks_expected": [
+  "gt1l",
+  "gt1r",
+  "gt2l",
+  "gt2r",
+  "gt3l",
+  "gt3r"
+ ],
+ "url": "https://cmr.earthdata.nasa.gov/search/granules.json?collection_concept_id=C3565574177-NSIDC_CPRD",
+ "verified": "2026-09-20 from this sandbox, anonymously against NASA CMR and NSIDC (the granules are Earthdata-protected, so the bytes are a hosted runner's job). CMR lists exactly ONE ATL08 collection: release 007, C3565574177-NSIDC_CPRD, 2018-10-14 -> ongoing. 2022-06 IN FULL: 4,641 granules, 385,160 MB (376.1 GB), mean 83.0 MB, smallest 16 MB, largest 344 MB, every one with a direct protected https .h5 url on data.nsidc.earthdatacloud.nasa.gov and the same object on s3://nsidc-cumulus-prod-protected. Service associations: the Harmony Trajectory Subsetter, NSIDC's own Harmony trajectory subsetter, an HTTPS file-system service and an S3 service \u2014 NO OPeNDAP service, and the opendap.earthdata.nasa.gov url in each granule's links answers HTTP 401 anonymously. CMR publishes no variable metadata for this collection (0 associations), so the group and dataset names come from the release-007 data dictionary PDF fetched the same day, which gives /gtx/land_segments with canopy/ and terrain/ subgroups and the six tracks gt1l..gt3r. NOT MEASURED HERE, and what the runner probe is for: whether NSIDC serves HTTP 206 for a range read, what fraction of a granule the six datasets cost, segments a granule, how many are dropped as water, the flag histograms, and therefore rows and bytes a year.",
+ "version": "007",
+ "window": [
+  "2022-01-01",
+  "2022-01-31"
+ ],
+ "years": [
+  2022
+ ]
+}
