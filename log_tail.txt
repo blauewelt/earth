@@ -1,0 +1,17 @@
+  stage all (tier G): index, fetch, assemble, publish — the full-decode `check` stage runs only when named
+store     irtb — NCEP/CPC merged infrared brightness temperature (GPM_MERGIR v1), 4 km — cloud-top temperature; phase A is the tropics three-hourly
+family    family1_gf (1.gf) · public -> chfrank/earth-tensors:tensors/family1_gf/irtb
+axis      1998-01-01 .. 2026-09-15  bins 1169..3265 · time_s int32 (schema 2)
+lane      (unnamed) — whole calendar year(s), no group subset: the year folder's own files, as every store on the Hub holds them
+channels  C=1: tb
+tier G    sharded, groups ['irtb'], F=40 x 10800 s, uint8, years (by bin start) 1998..2026
+work      /opt/runner/_work/earth/earth/ml/cache/family1_gf
+
+=== stage index (irtb) ===
+  [index irtb] start (1 items)  0/1  0.0s
+  [index irtb] plan.json  1/1  323.1s
+  index: irtb — 29 year(s), C=1 (tb), bins 1169..3265
+=== stage index done in 323.1s ===
+
+=== stage fetch (irtb) ===
+REFUSING irtb: the GPM_MERGIR files are Earthdata-protected and this process can authenticate to Earthdata Login in NEITHER way: no EARTHDATA_USERNAME / EARTHDATA_PASSWORD in the environment and no netrc naming urs.earthdata.nasa.gov. family1-build.yml gives both on a HOSTED runner from the repository secrets (ml/CLAUDE.md §6); a box gets neither. Nothing has been fetched.
