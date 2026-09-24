@@ -1,150 +1,6 @@
 {
  "pending": [
   {
-   "store": "sif",
-   "stage": "index,fetch",
-   "start": "2018-05-01",
-   "end": "2018-12-31",
-   "runner": "ubuntu-latest",
-   "extra_args": "--push-parts",
-   "adapter_env": "SIF_OCO=0"
-  },
-  {
-   "store": "sif",
-   "stage": "index,fetch",
-   "start": "2019-01-01",
-   "end": "2019-12-31",
-   "runner": "ubuntu-latest",
-   "extra_args": "--push-parts",
-   "adapter_env": "SIF_OCO=0"
-  },
-  {
-   "store": "sif",
-   "stage": "index,fetch",
-   "start": "2020-01-01",
-   "end": "2020-12-31",
-   "runner": "ubuntu-latest",
-   "extra_args": "--push-parts",
-   "adapter_env": "SIF_OCO=0"
-  },
-  {
-   "store": "sif",
-   "stage": "index,fetch",
-   "start": "2021-01-01",
-   "end": "2021-12-31",
-   "runner": "ubuntu-latest",
-   "extra_args": "--push-parts",
-   "adapter_env": "SIF_OCO=0"
-  },
-  {
-   "store": "sif",
-   "stage": "index,fetch",
-   "start": "2022-01-01",
-   "end": "2022-12-31",
-   "runner": "ubuntu-latest",
-   "extra_args": "--push-parts",
-   "adapter_env": "SIF_OCO=0"
-  },
-  {
-   "store": "sif",
-   "stage": "index,fetch",
-   "start": "2023-01-01",
-   "end": "2023-12-31",
-   "runner": "ubuntu-latest",
-   "extra_args": "--push-parts",
-   "adapter_env": "SIF_OCO=0"
-  },
-  {
-   "store": "sif",
-   "stage": "index,fetch",
-   "start": "2024-01-01",
-   "end": "2024-12-31",
-   "runner": "ubuntu-latest",
-   "extra_args": "--push-parts",
-   "adapter_env": "SIF_OCO=0"
-  },
-  {
-   "store": "sif",
-   "stage": "index,fetch",
-   "start": "2025-01-01",
-   "end": "2025-12-31",
-   "runner": "ubuntu-latest",
-   "extra_args": "--push-parts",
-   "adapter_env": "SIF_OCO=0"
-  },
-  {
-   "store": "sif",
-   "stage": "index,fetch",
-   "start": "2026-01-01",
-   "end": "2026-09-15",
-   "runner": "ubuntu-latest",
-   "extra_args": "--push-parts",
-   "adapter_env": "SIF_OCO=0"
-  },
-  {
-   "store": "lai500",
-   "stage": "index,fetch",
-   "start": "2020-07-01",
-   "end": "2020-09-30",
-   "runner": "ubuntu-latest",
-   "extra_args": "--push-parts",
-   "adapter_env": "LAI500_GROUPS=terra"
-  },
-  {
-   "store": "lai500",
-   "stage": "index,fetch",
-   "start": "2020-10-01",
-   "end": "2020-12-31",
-   "runner": "ubuntu-latest",
-   "extra_args": "--push-parts",
-   "adapter_env": "LAI500_GROUPS=terra"
-  },
-  {
-   "store": "pheno500",
-   "stage": "index,fetch",
-   "start": "2001-01-01",
-   "end": "2001-12-31",
-   "runner": "ubuntu-latest",
-   "extra_args": "--push-parts",
-   "adapter_env": ""
-  },
-  {
-   "store": "pheno500",
-   "stage": "index,fetch",
-   "start": "2002-01-01",
-   "end": "2002-12-31",
-   "runner": "ubuntu-latest",
-   "extra_args": "--push-parts",
-   "adapter_env": ""
-  },
-  {
-   "store": "pheno500",
-   "stage": "index,fetch",
-   "start": "2003-01-01",
-   "end": "2003-12-31",
-   "runner": "ubuntu-latest",
-   "extra_args": "--push-parts",
-   "adapter_env": ""
-  },
-  {
-   "store": "pheno500",
-   "stage": "index,fetch",
-   "start": "2004-01-01",
-   "end": "2004-12-31",
-   "runner": "ubuntu-latest",
-   "extra_args": "--push-parts",
-   "adapter_env": ""
-  },
-  {
-   "store": "pheno500",
-   "stage": "index,fetch",
-   "start": "2005-01-01",
-   "end": "2005-12-31",
-   "runner": "ubuntu-latest",
-   "extra_args": "--push-parts",
-   "adapter_env": ""
-  },
-  {
    "store": "pheno500",
    "stage": "index,fetch",
    "start": "2006-01-01",
@@ -460,7 +316,168 @@
    "adapter_env": ""
   }
  ],
- "dispatched": [],
+ "dispatched": [
+  {
+   "store": "sif",
+   "stage": "index,fetch",
+   "start": "2018-05-01",
+   "end": "2018-12-31",
+   "runner": "ubuntu-latest",
+   "extra_args": "--push-parts",
+   "adapter_env": "SIF_OCO=0",
+   "at": "2026-09-24T12:12:07.909Z"
+  },
+  {
+   "store": "sif",
+   "stage": "index,fetch",
+   "start": "2019-01-01",
+   "end": "2019-12-31",
+   "runner": "ubuntu-latest",
+   "extra_args": "--push-parts",
+   "adapter_env": "SIF_OCO=0",
+   "at": "2026-09-24T12:12:11.568Z"
+  },
+  {
+   "store": "sif",
+   "stage": "index,fetch",
+   "start": "2020-01-01",
+   "end": "2020-12-31",
+   "runner": "ubuntu-latest",
+   "extra_args": "--push-parts",
+   "adapter_env": "SIF_OCO=0",
+   "at": "2026-09-24T12:12:15.215Z"
+  },
+  {
+   "store": "sif",
+   "stage": "index,fetch",
+   "start": "2021-01-01",
+   "end": "2021-12-31",
+   "runner": "ubuntu-latest",
+   "extra_args": "--push-parts",
+   "adapter_env": "SIF_OCO=0",
+   "at": "2026-09-24T12:12:18.922Z"
+  },
+  {
+   "store": "sif",
+   "stage": "index,fetch",
+   "start": "2022-01-01",
+   "end": "2022-12-31",
+   "runner": "ubuntu-latest",
+   "extra_args": "--push-parts",
+   "adapter_env": "SIF_OCO=0",
+   "at": "2026-09-24T12:12:22.627Z"
+  },
+  {
+   "store": "sif",
+   "stage": "index,fetch",
+   "start": "2023-01-01",
+   "end": "2023-12-31",
+   "runner": "ubuntu-latest",
+   "extra_args": "--push-parts",
+   "adapter_env": "SIF_OCO=0",
+   "at": "2026-09-24T12:12:26.213Z"
+  },
+  {
+   "store": "sif",
+   "stage": "index,fetch",
+   "start": "2024-01-01",
+   "end": "2024-12-31",
+   "runner": "ubuntu-latest",
+   "extra_args": "--push-parts",
+   "adapter_env": "SIF_OCO=0",
+   "at": "2026-09-24T12:12:29.797Z"
+  },
+  {
+   "store": "sif",
+   "stage": "index,fetch",
+   "start": "2025-01-01",
+   "end": "2025-12-31",
+   "runner": "ubuntu-latest",
+   "extra_args": "--push-parts",
+   "adapter_env": "SIF_OCO=0",
+   "at": "2026-09-24T12:12:33.365Z"
+  },
+  {
+   "store": "sif",
+   "stage": "index,fetch",
+   "start": "2026-01-01",
+   "end": "2026-09-15",
+   "runner": "ubuntu-latest",
+   "extra_args": "--push-parts",
+   "adapter_env": "SIF_OCO=0",
+   "at": "2026-09-24T12:12:37.048Z"
+  },
+  {
+   "store": "lai500",
+   "stage": "index,fetch",
+   "start": "2020-07-01",
+   "end": "2020-09-30",
+   "runner": "ubuntu-latest",
+   "extra_args": "--push-parts",
+   "adapter_env": "LAI500_GROUPS=terra",
+   "at": "2026-09-24T12:12:40.591Z"
+  },
+  {
+   "store": "lai500",
+   "stage": "index,fetch",
+   "start": "2020-10-01",
+   "end": "2020-12-31",
+   "runner": "ubuntu-latest",
+   "extra_args": "--push-parts",
+   "adapter_env": "LAI500_GROUPS=terra",
+   "at": "2026-09-24T12:12:44.286Z"
+  },
+  {
+   "store": "pheno500",
+   "stage": "index,fetch",
+   "start": "2001-01-01",
+   "end": "2001-12-31",
+   "runner": "ubuntu-latest",
+   "extra_args": "--push-parts",
+   "adapter_env": "",
+   "at": "2026-09-24T12:12:47.953Z"
+  },
+  {
+   "store": "pheno500",
+   "stage": "index,fetch",
+   "start": "2002-01-01",
+   "end": "2002-12-31",
+   "runner": "ubuntu-latest",
+   "extra_args": "--push-parts",
+   "adapter_env": "",
+   "at": "2026-09-24T12:12:51.649Z"
+  },
+  {
+   "store": "pheno500",
+   "stage": "index,fetch",
+   "start": "2003-01-01",
+   "end": "2003-12-31",
+   "runner": "ubuntu-latest",
+   "extra_args": "--push-parts",
+   "adapter_env": "",
+   "at": "2026-09-24T12:12:55.256Z"
+  },
+  {
+   "store": "pheno500",
+   "stage": "index,fetch",
+   "start": "2004-01-01",
+   "end": "2004-12-31",
+   "runner": "ubuntu-latest",
+   "extra_args": "--push-parts",
+   "adapter_env": "",
+   "at": "2026-09-24T12:12:58.945Z"
+  },
+  {
+   "store": "pheno500",
+   "stage": "index,fetch",
+   "start": "2005-01-01",
+   "end": "2005-12-31",
+   "runner": "ubuntu-latest",
+   "extra_args": "--push-parts",
+   "adapter_env": "",
+   "at": "2026-09-24T12:13:02.645Z"
+  }
+ ],
  "done": [
   {
    "store": "sst_acspo02",
