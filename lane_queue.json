@@ -1,17 +1,6 @@
 {
  "pending": [],
- "dispatched": [
-  {
-   "store": "gbif",
-   "stage": "index,fetch",
-   "start": "1600-01-01",
-   "end": "2026-12-31",
-   "runner": "ubuntu-latest",
-   "extra_args": "--push-parts",
-   "adapter_env": "GBIF_SNAPSHOT=2026-09-01 GBIF_PARTS=8652:9270",
-   "at": "2026-09-24T22:20:59.833Z"
-  }
- ],
+ "dispatched": [],
  "done": [
   {
    "store": "sst_acspo02",
@@ -3284,6 +3273,18 @@
    "at": "2026-09-24T22:20:37.127Z",
    "run_number": 909,
    "finished": "2026-09-24T23:48:36Z"
+  },
+  {
+   "store": "gbif",
+   "stage": "index,fetch",
+   "start": "1600-01-01",
+   "end": "2026-12-31",
+   "runner": "ubuntu-latest",
+   "extra_args": "--push-parts",
+   "adapter_env": "GBIF_SNAPSHOT=2026-09-01 GBIF_PARTS=8652:9270",
+   "at": "2026-09-24T22:20:59.833Z",
+   "run_number": 915,
+   "finished": "2026-09-24T23:59:07Z"
   }
  ],
  "failed": []
