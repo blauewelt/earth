@@ -3,6 +3,20 @@
   {
    "store": "irtb",
    "stage": "index,fetch",
+   "start": "2020-07-01",
+   "end": "2020-09-30",
+   "runner": "ubuntu-latest",
+   "extra_args": "--push-parts",
+   "adapter_env": "",
+   "retries": 1,
+   "seen_runs": [
+    35953534776
+   ],
+   "not_before": "2026-09-24T04:14:32.026Z"
+  },
+  {
+   "store": "irtb",
+   "stage": "index,fetch",
    "start": "2018-01-01",
    "end": "2018-03-31",
    "runner": "ubuntu-latest",
@@ -13,15 +27,6 @@
     35953071327
    ],
    "not_before": "2026-09-24T04:08:04.498Z"
-  },
-  {
-   "store": "irtb",
-   "stage": "index,fetch",
-   "start": "2020-10-01",
-   "end": "2020-12-31",
-   "runner": "ubuntu-latest",
-   "extra_args": "--push-parts",
-   "adapter_env": ""
   },
   {
    "store": "irtb",
@@ -529,12 +534,12 @@
   {
    "store": "irtb",
    "stage": "index,fetch",
-   "start": "2020-07-01",
-   "end": "2020-09-30",
+   "start": "2020-10-01",
+   "end": "2020-12-31",
    "runner": "ubuntu-latest",
    "extra_args": "--push-parts",
    "adapter_env": "",
-   "at": "2026-09-24T03:56:29.514Z"
+   "at": "2026-09-24T03:59:36.357Z"
   }
  ],
  "done": [
