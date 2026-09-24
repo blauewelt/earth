@@ -29,16 +29,6 @@
   {
    "store": "burned500",
    "stage": "index,fetch",
-   "start": "2024-01-01",
-   "end": "2024-12-31",
-   "runner": "ubuntu-latest",
-   "extra_args": "--push-parts",
-   "adapter_env": "",
-   "at": "2026-09-24T15:53:15.044Z"
-  },
-  {
-   "store": "burned500",
-   "stage": "index,fetch",
    "start": "2020-01-01",
    "end": "2020-12-31",
    "runner": "ubuntu-latest",
@@ -3064,6 +3054,18 @@
    "at": "2026-09-24T15:34:31.807Z",
    "run_number": 870,
    "finished": "2026-09-24T17:27:37Z"
+  },
+  {
+   "store": "burned500",
+   "stage": "index,fetch",
+   "start": "2024-01-01",
+   "end": "2024-12-31",
+   "runner": "ubuntu-latest",
+   "extra_args": "--push-parts",
+   "adapter_env": "",
+   "at": "2026-09-24T15:53:15.044Z",
+   "run_number": 881,
+   "finished": "2026-09-24T17:33:04Z"
   }
  ],
  "failed": [
