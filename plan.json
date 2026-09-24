@@ -1,0 +1,188 @@
+{
+ "bins": [
+  2228,
+  2246
+ ],
+ "builder_git_sha": "dcadbcfa7886b05daec3bbd08cd9b1691c81213d",
+ "built_at": "2026-09-24T03:18:45+00:00",
+ "bytes": 62099814706,
+ "channels": [
+  {
+   "max": 254.0,
+   "min": 0.0,
+   "name": "tb",
+   "unit": "K - 160 (uint8; add 160 for kelvin)"
+  }
+ ],
+ "collection": "C1432254058-GES_DISC",
+ "dataset": "GPM_MERGIR v1 \u2014 NCEP/CPC globally merged infrared brightness temperature, 4 km, 60 S .. 60 N, half-hourly",
+ "date_range": [
+  "2012-07-01",
+  "2012-09-30"
+ ],
+ "files": 2304,
+ "files_per_year": {
+  "2012": 2304
+ },
+ "first_file": {
+  "bytes": 27106783,
+  "dimensions": {
+   "lat": 3298,
+   "lon": 9896,
+   "time": 2
+  },
+  "format": "NETCDF4",
+  "grid_checked": {
+   "band_lat": [
+    -30.0,
+    29.963611602783203
+   ],
+   "band_rows": [
+    824,
+    2473
+   ],
+   "lat_first": -59.981807708740234,
+   "lat_last": 59.981807708740234,
+   "lon_first": -179.9818115234375,
+   "lon_last": 179.9818115234375
+  },
+  "hour": "2012-07-01 00:00:00",
+  "inventory": {
+   "Tb": {
+    "add_offset": null,
+    "dims": [
+     "time",
+     "lat",
+     "lon"
+    ],
+    "dtype": "int16",
+    "fill": -9999.0,
+    "long_name": "",
+    "scale_factor": null,
+    "shape": [
+     2,
+     3298,
+     9896
+    ],
+    "units": "K"
+   },
+   "lat": {
+    "add_offset": null,
+    "dims": [
+     "lat"
+    ],
+    "dtype": "float32",
+    "fill": null,
+    "long_name": "",
+    "scale_factor": null,
+    "shape": [
+     3298
+    ],
+    "units": "degrees_north"
+   },
+   "lon": {
+    "add_offset": null,
+    "dims": [
+     "lon"
+    ],
+    "dtype": "float32",
+    "fill": null,
+    "long_name": "",
+    "scale_factor": null,
+    "shape": [
+     9896
+    ],
+    "units": "degrees_east"
+   },
+   "time": {
+    "add_offset": null,
+    "dims": [
+     "time"
+    ],
+    "dtype": "float64",
+    "fill": null,
+    "long_name": "",
+    "scale_factor": null,
+    "shape": [
+     2
+    ],
+    "units": "days since 1970-01-01 00:00:00"
+   }
+  },
+  "name": "GPM_MERGIR.1:merg_2012070100_4km-pixel.nc4",
+  "resolution": {
+   "lat": "lat",
+   "lon": "lon",
+   "tb": "Tb",
+   "time": "time"
+  },
+  "variables": 4
+ },
+ "footprint": {
+  "log2_dt": -7.906890595608519,
+  "log2_fp": -2.7807832982061296
+ },
+ "grid": {
+  "H": 1649,
+  "W": 9896,
+  "band_note": "rows [band_rows[0], band_rows[1]) of the source field above; IRTB_LAT_BAND chose them",
+  "band_rows": [
+   824,
+   2473
+  ],
+  "coordinates": "lon = x0 + (col + 0.5) * dx, lat = y0 + (row + 0.5) * dy with dy POSITIVE; x0/y0 are the group's WEST and SOUTH edges",
+  "crs": "EPSG:4326",
+  "dx": 0.03637833468067906,
+  "dy": 0.036385688295936934,
+  "extent": [
+   -180.0,
+   -30.018192844147965,
+   180.0,
+   29.981807155852042
+  ],
+  "extent_note": "[west, south, east, north] in degrees",
+  "full_grid": {
+   "H": 3298,
+   "W": 9896,
+   "note": "the SOURCE field this band is cut from (3298 x 9896 for the real archive)",
+   "south": -60.0
+  },
+  "no_tile_corners": "a plain geographic grid: the affine rule above IS the lat/lon of every pixel and tile corner",
+  "pixel_deg_lat": 0.036385688295936934,
+  "pixel_deg_lon": 0.03637833468067906,
+  "pixel_km_equator": 4.0496,
+  "proj4": "+proj=longlat +datum=WGS84 +no_defs",
+  "row_order": "row 0 is the SOUTHERNMOST row \u2014 the source netCDF's own order, whose `lat` array ASCENDS. `grid_check` compares every file's lat/lon arrays against this affine rule and refuses on a mismatch",
+  "x0": -180.0,
+  "y0": -30.018192844147965
+ },
+ "hours_absent_in_window": [],
+ "hours_absent_n": 0,
+ "hours_per_day_histogram": {
+  "24": 96
+ },
+ "per_year_resume": true,
+ "qc_policy": "The merged IR field publishes no per-pixel quality flag; a pixel no satellite could see is the netCDF fill and becomes the layout's missing value 255. A kelvin outside [160, 414] \u2014 i.e. a stored value outside 0..254 \u2014 becomes missing and is COUNTED (`out_of_bounds`), never clipped: 160-330 K is the physical range of a merged IR field and anything past it is a broken file rather than a colder cloud. The store's unit is kelvin MINUS 160, the note's own encoding, and `tile_grid.json` says so in `channel_encoding`.",
+ "record": [
+  "2012-07-01 00:00:00",
+  "2012-10-04 23:00:00"
+ ],
+ "scope": {
+  "every_half_hours": 6,
+  "frame_seconds": 10800,
+  "frames_per_bin": 40,
+  "lat_band_deg": 30.0
+ },
+ "sources": [
+  "https://cmr.earthdata.nasa.gov/search/granules.json?collection_concept_id=C1432254058-GES_DISC (anonymous)",
+  "https://data.gesdisc.earthdata.nasa.gov/data/MERGED_IR/GPM_MERGIR.1/<YYYY>/<DDD>/merg_<YYYYMMDDHH>_4km-pixel.nc4"
+ ],
+ "store": "irtb",
+ "title": "NCEP/CPC merged infrared brightness temperature (GPM_MERGIR v1), 4 km \u2014 cloud-top temperature; phase A is the tropics three-hourly",
+ "url": "https://cmr.earthdata.nasa.gov/search/granules.json?collection_concept_id=C1432254058-GES_DISC",
+ "verified": "2026-09-18 from this sandbox (CMR only \u2014 a GES DISC .nc4 answers an anonymous GET with 302 to urs.earthdata.nasa.gov and then 401, so the BYTES are a hosted runner's job): the collection GPM_MERGIR v1 (C1432254058-GES_DISC, 1998-01-01 ->) and 2015-01-01's granules \u2014 24 files, one an hour, `merg_2015010100_4km-pixel.nc4` .. `...23...`, 698.5 MB in total, 27.6-28.3 MB each \u2014 with each granule's own https .nc4 link read from its CMR entry. NOT MEASURED HERE, and what the runner probe settles: the file's internal variable layout (resolved against a candidate list, with the whole inventory written into plan.json), whether an hourly file really holds TWO time steps, the lat/lon axes against the declared affine grid, and the compressed bytes a tile and a frame.",
+ "version": "1",
+ "years": [
+  2012
+ ]
+}
