@@ -3,15 +3,6 @@
   {
    "store": "pheno500",
    "stage": "index,fetch",
-   "start": "2008-01-01",
-   "end": "2008-12-31",
-   "runner": "ubuntu-latest",
-   "extra_args": "--push-parts",
-   "adapter_env": ""
-  },
-  {
-   "store": "pheno500",
-   "stage": "index,fetch",
    "start": "2009-01-01",
    "end": "2009-12-31",
    "runner": "ubuntu-latest",
@@ -392,16 +383,6 @@
   {
    "store": "pheno500",
    "stage": "index,fetch",
-   "start": "2003-01-01",
-   "end": "2003-12-31",
-   "runner": "ubuntu-latest",
-   "extra_args": "--push-parts",
-   "adapter_env": "",
-   "at": "2026-09-24T12:12:55.256Z"
-  },
-  {
-   "store": "pheno500",
-   "stage": "index,fetch",
    "start": "2004-01-01",
    "end": "2004-12-31",
    "runner": "ubuntu-latest",
@@ -466,6 +447,16 @@
     35997599857
    ],
    "at": "2026-09-24T13:02:22.718Z"
+  },
+  {
+   "store": "pheno500",
+   "stage": "index,fetch",
+   "start": "2008-01-01",
+   "end": "2008-12-31",
+   "runner": "ubuntu-latest",
+   "extra_args": "--push-parts",
+   "adapter_env": "",
+   "at": "2026-09-24T13:14:44.906Z"
   }
  ],
  "done": [
@@ -2942,6 +2933,18 @@
    "at": "2026-09-24T12:12:47.953Z",
    "run_number": 832,
    "finished": "2026-09-24T13:01:50Z"
+  },
+  {
+   "store": "pheno500",
+   "stage": "index,fetch",
+   "start": "2003-01-01",
+   "end": "2003-12-31",
+   "runner": "ubuntu-latest",
+   "extra_args": "--push-parts",
+   "adapter_env": "",
+   "at": "2026-09-24T12:12:55.256Z",
+   "run_number": 834,
+   "finished": "2026-09-24T13:12:16Z"
   }
  ],
  "failed": []
