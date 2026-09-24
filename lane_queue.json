@@ -1,15 +1,6 @@
 {
  "pending": [
   {
-   "store": "pheno500",
-   "stage": "index,fetch",
-   "start": "2011-01-01",
-   "end": "2011-12-31",
-   "runner": "ubuntu-latest",
-   "extra_args": "--push-parts",
-   "adapter_env": ""
-  },
-  {
    "store": "burned500",
    "stage": "index,fetch",
    "start": "2006-01-01",
@@ -192,20 +183,6 @@
   {
    "store": "sif",
    "stage": "index,fetch",
-   "start": "2022-01-01",
-   "end": "2022-12-31",
-   "runner": "ubuntu-latest",
-   "extra_args": "--push-parts",
-   "adapter_env": "SIF_OCO=0",
-   "retries": 1,
-   "seen_runs": [
-    35997593029
-   ],
-   "at": "2026-09-24T13:02:18.760Z"
-  },
-  {
-   "store": "sif",
-   "stage": "index,fetch",
    "start": "2023-01-01",
    "end": "2023-12-31",
    "runner": "ubuntu-latest",
@@ -336,6 +313,16 @@
    "extra_args": "--push-parts",
    "adapter_env": "",
    "at": "2026-09-24T14:29:24.351Z"
+  },
+  {
+   "store": "pheno500",
+   "stage": "index,fetch",
+   "start": "2011-01-01",
+   "end": "2011-12-31",
+   "runner": "ubuntu-latest",
+   "extra_args": "--push-parts",
+   "adapter_env": "",
+   "at": "2026-09-24T14:32:33.130Z"
   }
  ],
  "done": [
@@ -2992,6 +2979,22 @@
    "at": "2026-09-24T13:17:51.467Z",
    "run_number": 843,
    "finished": "2026-09-24T14:26:29Z"
+  },
+  {
+   "store": "sif",
+   "stage": "index,fetch",
+   "start": "2022-01-01",
+   "end": "2022-12-31",
+   "runner": "ubuntu-latest",
+   "extra_args": "--push-parts",
+   "adapter_env": "SIF_OCO=0",
+   "retries": 1,
+   "seen_runs": [
+    35997593029
+   ],
+   "at": "2026-09-24T13:02:18.760Z",
+   "run_number": 840,
+   "finished": "2026-09-24T14:32:02Z"
   }
  ],
  "failed": []
