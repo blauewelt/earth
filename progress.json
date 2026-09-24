@@ -1,0 +1,10 @@
+{
+ "at": "2026-09-24T12:47:51+00:00",
+ "done": 1,
+ "elapsed_s": 2102.9,
+ "eta_s": 0.0,
+ "item": "sif 2018",
+ "stage": "fetch sif",
+ "total": 1,
+ "year_rows": 559232744
+}
