@@ -1,17 +1,6 @@
 {
  "pending": [],
- "dispatched": [
-  {
-   "store": "burned500",
-   "stage": "index,fetch",
-   "start": "2026-01-01",
-   "end": "2026-09-15",
-   "runner": "ubuntu-latest",
-   "extra_args": "--push-parts",
-   "adapter_env": "",
-   "at": "2026-09-24T17:31:52.285Z"
-  }
- ],
+ "dispatched": [],
  "done": [
   {
    "store": "sst_acspo02",
@@ -3076,6 +3065,18 @@
    "at": "2026-09-24T16:11:48.147Z",
    "run_number": 885,
    "finished": "2026-09-24T18:04:42Z"
+  },
+  {
+   "store": "burned500",
+   "stage": "index,fetch",
+   "start": "2026-01-01",
+   "end": "2026-09-15",
+   "runner": "ubuntu-latest",
+   "extra_args": "--push-parts",
+   "adapter_env": "",
+   "at": "2026-09-24T17:31:52.285Z",
+   "run_number": 889,
+   "finished": "2026-09-24T18:33:40Z"
   }
  ],
  "failed": [
