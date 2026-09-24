@@ -658,6 +658,14 @@ class SSTACSPO02Adapter(sh.GridAdapter):
         # for this collection (probe #172), so the first day is read anyway —
         # what decides is whether the FILE opens and its grid checks out.
         key = (good or sorted(days))[0]
+        if getattr(ctx.a, "parts_from_hub", False):
+            # a box assembling parked lanes has no Earthdata credentials
+            # (ml/CLAUDE.md §6); the lane ledgers inventoried the granules
+            # (irtb's whole-record assembly #721 died on this read, 2026-09-24)
+            out["first_file"] = {"name": days[key]["name"], "day": str(key),
+                                 "not_read": "parts from the Hub — the lane "
+                                             "ledgers inventoried the files"}
+            return out
         try:
             path, tmp = self._get(ctx, days[key])
         except (IOError, f10b._NotFound) as e:

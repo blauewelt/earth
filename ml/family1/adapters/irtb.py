@@ -612,7 +612,17 @@ class IRTBAdapter(sh.GridAdapter):
                          "frames_per_bin": self.frames_per_bin,
                          "frame_seconds": self.frame_seconds},
                "grid": self.grid}
-        # ONE REAL FILE, downloaded, INVENTORIED and grid-checked.
+        # ONE REAL FILE, downloaded, INVENTORIED and grid-checked — unless
+        # the parts come from the Hub: a box assembling parked lanes has no
+        # Earthdata credentials (ml/CLAUDE.md §6), every lane's ledger already
+        # inventoried its own files, and the whole-record irtb assembly
+        # (family1-build #721, 2026-09-24) died here on a 401 for exactly that
+        # reason. `needs_source` says the same thing one level up.
+        if getattr(ctx.a, "parts_from_hub", False):
+            out["first_file"] = {"name": hours[lo]["name"], "hour": str(lo),
+                                 "not_read": "parts from the Hub — the lane "
+                                             "ledgers inventoried the files"}
+            return out
         key = lo
         try:
             path, tmp = self._get(ctx, hours[key])
