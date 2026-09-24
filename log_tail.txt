@@ -1,0 +1,80 @@
+  [verify irtb before publish] check: sha256 2000/4196  16.2s
+  [verify irtb before publish] check: sha256 2200/4196  17.8s
+  [verify irtb before publish] check: sha256 2400/4196  19.6s
+  [verify irtb before publish] check: sha256 2600/4196  21.2s
+  [verify irtb before publish] check: sha256 2800/4196  23.0s
+  [verify irtb before publish] check: sha256 3000/4196  24.8s
+  [verify irtb before publish] check: sha256 3200/4196  26.6s
+  [verify irtb before publish] check: sha256 3400/4196  28.4s
+  [verify irtb before publish] check: sha256 3600/4196  30.2s
+  [verify irtb before publish] check: sha256 3800/4196  32.0s
+  [verify irtb before publish] check: sha256 4000/4196  33.8s
+  [verify irtb before publish] check: sha256 4196/4196  35.6s
+  [verify irtb before publish] check: check irtb 100/2097  35.6s
+  [verify irtb before publish] check: check irtb 200/2097  35.7s
+  [verify irtb before publish] check: check irtb 300/2097  35.7s
+  [verify irtb before publish] check: check irtb 400/2097  35.7s
+  [verify irtb before publish] check: check irtb 500/2097  35.8s
+  [verify irtb before publish] check: check irtb 600/2097  35.8s
+  [verify irtb before publish] check: check irtb 700/2097  35.9s
+  [verify irtb before publish] check: check irtb 800/2097  35.9s
+  [verify irtb before publish] check: check irtb 900/2097  36.0s
+  [verify irtb before publish] check: check irtb 1000/2097  36.0s
+  [verify irtb before publish] check: check irtb 1100/2097  36.0s
+  [verify irtb before publish] check: check irtb 1200/2097  36.1s
+  [verify irtb before publish] check: check irtb 1300/2097  36.1s
+  [verify irtb before publish] check: check irtb 1400/2097  36.2s
+  [verify irtb before publish] check: check irtb 1500/2097  36.2s
+  [verify irtb before publish] check: check irtb 1600/2097  36.3s
+  [verify irtb before publish] check: check irtb 1700/2097  36.3s
+  [verify irtb before publish] check: check irtb 1800/2097  36.4s
+  [verify irtb before publish] check: check irtb 1900/2097  36.4s
+  [verify irtb before publish] check: check irtb 2000/2097  36.4s
+  [verify irtb before publish] check: check irtb 2097/2097  36.5s
+  hub: chfrank/earth-tensors with the token from $HF_TOKEN
+  [publish irtb] start (4197 items)  0/4197  0.0s
+Upload 0 LFS files: 0it [00:00, ?it/s]Upload 0 LFS files: 0it [00:00, ?it/s]
+No files have been modified since last commit. Skipping to prevent empty commit.
+Upload 0 LFS files: 0it [00:00, ?it/s]Upload 0 LFS files: 0it [00:00, ?it/s]
+No files have been modified since last commit. Skipping to prevent empty commit.
+Upload 0 LFS files: 0it [00:00, ?it/s]Upload 0 LFS files: 0it [00:00, ?it/s]
+No files have been modified since last commit. Skipping to prevent empty commit.
+Upload 0 LFS files: 0it [00:00, ?it/s]Upload 0 LFS files: 0it [00:00, ?it/s]
+Upload 0 LFS files: 0it [00:00, ?it/s]Upload 0 LFS files: 0it [00:00, ?it/s]
+Upload 0 LFS files: 0it [00:00, ?it/s]Upload 0 LFS files: 0it [00:00, ?it/s]
+Upload 0 LFS files: 0it [00:00, ?it/s]Upload 0 LFS files: 0it [00:00, ?it/s]
+Upload 0 LFS files: 0it [00:00, ?it/s]Upload 0 LFS files: 0it [00:00, ?it/s]
+shard_index.npy:   0%|          | 0.00/759k [00:00<?, ?B/s]shard_index.npy:  60%|██████    | 459k/759k [00:00<00:00, 4.49MB/s]shard_index.npy: 100%|██████████| 759k/759k [00:00<00:00, 2.64MB/s]
+  [publish irtb] irtb  2/4197  108.6s
+  [publish irtb] irtb/1998  148/4197  175.6s
+  [publish irtb] irtb/1999  294/4197  256.0s
+  [publish irtb] irtb/2000  440/4197  328.2s
+  [publish irtb] irtb/2001  586/4197  404.7s
+  [publish irtb] irtb/2002  732/4197  474.7s
+  [publish irtb] irtb/2003  878/4197  546.8s
+  [publish irtb] irtb/2004  1026/4197  637.1s
+  [publish irtb] irtb/2005  1172/4197  723.1s
+  [publish irtb] irtb/2006  1318/4197  820.1s
+  [publish irtb] irtb/2007  1464/4197  905.1s
+  [publish irtb] irtb/2008  1610/4197  984.7s
+  [publish irtb] irtb/2009  1756/4197  1061.3s
+  [publish irtb] irtb/2010  1902/4197  1148.4s
+  [publish irtb] irtb/2011  2048/4197  1261.2s
+  [publish irtb] irtb/2012  2194/4197  1342.1s
+  [publish irtb] irtb/2013  2340/4197  1412.1s
+  [publish irtb] irtb/2014  2486/4197  1485.7s
+  [publish irtb] irtb/2015  2632/4197  1562.5s
+  [publish irtb] irtb/2016  2778/4197  1644.9s
+  [publish irtb] irtb/2017  2924/4197  1726.0s
+  [publish irtb] irtb/2018  3070/4197  1807.8s
+  [publish irtb] irtb/2019  3216/4197  1887.5s
+  [publish irtb] irtb/2020  3362/4197  1973.2s
+  [publish irtb] irtb/2021  3508/4197  2058.3s
+  [publish irtb] irtb/2022  3654/4197  2145.8s
+  [publish irtb] irtb/2023  3800/4197  2236.3s
+  [publish irtb] irtb/2024  3948/4197  2331.1s
+  [publish irtb] irtb/2025  4094/4197  2411.1s
+  [publish irtb] irtb/2026  4196/4197  2485.5s
+  [publish irtb] store.json  4197/4197  2485.8s
+  publish: 4197 file(s) verified by restore, 50 tile(s) decompressed, HTTP range {'checked': 5} -> https://huggingface.co/datasets/chfrank/earth-tensors/tree/main/tensors/family1_gf/irtb
+=== stage publish done in 2532.9s ===
