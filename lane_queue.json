@@ -16,20 +16,6 @@
    "at": "2026-09-23T23:45:21.583Z"
   },
   {
-   "store": "sst_acspo02",
-   "stage": "index,fetch",
-   "start": "2017-07-01",
-   "end": "2017-12-31",
-   "runner": "ubuntu-latest",
-   "extra_args": "--push-parts",
-   "adapter_env": "",
-   "retries": 1,
-   "seen_runs": [
-    35935405129
-   ],
-   "at": "2026-09-24T00:13:02.631Z"
-  },
-  {
    "store": "icesat2",
    "stage": "index,fetch",
    "start": "2022-01-01",
@@ -2503,6 +2489,22 @@
    "at": "2026-09-23T23:23:37.139Z",
    "run_number": 714,
    "finished": "2026-09-24T01:57:48Z"
+  },
+  {
+   "store": "sst_acspo02",
+   "stage": "index,fetch",
+   "start": "2017-07-01",
+   "end": "2017-12-31",
+   "runner": "ubuntu-latest",
+   "extra_args": "--push-parts",
+   "adapter_env": "",
+   "retries": 1,
+   "seen_runs": [
+    35935405129
+   ],
+   "at": "2026-09-24T00:13:02.631Z",
+   "run_number": 722,
+   "finished": "2026-09-24T02:14:03Z"
   }
  ],
  "failed": []
