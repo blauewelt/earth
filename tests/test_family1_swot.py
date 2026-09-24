@@ -217,33 +217,31 @@ def test_the_quality_vocabulary_comes_from_the_file():
         swot.qc_grade(Bad())
 
 
-def test_the_pager_survives_a_page_seam(monkeypatch):
-    """CMR's temporal filter is inclusive, so the next page repeats the last
-    granule; a whole year (~9,700 granules) is five pages. Without the
-    de-duplication the seam raised "two granules for cycle … pass …"."""
+def test_the_pager_follows_the_cursor_and_dedupes_a_repeat(monkeypatch):
+    """The listing pages on `CMR-Search-After` through `cm.cmr_entries`
+    (checked against CMR-Hits — a cut listing is a refusal, see
+    tests/test_family1_cmr_walk.py). A granule CMR lists twice is kept once,
+    so a seam cannot raise "two granules for cycle … pass …"."""
     def g(i):
         n = (f"SWOT_L2_LR_SSH_Expert_010_{i:03d}_20240125T000000_"
              f"20240125T005000_PGD0_02_swot")
         return {"id": f"G{i}", "title": n,
                 "time_start": f"2024-01-25T{i:02d}:00:00Z",
                 "time_end": f"2024-01-25T{i:02d}:50:00Z"}
-    pages = [[g(1), g(2), g(3)], [g(3), g(4), g(5)], [g(5), g(6)]]
+    # seven rows, one of them a repeat of G3 — CMR-Hits counts rows
+    pages = [([g(1), g(2), g(3)], 7, "A"), ([g(3), g(4), g(5)], 7, "B"),
+             ([g(6)], 7, None)]
     asked = []
 
-    def fake(url, attempts=4, headers=None, **k):
-        asked.append(url)
-        return json.dumps({"feed": {"entry": pages[len(asked) - 1]}}).encode(), None
-    monkeypatch.setattr(swot.cm, "get_bytes", fake)
+    def fake(url, headers=None, attempts=4, sleep=3.0, count=None):
+        asked.append((url, (headers or {}).get("CMR-Search-After")))
+        return pages[len(asked) - 1]
+    monkeypatch.setattr(swot.cm, "cmr_page", fake)
     got = swot.cmr_granules(temporal="2024-01-01T00:00:00Z,2024-01-31T23:59:59Z",
                             page=3)
     assert [x["id"] for x in got] == [f"G{i}" for i in range(1, 7)]
-    assert len(asked) == 3 and "2024-01-25T03%3A00%3A00Z" in asked[1]
-    # a page of nothing new is a refusal, never an endless loop
-    pages[:] = [[g(1), g(2), g(3)], [g(1), g(2), g(3)]]
-    asked.clear()
-    with pytest.raises(swot.FormatError, match="already listed"):
-        swot.cmr_granules(temporal="2024-01-01T00:00:00Z,2024-01-31T23:59:59Z",
-                          page=3)
+    assert [a[1] for a in asked] == [None, "A", "B"]
+    assert "page_size=3" in asked[0][0] and "temporal=" in asked[0][0]
 
 
 def test_a_build_lists_its_window_and_a_probe_its_cycle(monkeypatch):

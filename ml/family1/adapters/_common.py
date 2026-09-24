@@ -9,12 +9,14 @@ body, and an ordered thread map with a bounded look-ahead so a pool of
 downloads never holds more than a few files at once.
 """
 import collections
+import json
 import os
 import re
 import concurrent.futures as cf
 import sys
 import time
 import urllib.error
+import urllib.parse
 import urllib.request
 
 import numpy as np
@@ -112,6 +114,142 @@ def get_bytes(url, attempts=4, sleep=3.0, headers=None, timeout=None):
             if i < attempts - 1:
                 time.sleep(sleep * (2 ** i))
     raise IOError(f"{url}: {type(err).__name__}: {err}")
+
+
+# ============================================================ CMR paging ==
+CMR_PAGE = 2000          # CMR's documented maximum page_size
+#: how far below its own `CMR-Hits` header one CMR listing may come back —
+#: the header is an index count that can include a tombstoned or
+#: double-revisioned concept the result set does not (measured on VNP02IMG,
+#: 243 against 242: `_stac.CMR_HITS_SLACK`). Any larger shortfall is the
+#: listing being cut, and a cut listing is never acted on.
+CMR_HITS_SLACK = 8
+#: whole-walk retries when the listing comes back short of CMR-Hits
+CMR_WALK_ATTEMPTS = 3
+CMR_TIMEOUT = 120
+
+
+class CMRTruncated(IOError):
+    """CMR listed fewer granules than its own CMR-Hits header counts.
+
+    MEASURED 2026-09-23, on the irtb (cloud-top temperature) lanes that ran
+    during a slow hour of CMR (≈21:00–23:45Z): the service answers HTTP 200
+    with a `CMR-Timed-Out: true` header and however many rows it had found
+    before its own deadline — 247 of the 2,160 granules of 2013 Q1 — and a
+    pager that took a short page as the end of the listing then recorded
+    the other 1,913 hours as `absent_upstream`. Sixteen years of the store
+    were short by 15,388 frames from listings that looked complete. This is
+    an IOError because the archive is fine; the LISTING was cut.
+    """
+
+
+def cmr_page(url, headers=None, attempts=4, sleep=3.0, count=None):
+    """One CMR GET -> (feed entries, hits or None, next CMR-Search-After).
+
+    A response carrying `CMR-Timed-Out` is a PARTIAL page — CMR gave up
+    before it finished — and is retried like a transport failure, never
+    parsed as the listing. A 4xx other than 429 is our own bad request and
+    is not retried.
+    """
+    err = None
+    for i in range(max(1, attempts)):
+        try:
+            req = urllib.request.Request(url, headers={**f10b.UA,
+                                                       **(headers or {})})
+            with urllib.request.urlopen(req, timeout=CMR_TIMEOUT) as r:
+                raw = r.read()
+                rh = r.headers
+            f10b.count_bytes(len(raw))
+            if count is not None:
+                count(len(raw))
+            if str(rh.get("CMR-Timed-Out", "")).lower() == "true":
+                raise IOError(f"{url}: CMR answered a partial page "
+                              f"(CMR-Timed-Out) — retrying")
+            feed = json.loads(raw).get("feed") or {}
+            ents = list(feed.get("entry") or ())
+            hits = rh.get("CMR-Hits")
+            return (ents, int(hits) if hits is not None else None,
+                    rh.get("CMR-Search-After"))
+        except urllib.error.HTTPError as e:
+            err = e
+            if 400 <= e.code < 500 and e.code != 429:
+                break
+        except (IOError, ValueError, *RETRY_ERRORS) as e:
+            err = e
+        if i < attempts - 1:
+            time.sleep(sleep * (2 ** i))
+    raise IOError(f"{url}: {type(err).__name__}: {err}")
+
+
+def cmr_entries(base, params, attempts=4, count=None, what="CMR",
+                page_size=CMR_PAGE, walk_attempts=CMR_WALK_ATTEMPTS,
+                sleep=3.0, max_pages=100000):
+    """Every `feed.entry` of one CMR query, as a list.
+
+    Paged with the `CMR-Search-After` cursor and CHECKED against `CMR-Hits`:
+    a walk that returns more than the header counts, or more than
+    `CMR_HITS_SLACK` fewer, is wrong, and a short walk is retried whole
+    `walk_attempts` times before it RAISES `CMRTruncated` — a lane must
+    never book a granule as absent because the listing was cut. A page
+    shorter than `page_size` ends the walk, and it is the CMR-Hits check —
+    not the page length — that says whether that was the end of the listing
+    or a page the server cut short. `count` is called with each page's byte
+    count.
+    """
+    params = dict(params)
+    params["page_size"] = int(page_size)
+    url = f"{base}?{urllib.parse.urlencode(params)}"
+    last_err = None
+    for w in range(max(1, walk_attempts)):
+        out, hits, after, pages = [], None, None, 0
+        try:
+            while True:
+                hdr = {"CMR-Search-After": after} if after else None
+                ents, h, nxt = cmr_page(url, headers=hdr, attempts=attempts,
+                                        sleep=sleep, count=count)
+                pages += 1
+                if h is not None:
+                    if hits is None:
+                        hits = h
+                    elif h != hits:
+                        raise CMRTruncated(
+                            f"{what}: CMR-Hits changed from {hits} to {h} "
+                            f"on page {pages} — the catalogue moved under "
+                            f"the walk")
+                out.extend(ents)
+                after = nxt
+                if len(ents) < page_size:
+                    # the ordinary end of a listing, whether or not CMR
+                    # still offers a cursor; the CMR-Hits check below is
+                    # what tells it from a page the server cut short
+                    break
+                if not ents or not after:
+                    break
+                if pages >= max_pages:
+                    raise CMRTruncated(f"{what}: more than {max_pages} "
+                                       f"CMR pages")
+            if hits is None:
+                raise CMRTruncated(
+                    f"{what}: CMR never sent a CMR-Hits header, so the "
+                    f"{len(out)} granule(s) have nothing to check against")
+            if len(out) > hits:
+                raise CMRTruncated(
+                    f"{what}: walked {len(out)} granule(s) and CMR-Hits "
+                    f"says only {hits} — the walk returned rows the "
+                    f"producer does not count")
+            if hits - len(out) > CMR_HITS_SLACK:
+                raise CMRTruncated(
+                    f"{what}: walked {len(out)} granule(s) and CMR-Hits "
+                    f"says {hits} — the listing is short by "
+                    f"{hits - len(out)}, more than the {CMR_HITS_SLACK} a "
+                    f"listing may differ by (walk {w + 1} of "
+                    f"{walk_attempts})")
+            return out
+        except CMRTruncated as e:
+            last_err = e
+            if w < walk_attempts - 1:
+                time.sleep(sleep * (2 ** w))
+    raise last_err
 
 
 def range_reader(url, attempts=4, counter=None, headers=None):

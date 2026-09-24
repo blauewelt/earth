@@ -167,51 +167,40 @@ class FormatError(ValueError):
 def cmr_days(cid, attempts=4, count=None, temporal=None):
     """{date: entry} for one collection — every granule, paged.
 
-    ANONYMOUS. `sort_key=start_date` plus a `temporal` window advanced to the
-    last granule's start is the cursor, because `cm.get_bytes` does not hand
-    back the `CMR-Search-After` header.
+    ANONYMOUS. Paged by `cm.cmr_entries` on the `CMR-Search-After` cursor
+    and checked against `CMR-Hits`; a cut listing raises `cm.CMRTruncated`
+    (the 2026-09-23 irtb failure: a partial page during a slow hour of CMR
+    read as the end of the listing).
     """
-    out, lo = {}, (temporal or "1900-01-01T00:00:00Z,2100-01-01T00:00:00Z")
-    seen = 0
-    while True:
-        q = {"collection_concept_id": cid, "page_size": 2000,
-             "sort_key": "start_date", "temporal": lo}
-        raw, why = cm.get_bytes(f"{CMR}?{urllib.parse.urlencode(q)}",
-                                attempts=attempts)
-        if raw is None:
-            raise FormatError(f"CMR answered {why} for {cid}")
-        if count is not None:
-            count(len(raw))
-        e = json.loads(raw).get("feed", {}).get("entry", [])
-        for g in e:
-            title = g.get("title", "")
-            m = NAME.search(title)
-            if not m:
-                continue
-            stamp = m.group(1)
-            y = 2000 + int(stamp[:2])
-            try:
-                d = dt.date(y, int(stamp[2:4]), int(stamp[4:6]))
-            except ValueError:
-                raise FormatError(f"{title}: {stamp} is not a YYMMDD "
-                                  f"date") from None
-            url = None
-            for ln in g.get("links", []):
-                h = str(ln.get("href", ""))
-                if h.startswith("https") and h.endswith((".nc4", ".nc")) \
-                        and "opendap" not in h:
-                    url = h
-                    break
-            if url is None:
-                raise FormatError(f"{title}: no https .nc4 link in its CMR "
-                                  f"entry")
-            out[d] = {"name": title, "url": url,
-                      "bytes": int(float(g.get("granule_size") or 0) * 1e6)}
-        seen += len(e)
-        if len(e) < 2000:
-            return out
-        last = e[-1]["time_start"]
-        lo = f"{last},{lo.split(',')[1]}"
+    q = {"collection_concept_id": cid, "sort_key": "start_date",
+         "temporal": temporal or "1900-01-01T00:00:00Z,2100-01-01T00:00:00Z"}
+    out = {}
+    for g in cm.cmr_entries(CMR, q, attempts=attempts, count=count,
+                            what=f"{cid} {q['temporal']}"):
+        title = g.get("title", "")
+        m = NAME.search(title)
+        if not m:
+            continue
+        stamp = m.group(1)
+        y = 2000 + int(stamp[:2])
+        try:
+            d = dt.date(y, int(stamp[2:4]), int(stamp[4:6]))
+        except ValueError:
+            raise FormatError(f"{title}: {stamp} is not a YYMMDD "
+                              f"date") from None
+        url = None
+        for ln in g.get("links", []):
+            h = str(ln.get("href", ""))
+            if h.startswith("https") and h.endswith((".nc4", ".nc")) \
+                    and "opendap" not in h:
+                url = h
+                break
+        if url is None:
+            raise FormatError(f"{title}: no https .nc4 link in its CMR "
+                              f"entry")
+        out[d] = {"name": title, "url": url,
+                  "bytes": int(float(g.get("granule_size") or 0) * 1e6)}
+    return out
 
 
 # ================================================================ one file =
@@ -498,7 +487,7 @@ class XCO2Adapter(f10b.SourceAdapter):
                 try:
                     got = cmr_days(cid, attempts=ctx.a.attempts,
                                    count=ctx.count_bytes)
-                except FormatError as e:
+                except (FormatError, cm.CMRTruncated) as e:
                     sys.exit(f"REFUSING xco2: {e}")
                 if not got:
                     sys.exit(f"REFUSING xco2: CMR lists no granule of "

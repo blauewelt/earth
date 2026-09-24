@@ -141,45 +141,41 @@ class FormatError(ValueError):
 
 # ================================================================ listing ==
 def cmr_hours(t_lo, t_hi, attempts=4, count=None):
-    """{datetime hour: entry} for the window, from CMR. ANONYMOUS."""
-    out, lo = {}, f"{t_lo},{t_hi}"
-    while True:
-        q = {"collection_concept_id": COLLECTION, "page_size": 2000,
-             "sort_key": "start_date", "temporal": lo}
-        raw, why = cm.get_bytes(f"{CMR}?{urllib.parse.urlencode(q)}",
-                                attempts=attempts)
-        if raw is None:
-            raise FormatError(f"CMR answered {why} for {SHORT_NAME}")
-        if count is not None:
-            count(len(raw))
-        e = json.loads(raw).get("feed", {}).get("entry", [])
-        for g in e:
-            title = str(g.get("title", ""))
-            m = NAME.search(title)
-            if not m:
-                continue
-            s = m.group(1)
-            try:
-                when = dt.datetime(int(s[:4]), int(s[4:6]), int(s[6:8]),
-                                   int(s[8:10]))
-            except ValueError:
-                raise FormatError(f"{title}: {s} is not YYYYMMDDHH") from None
-            url = None
-            for ln in g.get("links", []):
-                h = str(ln.get("href", ""))
-                if h.startswith("https") and h.endswith(".nc4") \
-                        and "opendap" not in h:
-                    url = h
-                    break
-            if url is None:
-                raise FormatError(f"{title}: no https .nc4 link in its CMR "
-                                  f"entry")
-            out[when] = {"name": os.path.basename(title), "url": url,
-                         "bytes": int(float(g.get("granule_size") or 0) * 1e6)}
-        if len(e) < 2000:
-            return out
-        last = e[-1]["time_start"]
-        lo = f"{last},{t_hi}"
+    """{datetime hour: entry} for the window, from CMR. ANONYMOUS.
+
+    Paged by `cm.cmr_entries`, which checks the walk against CMR's own
+    `CMR-Hits` count and raises `cm.CMRTruncated` on a cut listing — the
+    2026-09-23 failure, where a short page during a slow hour of CMR was
+    taken as the end of the window and 15,388 hours were booked absent.
+    """
+    q = {"collection_concept_id": COLLECTION, "sort_key": "start_date",
+         "temporal": f"{t_lo},{t_hi}"}
+    out = {}
+    for g in cm.cmr_entries(CMR, q, attempts=attempts, count=count,
+                            what=f"{SHORT_NAME} {t_lo}..{t_hi}"):
+        title = str(g.get("title", ""))
+        m = NAME.search(title)
+        if not m:
+            continue
+        s = m.group(1)
+        try:
+            when = dt.datetime(int(s[:4]), int(s[4:6]), int(s[6:8]),
+                               int(s[8:10]))
+        except ValueError:
+            raise FormatError(f"{title}: {s} is not YYYYMMDDHH") from None
+        url = None
+        for ln in g.get("links", []):
+            h = str(ln.get("href", ""))
+            if h.startswith("https") and h.endswith(".nc4") \
+                    and "opendap" not in h:
+                url = h
+                break
+        if url is None:
+            raise FormatError(f"{title}: no https .nc4 link in its CMR "
+                              f"entry")
+        out[when] = {"name": os.path.basename(title), "url": url,
+                     "bytes": int(float(g.get("granule_size") or 0) * 1e6)}
+    return out
 
 
 # ================================================================== grid ===
@@ -538,7 +534,7 @@ class IRTBAdapter(sh.GridAdapter):
             try:
                 out = cmr_hours(lo, hi, attempts=ctx.a.attempts,
                                 count=ctx.count_bytes)
-            except FormatError as e:
+            except (FormatError, cm.CMRTruncated) as e:
                 sys.exit(f"REFUSING irtb: {e}")
             if not out:
                 sys.exit(f"REFUSING irtb: CMR lists no {SHORT_NAME} granule "

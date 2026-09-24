@@ -163,49 +163,45 @@ class FormatError(ValueError):
 
 # ================================================================ listing ==
 def cmr_days(cid, t_lo, t_hi, attempts=4, count=None):
-    """{date: entry} for the window. ANONYMOUS; the BYTES need a login."""
-    out, lo = {}, f"{t_lo},{t_hi}"
-    while True:
-        q = {"collection_concept_id": cid, "page_size": 2000,
-             "sort_key": "start_date", "temporal": lo}
-        raw, why = cm.get_bytes(f"{CMR}?{urllib.parse.urlencode(q)}",
-                                attempts=attempts)
-        if raw is None:
-            raise FormatError(f"CMR answered {why} for {cid}")
-        if count is not None:
-            count(len(raw))
-        e = json.loads(raw).get("feed", {}).get("entry", [])
-        for g in e:
-            title = str(g.get("title", ""))
-            m = NAME.match(title)
-            if not m:
-                continue
-            s = m.group(1)
-            try:
-                d = dt.date(int(s[:4]), int(s[4:6]), int(s[6:8]))
-            except ValueError:
-                raise FormatError(f"{title}: {s[:8]} is not a date") from None
-            url = None
-            for ln in g.get("links", []):
-                h = str(ln.get("href", ""))
-                if h.startswith("https") and "protected" in h \
-                        and h.endswith(".nc"):
-                    url = h
-                    break
-            if url is None:
-                raise FormatError(f"{title}: no protected https .nc link in "
-                                  f"its CMR entry")
-            nb = int(float(g.get("granule_size") or 0) * 1e6)
-            if d in out:
-                raise FormatError(
-                    f"two granules for {d}: {out[d]['name']} and {title} — "
-                    f"this collection is one a day, so a second one means "
-                    f"the day/night split (a PM or AM collection) rather "
-                    f"than the daily super-collation")
-            out[d] = {"name": title, "url": url, "bytes": nb}
-        if len(e) < 2000:
-            return out
-        lo = f"{e[-1]['time_start']},{t_hi}"
+    """{date: entry} for the window. ANONYMOUS; the BYTES need a login.
+
+    Paged by `cm.cmr_entries`, which checks the walk against `CMR-Hits`
+    and raises `cm.CMRTruncated` on a cut listing (the 2026-09-23 irtb
+    failure: a partial page during a slow hour of CMR read as the end).
+    """
+    q = {"collection_concept_id": cid, "sort_key": "start_date",
+         "temporal": f"{t_lo},{t_hi}"}
+    out = {}
+    for g in cm.cmr_entries(CMR, q, attempts=attempts, count=count,
+                            what=f"{cid} {t_lo}..{t_hi}"):
+        title = str(g.get("title", ""))
+        m = NAME.match(title)
+        if not m:
+            continue
+        s = m.group(1)
+        try:
+            d = dt.date(int(s[:4]), int(s[4:6]), int(s[6:8]))
+        except ValueError:
+            raise FormatError(f"{title}: {s[:8]} is not a date") from None
+        url = None
+        for ln in g.get("links", []):
+            h = str(ln.get("href", ""))
+            if h.startswith("https") and "protected" in h \
+                    and h.endswith(".nc"):
+                url = h
+                break
+        if url is None:
+            raise FormatError(f"{title}: no protected https .nc link in "
+                              f"its CMR entry")
+        nb = int(float(g.get("granule_size") or 0) * 1e6)
+        if d in out:
+            raise FormatError(
+                f"two granules for {d}: {out[d]['name']} and {title} — "
+                f"this collection is one a day, so a second one means "
+                f"the day/night split (a PM or AM collection) rather "
+                f"than the daily super-collation")
+        out[d] = {"name": title, "url": url, "bytes": nb}
+    return out
 
 
 # ================================================================== grid ===
@@ -559,7 +555,7 @@ class SSTACSPO02Adapter(sh.GridAdapter):
             try:
                 out = cmr_days(self.cid, lo, hi, attempts=ctx.a.attempts,
                                count=ctx.count_bytes)
-            except FormatError as e:
+            except (FormatError, cm.CMRTruncated) as e:
                 sys.exit(f"REFUSING sst_acspo02: {e}")
             if not out:
                 sys.exit(f"REFUSING sst_acspo02: CMR lists no "

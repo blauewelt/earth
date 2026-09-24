@@ -197,52 +197,29 @@ def cmr_granules(cycle=None, temporal=None, page=2000, attempts=4,
     returned as an empty list and the CALLER decides whether that is a
     refusal.
 
-    PAGING. `get_bytes` drops the response headers, so the `CMR-Search-After`
-    cursor is not available; a full page is followed by asking for the window
-    from the last granule's START. CMR's temporal filter is inclusive, so that
-    granule (and any sharing its start second) comes back on the next page —
-    entries are therefore de-duplicated by their concept id. Without that, a
-    window of more than one page (a whole year is ~9,700 granules) raised
-    "two granules for cycle … pass …" on the page seam.
+    PAGING is `cm.cmr_entries`: the `CMR-Search-After` cursor, every walk
+    checked against CMR's own `CMR-Hits` count, a cut listing raised as
+    `cm.CMRTruncated` (the 2026-09-23 irtb failure — a partial page during
+    a slow hour of CMR read as the end of the window). Entries are still
+    de-duplicated by concept id, so a granule CMR lists twice cannot raise
+    "two granules for cycle … pass …" downstream.
     """
-    out, seen, after = [], set(), None
-    while True:
-        q = {"collection_concept_id": COLLECTION, "page_size": page,
-             "sort_key": "start_date"}
-        if cycle:
-            q["readable_granule_name"] = f"SWOT_L2_LR_SSH_Expert_{cycle}_*"
-            q["options[readable_granule_name][pattern]"] = "true"
-        if temporal:
-            q["temporal"] = temporal
-        url = f"{CMR}?{urllib.parse.urlencode(q)}"
-        hdr = {"CMR-Search-After": after} if after else None
-        raw, why = cm.get_bytes(url, attempts=attempts, headers=hdr)
-        if raw is None:
-            raise FormatError(f"CMR answered {why} for {url}")
-        if count is not None:
-            count(len(raw))
-        js = json.loads(raw)
-        e = js.get("feed", {}).get("entry", [])
-        new = 0
-        for g in e:
-            k = g.get("id") or g.get("title")
-            if k in seen:
-                continue
-            seen.add(k)
-            out.append(g)
-            new += 1
-        if len(e) < page:
-            return out
-        if temporal is None:
-            return out                      # one page is all a cycle needs
-        if not new:
-            raise FormatError(
-                f"CMR returned a full page of {len(e)} granule(s) that were "
-                f"all already listed — {page} granules share one start "
-                f"second, and this pager cannot move past them ({url})")
-        last = e[-1]["time_start"]
-        temporal = f"{last},{temporal.split(',')[1]}"
-        after = None
+    q = {"collection_concept_id": COLLECTION, "sort_key": "start_date"}
+    if cycle:
+        q["readable_granule_name"] = f"SWOT_L2_LR_SSH_Expert_{cycle}_*"
+        q["options[readable_granule_name][pattern]"] = "true"
+    if temporal:
+        q["temporal"] = temporal
+    out, seen = [], set()
+    for g in cm.cmr_entries(CMR, q, attempts=attempts, count=count,
+                            page_size=page,
+                            what=f"{SHORT_NAME} {temporal or cycle}"):
+        k = g.get("id") or g.get("title")
+        if k in seen:
+            continue
+        seen.add(k)
+        out.append(g)
+    return out
 
 
 def parse_granules(entries):
@@ -640,7 +617,7 @@ class SWOTAdapter(f10b.SourceAdapter):
                 ents = cmr_granules(cycle=self.cycle or None,
                                     attempts=ctx.a.attempts,
                                     count=ctx.count_bytes)
-            except FormatError as e:
+            except (FormatError, cm.CMRTruncated) as e:
                 sys.exit(f"REFUSING swot: {e}")
             if not ents:
                 sys.exit(f"REFUSING swot: CMR lists no granule of "
@@ -664,7 +641,7 @@ class SWOTAdapter(f10b.SourceAdapter):
             try:
                 ents = cmr_granules(temporal=window, attempts=ctx.a.attempts,
                                     count=ctx.count_bytes)
-            except FormatError as e:
+            except (FormatError, cm.CMRTruncated) as e:
                 sys.exit(f"REFUSING swot: {e}")
             if not ents:
                 sys.exit(f"REFUSING swot: CMR lists no granule of "
