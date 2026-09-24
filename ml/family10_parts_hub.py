@@ -137,6 +137,8 @@ BATCH = 64
 # ~1 MB files (lai500 2020: 27,848 files, 29 GB; pheno500: 947 a year), so
 # the pull is a request-latency problem and a worker is what buys a request.
 PULL_WORKERS = 16
+PULL_LINE_FILES = 1000       # a progress line per this many files pulled...
+PULL_LINE_S = 60             # ...or per this many seconds, whichever first
 
 
 # ----------------------------------------------------------------- the Hub --
@@ -956,6 +958,7 @@ def pull(store, years, work, allow_missing=False, scratch=None,
 
             got = []
             results = _ordered_map(fetch, entries, PULL_WORKERS)
+            t0, nbytes, last_line = time.time(), 0, time.time()
             try:
                 for i, (n, p, h) in enumerate(results):
                     e = entries[i]
@@ -964,6 +967,21 @@ def pull(store, years, work, allow_missing=False, scratch=None,
                                  f"done.json says {e['sha256']}, the Hub "
                                  f"served {h}")
                     got.append((n, p))
+                    nbytes += int(e.get("bytes") or 0)
+                    # A LINE EVERY MINUTE OR EVERY 1,000 FILES, so a pull of
+                    # tens of thousands of small parts is readable from the
+                    # live log (family1-build #888/#890, 2026-09-24: an hour
+                    # with no line at all, and no way to tell 1 file/s from
+                    # 40 without cancelling the job).
+                    now = time.time()
+                    if (i + 1) % PULL_LINE_FILES == 0 or \
+                            now - last_line >= PULL_LINE_S:
+                        dt = max(now - t0, 1e-6)
+                        print(f"  pull {what}: {i + 1:,}/{len(entries):,} "
+                              f"file(s), {nbytes / 1e9:.2f} GB, "
+                              f"{(i + 1) / dt:.1f} file/s, "
+                              f"{nbytes / 1e6 / dt:.1f} MB/s", flush=True)
+                        last_line = now
             finally:
                 results.close()      # cancel what is queued, join the rest
             # THE SCHEMA IS CHECKED ON WHAT ARRIVED, not on what the marker
