@@ -375,7 +375,9 @@ def hub_stream(repo, path_in_repo, token, consume, just_uploaded=False,
                         ".", "", 1).isdigit() else None
                     raise IOError(f"HTTP 429" + (f" (Retry-After {ra})"
                                                  if ra else ""))
-                if r.status_code in (500, 502, 503, 504):
+                if r.status_code in (499, 500, 502, 503, 504):
+                    # 499 is the CDN's "client closed request" — a dropped
+                    # connection reported as a status (family1-build #895)
                     raise IOError(f"HTTP {r.status_code}")
                 if r.status_code >= 400:
                     raise StreamRefused(f"{url}: HTTP {r.status_code}")

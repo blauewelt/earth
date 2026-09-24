@@ -818,6 +818,9 @@ class FakeHub:
         self.commit(api, repo, pairs, message)
 
     def ph_download(self, repo, rel, token, dest_dir, just_uploaded=False):
+        # the grid publish's download-back comes through here too since
+        # `b1._download` became `ph._download` (2026-09-24)
+        self.calls.append(("download", repo, rel))
         os.makedirs(dest_dir, exist_ok=True)
         src = os.path.join(self.root, repo, rel)
         if not os.path.exists(src):

@@ -462,6 +462,15 @@ def test_distribution_private_overrides_a_public_adapter_and_never_the_reverse(
     # ... and so does the store; the public repository is refused outright
     hub = str(tmp_path / "hub")
     api = _fake_hub(monkeypatch, hub, None)
+
+    def hub_download(repo_, rel, tok, dest_dir, just_uploaded=False):
+        # the grid publish's download-back reads the STORE's repository,
+        # not the parts fake above (`b1._download` is `ph._download`)
+        os.makedirs(dest_dir, exist_ok=True)
+        dst = os.path.join(dest_dir, os.path.basename(rel))
+        shutil.copyfile(os.path.join(hub, repo_, rel), dst)
+        return dst
+    monkeypatch.setattr(ph, "_download", hub_download)
     monkeypatch.setattr(ctx, "hub", lambda: (api, "chfrank/earth-tensors",
                                              "tok"))
     with pytest.raises(SystemExit, match="REFUSING to publish"):
@@ -899,51 +908,26 @@ def test_a_publish_commits_in_batches_with_store_json_last(tmp_path,
         assert os.path.exists(os.path.join(hub, n)), n
 
 
-def test_a_restore_download_retries_a_dropped_connection(monkeypatch,
-                                                         tmp_path):
-    """oc4k's first publish (#278) uploaded 3,702 files and died 1,220 files
-    into the download-back check on one `Server disconnected without
-    sending a response` — a transient the Hub client does not retry. The
-    restore's download now retries transient failures and still refuses a
-    4xx that names our own request."""
-    import huggingface_hub
-    from huggingface_hub.utils import HfHubHTTPError
-
-    class Resp:
-        def __init__(self, code):
-            self.status_code = code
-            self.headers = {}
-            self.request = None
-
+def test_a_restore_download_streams_through_the_parts_hub_path(monkeypatch,
+                                                              tmp_path):
+    """oc4k's first publish (family1-build #278, 2026-09-20) lost 7.5 hours
+    of a verified store to one dropped connection in the download-back
+    check; lai500 2020's (#895, 2026-09-24) lost 27,261 uploaded files'
+    manifest to one HTTP 499 through hf_hub_download. `b1._download` is now
+    `ph._download` — the streamed, paced, token-carrying GET every other
+    Hub read uses — and a 499 is retried with the 5xx family."""
     calls = []
-    scripted = [
-        ConnectionError("Server disconnected without sending a response"),
-        HfHubHTTPError("503", response=Resp(503)),
-        "ok",
-    ]
 
-    def fake(repo, rel, **kw):
-        calls.append(rel)
-        nxt = scripted[len(calls) - 1]
-        if isinstance(nxt, Exception):
-            raise nxt
-        return str(tmp_path / "file")
-
-    monkeypatch.setattr(huggingface_hub, "hf_hub_download", fake)
-    monkeypatch.setattr(b1, "DOWNLOAD_BACKOFF_S", (0, 0, 0, 0, 0))
-    assert b1._download("r", "x", "tok", str(tmp_path)) == str(tmp_path / "file")
-    assert calls == ["x", "x", "x"]
-
-    # a 404 is our own bad request: no retry
-    calls.clear()
-    scripted[:] = [HfHubHTTPError("404", response=Resp(404))]
-    with pytest.raises(HfHubHTTPError):
-        b1._download("r", "y", "tok", str(tmp_path))
-    assert calls == ["y"]
-
-    # the ladder gives up after DOWNLOAD_ATTEMPTS transient failures
-    calls.clear()
-    scripted[:] = [ConnectionError("again")] * b1.DOWNLOAD_ATTEMPTS
-    with pytest.raises(ConnectionError):
-        b1._download("r", "z", "tok", str(tmp_path))
-    assert len(calls) == b1.DOWNLOAD_ATTEMPTS
+    def fake_stream(repo, rel, token, consume, just_uploaded=False,
+                    attempts=12, private=False):
+        calls.append((repo, rel, token))
+        consume(b"bytes")
+        return 5
+    monkeypatch.setattr(ph, "hub_stream", fake_stream)
+    got = b1._download("o/earth-tensors", "tensors/x/a/b.npy", "tok",
+                       str(tmp_path))
+    assert got == str(tmp_path / "b.npy") and open(got, "rb").read() == b"bytes"
+    assert calls == [("o/earth-tensors", "tensors/x/a/b.npy", "tok")]
+    src = open(ph.__file__).read()
+    assert "if r.status_code in (499, 500, 502, 503, 504):" in src
+    assert not hasattr(b1, "DOWNLOAD_ATTEMPTS")

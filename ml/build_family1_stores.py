@@ -1093,53 +1093,27 @@ def _pick_tiles(dest, groups, k, seed):
     return rng.sample(pool, min(k, len(pool)))
 
 
-DOWNLOAD_ATTEMPTS = 6
-DOWNLOAD_BACKOFF_S = (5, 15, 45, 120, 300)
-
-
-def _transient_download_error(e):
-    """A Hub read that may succeed on retry: a dropped connection, a
-    timeout, a 5xx or a 429 — never a 4xx that names OUR request (a 401 or
-    404 will not change by asking again)."""
-    from huggingface_hub.utils import HfHubHTTPError
-    if isinstance(e, HfHubHTTPError):
-        code = getattr(getattr(e, "response", None), "status_code", None)
-        return code is None or code == 429 or code >= 500
-    name = type(e).__name__
-    mod = type(e).__module__ or ""
-    if mod.startswith(("httpx", "httpcore", "requests", "urllib3")):
-        return not name.endswith(("HTTPStatusError", "InvalidURL"))
-    return isinstance(e, (ConnectionError, TimeoutError, OSError))
-
-
 def _download(repo, rel, tok, dest_dir):
-    """`hf_hub_download` with a retry ladder for transient network failures.
+    """One repo file into `dest_dir/<basename>`, STREAMED over plain HTTPS
+    through `family10_parts_hub._download` — the token on every request,
+    paced under the Hub's resolver quota, Range-resumed on a drop, a 429
+    sleeping the Hub's Retry-After (family10_parts_hub.hub_stream).
 
-    oc4k's first publish (family1-build #278, 2026-09-20) had uploaded all
-    3,702 files and was 1,220 files into the download-back check when the
-    Hub answered one HEAD with `Server disconnected without sending a
-    response` — an httpx RemoteProtocolError that huggingface_hub's own
-    backoff does not retry — and 7.5 hours of a verified store were thrown
-    away over one dropped connection. A restore check is a loop of
-    thousands of requests; one of them failing transiently is the expected
-    case, not the exceptional one. Six attempts, ~8 minutes of backoff.
+    It was `hf_hub_download` with its own retry ladder until 2026-09-24.
+    oc4k's first publish (family1-build #278, 2026-09-20) had lost 7.5 hours
+    of a verified store to one `Server disconnected without sending a
+    response` in the download-back check; that ladder fixed the dropped
+    connection and left the path: lai500 2020's publish (family1-build
+    #895, the Ohio box) had uploaded all 27,261 files of the sharded store
+    and was 13,256 into the download-back check when the CDN answered one
+    `.idx.npy` with HTTP 499 — a status the ladder read as our own bad
+    request — and the store's manifest was never written. The streamed GET
+    is what every other Hub read in the family-1 and family-10 builders
+    uses since the same day (the restore, the store.json read, the parts
+    pull), and it retries a 499 with the 5xx family.
     """
-    from huggingface_hub import hf_hub_download
-    last = None
-    for i in range(DOWNLOAD_ATTEMPTS):
-        try:
-            return hf_hub_download(repo, rel, repo_type="dataset", token=tok,
-                                   local_dir=dest_dir)
-        except Exception as e:                      # noqa: BLE001
-            if not _transient_download_error(e) or i == DOWNLOAD_ATTEMPTS - 1:
-                raise
-            last = e
-            wait = DOWNLOAD_BACKOFF_S[min(i, len(DOWNLOAD_BACKOFF_S) - 1)]
-            print(f"::warning::{rel}: {type(e).__name__}: {str(e)[:160]} — "
-                  f"attempt {i + 1}/{DOWNLOAD_ATTEMPTS}, retrying in {wait}s",
-                  flush=True)
-            time.sleep(wait)
-    raise last
+    import family10_parts_hub as ph
+    return ph._download(repo, rel, tok, dest_dir)
 
 
 def http_verify(repo, prefix, picks, dest, private):
