@@ -1,5 +1,6 @@
 {
- "pending": [
+ "pending": [],
+ "dispatched": [
   {
    "store": "gbif",
    "stage": "index,fetch",
@@ -7,7 +8,8 @@
    "end": "2026-12-31",
    "runner": "ubuntu-latest",
    "extra_args": "--push-parts",
-   "adapter_env": "GBIF_SNAPSHOT=2026-09-01 GBIF_PARTS=0:618"
+   "adapter_env": "GBIF_SNAPSHOT=2026-09-01 GBIF_PARTS=0:618",
+   "at": "2026-09-24T22:20:05.660Z"
   },
   {
    "store": "gbif",
@@ -16,7 +18,8 @@
    "end": "2026-12-31",
    "runner": "ubuntu-latest",
    "extra_args": "--push-parts",
-   "adapter_env": "GBIF_SNAPSHOT=2026-09-01 GBIF_PARTS=618:1236"
+   "adapter_env": "GBIF_SNAPSHOT=2026-09-01 GBIF_PARTS=618:1236",
+   "at": "2026-09-24T22:20:09.784Z"
   },
   {
    "store": "gbif",
@@ -25,7 +28,8 @@
    "end": "2026-12-31",
    "runner": "ubuntu-latest",
    "extra_args": "--push-parts",
-   "adapter_env": "GBIF_SNAPSHOT=2026-09-01 GBIF_PARTS=1236:1854"
+   "adapter_env": "GBIF_SNAPSHOT=2026-09-01 GBIF_PARTS=1236:1854",
+   "at": "2026-09-24T22:20:13.833Z"
   },
   {
    "store": "gbif",
@@ -34,7 +38,8 @@
    "end": "2026-12-31",
    "runner": "ubuntu-latest",
    "extra_args": "--push-parts",
-   "adapter_env": "GBIF_SNAPSHOT=2026-09-01 GBIF_PARTS=1854:2472"
+   "adapter_env": "GBIF_SNAPSHOT=2026-09-01 GBIF_PARTS=1854:2472",
+   "at": "2026-09-24T22:20:17.777Z"
   },
   {
    "store": "gbif",
@@ -43,7 +48,8 @@
    "end": "2026-12-31",
    "runner": "ubuntu-latest",
    "extra_args": "--push-parts",
-   "adapter_env": "GBIF_SNAPSHOT=2026-09-01 GBIF_PARTS=2472:3090"
+   "adapter_env": "GBIF_SNAPSHOT=2026-09-01 GBIF_PARTS=2472:3090",
+   "at": "2026-09-24T22:20:21.640Z"
   },
   {
    "store": "gbif",
@@ -52,7 +58,8 @@
    "end": "2026-12-31",
    "runner": "ubuntu-latest",
    "extra_args": "--push-parts",
-   "adapter_env": "GBIF_SNAPSHOT=2026-09-01 GBIF_PARTS=3090:3708"
+   "adapter_env": "GBIF_SNAPSHOT=2026-09-01 GBIF_PARTS=3090:3708",
+   "at": "2026-09-24T22:20:25.466Z"
   },
   {
    "store": "gbif",
@@ -61,7 +68,8 @@
    "end": "2026-12-31",
    "runner": "ubuntu-latest",
    "extra_args": "--push-parts",
-   "adapter_env": "GBIF_SNAPSHOT=2026-09-01 GBIF_PARTS=3708:4326"
+   "adapter_env": "GBIF_SNAPSHOT=2026-09-01 GBIF_PARTS=3708:4326",
+   "at": "2026-09-24T22:20:29.311Z"
   },
   {
    "store": "gbif",
@@ -70,7 +78,8 @@
    "end": "2026-12-31",
    "runner": "ubuntu-latest",
    "extra_args": "--push-parts",
-   "adapter_env": "GBIF_SNAPSHOT=2026-09-01 GBIF_PARTS=4326:4944"
+   "adapter_env": "GBIF_SNAPSHOT=2026-09-01 GBIF_PARTS=4326:4944",
+   "at": "2026-09-24T22:20:32.934Z"
   },
   {
    "store": "gbif",
@@ -79,7 +88,8 @@
    "end": "2026-12-31",
    "runner": "ubuntu-latest",
    "extra_args": "--push-parts",
-   "adapter_env": "GBIF_SNAPSHOT=2026-09-01 GBIF_PARTS=4944:5562"
+   "adapter_env": "GBIF_SNAPSHOT=2026-09-01 GBIF_PARTS=4944:5562",
+   "at": "2026-09-24T22:20:37.127Z"
   },
   {
    "store": "gbif",
@@ -88,7 +98,8 @@
    "end": "2026-12-31",
    "runner": "ubuntu-latest",
    "extra_args": "--push-parts",
-   "adapter_env": "GBIF_SNAPSHOT=2026-09-01 GBIF_PARTS=5562:6180"
+   "adapter_env": "GBIF_SNAPSHOT=2026-09-01 GBIF_PARTS=5562:6180",
+   "at": "2026-09-24T22:20:40.826Z"
   },
   {
    "store": "gbif",
@@ -97,7 +108,8 @@
    "end": "2026-12-31",
    "runner": "ubuntu-latest",
    "extra_args": "--push-parts",
-   "adapter_env": "GBIF_SNAPSHOT=2026-09-01 GBIF_PARTS=6180:6798"
+   "adapter_env": "GBIF_SNAPSHOT=2026-09-01 GBIF_PARTS=6180:6798",
+   "at": "2026-09-24T22:20:44.558Z"
   },
   {
    "store": "gbif",
@@ -106,7 +118,8 @@
    "end": "2026-12-31",
    "runner": "ubuntu-latest",
    "extra_args": "--push-parts",
-   "adapter_env": "GBIF_SNAPSHOT=2026-09-01 GBIF_PARTS=6798:7416"
+   "adapter_env": "GBIF_SNAPSHOT=2026-09-01 GBIF_PARTS=6798:7416",
+   "at": "2026-09-24T22:20:48.276Z"
   },
   {
    "store": "gbif",
@@ -115,7 +128,8 @@
    "end": "2026-12-31",
    "runner": "ubuntu-latest",
    "extra_args": "--push-parts",
-   "adapter_env": "GBIF_SNAPSHOT=2026-09-01 GBIF_PARTS=7416:8034"
+   "adapter_env": "GBIF_SNAPSHOT=2026-09-01 GBIF_PARTS=7416:8034",
+   "at": "2026-09-24T22:20:52.157Z"
   },
   {
    "store": "gbif",
@@ -124,7 +138,8 @@
    "end": "2026-12-31",
    "runner": "ubuntu-latest",
    "extra_args": "--push-parts",
-   "adapter_env": "GBIF_SNAPSHOT=2026-09-01 GBIF_PARTS=8034:8652"
+   "adapter_env": "GBIF_SNAPSHOT=2026-09-01 GBIF_PARTS=8034:8652",
+   "at": "2026-09-24T22:20:55.952Z"
   },
   {
    "store": "gbif",
@@ -133,7 +148,8 @@
    "end": "2026-12-31",
    "runner": "ubuntu-latest",
    "extra_args": "--push-parts",
-   "adapter_env": "GBIF_SNAPSHOT=2026-09-01 GBIF_PARTS=8652:9270"
+   "adapter_env": "GBIF_SNAPSHOT=2026-09-01 GBIF_PARTS=8652:9270",
+   "at": "2026-09-24T22:20:59.833Z"
   },
   {
    "store": "gbif",
@@ -142,10 +158,10 @@
    "end": "2026-12-31",
    "runner": "ubuntu-latest",
    "extra_args": "--push-parts",
-   "adapter_env": "GBIF_SNAPSHOT=2026-09-01 GBIF_PARTS=9270:9898"
+   "adapter_env": "GBIF_SNAPSHOT=2026-09-01 GBIF_PARTS=9270:9898",
+   "at": "2026-09-24T22:21:03.609Z"
   }
  ],
- "dispatched": [],
  "done": [
   {
    "store": "sst_acspo02",
