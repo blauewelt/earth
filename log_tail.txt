@@ -1,0 +1,53 @@
+store     swot — SWOT L2 LR sea-surface height, Expert (version D): the 2 km KaRIn swath, one row per valid pixel (tier P)
+family    family1_gf (1.gf) · public -> chfrank/earth-tensors:tensors/family1_gf/swot
+axis      2023-07-25 .. 2026-09-15  bins 3036..3265 · time_s int32 (schema 2)
+lane      d20230725-20260915 — this fetch writes parts/<year>/d20230725-20260915/ and pushes only that folder
+channels  C=3: ssha_karin, sig0_karin, ssh_karin_uncert
+work      /opt/runner/_work/earth/earth/ml/cache/family1_gf
+
+=== stage publish (swot) ===
+  hub: chfrank/earth-tensors with the token from $HF_TOKEN
+Traceback (most recent call last):
+  File "/opt/runner/_work/earth/earth/ml/build_family1_stores.py", line 1981, in <module>
+    sys.exit(main())
+             ^^^^^^
+  File "/opt/runner/_work/earth/earth/ml/build_family1_stores.py", line 1976, in main
+    f10b.run_stages(ctx, stages, stage_fn=stage_fns(ad), deps=deps)
+  File "/opt/runner/_work/earth/earth/ml/build_family10_stores.py", line 5915, in run_stages
+    stage_fn[s](ctx)
+  File "/opt/runner/_work/earth/earth/ml/build_family1_stores.py", line 440, in stage_publish
+    return f10b.stage_publish(ctx)
+           ^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/runner/_work/earth/earth/ml/build_family10_stores.py", line 5545, in stage_publish
+    return stage_verify_hub(ctx)
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/runner/_work/earth/earth/ml/build_family10_stores.py", line 5732, in stage_verify_hub
+    sj = ph._download(repo, f"{prefix}/store.json", tok, here)
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/runner/_work/earth/earth/ml/family10_parts_hub.py", line 229, in _download
+    return hf_hub_download(repo, path_in_repo, repo_type="dataset",
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/conda/lib/python3.11/site-packages/huggingface_hub/utils/_validators.py", line 89, in _inner_fn
+    return fn(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^
+  File "/opt/conda/lib/python3.11/site-packages/huggingface_hub/utils/_http.py", line 266, in _inner
+    return fn(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^
+  File "/opt/conda/lib/python3.11/site-packages/huggingface_hub/file_download.py", line 1026, in hf_hub_download
+    return _hf_hub_download_to_local_dir(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/conda/lib/python3.11/site-packages/huggingface_hub/file_download.py", line 1505, in _hf_hub_download_to_local_dir
+    _download_to_tmp_and_move(
+  File "/opt/conda/lib/python3.11/site-packages/huggingface_hub/file_download.py", line 2032, in _download_to_tmp_and_move
+    http_get(
+  File "/opt/conda/lib/python3.11/site-packages/huggingface_hub/utils/_validators.py", line 89, in _inner_fn
+    return fn(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^
+  File "/opt/conda/lib/python3.11/site-packages/huggingface_hub/file_download.py", line 459, in http_get
+    for chunk in response.iter_bytes(chunk_size=constants.DOWNLOAD_CHUNK_SIZE):
+  File "/opt/conda/lib/python3.11/site-packages/httpx2/_models.py", line 893, in iter_bytes
+    for decoded in decoder.decode(raw_bytes):
+  File "/opt/conda/lib/python3.11/site-packages/httpx2/_decoders.py", line 191, in decode
+    decompressed = self._decompress(data, output_buffer_limit=output_buffer_limit)
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+TypeError: process() takes no keyword arguments
