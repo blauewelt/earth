@@ -17,15 +17,6 @@
   {
    "store": "irtb",
    "stage": "index,fetch",
-   "start": "2023-10-01",
-   "end": "2023-12-31",
-   "runner": "ubuntu-latest",
-   "extra_args": "--push-parts",
-   "adapter_env": ""
-  },
-  {
-   "store": "irtb",
-   "stage": "index,fetch",
    "start": "2024-01-01",
    "end": "2024-03-31",
    "runner": "ubuntu-latest",
@@ -311,16 +302,6 @@
   {
    "store": "irtb",
    "stage": "index,fetch",
-   "start": "2021-01-01",
-   "end": "2021-03-31",
-   "runner": "ubuntu-latest",
-   "extra_args": "--push-parts",
-   "adapter_env": "",
-   "at": "2026-09-24T04:02:42.469Z"
-  },
-  {
-   "store": "irtb",
-   "stage": "index,fetch",
    "start": "2018-01-01",
    "end": "2018-03-31",
    "runner": "ubuntu-latest",
@@ -435,6 +416,16 @@
    "extra_args": "--push-parts",
    "adapter_env": "",
    "at": "2026-09-24T04:15:39.494Z"
+  },
+  {
+   "store": "irtb",
+   "stage": "index,fetch",
+   "start": "2023-10-01",
+   "end": "2023-12-31",
+   "runner": "ubuntu-latest",
+   "extra_args": "--push-parts",
+   "adapter_env": "",
+   "at": "2026-09-24T04:21:49.521Z"
   }
  ],
  "done": [
@@ -2331,6 +2322,18 @@
    "at": "2026-09-24T03:59:36.357Z",
    "run_number": 769,
    "finished": "2026-09-24T04:14:26Z"
+  },
+  {
+   "store": "irtb",
+   "stage": "index,fetch",
+   "start": "2021-01-01",
+   "end": "2021-03-31",
+   "runner": "ubuntu-latest",
+   "extra_args": "--push-parts",
+   "adapter_env": "",
+   "at": "2026-09-24T04:02:42.469Z",
+   "run_number": 770,
+   "finished": "2026-09-24T04:19:24Z"
   }
  ],
  "failed": []
