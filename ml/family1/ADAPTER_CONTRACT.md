@@ -249,6 +249,17 @@ product* to build (`LST05_GROUPS` picks a satellite, `LAI500_GROUPS` picks
 Terra or Aqua) selects a whole store rather than a subset of one, and a store
 already on the Hub must not acquire a lane because of one.
 
+A hook that needs the context to resolve its subset declares it —
+`def group_subset(self, ctx=None)` — and `apply_lane` hands it over (gbif,
+2026-09-24: `GBIF_PARTS=lo:hi` is an index into the snapshot's listing, so a
+tier-P one-stream store is laned by PART RANGE and its groups are part names).
+Such a store declares its lanes with `--lanes parts:<N>` (the adapter's
+`lanes_for_parts(ctx, n)`; any other adapter refuses it). A file the
+assembler needs beside the parts on another machine is a SIDECAR
+(`family10_parts_hub.SIDECAR_NAMES`), written by the optional
+`finish_fetch(ctx, year_dirs)` hook before the years are marked; it travels
+in `done.json` and is never read as a part.
+
 ### What the assembler does, and what it refuses
 
 - It **merges** the lanes of each year: tier P concatenates their parts in

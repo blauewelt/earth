@@ -392,3 +392,300 @@ def test_the_probe_reads_a_spread_of_parts_by_default(tmp_path, monkeypatch):
     assert len(got) == 8 and got == sorted(got)
     assert got[0] == "000618" and got[-1] == "009279"
     assert [p[0] for p in ad.probe_parts(None)] == got
+
+
+# ================================================ part-range lanes (2026-09-24)
+# The whole pass was the resumable unit (23 h on one box; family1-build #837
+# lost nine hours of it). A `GBIF_PARTS=lo:hi` run is now a GROUP LANE named
+# after its part names, the taxon table travels with each year-lane's parts
+# as a `taxa.json` SIDECAR, and `--lanes parts:<N>` declares the N lanes an
+# assembly expects. These tests run the smoke snapshot through all of it.
+sys.path.insert(0, HERE)
+import family10_parts_hub as ph                                 # noqa: E402
+from test_family1_lanes import FakePartsHub, copy_lane_parts    # noqa: E402
+
+# WHOLE calendar years, so the window earns no lane name of its own and a
+# part-range lane is `g-<hash>` alone — the shape a dispatch uses (no
+# --start, --end 2026-12-31). The smoke's truth is the same over this window
+# as over `smoke_window`: its outside records are in 1897 and 1903.
+WIN = ("1899-01-01", "1900-12-31")
+YEARS = (1899, 1900)
+
+
+def _src(tmp_path):
+    src = str(tmp_path / "src")
+    ad = gbif.GBIFAdapter()
+    lo, hi = (b10.parse_date(x) for x in WIN)
+    return src, ad.smoke_sources(src, lo, hi)
+
+
+def _gctx(monkeypatch, work, src, spec="", **over):
+    """A gbif context the way `main` builds one: GBIF_PARTS read at
+    construction, the lane named by `apply_lane`."""
+    if spec:
+        monkeypatch.setenv("GBIF_PARTS", spec)
+    else:
+        monkeypatch.delenv("GBIF_PARTS", raising=False)
+    ad = gbif.GBIFAdapter()
+    d = dict(store=ad.store, work=str(work), source_dir=src, start=WIN[0],
+             end=WIN[1], stage="all", force=False, attempts=1, qc_keep=2,
+             check_chunk_rows=b10.CHECK_CHUNK_ROWS, assemble="auto",
+             parts_from_hub=False, push_parts=False, lanes="",
+             allow_missing_years=False, allow_unconfirmed_licence=False,
+             probe_month="", smoke=False)
+    d.update(over)
+    ctx = b10.Ctx(argparse.Namespace(**d), adapter=ad,
+                  layout=b1.layout_for(ad))
+    b1.apply_lane(ctx)
+    return ctx
+
+
+def _run(ctx, stages):
+    b10.run_stages(ctx, stages, stage_fn=b1.STAGE_FN, deps=b1.DEPS)
+
+
+def _rows(store):
+    """The store's rows as sorted tuples — content, not order."""
+    st = f10.Store(store)
+    cols = [np.asarray(st[k]).tolist() for k in
+            ("bin", "time_s", "lat", "lon", "platform", "qc")]
+    vals = [tuple(None if v != v else float(v) for v in r)
+            for r in np.asarray(st["values"], np.float64).tolist()]
+    return sorted(zip(*cols, vals), key=repr)
+
+
+def _hub(monkeypatch, tmp_path):
+    fake = FakePartsHub(str(tmp_path / "hub"))
+    monkeypatch.setattr(ph, "_list_files", fake.list_files)
+    monkeypatch.setattr(ph, "_upload", fake.upload)
+    monkeypatch.setattr(ph, "_download", fake.download)
+    monkeypatch.setattr(ph, "_hub", lambda: pytest.fail("family 10's hub"))
+    return fake
+
+
+def test_a_part_range_is_a_group_lane(tmp_path, monkeypatch):
+    src, truth = _src(tmp_path)
+    ctx = _gctx(monkeypatch, tmp_path / "lane", src, "0:2")
+    names = ["000001", "000002"]
+    assert ctx.lane == b1.group_lane(names)
+    assert ctx.lane.startswith("g-") and ctx.lane_groups == names
+    _run(ctx, ["index", "fetch"])
+    kept = {1899: 0, 1900: 0}
+    for y in YEARS:
+        d = ctx.year_dir(y)
+        assert d.endswith(os.path.join("parts", str(y), ctx.lane))
+        assert b10.marked(ctx.root, f"parts/{y}/{ctx.lane}")
+        led = json.load(open(os.path.join(d, "counts.json")))
+        assert led["lane"] == ctx.lane
+        assert led["lane_groups"] == names
+        assert led["lane_window"] == [f"{y}-01-01", f"{y}-12-31"]
+        kept[y] = led["rows"]
+        # the unnamed lane was never written: nothing at the year's top level
+        # but the lane's own marker
+        top = os.path.join(ctx.parts, str(y))
+        assert not [n for n in os.listdir(top)
+                    if os.path.isfile(os.path.join(top, n))
+                    and not n.endswith(".done")]
+    # parts 000001 (December 1899) and 000002 (January 1900) only
+    assert kept == {1899: 10, 1900: PUBLIC_IN_JAN}
+    # a comma list of the same parts, in any order, is the SAME lane
+    other = _gctx(monkeypatch, tmp_path / "b", src, "000002,000001")
+    assert other.lane == ctx.lane
+    # no GBIF_PARTS: the whole snapshot, the unnamed lane, exactly as before
+    assert _gctx(monkeypatch, tmp_path / "c", src).lane == ""
+    # a range over nothing would claim the whole snapshot: refused
+    with pytest.raises(SystemExit, match="selects no part"):
+        _gctx(monkeypatch, tmp_path / "d", src, "5:9")
+    # and a box assembling from the Hub is never a lane, GBIF_PARTS or not
+    assert _gctx(monkeypatch, tmp_path / "e", src, "0:2",
+                 parts_from_hub=True).lane == ""
+
+
+def test_two_part_lanes_through_the_hub_equal_the_whole_build(tmp_path,
+                                                              monkeypatch):
+    src, truth = _src(tmp_path)
+    fake = _hub(monkeypatch, tmp_path)
+    ad = gbif.GBIFAdapter()
+    listing = ad.listing(_gctx(monkeypatch, tmp_path / "l", src))[1]
+    lanes = _gbif.part_lanes(listing, 2)          # 000001 | 000002, 000003
+    assert [(lo, hi) for lo, hi, _ in lanes] == [(0, 1), (1, 3)]
+    names = sorted(n for _lo, _hi, n in lanes)
+
+    # two hosted lanes, each pushing only its own folders
+    for lo, hi, name in lanes:
+        ctx = _gctx(monkeypatch, tmp_path / f"lane{lo}", src, f"{lo}:{hi}",
+                    push_parts=True)
+        monkeypatch.setattr(ctx.layout, "hub", fake.hub)
+        assert ctx.lane == name
+        _run(ctx, ["index", "fetch"])
+    pre = os.path.join(fake.root, "partials/family1_tf/gbif")
+    for y in YEARS:
+        assert sorted(os.listdir(os.path.join(pre, str(y)))) == names
+
+    # THE SIDECAR TRAVELS: in done.json, between the parts and the ledger,
+    # hashed; and only where the lane's year has rows
+    for lo, hi, name in lanes:
+        for y in YEARS:
+            d = os.path.join(pre, str(y), name)
+            done = json.load(open(os.path.join(d, "done.json")))
+            files = [e["name"] for e in done["files"]]
+            has_rows = done["rows"] > 0
+            assert (_gbif.TAXA_SIDECAR in files) == has_rows, (y, name)
+            if has_rows:
+                assert files[-2:] == [_gbif.TAXA_SIDECAR, "counts.json"]
+                assert done["n_parts"] == sum(f.endswith(".npz")
+                                              for f in files)
+                e = files.index(_gbif.TAXA_SIDECAR)
+                assert done["files"][e]["sha256"] == b10.sha256(
+                    os.path.join(d, _gbif.TAXA_SIDECAR))
+    # lane 0:1 is December 1899 only, so its 1900 has no row and no sidecar
+    assert json.load(open(os.path.join(pre, "1900", lanes[0][2],
+                                       "done.json")))["rows"] == 0
+
+    # the box: a fresh tree, nothing fetched, both lanes pulled and DECLARED
+    monkeypatch.delenv("GBIF_PARTS", raising=False)
+    box = _gctx(monkeypatch, tmp_path / "box", src, parts_from_hub=True,
+                lanes="parts:2")
+    monkeypatch.setattr(box.layout, "hub", fake.hub)
+    assert box.lane == ""
+    _run(box, ["index", "fetch", "assemble", "check"])
+    plan = json.load(open(os.path.join(box.root, "plan.json")))
+    assert plan["lanes_expected"] == {str(y): [n for _l, _h, n in lanes]
+                                      for y in YEARS}
+    for y in YEARS:
+        assert box.lanes_of(y) == names
+    # the box never ran a fetch: no taxa.json of its own, only the sidecars
+    assert not os.path.exists(os.path.join(box.root, "taxa.json"))
+    # a sidecar is never read as a part
+    assert not [p for _y, p in b10._part_paths(box)
+                if not p.endswith(".npz")]
+    b10.check_smoke(box, truth)
+    meta = json.load(open(os.path.join(box.store, "store.json")))
+    assert meta["lanes_by_year"]["1900"] == {
+        "lanes": names, "declared": True,
+        "expected": [n for _l, _h, n in lanes]}
+    assert meta["platforms"]["in_store_without_entry"] == 0
+
+    # the single-lane build of the whole snapshot, for comparison
+    one = _gctx(monkeypatch, tmp_path / "one", src)
+    assert one.lane == ""
+    _run(one, ["index", "fetch", "assemble"])
+    one_meta = json.load(open(os.path.join(one.store, "store.json")))
+    assert meta["N"] == one_meta["N"] == PUBLIC_ROWS
+    assert meta["per_year"] == one_meta["per_year"]
+    assert _rows(box.store) == _rows(one.store)
+    # the taxon table: platforms.json and platforms(ctx) both equal the full
+    # build's own table
+    assert json.load(open(os.path.join(box.store, "platforms.json"))) == \
+        json.load(open(os.path.join(one.store, "platforms.json")))
+    full = {int(k): v for k, v in json.load(
+        open(os.path.join(one.root, "taxa.json"))).items()}
+    assert box.adapter.platforms(box) == full
+    assert one.adapter.platforms(one) == full
+
+    # a sidecar whose bytes changed on the Hub is refused at the pull
+    bad = os.path.join(pre, "1900", lanes[1][2], _gbif.TAXA_SIDECAR)
+    with open(bad, "a") as fh:
+        fh.write(" ")
+    box2 = _gctx(monkeypatch, tmp_path / "box2", src, parts_from_hub=True)
+    monkeypatch.setattr(box2.layout, "hub", fake.hub)
+    with pytest.raises(SystemExit, match="PULL MISMATCH .*taxa.json"):
+        _run(box2, ["index", "fetch"])
+
+
+def test_the_sidecar_is_listed_between_parts_and_ledger(tmp_path):
+    assert _gbif.TAXA_SIDECAR in ph.SIDECAR_NAMES
+    d = tmp_path / "y"
+    d.mkdir()
+    for n in ("00001.npz", "00000.npz", "counts.json", "taxa.json",
+              "stray.txt"):
+        (d / n).write_text("x")
+    assert ph.local_part_files(str(d)) == ["00000.npz", "00001.npz",
+                                           "taxa.json", "counts.json"]
+
+
+def test_platforms_unions_the_sidecars_and_refuses_a_disagreement(
+        tmp_path, monkeypatch):
+    src, _ = _src(tmp_path)
+    ctx = _gctx(monkeypatch, tmp_path / "w", src)
+    ad = ctx.adapter
+    rec = {"taxonkey": "K", "scientificname": "A", "kingdom": "Plantae",
+           "class": "Liliopsida"}
+    for y, lane, r in ((1899, "g-aaaaaaaa", rec),
+                       (1900, "g-bbbbbbbb", dict(rec, scientificname="B"))):
+        d = ctx.year_dir(y, lane)
+        os.makedirs(d)
+        json.dump({"7": r}, open(os.path.join(d, _gbif.TAXA_SIDECAR), "w"))
+    with pytest.raises(ValueError, match="platform 7 .*'K'.*two different"):
+        ad.platforms(ctx)
+    json.dump({"7": rec, "8": dict(rec, taxonkey="L")},
+              open(os.path.join(ctx.year_dir(1900, "g-bbbbbbbb"),
+                                _gbif.TAXA_SIDECAR), "w"))
+    assert sorted(ad.platforms(ctx)) == [7, 8]
+    # two snapshots in one assembly are refused too
+    for y, lane, snap in ((1899, "g-aaaaaaaa", "2026-08-01"),
+                          (1900, "g-bbbbbbbb", "2026-09-01")):
+        json.dump({"rows": 1, "counts": {"snapshot": snap}},
+                  open(os.path.join(ctx.year_dir(y, lane), "counts.json"),
+                       "w"))
+    with pytest.raises(ValueError, match="2 different GBIF snapshots"):
+        ad.platforms(ctx)
+
+
+def test_part_lanes_cover_every_part_exactly_once(tmp_path):
+    names = [f"{i:06d}" for i in range(1, 9899)]            # 9,898 parts
+    lanes = _gbif.part_lanes(names, 16)
+    assert len(lanes) == 16
+    assert [n for lo, hi, _ in lanes for n in names[lo:hi]] == names
+    sizes = [hi - lo for lo, hi, _ in lanes]
+    assert sizes == [618] * 15 + [628]            # the last takes the rest
+    assert all(lanes[i][1] == lanes[i + 1][0] for i in range(15))
+    for lo, hi, name in lanes:
+        assert name == b1.group_lane(names[lo:hi])
+    assert len({n for _l, _h, n in lanes}) == 16
+    # the listing's own tuples give the same answer
+    assert _gbif.part_lanes([(n, f"k/{n}", 1) for n in names], 16) == lanes
+    assert _gbif.part_lanes(names, 1) == [(0, 9898, b1.group_lane(names))]
+    for bad in (0, 9899):
+        with pytest.raises(ValueError, match="non-empty"):
+            _gbif.part_lanes(names, bad)
+    with pytest.raises(ValueError, match="sorted"):
+        _gbif.part_lanes(list(reversed(names)), 2)
+    # the dispatcher's printout, off the smoke listing
+    src, _ = _src(tmp_path)
+    out = _gbif.main(["--lanes", "2", "--source-dir", src, "--json"])
+    assert [(r["GBIF_PARTS"], r["lane_name"]) for r in out] == \
+        [(f"{lo}:{hi}", n) for lo, hi, n in
+         _gbif.part_lanes(list(_gbif.SMOKE_PARTS), 2)]
+
+
+def test_lanes_parts_n_is_declared_and_a_missing_lane_is_refused(
+        tmp_path, monkeypatch):
+    src, _ = _src(tmp_path)
+    box = _gctx(monkeypatch, tmp_path / "box", src, lanes="parts:2")
+    _run(box, ["index"])
+    lanes = _gbif.part_lanes(list(_gbif.SMOKE_PARTS), 2)
+    want = [n for _l, _h, n in lanes]
+    plan = json.load(open(os.path.join(box.root, "plan.json")))
+    assert plan["lanes_expected"] == {"1899": want, "1900": want}
+    # only the first lane arrives
+    lo, hi, name = lanes[0]
+    w = tmp_path / "lane0"
+    ctx = _gctx(monkeypatch, w, src, f"{lo}:{hi}")
+    assert ctx.lane == name
+    _run(ctx, ["index", "fetch"])
+    copy_lane_parts(str(w), str(tmp_path / "box"), "gbif")
+    with pytest.raises(SystemExit, match=lanes[1][2]):
+        b1.stage_assemble(box)
+    # the declaration is refused where it cannot mean anything
+    with pytest.raises(SystemExit, match="positive"):
+        b10.declare_lanes(_gctx(monkeypatch, tmp_path / "z", src,
+                                lanes="parts:0"))
+    with pytest.raises(SystemExit, match="GBIF_PARTS"):
+        b10.declare_lanes(_gctx(monkeypatch, tmp_path / "y", src, "0:1",
+                                lanes="parts:2"))
+    other = argparse.Namespace(a=argparse.Namespace(lanes="parts:2"),
+                               adapter=argparse.Namespace(store="ghcnd"),
+                               years=[2022])
+    with pytest.raises(SystemExit, match="does not split"):
+        b10.declare_lanes(other)

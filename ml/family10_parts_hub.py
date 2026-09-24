@@ -510,14 +510,30 @@ def part_key(year, lane=None):
 # list, and therefore its done.json, is exactly what it always was.
 PART_SUFFIXES = (".npz", ".zst", ".npy")
 
+# SIDECARS: files an ADAPTER writes into a year (or lane) directory beside its
+# parts because the assembler will need them on a machine that never ran the
+# fetch (2026-09-24, gbif's lanes). They are NOT parts: no assembler reads
+# them as rows (`read_parts` and `_part_paths` walk `.npz` only), the pull's
+# schema check skips them, and `n_parts` never counts them. They DO travel:
+# `local_part_files` lists one that is present, so `push`/`push_many` upload
+# it, restore-verify it and name it in `done.json`, and `pull` downloads and
+# sha256-checks it like every other file the marker lists.
+#
+#   taxa.json   gbif / gbif_nc: {platform_hash: taxon record} for the rows of
+#               this year-lane directory — `platforms(ctx)` unions them at
+#               assemble time (`ml/family1/adapters/_gbif.py`).
+SIDECAR_NAMES = ("taxa.json",)
+
 
 def local_part_files(d):
     """The files a year directory contributes, in the order `read_parts` reads
-    them: the numbered parts sorted by name, then `counts.json`."""
+    them: the numbered parts sorted by name, then any adapter SIDECAR present
+    (`SIDECAR_NAMES`, in that order), then `counts.json`."""
     if not os.path.isdir(d):
         return []
     npz = sorted(n for n in os.listdir(d) if n.endswith(PART_SUFFIXES))
     out = list(npz)
+    out += [n for n in SIDECAR_NAMES if os.path.isfile(os.path.join(d, n))]
     if os.path.exists(os.path.join(d, COUNTS)):
         out.append(COUNTS)
     return out
@@ -1036,7 +1052,9 @@ def pull(store, years, work, allow_missing=False, scratch=None,
             # by an older builder verifies perfectly and is still unusable.
             # Refusing here, before the lane is moved into place and marked,
             # keeps it a lane that is simply not present rather than one the
-            # assembler has to discover.
+            # assembler has to discover. A SIDECAR (`SIDECAR_NAMES`) is not a
+            # part and has no column layout: its sha256 was checked above and
+            # that is all a pull can say about it.
             for n, p in got:
                 if n.endswith(".npz"):
                     try:

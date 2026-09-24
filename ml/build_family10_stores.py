@@ -607,12 +607,23 @@ class SourceAdapter:
         """Yield `(year, rows)` over the whole archive. `per_year = False`."""
         raise NotImplementedError
 
-    # -- three optional hooks, all no-ops by default ------------------------
+    # -- four optional hooks, all no-ops by default -------------------------
     def fetch_preflight(self, ctx):
         """Checked BEFORE the first byte is fetched (ml/CLAUDE.md §0.3).
 
         A precondition that depends only on the inputs — the projected disk,
         say — is free here and expensive at hour three.
+        """
+        return None
+
+    def finish_fetch(self, ctx, year_dirs):
+        """One-stream adapters only: called by `stage_fetch` once the stream
+        has ended and every year's rows are flushed, and BEFORE any year is
+        closed and marked, with `{year: that year's (lane) directory}`.
+
+        An adapter that must leave a file beside its parts for the assembler
+        — gbif's taxon sidecar (`family10_parts_hub.SIDECAR_NAMES`) — writes
+        it here, so the marker still comes last (ml/CLAUDE.md §5.21).
         """
         return None
 
@@ -4108,6 +4119,39 @@ def parse_lanes(spec, years):
     return {str(y): list(names) for y in years}
 
 
+def declare_lanes(ctx):
+    """`--lanes` for THIS build's adapter -> `{year: [lane names]}`.
+
+    `months`, `quarters` and a comma list go to `parse_lanes`. `parts:<N>`
+    (2026-09-24) is the fourth form and the only one that needs the ADAPTER:
+    a store with no time axis to lane on (gbif, gbif_nc — one snapshot of
+    ~9,900 parquet parts) is split into N contiguous PART RANGES, and each
+    range is a group lane `g-<hash of its part names>`. The adapter answers
+    through `lanes_for_parts(ctx, n)`; an adapter without it is refused, as is
+    an N that is not a positive integer. Every year of the build gets all N
+    names, because a part-range lane writes every year of its window.
+    """
+    spec = str(getattr(ctx.a, "lanes", "") or "").strip()
+    if not spec.startswith("parts:"):
+        return parse_lanes(spec, ctx.years)
+    ad = ctx.adapter
+    fn = getattr(ad, "lanes_for_parts", None)
+    if not callable(fn):
+        sys.exit(f"--lanes {spec!r}: {ad.store} does not split its source "
+                 f"into part ranges — `parts:<N>` is for a store whose lanes "
+                 f"are ranges of one snapshot's parts (gbif, gbif_nc). Use "
+                 f"`months`, `quarters` or a comma list of lane names.")
+    try:
+        n = int(spec[len("parts:"):])
+    except ValueError:
+        n = 0
+    if n < 1:
+        sys.exit(f"--lanes {spec!r}: expected `parts:<N>` with N a positive "
+                 f"integer, the number of part-range lanes")
+    names = list(fn(ctx, n))
+    return {str(y): list(names) for y in ctx.years}
+
+
 LANES_NOTE = (
     "E-082 wave 7: a year can be fetched by SEVERAL LANES, one hosted runner "
     "each, and each lane writes its own parts, index, ledger and done.json "
@@ -4142,7 +4186,7 @@ def stage_index(ctx):
     # and read by the assembler, which refuses a year whose declared lanes did
     # not all arrive (E-082 wave 7). Absent when nothing was declared, which
     # is family 10 always and family 1 by default, so plan.json is unchanged.
-    lanes = parse_lanes(getattr(ctx.a, "lanes", ""), ctx.years)
+    lanes = declare_lanes(ctx)
     if lanes:
         plan["lanes_expected"] = lanes
     atomic_json(os.path.join(ctx.root, "plan.json"), plan)
@@ -4289,6 +4333,18 @@ def stage_fetch(ctx, assemble_store_after=True):
                       f"one pass that is this store's resumable unit; "
                       f"{total:,} row(s) kept on disk for the retry")
             else:
+                # THE ADAPTER'S OWN FILES FOR EACH YEAR, BEFORE ANY MARKER
+                # (§5.21, flush THEN mark). `finish_fetch(ctx, year_dirs)` is
+                # an optional hook, a no-op by default; gbif writes each
+                # year-lane directory's taxon sidecar here, so a marked year
+                # can never be missing the table its rows need
+                # (family10_parts_hub.SIDECAR_NAMES).
+                for year in sorted(writers):
+                    if year in ctx.years:
+                        writers[year].flush()
+                fin = getattr(ad, "finish_fetch", None)
+                if callable(fin):
+                    fin(ctx, {y: ctx.year_dir(y) for y in ctx.years})
                 for year in sorted(writers):
                     if year in ctx.years:
                         writers[year].counts = (dict(final) if year == ledger

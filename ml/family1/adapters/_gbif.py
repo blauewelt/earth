@@ -191,12 +191,27 @@ on and a part range is the only way to split the work. A restricted run
 writes the restriction into `notes`, which reaches store.json, so a partial
 store can never look like a whole one.
 
+A PART RANGE IS A LANE (2026-09-24). The whole pass was the resumable unit —
+23 h on one box, and family1-build #837 lost nine hours of it when its runner
+lost contact — so the snapshot is fetched as N PART-RANGE LANES on
+GitHub-hosted runners, each `GBIF_PARTS=lo:hi` with `--push-parts`, and
+assembled on a box with `--parts-from-hub --lanes parts:N`. A range's part
+NAMES are its groups, so the lane is `g-<hash>` (`group_subset`), every year
+it writes carries them as `lane_groups`, and N lanes of one year are disjoint.
+`part_lanes(parts, n)` — or `python3 -m family1.adapters._gbif --lanes N`
+from `ml/` — gives the dispatcher the N specs and lane names.
+
 THE TAXON TABLE TRAVELS ON DISK. `platforms(ctx)` is called at ASSEMBLE time
 and the taxa are only discovered during the FETCH, so the fetch writes
 `<work>/<store>/taxa.json` atomically as it goes (flush, THEN mark —
-ml/CLAUDE.md §5.21) and `platforms()` reads it back. An assemble on a machine
-that did not run the fetch — `--parts-from-hub` — has no taxa.json and is
-refused with that sentence, rather than publishing a store whose
+ml/CLAUDE.md §5.21) and `platforms()` reads it back. For an assemble on a
+machine that did not run the fetch — `--parts-from-hub` — the table ALSO
+travels with the parts: `finish_fetch` writes each year-lane directory a
+`taxa.json` SIDECAR holding the taxa of that directory's rows, the Hub carries
+and verifies it like a part (`family10_parts_hub.SIDECAR_NAMES`), and
+`platforms()` unions every sidecar of the years being assembled, refusing two
+different records for one key and parts from two different snapshots. Only
+with no table anywhere is it refused, rather than publishing a store whose
 platforms.json is empty. It is also the one thing here that scales with the
 ARCHIVE rather than with the block being read: the probe met 35,206 distinct
 taxa in eight parts, so a whole-snapshot build holds a few million entries,
@@ -433,6 +448,9 @@ TAXON_UNMATCHED = "gbif-taxon-unmatched"
 # million entries — order a gigabyte of dicts, which is the one part of this
 # adapter that scales with the ARCHIVE rather than with the block being read.
 TAXA_FLUSH_PARTS = 32
+# The year-lane sidecar `finish_fetch` writes; it must be one of
+# `family10_parts_hub.SIDECAR_NAMES` for the Hub to carry it (a test says so).
+TAXA_SIDECAR = "taxa.json"
 NOON = 43200
 DAYS_IN_MONTH = (0, 31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31)
 MEAN_MONTH_DAYS = 365.2425 / 12.0       # 30.4369
@@ -987,6 +1005,11 @@ class GBIFBase(f10b.SourceAdapter):
         self._listing = None
         self._taxa = {}
         self._taxa_path = None
+        # the part NAMES `GBIF_PARTS` resolved to (`wanted_parts`), and the
+        # platforms each year's rows carried in this fetch (`fetch_stream`),
+        # which is what each year-lane's taxon sidecar is cut from
+        self._wanted_names = None
+        self._year_plats = {}
         self.notes = (
             "Two tracks decided by the row's own `license` column: CC0 and "
             "CC BY 4.0 to the public store `gbif`, CC BY-NC 4.0 to the "
@@ -994,7 +1017,9 @@ class GBIFBase(f10b.SourceAdapter):
             "SAME SNAPSHOT (GBIF_SNAPSHOT), or they are two different months "
             "of the archive. The snapshot has no time axis, so `per_year` is "
             "False and the resumable unit is the whole pass; GBIF_PARTS is "
-            "the only way to lane it. Each part is read by COLUMN "
+            "the only way to lane it — each `lo:hi` range is a g-<hash> "
+            "group lane, and an assembly from N such lanes declares them "
+            "with --lanes parts:N. Each part is read by COLUMN "
             "PROJECTION over HTTP Range requests — 22.1 % of its bytes, "
             "measured. qc is a BITFIELD here (see qc_policy): the layout "
             "carries one (log2_fp, log2_dt) pair per store and `check_store` "
@@ -1059,14 +1084,74 @@ class GBIFBase(f10b.SourceAdapter):
             except ValueError:
                 sys.exit(f"GBIF_PARTS={spec!r}: expected `lo:hi` or a comma "
                          f"list of part names")
-            return parts[lo:hi]
-        want = {s.strip() for s in spec.split(",") if s.strip()}
-        out = [p for p in parts if p[0] in want]
-        missing = sorted(want - {p[0] for p in out})
-        if missing:
-            sys.exit(f"REFUSING {self.store}: GBIF_PARTS names part(s) the "
-                     f"snapshot does not list: {missing[:8]}")
+            out = parts[lo:hi]
+        else:
+            want = {s.strip() for s in spec.split(",") if s.strip()}
+            out = [p for p in parts if p[0] in want]
+            missing = sorted(want - {p[0] for p in out})
+            if missing:
+                sys.exit(f"REFUSING {self.store}: GBIF_PARTS names part(s) "
+                         f"the snapshot does not list: {missing[:8]}")
+        self._wanted_names = sorted(p[0] for p in out)
         return out
+
+    # --------------------------------------------------------------- lanes --
+    # A PART RANGE IS A GROUP LANE (2026-09-24). The whole pass was the
+    # resumable unit — 23 h on one box, and family1-build #837 lost nine hours
+    # of it when its runner lost contact — so the snapshot is split by part
+    # range across GitHub-hosted runners, each one `GBIF_PARTS=lo:hi`. The
+    # lane's GROUPS are the part NAMES it reads, so it is named
+    # `g-<sha1 of the sorted names>` by the lane machinery that already names
+    # canopy30's tile subsets (`build_family1_stores.group_lane`), writes
+    # `parts/<year>/<lane>/` for every year of its window, and carries the
+    # names in each year's `counts.json` as `lane_groups` — so N part lanes of
+    # one year are DISJOINT to `lanes_preflight` and assemble as one year.
+    #
+    # WHY `group_subset` TAKES A CONTEXT. `lo:hi` is an index into the
+    # listing, and the listing needs the context (`--source-dir`, attempts),
+    # while `apply_lane` runs in `main` before any stage. `apply_lane` now
+    # hands the context to a hook that declares one (`adapter_group_subset`),
+    # so the lane is known BEFORE the index and the fetch, the listing is made
+    # once and cached, and no stage has to re-derive a lane afterwards.
+    def group_subset(self, ctx=None):
+        """The sorted part NAMES `GBIF_PARTS` restricts this run to, or None
+        (the whole snapshot — the unnamed lane, exactly as before)."""
+        if not self.parts_spec:
+            return None
+        if ctx is not None:
+            self.wanted_parts(ctx)
+        elif self._wanted_names is None:
+            sys.exit(f"{self.store}: GBIF_PARTS={self.parts_spec!r} names its "
+                     f"lane only once the snapshot is listed — call "
+                     f"group_subset(ctx)")
+        if not self._wanted_names:
+            # An empty range would read as NO subset and write the UNNAMED
+            # lane — a whole-snapshot claim over zero parts.
+            sys.exit(f"REFUSING {self.store}: GBIF_PARTS={self.parts_spec!r} "
+                     f"selects no part of the snapshot's "
+                     f"{len(self.listing(ctx)[1]) if ctx is not None else '?'}"
+                     f" — a lane over nothing would claim the whole snapshot")
+        return list(self._wanted_names)
+
+    def lanes_for_parts(self, ctx, n):
+        """`--lanes parts:<N>`: the N lane names of the snapshot split into
+        N contiguous part ranges (`part_lanes`), for plan.json's
+        `lanes_expected`. Declared from the WHOLE listing, so a declaring run
+        with `GBIF_PARTS` set is a contradiction and is refused."""
+        if self.parts_spec:
+            sys.exit(f"--lanes parts:{n}: GBIF_PARTS={self.parts_spec!r} is "
+                     f"set — the run that DECLARES the part lanes is the "
+                     f"assembly of all of them; unset GBIF_PARTS there")
+        snap, parts, _c = self.listing(ctx)
+        try:
+            lanes = part_lanes(parts, n)
+        except ValueError as e:
+            sys.exit(f"--lanes parts:{n}: {e}")
+        print(f"  {self.store}: snapshot {snap}, {len(parts):,} parts in "
+              f"{n} part-range lane(s): "
+              + ", ".join(f"{lo}:{hi}={name}" for lo, hi, name in lanes[:4])
+              + (" …" if len(lanes) > 4 else ""))
+        return [name for _lo, _hi, name in lanes]
 
     def probe_part(self, ctx):
         """The ONE part `index` opens to check the schema: the middle of the
@@ -1242,11 +1327,13 @@ class GBIFBase(f10b.SourceAdapter):
         mine = self.wanted_parts(ctx)
         counts = {"snapshot": snap, "parts_listed": len(parts),
                   "parts_wanted": len(mine), "track": self.track}
+        self._year_plats = {}
         for t, lat, lon, vals, plat, qc in self._parts_rows(
                 ctx, mine, snap, ctx.t_lo, ctx.t_hi, counts):
             years = years_of(t)
             for y in np.unique(years):
                 m = years == y
+                self._note_year_platforms(int(y), plat[m])
                 # AN INT, NOT A STRING: `stage_fetch`'s one-stream branch
                 # tests `year in ctx.years`, and ctx.years holds ints — a
                 # string year makes it close a SECOND writer over the same
@@ -1311,21 +1398,139 @@ class GBIFBase(f10b.SourceAdapter):
         rows = cm.concat_rows(batches, self.C, self.time_dtype)
         yield from cm.batch_rows(self, rows, counts, label)
 
+    # ------------------------------------------------------- taxon sidecars --
+    def _note_year_platforms(self, year, plat):
+        """Remember which platforms `year`'s rows carried, as sorted int64
+        arrays compacted as they grow — eight bytes a (taxon, year) pair
+        rather than a Python set's sixty."""
+        got = self._year_plats.setdefault(int(year), [])
+        got.append(np.unique(np.asarray(plat, np.int64)))
+        if len(got) > 32:
+            self._year_plats[int(year)] = [np.unique(np.concatenate(got))]
+
+    def year_platforms(self, year):
+        got = self._year_plats.get(int(year))
+        if not got:
+            return np.empty(0, np.int64)
+        return np.unique(np.concatenate(got))
+
+    def finish_fetch(self, ctx, year_dirs):
+        """THE TAXON TABLE TRAVELS WITH THE PARTS (2026-09-24).
+
+        `platforms(ctx)` runs at ASSEMBLE time and the taxa are discovered
+        during the FETCH, so a box assembling part-range lanes pulled from the
+        Hub (`--parts-from-hub`) has no `<work>/<store>/taxa.json` of its own.
+        Each year-lane directory therefore gets a `taxa.json` SIDECAR
+        (`family10_parts_hub.SIDECAR_NAMES`): pushed, restore-verified, listed
+        in `done.json` and pulled like a part, and never read as one.
+
+        EACH DIRECTORY GETS THE TAXA ITS OWN ROWS CARRY, NOT THE WHOLE TABLE.
+        A lane's window is 1600..2026, i.e. 427 year directories, and the
+        table is the one thing here that scales with the archive (a few
+        million taxa over the snapshot): a full copy in every directory would
+        be hundreds of copies of the largest file the lane writes, on a
+        runner with ~86 GB of disk. A per-year subset is exactly what that
+        year's parts need, the union over any set of years and lanes is
+        exactly the table those rows need, and a year with no row gets no
+        sidecar. Called by `stage_fetch` BEFORE the years are marked, so a
+        marked year always carries its sidecar (§5.21, flush THEN mark).
+        """
+        for y, d in sorted(year_dirs.items()):
+            plats = self.year_platforms(y)
+            if not plats.size:
+                continue
+            table = {}
+            for h in plats.tolist():
+                rec = self._taxa.get(int(h))
+                if rec is None:
+                    raise ValueError(
+                        f"{self.store}: year {y} holds platform {h} and the "
+                        f"fetch's taxon table has no record of it — refusing "
+                        f"to mark a year whose sidecar would be short")
+                table[str(int(h))] = rec
+            os.makedirs(d, exist_ok=True)
+            p = os.path.join(d, TAXA_SIDECAR)
+            tmp = f"{p}.tmp{os.getpid()}"
+            with open(tmp, "w") as fh:
+                json.dump(table, fh, separators=(",", ":"))
+            os.replace(tmp, p)
+
     def platforms(self, ctx):
-        """The taxa this build met, read back from the fetch's own sidecar."""
+        """The taxa this build met: the fetch's own table, UNIONED with every
+        year-lane sidecar of the years being assembled.
+
+        Sources, all optional, at least one required: the table in memory
+        when this process ran the fetch, else `<work>/<store>/taxa.json`; and
+        `parts/<year>[/<lane>]/taxa.json` for every year of the window and
+        every lane of it on disk (`ctx.lanes_of`) — which is how a box that
+        pulled N part-range lanes from the Hub gets the whole table. A taxon
+        key maps to one record by construction (the platform is a hash of the
+        key), so two sources that both know a key must agree, and a
+        disagreement is REFUSED by name rather than resolved by picking one.
+        The same pass refuses parts from two different SNAPSHOTS (their
+        ledgers' `snapshot`, and plan.json's): lanes dispatched without a
+        pinned GBIF_SNAPSHOT across a monthly release would otherwise
+        assemble two months of the archive into one store.
+        """
+        sources = []
         if self._taxa:
-            return {int(k): v for k, v in self._taxa.items()}
-        p = self._taxa_file(ctx)
-        if not os.path.exists(p):
+            sources.append(("this process's fetch", self._taxa))
+        else:
+            p = self._taxa_file(ctx)
+            if os.path.exists(p):
+                with open(p, "rb") as fh:
+                    sources.append((p, json.load(fh)))
+        snaps = {}
+        plan = os.path.join(ctx.root, "plan.json")
+        if os.path.exists(plan):
+            with open(plan, "rb") as fh:
+                s = json.load(fh).get("snapshot")
+            if s:
+                snaps.setdefault(str(s), plan)
+        for y in ctx.years:
+            for lane in ctx.lanes_of(y):
+                d = ctx.year_dir(y, lane)
+                p = os.path.join(d, TAXA_SIDECAR)
+                if os.path.exists(p):
+                    with open(p, "rb") as fh:
+                        sources.append((p, json.load(fh)))
+                cp = os.path.join(d, "counts.json")
+                if os.path.exists(cp):
+                    with open(cp, "rb") as fh:
+                        s = (json.load(fh).get("counts") or {}).get("snapshot")
+                    if s:
+                        snaps.setdefault(str(s), cp)
+        if len(snaps) > 1:
+            raise ValueError(
+                f"{self.store}: the parts being assembled come from "
+                f"{len(snaps)} different GBIF snapshots — "
+                + "; ".join(f"{s} ({w})" for s, w in sorted(snaps.items()))
+                + ". Every lane and the assembling box must pin the SAME "
+                  "GBIF_SNAPSHOT.")
+        if not sources:
             raise ValueError(
                 f"{self.store}: platforms.json needs the taxon table the "
-                f"FETCH writes ({p}), and it is not there. The taxa are "
-                f"discovered while the parts are read, so an assemble on a "
-                f"machine that did not run the fetch — `--parts-from-hub` — "
-                f"cannot write platforms.json. Assemble where the parts were "
-                f"fetched, or copy taxa.json beside them.")
-        with open(p, "rb") as fh:
-            return {int(k): v for k, v in json.load(fh).items()}
+                f"FETCH writes ({self._taxa_file(ctx)}, or a {TAXA_SIDECAR} "
+                f"sidecar in the year-lane directories under {ctx.parts}), "
+                f"and none is there. The taxa are discovered while the parts "
+                f"are read, so parts pushed by a builder older than the "
+                f"sidecar (2026-09-24) cannot write platforms.json on a "
+                f"machine that did not run the fetch. Re-fetch those lanes, "
+                f"or assemble where the parts were fetched.")
+        out = {}
+        for where, table in sources:
+            for k, rec in table.items():
+                k = int(k)
+                have = out.get(k)
+                if have is None:
+                    out[k] = rec
+                elif have != rec:
+                    raise ValueError(
+                        f"{self.store}: platform {k} (taxon key "
+                        f"{rec.get('taxonkey')!r}) has two different records "
+                        f"— {have!r} and {rec!r} (the second from {where}). "
+                        f"Refusing to pick one.")
+        return out
 
     def smoke_sources(self, root, d_lo, d_hi, seed=20260920):
         truth = make_smoke_sources(root, d_lo, d_hi, self.track, seed)
@@ -1350,6 +1555,89 @@ def years_of(t):
     doy = doe - (365 * yoe + yoe // 4 - yoe // 100)
     mp = (5 * doy + 2) // 153
     return y + (mp >= 10)
+
+
+def part_ranges(n_parts, n):
+    """`n` contiguous `(lo, hi)` index ranges over `n_parts` parts: equal
+    size `n_parts // n`, the LAST one taking the remainder. Refuses an `n`
+    that would leave a range empty."""
+    n_parts, n = int(n_parts), int(n)
+    if n < 1 or n > n_parts:
+        raise ValueError(f"cannot split {n_parts} part(s) into {n} non-empty "
+                         f"range(s)")
+    size = n_parts // n
+    return [(i * size, (i + 1) * size if i < n - 1 else n_parts)
+            for i in range(n)]
+
+
+def part_lanes(parts, n):
+    """The N part-range lanes of a snapshot: `[(lo, hi, lane_name)]`.
+
+    `parts` is the listing as `listing()` returns it — `(name, key, bytes)`
+    tuples — or bare part names, in LISTING ORDER (sorted, as `parse_parts`
+    sorts them). `lo:hi` is the `GBIF_PARTS` value a hosted lane is dispatched
+    with, and `lane_name` is `build_family1_stores.group_lane` of the names in
+    that range — the very name that lane's `apply_lane` will derive, and the
+    name `--lanes parts:<N>` declares for the assembly. Every part is in
+    exactly one range.
+
+    The dispatcher, from the sandbox (one anonymous S3 listing):
+        cd ml && python3 -m family1.adapters._gbif --lanes 16 \\
+            [--snapshot 2026-09-01]
+    """
+    import build_family1_stores as b1          # not at import: b1 imports us
+    names = [p[0] if isinstance(p, (tuple, list)) else str(p) for p in parts]
+    if names != sorted(set(names)):
+        raise ValueError("the part names are not the listing's sorted, "
+                         "distinct names")
+    return [(lo, hi, b1.group_lane(names[lo:hi]))
+            for lo, hi in part_ranges(len(names), n)]
+
+
+def main(argv=None):
+    """Print the N `GBIF_PARTS=lo:hi` specs of a snapshot and their lane
+    names — what a dispatcher needs to launch N hosted part lanes and the one
+    assembly that declares them."""
+    import argparse
+    import types
+    from family1.adapters import gbif as _pub
+    ap = argparse.ArgumentParser(description=main.__doc__)
+    ap.add_argument("--lanes", type=int, required=True,
+                    help="how many part-range lanes")
+    ap.add_argument("--snapshot", default=os.environ.get("GBIF_SNAPSHOT", ""),
+                    help="YYYY-MM-DD (default GBIF_SNAPSHOT, else the newest "
+                         "the bucket lists)")
+    ap.add_argument("--source-dir", default="",
+                    help="read listing.json from here (tests) instead of S3")
+    ap.add_argument("--json", action="store_true",
+                    help="print the lanes as JSON")
+    a = ap.parse_args(argv)
+    ad = _pub.GBIFAdapter()
+    ad.snapshot, ad.parts_spec = a.snapshot.strip(), ""
+    ctx = types.SimpleNamespace(
+        source_dir=os.path.abspath(a.source_dir) if a.source_dir else None,
+        a=types.SimpleNamespace(attempts=4), count_bytes=lambda n: None)
+    snap, parts, _c = ad.listing(ctx)
+    lanes = part_lanes(parts, a.lanes)
+    out = [{"lane": i + 1, "GBIF_PARTS": f"{lo}:{hi}", "lane_name": name,
+            "first_part": parts[lo][0], "last_part": parts[hi - 1][0],
+            "n_parts": hi - lo} for i, (lo, hi, name) in enumerate(lanes)]
+    if a.json:
+        print(json.dumps({"snapshot": snap, "parts": len(parts),
+                          "lanes": out}, indent=1))
+        return out
+    print(f"snapshot {snap} · {len(parts):,} parts · {a.lanes} lane(s). Pin "
+          f"GBIF_SNAPSHOT={snap} on EVERY lane and on the assembling box.")
+    for r in out:
+        print(f"  lane {r['lane']:>3}  GBIF_PARTS={r['GBIF_PARTS']:<12} "
+              f"{r['lane_name']}  parts {r['first_part']}..{r['last_part']} "
+              f"({r['n_parts']})")
+    print(f"each lane:  --store gbif --stage index,fetch --end 2026-12-31 "
+          f"--push-parts   (no --start: the whole record, so the lane name "
+          f"is the g-<hash> alone)")
+    print(f"the box:    --store gbif --stage all --parts-from-hub "
+          f"--end 2026-12-31 --lanes parts:{a.lanes}   (GBIF_PARTS unset)")
+    return out
 
 
 def _projection(counts, n_parts, C, time_dtype):
@@ -1647,3 +1935,7 @@ def make_smoke_sources(root, d_lo, d_hi, track, seed=20260920):
     with open(os.path.join(root, "gbif", "listing.json"), "w") as fh:
         json.dump({"snapshots": [SMOKE_SNAPSHOT], "keys": keys}, fh)
     return truth
+
+
+if __name__ == "__main__":                                  # pragma: no cover
+    main()

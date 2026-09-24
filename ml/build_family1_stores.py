@@ -52,8 +52,11 @@ and family 10 does not:
     store and every part already on the Hub reads unchanged. The assembler
     MERGES a year's lanes, refuses two that cover the same thing, sums their
     ledgers and records the list in store.json's `lanes_by_year`. `--lanes
-    months|quarters|<list>` DECLARES which lanes to expect, and the assembler
-    then refuses a year whose declared lanes did not all arrive.
+    months|quarters|parts:<N>|<list>` DECLARES which lanes to expect, and the
+    assembler then refuses a year whose declared lanes did not all arrive.
+    `parts:<N>` is gbif's: a snapshot with no time axis is laned by PART
+    RANGE (`GBIF_PARTS=lo:hi` on each hosted lane, a `g-<hash>` group lane;
+    `_gbif.part_lanes` prints the N specs and names).
       assemble  the store, from the parts (streaming above 50 M rows)
       publish   upload, download every file back, compare sha256
       check     the store's sha256 against store.json, E-079 §4's
@@ -102,6 +105,11 @@ Run:
   python3 ml/build_family1_stores.py --store icesat2 --stage all \\
       --parts-from-hub --start 2022-01-01 --end 2022-12-31 \\
       --lanes months                                # the box, twelve lanes
+  (cd ml && python3 -m family1.adapters._gbif --lanes 16)  # gbif's 16 specs
+  GBIF_SNAPSHOT=2026-09-01 GBIF_PARTS=0:618 python3 ml/build_family1_stores.py \\
+      --store gbif --stage index,fetch --end 2026-12-31 --push-parts  # lane 1
+  GBIF_SNAPSHOT=2026-09-01 python3 ml/build_family1_stores.py --store gbif \\
+      --stage all --parts-from-hub --end 2026-12-31 --lanes parts:16  # the box
   python3 ml/build_family1_stores.py --store seaice_asi --smoke   # tier G
   python3 ml/build_family1_stores.py --store seaice_asi --stage probe \\
       --probe-month 2020-03
@@ -111,6 +119,7 @@ import argparse
 import calendar
 import datetime as dt
 import hashlib
+import inspect
 import json
 import os
 import platform as _platform
@@ -310,7 +319,7 @@ def lane_name(d_lo, d_hi, groups=None):
     return "-".join(parts)
 
 
-def adapter_group_subset(ad):
+def adapter_group_subset(ad, ctx=None):
     """The groups THIS adapter instance was restricted to, or None.
 
     A tier-G adapter whose groups are chosen at construction time from an
@@ -320,9 +329,21 @@ def adapter_group_subset(ad):
     selects WHICH PRODUCT to build (`LST05_GROUPS` picks a satellite) is not a
     subset of one product's groups, and a store already on the Hub must not
     acquire a lane because of one.
+
+    A hook that declares a `ctx` parameter is handed the context (2026-09-24):
+    gbif's groups are PART NAMES, and a `GBIF_PARTS=lo:hi` range can only be
+    resolved against the snapshot's listing, which needs the context (its
+    `--source-dir`, its attempts). `apply_lane` passes it; the hooks that take
+    none are called exactly as before.
     """
     fn = getattr(ad, "group_subset", None)
-    got = fn() if callable(fn) else None
+    if not callable(fn):
+        return None
+    try:
+        takes_ctx = "ctx" in inspect.signature(fn).parameters
+    except (TypeError, ValueError):                         # pragma: no cover
+        takes_ctx = False
+    got = fn(ctx) if (takes_ctx and ctx is not None) else fn()
     return sorted(str(g) for g in got) if got else None
 
 
@@ -353,7 +374,7 @@ def apply_lane(ctx):
     if getattr(ctx.a, "parts_from_hub", False):
         ctx.lane, ctx.lane_groups = "", []
         return ctx.lane
-    groups = adapter_group_subset(ctx.adapter)
+    groups = adapter_group_subset(ctx.adapter, ctx)
     ctx.lane = lane_name(ctx.d_lo, ctx.d_hi, groups)
     ctx.lane_groups = groups or []
     return ctx.lane
@@ -1779,8 +1800,11 @@ def build_parser():
                          "records every such unit in `degraded`")
     ap.add_argument("--lanes", default="",
                     help="DECLARE which lanes each year is fetched by, at "
-                         "`index`: `months` (m01..m12), `quarters` (q1..q4) "
-                         "or a comma list of lane names. The assembler then "
+                         "`index`: `months` (m01..m12), `quarters` (q1..q4), "
+                         "`parts:<N>` (gbif/gbif_nc: N contiguous ranges of "
+                         "the snapshot's parts, each a g-<hash> lane — "
+                         "`_gbif.part_lanes`) or a comma list of lane names. "
+                         "The assembler then "
                          "REFUSES a year whose declared lanes are not all "
                          "present (--allow-missing-years names the degrade "
                          "instead). Without it the assembler takes the lanes "
