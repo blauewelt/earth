@@ -47,7 +47,16 @@ const FETCH_STORES = ["irtb", "sst_acspo02", "swot", "xco2", "burned500"];
 const ms = (iso) => Date.parse(iso);
 const laneOnly = (x) => Object.fromEntries(LANE_KEYS.map((k) => [k, x[k] ?? ""]));
 const laneKey = (x) => LANE_KEYS.map((k) => x[k] ?? "").join("|");
-const titleNeedle = (l) => `family1 ${l.store} ${l.stage} ${l.start}..${l.end}`;
+// THE ADAPTER ENV IS PART OF THE NEEDLE (2026-09-24): sixteen gbif part
+// lanes share store, stage and window and differ only in GBIF_PARTS, and a
+// needle without it would pair each lane with whichever sibling's run was
+// created first — a failure would then re-queue the wrong lane. The build's
+// run-name carries adapter_env at its end for the same reason.
+const titleNeedle = (l) => `family1 ${l.store} ${l.stage} ${l.start}..${l.end}`
+  + (l.adapter_env ? ` ${l.adapter_env}` : "");
+// The run-name joins optional fields with single spaces, so an empty
+// probe_month or runner leaves two or three spaces in a row in the title.
+const squash = (s) => String(s || "").replace(/\s+/g, " ").trim();
 
 export function normalize(q) {
   return {
@@ -75,7 +84,7 @@ export function reconcile(queue, runs, nowIso) {
     const needle = titleNeedle(d);
     const seen = new Set(d.seen_runs || []);
     const run = runs
-      .filter((r) => (r.display_title || "").includes(needle)
+      .filter((r) => squash(r.display_title).includes(squash(needle))
         && ms(r.created_at) >= at - MATCH_SLACK_MIN * 60e3
         && !seen.has(r.id) && !claimed.has(r.id))
       .sort((a, b) => ms(a.created_at) - ms(b.created_at))[0];
@@ -358,7 +367,7 @@ function selftest() {
   const ago = (min) => new Date(ms(now) - min * 60e3).toISOString();
   const lane = (store, start, end, extra = {}) => ({ store, stage: "index,fetch", start, end,
     runner: "ubuntu-latest", extra_args: "--push-parts", adapter_env: "", ...extra });
-  const title = (l) => `family1 ${l.store} index,fetch ${l.start}..${l.end}  `;
+  const title = (l) => `family1 ${l.store} index,fetch ${l.start}..${l.end}  ${l.adapter_env || ""}`;
   const run = (id, l, status, conclusion, createdAgo, durMin) => ({
     id, run_number: 1000 + id, display_title: title(l), status, conclusion,
     created_at: ago(createdAgo), run_started_at: ago(createdAgo),
@@ -452,6 +461,20 @@ function selftest() {
   const rx = inflightRegex({ pending: [] });
   check("inflight regex matches a fetch lane title", rx.test("family1 sst_acspo02 index,fetch 2010-01-01..2010-06-30 "));
   check("inflight regex ignores an assembly / probe", !rx.test("family1 irtb all 2012-01-01..2012-12-31 gpu-box-1") && !rx.test("family1 swot probe  2023-01"));
+
+  // Sixteen gbif part lanes share the window; the adapter_env in the needle
+  // is what pairs each lane with ITS run — here the second lane's run was
+  // created first and failed, and it is the second lane that is retried.
+  {
+    const P1 = lane("gbif", "1600-01-01", "2026-12-31", { adapter_env: "GBIF_SNAPSHOT=2026-09-01 GBIF_PARTS=0:618" });
+    const P2 = lane("gbif", "1600-01-01", "2026-12-31", { adapter_env: "GBIF_SNAPSHOT=2026-09-01 GBIF_PARTS=618:1236" });
+    const qq = { pending: [], dispatched: [{ ...P1, at: ago(20) }, { ...P2, at: ago(20) }], done: [], failed: [] };
+    const rr = [run(21, P2, "completed", "failure", 19, 5), run(22, P1, "in_progress", null, 18)];
+    const { queue: q4, events: ev } = reconcile(qq, rr, now);
+    check("adapter_env pairs a lane with its own run", ev.retried.length === 1 && ev.retried[0].run_number === 1021
+      && !!has(q4.pending, P2) && !!has(q4.dispatched, P1) && !has(q4.pending, P1));
+    check("inflight regex matches a part lane's title", inflightRegex({ pending: [P1] }).test(title(P1)));
+  }
 
   console.log(fails ? `selftest: ${fails} FAILED` : "selftest: all passed");
   process.exit(fails ? 1 : 0);
