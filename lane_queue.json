@@ -68,16 +68,6 @@
    "end": "2026-12-31",
    "runner": "ubuntu-latest",
    "extra_args": "--push-parts",
-   "adapter_env": "GBIF_SNAPSHOT=2026-09-01 GBIF_PARTS=6180:6798",
-   "at": "2026-09-24T22:20:44.558Z"
-  },
-  {
-   "store": "gbif",
-   "stage": "index,fetch",
-   "start": "1600-01-01",
-   "end": "2026-12-31",
-   "runner": "ubuntu-latest",
-   "extra_args": "--push-parts",
    "adapter_env": "GBIF_SNAPSHOT=2026-09-01 GBIF_PARTS=6798:7416",
    "at": "2026-09-24T22:20:48.276Z"
   },
@@ -3260,6 +3250,18 @@
    "at": "2026-09-24T22:20:40.826Z",
    "run_number": 910,
    "finished": "2026-09-24T23:09:44Z"
+  },
+  {
+   "store": "gbif",
+   "stage": "index,fetch",
+   "start": "1600-01-01",
+   "end": "2026-12-31",
+   "runner": "ubuntu-latest",
+   "extra_args": "--push-parts",
+   "adapter_env": "GBIF_SNAPSHOT=2026-09-01 GBIF_PARTS=6180:6798",
+   "at": "2026-09-24T22:20:44.558Z",
+   "run_number": 911,
+   "finished": "2026-09-24T23:12:53Z"
   }
  ],
  "failed": []
