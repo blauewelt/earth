@@ -1,0 +1,10 @@
+{
+ "at": "2026-09-24T01:52:27+00:00",
+ "done": 16705,
+ "elapsed_s": 5748.5,
+ "eta_s": 0.0,
+ "files": 16705,
+ "item": "store.json",
+ "stage": "publish canopy30",
+ "total": 16705
+}
