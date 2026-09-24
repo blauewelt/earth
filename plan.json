@@ -1,0 +1,125 @@
+{
+ "alternative_source_not_read": "https://data.caltech.edu/api/records/8hm1f-w5492/files/TROPO_SIF_ARCHIVE_<year>.tar.gz/content",
+ "bins": [
+  2702,
+  2775
+ ],
+ "builder_git_sha": "0d9f65675caeb2ecb4aaae7fd9cb456d365ee027",
+ "built_at": "2026-09-24T12:13:28+00:00",
+ "bytes": 115722500195,
+ "bytes_per_day_mean": 315320164.0,
+ "channels": [
+  {
+   "max": 20.0,
+   "min": -20.0,
+   "name": "sif_740",
+   "unit": "mW m-2 sr-1 nm-1"
+  },
+  {
+   "max": 20.0,
+   "min": -20.0,
+   "name": "sif_740_daily",
+   "unit": "mW m-2 sr-1 nm-1"
+  },
+  {
+   "max": 20.0,
+   "min": 0.0,
+   "name": "sif_740_error",
+   "unit": "mW m-2 sr-1 nm-1"
+  },
+  {
+   "max": 1.0,
+   "min": 0.0,
+   "name": "cloud_fraction",
+   "unit": "1"
+  },
+  {
+   "max": 90.0,
+   "min": 0.0,
+   "name": "solar_zenith",
+   "unit": "degree"
+  },
+  {
+   "max": 90.0,
+   "min": 0.0,
+   "name": "viewing_zenith",
+   "unit": "degree"
+  }
+ ],
+ "collection": "L2B_SIF___",
+ "dataset": "S5P-PAL L2B_SIF___ (TROPOSIF L2B)",
+ "date_range": [
+  "2019-01-01",
+  "2019-12-31"
+ ],
+ "days_listed": 367,
+ "first_day": "2018-12-31",
+ "first_file": {
+  "bytes": 274320798,
+  "cloud_fraction_cut": {
+   "le_0.1": 0.386248,
+   "le_0.2": 0.504652,
+   "le_0.3": 0.600966,
+   "le_0.5": 0.756304,
+   "le_0.8": 1.0
+  },
+  "day": "2018-12-31",
+  "delta_time_units": "milliseconds since 2018-12-31T00:00:00 UTC",
+  "footprint_km": {
+   "max": 9.661,
+   "median": 5.764,
+   "min": 5.101,
+   "p1": 5.107,
+   "p25": 5.267,
+   "p75": 6.803,
+   "p99": 9.364
+  },
+  "format": "NETCDF4",
+  "has_corners": 4,
+  "id": "S5P_PAL__L2B_SIF____20181231T001500_20190101T013729_20230913T082047",
+  "log2_fp_measured": -2.2716,
+  "n_elem": 2266877,
+  "processor_version": "01.00.01",
+  "reference_time_s": 1167523200.0,
+  "thresholds": {
+   "cloud": 0.8,
+   "sza": 70.0,
+   "vza": 60.0
+  },
+  "time_units": "seconds since 2010-01-01 00:00:00",
+  "title": "TROPOSIF_L2B",
+  "valid_fraction": 1.0
+ },
+ "footprint": {
+  "log2_dt": -4.0,
+  "log2_fp": -2.4912140814992783
+ },
+ "last_day": "2020-01-01",
+ "max_days": 0,
+ "oco_enabled": false,
+ "orbit_collection_not_read": "L2__SIF___",
+ "other": {
+  "items": 367
+ },
+ "per_year_resume": true,
+ "platforms_enabled": [
+  "TROPOMI"
+ ],
+ "qc_policy": "The product ships NO per-sounding quality flag: its quality control is applied upstream and survives only as thresholds in the file's own /METADATA/ALGORITHM_SETTINGS (cloud fraction 0.8, solar zenith 70 deg, viewing zenith 60 deg on the granule measured, and those are exactly the data's own limits there). qc therefore grades the cloud fraction in quarters of the file's OWN threshold T: 0 for <= T/4, 1 for <= T/2, 2 for <= T, 3 for a sounding past T or past either angle threshold, counted by which one (`beyond_producer_threshold`); a sounding with no cloud fraction is qc 2, not assessed. A file whose ALGORITHM_SETTINGS lacks any of the three numbers is a REFUSAL, not a guess. A sounding with no fluorescence, no time or no position is dropped and counted; any magnitude >= 1e30 is the netCDF4 default fill this product writes WITHOUT declaring it and becomes NaN for that channel, counted as `fill_valued`. A value outside its channel's bounds becomes NaN for that channel alone and is counted, never clipped.",
+ "sources": [
+  "https://data-portal.s5p-pal.com/api/s5p-l2/collections/L2B_SIF___/items (anonymous STAC)",
+  "https://data-portal.s5p-pal.com/download/s5p-l2/<uuid> (302 to an anonymous object store, HTTP 206, exact Content-Length)",
+  "https://data.caltech.edu/api/records/8hm1f-w5492/files/TROPO_SIF_ARCHIVE_<year>.tar.gz/content (the CC0 alternative; four yearly tarballs, not used)"
+ ],
+ "store": "sif",
+ "title": "Solar-induced chlorophyll fluorescence at 740 nm: TROPOMI (Sentinel-5P) daily L2B soundings from ESA's S5P-PAL service, one row per sounding; OCO-2 and OCO-3 SIF Lite gated on SIF_OCO=1 until GES DISC is approved",
+ "url": "https://data-portal.s5p-pal.com/api/s5p-l2/collections/L2B_SIF___",
+ "verified": "2026-09-20 from this sandbox, anonymously. The S5P-PAL STAC API (https://data-portal.s5p-pal.com/api/s5p-l2) and its L2B_SIF___ collection: temporal extent 2018-04-30 -> open, ONE item a day, 402,064,007 B for 2023-07-01, 377,766,360 B for 2026-08-15, and the first five items starting 2018-05-01 .. 2018-05-05 (so the DAILY product begins 2018-05-01, a day after the extent and the ledger say). The per-orbit L2__SIF___ collection for the same three days: 16 / 14 / 14 granules and 3.22 / 3.69 / 3.69 GB a day. The 2023-07-01 granule downloaded whole (402,064,007 B) and opened with netCDF4: 3,322,606 soundings, the variable and attribute inventory in the module docstring, SIF_735 carrying 9,504 undeclared fill values against SIF_743's none, cloud fraction / solar zenith / viewing zenith reaching exactly the 0.8 / 70.0 / 60.0 of ALGORITHM_SETTINGS, and a corner-derived footprint whose median is 5.098 km (log2 -2.4488 against the nominal -2.4912). Caltech's CaltechDATA record 8hm1f-w5492 ('cc-zero'): four yearly tarballs, 181,646,370,092 B in all, 2018-2022 only, served over HTTPS through a signed redirect that honours Range (206) but is a single gzip stream with no member index, so one day cannot be reached without the whole 34-63 GB year.",
+ "window": [
+  "2019-01-01",
+  "2019-12-31"
+ ],
+ "years": [
+  2019
+ ]
+}
