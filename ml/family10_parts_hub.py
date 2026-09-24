@@ -107,6 +107,7 @@ import os
 import re
 import shutil
 import sys
+import threading
 import time
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -132,7 +133,10 @@ BATCH = 64
 
 # Parts of one lane download this many at a time (2026-09-23): serially, 148
 # x ~35 MB took ~3.5 min on #459 (slow disk) AND #593 (NVMe) — latency-bound.
-PULL_WORKERS = 8
+# Sixteen since 2026-09-24: a sharded tier-G year is tens of thousands of
+# ~1 MB files (lai500 2020: 27,848 files, 29 GB; pheno500: 947 a year), so
+# the pull is a request-latency problem and a worker is what buys a request.
+PULL_WORKERS = 16
 
 
 # ----------------------------------------------------------------- the Hub --
@@ -259,6 +263,37 @@ STREAM_CHUNK = 8 << 20
 STREAM_ATTEMPTS = 12
 STREAM_TIMEOUT = (30, 120)
 
+_HTTP = threading.local()
+
+
+def _http():
+    """What `hub_stream` GETs with: ONE keep-alive `requests.Session` per
+    thread, made on first use and kept for the thread's life.
+
+    A bare `requests.get` opens a fresh connection for every call — a DNS
+    lookup and a TLS handshake to huggingface.co for the 302, then both again
+    to the CDN host it points at — and a sharded year is tens of thousands of
+    ~1 MB files. Measured 2026-09-24 on family1-build #888 (lai500 2020 on the
+    California box): 4,183 files in 56 minutes over eight workers, 6.4 s per
+    file per worker, against 0.5–1.2 s for the same GETs from the sandbox —
+    the per-connection setup on that host, not the bytes (the same box
+    streams a 36 GB column at line rate). A Session reuses both connections
+    across files, so each costs the server's latency and nothing else.
+
+    Per thread rather than shared: `requests.Session` is not documented
+    thread-safe, and the pool would otherwise be one more thing the workers
+    contend on. A `requests` stand-in without `Session` (the tests') is
+    returned as it is — nothing to keep, and nothing cached across tests.
+    """
+    import requests
+    mk = getattr(requests, "Session", None)
+    if mk is None:
+        return requests
+    s = getattr(_HTTP, "session", None)
+    if s is None:
+        s = _HTTP.session = mk()
+    return s
+
 
 class StreamRefused(IOError):
     """A definite answer from the Hub (a plain 4xx, a Range ignored) — not
@@ -296,9 +331,9 @@ def hub_stream(repo, path_in_repo, token, consume, just_uploaded=False,
         if got:
             hdr["Range"] = f"bytes={got}-"
         try:
-            with requests.get(url, headers=hdr, stream=True,
-                              timeout=STREAM_TIMEOUT,
-                              allow_redirects=True) as r:
+            with _http().get(url, headers=hdr, stream=True,
+                             timeout=STREAM_TIMEOUT,
+                             allow_redirects=True) as r:
                 if r.status_code == 404 and just_uploaded and i < attempts - 1:
                     raise IOError(f"HTTP 404 (just uploaded, propagating)")
                 if r.status_code in (429, 500, 502, 503, 504):

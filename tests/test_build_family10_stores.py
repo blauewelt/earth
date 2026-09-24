@@ -3759,6 +3759,41 @@ def test_stream_split_streams_every_part_through_one_hash(monkeypatch):
         ph.stream_split("r/x", "pre", "big.npy", entry, "tok", "/nonexistent")
 
 
+def test_hub_stream_keeps_one_keep_alive_session_per_thread(monkeypatch):
+    """family1-build #888 (lai500 2020 on the California box, 2026-09-24):
+    a bare `requests.get` per file cost 6.4 s of connection setup on that
+    host, over 27,848 files. `hub_stream` GETs through `ph._http()` — one
+    `requests.Session` made per thread on first use and reused for every
+    file that thread pulls; a stand-in module with no `Session` (the tests'
+    `_fake_requests`) is used as it is and never cached."""
+    import threading
+    body = b"x" * 3000
+    fr = _stream_env(monkeypatch, body, ["ok", "ok", "ok"])
+    made = []
+
+    class Session:
+        def __init__(self):
+            made.append(threading.get_ident())
+
+        def get(self, *a, **k):
+            return fr.get(*a, **k)
+    fr.Session = Session
+    monkeypatch.setattr(ph, "_HTTP", threading.local())
+    ph.hub_stream("r/x", "p/a.npy", None, lambda b: None)
+    ph.hub_stream("r/x", "p/b.npy", None, lambda b: None)
+    assert len(made) == 1 and len(fr.calls) == 2       # one Session, two GETs
+    t = threading.Thread(
+        target=lambda: ph.hub_stream("r/x", "p/c.npy", None, lambda b: None))
+    t.start()
+    t.join()
+    assert len(made) == 2 and made[1] != made[0]       # its own, on its thread
+    del fr.Session                                     # no Session: as it is
+    monkeypatch.setattr(ph, "_HTTP", threading.local())
+    assert ph._http() is fr
+    assert not hasattr(ph._HTTP, "session")
+    assert ph.PULL_WORKERS == 16
+
+
 def test_download_streams_the_file_to_its_destination(tmp_path, monkeypatch):
     """`ph._download` (the parts pull, the Hub store.json read) streams over
     plain HTTPS into `<dest>/<basename>` — the xet path crawled on rented
