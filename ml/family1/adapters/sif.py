@@ -168,6 +168,7 @@ import calendar
 import datetime as dt
 import json
 import os
+import re
 import sys
 import time
 import urllib.parse
@@ -298,19 +299,49 @@ def parse_items(features):
             raise FormatError(f"{f.get('id')!r}: no `product` asset href "
                               f"(assets {sorted(f.get('assets') or {})})")
         day = dt.date.fromisoformat(str(start)[:10])
+        rec = {"id": f.get("id"), "url": a["href"],
+               "bytes": int(a.get("file:size") or 0),
+               "name": a.get("file:local_path") or (str(f.get("id"))
+                                                    + ".nc"),
+               "start": str(start),
+               "end": str(p.get("end_datetime") or ""),
+               "processor": p.get("s5p:processor_version"),
+               "processed": processing_stamp(f.get("id"))}
         if day in out:
-            raise FormatError(
-                f"two L2B items start on {day}: {out[day]['id']} and "
-                f"{f.get('id')} — the product is one file a day and this "
-                f"adapter would silently read only one of them")
-        out[day] = {"id": f.get("id"), "url": a["href"],
-                    "bytes": int(a.get("file:size") or 0),
-                    "name": a.get("file:local_path") or (str(f.get("id"))
-                                                         + ".nc"),
-                    "start": str(start),
-                    "end": str(p.get("end_datetime") or ""),
-                    "processor": p.get("s5p:processor_version")}
+            # THE PRODUCT'S OWN VERSIONING (family1-build #825/#826,
+            # 2026-09-24): S5P-PAL lists two L2B items for one day when a
+            # day was re-run — 2022-05-27 has a 00:21→22:20 file processed
+            # 2023-09-13 beside a 02:02→22:20 one processed 2023-09-12, and
+            # 2023-10-29 two identical windows processed two minutes apart
+            # on 2026-09-24. The item processed LAST supersedes, the swot
+            # rule for a re-processed pass; two items processed at the same
+            # second stay a refusal, because then nothing says which is the
+            # producer's current file.
+            old = out[day]
+            if not rec["processed"] or not old["processed"] or \
+                    rec["processed"] == old["processed"]:
+                raise FormatError(
+                    f"two L2B items start on {day}: {old['id']} and "
+                    f"{f.get('id')} — the product is one file a day and "
+                    f"this adapter would silently read only one of them")
+            keep, drop = (rec, old) if rec["processed"] > old["processed"] \
+                else (old, rec)
+            counts["items_superseded"] = counts.get("items_superseded", 0) + 1
+            counts.setdefault("superseded_ids", []).append(drop["id"])
+            out[day] = keep
+            continue
+        out[day] = rec
     return out, counts
+
+
+_PROC = re.compile(r"_(\d{8}T\d{6})$")
+
+
+def processing_stamp(item_id):
+    """The processing timestamp at the END of an S5P-PAL item id
+    (`S5P_PAL__L2B_SIF____<start>_<end>_<processed>`), or None."""
+    m = _PROC.search(str(item_id or ""))
+    return m.group(1) if m else None
 
 
 # ============================================================== one granule ==

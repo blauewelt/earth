@@ -133,10 +133,37 @@ def test_the_stac_item_parser():
     assert sorted(by_day) == [dt.date(2023, 7, 1), dt.date(2023, 7, 2)]
     assert counts["items"] == 2
     assert by_day[dt.date(2023, 7, 1)]["bytes"] == 402064007
-    # the product is ONE file a day: two items on one day would mean the
-    # adapter silently read one of them
+    # the product is ONE file a day: two items on one day with no
+    # processing stamp to order them would mean the adapter silently read
+    # one of them
     with pytest.raises(sif.FormatError, match="two L2B items"):
         sif.parse_items([item("2023-07-01"), item("2023-07-01", uid="v")])
+
+    # …but a RE-RUN day (family1-build #825/#826, 2026-09-24) lists two
+    # items whose ids end in their processing time: the later one wins,
+    # the other is counted, and two processed at the same second refuse
+    def pal(day, start, end, proc, uid):
+        it = item(day, uid=uid)
+        it["id"] = f"S5P_PAL__L2B_SIF____{start}_{end}_{proc}"
+        return it
+    a = pal("2022-05-27", "20220527T002116", "20220527T222045",
+            "20230913T082425", "a")
+    b = pal("2022-05-27", "20220527T020246", "20220527T222045",
+            "20230912T094900", "b")
+    by_day, counts = sif.parse_items([b, a])
+    assert by_day[dt.date(2022, 5, 27)]["url"] == "https://x/a"
+    assert counts["items_superseded"] == 1 and counts["superseded_ids"] == \
+        [b["id"]]
+    by_day, counts = sif.parse_items([a, b])           # order-independent
+    assert by_day[dt.date(2022, 5, 27)]["url"] == "https://x/a"
+    c = pal("2023-10-29", "20231029T010258", "20231030T004350",
+            "20260924T073817", "c")
+    d = pal("2023-10-29", "20231029T010258", "20231030T004350",
+            "20260924T073817", "d")
+    with pytest.raises(sif.FormatError, match="two L2B items"):
+        sif.parse_items([c, d])
+    assert sif.processing_stamp(c["id"]) == "20260924T073817"
+    assert sif.processing_stamp("S5P_PAL__L2B_SIF____2023-07-01") is None
     noasset = item("2023-07-03")
     noasset["assets"] = {}
     with pytest.raises(sif.FormatError, match="no `product` asset"):
