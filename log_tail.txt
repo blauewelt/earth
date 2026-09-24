@@ -1,0 +1,12 @@
+  stage all (tier G): index, fetch, assemble, publish — the full-decode `check` stage runs only when named
+store     sst_acspo02 — NOAA ACSPO L3S-LEO daily sea-surface temperature, 0.02 degrees — the finest satellite SST field; phase C, probed and parked
+family    family1_gf (1.gf) · public -> chfrank/earth-tensors:tensors/family1_gf/sst_acspo02
+axis      2000-02-24 .. 2026-09-15  bins 1326..3265 · time_s int32 (schema 2)
+lane      (unnamed) — whole calendar year(s), no group subset: the year folder's own files, as every store on the Hub holds them
+channels  C=2: sst, quality_level
+tier G    sharded, groups ['sst_acspo02'], F=5 x 86400 s, float16, years (by bin start) 2000..2026
+work      /opt/runner/_work/earth/earth/ml/cache/family1_gf
+
+=== stage index (sst_acspo02) ===
+  [index sst_acspo02] start (1 items)  0/1  0.0s
+REFUSING sst_acspo02: two granules for 2005-09-30: 20050930120000-STAR-L3S_GHRSST-SSTsubskin-LEO_Daily-ACSPO_V2.81-v02.0-fv01.0 and 20050930120000-STAR-L3S_GHRSST-SSTsubskin-LEO_Daily-ACSPO_V2.81-v02.0-fv01.0 — this collection is one a day, so a second one means the day/night split (a PM or AM collection) rather than the daily super-collation
