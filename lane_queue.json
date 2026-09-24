@@ -3,24 +3,6 @@
   {
    "store": "sst_acspo02",
    "stage": "index,fetch",
-   "start": "2025-01-01",
-   "end": "2025-06-30",
-   "runner": "ubuntu-latest",
-   "extra_args": "--push-parts",
-   "adapter_env": ""
-  },
-  {
-   "store": "sst_acspo02",
-   "stage": "index,fetch",
-   "start": "2025-07-01",
-   "end": "2025-12-31",
-   "runner": "ubuntu-latest",
-   "extra_args": "--push-parts",
-   "adapter_env": ""
-  },
-  {
-   "store": "sst_acspo02",
-   "stage": "index,fetch",
    "start": "2026-01-01",
    "end": "2026-06-30",
    "runner": "ubuntu-latest",
@@ -57,26 +39,6 @@
    "extra_args": "--push-parts",
    "adapter_env": "GEDI_FETCH=range GEDI_L4A_VERSION=3",
    "at": "2026-09-24T00:56:15.409Z"
-  },
-  {
-   "store": "gedi",
-   "stage": "index,fetch",
-   "start": "2022-06-10",
-   "end": "2022-06-12",
-   "runner": "ubuntu-latest",
-   "extra_args": "--push-parts",
-   "adapter_env": "GEDI_FETCH=range GEDI_L4A_VERSION=3",
-   "at": "2026-09-24T00:56:18.903Z"
-  },
-  {
-   "store": "irtb",
-   "stage": "index,fetch",
-   "start": "2026-04-01",
-   "end": "2026-06-30",
-   "runner": "ubuntu-latest",
-   "extra_args": "--push-parts",
-   "adapter_env": "",
-   "at": "2026-09-24T04:34:44.990Z"
   },
   {
    "store": "sst_acspo02",
@@ -197,6 +159,26 @@
    "extra_args": "--push-parts",
    "adapter_env": "",
    "at": "2026-09-24T04:50:46.369Z"
+  },
+  {
+   "store": "sst_acspo02",
+   "stage": "index,fetch",
+   "start": "2025-01-01",
+   "end": "2025-06-30",
+   "runner": "ubuntu-latest",
+   "extra_args": "--push-parts",
+   "adapter_env": "",
+   "at": "2026-09-24T04:53:51.640Z"
+  },
+  {
+   "store": "sst_acspo02",
+   "stage": "index,fetch",
+   "start": "2025-07-01",
+   "end": "2025-12-31",
+   "runner": "ubuntu-latest",
+   "extra_args": "--push-parts",
+   "adapter_env": "",
+   "at": "2026-09-24T04:53:55.237Z"
   }
  ],
  "done": [
@@ -2405,6 +2387,30 @@
    "at": "2026-09-24T04:31:38.906Z",
    "run_number": 794,
    "finished": "2026-09-24T04:49:23Z"
+  },
+  {
+   "store": "gedi",
+   "stage": "index,fetch",
+   "start": "2022-06-10",
+   "end": "2022-06-12",
+   "runner": "ubuntu-latest",
+   "extra_args": "--push-parts",
+   "adapter_env": "GEDI_FETCH=range GEDI_L4A_VERSION=3",
+   "at": "2026-09-24T00:56:18.903Z",
+   "run_number": 729,
+   "finished": "2026-09-24T04:52:16Z"
+  },
+  {
+   "store": "irtb",
+   "stage": "index,fetch",
+   "start": "2026-04-01",
+   "end": "2026-06-30",
+   "runner": "ubuntu-latest",
+   "extra_args": "--push-parts",
+   "adapter_env": "",
+   "at": "2026-09-24T04:34:44.990Z",
+   "run_number": 795,
+   "finished": "2026-09-24T04:53:28Z"
   }
  ],
  "failed": []
