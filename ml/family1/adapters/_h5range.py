@@ -216,6 +216,14 @@ class RangeFile(io.RawIOBase):
                         self._url, _sz = resolve(self._s, self._url0,
                                                  attempts=self._attempts)
                         raise IOError("signed url expired; re-resolved")
+                    if r.status_code in (429, 500, 502, 503, 504):
+                        # a transient answer from the archive, retried on
+                        # the ladder below: measured 2026-09-21 on
+                        # family1-build #424 (gedi 2022-06-28..30, byte-range
+                        # mode), one HTTP 503 on a range read killed a lane
+                        # four hours in as a RangeError
+                        raise IOError(f"{self._url0}: range {lo}-{hi} "
+                                      f"answered HTTP {r.status_code}")
                     if r.status_code != 206:
                         raise RangeError(
                             f"{self._url0}: range {lo}-{hi} answered HTTP "
@@ -232,7 +240,7 @@ class RangeFile(io.RawIOBase):
             except Exception as e:                              # noqa: BLE001
                 err = e
                 if i < self._attempts - 1:
-                    time.sleep(2.0 * (2 ** i))
+                    time.sleep(5.0 * (2 ** i))
         raise IOError(f"{self._url0} bytes {lo}-{hi}: "
                       f"{type(err).__name__}: {err}")
 
