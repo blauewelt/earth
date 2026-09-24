@@ -1,0 +1,10 @@
+store     sif — Solar-induced chlorophyll fluorescence at 740 nm: TROPOMI (Sentinel-5P) daily L2B soundings from ESA's S5P-PAL service, one row per sounding; OCO-2 and OCO-3 SIF Lite gated on SIF_OCO=1 until GES DISC is approved
+family    family1_tf (1.0.tf) · public -> chfrank/earth-tensors:tensors/family1_tf/sif
+axis      2018-05-01 .. 2026-09-15  bins 2653..3265 · time_s int32 (schema 2)
+lane      (unnamed) — whole calendar year(s), no group subset: the year folder's own files, as every store on the Hub holds them
+channels  C=6: sif_740, sif_740_daily, sif_740_error, cloud_fraction, solar_zenith, viewing_zenith
+work      /opt/runner/_work/earth/earth/ml/cache/family1_tf
+
+=== stage index (sif) ===
+  [index sif] start (1 items)  0/1  0.0s
+REFUSING sif: https://data-portal.s5p-pal.com/api/s5p-l2/collections/L2B_SIF___/items?datetime=2018-04-30T00%3A00%3A00Z%2F2026-09-16T23%3A59%3A59Z&limit=500: the service matched 3068 item(s) and returned 500 — raise `limit` rather than quietly building from a page
