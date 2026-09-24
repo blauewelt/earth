@@ -20,6 +20,13 @@
 #       A hosted lane fetches years (extra_args=--push-parts parks each marked
 #       year under partials/<family>/<store>/<year>/ on the Hub); a box
 #       assembles them (extra_args=--parts-from-hub) and publishes.
+#   stage=publish, extra_args=--verify-hub   the publish's RESTORE CHECK ONLY,
+#       for a tier-P store already on the Hub, from a box that does not hold
+#       it: every file the Hub's store.json names is downloaded back and
+#       hashed, then manifest.json is written and uploaded -- nothing else.
+#       No fetch or assemble stage is needed on that box. Added 2026-09-24
+#       after the swot upload finished from a Singapore box whose restore ran
+#       at < 8 MB/s (family1-build #734); pass a fast box as `runner`.
 #
 # LANES -- MORE THAN ONE RUNNER FOR ONE YEAR (E-082 wave 7). A lane is one
 # hosted runner: six hours and ~86 GB. Some stores need several per year (a
@@ -147,7 +154,7 @@ on:
         description: "runner label. ubuntu-latest (default) for probes and fetch lanes; a Vast box's runner name (gpu-box-NNNNN) to assemble a big store from Hub parts -- a box never receives a source credential, so pass extra_args=--parts-from-hub there"
         default: "ubuntu-latest"
       extra_args:
-        description: "extra flags for ml/build_family1_stores.py: --push-parts (a hosted lane parks its years on the Hub), --parts-from-hub (a box assembles from them), --lanes months|quarters|<comma list> (DECLARE which lanes each year is fetched by; the assembler then refuses a year missing one), --allow-missing-years, --assemble streaming|memory|auto, --qc-keep N, --attempts N, --force. The work directory is the adapter's default (ml/cache/family1_<x>; on a box, /opt/earth-cache). Word-split deliberately"
+        description: "extra flags for ml/build_family1_stores.py: --push-parts (a hosted lane parks its years on the Hub), --parts-from-hub (a box assembles from them), --lanes months|quarters|<comma list> (DECLARE which lanes each year is fetched by; the assembler then refuses a year missing one), --allow-missing-years, --assemble streaming|memory|auto, --qc-keep N, --attempts N, --force, --verify-hub (with stage=publish: restore-verify a tier-P store already on the Hub and write its manifest; no local store, nothing else uploaded). The work directory is the adapter's default (ml/cache/family1_<x>; on a box, /opt/earth-cache). Word-split deliberately"
         default: ""
       probe_month:
         description: "YYYY-MM -- the month stage=probe measures (required for a probe, ignored otherwise)"

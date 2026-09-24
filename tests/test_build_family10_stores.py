@@ -3393,6 +3393,183 @@ def test_a_store_under_the_limit_publishes_exactly_as_before(
     assert "split" not in out
 
 
+# ======================================= --verify-hub: the restore alone ==
+# family1-build #734 (2026-09-24): the swot store went up completely from a
+# box in Singapore, whose restore-verify then ran at < 8 MB/s. `--verify-hub`
+# runs ONLY that restore (and the manifest) from another box, with no store
+# on disk, against the Hub's own store.json.
+def _verify_box(tmp_path, monkeypatch, hub):
+    """A gdp context on a box that has never fetched or assembled."""
+    ctx = b10.Ctx(_ns(store="gdp", work=str(tmp_path / "vbox"), source_dir="",
+                      start=SMOKE_START, end=SMOKE_END, verify_hub=True))
+    monkeypatch.setattr(ctx, "hub", lambda: (hub, SPLIT_REPO, "tok"))
+    assert not os.path.exists(ctx.store)
+    return ctx
+
+
+def test_verify_hub_restores_the_hub_copy_and_uploads_only_the_manifest(
+        tmp_path, built, monkeypatch):
+    hub = SplitFakeHub(str(tmp_path / "hub")).install(monkeypatch)
+    monkeypatch.setattr(b10, "HUB_SPLIT_BYTES", 600)
+    man0 = b10.stage_publish(_publishable_gdp(tmp_path, built, monkeypatch,
+                                              hub))
+    prefix = b10.Layout().prefix("gdp")
+    sj = json.load(open(hub.path(f"{prefix}/store.json")))
+    split = sorted(sj["hub_split"])
+    assert "values.npy" in split
+    whole = sorted(set(sj["sha256"]) - set(split))
+    n_commits = len(hub.commits)
+    # every read the restore makes, recorded
+    fetched, streamed = [], []
+    fake_hf = sys.modules["huggingface_hub"]
+    real_dl, real_stream = fake_hf.hf_hub_download, ph.stream_split
+    monkeypatch.setattr(fake_hf, "hf_hub_download",
+                        lambda repo, rel, **k: (fetched.append(rel),
+                                                real_dl(repo, rel, **k))[1])
+    monkeypatch.setattr(ph, "stream_split",
+                        lambda *a, **k: (streamed.append((a[2], k)),
+                                         real_stream(*a, **k))[1])
+    ctx = _verify_box(tmp_path, monkeypatch, hub)
+
+    man = b10.stage_publish(ctx)
+
+    # ONLY manifest.json went up: no array, no store.json, no delete
+    assert hub.commits[n_commits:] == [
+        (f"{ctx.layout.label} (gdp): manifest (--verify-hub)",
+         [("add", f"{prefix}/manifest.json")])]
+    # every whole file and store.json fetched once; every split file streamed
+    # part by part as an OLD upload (no 404 retries for propagation lag)
+    assert sorted(fetched) == sorted(
+        [f"{prefix}/store.json"] + [f"{prefix}/{n}" for n in whole]
+        + [f"{prefix}/{p['name']}" for n in split
+           for p in sj["hub_split"][n]["parts"]])
+    assert sorted(n for n, _ in streamed) == split
+    assert all(k["just_uploaded"] is False for _, k in streamed)
+    # the manifest is the one the publish itself wrote, entry for entry:
+    # bytes, sha256, hub_parts and store.json last
+    assert man["files"] == man0["files"]
+    ents = {e["name"]: e for e in man["files"]}
+    assert ents["values.npy"]["hub_parts"] == sj["hub_split"]["values.npy"][
+        "parts"]
+    assert ents["values.npy"]["bytes"] == sj["hub_split"]["values.npy"][
+        "bytes"]
+    assert all("hub_parts" not in ents[n] for n in whole)
+    for k in ("family", "tier", "store", "repo", "prefix", "N", "C",
+              "channels", "bin_first", "bin_last", "footprint", "date_range"):
+        assert man[k] == man0[k], k
+    assert json.load(open(hub.path(f"{prefix}/manifest.json"))) == man
+    assert json.load(open(os.path.join(ctx.root, "manifest.json"))) == man
+    assert b10.marked(ctx.root, "publish")
+    # still no store on this box, and nothing left in its scratch space
+    assert not os.path.exists(ctx.store)
+    assert not os.path.exists(os.path.join(ctx.scratch, "verify"))
+    assert not os.path.exists(os.path.join(ctx.scratch, "verify_hub"))
+
+
+def test_verify_hub_refuses_a_file_that_does_not_match_its_digest(
+        tmp_path, built, monkeypatch):
+    hub = SplitFakeHub(str(tmp_path / "hub")).install(monkeypatch)
+    monkeypatch.setattr(b10, "HUB_SPLIT_BYTES", 600)
+    b10.stage_publish(_publishable_gdp(tmp_path, built, monkeypatch, hub))
+    prefix = b10.Layout().prefix("gdp")
+    n_commits = len(hub.commits)
+    for rel, name in (("bin.npy", "bin.npy"),
+                      ("values.npy.part001", "values.npy.part001")):
+        p = hub.path(f"{prefix}/{rel}")
+        good = open(p, "rb").read()
+        open(p, "wb").write(good[:9] + bytes([good[9] ^ 0xFF]) + good[10:])
+        ctx = _verify_box(tmp_path, monkeypatch, hub)
+        with pytest.raises(SystemExit) as e:
+            b10.stage_publish(ctx)
+        assert "RESTORE MISMATCH" in str(e.value) and name in str(e.value)
+        assert not b10.marked(ctx.root, "publish")
+        assert len(hub.commits) == n_commits       # no manifest either
+        open(p, "wb").write(good)
+
+
+def test_verify_hub_refuses_without_the_hubs_store_json(
+        tmp_path, built, monkeypatch):
+    hub = SplitFakeHub(str(tmp_path / "hub")).install(monkeypatch)
+    ctx = _verify_box(tmp_path, monkeypatch, hub)
+    with pytest.raises(SystemExit, match="REFUSING --verify-hub.*store.json"):
+        b10.stage_publish(ctx)
+    prefix = b10.Layout().prefix("gdp")
+    os.makedirs(os.path.dirname(hub.path(f"{prefix}/store.json")))
+    json.dump({"N": 3}, open(hub.path(f"{prefix}/store.json"), "w"))
+    with pytest.raises(SystemExit, match="REFUSING.*no sha256 block"):
+        b10.stage_publish(ctx)
+    assert hub.commits == [] and not b10.marked(ctx.root, "publish")
+
+
+def _hub_only_swot(hub, prefix):
+    """A tier-P store that exists ONLY on the (fake) Hub: one whole file and
+    one split into three parts, with the store.json that names them."""
+    import hashlib
+    d = hub.path(prefix)
+    os.makedirs(d)
+    whole = bytes(range(200))
+    open(os.path.join(d, "lat.npy"), "wb").write(whole)
+    blob = bytes(range(256)) * 6                      # 1536 bytes
+    parts = []
+    for i, (o, n) in enumerate(ph.split_ranges(len(blob), 600)):
+        pn = ph.split_part_name("values.npy", i)
+        open(os.path.join(d, pn), "wb").write(blob[o:o + n])
+        parts.append({"name": pn, "bytes": n,
+                      "sha256": hashlib.sha256(blob[o:o + n]).hexdigest()})
+    sj = {"N": 7, "C": 3, "channels": ["a", "b", "c"], "bin_first": 1,
+          "bin_last": 2, "footprint": {"x": 1}, "date_range": ["a", "b"],
+          "sha256": {"lat.npy": hashlib.sha256(whole).hexdigest(),
+                     "values.npy": hashlib.sha256(blob).hexdigest()},
+          "hub_split": {"values.npy": {"bytes": len(blob), "chunk_bytes": 600,
+                                       "parts": parts}}}
+    json.dump(sj, open(os.path.join(d, "store.json"), "w"))
+    return sj
+
+
+def test_family1_publish_verify_hub_needs_no_fetch_or_assemble(
+        tmp_path, monkeypatch):
+    """The driver: `--store swot --stage publish --verify-hub` on a box that
+    has run no stage at all. Without the flag the same call refuses on the
+    missing `assemble` marker, which is what the flag bypasses."""
+    hub = SplitFakeHub(str(tmp_path / "hub")).install(monkeypatch)
+    monkeypatch.setattr(b10.Layout, "hub",
+                        lambda self: (hub, SPLIT_REPO, "tok"))
+    prefix = "tensors/family1_gf/swot"
+    sj = _hub_only_swot(hub, prefix)
+    work = str(tmp_path / "w")
+    argv = ["--store", "swot", "--stage", "publish", "--work", work]
+    with pytest.raises(SystemExit, match="needs 'assemble' first"):
+        b1.main(argv)
+    with pytest.raises(SystemExit, match="pass --stage publish"):
+        b1.main(["--store", "swot", "--stage", "assemble,publish",
+                 "--work", work, "--verify-hub"])
+    with pytest.raises(SystemExit, match="tier G"):
+        b1.main(["--store", "seaice_asi", "--stage", "publish",
+                 "--work", work, "--verify-hub"])
+    assert hub.commits == []
+
+    assert b1.main(argv + ["--verify-hub"]) == 0
+
+    label = b1.layout_for(b1.REGISTRY["swot"]()).label
+    assert hub.commits == [(f"{label} (swot): manifest (--verify-hub)",
+                            [("add", f"{prefix}/manifest.json")])]
+    man = json.load(open(hub.path(f"{prefix}/manifest.json")))
+    assert (man["store"], man["prefix"], man["repo"]) == (
+        "swot", prefix, SPLIT_REPO)
+    assert (man["N"], man["C"], man["channels"]) == (7, 3, ["a", "b", "c"])
+    ents = {e["name"]: e for e in man["files"]}
+    assert list(ents) == ["lat.npy", "values.npy", "store.json"]
+    assert ents["lat.npy"] == {"name": "lat.npy", "bytes": 200,
+                               "sha256": sj["sha256"]["lat.npy"]}
+    assert ents["values.npy"] == {
+        "name": "values.npy", "bytes": 1536,
+        "sha256": sj["sha256"]["values.npy"],
+        "hub_parts": sj["hub_split"]["values.npy"]["parts"]}
+    root = os.path.join(work, "swot")
+    assert b10.marked(root, "publish") and not b10.marked(root, "assemble")
+    assert not os.path.exists(os.path.join(root, "swot"))   # no local store
+
+
 def test_hub_commit_raises_at_once_on_the_hubs_file_size_refusal(monkeypatch):
     """#680: the LFS batch endpoint's size refusal is a status-less
     ValueError, and the retry ladder slept 16 and 32 minutes on it."""

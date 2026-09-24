@@ -5429,6 +5429,13 @@ def _restore_disk_preflight(ctx, dest, names):
                    if s > HUB_SPLIT_BYTES and n != "store.json")
     hub = {n: (_hub_object_bytes(s) if n in split else s)
            for n, s in sizes.items()}
+    return _restore_disk_check(ctx, hub, split, uploading=True)
+
+
+def _restore_disk_check(ctx, hub, split, uploading):
+    """The free-space refusal itself, over {name: largest Hub object} —
+    measured from the local store before a publish, or read from the Hub's
+    own listing and `hub_split` before a `--verify-hub` restore."""
     big, need = max(hub.items(), key=lambda kv: kv[1])
     what = (f"{big}'s largest Hub part" if big in split else big)
     os.makedirs(ctx.scratch, exist_ok=True)
@@ -5440,16 +5447,86 @@ def _restore_disk_preflight(ctx, dest, names):
           + (f"; split on the Hub at {HUB_SPLIT_BYTES / 2 ** 30:g} GiB: "
              f"{split}" if split else ""))
     if free < want:
-        sys.exit(f"REFUSING to publish: the restore check downloads every "
+        sys.exit(f"REFUSING to {'publish' if uploading else 'verify'}: the "
+                 f"restore check downloads every "
                  f"file back and {what} is {need / 1e9:.2f} GB, but "
                  f"{ctx.scratch} has only {free / 1e9:.2f} GB free "
                  f"({RESTORE_HEADROOM:g}x = {want / 1e9:.2f} GB with margin)"
                  + (f" — and the Hub split of {split} writes each "
                     f"{HUB_SPLIT_BYTES / 1e9:.2f} GB part to a scratch file "
-                    f"there before uploading it" if split else "")
+                    f"there before uploading it" if split and uploading
+                    else "")
                  + ". Free space or point --work at a bigger disk; nothing "
                    "has been uploaded.")
     return need
+
+
+def _restore_verify(ctx, repo, tok, prefix, names, digests, hub_split,
+                    just_uploaded):
+    """DOWNLOAD EACH FILE BACK and compare it with `digests`; the manifest's
+    `files` entries, or `sys.exit("RESTORE MISMATCH …")`.
+
+    ONE LOOP FOR BOTH CALLERS: the publish, right after its upload, and
+    `stage_verify_hub`, which restores a store another box uploaded. `bytes`
+    is measured from what came back (the downloaded file, or `hub_split`'s
+    whole-file size for a file the Hub holds as parts), never from a local
+    copy — a verify-only box has none, and after a matching sha256 the two
+    are the same number.
+    """
+    import family10_parts_hub as ph
+    from huggingface_hub import hf_hub_download
+    scratch = os.path.join(ctx.scratch, "verify")
+    entries = []
+    for i, n in enumerate(names, 1):
+        src = digests[n]
+        shutil.rmtree(scratch, ignore_errors=True)
+        if n in hub_split:
+            # every part fetched, checked against its own sha256 and fed
+            # through ONE whole-file hash in order, then deleted: the
+            # concatenation must be the file store.json's sha256 names
+            try:
+                got = ph.stream_split(repo, prefix, n, hub_split[n], tok,
+                                      scratch, just_uploaded=just_uploaded)
+            except ph.SplitError as e:
+                sys.exit(f"RESTORE MISMATCH {e} — the publish is not "
+                         f"trustworthy")
+            shutil.rmtree(scratch, ignore_errors=True)
+            if got != src:
+                sys.exit(f"RESTORE MISMATCH {n}: its "
+                         f"{len(hub_split[n]['parts'])} part(s) each match "
+                         f"hub_split but concatenate to {got}, and store.json "
+                         f"records {src} — the publish is not trustworthy")
+            entries.append({"name": n, "bytes": int(hub_split[n]["bytes"]),
+                            "sha256": src,
+                            "hub_parts": hub_split[n]["parts"]})
+            ctx.prog.item(n, i, {"sha256": src[:16],
+                                 "parts": len(hub_split[n]["parts"])})
+            continue
+        back = hf_hub_download(repo, f"{prefix}/{n}", repo_type="dataset",
+                               token=tok, local_dir=scratch)
+        got = sha256(back)
+        size = os.path.getsize(back)
+        shutil.rmtree(scratch, ignore_errors=True)
+        if got != src:
+            sys.exit(f"RESTORE MISMATCH {n}: uploaded {src}, downloaded {got} "
+                     f"— the publish is not trustworthy")
+        entries.append({"name": n, "bytes": size, "sha256": src})
+        ctx.prog.item(n, i, {"sha256": src[:16]})
+    return entries
+
+
+def _manifest(ctx, repo, prefix, sm, entries):
+    """manifest.json's record, the store's shape read from `sm` (store.json)."""
+    lay, ad = ctx.layout, ctx.adapter
+    return {"family": lay.family, "tier": "P", "store": ad.store,
+            "repo": repo, "prefix": prefix,
+            "N": sm.get("N"), "C": sm.get("C"),
+            "channels": sm.get("channels"),
+            "bin_first": sm.get("bin_first"), "bin_last": sm.get("bin_last"),
+            "footprint": sm.get("footprint"),
+            "date_range": sm.get("date_range"),
+            "builder_git_sha": git_sha(), "built_at": utcnow(),
+            "files": entries}
 
 
 def stage_publish(ctx):
@@ -5458,7 +5535,13 @@ def stage_publish(ctx):
     Family 7's and family 8's rule, file for file: an upload that returns 200
     is not evidence the bytes are retrievable, so a publish that cannot verify
     FAILS the job.
+
+    With `--verify-hub` (`ctx.a.verify_hub`) nothing is uploaded: the store
+    already on the Hub is restored and its manifest written
+    (`stage_verify_hub`).
     """
+    if getattr(ctx.a, "verify_hub", False):
+        return stage_verify_hub(ctx)
     ad = ctx.adapter
     dest = ctx.store
     lay = ctx.layout
@@ -5502,12 +5585,9 @@ def stage_publish(ctx):
     # (E-082 §1.3) — not on the adapter's intention. It runs after the id is
     # resolved and before the first request that touches the repository.
     check_publish_target(ad, lay, repo)
-    from huggingface_hub import hf_hub_download
     api.create_repo(repo, repo_type="dataset", exist_ok=True,
                     private=lay.private)
     ctx.prog.stage_start(f"publish {ad.store}", len(names))
-    entries = []
-    scratch = os.path.join(ctx.scratch, "verify")
     # A FEW COMMITS, NOT ONE PER FILE AND NOT ONE FOR EVERYTHING. The Hub
     # allows 256 commits per repository per hour and `upload_file` is one
     # commit each, so a publish that spent ten of them per store is what put
@@ -5600,52 +5680,10 @@ def stage_publish(ctx):
     hub_commit(api, repo, ops,
                f"{lay.label} ({ad.store}): 1 file(s), batch "
                f"{len(batches)}/{len(batches)}")
-    for i, n in enumerate(names, 1):
-        p = os.path.join(dest, n)
-        src = digests[n]
-        shutil.rmtree(scratch, ignore_errors=True)
-        if n in hub_split:
-            # every part fetched, checked against its own sha256 and fed
-            # through ONE whole-file hash in order, then deleted: the
-            # concatenation must be the file store.json's sha256 names
-            try:
-                got = ph.stream_split(repo, prefix, n, hub_split[n], tok,
-                                      scratch, just_uploaded=True)
-            except ph.SplitError as e:
-                sys.exit(f"RESTORE MISMATCH {e} — the publish is not "
-                         f"trustworthy")
-            shutil.rmtree(scratch, ignore_errors=True)
-            if got != src:
-                sys.exit(f"RESTORE MISMATCH {n}: its "
-                         f"{len(hub_split[n]['parts'])} part(s) each match "
-                         f"hub_split but concatenate to {got}, and store.json "
-                         f"records {src} — the publish is not trustworthy")
-            entries.append({"name": n, "bytes": os.path.getsize(p),
-                            "sha256": src,
-                            "hub_parts": hub_split[n]["parts"]})
-            ctx.prog.item(n, i, {"sha256": src[:16],
-                                 "parts": len(hub_split[n]["parts"])})
-            continue
-        back = hf_hub_download(repo, f"{prefix}/{n}", repo_type="dataset",
-                               token=tok, local_dir=scratch)
-        got = sha256(back)
-        shutil.rmtree(scratch, ignore_errors=True)
-        if got != src:
-            sys.exit(f"RESTORE MISMATCH {n}: uploaded {src}, downloaded {got} "
-                     f"— the publish is not trustworthy")
-        entries.append({"name": n, "bytes": os.path.getsize(p), "sha256": src})
-        ctx.prog.item(n, i, {"sha256": src[:16]})
-
+    entries = _restore_verify(ctx, repo, tok, prefix, names, digests,
+                              hub_split, just_uploaded=True)
     sm = read_json(os.path.join(dest, "store.json"), {})
-    man = {"family": lay.family, "tier": "P", "store": ad.store,
-           "repo": repo, "prefix": prefix,
-           "N": sm.get("N"), "C": sm.get("C"),
-           "channels": sm.get("channels"),
-           "bin_first": sm.get("bin_first"), "bin_last": sm.get("bin_last"),
-           "footprint": sm.get("footprint"),
-           "date_range": sm.get("date_range"),
-           "builder_git_sha": git_sha(), "built_at": utcnow(),
-           "files": entries}
+    man = _manifest(ctx, repo, prefix, sm, entries)
     mp = os.path.join(ctx.root, "manifest.json")
     atomic_json(mp, man)
     hub_upload_with_backoff(api, repo, mp, f"{prefix}/manifest.json",
@@ -5654,6 +5692,104 @@ def stage_publish(ctx):
     if grid:
         man["grid"] = grid
         atomic_json(mp, man)
+    mark(ctx.root, "publish")
+    print(f"  publish: {len(entries)} file(s) verified by restore -> "
+          f"https://huggingface.co/datasets/{repo}/tree/main/{prefix}")
+    return man
+
+
+def stage_verify_hub(ctx):
+    """`--stage publish --verify-hub`: the RESTORE HALF of `stage_publish`,
+    for a tier-P store that is already on the Hub, from a box that does not
+    hold it.
+
+    WHY IT EXISTS. The swot whole-record store (`tensors/family1_gf/swot`)
+    went up completely from a box in Singapore on 2026-09-24 (family1-build
+    #734) — its Hub store.json carries sha256 for nine arrays and hub_split
+    for platform.npy and values.npy — and then the restore check, which
+    downloads every file back, ran at under 8 MB/s: ten hours or more on a
+    box rented by the hour, for bytes that were already where they belong.
+    The restore is a property of the HUB COPY, not of the uploading box, so
+    any box with a fast link can run it.
+
+    THE RECORD IS THE HUB'S OWN store.json: its `sha256` block names the
+    files and their whole-file digests and its `hub_split` the parts, so the
+    check is exactly the one the publish runs (`_restore_verify`, shared).
+    Nothing is uploaded but manifest.json, nothing is deleted, and no local
+    store is read — which is also why `check_store` cannot run here; the
+    uploading box ran it before its first byte.
+    """
+    import family10_parts_hub as ph
+    ad = ctx.adapter
+    lay = ctx.layout
+    api, repo, tok = ctx.hub()
+    prefix = lay.prefix(ad.store)
+    check_publish_target(ad, lay, repo)
+    here = os.path.join(ctx.scratch, "verify_hub")
+    shutil.rmtree(here, ignore_errors=True)
+    try:
+        sj = ph._download(repo, f"{prefix}/store.json", tok, here)
+    except Exception as e:                              # noqa: BLE001
+        if not ph._is_404(e):
+            raise
+        sys.exit(f"REFUSING --verify-hub for {ad.store}: {repo} has no "
+                 f"{prefix}/store.json ({type(e).__name__}), so there is no "
+                 f"record of which files the store is made of. Publish it "
+                 f"first; nothing has been uploaded.")
+    sm = read_json(sj, {})
+    sj_digest, sj_bytes = sha256(sj), os.path.getsize(sj)
+    shutil.rmtree(here, ignore_errors=True)
+    digests = dict(sm.get("sha256") or {})
+    if not digests:
+        sys.exit(f"REFUSING --verify-hub for {ad.store}: {repo}:{prefix}/"
+                 f"store.json carries no sha256 block, so there is nothing "
+                 f"to verify the files against. Nothing has been uploaded.")
+    hub_split = dict(sm.get("hub_split") or {})
+    names = sorted(digests)
+    # THE DISK PREFLIGHT FROM THE HUB'S OWN SIZES: one folder listing for
+    # the whole files, `hub_split` for the parts (a split file is restored
+    # one part at a time). A file the listing does not show is left to the
+    # restore, which will say so by name.
+    tree = ph._tree(api, repo, prefix)
+    hub = {}
+    for n in names:
+        if n in hub_split:
+            # a malformed entry is the restore's to refuse, by name
+            parts = [int(p.get("bytes", 0) or 0)
+                     for p in (hub_split[n] or {}).get("parts") or []]
+            if parts:
+                hub[n] = max(parts)
+        elif n in tree:
+            hub[n] = int(tree[n]["size"])
+    if hub:
+        _restore_disk_check(ctx, hub, sorted(n for n in hub if n in hub_split),
+                            uploading=False)
+    else:
+        print(f"  restore: no file of {prefix} is in the Hub listing — no "
+              f"free-space preflight; the restore will name what is missing")
+    print(f"  verify-hub: {len(names)} file(s) named by {repo}:{prefix}/"
+          f"store.json, {len(hub_split)} of them split on the Hub "
+          f"({sorted(hub_split)}); nothing will be uploaded but "
+          f"manifest.json")
+    ctx.prog.stage_start(f"verify-hub {ad.store}", len(names))
+    entries = _restore_verify(ctx, repo, tok, prefix, names, digests,
+                              hub_split, just_uploaded=False)
+    # store.json itself was downloaded and hashed above, so it takes the
+    # same last entry the publish gives it
+    entries.append({"name": "store.json", "bytes": sj_bytes,
+                    "sha256": sj_digest})
+    man = _manifest(ctx, repo, prefix, sm, entries)
+    mp = os.path.join(ctx.root, "manifest.json")
+    atomic_json(mp, man)
+    hub_upload_with_backoff(api, repo, mp, f"{prefix}/manifest.json",
+                            f"{lay.label} ({ad.store}): manifest "
+                            f"(--verify-hub)")
+    # `publish_grid` UPLOADS the fishing grid from local files and indexes it
+    # against the local store.json; this mode uploads nothing and has no
+    # local store, so it is not called.
+    print(f"  verify-hub: the tier-P grid step (publish_grid) is skipped — "
+          f"it uploads local files, and --verify-hub uploads nothing but "
+          f"the manifest")
     mark(ctx.root, "publish")
     print(f"  publish: {len(entries)} file(s) verified by restore -> "
           f"https://huggingface.co/datasets/{repo}/tree/main/{prefix}")

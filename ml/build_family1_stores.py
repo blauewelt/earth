@@ -1831,6 +1831,13 @@ def build_parser():
                          "licence_pending in store.json (a producer that has "
                          "not answered); 'public' on a private adapter is "
                          "refused")
+    ap.add_argument("--verify-hub", action="store_true",
+                    help="with --stage publish: verify a tier-P store already "
+                         "on the Hub — download every file named by the "
+                         "Hub's store.json back, compare sha256, write "
+                         "manifest.json; nothing else is uploaded; no local "
+                         "store needed (the fetch and assemble stages need "
+                         "not have run on this box)")
     ap.add_argument("--check-credentials", action="store_true",
                     help="no store: one authenticated request to each of LP "
                          "DAAC, GES DISC and PO.DAAC with "
@@ -1915,6 +1922,20 @@ def main(argv=None):
     stages = f10b.parse_stages(a.stage, STAGES)
     ad = apply_distribution(cls(), a.distribution)
     lay = layout_for(ad)
+    deps = DEPS
+    if a.verify_hub:
+        # THE RESTORE WITHOUT THE STORE (2026-09-24, family1-build #734: the
+        # swot upload finished from a Singapore box whose restore then ran
+        # at < 8 MB/s). The box that verifies holds no store, so `publish`
+        # must not need `assemble` here — the Hub's own store.json is the
+        # record (`f10b.stage_verify_hub`).
+        if stages != ["publish"]:
+            sys.exit(f"--verify-hub runs the publish stage's restore check "
+                     f"only: pass --stage publish (got {a.stage!r})")
+        if is_grid(ad):
+            sys.exit(f"--verify-hub: {ad.store} is tier G; it verifies a "
+                     f"tier-P store's files against the Hub's store.json")
+        deps = {k: v for k, v in DEPS.items() if k != "publish"}
     if a.stage.strip() == "all" and getattr(ad, "tier", "P") == "G":
         # `all` on a tier-G store stops at publish. The check stage decodes
         # EVERY stored tile in single-threaded Python — measured 2026-09-23
@@ -1952,7 +1973,7 @@ def main(argv=None):
               f"F={ad.frames_per_bin} x {ad.frame_seconds} s, {ad.dtype}, "
               f"years (by bin start) {ctx.years[0]}..{ctx.years[-1]}")
     print(f"work      {ctx.work}")
-    f10b.run_stages(ctx, stages, stage_fn=stage_fns(ad), deps=DEPS)
+    f10b.run_stages(ctx, stages, stage_fn=stage_fns(ad), deps=deps)
     return 0
 
 
