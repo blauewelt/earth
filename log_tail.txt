@@ -1,0 +1,80 @@
+  [fetch burned500 (tier G)] burned500 2017 v08h00 bin 2625  0.1s
+  [fetch burned500 (tier G)] burned500 2017 v08h09 bin 2582  0.1s
+  [fetch burned500 (tier G)] burned500 2017 v08h09 bin 2612  0.1s
+  [fetch burned500 (tier G)] burned500 2017 v08h18 bin 2569  0.1s
+  [fetch burned500 (tier G)] burned500 2017 v08h18 bin 2599  0.1s
+  [fetch burned500 (tier G)] burned500 2017 v08h18 bin 2629  0.1s
+  [fetch burned500 (tier G)] burned500 2017 v08h27 bin 2586  0.1s
+  [fetch burned500 (tier G)] burned500 2017 v08h27 bin 2616  0.1s
+  [fetch burned500 (tier G)] burned500 2017 v09h00 bin 2573  0.1s
+  [fetch burned500 (tier G)] burned500 2017 v09h00 bin 2603  0.1s
+  [fetch burned500 (tier G)] burned500 2017 v09h09 bin 2560  0.1s
+  [fetch burned500 (tier G)] burned500 2017 v09h09 bin 2590  0.1s
+  [fetch burned500 (tier G)] burned500 2017 v09h09 bin 2619  0.1s
+  [fetch burned500 (tier G)] burned500 2017 v09h18 bin 2576  0.1s
+  [fetch burned500 (tier G)] burned500 2017 v09h18 bin 2606  0.1s
+  [fetch burned500 (tier G)] burned500 2017 v09h27 bin 2563  0.1s
+  [fetch burned500 (tier G)] burned500 2017 v09h27 bin 2593  0.1s
+  [fetch burned500 (tier G)] burned500 2017 v09h27 bin 2623  0.1s
+  [fetch burned500 (tier G)] burned500 2017 v10h00 bin 2580  0.1s
+  [fetch burned500 (tier G)] burned500 2017 v10h00 bin 2610  0.1s
+  [fetch burned500 (tier G)] burned500 2017 v10h09 bin 2567  0.1s
+  [fetch burned500 (tier G)] burned500 2017 v10h09 bin 2597  0.1s
+  [fetch burned500 (tier G)] burned500 2017 v10h09 bin 2627  0.1s
+  [fetch burned500 (tier G)] burned500 2017 v10h18 bin 2584  0.1s
+  [fetch burned500 (tier G)] burned500 2017 v10h18 bin 2613  0.1s
+  [fetch burned500 (tier G)] burned500 2017 v10h27 bin 2570  0.1s
+  [fetch burned500 (tier G)] burned500 2017 v10h27 bin 2600  0.1s
+  [fetch burned500 (tier G)] burned500 2017 v11h00 bin 2557  0.1s
+  [fetch burned500 (tier G)] burned500 2017 v11h00 bin 2587  0.1s
+  [fetch burned500 (tier G)] burned500 2017 v11h00 bin 2617  0.1s
+  [fetch burned500 (tier G)] burned500 2017 v11h09 bin 2574  0.1s
+  [fetch burned500 (tier G)] burned500 2017 v11h09 bin 2604  0.1s
+  [fetch burned500 (tier G)] burned500 2017 v11h18 bin 2561  0.1s
+  [fetch burned500 (tier G)] burned500 2017 v11h18 bin 2591  0.1s
+  [fetch burned500 (tier G)] burned500 2017 v11h18 bin 2621  0.1s
+  [fetch burned500 (tier G)] burned500 2017 v11h27 bin 2578  0.1s
+  [fetch burned500 (tier G)] burned500 2017 v11h27 bin 2607  0.1s
+  [fetch burned500 (tier G)] burned500 2017 v12h09 bin 2564  0.1s
+  [fetch burned500 (tier G)] burned500 2017 v12h09 bin 2594  0.1s
+  [fetch burned500 (tier G)] burned500 2017 v12h09 bin 2624  0.1s
+  [fetch burned500 (tier G)] burned500 2017 v12h18 bin 2581  0.1s
+  [fetch burned500 (tier G)] burned500 2017 v12h18 bin 2611  0.1s
+  [fetch burned500 (tier G)] burned500 2017 v12h27 bin 2568  0.1s
+  [fetch burned500 (tier G)] burned500 2017 v12h27 bin 2598  0.1s
+  [fetch burned500 (tier G)] burned500 2017 v12h27 bin 2628  0.1s
+  [fetch burned500 (tier G)] burned500 2017 v13h00 bin 2585  0.1s
+  [fetch burned500 (tier G)] burned500 2017 v13h00 bin 2615  0.1s
+  [fetch burned500 (tier G)] burned500 2017 v13h09 bin 2572  0.1s
+  [fetch burned500 (tier G)] burned500 2017 v13h09 bin 2601  0.1s
+  [fetch burned500 (tier G)] burned500 2017 v13h18 bin 2558  0.1s
+  [fetch burned500 (tier G)] burned500 2017 v13h18 bin 2588  0.1s
+  [fetch burned500 (tier G)] burned500 2017 v13h18 bin 2618  0.1s
+  [fetch burned500 (tier G)] burned500 2017 v13h27 bin 2575  0.1s
+  [fetch burned500 (tier G)] burned500 2017 v13h27 bin 2605  0.1s
+  [fetch burned500 (tier G)] burned500 2017 v14h09 bin 2562  0.1s
+  [fetch burned500 (tier G)] burned500 2017 v14h09 bin 2592  0.1s
+  [fetch burned500 (tier G)] burned500 2017 v14h09 bin 2622  0.1s
+Traceback (most recent call last):
+  File "/home/runner/work/earth/earth/ml/build_family1_stores.py", line 1981, in <module>
+    sys.exit(main())
+             ^^^^^^
+  File "/home/runner/work/earth/earth/ml/build_family1_stores.py", line 1976, in main
+    f10b.run_stages(ctx, stages, stage_fn=stage_fns(ad), deps=deps)
+  File "/home/runner/work/earth/earth/ml/build_family10_stores.py", line 5915, in run_stages
+    stage_fn[s](ctx)
+  File "/home/runner/work/earth/earth/ml/build_family1_stores.py", line 840, in stage_fetch_grid
+    fetch_grid_year(ctx, y)
+  File "/home/runner/work/earth/earth/ml/build_family1_stores.py", line 743, in fetch_grid_year
+    for i, item in enumerate(ad.fetch_year(ctx, y), 1):
+  File "/home/runner/work/earth/earth/ml/family1/sharded.py", line 1016, in fetch_year
+    yield from self.fetch_frames(ctx, wanted)
+  File "/home/runner/work/earth/earth/ml/family1/adapters/burned500.py", line 836, in fetch_frames
+    p, why = self.granule_path(ctx, listing[t], tmpdir)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/work/earth/earth/ml/family1/adapters/burned500.py", line 783, in granule_path
+    n, why = mc.download(self.session(), rec["url"], p,
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/work/earth/earth/ml/family1/adapters/_modis_cmg.py", line 389, in download
+    raise IOError(f"{url}: {type(err).__name__}: {err}")
+OSError: https://data.lpdaac.earthdatacloud.nasa.gov/lp-prod-protected/MCD64A1.061/MCD64A1.A2017001.h09v02.061.2022017143333/MCD64A1.A2017001.h09v02.061.2022017143333.hdf: ConnectTimeout: HTTPSConnectionPool(host='urs.earthdata.nasa.gov', port=443): Max retries exceeded with url: /oauth/authorize?client_id=FtSFfbOeuxDcdf4px-elGw&response_type=code&redirect_uri=https://data.lpdaac.earthdatacloud.nasa.gov/login&state=%2Flp-prod-protected%2FMCD64A1.061%2FMCD64A1.A2017001.h09v02.061.2022017143333%2FMCD64A1.A2017001.h09v02.061.2022017143333.hdf&app_type=401 (Caused by ConnectTimeoutError(<urllib3.connection.HTTPSConnection object at 0x7ffa4e1b8170>, 'Connection to urs.earthdata.nasa.gov timed out. (connect timeout=30)'))
