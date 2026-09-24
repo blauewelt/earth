@@ -1,5 +1,78 @@
 {
- "pending": [],
+ "pending": [
+  {
+   "store": "icesat2",
+   "stage": "index,fetch",
+   "start": "2022-01-01",
+   "end": "2022-01-31",
+   "runner": "ubuntu-latest",
+   "extra_args": "--push-parts",
+   "adapter_env": "ICESAT2_FETCH=whole"
+  },
+  {
+   "store": "icesat2",
+   "stage": "index,fetch",
+   "start": "2022-04-01",
+   "end": "2022-04-30",
+   "runner": "ubuntu-latest",
+   "extra_args": "--push-parts",
+   "adapter_env": "ICESAT2_FETCH=whole"
+  },
+  {
+   "store": "icesat2",
+   "stage": "index,fetch",
+   "start": "2022-09-01",
+   "end": "2022-09-30",
+   "runner": "ubuntu-latest",
+   "extra_args": "--push-parts",
+   "adapter_env": "ICESAT2_FETCH=whole"
+  },
+  {
+   "store": "gedi",
+   "stage": "index,fetch",
+   "start": "2022-06-07",
+   "end": "2022-06-09",
+   "runner": "ubuntu-latest",
+   "extra_args": "--push-parts",
+   "adapter_env": "GEDI_FETCH=range GEDI_L4A_VERSION=3"
+  },
+  {
+   "store": "gedi",
+   "stage": "index,fetch",
+   "start": "2022-06-10",
+   "end": "2022-06-12",
+   "runner": "ubuntu-latest",
+   "extra_args": "--push-parts",
+   "adapter_env": "GEDI_FETCH=range GEDI_L4A_VERSION=3"
+  },
+  {
+   "store": "gedi",
+   "stage": "index,fetch",
+   "start": "2022-06-16",
+   "end": "2022-06-18",
+   "runner": "ubuntu-latest",
+   "extra_args": "--push-parts",
+   "adapter_env": "GEDI_FETCH=range GEDI_L4A_VERSION=3"
+  },
+  {
+   "store": "gedi",
+   "stage": "index,fetch",
+   "start": "2022-06-22",
+   "end": "2022-06-24",
+   "runner": "ubuntu-latest",
+   "extra_args": "--push-parts",
+   "adapter_env": "GEDI_FETCH=range GEDI_L4A_VERSION=3"
+  },
+  {
+   "store": "gedi",
+   "stage": "index,fetch",
+   "start": "2022-06-28",
+   "end": "2022-06-30",
+   "runner": "ubuntu-latest",
+   "extra_args": "--push-parts",
+   "adapter_env": "GEDI_FETCH=range GEDI_L4A_VERSION=3"
+  }
+ ],
  "dispatched": [
   {
    "store": "sst_acspo02",
