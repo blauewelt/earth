@@ -681,6 +681,29 @@ integer division truncates toward zero, so a port must floor explicitly. And a
 schema-3 store's `time_s` is int64 because 1662 is 10,069,268,400 s before the
 epoch, far past int32; `bin` stays int16, which spans the years 1533 to 2430.
 
+**A column larger than 40 GiB is on the Hub in parts.** The Hub takes at most
+50 GB per file, and a whole-record store can exceed that in one column: `swot`
+as assembled on 2026-09-24 (family1-build #680, the whole-record swot point
+store, about 9 billion rows from 2023-07-25 to 2026-09-15, whose publish the
+limit refused) has a 72.99 GB `platform.npy`, a 73 GB int64 `time_s.npy` and a
+three-channel float16 `values.npy` of about 55 GB. Any such file is stored under the store's
+prefix as consecutive byte ranges `<name>.part000`, `<name>.part001`, … (each at
+most 40 GiB = 42.9 GB, only the last shorter), and `store.json` lists them in a
+top-level `hub_split` block — `{"<name>": {"bytes", "chunk_bytes", "parts":
+[{"name", "bytes", "sha256"}, …]}}`, one sha256 per part — while
+`sha256[<name>]` stays the digest of the WHOLE file. There is no `<name>` on
+the Hub for a split column, so a download of the files the `sha256` block names
+must read `hub_split` first. Concatenate the parts in order (`cat
+platform.npy.part000 platform.npy.part001 > platform.npy`, or stream them into
+one file), check each part against its own sha256 and the result against
+`sha256[<name>]` (step 1 above does the latter unchanged), and `np.load` the
+result exactly as any other column; a memory-mapped read straight from the parts
+is not provided. `ml/family10_store.py`'s `Store.open("<repo>:<prefix>")` and
+`ml/family10_parts_hub.hub_split_download` do the fetch, the per-part check and
+the join. A store with no column over the limit carries no `hub_split` and is
+laid out exactly as before; on the build machine every store keeps one `.npy`
+per column.
+
 ### 5.2 · A sharded frame in two range reads — executed on `oc4k`
 
 **The recipe.** Given a group prefix `P` (here

@@ -817,7 +817,7 @@ class FakeHub:
     def ph_upload(self, api, repo, pairs, message):
         self.commit(api, repo, pairs, message)
 
-    def ph_download(self, repo, rel, token, dest_dir):
+    def ph_download(self, repo, rel, token, dest_dir, just_uploaded=False):
         os.makedirs(dest_dir, exist_ok=True)
         src = os.path.join(self.root, repo, rel)
         if not os.path.exists(src):

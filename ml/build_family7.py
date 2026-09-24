@@ -98,6 +98,7 @@ import glob
 import hashlib
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -1499,6 +1500,45 @@ def hub_retry_after(text):
     return n * {"second": 1, "minute": 60, "hour": 3600}[unit]
 
 
+# A SIZE REFUSAL IS DEFINITIVE. Measured 2026-09-24 02:50Z on family1-build
+# #680 (the swot whole-record point store, ~9e9 rows): the Hub's LFS batch
+# endpoint refused `platform.npy` (72.99 GB) with "LFS batch API returned
+# errors: ... Max individual file size ...", which huggingface_hub raises as a
+# bare ValueError with no HTTP status — so the ladder below read it as a
+# connection-class failure and slept 16 and then 32 minutes on a refusal that
+# no amount of waiting changes. The Hub's per-file limit is 50 GB; the fix for
+# the store is `build_family10_stores.HUB_SPLIT_BYTES`, and the fix HERE is
+# to raise at once. The spellings: the LFS batch error's own sentence, the
+# HTTP reason phrase of a 413, and the generic "file too large" family.
+HUB_SIZE_REFUSAL_RE = re.compile(
+    r"max(?:imum)?\s+individual\s+file\s+size"
+    r"|payload\s+too\s+large"
+    r"|request\s+entity\s+too\s+large"
+    r"|file\s+(?:is\s+)?too\s+large"
+    r"|exceeds?\s+the\s+(?:maximum|max(?:imum)?\s+allowed)\s+(?:file\s+)?size"
+    r"|file\s+size\s+(?:limit|exceeds)",
+    re.I)
+
+
+class HubFileTooLarge(RuntimeError):
+    """The Hub refused a file (or a commit payload) as too large: not
+    transient, never retried."""
+
+
+def hub_size_refusal(e):
+    """The matched size-refusal spelling in `e`, or None.
+
+    An HTTP 413 counts whatever its text says; otherwise the text must carry
+    one of `HUB_SIZE_REFUSAL_RE`'s spellings. A bare "413" inside a message
+    is NOT enough on its own — request ids and byte counts carry digits.
+    """
+    code = getattr(getattr(e, "response", None), "status_code", None)
+    if code == 413:
+        return "HTTP 413"
+    m = HUB_SIZE_REFUSAL_RE.search(str(e))
+    return m.group(0) if m else None
+
+
 def hub_commit(api, repo, ops, message, *, repo_type="dataset", sleep=None):
     """ONE `create_commit` for `ops`, retried through the Hub's 429.
 
@@ -1506,7 +1546,9 @@ def hub_commit(api, repo, ops, message, *, repo_type="dataset", sleep=None):
     a 5xx or a connection error SLEEPS and retries — the Hub's own "retry in
     about N" when it gives one, else 60 s doubling — up to `HUB_RETRY_CAP_S`
     of total sleep. Any other 4xx (401, 403, 404, 413) raises at once: those
-    do not become true by waiting.
+    do not become true by waiting. A SIZE REFUSAL (`hub_size_refusal`) raises
+    `HubFileTooLarge` at once, before any sleep, whatever exception carried
+    it — the LFS batch endpoint's comes as a status-less ValueError.
     """
     slp = sleep or time.sleep
     waited, attempt = 0.0, 0
@@ -1517,6 +1559,14 @@ def hub_commit(api, repo, ops, message, *, repo_type="dataset", sleep=None):
                                      commit_message=message)
         except Exception as e:                                # noqa: BLE001
             attempt += 1
+            why = hub_size_refusal(e)
+            if why is not None:
+                raise HubFileTooLarge(
+                    f"hub commit ({len(ops)} op(s), {message[:60]!r}) REFUSED "
+                    f"AS TOO LARGE ({why!r}) — a definitive refusal, not "
+                    f"retried: the Hub takes at most 50 GB per file (split "
+                    f"larger files, build_family10_stores.HUB_SPLIT_BYTES). "
+                    f"The Hub said: {str(e)[:400]}") from e
             code = hub_http_status(e)
             if code is not None and 400 <= code < 500 and code != 429:
                 raise

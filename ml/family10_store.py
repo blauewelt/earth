@@ -102,6 +102,7 @@ rows of the bins the time bound admits.
 import hashlib
 import json
 import os
+import sys
 
 import numpy as np
 
@@ -389,11 +390,32 @@ def resolve(spec, cache_dir=None, token=None):
     meta = hf_hub_download(repo, f"{prefix}/store.json", repo_type="dataset",
                            token=token, local_dir=cache_dir)
     with open(meta) as fh:
-        names = sorted((json.load(fh).get("sha256") or {}).keys())
+        meta_d = json.load(fh)
+    names = sorted((meta_d.get("sha256") or {}).keys())
     if not names:
         raise ValueError(f"{repo}:{prefix}/store.json carries no sha256 block")
+    # A COLUMN OVER THE HUB'S 50 GB PER-FILE LIMIT is on the Hub as
+    # `<name>.part000, …`, listed in store.json's `hub_split` (swot's
+    # platform.npy is 72.99 GB). It is fetched part by part, each part checked
+    # and appended, and the whole checked against `sha256[<name>]`, into the
+    # same directory as everything else — so the store opens as one `.npy`
+    # per column exactly as a whole-file store does. A copy already there at
+    # the recorded size is kept (`Store.open(..., verify=True)` re-hashes).
+    split = meta_d.get("hub_split") or {}
+    here = os.path.dirname(os.path.abspath(meta))
     for n in names:
         if n == "store.json":
+            continue
+        if n in split:
+            have = os.path.join(here, n)
+            if os.path.exists(have) and \
+                    os.path.getsize(have) == int(split[n].get("bytes", -1)):
+                continue
+            ml = os.path.dirname(os.path.abspath(__file__))
+            if ml not in sys.path:
+                sys.path.insert(0, ml)
+            import family10_parts_hub as ph
+            ph.hub_split_download(repo, prefix, n, meta_d, token, here)
             continue
         hf_hub_download(repo, f"{prefix}/{n}", repo_type="dataset",
                         token=token, local_dir=cache_dir)

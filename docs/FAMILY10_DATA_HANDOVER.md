@@ -700,6 +700,24 @@ every file against `store.json`'s own record and raises on any mismatch. A
 truncated `values.npy` still memmaps and still answers a search, with whatever
 its tail happens to hold.
 
+**A column larger than 40 GiB is on the Hub in parts.** The Hub takes at most
+50 GB per file, and the same tier-P layout written for a whole-record store can
+exceed that in one column — the family-1 `swot` store's `platform.npy` is
+72.99 GB. Any such file is stored under the store's prefix as consecutive byte
+ranges `<name>.part000`, `<name>.part001`, … (each at most 40 GiB = 42.9 GB,
+only the last shorter), listed in `store.json`'s top-level `hub_split` block —
+`{"<name>": {"bytes", "chunk_bytes", "parts": [{"name", "bytes", "sha256"},
+…]}}` — while `sha256[<name>]` stays the digest of the WHOLE file, so the check
+above is unchanged once the file is rebuilt. Concatenate the parts in order
+(`cat name.npy.part000 name.npy.part001 > name.npy`, or stream them into one
+file), check each part against its own sha256 and the result against
+`sha256[<name>]`, and `np.load` it like any other column; a memory-mapped read
+straight from the parts is not provided. `ml/family10_store.py` does this for a
+Hub prefix (`Store.open("<repo>:<prefix>")`). None of the five stores here is
+split: the largest file among them is `slatrack`'s `platform.npy` at
+16,246,401,536 bytes (§9.1), so none of their `store.json` files carries
+`hub_split`.
+
 **If you already downloaded a 10.0 store**, it still opens: it carries
 `time_days.npy` (float32 days) instead of `time_s.npy`, and `store.json` says
 `schema_version: 1`. Multiply by 86,400 to put the two in one unit if you must

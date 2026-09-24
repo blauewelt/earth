@@ -159,8 +159,9 @@ sys.path.insert(0, HERE)
 
 import family10_store as f10                                   # noqa: E402
 from build_family7 import (START, END, Progress, atomic_json,   # noqa: E402
-                           git_sha, hub_add_ops, hub_commit, hub_repo,
-                           hub_upload_with_backoff, mark, marked, marker,
+                           git_sha, hub_add_ops, hub_commit, hub_delete_ops,
+                           hub_repo, hub_upload_with_backoff, mark, marked,
+                           marker,
                            read_json, sha256, utcnow)
 
 CACHE = os.path.join(HERE, "cache")
@@ -5387,6 +5388,25 @@ def stage_grid(ctx):
 RESTORE_HEADROOM = 1.1
 # Files per publish commit (store.json always alone, last). See stage_publish.
 PUBLISH_BATCH = 3
+# THE HUB'S PER-FILE LIMIT, measured 2026-09-24 02:50Z on family1-build #680:
+# the swot whole-record point store (~9e9 rows, 2023-07-25 -> 2026-09-15)
+# assembled fine on a rented box and its publish was then refused file by
+# file — `platform.npy` 72.99 GB ("LFS batch API returned errors: ... Max
+# individual file size ..."), with `time_s.npy` (int64, 73 GB) and
+# `values.npy` (float16 x 3, ~55 GB) over the line too. The Hub takes at most
+# 50 GB per file. A store file LARGER than this is uploaded as consecutive
+# byte ranges `<name>.part000`, `<name>.part001`, … each at most this size,
+# and store.json's `hub_split` lists them (`family10_parts_hub` holds the
+# layout's one definition). ON DISK THE STORE IS UNCHANGED: one `.npy` per
+# column, and `sha256[<name>]` stays the whole file's digest. 40 GiB is
+# 42.9 GB — margin under 50 GB.
+HUB_SPLIT_BYTES = 40 * 1024 ** 3
+
+
+def _hub_object_bytes(size):
+    """The largest object one store file becomes on the Hub: the file, or
+    one `HUB_SPLIT_BYTES` part of it."""
+    return min(int(size), HUB_SPLIT_BYTES)
 
 
 def _restore_disk_preflight(ctx, dest, names):
@@ -5398,22 +5418,37 @@ def _restore_disk_preflight(ctx, dest, names):
     50-80 GB that largest file is `values.npy` at ~1.5x2e9x C bytes, and a
     box that cannot hold one more copy of it would upload for hours and then
     fail the verification it cannot skip.
+
+    A file over `HUB_SPLIT_BYTES` travels as parts: the publish writes each
+    part to `<scratch>/hub_split` before its commit and the restore fetches
+    them one at a time, so for it the requirement is one PART, not the file.
     """
     sizes = {n: os.path.getsize(os.path.join(dest, n)) for n in names}
-    big, need = max(sizes.items(), key=lambda kv: kv[1])
+    # store.json is never split (it is kilobytes, and it is what names parts)
+    split = sorted(n for n, s in sizes.items()
+                   if s > HUB_SPLIT_BYTES and n != "store.json")
+    hub = {n: (_hub_object_bytes(s) if n in split else s)
+           for n, s in sizes.items()}
+    big, need = max(hub.items(), key=lambda kv: kv[1])
+    what = (f"{big}'s largest Hub part" if big in split else big)
     os.makedirs(ctx.scratch, exist_ok=True)
     free = shutil.disk_usage(ctx.scratch).free
     want = need * RESTORE_HEADROOM
-    print(f"  restore: the largest file is {big} at {need / 1e9:.2f} GB; "
+    print(f"  restore: the largest file is {what} at {need / 1e9:.2f} GB; "
           f"{free / 1e9:.2f} GB free under {ctx.scratch}; "
-          f"{RESTORE_HEADROOM:g}x margin wants {want / 1e9:.2f} GB")
+          f"{RESTORE_HEADROOM:g}x margin wants {want / 1e9:.2f} GB"
+          + (f"; split on the Hub at {HUB_SPLIT_BYTES / 2 ** 30:g} GiB: "
+             f"{split}" if split else ""))
     if free < want:
         sys.exit(f"REFUSING to publish: the restore check downloads every "
-                 f"file back and {big} is {need / 1e9:.2f} GB, but "
+                 f"file back and {what} is {need / 1e9:.2f} GB, but "
                  f"{ctx.scratch} has only {free / 1e9:.2f} GB free "
-                 f"({RESTORE_HEADROOM:g}x = {want / 1e9:.2f} GB with margin). "
-                 f"Free space or point --work at a bigger disk; nothing has "
-                 f"been uploaded.")
+                 f"({RESTORE_HEADROOM:g}x = {want / 1e9:.2f} GB with margin)"
+                 + (f" — and the Hub split of {split} writes each "
+                    f"{HUB_SPLIT_BYTES / 1e9:.2f} GB part to a scratch file "
+                    f"there before uploading it" if split else "")
+                 + ". Free space or point --work at a bigger disk; nothing "
+                   "has been uploaded.")
     return need
 
 
@@ -5485,22 +5520,112 @@ def stage_publish(ctx):
     # handful of commits per store, none of them carrying the whole store.
     # STORE.JSON GOES LAST, IN ITS OWN COMMIT — the rule the tier-G path
     # already follows: a consumer that finds store.json finds every file it
-    # names. The restore check below is unchanged.
+    # names. The restore check below is unchanged for a whole file.
+    #
+    # A FILE OVER THE HUB'S PER-FILE LIMIT (`HUB_SPLIT_BYTES`, family1-build
+    # #680) goes up as `<name>.partNNN`, one part per commit, each written to
+    # `<scratch>/hub_split` and deleted after its commit — one part on disk
+    # at a time, the headroom `_restore_disk_preflight` already asked for.
+    # store.json then gains `hub_split` (atomically, locally) BEFORE it is
+    # uploaded, so the store.json on the Hub always names the parts that are
+    # there; its `sha256` block is untouched and still holds the whole files.
+    import family10_parts_hub as ph
     digests = {n: sha256(os.path.join(dest, n)) for n in names}
     arrays = [n for n in names if n != "store.json"]
-    batches = [arrays[i:i + PUBLISH_BATCH]
-               for i in range(0, len(arrays), PUBLISH_BATCH)] + \
+    split = [n for n in arrays
+             if os.path.getsize(os.path.join(dest, n)) > HUB_SPLIT_BYTES]
+    for n in split:
+        # the reassembled parts are checked against THIS digest at restore,
+        # so a disk that disagrees with its own record refuses before hours
+        # of upload, not after
+        if digests[n] != sm["sha256"][n]:
+            sys.exit(f"cannot publish {n}: it hashes to {digests[n]} on disk "
+                     f"and store.json records {sm['sha256'][n]}. Its Hub "
+                     f"parts would reassemble into a file the store does not "
+                     f"describe; nothing has been uploaded.")
+    whole = [n for n in arrays if n not in split]
+    batches = [whole[i:i + PUBLISH_BATCH]
+               for i in range(0, len(whole), PUBLISH_BATCH)] + \
         [["store.json"]]
-    for i, chunk in enumerate(batches, 1):
+    for i, chunk in enumerate(batches[:-1], 1):
         hub_commit(api, repo,
                    hub_add_ops([(f"{prefix}/{n}", os.path.join(dest, n))
                                 for n in chunk]),
                    f"{lay.label} ({ad.store}): {len(chunk)} file(s), batch "
                    f"{i}/{len(batches)}")
+    hub_split = {}
+    split_dir = os.path.join(ctx.scratch, "hub_split")
+    for n in split:
+        p = os.path.join(dest, n)
+        total = os.path.getsize(p)
+        ranges = ph.split_ranges(total, HUB_SPLIT_BYTES)
+        parts = []
+        for j, (off, ln) in enumerate(ranges):
+            pn = ph.split_part_name(n, j)
+            shutil.rmtree(split_dir, ignore_errors=True)
+            os.makedirs(split_dir)
+            local = os.path.join(split_dir, pn)
+            h = ph.write_split_part(p, off, ln, local)
+            hub_commit(api, repo, hub_add_ops([(f"{prefix}/{pn}", local)]),
+                       f"{lay.label} ({ad.store}): {n} part {j + 1}/"
+                       f"{len(ranges)} ({ln / 1e9:.2f} GB)")
+            shutil.rmtree(split_dir, ignore_errors=True)
+            parts.append({"name": pn, "bytes": ln, "sha256": h})
+            print(f"  publish: {pn} ({ln / 1e9:.2f} GB, sha256 {h[:16]}) "
+                  f"uploaded", flush=True)
+        hub_split[n] = {"bytes": total, "chunk_bytes": HUB_SPLIT_BYTES,
+                        "parts": parts}
+        ph.split_parts(n, hub_split[n])          # the layout's own validator
+    sj = os.path.join(dest, "store.json")
+    stale = []
+    if hub_split or "hub_split" in sm:
+        meta = read_json(sj, {})
+        if hub_split:
+            meta["hub_split"] = hub_split
+        else:
+            meta.pop("hub_split", None)
+        atomic_json(sj, meta)
+        digests["store.json"] = sha256(sj)
+        # an earlier publish of this prefix may have left a WHOLE copy of a
+        # file that is now split, or parts of a different split: they go in
+        # the same commit as the store.json that stops naming them
+        stale = ph.stale_split_paths(ph._tree(api, repo, prefix), arrays,
+                                     hub_split)
+    ops = hub_add_ops([(f"{prefix}/store.json", sj)])
+    if stale:
+        print(f"  publish: deleting {len(stale)} stale object(s) under "
+              f"{prefix}: {stale[:6]}")
+        ops = list(ops) + list(hub_delete_ops([f"{prefix}/{n}"
+                                               for n in stale]))
+    hub_commit(api, repo, ops,
+               f"{lay.label} ({ad.store}): 1 file(s), batch "
+               f"{len(batches)}/{len(batches)}")
     for i, n in enumerate(names, 1):
         p = os.path.join(dest, n)
         src = digests[n]
         shutil.rmtree(scratch, ignore_errors=True)
+        if n in hub_split:
+            # every part fetched, checked against its own sha256 and fed
+            # through ONE whole-file hash in order, then deleted: the
+            # concatenation must be the file store.json's sha256 names
+            try:
+                got = ph.stream_split(repo, prefix, n, hub_split[n], tok,
+                                      scratch, just_uploaded=True)
+            except ph.SplitError as e:
+                sys.exit(f"RESTORE MISMATCH {e} — the publish is not "
+                         f"trustworthy")
+            shutil.rmtree(scratch, ignore_errors=True)
+            if got != src:
+                sys.exit(f"RESTORE MISMATCH {n}: its "
+                         f"{len(hub_split[n]['parts'])} part(s) each match "
+                         f"hub_split but concatenate to {got}, and store.json "
+                         f"records {src} — the publish is not trustworthy")
+            entries.append({"name": n, "bytes": os.path.getsize(p),
+                            "sha256": src,
+                            "hub_parts": hub_split[n]["parts"]})
+            ctx.prog.item(n, i, {"sha256": src[:16],
+                                 "parts": len(hub_split[n]["parts"])})
+            continue
         back = hf_hub_download(repo, f"{prefix}/{n}", repo_type="dataset",
                                token=tok, local_dir=scratch)
         got = sha256(back)

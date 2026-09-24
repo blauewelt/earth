@@ -3096,3 +3096,341 @@ def test_a_worker_exception_fails_the_pull_and_writes_no_marker(
     assert not ph.marked(ph.store_root(work, store), ph.part_key(year))
     lane_dir = ph.year_dir(work, store, year)
     assert not os.path.isdir(lane_dir) or os.listdir(lane_dir) == []
+
+
+# ==================================== files over the Hub's per-file limit ==
+# family1-build #680 (2026-09-24): the swot whole-record point store's
+# `platform.npy` is 72.99 GB and the Hub takes at most 50 GB per file. A store
+# file over `HUB_SPLIT_BYTES` is published as `<name>.part000, …`, listed in
+# store.json's `hub_split`; on disk the store is unchanged. The fake Hub below
+# is a directory that answers `create_commit` (adds AND deletes), the folder
+# listing with LFS sizes and hashes, and `hf_hub_download`.
+import build_family1_stores as b1                               # noqa: E402
+import build_family7 as b7                                      # noqa: E402
+
+SPLIT_REPO = "fake/earth-tensors"
+
+
+class _RepoFolder:
+    def __init__(self, path):
+        self.path = path
+
+
+class SplitFakeHub:
+    def __init__(self, root):
+        self.root = root
+        self.commits = []            # (message, [("add"|"del", rel)])
+        self.corrupt_suffix = None   # a path whose committed copy is flipped
+
+    def path(self, rel):
+        return os.path.join(self.root, SPLIT_REPO, rel)
+
+    # the api --------------------------------------------------------------
+    def create_repo(self, *a, **k):
+        pass
+
+    def list_repo_tree(self, repo, path_in_repo="", repo_type=None,
+                       recursive=False):
+        import hashlib
+        import types
+        d = self.path(path_in_repo)
+        if not os.path.isdir(d):
+            return []
+        out = []
+        for n in sorted(os.listdir(d)):
+            p = os.path.join(d, n)
+            rel = f"{path_in_repo}/{n}"
+            if os.path.isdir(p):
+                out.append(_RepoFolder(rel))
+                continue
+            h = hashlib.sha256(open(p, "rb").read()).hexdigest()
+            out.append(types.SimpleNamespace(
+                path=rel, size=os.path.getsize(p),
+                lfs=types.SimpleNamespace(sha256=h)))
+        return out
+
+    # the module seams -----------------------------------------------------
+    def commit(self, api, repo, ops, message, **kw):
+        import shutil
+        assert repo == SPLIT_REPO
+        rec = []
+        for op in ops:
+            if op[0] == "del":
+                os.remove(self.path(op[1]))
+                rec.append(("del", op[1]))
+                continue
+            rel, local = op
+            dst = self.path(rel)
+            os.makedirs(os.path.dirname(dst), exist_ok=True)
+            shutil.copyfile(local, dst)
+            if self.corrupt_suffix and rel.endswith(self.corrupt_suffix):
+                with open(dst, "r+b") as fh:
+                    fh.seek(7)
+                    b = fh.read(1)
+                    fh.seek(7)
+                    fh.write(bytes([b[0] ^ 0xFF]))
+            rec.append(("add", rel))
+        self.commits.append((message, rec))
+
+    def upload(self, api, repo, local, rel, message, **kw):
+        self.commit(api, repo, [(rel, local)], message)
+
+    def download(self, repo, rel, repo_type=None, token=None, local_dir=None,
+                 **kw):
+        import shutil
+        src = self.path(rel)
+        if not os.path.exists(src):
+            raise FileNotFoundError(f"404 {rel}")
+        dst = os.path.join(local_dir, rel)
+        os.makedirs(os.path.dirname(dst), exist_ok=True)
+        shutil.copyfile(src, dst)
+        return dst
+
+    def install(self, monkeypatch):
+        import types
+        monkeypatch.setattr(b10, "hub_commit", self.commit)
+        monkeypatch.setattr(b10, "hub_add_ops", lambda pairs: list(pairs))
+        monkeypatch.setattr(b10, "hub_delete_ops",
+                            lambda rels: [("del", r) for r in rels])
+        monkeypatch.setattr(b10, "hub_upload_with_backoff", self.upload)
+        fake_hf = types.ModuleType("huggingface_hub")
+        fake_hf.hf_hub_download = self.download
+        monkeypatch.setitem(sys.modules, "huggingface_hub", fake_hf)
+        return self
+
+
+def _publishable_gdp(tmp_path, built, monkeypatch, hub):
+    """A copy of the built gdp store under a fresh work dir, wired to `hub`."""
+    import shutil
+    ctx, _ = built["gdp"]
+    ctx2 = b10.Ctx(_ns(store="gdp", work=str(tmp_path / "w"), source_dir="",
+                       start=SMOKE_START, end=SMOKE_END))
+    shutil.copytree(ctx.store, ctx2.store)
+    monkeypatch.setattr(ctx2, "hub", lambda: (hub, SPLIT_REPO, "tok"))
+    return ctx2
+
+
+def _whole_sha(p):
+    return b10.sha256(p)
+
+
+def test_a_file_over_the_split_size_is_published_as_parts_and_restored(
+        tmp_path, built, monkeypatch):
+    hub = SplitFakeHub(str(tmp_path / "hub")).install(monkeypatch)
+    monkeypatch.setattr(b10, "HUB_SPLIT_BYTES", 600)
+    ctx = _publishable_gdp(tmp_path, built, monkeypatch, hub)
+    prefix = ctx.layout.prefix("gdp")
+    before = json.load(open(os.path.join(ctx.store, "store.json")))
+    sizes = {n: os.path.getsize(os.path.join(ctx.store, n))
+             for n in before["sha256"]}
+    want_split = sorted(n for n, s in sizes.items() if s > 600)
+    assert "values.npy" in want_split and "bin.npy" not in want_split
+    disk = {n: _whole_sha(os.path.join(ctx.store, n)) for n in sizes}
+    # a stale WHOLE copy and a stray part from an earlier publish
+    for rel in ("values.npy", "values.npy.part007"):
+        os.makedirs(os.path.dirname(hub.path(f"{prefix}/{rel}")),
+                    exist_ok=True)
+        open(hub.path(f"{prefix}/{rel}"), "wb").write(b"old")
+
+    man = b10.stage_publish(ctx)
+
+    on_hub = set(os.listdir(hub.path(prefix)))
+    for n in sizes:
+        if n in want_split:
+            k = -(-sizes[n] // 600)
+            assert n not in on_hub, n
+            assert {f"{n}.part{i:03d}" for i in range(k)} <= on_hub, n
+            assert f"{n}.part{k:03d}" not in on_hub
+        else:
+            assert n in on_hub and not any(
+                x.startswith(n + ".part") for x in on_hub), n
+    assert "values.npy.part007" not in on_hub      # the stray was deleted
+    # store.json on the Hub carries hub_split, and sha256 is the WHOLE file
+    sj = json.load(open(hub.path(f"{prefix}/store.json")))
+    assert sj["sha256"] == before["sha256"] == disk
+    assert sorted(sj["hub_split"]) == want_split
+    vs = sj["hub_split"]["values.npy"]
+    assert vs["bytes"] == sizes["values.npy"] and vs["chunk_bytes"] == 600
+    assert [p["name"] for p in vs["parts"]] == [
+        "values.npy.part000", "values.npy.part001", "values.npy.part002"]
+    assert [p["bytes"] for p in vs["parts"]] == [600, 600,
+                                                 sizes["values.npy"] - 1200]
+    raw = open(os.path.join(ctx.store, "values.npy"), "rb").read()
+    for i, p in enumerate(vs["parts"]):
+        assert p["sha256"] == __import__("hashlib").sha256(
+            raw[600 * i:600 * (i + 1)]).hexdigest()
+        assert _whole_sha(hub.path(f"{prefix}/{p['name']}")) == p["sha256"]
+    # the local store.json is the one on the Hub; the arrays are untouched
+    assert _whole_sha(os.path.join(ctx.store, "store.json")) == \
+        _whole_sha(hub.path(f"{prefix}/store.json"))
+    assert {n: _whole_sha(os.path.join(ctx.store, n)) for n in sizes} == disk
+    # store.json went up LAST, in the commit that deleted the stale objects
+    last_msg, last_ops = hub.commits[-2]            # [-1] is the manifest
+    assert last_ops[0] == ("add", f"{prefix}/store.json")
+    assert sorted(r for k, r in last_ops if k == "del") == sorted(
+        [f"{prefix}/values.npy", f"{prefix}/values.npy.part007"])
+    # the restore verified every file, the manifest names the parts
+    ents = {e["name"]: e for e in man["files"]}
+    assert set(ents) == set(sizes) | {"store.json"}
+    assert ents["values.npy"]["sha256"] == disk["values.npy"]
+    assert ents["values.npy"]["hub_parts"] == vs["parts"]
+    assert "hub_parts" not in ents["bin.npy"]
+    assert b10.marked(ctx.root, "publish")
+    # nothing left behind in the scratch space
+    assert not os.path.exists(os.path.join(ctx.scratch, "hub_split"))
+    # the check stage's Hub comparison agrees, and says how it was split
+    sm = json.load(open(os.path.join(ctx.store, "store.json")))
+    out = b1.hub_agrees(ctx, sm, "check")
+    assert out["split"] == {n: -(-sizes[n] // 600) for n in want_split}
+    # ... and refuses a Hub whose part no longer matches hub_split
+    with open(hub.path(f"{prefix}/values.npy.part001"), "r+b") as fh:
+        fh.write(b"X")
+    with pytest.raises(SystemExit, match="values.npy.part001"):
+        b1.hub_agrees(ctx, sm, "check")
+    os.remove(hub.path(f"{prefix}/values.npy.part001"))
+    with pytest.raises(SystemExit, match="part001: not on the Hub"):
+        b1.hub_agrees(ctx, sm, "check")
+
+
+def test_a_corrupted_part_on_the_hub_fails_the_restore_naming_the_part(
+        tmp_path, built, monkeypatch):
+    hub = SplitFakeHub(str(tmp_path / "hub")).install(monkeypatch)
+    monkeypatch.setattr(b10, "HUB_SPLIT_BYTES", 600)
+    hub.corrupt_suffix = "values.npy.part001"
+    ctx = _publishable_gdp(tmp_path, built, monkeypatch, hub)
+    with pytest.raises(SystemExit) as e:
+        b10.stage_publish(ctx)
+    msg = str(e.value)
+    assert "RESTORE MISMATCH" in msg and "values.npy.part001" in msg
+    assert not b10.marked(ctx.root, "publish")
+
+
+def test_the_parts_are_checked_as_a_WHOLE_too(tmp_path, built, monkeypatch):
+    """Each part matching its own record is not enough: parts that are right
+    one by one and reassemble into the wrong file (a hub_split whose order or
+    content is not the file's) must fail on the whole-file sha256."""
+    import family10_parts_hub as ph
+    hub = SplitFakeHub(str(tmp_path / "hub")).install(monkeypatch)
+    root = str(tmp_path / "x")
+    os.makedirs(root)
+    src = os.path.join(root, "col.npy")
+    blob = bytes(range(256)) * 7
+    open(src, "wb").write(blob)
+    parts = []
+    for i, (o, n) in enumerate(ph.split_ranges(len(blob), 500)):
+        pn = ph.split_part_name("col.npy", i)
+        loc = os.path.join(root, pn)
+        parts.append({"name": pn, "bytes": n,
+                      "sha256": ph.write_split_part(src, o, n, loc)})
+        hub.commit(None, SPLIT_REPO, [(f"pre/{pn}", loc)], "up")
+    entry = {"bytes": len(blob), "chunk_bytes": 500, "parts": parts}
+    meta = {"sha256": {"col.npy": "0" * 64}, "hub_split": {"col.npy": entry}}
+    with pytest.raises(ph.SplitError, match="concatenate"):
+        ph.hub_split_download(SPLIT_REPO, "pre", "col.npy", meta, "t",
+                              str(tmp_path / "out"))
+    assert not os.path.exists(str(tmp_path / "out" / "col.npy"))
+    # the validator refuses a malformed entry before a byte is fetched
+    bad = dict(entry, parts=[parts[1], parts[0]] + parts[2:])
+    with pytest.raises(ph.SplitError, match="part000"):
+        ph.split_parts("col.npy", bad)
+    with pytest.raises(ph.SplitError, match="sum"):
+        ph.split_parts("col.npy", dict(entry, bytes=len(blob) + 1))
+
+
+def test_hub_split_download_round_trips_the_file_byte_identically(
+        tmp_path, built, monkeypatch):
+    import family10_parts_hub as ph
+    hub = SplitFakeHub(str(tmp_path / "hub")).install(monkeypatch)
+    monkeypatch.setattr(b10, "HUB_SPLIT_BYTES", 600)
+    ctx = _publishable_gdp(tmp_path, built, monkeypatch, hub)
+    b10.stage_publish(ctx)
+    prefix = ctx.layout.prefix("gdp")
+    meta = json.load(open(hub.path(f"{prefix}/store.json")))
+    out = str(tmp_path / "back")
+    for n in ("values.npy", "platform.npy", "bin.npy"):
+        p = ph.hub_split_download(SPLIT_REPO, prefix, n, meta, "tok", out)
+        assert p == os.path.join(out, n)
+        assert open(p, "rb").read() == \
+            open(os.path.join(ctx.store, n), "rb").read(), n
+    assert sorted(os.listdir(out)) == ["bin.npy", "platform.npy",
+                                       "values.npy"]
+    # and the reader's Hub path opens the split store as one .npy per column
+    cache = str(tmp_path / "cache")
+    d = f10.resolve(f"{SPLIT_REPO}:{prefix}", cache_dir=cache)
+    assert f10.verify_store(d) == len(meta["sha256"])
+    st = f10.Store.open(d)
+    here = f10.Store.open(ctx.store)
+    assert np.array_equal(st["values"], here["values"], equal_nan=True)
+    assert np.array_equal(st["platform"], here["platform"])
+
+
+def test_a_store_under_the_limit_publishes_exactly_as_before(
+        tmp_path, built, monkeypatch):
+    hub = SplitFakeHub(str(tmp_path / "hub")).install(monkeypatch)
+    ctx = _publishable_gdp(tmp_path, built, monkeypatch, hub)
+    sj = os.path.join(ctx.store, "store.json")
+    before = open(sj, "rb").read()
+    man = b10.stage_publish(ctx)
+    assert open(sj, "rb").read() == before            # store.json untouched
+    prefix = ctx.layout.prefix("gdp")
+    names = sorted(json.loads(before)["sha256"])
+    assert sorted(os.listdir(hub.path(prefix))) == sorted(
+        names + ["store.json", "manifest.json"])
+    # the old commit plan: PUBLISH_BATCH files a commit, store.json alone and
+    # last, then the manifest; no deletes, no listing needed
+    B = b10.PUBLISH_BATCH
+    batches = [names[i:i + B] for i in range(0, len(names), B)] + \
+        [["store.json"]]
+    want = [(f"{ctx.layout.label} (gdp): {len(c)} file(s), batch "
+             f"{j}/{len(batches)}", [("add", f"{prefix}/{n}") for n in c])
+            for j, c in enumerate(batches, 1)]
+    assert hub.commits[:len(batches)] == want
+    assert len(hub.commits) == len(batches) + 1          # + the manifest
+    assert all(kind == "add" for _, ops in hub.commits for kind, _ in ops)
+    assert "hub_split" not in json.load(open(hub.path(f"{prefix}/store.json")))
+    assert all("hub_parts" not in e for e in man["files"])
+    out = b1.hub_agrees(ctx, json.loads(before), "check")
+    assert "split" not in out
+
+
+def test_hub_commit_raises_at_once_on_the_hubs_file_size_refusal(monkeypatch):
+    """#680: the LFS batch endpoint's size refusal is a status-less
+    ValueError, and the retry ladder slept 16 and 32 minutes on it."""
+    slept = []
+    monkeypatch.setattr(b7.time, "sleep", lambda s: slept.append(s))
+
+    class Api:
+        def __init__(self, errs):
+            self.errs = list(errs)
+            self.calls = 0
+
+        def create_commit(self, **kw):
+            self.calls += 1
+            if self.errs:
+                raise self.errs.pop(0)
+            return "ok"
+
+    lfs = ValueError(
+        "LFS batch API returned errors:\nEncountered error for file with OID "
+        "5f1e…: `Max individual file size is 50GB. File platform.npy is "
+        "72.99GB`")
+    api = Api([lfs])
+    with pytest.raises(b7.HubFileTooLarge, match="REFUSED AS TOO LARGE"):
+        b7.hub_commit(api, "r/x", ["op"], "swot: 3 file(s), batch 1/4")
+    assert api.calls == 1 and slept == []
+
+    class Resp:
+        status_code = 413
+
+    e413 = RuntimeError("Payload Too Large")
+    e413.response = Resp()
+    api = Api([e413])
+    with pytest.raises(b7.HubFileTooLarge):
+        b7.hub_commit(api, "r/x", ["op"], "m")
+    assert api.calls == 1 and slept == []
+    # a transient failure still takes the ladder
+    api = Api([ConnectionError("reset by peer")])
+    assert b7.hub_commit(api, "r/x", ["op"], "m") == "ok"
+    assert api.calls == 2 and slept == [b7.HUB_RETRY_BASE_S]
+    # and a stray "413" in a message is not a size refusal by itself
+    assert b7.hub_size_refusal(RuntimeError("req id 1-413-ab 500")) is None

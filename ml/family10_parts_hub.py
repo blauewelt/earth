@@ -101,8 +101,10 @@ touched by this module at all, which is the point of it.
 import argparse
 import collections
 import concurrent.futures as cf
+import hashlib
 import json
 import os
+import re
 import shutil
 import sys
 import time
@@ -907,6 +909,257 @@ def status(store, years=None, scratch=None, partials=None, hub=None):
         miss = sorted(set(int(y) for y in years) - set(found))
         print(f"missing_years: {' '.join(str(y) for y in miss)}")
     return found
+
+
+# ============================================ files over the Hub's size limit ==
+# The Hub takes at most 50 GB per file. Measured 2026-09-24 02:50Z on
+# family1-build #680: the swot whole-record point store (~9e9 rows) assembled
+# fine and its publish was refused — `platform.npy` 72.99 GB, `time_s.npy`
+# 73 GB, `values.npy` ~55 GB. So `build_family10_stores.stage_publish` uploads
+# a store file larger than `HUB_SPLIT_BYTES` as consecutive byte ranges
+# `<name>.part000`, `<name>.part001`, … and records them in store.json:
+#
+#   "hub_split": {"<name>": {"bytes": <whole file>, "chunk_bytes": <split>,
+#                            "parts": [{"name": "<name>.part000",
+#                                       "bytes": n, "sha256": h}, …]}}
+#
+# while `sha256[<name>]` stays the WHOLE file's digest. The helpers below are
+# the one definition of that layout: the part names, the byte ranges, the
+# validation of an entry, the streamed restore and the reader.
+SPLIT_BUF = 1 << 22            # 4 MiB reads while copying and hashing a part
+_PART_RE = re.compile(r"\.part(\d{3})$")
+
+
+class SplitError(ValueError):
+    """A split file whose parts do not reassemble into the file store.json
+    records. The message names the part."""
+
+
+def split_part_name(name, i):
+    """`values.npy`, 0 -> `values.npy.part000`."""
+    return f"{name}.part{int(i):03d}"
+
+
+def split_ranges(total, chunk):
+    """[(offset, length)] of consecutive byte ranges covering `total`, each
+    at most `chunk`; only the last may be short."""
+    total, chunk = int(total), int(chunk)
+    if chunk <= 0:
+        raise ValueError(f"split chunk must be positive, got {chunk}")
+    return [(o, min(chunk, total - o)) for o in range(0, total, chunk)]
+
+
+def write_split_part(src, offset, length, dst, buf=SPLIT_BUF):
+    """Copy bytes [offset, offset + length) of `src` into `dst` (temp sibling
+    + os.replace) and return their sha256."""
+    tmp = f"{dst}.tmp{os.getpid()}"
+    h = hashlib.sha256()
+    left = int(length)
+    try:
+        with open(src, "rb") as fi, open(tmp, "wb") as fo:
+            fi.seek(int(offset))
+            while left:
+                blk = fi.read(min(buf, left))
+                if not blk:
+                    raise SplitError(f"{src} ended {left} byte(s) short of the "
+                                     f"range {offset}+{length}")
+                h.update(blk)
+                fo.write(blk)
+                left -= len(blk)
+        os.replace(tmp, dst)
+    finally:
+        if os.path.exists(tmp):
+            os.remove(tmp)
+    return h.hexdigest()
+
+
+def split_parts(name, entry):
+    """Validate ONE `hub_split[name]` entry and return its part list.
+
+    The parts must be named `<name>.part000` onward with no gap, each carry a
+    64-hex sha256 and a positive size no larger than `chunk_bytes`, every part
+    but the last be exactly `chunk_bytes`, and the sizes sum to `bytes`.
+    Anything else is an entry no reader can reassemble, and is refused here
+    rather than discovered as a wrong file."""
+    entry = entry or {}
+    parts = list(entry.get("parts") or [])
+    if not parts:
+        raise SplitError(f"hub_split[{name!r}] lists no parts")
+    total = int(entry.get("bytes", -1))
+    chunk = int(entry.get("chunk_bytes", 0) or 0)
+    for i, p in enumerate(parts):
+        want = split_part_name(name, i)
+        if p.get("name") != want:
+            raise SplitError(f"hub_split[{name!r}] part {i} is named "
+                             f"{p.get('name')!r}, expected {want!r}")
+        h = p.get("sha256")
+        if not (isinstance(h, str) and len(h) == 64):
+            raise SplitError(f"{want}: hub_split carries no sha256")
+        b = int(p.get("bytes", -1))
+        if b <= 0 or (chunk and b > chunk) or \
+                (chunk and i < len(parts) - 1 and b != chunk):
+            raise SplitError(f"{want}: {b} bytes against chunk_bytes {chunk} "
+                             f"(every part but the last is exactly one chunk)")
+    if sum(int(p["bytes"]) for p in parts) != total:
+        raise SplitError(f"hub_split[{name!r}]: the parts sum to "
+                         f"{sum(int(p['bytes']) for p in parts)} bytes, the "
+                         f"entry records {total}")
+    return parts
+
+
+def stream_split(repo, prefix, name, entry, token, scratch, sink=None,
+                 just_uploaded=False):
+    """Fetch every part of a split file IN ORDER, one at a time, check each
+    part's size and sha256 against `entry`, feed its bytes through ONE
+    whole-file sha256 (and into `sink`, a writable binary file, when given)
+    and delete it before the next. Returns the concatenation's sha256.
+
+    So the restore of a 73 GB column needs room for one 40 GiB part, never for
+    the column. Raises SplitError naming the first part that disagrees."""
+    parts = split_parts(name, entry)
+    whole = hashlib.sha256()
+    d = os.path.join(scratch, f"{name}.parts")
+    try:
+        for p in parts:
+            shutil.rmtree(d, ignore_errors=True)
+            local = _download(repo, f"{prefix}/{p['name']}", token, d,
+                              just_uploaded=just_uploaded)
+            h, n = hashlib.sha256(), 0
+            with open(local, "rb") as fh:
+                for blk in iter(lambda: fh.read(SPLIT_BUF), b""):
+                    h.update(blk)
+                    whole.update(blk)
+                    n += len(blk)
+                    if sink is not None:
+                        sink.write(blk)
+            shutil.rmtree(d, ignore_errors=True)
+            got = h.hexdigest()
+            if n != int(p["bytes"]) or got != p["sha256"]:
+                raise SplitError(
+                    f"{p['name']}: downloaded {n} bytes sha256 {got}, "
+                    f"store.json's hub_split records {p['bytes']} bytes "
+                    f"sha256 {p['sha256']}")
+    finally:
+        shutil.rmtree(d, ignore_errors=True)
+    return whole.hexdigest()
+
+
+def hub_split_download(repo, prefix, name, meta, token, dest_dir):
+    """Fetch store file `name` under `prefix` into ONE local file
+    `dest_dir/name`, whether the Hub holds it whole or as `hub_split` parts.
+
+    `meta` is the store's store.json (a dict). A split file is reassembled by
+    streaming its parts in order into a temp sibling — each part checked
+    against its own sha256 and deleted as soon as it is appended — and the
+    concatenation's sha256 must equal `meta["sha256"][name]` before it is
+    renamed into place. A whole file is checked against the same record
+    when store.json carries one. Returns the local path; raises SplitError
+    (and leaves nothing at `dest_dir/name`) on any disagreement."""
+    os.makedirs(dest_dir, exist_ok=True)
+    out = os.path.join(dest_dir, name)
+    want = (meta.get("sha256") or {}).get(name)
+    entry = (meta.get("hub_split") or {}).get(name)
+    tmp_dir = os.path.join(dest_dir, f".{name}.fetch")
+    partial = f"{out}.partial{os.getpid()}"
+    shutil.rmtree(tmp_dir, ignore_errors=True)
+    try:
+        if entry is None:
+            got = _download(repo, f"{prefix}/{name}", token, tmp_dir)
+            digest = sha256(got) if want else None
+            if want and digest != want:
+                raise SplitError(f"{name}: downloaded sha256 {digest}, "
+                                 f"store.json records {want}")
+            os.replace(got, out)
+            return out
+        if not want:
+            raise SplitError(f"{name} is split on the Hub and store.json "
+                             f"carries no sha256 for the whole file — the "
+                             f"reassembly cannot be checked")
+        with open(partial, "wb") as fo:
+            digest = stream_split(repo, prefix, name, entry, token, tmp_dir,
+                                  sink=fo)
+        if digest != want:
+            raise SplitError(f"{name}: its {len(entry['parts'])} part(s) "
+                             f"concatenate to sha256 {digest}, store.json "
+                             f"records {want} for the whole file")
+        os.replace(partial, out)
+        return out
+    finally:
+        shutil.rmtree(tmp_dir, ignore_errors=True)
+        if os.path.exists(partial):
+            os.remove(partial)
+
+
+def _tree(api, repo, prefix):
+    """The FILES directly under `prefix`: {name: {"size", "sha256"}}, where
+    `sha256` is the LFS object's digest (None for a file the Hub does not
+    report one for). One listing of one folder — never the whole repository.
+    The seam the tests replace."""
+    out = {}
+    for it in api.list_repo_tree(repo, path_in_repo=prefix,
+                                 repo_type="dataset", recursive=False):
+        if type(it).__name__ == "RepoFolder":
+            continue
+        size = getattr(it, "size", None)
+        if size is None:
+            continue
+        lfs = getattr(it, "lfs", None)
+        out[it.path.rsplit("/", 1)[-1]] = {
+            "size": int(size),
+            "sha256": getattr(lfs, "sha256", None) if lfs else None}
+    return out
+
+
+def _parts_of(tree, name):
+    return sorted(k for k in tree if k.startswith(name + ".part")
+                  and _PART_RE.search(k[len(name):]))
+
+
+def split_disagreements(tree, hub_split):
+    """The Hub folder listing against `hub_split`: a list of problems, empty
+    when every split file is present AS ALL ITS PARTS — sizes equal, and
+    sha256 equal wherever the Hub reports one — with no whole copy of it and
+    no stray part beside them (either would be a second answer to "what is
+    `<name>`" on the Hub)."""
+    bad = []
+    for name, entry in sorted((hub_split or {}).items()):
+        try:
+            parts = split_parts(name, entry)
+        except SplitError as e:
+            bad.append(str(e))
+            continue
+        for p in parts:
+            got = tree.get(p["name"])
+            if got is None:
+                bad.append(f"{p['name']}: not on the Hub")
+            elif got["size"] != int(p["bytes"]):
+                bad.append(f"{p['name']}: {got['size']} bytes on the Hub, "
+                           f"hub_split records {p['bytes']}")
+            elif got.get("sha256") and got["sha256"] != p["sha256"]:
+                bad.append(f"{p['name']}: sha256 {got['sha256']} on the Hub, "
+                           f"hub_split records {p['sha256']}")
+        if name in tree:
+            bad.append(f"{name}: a WHOLE copy sits on the Hub beside its parts")
+        want = {p["name"] for p in parts}
+        stray = [k for k in _parts_of(tree, name) if k not in want]
+        if stray:
+            bad.append(f"{name}: stray part(s) on the Hub that hub_split does "
+                       f"not list: {stray[:6]}")
+    return bad
+
+
+def stale_split_paths(tree, names, hub_split):
+    """Names under the prefix a publish of THIS layout must delete: the whole
+    copy of a file that is now split, and every `<name>.partNNN` that
+    `hub_split` does not list (all of them, for a file no longer split)."""
+    out = []
+    for n in names:
+        entry = (hub_split or {}).get(n)
+        want = {p["name"] for p in entry["parts"]} if entry else set()
+        if entry and n in tree:
+            out.append(n)
+        out += [k for k in _parts_of(tree, n) if k not in want]
+    return out
 
 
 # =================================================================== driver ==

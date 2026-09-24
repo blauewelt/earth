@@ -462,7 +462,27 @@ def hub_agrees(ctx, sm, check_name):
     if bad:
         sys.exit(f"{check_name} {ad.store}: the Hub manifest disagrees on "
                  f"{bad[:8]}")
-    return {"repo": repo, "prefix": prefix, "files": len(man)}
+    # A FILE OVER THE HUB'S PER-FILE LIMIT is on the Hub as
+    # `<name>.part000, …` (`f10b.HUB_SPLIT_BYTES`, family1-build #680), not
+    # as `<name>`. It is PRESENT when the Hub's store.json lists the same
+    # parts as the local one and every part is in the folder listing with
+    # the recorded size (and sha256, where the Hub reports one) — one listing
+    # of the store's folder, no download.
+    split = sm.get("hub_split") or {}
+    if (got["store.json"].get("hub_split") or {}) != split:
+        sys.exit(f"{check_name} {ad.store}: the Hub's store.json and the "
+                 f"local one disagree on hub_split (the parts a file over "
+                 f"the Hub's size limit is stored as)")
+    if split:
+        import family10_parts_hub as ph
+        wrong = ph.split_disagreements(ph._tree(api, repo, prefix), split)
+        if wrong:
+            sys.exit(f"{check_name} {ad.store}: the split file(s) on the Hub "
+                     f"disagree with store.json's hub_split: {wrong[:8]}")
+    out = {"repo": repo, "prefix": prefix, "files": len(man)}
+    if split:
+        out["split"] = {n: len(e["parts"]) for n, e in sorted(split.items())}
+    return out
 
 
 def stage_check(ctx):
