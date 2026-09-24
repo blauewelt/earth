@@ -39,16 +39,6 @@
   {
    "store": "burned500",
    "stage": "index,fetch",
-   "start": "2023-01-01",
-   "end": "2023-12-31",
-   "runner": "ubuntu-latest",
-   "extra_args": "--push-parts",
-   "adapter_env": "",
-   "at": "2026-09-24T15:53:11.421Z"
-  },
-  {
-   "store": "burned500",
-   "stage": "index,fetch",
    "start": "2024-01-01",
    "end": "2024-12-31",
    "runner": "ubuntu-latest",
@@ -3074,5 +3064,20 @@
    "finished": "2026-09-24T17:17:37Z"
   }
  ],
- "failed": []
+ "failed": [
+  {
+   "store": "burned500",
+   "stage": "index,fetch",
+   "start": "2023-01-01",
+   "end": "2023-12-31",
+   "runner": "ubuntu-latest",
+   "extra_args": "--push-parts",
+   "adapter_env": "",
+   "at": "2026-09-24T15:53:11.421Z",
+   "run_number": 880,
+   "url": "https://github.com/blauewelt/earth/actions/runs/36023441285",
+   "reason": "failed after 88 min — read the log",
+   "finished": "2026-09-24T17:21:13Z"
+  }
+ ]
 }
