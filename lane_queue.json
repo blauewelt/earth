@@ -32,15 +32,6 @@
   {
    "store": "burned500",
    "stage": "index,fetch",
-   "start": "2020-01-01",
-   "end": "2020-12-31",
-   "runner": "ubuntu-latest",
-   "extra_args": "--push-parts",
-   "adapter_env": ""
-  },
-  {
-   "store": "burned500",
-   "stage": "index,fetch",
    "start": "2021-01-01",
    "end": "2021-12-31",
    "runner": "ubuntu-latest",
@@ -103,16 +94,6 @@
    "extra_args": "--push-parts",
    "adapter_env": "LAI500_GROUPS=terra",
    "at": "2026-09-24T12:12:44.286Z"
-  },
-  {
-   "store": "burned500",
-   "stage": "index,fetch",
-   "start": "2003-01-01",
-   "end": "2003-12-31",
-   "runner": "ubuntu-latest",
-   "extra_args": "--push-parts",
-   "adapter_env": "",
-   "at": "2026-09-24T13:52:03.638Z"
   },
   {
    "store": "burned500",
@@ -257,6 +238,16 @@
    "extra_args": "--push-parts",
    "adapter_env": "",
    "at": "2026-09-24T15:34:31.807Z"
+  },
+  {
+   "store": "burned500",
+   "stage": "index,fetch",
+   "start": "2020-01-01",
+   "end": "2020-12-31",
+   "runner": "ubuntu-latest",
+   "extra_args": "--push-parts",
+   "adapter_env": "",
+   "at": "2026-09-24T15:37:39.183Z"
   }
  ],
  "done": [
@@ -3029,6 +3020,18 @@
    "at": "2026-09-24T13:55:10.514Z",
    "run_number": 852,
    "finished": "2026-09-24T15:33:17Z"
+  },
+  {
+   "store": "burned500",
+   "stage": "index,fetch",
+   "start": "2003-01-01",
+   "end": "2003-12-31",
+   "runner": "ubuntu-latest",
+   "extra_args": "--push-parts",
+   "adapter_env": "",
+   "at": "2026-09-24T13:52:03.638Z",
+   "run_number": 851,
+   "finished": "2026-09-24T15:36:10Z"
   }
  ],
  "failed": []
