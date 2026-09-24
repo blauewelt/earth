@@ -171,7 +171,7 @@ jobs:
       # an ImportError four hours into a download-bound job is the expensive
       # way to learn about one.
       - name: Install
-        run: pip install --quiet numpy netCDF4 huggingface_hub
+        run: pip install --quiet numpy netCDF4 "huggingface_hub<2"
 
       # HF_TOKEN in env, never on the command line: argv is readable by every
       # process on the box and the box's host has root (ml/CLAUDE.md 6).

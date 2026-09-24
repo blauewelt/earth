@@ -141,7 +141,7 @@ jobs:
       # no shapely: this stage touches neither GLORYS nor the statics, and a
       # hosted runner's pip install is on the clock.
       - name: Install
-        run: pip install --quiet numpy netCDF4 huggingface_hub
+        run: pip install --quiet numpy netCDF4 "huggingface_hub<2"
 
       # MEASURE THE HOST BEFORE THE LANE SPENDS SIX HOURS ON IT, and print the
       # arithmetic. This step does NOT refuse: a slow reading is a number in

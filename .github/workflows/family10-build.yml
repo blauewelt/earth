@@ -378,7 +378,7 @@ jobs:
         env:
           STORE: ${{ github.event.inputs.store }}
         run: |
-          pip install --quiet numpy netCDF4 huggingface_hub
+          pip install --quiet numpy netCDF4 "huggingface_hub<2"
           if [ "${STORE}" = "slatrack" ]; then
             pip install --quiet copernicusmarine
           fi

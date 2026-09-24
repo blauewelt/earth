@@ -249,6 +249,12 @@ class FormatError(ValueError):
 
 
 # ================================================================== STAC ====
+#: the longest window one STAC page is asked for — the product is one item
+#: a day, so 200 days is ≈ 200 items against `limit` 500, with room for the
+#: re-run days the archive lists twice (parse_items)
+STAC_WINDOW_DAYS = 200
+
+
 def stac_items(d_lo, d_hi, collection=COLLECTION, attempts=4, count=None,
                limit=500):
     """Every item of `collection` overlapping [d_lo, d_hi] (dates).
@@ -258,7 +264,28 @@ def stac_items(d_lo, d_hi, collection=COLLECTION, attempts=4, count=None,
     window is widened by a day at each end and the caller matches items to
     days by their `start_datetime`. An empty answer is returned as an empty
     list and the CALLER decides whether that is a refusal.
+
+    A LONG WINDOW IS WALKED IN PIECES of `STAC_WINDOW_DAYS`: the whole-record
+    assembly (family1-build #875, 2026-09-24) asked for 2018-05 → 2026-09 in
+    one page and the service matched 3,068 items and returned 500. Each
+    piece is still refused if it comes back short of its own `matched`, and
+    an item on a seam (the widening by a day at each end) is kept once.
     """
+    out, seen = [], set()
+    lo_d = d_lo
+    while lo_d <= d_hi:
+        hi_d = min(d_hi, lo_d + dt.timedelta(days=STAC_WINDOW_DAYS - 1))
+        for f in _stac_page(lo_d, hi_d, collection, attempts, count, limit):
+            k = f.get("id")
+            if k in seen:
+                continue
+            seen.add(k)
+            out.append(f)
+        lo_d = hi_d + dt.timedelta(days=1)
+    return out
+
+
+def _stac_page(d_lo, d_hi, collection, attempts, count, limit):
     lo = (d_lo - dt.timedelta(days=1)).isoformat() + "T00:00:00Z"
     hi = (d_hi + dt.timedelta(days=1)).isoformat() + "T23:59:59Z"
     q = {"datetime": f"{lo}/{hi}", "limit": int(limit)}

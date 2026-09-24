@@ -294,3 +294,47 @@ def test_a_truncated_granule_is_an_absence(tmp_path):
 
 if __name__ == "__main__":
     sys.exit(pytest.main([__file__, "-q"]))
+
+
+def test_a_long_stac_window_is_walked_in_pieces_and_seams_kept_once(monkeypatch):
+    """family1-build #875 (2026-09-24): the whole-record assembly asked the
+    STAC for 2018-05 → 2026-09 in one page — 3,068 matched, 500 returned,
+    refused. The window is walked in `STAC_WINDOW_DAYS` pieces; an item that
+    the day-widened seam lists twice is kept once; a short piece still
+    refuses."""
+    asked = []
+
+    def fake(url, attempts=4, **k):
+        asked.append(url)
+        q = dict(p.split("=", 1) for p in url.split("?", 1)[1].split("&"))
+        lo, hi = [s[:10] for s in
+                  __import__("urllib.parse").parse.unquote(q["datetime"]).split("/")]
+        d0, d1 = dt.date.fromisoformat(lo), dt.date.fromisoformat(hi)
+        feats = []
+        d = d0
+        while d <= d1:
+            feats.append({"id": f"S5P_PAL__L2B_SIF____{d:%Y%m%d}T000000_"
+                                f"{d:%Y%m%d}T235959_20240101T000000",
+                          "properties": {"start_datetime": f"{d}T00:00:00Z"},
+                          "assets": {"product": {"href": f"https://x/{d}",
+                                                 "file:size": 1}}})
+            d += dt.timedelta(days=1)
+        js = {"features": feats, "context": {"matched": len(feats)}}
+        return json.dumps(js).encode(), "ok"
+    monkeypatch.setattr(sif.cm, "get_bytes", fake)
+    monkeypatch.setattr(sif, "STAC_WINDOW_DAYS", 10)
+    feats = sif.stac_items(dt.date(2024, 1, 1), dt.date(2024, 1, 25))
+    # 25 days plus the one-day widening at each end of the whole window,
+    # each item once although every seam day was listed by two pieces
+    ids = [f["id"] for f in feats]
+    assert len(ids) == len(set(ids)) == 27 and len(asked) == 3
+    by_day, _ = sif.parse_items(feats)
+    assert min(by_day) == dt.date(2023, 12, 31) and max(by_day) == \
+        dt.date(2024, 1, 26)
+
+    def short(url, attempts=4, **k):
+        js = {"features": [], "context": {"matched": 7}}
+        return json.dumps(js).encode(), "ok"
+    monkeypatch.setattr(sif.cm, "get_bytes", short)
+    with pytest.raises(sif.FormatError, match="matched 7"):
+        sif.stac_items(dt.date(2024, 1, 1), dt.date(2024, 1, 2))
