@@ -1,0 +1,80 @@
+  [verify sst_acspo02 before publish] check: sha256 400/3882  2.2s
+  [verify sst_acspo02 before publish] check: sha256 600/3882  3.5s
+  [verify sst_acspo02 before publish] check: sha256 800/3882  5.0s
+  [verify sst_acspo02 before publish] check: sha256 1000/3882  6.4s
+  [verify sst_acspo02 before publish] check: sha256 1200/3882  7.9s
+  [verify sst_acspo02 before publish] check: sha256 1400/3882  9.5s
+  [verify sst_acspo02 before publish] check: sha256 1600/3882  11.0s
+  [verify sst_acspo02 before publish] check: sha256 1800/3882  12.5s
+  [verify sst_acspo02 before publish] check: sha256 2000/3882  14.3s
+  [verify sst_acspo02 before publish] check: sha256 2200/3882  16.0s
+  [verify sst_acspo02 before publish] check: sha256 2400/3882  17.7s
+  [verify sst_acspo02 before publish] check: sha256 2600/3882  19.4s
+  [verify sst_acspo02 before publish] check: sha256 2800/3882  21.3s
+  [verify sst_acspo02 before publish] check: sha256 3000/3882  23.1s
+  [verify sst_acspo02 before publish] check: sha256 3200/3882  24.8s
+  [verify sst_acspo02 before publish] check: sha256 3400/3882  26.6s
+  [verify sst_acspo02 before publish] check: sha256 3600/3882  28.3s
+  [verify sst_acspo02 before publish] check: sha256 3800/3882  30.0s
+  [verify sst_acspo02 before publish] check: sha256 3882/3882  30.8s
+  [verify sst_acspo02 before publish] check: check sst_acspo02 100/1940  30.8s
+  [verify sst_acspo02 before publish] check: check sst_acspo02 200/1940  30.8s
+  [verify sst_acspo02 before publish] check: check sst_acspo02 300/1940  30.9s
+  [verify sst_acspo02 before publish] check: check sst_acspo02 400/1940  30.9s
+  [verify sst_acspo02 before publish] check: check sst_acspo02 500/1940  30.9s
+  [verify sst_acspo02 before publish] check: check sst_acspo02 600/1940  30.9s
+  [verify sst_acspo02 before publish] check: check sst_acspo02 700/1940  30.9s
+  [verify sst_acspo02 before publish] check: check sst_acspo02 800/1940  30.9s
+  [verify sst_acspo02 before publish] check: check sst_acspo02 900/1940  31.0s
+  [verify sst_acspo02 before publish] check: check sst_acspo02 1000/1940  31.0s
+  [verify sst_acspo02 before publish] check: check sst_acspo02 1100/1940  31.0s
+  [verify sst_acspo02 before publish] check: check sst_acspo02 1200/1940  31.0s
+  [verify sst_acspo02 before publish] check: check sst_acspo02 1300/1940  31.0s
+  [verify sst_acspo02 before publish] check: check sst_acspo02 1400/1940  31.1s
+  [verify sst_acspo02 before publish] check: check sst_acspo02 1500/1940  31.1s
+  [verify sst_acspo02 before publish] check: check sst_acspo02 1600/1940  31.1s
+  [verify sst_acspo02 before publish] check: check sst_acspo02 1700/1940  31.1s
+  [verify sst_acspo02 before publish] check: check sst_acspo02 1800/1940  31.1s
+  [verify sst_acspo02 before publish] check: check sst_acspo02 1900/1940  31.1s
+  [verify sst_acspo02 before publish] check: check sst_acspo02 1940/1940  31.1s
+  hub: chfrank/earth-tensors with the token from $HF_TOKEN
+  [publish sst_acspo02] start (3883 items)  0/3883  0.0s
+Upload 0 LFS files: 0it [00:00, ?it/s]Upload 0 LFS files: 0it [00:00, ?it/s]
+Upload 0 LFS files: 0it [00:00, ?it/s]Upload 0 LFS files: 0it [00:00, ?it/s]
+Upload 0 LFS files: 0it [00:00, ?it/s]Upload 0 LFS files: 0it [00:00, ?it/s]
+Upload 0 LFS files: 0it [00:00, ?it/s]Upload 0 LFS files: 0it [00:00, ?it/s]
+Upload 0 LFS files: 0it [00:00, ?it/s]Upload 0 LFS files: 0it [00:00, ?it/s]
+Upload 0 LFS files: 0it [00:00, ?it/s]Upload 0 LFS files: 0it [00:00, ?it/s]
+Upload 0 LFS files: 0it [00:00, ?it/s]Upload 0 LFS files: 0it [00:00, ?it/s]
+shard_index.npy:   0%|          | 0.00/726k [00:00<?, ?B/s]shard_index.npy: 100%|██████████| 726k/726k [00:00<00:00, 2.84MB/s]
+  [publish sst_acspo02] sst_acspo02  2/3883  107.0s
+  [publish sst_acspo02] sst_acspo02/2000  126/3883  150.5s
+  [publish sst_acspo02] sst_acspo02/2001  272/3883  206.0s
+  [publish sst_acspo02] sst_acspo02/2002  418/3883  265.6s
+  [publish sst_acspo02] sst_acspo02/2003  564/3883  335.9s
+  [publish sst_acspo02] sst_acspo02/2004  712/3883  397.0s
+  [publish sst_acspo02] sst_acspo02/2005  858/3883  468.6s
+  [publish sst_acspo02] sst_acspo02/2006  1004/3883  538.6s
+  [publish sst_acspo02] sst_acspo02/2007  1150/3883  613.9s
+  [publish sst_acspo02] sst_acspo02/2008  1296/3883  683.6s
+  [publish sst_acspo02] sst_acspo02/2009  1442/3883  756.8s
+  [publish sst_acspo02] sst_acspo02/2010  1588/3883  826.4s
+  [publish sst_acspo02] sst_acspo02/2011  1734/3883  897.7s
+  [publish sst_acspo02] sst_acspo02/2012  1880/3883  980.1s
+  [publish sst_acspo02] sst_acspo02/2013  2026/3883  1068.9s
+  [publish sst_acspo02] sst_acspo02/2014  2172/3883  1158.3s
+  [publish sst_acspo02] sst_acspo02/2015  2318/3883  1238.3s
+  [publish sst_acspo02] sst_acspo02/2016  2464/3883  1329.8s
+  [publish sst_acspo02] sst_acspo02/2017  2610/3883  1409.4s
+  [publish sst_acspo02] sst_acspo02/2018  2756/3883  1492.1s
+  [publish sst_acspo02] sst_acspo02/2019  2902/3883  1581.0s
+  [publish sst_acspo02] sst_acspo02/2020  3048/3883  1665.1s
+  [publish sst_acspo02] sst_acspo02/2021  3194/3883  1751.9s
+  [publish sst_acspo02] sst_acspo02/2022  3340/3883  1832.0s
+  [publish sst_acspo02] sst_acspo02/2023  3486/3883  1909.5s
+  [publish sst_acspo02] sst_acspo02/2024  3634/3883  1991.2s
+  [publish sst_acspo02] sst_acspo02/2025  3780/3883  2076.1s
+  [publish sst_acspo02] sst_acspo02/2026  3882/3883  2136.6s
+  [publish sst_acspo02] store.json  3883/3883  2136.8s
+  publish: 3883 file(s) verified by restore, 50 tile(s) decompressed, HTTP range {'checked': 5} -> https://huggingface.co/datasets/chfrank/earth-tensors/tree/main/tensors/family1_gf/sst_acspo02
+=== stage publish done in 2175.5s ===

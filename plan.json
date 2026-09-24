@@ -1,0 +1,391 @@
+{
+ "bins": [
+  1326,
+  3265
+ ],
+ "builder_git_sha": "f435ef352899fa08f0b016f9076c1975ca741fed",
+ "built_at": "2026-09-24T09:26:35+00:00",
+ "bytes": 2499360286448,
+ "bytes_per_day_mean": 258840129.1,
+ "channels": [
+  {
+   "max": 40.0,
+   "min": -2.5,
+   "name": "sst",
+   "unit": "degC"
+  },
+  {
+   "max": 5.0,
+   "min": 2.0,
+   "name": "quality_level",
+   "unit": "ACSPO grade 0-5"
+  }
+ ],
+ "collection": "C2805339147-POCLOUD",
+ "collection_key": "DY",
+ "collection_shape": "one granule a day (day and night super-collated together)",
+ "dataset": "NOAA ACSPO L3S-LEO DY daily 0.02 degree SST (L3S_LEO_DY-STAR-v2.81)",
+ "date_range": [
+  "2000-02-24",
+  "2026-09-15"
+ ],
+ "days_absent_in_window": [
+  "2000-06-01",
+  "2000-08-06",
+  "2000-08-07",
+  "2000-08-08",
+  "2000-08-09",
+  "2000-08-10",
+  "2000-08-11",
+  "2000-08-12",
+  "2000-08-13",
+  "2000-08-14",
+  "2000-08-15",
+  "2000-08-16",
+  "2000-08-17",
+  "2000-09-05",
+  "2000-11-06",
+  "2000-11-07",
+  "2000-11-08",
+  "2001-01-10",
+  "2001-02-09",
+  "2001-06-16",
+  "2001-06-17",
+  "2001-06-18",
+  "2001-06-19",
+  "2001-06-20",
+  "2001-06-21",
+  "2001-06-22",
+  "2001-06-23",
+  "2001-06-24",
+  "2001-06-25",
+  "2001-06-26",
+  "2001-06-27",
+  "2001-06-28",
+  "2001-06-29",
+  "2001-06-30",
+  "2001-07-01",
+  "2001-07-02",
+  "2002-03-20",
+  "2002-03-21",
+  "2002-03-22",
+  "2002-03-23",
+  "2002-03-24",
+  "2002-03-25",
+  "2002-03-26",
+  "2002-03-27",
+  "2002-04-15",
+  "2002-06-16"
+ ],
+ "days_absent_n": 46,
+ "files": 9656,
+ "files_per_year": {
+  "2000": 295,
+  "2001": 346,
+  "2002": 355,
+  "2003": 365,
+  "2004": 366,
+  "2005": 365,
+  "2006": 365,
+  "2007": 365,
+  "2008": 366,
+  "2009": 365,
+  "2010": 365,
+  "2011": 365,
+  "2012": 366,
+  "2013": 365,
+  "2014": 365,
+  "2015": 365,
+  "2016": 366,
+  "2017": 365,
+  "2018": 365,
+  "2019": 365,
+  "2020": 366,
+  "2021": 365,
+  "2022": 365,
+  "2023": 365,
+  "2024": 366,
+  "2025": 365,
+  "2026": 259
+ },
+ "first_file": {
+  "day": "2000-02-24",
+  "name": "20000224120000-STAR-L3S_GHRSST-SSTsubskin-LEO_Daily-ACSPO_V2.81-v02.0-fv01.0",
+  "not_read": "parts from the Hub \u2014 the lane ledgers inventoried the files"
+ },
+ "footprint": {
+  "log2_dt": -2.321928094887362,
+  "log2_fp": -3.6438627993341592
+ },
+ "granules_suspiciously_small": [
+  {
+   "bytes": 108,
+   "date": "2008-06-27",
+   "name": "20080627120000-STAR-L3S_GHRSST-SSTsubskin-LEO_Daily-ACSPO_V2.81-v02.0-fv01.0"
+  },
+  {
+   "bytes": 108,
+   "date": "2008-06-28",
+   "name": "20080628120000-STAR-L3S_GHRSST-SSTsubskin-LEO_Daily-ACSPO_V2.81-v02.0-fv01.0"
+  },
+  {
+   "bytes": 108,
+   "date": "2008-06-29",
+   "name": "20080629120000-STAR-L3S_GHRSST-SSTsubskin-LEO_Daily-ACSPO_V2.81-v02.0-fv01.0"
+  },
+  {
+   "bytes": 108,
+   "date": "2008-07-04",
+   "name": "20080704120000-STAR-L3S_GHRSST-SSTsubskin-LEO_Daily-ACSPO_V2.81-v02.0-fv01.0"
+  },
+  {
+   "bytes": 108,
+   "date": "2008-07-06",
+   "name": "20080706120000-STAR-L3S_GHRSST-SSTsubskin-LEO_Daily-ACSPO_V2.81-v02.0-fv01.0"
+  },
+  {
+   "bytes": 108,
+   "date": "2008-07-09",
+   "name": "20080709120000-STAR-L3S_GHRSST-SSTsubskin-LEO_Daily-ACSPO_V2.81-v02.0-fv01.0"
+  },
+  {
+   "bytes": 108,
+   "date": "2008-07-10",
+   "name": "20080710120000-STAR-L3S_GHRSST-SSTsubskin-LEO_Daily-ACSPO_V2.81-v02.0-fv01.0"
+  },
+  {
+   "bytes": 108,
+   "date": "2008-07-12",
+   "name": "20080712120000-STAR-L3S_GHRSST-SSTsubskin-LEO_Daily-ACSPO_V2.81-v02.0-fv01.0"
+  },
+  {
+   "bytes": 108,
+   "date": "2008-07-13",
+   "name": "20080713120000-STAR-L3S_GHRSST-SSTsubskin-LEO_Daily-ACSPO_V2.81-v02.0-fv01.0"
+  },
+  {
+   "bytes": 108,
+   "date": "2008-07-16",
+   "name": "20080716120000-STAR-L3S_GHRSST-SSTsubskin-LEO_Daily-ACSPO_V2.81-v02.0-fv01.0"
+  },
+  {
+   "bytes": 108,
+   "date": "2008-07-18",
+   "name": "20080718120000-STAR-L3S_GHRSST-SSTsubskin-LEO_Daily-ACSPO_V2.81-v02.0-fv01.0"
+  },
+  {
+   "bytes": 108,
+   "date": "2008-07-20",
+   "name": "20080720120000-STAR-L3S_GHRSST-SSTsubskin-LEO_Daily-ACSPO_V2.81-v02.0-fv01.0"
+  },
+  {
+   "bytes": 108,
+   "date": "2008-07-23",
+   "name": "20080723120000-STAR-L3S_GHRSST-SSTsubskin-LEO_Daily-ACSPO_V2.81-v02.0-fv01.0"
+  },
+  {
+   "bytes": 108,
+   "date": "2008-07-25",
+   "name": "20080725120000-STAR-L3S_GHRSST-SSTsubskin-LEO_Daily-ACSPO_V2.81-v02.0-fv01.0"
+  },
+  {
+   "bytes": 108,
+   "date": "2008-07-27",
+   "name": "20080727120000-STAR-L3S_GHRSST-SSTsubskin-LEO_Daily-ACSPO_V2.81-v02.0-fv01.0"
+  },
+  {
+   "bytes": 108,
+   "date": "2008-07-31",
+   "name": "20080731120000-STAR-L3S_GHRSST-SSTsubskin-LEO_Daily-ACSPO_V2.81-v02.0-fv01.0"
+  },
+  {
+   "bytes": 108,
+   "date": "2008-08-01",
+   "name": "20080801120000-STAR-L3S_GHRSST-SSTsubskin-LEO_Daily-ACSPO_V2.81-v02.0-fv01.0"
+  },
+  {
+   "bytes": 108,
+   "date": "2008-08-03",
+   "name": "20080803120000-STAR-L3S_GHRSST-SSTsubskin-LEO_Daily-ACSPO_V2.81-v02.0-fv01.0"
+  },
+  {
+   "bytes": 108,
+   "date": "2008-08-05",
+   "name": "20080805120000-STAR-L3S_GHRSST-SSTsubskin-LEO_Daily-ACSPO_V2.81-v02.0-fv01.0"
+  },
+  {
+   "bytes": 108,
+   "date": "2008-08-07",
+   "name": "20080807120000-STAR-L3S_GHRSST-SSTsubskin-LEO_Daily-ACSPO_V2.81-v02.0-fv01.0"
+  },
+  {
+   "bytes": 108,
+   "date": "2008-08-09",
+   "name": "20080809120000-STAR-L3S_GHRSST-SSTsubskin-LEO_Daily-ACSPO_V2.81-v02.0-fv01.0"
+  },
+  {
+   "bytes": 108,
+   "date": "2008-08-10",
+   "name": "20080810120000-STAR-L3S_GHRSST-SSTsubskin-LEO_Daily-ACSPO_V2.81-v02.0-fv01.0"
+  },
+  {
+   "bytes": 108,
+   "date": "2008-08-13",
+   "name": "20080813120000-STAR-L3S_GHRSST-SSTsubskin-LEO_Daily-ACSPO_V2.81-v02.0-fv01.0"
+  },
+  {
+   "bytes": 108,
+   "date": "2008-08-15",
+   "name": "20080815120000-STAR-L3S_GHRSST-SSTsubskin-LEO_Daily-ACSPO_V2.81-v02.0-fv01.0"
+  },
+  {
+   "bytes": 108,
+   "date": "2008-08-17",
+   "name": "20080817120000-STAR-L3S_GHRSST-SSTsubskin-LEO_Daily-ACSPO_V2.81-v02.0-fv01.0"
+  },
+  {
+   "bytes": 108,
+   "date": "2008-08-18",
+   "name": "20080818120000-STAR-L3S_GHRSST-SSTsubskin-LEO_Daily-ACSPO_V2.81-v02.0-fv01.0"
+  },
+  {
+   "bytes": 108,
+   "date": "2008-08-22",
+   "name": "20080822120000-STAR-L3S_GHRSST-SSTsubskin-LEO_Daily-ACSPO_V2.81-v02.0-fv01.0"
+  },
+  {
+   "bytes": 108,
+   "date": "2008-08-23",
+   "name": "20080823120000-STAR-L3S_GHRSST-SSTsubskin-LEO_Daily-ACSPO_V2.81-v02.0-fv01.0"
+  },
+  {
+   "bytes": 108,
+   "date": "2008-08-24",
+   "name": "20080824120000-STAR-L3S_GHRSST-SSTsubskin-LEO_Daily-ACSPO_V2.81-v02.0-fv01.0"
+  },
+  {
+   "bytes": 108,
+   "date": "2008-08-25",
+   "name": "20080825120000-STAR-L3S_GHRSST-SSTsubskin-LEO_Daily-ACSPO_V2.81-v02.0-fv01.0"
+  },
+  {
+   "bytes": 108,
+   "date": "2008-08-26",
+   "name": "20080826120000-STAR-L3S_GHRSST-SSTsubskin-LEO_Daily-ACSPO_V2.81-v02.0-fv01.0"
+  },
+  {
+   "bytes": 108,
+   "date": "2008-08-27",
+   "name": "20080827120000-STAR-L3S_GHRSST-SSTsubskin-LEO_Daily-ACSPO_V2.81-v02.0-fv01.0"
+  },
+  {
+   "bytes": 108,
+   "date": "2008-09-01",
+   "name": "20080901120000-STAR-L3S_GHRSST-SSTsubskin-LEO_Daily-ACSPO_V2.81-v02.0-fv01.0"
+  },
+  {
+   "bytes": 108,
+   "date": "2008-09-02",
+   "name": "20080902120000-STAR-L3S_GHRSST-SSTsubskin-LEO_Daily-ACSPO_V2.81-v02.0-fv01.0"
+  },
+  {
+   "bytes": 108,
+   "date": "2008-09-03",
+   "name": "20080903120000-STAR-L3S_GHRSST-SSTsubskin-LEO_Daily-ACSPO_V2.81-v02.0-fv01.0"
+  },
+  {
+   "bytes": 108,
+   "date": "2008-09-04",
+   "name": "20080904120000-STAR-L3S_GHRSST-SSTsubskin-LEO_Daily-ACSPO_V2.81-v02.0-fv01.0"
+  },
+  {
+   "bytes": 108,
+   "date": "2008-09-07",
+   "name": "20080907120000-STAR-L3S_GHRSST-SSTsubskin-LEO_Daily-ACSPO_V2.81-v02.0-fv01.0"
+  },
+  {
+   "bytes": 108,
+   "date": "2008-09-09",
+   "name": "20080909120000-STAR-L3S_GHRSST-SSTsubskin-LEO_Daily-ACSPO_V2.81-v02.0-fv01.0"
+  },
+  {
+   "bytes": 108,
+   "date": "2008-09-10",
+   "name": "20080910120000-STAR-L3S_GHRSST-SSTsubskin-LEO_Daily-ACSPO_V2.81-v02.0-fv01.0"
+  },
+  {
+   "bytes": 108,
+   "date": "2008-09-20",
+   "name": "20080920120000-STAR-L3S_GHRSST-SSTsubskin-LEO_Daily-ACSPO_V2.81-v02.0-fv01.0"
+  }
+ ],
+ "granules_suspiciously_small_n": 2706,
+ "grid": {
+  "H": 9000,
+  "W": 18000,
+  "coordinates": "lon = x0 + (col + 0.5) * dx, lat = y0 + (row + 0.5) * dy with dy NEGATIVE; x0/y0 are the grid's WEST and NORTH edges",
+  "crs": "EPSG:4326",
+  "dx": 0.02,
+  "dy": -0.02,
+  "extent": [
+   -180.0,
+   -90.0,
+   180.0,
+   90.0
+  ],
+  "extent_note": "[west, south, east, north] in degrees; global",
+  "no_tile_corners": "a plain geographic grid: the affine rule above IS the lat/lon of every pixel and tile corner",
+  "pixel_deg": 0.02,
+  "pixel_km_equator": 2.2264,
+  "proj4": "+proj=longlat +datum=WGS84 +no_defs",
+  "row_order": "row 0 is the NORTHERNMOST row \u2014 the GHRSST convention, whose `lat` array DESCENDS, and what `grid_check` refuses a file for not having",
+  "x0": -180.0,
+  "y0": 90.0
+ },
+ "min_granule_bytes": 1000000,
+ "per_year_resume": true,
+ "qc_policy": "QUALITY IS A CHANNEL, NOT A FILTER, above the floor. ACSPO grades every pixel 0 (no data) to 5 (best); a pixel graded 0 or 1 is not a measurement and becomes missing, counted by grade (`quality_grade`), and 2..5 are stored WITH their grade so the consumer picks the threshold rather than inheriting one (family1tf.tex \u00a76). A pixel with an SST and no grade, or a grade and no SST, is missing in both channels. SST is converted from the source's kelvin to degrees Celsius and a file whose `units` is not kelvin is a REFUSAL rather than a guessed offset. A value outside its channel's bounds becomes NaN for that channel and is counted, never clipped. A granule that cannot be opened or whose grid does not check out is `ctx.note_absent` and leaves the year unmarked \u2014 CMR reports at least one granule (2020-01-03) as 114 bytes, and a 114-byte file is not a day of SST.",
+ "record": [
+  "2000-02-24",
+  "2026-09-16"
+ ],
+ "sources": [
+  "https://cmr.earthdata.nasa.gov/search/granules.json?collection_concept_id=C2805339147-POCLOUD (L3S_LEO_DY-STAR-v2.81, anonymous listing)",
+  "https://cmr.earthdata.nasa.gov/search/granules.json?collection_concept_id=C2805331435-POCLOUD (L3S_LEO_PM-STAR-v2.81, anonymous listing)",
+  "https://cmr.earthdata.nasa.gov/search/granules.json?collection_concept_id=C2050135480-POCLOUD (L3S_LEO_AM-STAR-v2.80, anonymous listing)"
+ ],
+ "store": "sst_acspo02",
+ "title": "NOAA ACSPO L3S-LEO daily sea-surface temperature, 0.02 degrees \u2014 the finest satellite SST field; phase C, probed and parked",
+ "url": "https://cmr.earthdata.nasa.gov/search/granules.json?collection_concept_id=C2805339147-POCLOUD",
+ "verified": "2026-09-18 from this sandbox (CMR only \u2014 the granules are Earthdata-protected at PO.DAAC, so the BYTES are a hosted runner's job): the three collections and their records \u2014 L3S_LEO_DY-STAR-v2.81 (C2805339147-POCLOUD, 2000-02-24 ->), L3S_LEO_PM-STAR-v2.81 (C2805331435-POCLOUD, 2002-07-04 ->) and L3S_LEO_AM-STAR-v2.80 (C2050135480-POCLOUD, 2006-12-01 ->) \u2014 and 2020-01's first granules: DY 422.93 MB on 2020-01-01 and 423.51 MB on 2020-01-02 (the note's 408 MB/day), PM publishing a _PM_D and a _PM_N granule of 285.86 and 288.71 MB on 2020-01-01, and **2020-01-03's DY granule reported as 1.09e-4 MB (114 bytes)**, which is why a granule under 1 MB is listed as suspicious at index time and refused at read time. NOT MEASURED HERE, and what the runner probe settles: the granule's internal variable layout (resolved against a candidate list, whole inventory written into plan.json), the lat/lon axes against the declared grid, the valid fraction after the quality floor, and the compressed bytes a tile and a frame \u2014 which is what replaces the note's 2.3 TB.",
+ "version": "2.81",
+ "years": [
+  2000,
+  2001,
+  2002,
+  2003,
+  2004,
+  2005,
+  2006,
+  2007,
+  2008,
+  2009,
+  2010,
+  2011,
+  2012,
+  2013,
+  2014,
+  2015,
+  2016,
+  2017,
+  2018,
+  2019,
+  2020,
+  2021,
+  2022,
+  2023,
+  2024,
+  2025,
+  2026
+ ]
+}

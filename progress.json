@@ -1,0 +1,10 @@
+{
+ "at": "2026-09-24T10:42:41+00:00",
+ "done": 3883,
+ "elapsed_s": 2136.8,
+ "eta_s": 0.0,
+ "files": 3883,
+ "item": "store.json",
+ "stage": "publish sst_acspo02",
+ "total": 3883
+}
