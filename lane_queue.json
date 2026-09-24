@@ -1,31 +1,6 @@
 {
- "pending": [
-  {
-   "store": "sst_acspo02",
-   "stage": "index,fetch",
-   "start": "2025-01-01",
-   "end": "2025-06-30",
-   "runner": "ubuntu-latest",
-   "extra_args": "--push-parts",
-   "adapter_env": "",
-   "retries": 1,
-   "seen_runs": [
-    35957591285
-   ],
-   "not_before": "2026-09-24T05:11:57.546Z"
-  }
- ],
+ "pending": [],
  "dispatched": [
-  {
-   "store": "icesat2",
-   "stage": "index,fetch",
-   "start": "2022-01-01",
-   "end": "2022-01-31",
-   "runner": "ubuntu-latest",
-   "extra_args": "--push-parts",
-   "adapter_env": "ICESAT2_FETCH=whole",
-   "at": "2026-09-24T00:56:03.969Z"
-  },
   {
    "store": "sst_acspo02",
    "stage": "index,fetch",
@@ -175,6 +150,20 @@
    "extra_args": "--push-parts",
    "adapter_env": "",
    "at": "2026-09-24T05:03:12.391Z"
+  },
+  {
+   "store": "sst_acspo02",
+   "stage": "index,fetch",
+   "start": "2025-01-01",
+   "end": "2025-06-30",
+   "runner": "ubuntu-latest",
+   "extra_args": "--push-parts",
+   "adapter_env": "",
+   "retries": 1,
+   "seen_runs": [
+    35957591285
+   ],
+   "at": "2026-09-24T05:40:02.239Z"
   }
  ],
  "done": [
@@ -2419,6 +2408,18 @@
    "at": "2026-09-24T00:56:15.409Z",
    "run_number": 728,
    "finished": "2026-09-24T05:03:07Z"
+  },
+  {
+   "store": "icesat2",
+   "stage": "index,fetch",
+   "start": "2022-01-01",
+   "end": "2022-01-31",
+   "runner": "ubuntu-latest",
+   "extra_args": "--push-parts",
+   "adapter_env": "ICESAT2_FETCH=whole",
+   "at": "2026-09-24T00:56:03.969Z",
+   "run_number": 725,
+   "finished": "2026-09-24T05:37:25Z"
   }
  ],
  "failed": []
