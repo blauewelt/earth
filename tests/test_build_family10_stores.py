@@ -3455,12 +3455,12 @@ def test_verify_hub_restores_the_hub_copy_and_uploads_only_the_manifest(
     assert hub.commits[n_commits:] == [
         (f"{ctx.layout.label} (gdp): manifest (--verify-hub)",
          [("add", f"{prefix}/manifest.json")])]
-    # store.json fetched once; every whole file STREAMED once; every split
-    # file streamed part by part as an OLD upload (no 404 retries for
-    # propagation lag)
-    assert fetched == [f"{prefix}/store.json"]
+    # nothing through hf_hub_download any more: store.json, every whole
+    # file and every split part STREAMED once, as an OLD upload (no 404
+    # retries for propagation lag)
+    assert fetched == []
     assert sorted(r for r, ju, _p in hub.streamed if not ju) == sorted(
-        [f"{prefix}/{n}" for n in whole]
+        [f"{prefix}/store.json"] + [f"{prefix}/{n}" for n in whole]
         + [f"{prefix}/{p['name']}" for n in split
            for p in sj["hub_split"][n]["parts"]])
     assert sorted(n for n, _ in streamed) == split
@@ -3757,3 +3757,27 @@ def test_stream_split_streams_every_part_through_one_hash(monkeypatch):
     files["pre/big.npy.part001"] = b"y" * 599
     with pytest.raises(ph.SplitError, match="big.npy.part001"):
         ph.stream_split("r/x", "pre", "big.npy", entry, "tok", "/nonexistent")
+
+
+def test_download_streams_the_file_to_its_destination(tmp_path, monkeypatch):
+    """`ph._download` (the parts pull, the Hub store.json read) streams over
+    plain HTTPS into `<dest>/<basename>` — the xet path crawled on rented
+    hosts (2026-09-24) — and hands the token only to a private repo."""
+    calls = []
+
+    def fake_stream(repo, rel, token, consume, just_uploaded=False,
+                    attempts=12, private=False):
+        calls.append((repo, rel, just_uploaded, private))
+        consume(b"abc")
+        consume(b"def")
+        return 6
+    monkeypatch.setattr(ph, "hub_stream", fake_stream)
+    d = str(tmp_path / "dl")
+    got = ph._download("o/earth-tensors", "partials/x/y/f.npy", "tok", d,
+                       just_uploaded=True)
+    assert got == os.path.join(d, "f.npy")
+    assert open(got, "rb").read() == b"abcdef"
+    assert not os.path.exists(got + ".part")
+    assert calls == [("o/earth-tensors", "partials/x/y/f.npy", True, False)]
+    ph._download("o/earth-tensors-private", "p/g.npy", "tok", d)
+    assert calls[-1][3] is True

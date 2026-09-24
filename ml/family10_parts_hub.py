@@ -221,13 +221,26 @@ def _download(repo, path_in_repo, token, dest_dir, just_uploaded=False):
     it must cost a few seconds of backoff rather than the job. Six attempts,
     ~8 minutes of backoff at most; a 4xx is raised at once.
     """
-    from huggingface_hub import hf_hub_download
+    # PLAIN HTTPS, NOT hf_hub_download (2026-09-24). huggingface_hub fetches
+    # through its hf_xet chunk store when it can, and on several rented
+    # hosts that path crawled behind "peer closed connection without
+    # sending complete message body" resumes — the swot restore on
+    # Singapore and Maryland, the pheno500 parts pull on California (18 GB
+    # in an hour over 11,000 small files) — while a streamed GET on the
+    # resolve URL ran at the host's line rate. `hub_stream` is that GET,
+    # written straight to the destination file, Range-resumed on a drop.
     os.makedirs(dest_dir, exist_ok=True)
+    dest = os.path.join(dest_dir, os.path.basename(path_in_repo))
+    tmp = dest + ".part"
     last = None
     for i in range(DOWNLOAD_ATTEMPTS):
         try:
-            return hf_hub_download(repo, path_in_repo, repo_type="dataset",
-                                   token=token, local_dir=dest_dir)
+            with open(tmp, "wb") as fh:
+                hub_stream(repo, path_in_repo, token, fh.write,
+                           just_uploaded=just_uploaded,
+                           private=_private_repo(repo))
+            os.replace(tmp, dest)
+            return dest
         except Exception as e:                          # noqa: BLE001
             fresh_404 = just_uploaded and _is_404(e)
             if (not transient_download_error(e) and not fresh_404) \
@@ -332,6 +345,13 @@ def hub_stream_sha256(repo, path_in_repo, token, just_uploaded=False,
                    just_uploaded=just_uploaded, private=private,
                    attempts=attempts)
     return h.hexdigest(), n
+
+
+def _private_repo(repo):
+    """The token goes only to a private repository (the `-private` twin,
+    `build_family10_stores.PRIVATE_SUFFIX`); `requests` drops it on the
+    redirect to the CDN anyway."""
+    return str(repo).endswith("-private")
 
 
 def _ordered_map(fn, items, workers, lookahead=None):
