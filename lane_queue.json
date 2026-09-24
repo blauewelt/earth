@@ -3,20 +3,16 @@
   {
    "store": "burned500",
    "stage": "index,fetch",
-   "start": "2007-01-01",
-   "end": "2007-12-31",
+   "start": "2006-01-01",
+   "end": "2006-12-31",
    "runner": "ubuntu-latest",
    "extra_args": "--push-parts",
-   "adapter_env": ""
-  },
-  {
-   "store": "burned500",
-   "stage": "index,fetch",
-   "start": "2008-01-01",
-   "end": "2008-12-31",
-   "runner": "ubuntu-latest",
-   "extra_args": "--push-parts",
-   "adapter_env": ""
+   "adapter_env": "",
+   "retries": 1,
+   "seen_runs": [
+    36011257625
+   ],
+   "not_before": "2026-09-24T14:31:47.841Z"
   },
   {
    "store": "burned500",
@@ -183,16 +179,6 @@
  ],
  "dispatched": [
   {
-   "store": "sif",
-   "stage": "index,fetch",
-   "start": "2020-01-01",
-   "end": "2020-12-31",
-   "runner": "ubuntu-latest",
-   "extra_args": "--push-parts",
-   "adapter_env": "SIF_OCO=0",
-   "at": "2026-09-24T12:12:15.215Z"
-  },
-  {
    "store": "lai500",
    "stage": "index,fetch",
    "start": "2020-07-01",
@@ -343,12 +329,22 @@
   {
    "store": "burned500",
    "stage": "index,fetch",
-   "start": "2006-01-01",
-   "end": "2006-12-31",
+   "start": "2007-01-01",
+   "end": "2007-12-31",
    "runner": "ubuntu-latest",
    "extra_args": "--push-parts",
    "adapter_env": "",
-   "at": "2026-09-24T14:13:44.478Z"
+   "at": "2026-09-24T14:16:52.136Z"
+  },
+  {
+   "store": "burned500",
+   "stage": "index,fetch",
+   "start": "2008-01-01",
+   "end": "2008-12-31",
+   "runner": "ubuntu-latest",
+   "extra_args": "--push-parts",
+   "adapter_env": "",
+   "at": "2026-09-24T14:16:56.387Z"
   }
  ],
  "done": [
@@ -2969,6 +2965,18 @@
    "at": "2026-09-24T12:12:18.922Z",
    "run_number": 824,
    "finished": "2026-09-24T14:11:43Z"
+  },
+  {
+   "store": "sif",
+   "stage": "index,fetch",
+   "start": "2020-01-01",
+   "end": "2020-12-31",
+   "runner": "ubuntu-latest",
+   "extra_args": "--push-parts",
+   "adapter_env": "SIF_OCO=0",
+   "at": "2026-09-24T12:12:15.215Z",
+   "run_number": 823,
+   "finished": "2026-09-24T14:16:46Z"
   }
  ],
  "failed": [
