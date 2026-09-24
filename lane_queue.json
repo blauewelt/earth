@@ -1,5 +1,6 @@
 {
- "pending": [
+ "pending": [],
+ "dispatched": [
   {
    "store": "burned500",
    "stage": "index,fetch",
@@ -7,10 +8,10 @@
    "end": "2023-12-31",
    "runner": "ubuntu-latest",
    "extra_args": "--push-parts",
-   "adapter_env": ""
+   "adapter_env": "",
+   "at": "2026-09-24T18:57:46.297Z"
   }
  ],
- "dispatched": [],
  "done": [
   {
    "store": "sst_acspo02",
