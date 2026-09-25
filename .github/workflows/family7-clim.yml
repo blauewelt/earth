@@ -1,0 +1,170 @@
+# E-083: export the model's climatology of family 7 — the per-calendar-month
+# "normal" every forecast is scored against — in three versions (all years /
+# the 2009-2017-2023 development holdout / the paper's 1982–2020 split), and
+# publish them to the Hugging Face Hub for the globe app's "Model
+# climatology" layer. Plan: ml/plans/E083_model_climatology.md.
+#
+# WHAT IT DOES. Pulls the family-7 tensor (61 GB of .npy sidecars +
+# metadata npz) from the Hub with parallel range reads, verifies every sha256
+# against data/family7_index.json, calls ml/trainprobe.py::anomaly_transform
+# (THE one anomaly transform) per group and per version through
+# ml/export_family7_clim.py, uploads clim.npy / clim.nc / stats.json per
+# (version, group) with ml/publish_family7_clim_index.py, downloads each file
+# back and refuses to write the index unless the sha256 matches. The index
+# leaves as an Actions artifact — the box cannot push (permissions:
+# contents: read, ml/CLAUDE.md §6) — and the main session commits it.
+#
+# WHY A BOX. The 0.25° group is 45.7 GB and the transform needs a writable
+# copy of it; a hosted runner has 14 GB of disk. A verified host with
+# >= 128 GB of RAM holds the group in page cache, so the nine passes per group
+# (3 versions × 3 passes) are RAM-speed.
+#
+# SECURITY. `workflow_dispatch` ONLY (ml/CLAUDE.md §6): never add
+# pull_request, issue_comment, workflow_run or schedule. HF_TOKEN reaches the
+# scripts as an ENV VAR for the life of the job and never as an argument.
+name: Family 7 climatology
+run-name: family7 clim ${{ github.event.inputs.versions }} on ${{ github.event.inputs.runner }}
+
+on:
+  workflow_dispatch:
+    inputs:
+      runner:
+        description: "runner label — a Vast box's runner NAME (gpu-box-NNNNNNNN). Needs >= 130 GB free disk (61 GB tensor + the 0.25° group's writable copy) and, for copy=ram, >= 100 GB RAM"
+        required: true
+      versions:
+        description: "comma list of version keys to export"
+        default: "all,dev,paper"
+      groups:
+        description: "comma list of groups (empty = every group in the tensor)"
+        default: ""
+      copy:
+        description: "ram = np.array(group) in memory (needs RAM > 2x the largest group); disk = writable copy beside the tensor"
+        default: "ram"
+      work:
+        description: "cache directory for the tensor, kept across jobs on the same box"
+        default: "ml/cache/family7_l2"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: family7-clim
+  cancel-in-progress: false
+
+jobs:
+  export:
+    runs-on: ${{ github.event.inputs.runner }}
+    timeout-minutes: 1440
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Persistent data cache (self-hosted box)
+        run: |
+          mkdir -p /opt/earth-cache
+          rm -rf ml/cache
+          ln -s /opt/earth-cache ml/cache
+
+      # Definite answers only (ml/CLAUDE.md §5.17): no token, no room, no RAM.
+      - name: Preflight
+        id: preflight
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+          COPY: ${{ github.event.inputs.copy }}
+        run: |
+          if [ -z "${HF_TOKEN}" ]; then
+            echo "::error::HF_TOKEN secret is not set (claude/huggingface-access.md)."
+            exit 1
+          fi
+          df -h ml/cache
+          line=$(df -P ml/cache | tail -1)
+          free_gb=$(printf '%s\n' "${line}" | awk '{print int($4 / 1048576)}')
+          need=70
+          [ "${COPY}" = "disk" ] && need=130
+          if [ "${free_gb}" -lt "${need}" ]; then
+            echo "::error::only ${free_gb} GB free on the cache mount; this job needs ${need} GB (copy=${COPY})."
+            exit 1
+          fi
+          mem_gb=$(awk '/MemTotal/ {print int($2 / 1048576)}' /proc/meminfo)
+          echo "RAM ${mem_gb} GB · free disk ${free_gb} GB"
+          if [ "${COPY}" = "ram" ] && [ "${mem_gb}" -lt 100 ]; then
+            echo "::error::copy=ram needs >= 100 GB RAM (the 0.25° group is 45.7 GB and the transform's working set sits beside it); this box has ${mem_gb} GB. Dispatch with copy=disk."
+            exit 1
+          fi
+          nproc; python3 --version
+
+      - name: Install
+        run: pip install --quiet numpy netCDF4 huggingface_hub requests
+
+      - name: Pull the tensor from the Hub
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+          WORK: ${{ github.event.inputs.work }}
+        run: |
+          set -o pipefail
+          mkdir -p "${WORK}"
+          python3 -u ml/pull_family7_tensor.py \
+              --dest "${WORK}" --index data/family7_index.json --workers 16 \
+              2>&1 | tee "${RUNNER_TEMP}/pull.log"
+          ls -la "${WORK}"
+          df -h ml/cache
+
+      - name: Export the climatology
+        env:
+          WORK: ${{ github.event.inputs.work }}
+          VERSIONS: ${{ github.event.inputs.versions }}
+          GROUPS: ${{ github.event.inputs.groups }}
+          COPY: ${{ github.event.inputs.copy }}
+        run: |
+          set -o pipefail
+          rm -rf ml/cache/family7_clim_out
+          mkdir -p ml/cache/family7_clim_out
+          args=(--tensor "${WORK}/family7_global025_pentad_l2.npz"
+                --index data/family7_index.json
+                --out ml/cache/family7_clim_out
+                --versions "${VERSIONS}" --copy "${COPY}"
+                --scratch "${WORK}")
+          [ -n "${GROUPS}" ] && args+=(--groups "${GROUPS}")
+          python3 -u ml/export_family7_clim.py "${args[@]}" \
+              2>&1 | tee "${RUNNER_TEMP}/export.log"
+          du -sh ml/cache/family7_clim_out/*/* || true
+
+      - name: Publish to the Hub and write the index
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+        run: |
+          set -o pipefail
+          python3 -u ml/publish_family7_clim_index.py upload \
+              --out ml/cache/family7_clim_out \
+              --f7-index data/family7_index.json \
+              --index data/family7_clim_index.json \
+              2>&1 | tee "${RUNNER_TEMP}/publish.log"
+          ls -la data/family7_clim_index.json
+
+      - name: Collect the index and the logs
+        if: always() && steps.preflight.outcome == 'success'
+        run: |
+          out="${RUNNER_TEMP}/family7-clim"
+          rm -rf "${out}"; mkdir -p "${out}"
+          [ -f data/family7_clim_index.json ] && cp data/family7_clim_index.json "${out}/" \
+            || echo "::warning::no data/family7_clim_index.json — the publish did not finish"
+          for f in pull export publish; do
+            [ -f "${RUNNER_TEMP}/${f}.log" ] && tail -n 300 "${RUNNER_TEMP}/${f}.log" > "${out}/${f}.log.tail"
+          done
+          ls -la "${out}"
+
+      - name: Upload the index
+        if: always() && steps.preflight.outcome == 'success'
+        uses: actions/upload-artifact@v4
+        with:
+          name: family7-clim-index-${{ github.run_number }}
+          path: ${{ runner.temp }}/family7-clim
+          if-no-files-found: warn
+          retention-days: 30
+
+      - name: Drop the scratch
+        if: always()
+        env:
+          WORK: ${{ github.event.inputs.work }}
+        run: |
+          rm -f "${WORK}"/*_clim_*.npy "${WORK}"/*.part "${WORK}"/*.part.done "${WORK}"/*.part.json 2>/dev/null || true
+          df -h ml/cache || true
