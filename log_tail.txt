@@ -1,0 +1,79 @@
+store     gbif — GBIF occurrence records, CC0 and CC BY 4.0 (the AWS Open Data parquet snapshot): one row per dated, georeferenced record of an organism
+family    family1_tf (1.0.tf) · public -> chfrank/earth-tensors:tensors/family1_tf/gbif
+axis      1600-01-01 .. 2026-09-15  bins -27905..3265 · time_s int64 (schema 3)
+lane      d16000101-20260915 — this fetch writes parts/<year>/d16000101-20260915/ and pushes only that folder
+channels  C=4: kingdom_code, class_code, basis_of_record_code, individual_count
+work      /opt/runner/_work/earth/earth/ml/cache/family1_tf
+
+=== stage index (gbif) ===
+  [index gbif] start (1 items)  0/1  0.0s
+  [index gbif] plan.json  1/1  9.4s
+  index: gbif — 427 year(s), C=4 (kingdom_code, class_code, basis_of_record_code, individual_count), bins -27905..3265
+=== stage index done in 9.4s ===
+
+=== stage fetch (gbif) ===
+  [fetch gbif (one stream)] start  0/0  0.0s
+  [fetch gbif (one stream)] gbif 2020  58.7s
+  [fetch gbif (one stream)] gbif 2021  111.4s
+  [fetch gbif (one stream)] gbif 2023  160.2s
+  [fetch gbif (one stream)] gbif 2021  209.5s
+  [fetch gbif (one stream)] gbif 2023  257.7s
+  [fetch gbif (one stream)] gbif 2020  312.6s
+  [fetch gbif (one stream)] gbif 2022  372.5s
+  [fetch gbif (one stream)] gbif 2017  451.0s
+  [fetch gbif (one stream)] gbif 2022  517.7s
+  [fetch gbif (one stream)] gbif 2021  582.2s
+  [fetch gbif (one stream)] gbif 2017  637.3s
+  [fetch gbif (one stream)] gbif 2016  692.9s
+  [fetch gbif (one stream)] gbif 1937  795.4s
+  [fetch gbif (one stream)] gbif 1992  916.0s
+  [fetch gbif (one stream)] gbif 2019  984.6s
+  [fetch gbif (one stream)] gbif 1962  1134.6s
+  [fetch gbif (one stream)] gbif 1984  1249.1s
+  [fetch gbif (one stream)] gbif 2018  1341.4s
+  [fetch gbif (one stream)] gbif 2018  1404.4s
+  [fetch gbif (one stream)] gbif 1991  1513.2s
+  [fetch gbif (one stream)] gbif 2001  1598.2s
+  [fetch gbif (one stream)] gbif 2019  1728.5s
+  [fetch gbif (one stream)] gbif 2023  1810.8s
+  [fetch gbif (one stream)] gbif 2000  1899.5s
+  [fetch gbif (one stream)] gbif 2015  1974.4s
+  [fetch gbif (one stream)] gbif 2020  2045.5s
+  [fetch gbif (one stream)] gbif 2014  2102.1s
+  [fetch gbif (one stream)] gbif 2009  2155.7s
+  [fetch gbif (one stream)] gbif 2016  2268.4s
+  [fetch gbif (one stream)] gbif 2022  2737.8s
+  [fetch gbif (one stream)] gbif 2021  3234.7s
+  [fetch gbif (one stream)] gbif 2001  3619.3s
+  [fetch gbif (one stream)] gbif 2021  3909.6s
+  [fetch gbif (one stream)] gbif 2024  4276.2s
+  [fetch gbif (one stream)] gbif 2019  4691.0s
+  [fetch gbif (one stream)] gbif 1996  4789.6s
+  [fetch gbif (one stream)] gbif 2025  4973.1s
+  [fetch gbif (one stream)] gbif 2020  5405.3s
+  [fetch gbif (one stream)] gbif 2010  5578.3s
+  [fetch gbif (one stream)] gbif 2015  5818.5s
+  [fetch gbif (one stream)] gbif 1994  6053.9s
+  [fetch gbif (one stream)] gbif 2007  6185.9s
+  [fetch gbif (one stream)] gbif 2001  6270.6s
+  [fetch gbif (one stream)] gbif 2017  6364.8s
+  [fetch gbif (one stream)] gbif 2025  6478.2s
+  [fetch gbif (one stream)] gbif 1965  6566.4s
+  [fetch gbif (one stream)] gbif 2017  6636.8s
+  [fetch gbif (one stream)] gbif 2019  6708.0s
+  [fetch gbif (one stream)] gbif 2017  6777.0s
+  [fetch gbif (one stream)] gbif 2012  6848.9s
+  [fetch gbif (one stream)] gbif 2014  6916.5s
+  [fetch gbif (one stream)] gbif 2013  6997.8s
+  [fetch gbif (one stream)] gbif 2015  7041.6s
+  [fetch gbif (one stream)] gbif 2001  7105.3s
+  [fetch gbif (one stream)] gbif 2016  7168.5s
+  [fetch gbif (one stream)] gbif 2012  7318.3s
+  [fetch gbif (one stream)] gbif 2010  7407.2s
+  [fetch gbif (one stream)] gbif 2014  7457.0s
+  [fetch gbif (one stream)] gbif 2021  7565.4s
+  [fetch gbif (one stream)] gbif 2015  7766.3s
+  [fetch gbif (one stream)] gbif 2016  7828.6s
+  [fetch gbif (one stream)] gbif 2021  7881.5s
+  [fetch gbif (one stream)] gbif 2023  7917.9s
+  [fetch gbif (one stream)] gbif 2019  7967.0s
