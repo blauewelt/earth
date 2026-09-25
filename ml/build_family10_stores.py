@@ -3716,7 +3716,35 @@ class Ctx:
         top = (any(os.path.isfile(os.path.join(d, n)) and
                    not n.endswith(".done") for n in names)
                or marked(self.root, f"parts/{year}"))
-        return ([""] if top else []) + named
+        lanes = ([""] if top else []) + named
+        if getattr(getattr(self, "a", None), "parts_from_hub", False):
+            # A BOX ASSEMBLING FROM THE HUB BELIEVES ONLY WHAT THE PULL
+            # MARKED. family1-build #918 (gbif, 2026-09-25): the box had run
+            # a single-stream fetch (#900) that was cancelled mid-pass, which
+            # left an UNMARKED lane folder `d16000101-20260915` beside the
+            # sixteen pulled part lanes in every year, and `lanes_preflight`
+            # refused the overlap — 75 minutes of pull for a folder nobody
+            # asked to assemble. The pull marks each lane-year it verified;
+            # a lane folder without its marker is the debris of an aborted
+            # fetch, and is left out (and named once).
+            keep = []
+            for lane in lanes:
+                if marked(self.root, self.part_key(year, lane)):
+                    keep.append(lane)
+                else:
+                    seen = getattr(self, "_unmarked_lanes_noted", None)
+                    if seen is None:
+                        seen = self._unmarked_lanes_noted = set()
+                    if lane not in seen:
+                        seen.add(lane)
+                        print(f"  ::warning::{self.adapter.store}: lane "
+                              f"{lane or '(the unnamed lane)'} is on disk "
+                              f"under {year} (and maybe other years) without "
+                              f"its marker — not pulled from the Hub, so not "
+                              f"assembled (an aborted local fetch's leftover)",
+                              flush=True)
+            lanes = keep
+        return lanes
 
     def lane_ledger(self, year):
         """What a NAMED lane adds to its own `counts.json`, and nothing at all

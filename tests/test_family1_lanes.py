@@ -233,6 +233,20 @@ def test_three_tier_p_lanes_assemble_into_the_single_lane_store(tmp_path):
     # the same year as three monthly lanes, merged
     box = build_three_tier_p_lanes(tmp)
     assert box.lanes_of(YEAR) == ["m01", "m02", "m03"]
+    # AN UNMARKED LANE FOLDER IS DEBRIS TO A BOX ASSEMBLING FROM THE HUB
+    # (family1-build #918, 2026-09-25: a cancelled local fetch's
+    # `d16000101-20260915` folder beside sixteen pulled lanes) — left out
+    # under --parts-from-hub, and still a lane to a local build.
+    debris = os.path.join(box.parts, str(YEAR), "d20220101-20220915")
+    os.makedirs(debris)
+    shutil.copyfile(
+        os.path.join(box.parts, str(YEAR), "m01", "counts.json"),
+        os.path.join(debris, "counts.json"))
+    assert box.lanes_of(YEAR) == ["d20220101-20220915", "m01", "m02", "m03"]
+    box.a.parts_from_hub = True
+    assert box.lanes_of(YEAR) == ["m01", "m02", "m03"]
+    box.a.parts_from_hub = False
+    shutil.rmtree(debris)
     meta = b1.stage_assemble(box)
 
     assert meta["N"] == one_meta["N"]
