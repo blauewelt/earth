@@ -2010,6 +2010,125 @@ test.describe("family7 index + fixture (the global tensor's range-read contract)
   });
 });
 
+/* ======== the model's climatology index + fixture (E-083, the plane contract)
+ *
+ * `data/family7_clim_index.json` (written by `ml/publish_family7_clim_index.py`,
+ * absent until the export publishes) tells the "Model climatology" layer how to
+ * address one (version, group, month, channel) plane of a `clim.npy`:
+ * `header_len + (month·C + c)·plane_bytes`, `plane_bytes` long. What is pinned
+ * here is the in-repo fixture of the same schema. Its channel metadata is a
+ * COPY of the family-7 index's, and the page paints both layers through one
+ * range rule — so the two must name the same tensor, the same channels and the
+ * same norms, or one channel would read differently on the two layers. */
+test.describe("family7 climatology index + fixture (the model's normal, plane by plane)", () => {
+  const CD = path.join(DATA, "family7_clim", "fixture");
+  const idx = JSON.parse(fs.readFileSync(path.join(CD, "family7_clim_index.json"), "utf8"));
+  const f7 = JSON.parse(fs.readFileSync(path.join(DATA, "family7", "fixture", "family7_index.json"), "utf8"));
+
+  function npyHeader(file) {
+    const buf = fs.readFileSync(file);
+    expect(buf.slice(0, 6).toString("latin1")).toBe("\x93NUMPY");
+    const major = buf[6];
+    const n = major === 1 ? buf.readUInt16LE(8) : buf.readUInt32LE(8);
+    const off = major === 1 ? 10 : 12;
+    const txt = buf.slice(off, off + n).toString("latin1");
+    const shape = /'shape':\s*\(([^)]*)\)/.exec(txt)[1]
+      .split(",").map((x) => x.trim()).filter(Boolean).map(Number);
+    return { headerLen: off + n, shape, descr: /'descr':\s*'([^']+)'/.exec(txt)[1],
+             fortran: /'fortran_order':\s*(True|False)/.exec(txt)[1] === "True", bytes: buf.length };
+  }
+
+  test("the index parses, names the family-7 fixture's tensor, and carries its channels", () => {
+    expect(idx._source).toContain("publish_family7_clim_index.py");
+    expect(idx.stem).toBe(f7.stem);
+    expect(idx.fixture).toBe(true);
+    expect(idx.base).toMatch(
+      /^https:\/\/huggingface\.co\/datasets\/chfrank\/earth-tensors\/resolve\/main\/tensors\/.*\/clim\/$/);
+    expect(idx.plan).toContain("E083_model_climatology.md");
+    // three versions, in order, the default among them
+    expect(idx.versions.map((v) => v.key)).toEqual(["all", "dev", "paper"]);
+    expect(idx.versions.map((v) => v.key)).toContain(idx.default_version);
+    for (const v of idx.versions) {
+      for (const k of ["key", "name", "rule", "holdout_years", "holdout_from", "train_span"]) {
+        expect(v, `${v.key}.${k}`).toHaveProperty(k);
+      }
+      expect(v.train_span).toMatch(/^\d{4}–\d{4}/);
+    }
+    // channel metadata is the family-7 index's, verbatim
+    for (const [g, grp] of Object.entries(idx.groups)) {
+      const src = f7.groups[g];
+      expect(src, `${g} is a family-7 group`).toBeTruthy();
+      expect(grp.chans, g).toEqual(src.chans);
+      expect(grp.norm, g).toEqual(src.norm);
+      expect(grp.grid, g).toEqual(src.grid);
+      for (const k of ["labels", "units", "ramp", "sign"]) expect(grp[k], `${g}.${k}`).toEqual(src[k]);
+    }
+    // every version carries the same groups, or the version switch breaks
+    for (const v of idx.versions) {
+      expect(Object.keys(idx.files[v.key]).sort()).toEqual(Object.keys(idx.groups).sort());
+    }
+  });
+
+  test("every clim.npy is [12, C, H, W] float32 and its plane arithmetic closes on the file", () => {
+    for (const v of idx.versions) {
+      for (const [g, grp] of Object.entries(idx.groups)) {
+        const e = idx.files[v.key][g];
+        const f = e.clim_npy;
+        const C = grp.chans.length, H = grp.grid.ny, W = grp.grid.nx;
+        expect(f.shape, `${v.key}/${g}`).toEqual([12, C, H, W]);
+        expect(f.dtype).toBe("<f4");
+        expect(f.fortran_order).toBe(false);
+        expect(f.plane_bytes).toBe(H * W * 4);
+        expect(f.url).toBe(`${idx.base}${v.key}/${g}/clim.npy`);
+        expect(e.stats.url).toBe(`${idx.base}${v.key}/${g}/stats.json`);
+        // clim_nc may be null (the fixture publishes none) — the page says so
+        expect(e.clim_nc === null || typeof e.clim_nc.url === "string").toBe(true);
+        // the REAL file's own header and length
+        const h = npyHeader(path.join(CD, v.key, g, "clim.npy"));
+        expect(h.headerLen, `${v.key}/${g} header_len`).toBe(f.header_len);
+        expect(h.shape).toEqual(f.shape);
+        expect(h.descr).toBe("<f4");
+        expect(h.fortran).toBe(false);
+        expect(h.bytes).toBe(f.bytes);
+        expect(h.bytes).toBe(f.header_len + 12 * C * f.plane_bytes);
+        // stats.json beside it: the trainer's constants, one per channel
+        const st = JSON.parse(fs.readFileSync(path.join(CD, v.key, g, "stats.json"), "utf8"));
+        expect(st.chans).toEqual(grp.chans);
+        expect(st.mu).toHaveLength(C);
+        expect(st.den).toHaveLength(C);
+        expect(st.tensor_stem).toBe(idx.stem);
+        expect(st.version.key).toBe(v.key);
+      }
+    }
+  });
+
+  test("a plane read at its offset is the month's own: January finite, south-first", () => {
+    // The fixture covers five pentads of January 2010, so month 0 carries data
+    // and the index says so — a reader who read month 1 (1-based) as the plane
+    // index would get an all-NaN February and a plausible blank globe.
+    const e = idx.files.all.g100;
+    expect(e.months_with_data).toEqual([1]);
+    const f = e.clim_npy, grp = idx.groups.g100;
+    const buf = fs.readFileSync(path.join(CD, "all", "g100", "clim.npy"));
+    const c = grp.chans.indexOf("t2m");
+    const C = grp.chans.length, { ny, nx } = grp.grid;
+    const plane = (m) => {
+      const off = f.header_len + (m * C + c) * f.plane_bytes;
+      const out = new Float32Array(ny * nx);
+      for (let i = 0; i < out.length; i++) out[i] = buf.readFloatLE(off + i * 4);
+      return out;
+    };
+    const jan = plane(0), feb = plane(1);
+    expect(jan.every(Number.isFinite)).toBe(true);
+    expect(feb.some(Number.isFinite)).toBe(false);
+    // south-first: the equator row is warmer than the southern edge, in °C
+    const [mean, sd] = grp.norm[c];
+    const row = (iy) => { let s = 0; for (let ix = 0; ix < nx; ix++) s += jan[iy * nx + ix]; return (s / nx) * sd + mean; };
+    const eq = Math.round((0 - grp.grid.lat0) / grp.grid.step);
+    expect(row(eq)).toBeGreaterThan(row(0));
+  });
+});
+
 /* ============ the COMMITTED family-7 statics (the two grids the app paints) ==
  *
  * The block above pins the FIXTURE's statics — a decimated 5° copy built from

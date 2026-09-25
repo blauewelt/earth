@@ -419,6 +419,7 @@ A new layer is not done until it has **all** of:
    | Drivers of forest loss (grid) | ✗ | ✗ | categorical AND untimed — one 2001–2025 attribution, and "logging" plus "wildfire" is not a quantity |
    | AMOC eval mask (grid) | ✗ | ✗ | categorical AND untimed — a cell carries the ROLE it plays in an experiment, and an experiment's geometry has no date to average over |
    | Global tensor, family 7 (grid) | ✗ | ✗ | the fields are continuous and would average and difference soundly; the reason is the BYTE COUNT — each frame is one 14.5 MB range read of the archive, so a 12-day window would be three of them per paint and a computed difference doubles whatever the window costs. "What does the model read at this pentad" has no window in it. Its two statics (`sphere`, `elev`) are additionally untimed |
+   | Model climatology, family 7 (grid) | ✗ | ✗ | already a multi-decade average, one calendar month per frame — a window would blend two months' normals into a number no trainer ever subtracted, and a per-pixel difference between two dates is just the seasonal cycle the ±1 month stepper already shows |
    | Fishing effort, AIS (grid) | ✗ | ✗ | the cell is ALREADY a monthly SUM of vessel-hours: averaging one over a 12-day window produces a number in no unit at all, and differencing two per pixel differences two sums over different numbers of days unless the window happens to land on a month. The family-7 byte-count argument applies unchanged on top of that — each month is one 8.3 MB range read. The month is the window |
    | Loitering vessels (points) | ✗ | ✗ | not a raster at all: each event is an interval with a start and an end, and the layer shows the ones whose interval overlaps the selected day. "The average of an event" is not a thing, and a difference of two days' event sets is a list, not a field |
 6. **Catalog consistency** — the dataset exists in `data/catalog.json`; set
@@ -2040,6 +2041,31 @@ Hub URL to it and answer with the SLICED bytes and a real 206, which is what
 makes the offset arithmetic tested rather than assumed.
 `docs/FAMILY7_GLOBE.md` explains the whole thing and says how to regenerate the
 index.
+
+- **What the forecaster calls normal, beside it (2026-09-25, E-083 §4).** A
+  second family-7 layer, **"Model climatology — what the forecaster calls
+  normal (family 7), 0.25° / 1°"** (`clim7`): the per-calendar-month
+  climatology `ml/trainprobe.py::anomaly_transform` subtracts before training
+  and `msss_clim` scores against, in three versions (all years · the
+  development holdout · the paper's split). Keyed by the CALENDAR MONTH of the
+  date — the year never counts, and the toast says so. One (version, group,
+  month, channel) plane of `clim.npy` (`[12, C, H, W]` float32) is one `Range:`
+  read at `header_len + (month·C + c)·plane_bytes`, through the same
+  `hubRangeRead` the tensor's slabs use; a month of a group is read WHOLE when
+  it is ≤ 16 MB (every 1° group), so a channel switch there is a decode, and a
+  0.25° channel switch is one 4 MB plane. Everything is addressed from
+  `data/family7_clim_index.json` (`ml/publish_family7_clim_index.py`), whose
+  channel metadata and `norm` are copied from the family-7 index — the layer
+  paints a channel with the tensor layer's own ramp and range. With the Global
+  tensor's pentad ALREADY resident, the probe and the pixel card add the
+  departure from normal (unit, and the trainer's `(x − clim − mu)/den` from the
+  per-(version, group) `stats.json`); it never reads a tensor slab for a click.
+  A Downloads block (hover card + the row's ⤓ fold) links `clim.nc` /
+  `clim.npy` / `stats.json` / the index and builds "this channel, this month as
+  CSV" from the plane in memory. No catalog record (§2.6's exception). The
+  index is absent until the export publishes — the layer then paints nothing
+  and a toast names the chain; `data/family7_clim/fixture/` is what the tests
+  serve. `docs/FAMILY7_CLIM.md` explains it and says how to regenerate.
 
 **The fishing fleet, in two layers (2026-09-16, E-081 §4).** Chris: *"add what
 you propose to family 10.2 (and build the family). At the same time make sure

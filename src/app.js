@@ -922,6 +922,43 @@ const GIBS_LAYERS = [
     on: false,
   },
   {
+    id: "clim7",
+    /* WHAT THE FORECASTER CALLS NORMAL (E-083 §4). Every model in this
+     * programme is trained in anomaly space: a channel reaches it as the
+     * departure from its own per-calendar-month climatology, and the rollout
+     * skill `msss_clim` scores forecasts against that same field. This layer
+     * paints it — one (version, group, calendar month, channel) plane of
+     * `clim.npy` on the Hugging Face Hub per frame, addressed by
+     * `data/family7_clim_index.json` (written by
+     * `ml/publish_family7_clim_index.py`). The arithmetic is in the block
+     * above `GridProvider`, and docs/FAMILY7_CLIM.md explains it for a reader.
+     *
+     * NO catalog record (§2.6's exception, as `amoc-eval` and the Global
+     * tensor take it): a picture of our own work, not an open dataset. `doc`
+     * links the plan instead.
+     *
+     * AGGREGATION / DIFFERENCE POSTURE: NEITHER. The field is already a
+     * multi-decade average, one calendar month per frame — averaging it over
+     * an N-day window would blend adjacent months' normals into a number no
+     * trainer ever subtracted, and a per-pixel difference of two dates is a
+     * difference of two MONTHS' normals, i.e. the seasonal cycle, which the
+     * ±1 month stepper already shows frame by frame. (Not `timed`, so
+     * `providersFor` never suppresses it either.)
+     *
+     * `ramp`, `vmin`, `vmax` and `units` are REWRITTEN per channel from the
+     * index by `climApplyChannel` — through the tensor layer's own range
+     * rule, so the two layers paint one channel identically. The seeds here
+     * only fill the row before the index has landed; the channel starts as
+     * the index's first, because no channel name belongs in this file. */
+    grid: true, climGrid: true,
+    climChan: null, climVersion: null,
+    ramp: "sst", vmin: 0, vmax: 1, units: "", maxLevel: 7,
+    doc: "https://blauewelt.github.io/earth/docs.html?f=ml/plans/E083_model_climatology.md",
+    title: "Model climatology — what the forecaster calls normal (family 7), 0.25° / 1°",
+    meta: "The per-calendar-month mean every forecast is scored against — the month of the date matters, the year doesn't",
+    on: false,
+  },
+  {
     id: "fishing",
     /* Global Fishing Watch's apparent fishing effort, summed per 0.25° cell
      * per month, read the same way the family-7 tensor is read: ONE HTTP range
@@ -3419,6 +3456,9 @@ async function loadGridMonth(cfg) {
   // through `loadGrid`. Everything downstream — the painter, the probe, the
   // pixel card, the legend — is unchanged by that.
   if (cfg.tensorGrid) return tensorGridFor(cfg);
+  // …and for the model's climatology: one (version, group, month, channel)
+  // plane of `clim.npy` on the Hub, read by range.
+  if (cfg.climGrid) return climGridFor(cfg);
   // Same arrangement for the fishing grid: a month of it is one range read of
   // the Hub, not a baked file, and everything downstream is unchanged by that.
   if (cfg.fishingGrid) return fishingGridFor(cfg);
@@ -3679,6 +3719,28 @@ function tensorEvict() {
   }
 }
 
+/* ONE bounded range read of a published `.npy` — `len` bytes at `off` — and
+ * the one place its contract is enforced. Shared by the tensor's slabs and the
+ * model climatology's planes, which are the same read at a different offset,
+ * length and dtype (the dtype is the caller's to decode).
+ *
+ * 206 is the contract. A 200 means the host ignored the Range and is sending
+ * the whole file — 46 GB for the tensor — which must be refused rather than
+ * consumed: accepting it would be the one request these layers promise never
+ * to make. A short or long body is refused too, because a plane decoded from
+ * the wrong number of bytes is a plausible-looking wrong map. */
+function hubRangeRead(url, off, len) {
+  return fetch(url, { headers: { Range: `bytes=${off}-${off + len - 1}` } })
+    .then((r) => {
+      if (r.status !== 206) throw new Error(`HTTP ${r.status} (expected 206)`);
+      return r.arrayBuffer();
+    })
+    .then((buf) => {
+      if (buf.byteLength !== len) throw new Error(`${buf.byteLength} bytes, expected ${len}`);
+      return buf;
+    });
+}
+
 /* One slab = one bin of one group. The ONLY network call in this whole block. */
 function tensorSlab(idx, group, bin) {
   const key = `${group}:${bin}`;
@@ -3692,21 +3754,8 @@ function tensorSlab(idx, group, bin) {
   const grp = idx.groups[group];
   const row = tensorRowOf(idx, group, bin);
   if (row === null) return Promise.resolve(null);
-  const off = grp.header_len + row * grp.slab_bytes;
-  const end = off + grp.slab_bytes - 1;
-  const p = fetch(grp.url, { headers: { Range: `bytes=${off}-${end}` } })
-    .then((r) => {
-      // 206 is the contract. A 200 means the host ignored the Range and is
-      // sending the whole 46 GB file, which must be refused rather than
-      // consumed — accepting it would be the one request this layer promises
-      // never to make.
-      if (r.status !== 206) throw new Error(`HTTP ${r.status} (expected 206)`);
-      return r.arrayBuffer();
-    })
+  const p = hubRangeRead(grp.url, grp.header_len + row * grp.slab_bytes, grp.slab_bytes)
     .then((buf) => {
-      if (buf.byteLength !== grp.slab_bytes) {
-        throw new Error(`${buf.byteLength} bytes, expected ${grp.slab_bytes}`);
-      }
       tensorState.slabs.set(key, buf);
       tensorState.bytes += buf.byteLength;
       tensorEvict();
@@ -3788,22 +3837,27 @@ function tensorStatic(idx, name) {
  * 1997: it is dense from there on, and a date before it paints nothing for a
  * stateable reason the toast gives, rather than for the structural reason
  * rg100 would. */
+/* One channel's presentation, from a group block of the family-7 index — or of
+ * the climatology index, which copies the same fields from it. Shared, so the
+ * two layers can never label, colour or scale one channel differently. */
+function f7ChannelSpec(group, grp, c) {
+  return {
+    key: `${group}:${c}`, group, chan: c,
+    label: (grp.labels && grp.labels[c]) || c,
+    units: (grp.units && grp.units[c]) || "",
+    sign: (grp.sign && grp.sign[c]) || "seq",
+    ramp: (grp.ramp && grp.ramp[c]) || "precip",
+    step: grp.grid.step,
+  };
+}
+
 function tensorChannelList(idx) {
   const out = [];
   if (!idx) return out;
   for (const group of ["g025", "g100", "oc025"]) {
     const grp = idx.groups[group];
     if (!grp) continue;
-    for (const c of grp.chans) {
-      out.push({
-        key: `${group}:${c}`, group, chan: c,
-        label: (grp.labels && grp.labels[c]) || c,
-        units: (grp.units && grp.units[c]) || "",
-        sign: (grp.sign && grp.sign[c]) || "seq",
-        ramp: (grp.ramp && grp.ramp[c]) || "precip",
-        step: grp.grid.step,
-      });
-    }
+    for (const c of grp.chans) out.push(f7ChannelSpec(group, grp, c));
   }
   for (const name of ["sphere", "elev"]) {
     const s = idx.statics && idx.statics[name];
@@ -4071,6 +4125,25 @@ function tensorSampleAt(lon, lat) {
   const cfg = GIBS_LAYERS.find((l) => l.id === "family7");
   const g = tensorGridFor(cfg);
   return g ? sampleGrid(g, lon, lat) : null;
+}
+
+/* The STORED z of one cell of one channel, from a slab that is ALREADY in the
+ * LRU — or null. Never a request: this is for read-outs that may use the
+ * tensor when its bytes are resident (the model climatology's "departure from
+ * normal") but must never pay a 14.5 MB range read to answer a click. `cell`
+ * is the flat south-first index `gridCellIndex` returns on the group's grid. */
+function tensorResidentZ(group, bin, chan, cell) {
+  const idx = tensorState.index;
+  const grp = idx && idx.groups && idx.groups[group];
+  if (!grp || cell < 0) return null;
+  const buf = tensorState.slabs.get(`${group}:${bin}`);
+  if (!buf) return null;
+  const ci = grp.chans.indexOf(chan);
+  if (ci < 0) return null;
+  const o = (cell * grp.chans.length + ci) * 2;          // float16, as tensorPlane reads it
+  if (o + 2 > buf.byteLength) return null;
+  const z = tensorF16(new DataView(buf).getUint16(o, true));
+  return Number.isFinite(z) ? z : null;
 }
 
 /* Said on enable: which pentad is on screen, or why nothing is. */
@@ -4472,6 +4545,576 @@ function fishingSampleAt(lon, lat) {
   return { fishing_hours: sampleGrid(g, lon, lat), hours: fishingHoursAt(g, lon, lat) };
 }
 
+/* ============= the model's climatology (family 7), read by the byte — E-083 §4
+ *
+ * WHAT IT IS. Every forecaster in this programme is trained in anomaly space:
+ * before a channel reaches the model it becomes the departure from its own
+ * PER-CALENDAR-MONTH climatology (the mean of that channel, at that cell, over
+ * every training-year pentad that opens in that month), then z-scored. The
+ * one function that does it is `ml/trainprobe.py::anomaly_transform`, and the
+ * rollout skill `msss_clim` scores every forecast against the same field. This
+ * layer paints it: "what the forecaster calls normal".
+ *
+ * THREE VERSIONS, because which years count as training decides the normal:
+ * all years, the development holdout, and the paper's split. They come from
+ * the index's `versions` list, in its order, with its names and rules — none
+ * is spelled here.
+ *
+ * THE READ. `clim.npy` is `[12, C, H, W]` float32, month-major then
+ * channel-major, so one (month, channel) plane is contiguous:
+ *
+ *     offset = header_len + (month * C + c) * plane_bytes
+ *     length =                                plane_bytes   (= H * W * 4)
+ *
+ * — 4.15 MB at 0.25°, 0.26 MB at 1°. And because the C planes of one month
+ * sit side by side, a whole month of a group is ALSO one contiguous range:
+ * offset `header_len + month * C * plane_bytes`, length `C * plane_bytes`.
+ * When that block is small (≤ `CLIM_BLOCK_BYTES`: every 1° group, and the
+ * decimated fixture) it is read whole, so a channel switch inside a fetched
+ * month is a decode and no request; when it is not (0.25°: 7 × 4.15 MB =
+ * 29 MB) the single plane is read and a channel switch costs one 4 MB read —
+ * the plan's "a decode, or one 4 MB read, never more". Every number in that
+ * arithmetic comes from `data/family7_clim_index.json`; there is no 721, 1440,
+ * 12 or channel name in this block.
+ *
+ * VALUES ARE Z-UNITS, like the tensor they were computed from: physical =
+ * z · sd + mean through the same per-channel `norm` the tensor layer uses,
+ * copied into the clim index from the family-7 index. NaN is "no training
+ * sample for this (month, cell)" and paints nothing.
+ *
+ * huggingface.co is §3's second approved live endpoint and this is the same
+ * bounded, click- or date-triggered range read family 7 was admitted on. An
+ * index that has not been published yet (a 404) is a STATE, not a bug: the
+ * layer stays on, paints nothing, and a toast names the export chain. */
+const CLIM_INDEX_URL = "data/family7_clim_index.json";
+const CLIM_LRU_PLANES = 24;           // ~100 MB of 0.25° planes; a 1° plane is 16× smaller
+const CLIM_BLOCK_BYTES = 16 << 20;    // read a month's C planes whole below this
+const LITTLE_ENDIAN = new Uint8Array(new Uint16Array([1]).buffer)[0] === 1;
+const climState = {
+  index: null, indexPromise: null, unpublished: false, error: null,
+  planes: new Map(),       // "<version>:<group>:<month>:<chan>" -> grid, insertion-ordered
+  inflight: new Map(),     // one promise per range read in flight
+  stats: new Map(),        // "<version>:<group>" -> Promise<stats.json | null>
+  current: null, currentKey: null, loading: false, seq: 0,
+  blockBytes: CLIM_BLOCK_BYTES,   // a field, not the constant, so a test can force single-plane reads
+  reads: 0,                // range reads issued, for tests and the curious
+};
+
+function loadClimIndex() {
+  if (!climState.indexPromise) {
+    climState.indexPromise = fetch(CLIM_INDEX_URL)
+      .then((r) => {
+        if (r.status === 404) { climState.unpublished = true; return null; }
+        return r.ok ? r.json() : null;
+      })
+      .then((j) => (climState.index = j))
+      .catch(() => null);
+  }
+  return climState.indexPromise;
+}
+
+function monthName(m) {
+  return new Date(Date.UTC(2000, m, 1)).toLocaleString("en-US", { month: "long", timeZone: "UTC" });
+}
+/* The calendar month of a date, 0 = January — the index into `clim.npy`'s
+ * first axis. The year never enters. */
+function climMonthOf(dateStr = state.date) {
+  return Number(String(dateStr).slice(5, 7)) - 1;
+}
+function climVersionOf(idx, cfg) {
+  const vs = (idx && idx.versions) || [];
+  return vs.find((v) => v.key === cfg.climVersion)
+    || vs.find((v) => v.key === idx.default_version) || vs[0] || null;
+}
+/* Every channel of every group the index carries, in the index's order. */
+function climChannelList(idx) {
+  const out = [];
+  if (!idx || !idx.groups) return out;
+  for (const [group, grp] of Object.entries(idx.groups)) {
+    for (const c of grp.chans) out.push(f7ChannelSpec(group, grp, c));
+  }
+  return out;
+}
+function climChannelSpec(idx, key) {
+  const list = climChannelList(idx);
+  return list.find((c) => c.key === key) || list[0] || null;
+}
+function climFiles(idx, ver, group) {
+  return (idx && idx.files && idx.files[ver] && idx.files[ver][group]) || null;
+}
+
+/* float32 little-endian → a Float32Array of its own. `slice` makes the ALIGNED
+ * copy a typed-array view needs (a plane's byte offset inside a block is a
+ * multiple of 4, but the header before it is not something to rely on), and
+ * the DataView branch keeps a big-endian host honest. */
+function f32leCopy(buf, off, n) {
+  if (LITTLE_ENDIAN) return new Float32Array(buf.slice(off, off + n * 4));
+  const dv = new DataView(buf, off, n * 4);
+  const out = new Float32Array(n);
+  for (let i = 0; i < n; i++) out[i] = dv.getFloat32(i * 4, true);
+  return out;
+}
+
+/* One plane as the grid object the painter, the probe and the pixel card
+ * already understand — un-z-scored into the channel's unit, point-aligned and
+ * wrapping at the dateline, south-first like the tensor, so there is no flip. */
+function climMakeGrid(idx, ver, group, month, chan, buf, byteOff) {
+  const grp = idx.groups[group];
+  const ci = grp.chans.indexOf(chan);
+  const { ny, nx, step, lat0, lon0 } = grp.grid;
+  const vals = f32leCopy(buf, byteOff, ny * nx);
+  const [mean, sd] = grp.norm[ci];
+  for (let p = 0; p < vals.length; p++) {
+    const z = vals[p];
+    vals[p] = z === z ? z * sd + mean : NaN;     // NaN = no training sample
+  }
+  const v = (idx.versions || []).find((x) => x.key === ver);
+  return {
+    west: lon0 - step / 2, east: lon0 + (nx - 0.5) * step,
+    south: lat0 - step / 2, north: lat0 + (ny - 0.5) * step,
+    dlon: step, dlat: step, nx, ny, wrap: !!grp.grid.wrap,
+    values: vals, units: (grp.units && grp.units[chan]) || "",
+    // `period` is what `whenOfGrid` stamps every read-out with (§2.9): the
+    // version's training span, a FIXED span, so it never prints an age.
+    period: v ? v.train_span : null,
+    clim: { version: ver, group, chan, month, mean, sd, ci, nC: grp.chans.length },
+  };
+}
+
+function climStore(key, g) {
+  climState.planes.delete(key);
+  climState.planes.set(key, g);
+  while (climState.planes.size > CLIM_LRU_PLANES) {
+    climState.planes.delete(climState.planes.keys().next().value);   // oldest first
+  }
+}
+
+/* One (version, group, month, channel) plane. The ONLY network call in this
+ * block, and at most ONE range read per call — the whole month of the group
+ * when that is small, else the single plane (see the block comment). */
+function climPlane(idx, ver, group, month, chan) {
+  const key = `${ver}:${group}:${month}:${chan}`;
+  if (climState.planes.has(key)) {
+    const g = climState.planes.get(key);
+    climStore(key, g);                                   // touch
+    return Promise.resolve(g);
+  }
+  const f = climFiles(idx, ver, group);
+  const grp = idx.groups && idx.groups[group];
+  const npy = f && f.clim_npy;
+  if (!npy || !grp) return Promise.resolve(null);
+  const [nM, C, H, W] = npy.shape;
+  const ci = grp.chans.indexOf(chan);
+  if (ci < 0 || month < 0 || month >= nM) return Promise.resolve(null);
+  if (npy.dtype !== "<f4") return Promise.reject(new Error(`dtype ${npy.dtype}, expected <f4`));
+  if (C !== grp.chans.length || H !== grp.grid.ny || W !== grp.grid.nx || npy.plane_bytes !== H * W * 4) {
+    return Promise.reject(new Error(`shape ${JSON.stringify(npy.shape)} disagrees with the ${group} grid`));
+  }
+  const pb = npy.plane_bytes;
+  const block = C * pb <= climState.blockBytes;
+  const readKey = block ? `${ver}:${group}:${month}` : key;
+  let p = climState.inflight.get(readKey);
+  if (!p) {
+    const first = block ? 0 : ci;
+    const n = block ? C : 1;
+    climState.reads++;
+    p = hubRangeRead(npy.url, npy.header_len + (month * C + first) * pb, n * pb)
+      .then((buf) => {
+        // The wanted channel goes in LAST, so a month block wider than the LRU
+        // (32 depth channels at 1°) cannot evict the one plane asked for.
+        for (let k = 0; k < n; k++) {
+          const c = grp.chans[first + k];
+          if (c !== chan) climStore(`${ver}:${group}:${month}:${c}`, climMakeGrid(idx, ver, group, month, c, buf, k * pb));
+        }
+        climStore(key, climMakeGrid(idx, ver, group, month, chan, buf, (ci - first) * pb));
+      })
+      .finally(() => climState.inflight.delete(readKey));
+    climState.inflight.set(readKey, p);
+  }
+  return p.then(() => climState.planes.get(key) || null);
+}
+
+/* The z-score constants `anomaly_transform` applied after subtracting this
+ * climatology — `mu`, `den`, `dynamic` — from the small per-(version, group)
+ * `stats.json` beside the plane. Fetched once, on the first departure asked
+ * for, and cached; a failure is forgotten so the next click may retry. */
+function climStats(idx, ver, group) {
+  const key = `${ver}:${group}`;
+  if (!climState.stats.has(key)) {
+    const f = climFiles(idx, ver, group);
+    const url = f && f.stats && f.stats.url;
+    const p = url ? fetch(url).then((r) => (r.ok ? r.json() : null)).catch(() => null)
+                  : Promise.resolve(null);
+    climState.stats.set(key, p);
+    p.then((j) => { if (!j) climState.stats.delete(key); });
+  }
+  return climState.stats.get(key);
+}
+
+/* The layer's config carries the CURRENT channel's presentation, through the
+ * tensor layer's own range rule (`tensorRange`: mean ± 2.5 sd, symmetric for a
+ * signed channel) — so one channel looks identical on the two layers. */
+function climApplyChannel(cfg, idx, spec, ver) {
+  cfg.climChan = spec.key;
+  if (ver) cfg.climVersion = ver.key;
+  cfg.units = spec.units;
+  cfg.ramp = spec.ramp;
+  cfg.classGrid = false;
+  const [lo, hi] = tensorRange(idx, spec);
+  cfg.vmin = lo; cfg.vmax = hi;
+  cfg.maxLevel = spec.step < 1 ? 7 : 6;
+}
+
+function climKeyFor(idx, cfg, dateStr = state.date) {
+  const spec = climChannelSpec(idx, cfg.climChan);
+  const ver = climVersionOf(idx, cfg);
+  if (!spec || !ver) return null;
+  return { spec, ver, month: climMonthOf(dateStr),
+           key: `${ver.key}:${spec.group}:${climMonthOf(dateStr)}:${spec.chan}` };
+}
+
+/* Resolve what the layer should be painting NOW, reading the plane if it is
+ * not in the LRU. `seq` supersedes a resolution nobody is waiting for — two
+ * quick switches must not let the slower read win. */
+async function ensureClimGrid(cfg, { toast = false } = {}) {
+  const my = ++climState.seq;
+  const idx = await loadClimIndex();
+  if (!idx) {
+    climState.error = climState.unpublished ? "not published yet" : "no index";
+    climState.current = null;
+    climState.currentKey = null;
+    if (toast) climMissingToast(cfg);
+    return null;
+  }
+  const at = climKeyFor(idx, cfg);
+  if (!at) return null;
+  climApplyChannel(cfg, idx, at.spec, at.ver);
+  if (climState.currentKey === at.key && climState.current) return climState.current;
+  let g = null;
+  try {
+    climState.loading = true;
+    g = await climPlane(idx, at.ver.key, at.spec.group, at.month, at.spec.chan);
+    climState.error = g ? null : `no ${at.spec.group} climatology in “${at.ver.name}”`;
+  } catch (err) {
+    climState.error = String((err && err.message) || err);
+    g = null;
+  } finally {
+    climState.loading = false;
+  }
+  if (my !== climState.seq) return climState.current;       // superseded
+  if (!g) {
+    climState.current = null;
+    climState.currentKey = null;
+    if (toast) climMissingToast(cfg);
+    return null;
+  }
+  g.climSpec = at.spec;
+  climState.current = g;
+  climState.currentKey = at.key;
+  gridsLoaded.set(cfg.id, g);
+  return g;
+}
+
+/* Synchronous view for the painter: `GridProvider` asks per TILE and must
+ * never issue a request of its own. */
+function climGridFor(cfg) {
+  const idx = climState.index;
+  if (!idx || !cfg) return null;
+  const at = climKeyFor(idx, cfg);
+  return at && climState.currentKey === at.key ? climState.current : null;
+}
+
+function climMissingToast(cfg) {
+  const why = climState.unpublished
+    ? `its index <code>data/family7_clim_index.json</code> has not been published yet — ` +
+      `it is made by <code>ml/pull_family7_tensor.py</code> → ` +
+      `<code>ml/export_family7_clim.py</code> → ` +
+      `<code>ml/publish_family7_clim_index.py upload</code>, and the layer goes live ` +
+      `the moment that file lands beside this page, with no change here`
+    : `it could not be read${climState.error ? ` (${esc(climState.error)})` : ""}`;
+  showToast(`<strong>${cfg.title}</strong>: ${why}. The normals live on the Hugging ` +
+    `Face Hub and are fetched one calendar month at a time; the rest of the globe is ` +
+    `unaffected. <a href="https://blauewelt.github.io/earth/docs.html?f=docs/FAMILY7_CLIM.md" ` +
+    `target="_blank" rel="noopener">what this layer is</a>.`,
+    { key: `${cfg.id}-missing`, replace: true });
+}
+
+/* Said on enable, on a month change and on a version switch — the
+ * `datelessToast` family one rung finer: the DAY and the YEAR of the date
+ * selector do nothing here, its MONTH is the whole of what it does. */
+function maybeClimToast(cfg, { replace = false } = {}) {
+  const idx = climState.index;
+  if (!idx) return;
+  const at = climKeyFor(idx, cfg);
+  if (!at) return;
+  const f = climFiles(idx, at.ver.key, at.spec.group);
+  const have = f && Array.isArray(f.months_with_data) ? f.months_with_data : null;
+  const empty = have && have.length && !have.includes(at.month + 1);
+  showToast(`<strong>${cfg.title}</strong> is a <strong>per-calendar-month ` +
+    `average</strong> — <strong>${esc(at.ver.name)}</strong>, the mean over ` +
+    `${esc(at.ver.train_span)}. The <strong>month of the date selector matters, the ` +
+    `year doesn't</strong>: showing the normal for <strong>${monthName(at.month)}</strong>` +
+    ` — step ±1 month to walk the seasonal cycle.` +
+    (empty ? ` This group has no training sample in ${monthName(at.month)}, so nothing ` +
+             `is painted.` : ""),
+    { key: `${cfg.id}-month`, replace });
+}
+
+/* A date move repaints this layer only when it lands in a DIFFERENT calendar
+ * month — the month is the key, never the date, so a day step, and a whole
+ * year step, cost nothing. Called from `applyDateMove` (inside `scrubApply`:
+ * a held key is one read per settled date, not per keystroke). */
+async function refreshClimGrids() {
+  if (!climState.index) return;
+  for (const [id, entry] of Object.entries(state.layers)) {
+    if (!entry.layer || !entry.cfg.climGrid) continue;
+    const month = climMonthOf(state.date);
+    if (entry.climMonth === month) continue;
+    entry.climMonth = month;
+    await ensureClimGrid(entry.cfg);
+    if (!state.layers[id] || !state.layers[id].layer) continue;
+    removeLayer(id);
+    addLayer(entry.cfg);
+    maybeClimToast(entry.cfg, { replace: true });
+    climRefreshUi(entry.cfg);
+  }
+}
+
+/* Resolve the bytes and, if they arrived after the provider was built,
+ * rebuild it (Cesium caches rendered tiles — the rule `tensorEnsureForLayer`
+ * follows). Terminates: the rebuild comes back here already resolved. */
+async function climEnsureForLayer(cfg) {
+  const had = climGridFor(cfg);
+  const g = await ensureClimGrid(cfg);
+  climRefreshUi(cfg);
+  const entry = state.layers[cfg.id];
+  if (!entry || !entry.layer) return g;
+  entry.climMonth = g ? g.clim.month : null;
+  if (!g && climState.index && climState.error) climMissingToast(cfg);
+  if (g && !had) { removeLayer(cfg.id); addLayer(cfg); }
+  else updateLegends();
+  return g;
+}
+
+/* The channel or the version picker moved. Same layer, same chip, same opacity
+ * — only the plane changes (a decode, or one read). */
+async function climSwitch(cfg, { version = false } = {}) {
+  await ensureClimGrid(cfg, { toast: true });
+  climRefreshUi(cfg);
+  const entry = state.layers[cfg.id];
+  if (entry && entry.layer) { removeLayer(cfg.id); addLayer(cfg); }
+  updateLegends();
+  if (version) maybeClimToast(cfg, { replace: true });
+}
+
+/* Both pickers, from the INDEX: channels grouped by tensor group (one
+ * <optgroup> each, the labels the builder published), versions in the index's
+ * order with their rule as the tooltip. */
+function climFillSelects(cfg) {
+  const idx = climState.index;
+  const chSel = document.querySelector(`select[data-climchan="${cfg.id}"]`);
+  const vSel = document.querySelector(`select[data-climver="${cfg.id}"]`);
+  if (!chSel || !vSel) return;
+  const none = `<option value="">— the index has not landed —</option>`;
+  const set = (sel, html) => { if (sel.dataset.sig !== html) { sel.innerHTML = html; sel.dataset.sig = html; } };
+  if (!idx) { set(chSel, none); set(vSel, none); return; }
+  set(chSel, Object.entries(idx.groups).map(([group, grp]) =>
+    `<optgroup label="${esc(group)} · ${grp.grid.step}°">` +
+    grp.chans.map((c) => `<option value="${esc(`${group}:${c}`)}">` +
+      `${esc((grp.labels && grp.labels[c]) || c)}</option>`).join("") +
+    `</optgroup>`).join(""));
+  set(vSel, (idx.versions || []).map((v) =>
+    `<option value="${esc(v.key)}" title="${esc(v.rule || "")}">${esc(v.name)}</option>`).join(""));
+  const at = climKeyFor(idx, cfg);
+  if (at) { chSel.value = at.spec.key; vSel.value = at.ver.key; }
+}
+
+/* The Downloads block, for the selected version and group: the NetCDF (when
+ * one was published), the raw array, its z-score constants, the index, and —
+ * in the row, where it can be clicked — the plane on screen as CSV. */
+function climDownloadsHtml(cfg, { inTip = false } = {}) {
+  const idx = climState.index;
+  if (!idx) {
+    return `nothing yet — the index <code>data/family7_clim_index.json</code> has not ` +
+      `been published (made by <code>ml/export_family7_clim.py</code> → ` +
+      `<code>ml/publish_family7_clim_index.py upload</code>).`;
+  }
+  const at = climKeyFor(idx, cfg);
+  const f = at && climFiles(idx, at.ver.key, at.spec.group);
+  if (!f) return `no files for this group in this version.`;
+  const a = (url, text) => `<a href="${esc(url)}" target="_blank" rel="noopener">${text}</a>`;
+  const shape = (f.clim_npy && f.clim_npy.shape) || [];
+  const items = [
+    f.clim_nc && f.clim_nc.url
+      ? `${a(f.clim_nc.url, "clim.nc")} — NetCDF, one variable per channel in physical units`
+      : `NetCDF not published for this group`,
+    `${a(f.clim_npy.url, "clim.npy")} — [12, C, H, W] = [${shape.join(", ")}] float32, ` +
+      `z-scored — see stats.json`,
+    `${a(f.stats.url, "stats.json")} — the z-score constants (mu, sd, den), the ` +
+      `version's rule and the tensor's sha256`,
+    `${a(CLIM_INDEX_URL, "the index")} — every version and group, with URLs, sizes and sha256`,
+    inTip
+      ? `“this channel, this month as CSV” — the button is under ⤓ downloads in the row`
+      : `<button type="button" class="clim-csv" data-climcsv="${cfg.id}">this channel, ` +
+        `this month as CSV</button>`,
+  ];
+  return `<div class="clim-dl-head">${esc(at.ver.name)} · ${esc(at.spec.group)} ` +
+    `(${at.spec.step}°)</div><ul>${items.map((x) => `<li>${x}</li>`).join("")}</ul>`;
+}
+
+/* Everything in the row and the hover card that follows the selection. */
+function climRefreshUi(cfg) {
+  climFillSelects(cfg);
+  const body = document.querySelector(`[data-climdlbody="${cfg.id}"]`);
+  if (body) body.innerHTML = climDownloadsHtml(cfg);
+  const item = document.querySelector(`#layer-list input[data-id="${cfg.id}"]`)?.closest(".layer-item");
+  const tip = item && item.querySelector(".layer-tip");
+  if (!tip) return;
+  const tdl = tip.querySelector(".tip-dl-body");
+  if (tdl) tdl.innerHTML = climDownloadsHtml(cfg, { inTip: true });
+  const idx = climState.index;
+  const at = idx && climKeyFor(idx, cfg);
+  if (!at) return;
+  const rec = tip.querySelector('[data-tip="rec"]');
+  if (rec) {
+    rec.innerHTML = `<span>Recorded</span>average of the years ${esc(at.ver.train_span)} ` +
+      `(${esc(at.ver.name)} — one calendar month's mean over those years, not one date)`;
+  }
+  const sp = tip.querySelector('[data-tip="sp"]');
+  if (sp) {
+    const all = Object.entries(idx.groups).map(([g, grp]) => `${esc(g)} ${grp.grid.step}°`).join(" · ");
+    sp.innerHTML = `<span>Spatial</span>${at.spec.step}° — this channel's group ` +
+      `(${esc(at.spec.group)}); each group keeps the tensor's own grid: ${all}`;
+  }
+}
+
+/* The read-out both the probe and the pixel card print: the normal in the
+ * channel's unit and as the tensor stores it, and — only if the Global tensor's
+ * slab for this pentad is ALREADY resident — the departure from normal. */
+const CLIM_DEP_HINT = `switch on <em>Global tensor</em> to see the departure from ` +
+  `normal — its 14.5 MB pentad is never read for a click`;
+
+async function climDeparture(g, lon, lat) {
+  const cIdx = climState.index, tIdx = tensorState.index;
+  const { group, chan, version, mean, sd, ci } = g.clim;
+  if (!cIdx || !tIdx || !tIdx.groups) return { hint: CLIM_DEP_HINT };
+  if (tIdx.stem !== cIdx.stem) {
+    return { hint: `no departure: the tensor on this page (${esc(tIdx.stem)}) is not the ` +
+      `build this climatology was computed from (${esc(cIdx.stem)})` };
+  }
+  const tg = tIdx.groups[group];
+  if (!tg || !tg.grid || tg.grid.nx !== g.nx || tg.grid.ny !== g.ny) return { hint: CLIM_DEP_HINT };
+  const bin = tensorBinOfDate(tIdx, state.date);
+  if (!tensorState.slabs.has(`${group}:${bin}`)) return { hint: CLIM_DEP_HINT };
+  const xz = tensorResidentZ(group, bin, chan, gridCellIndex(g, lon, lat));
+  if (xz == null) return { hint: `no departure: the tensor holds no value at this cell for this pentad` };
+  /* The trainer charges a pentad to the month it OPENS in
+   * (`ml/export_family7_clim.py::master_calendar`), which for a date early in
+   * a month can be the month before — so the normal subtracted is THAT month's,
+   * read (one small plane, never a tensor slab) if it is not the one on screen. */
+  const binDate = tensorDateOfBin(tIdx, bin);
+  const m = climMonthOf(binDate);
+  const gm = m === g.clim.month ? g
+    : await climPlane(cIdx, version, group, m, chan).catch(() => null);
+  const normal = gm ? sampleGrid(gm, lon, lat) : null;
+  if (normal == null) return { hint: `no departure: no training sample for ${monthName(m)} at this cell` };
+  const cz = (normal - mean) / sd;
+  const dep = { bin, binDate, month: m, value: xz * sd + mean, normal,
+                dv: (xz - cz) * sd, dz: null, pentad: tensorPentadLabel(tIdx, bin) };
+  const st = await climStats(cIdx, version, group);
+  if (st && Array.isArray(st.mu) && Array.isArray(st.den) && st.mu[ci] != null &&
+      st.den[ci] != null && (!Array.isArray(st.dynamic) || st.dynamic.includes(ci))) {
+    dep.dz = (xz - cz - st.mu[ci]) / st.den[ci];     // exactly what anomaly_transform wrote
+  }
+  return dep;
+}
+
+async function climReadout(g, lon, lat) {
+  const v = sampleGrid(g, lon, lat);
+  if (v == null) return null;
+  const ver = (climState.index?.versions || []).find((x) => x.key === g.clim.version);
+  return {
+    v, z: (v - g.clim.mean) / g.clim.sd, units: g.units,
+    label: g.climSpec ? g.climSpec.label : g.clim.chan,
+    what: `normal for ${monthName(g.clim.month)} · ${ver ? ver.name : g.clim.version}`,
+    dep: await climDeparture(g, lon, lat),
+  };
+}
+
+function climDepText(dep, units) {
+  const s = (x) => `${x >= 0 ? "+" : "−"}${fmtVal(Math.abs(x))}`;
+  return `<strong>${s(dep.dv)} ${esc(units || "")}</strong>` +
+    (dep.dz != null ? ` · z = ${s(dep.dz)} as the trainer sees it` : "") +
+    ` (tensor ${fmtVal(dep.value)} vs normal ${fmtVal(dep.normal)} for ${monthName(dep.month)})`;
+}
+
+/* The plane on screen as `lat,lon,value` — physical units, one row per cell,
+ * south-first, NaN as an empty value — built from the bytes already in
+ * memory, so the download costs no request. */
+function climCsvName(g) {
+  const { version, group, chan, month } = g.clim;
+  return `family7_clim_${version}_${group}_${chan}_m${String(month + 1).padStart(2, "0")}.csv`;
+}
+function climCsvParts(g) {
+  const parts = ["lat,lon,value\n"];
+  const lat0 = g.south + g.dlat / 2, lon0 = g.west + g.dlon / 2;
+  for (let iy = 0; iy < g.ny; iy++) {
+    const lat = +(lat0 + iy * g.dlat).toFixed(6);
+    let row = "";
+    for (let ix = 0; ix < g.nx; ix++) {
+      const v = g.values[iy * g.nx + ix];
+      row += `${lat},${+(lon0 + ix * g.dlon).toFixed(6)},${Number.isFinite(v) ? +v.toPrecision(7) : ""}\n`;
+    }
+    parts.push(row);
+  }
+  return parts;
+}
+function climDownloadCsv(cfg) {
+  const g = climGridFor(cfg);
+  if (!g) {
+    showToast(`<strong>${cfg.title}</strong>: nothing to export yet — this month's plane ` +
+      `has not been read.`, { key: `${cfg.id}-csv` });
+    return null;
+  }
+  const name = climCsvName(g);
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(new Blob(climCsvParts(g), { type: "text/csv" }));
+  a.download = name;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 60000);
+  return name;
+}
+
+/* Said on enable: which month and version are on screen, or why nothing is. */
+async function climAnnounce(cfg) {
+  const idx = await loadClimIndex();
+  if (!idx) { climMissingToast(cfg); return; }
+  maybeClimToast(cfg);
+}
+
+/* What the tests read instead of pixels. */
+function climLayerState() {
+  const cfg = GIBS_LAYERS.find((l) => l.climGrid);
+  const idx = climState.index;
+  const g = climGridFor(cfg);
+  return {
+    hasIndex: !!idx, unpublished: climState.unpublished, error: climState.error,
+    chan: cfg.climChan, version: cfg.climVersion, month: climMonthOf(state.date),
+    ready: !!g, reads: climState.reads, planes: [...climState.planes.keys()],
+    grid: g ? { nx: g.nx, ny: g.ny, dlon: g.dlon, west: g.west, south: g.south,
+                wrap: !!g.wrap, units: g.units, period: g.period, month: g.clim.month,
+                version: g.clim.version, group: g.clim.group, chan: g.clim.chan } : null,
+    norm: g ? [g.clim.mean, g.clim.sd] : null,
+    vmin: cfg.vmin, vmax: cfg.vmax, ramp: cfg.ramp, units: cfg.units,
+  };
+}
+function climSampleAt(lon, lat) {
+  const g = climGridFor(GIBS_LAYERS.find((l) => l.climGrid));
+  return g ? sampleGrid(g, lon, lat) : null;
+}
+
 class GridProvider {
   constructor(cfg) {
     this._cfg = cfg;
@@ -4688,6 +5331,7 @@ function addLayer(cfg) {
     state.layers[cfg.id] = entry;
     if (cfg.tensorGrid) tensorEnsureForLayer(cfg);
     if (cfg.fishingGrid) fishingEnsureForLayer(cfg);
+    if (cfg.climGrid) climEnsureForLayer(cfg);
     if (cfg.monthlyGrid) {
       // remember which month rendered, so a date change knows when to repaint
       loadGrid(cfg).then((g) => {
@@ -5060,6 +5704,7 @@ function applyDateMove() {
     refreshMonthlyGrids();
     refreshTensorGrids();     // one 14.5 MB range read per SETTLED date, not per keystroke
     refreshFishingGrids();    // …and one 8.3 MB read per settled MONTH
+    refreshClimGrids();       // …and one plane per settled CALENDAR month (the year never counts)
     refreshLoitering();       // …and the events whose drift overlaps the new day
     if (sstEnsembleLayer) updateEnsembleLayer();
   });
@@ -5116,6 +5761,7 @@ function syncDateMax() {
     refreshMonthlyGrids();
     refreshTensorGrids();
     refreshFishingGrids();
+    refreshClimGrids();
   }
   // The comparison lives on the same axis: when the axis shortens, a pinned
   // date past the new end has to come back with it, or the comparison would
@@ -6051,6 +6697,15 @@ function gridLegendEl(cfg) {
         `${spec.step ? ` · ${spec.step}°` : ""}</div>`;
     }
   }
+  if (cfg.climGrid && climState.index) {
+    // Same shape as the tensor's: the channel, its grid, and — because this
+    // layer is keyed by it — which month's normal and which version.
+    const at = climKeyFor(climState.index, cfg);
+    if (at) {
+      div.innerHTML = `<div class="legend-title">${esc(at.spec.label)} · ${at.spec.step}° ` +
+        `— normal for ${monthName(at.month)} · ${esc(at.ver.name)}</div>`;
+    }
+  }
   if (cfg.classGrid) {
     // Same swatch legend as the classification rasters, fed from the grid file
     // instead of a GIBS colormap — one shape for "the value is a category".
@@ -6287,6 +6942,9 @@ function datelessToast(id) {
     // Month-aware: date-driven, with its own toast naming the month showing
     // and the archive wording at either end of the record (maybeFishingToast).
     if (cfg.fishingGrid) return null;
+    // Month-aware, year-blind: a per-calendar-month normal, with its own toast
+    // saying the date's MONTH matters and its year doesn't (maybeClimToast).
+    if (cfg.climGrid) return null;
     if (cfg.grid) {
       if (cfg.classGrid) {
         // Each categorical grid is dateless for its OWN reason and must say
@@ -6835,7 +7493,33 @@ const LAYER_FACTS = {
          "its temperature from `skt`, `t2m` and `tsoil`, never from `sst`. " +
          "The archive stores every channel " +
          "z-scored; the numbers shown here are multiplied back into their own " +
-         "units, and the probe prints the stored σ beside them.",
+         "units, and the probe prints the stored σ beside them. What the " +
+         "forecaster calls NORMAL for each channel — the per-calendar-month mean " +
+         "it is trained against — is the “Model climatology” layer just below.",
+  },
+  "clim7": {
+    rec: "average of the selected version's training years (the per-calendar-month " +
+         "mean over them, not one date) — the span is filled in from the index",
+    int: "one calendar month; the year does not matter — twelve frames, one per " +
+         "month, and the date selector's month picks which",
+    sp: "0.25° or 1° — each channel group keeps the tensor's own grid (0.25° for " +
+        "the ocean-surface and ocean-colour groups, 1° for the atmosphere-and-land " +
+        "and Argo groups)",
+    sum: "What the forecaster calls NORMAL. Every model here is trained on " +
+         "departures from a per-calendar-month climatology — the mean of each " +
+         "channel, at each cell, over every training-year five-day frame that " +
+         "opens in that month — and every forecast skill number is scored against " +
+         "the same field. This layer paints it, from the family-7 global tensor, in " +
+         "three versions that differ only in which years count as training: all of " +
+         "them, the development holdout (2009, 2017 and 2023 left out), and the " +
+         "paper's split (trained on 1982–2020 less 2009 and 2017). Values are in " +
+         "the channel's own unit, with the stored z beside them; with the Global " +
+         "tensor on, the probe also prints today's departure from normal — the " +
+         "number the model is actually handed.",
+    dl: "for the selected version and group: clim.nc (NetCDF, physical units), " +
+        "clim.npy ([12, C, H, W] float32, z-scored — see stats.json), stats.json, " +
+        "the index, and this channel and month as CSV — listed here once the " +
+        "index has landed",
   },
   "fishing": {
     rec: "2012-01 → 2024-12 · the date's MONTH picks the map; 2024 is provisional " +
@@ -6869,9 +7553,11 @@ function layerTipHtml(id) {
   if (!f) return "";
   return `<div class="layer-tip">
       ${f.sum ? `<p class="tip-sum">${f.sum}</p>` : ""}
-      <div><span>Recorded</span>${f.rec}</div>
-      <div><span>Interval</span>${f.int}</div>
-      <div><span>Spatial</span>${f.sp}</div>
+      <div data-tip="rec"><span>Recorded</span>${f.rec}</div>
+      <div data-tip="int"><span>Interval</span>${f.int}</div>
+      <div data-tip="sp"><span>Spatial</span>${f.sp}</div>
+      ${f.dl ? `<div class="tip-dl" data-tip="dl"><span>Downloads</span>` +
+               `<div class="tip-dl-body">${f.dl}</div></div>` : ""}
     </div>`;
 }
 
@@ -6895,6 +7581,23 @@ function buildLayerPanel() {
         <label class="alpha-label" for="chan-${cfg.id}">channel</label>
         <select id="chan-${cfg.id}" data-chan="${cfg.id}"
                 title="Which channel of the tensor to paint"></select>
+      </div>` : ""}
+      ${cfg.climGrid ? `<div class="clim-rows" data-chanrow="${cfg.id}"
+              ${cfg.on ? "" : "style='display:none'"}>
+        <div class="chan-row">
+          <label class="alpha-label" for="climchan-${cfg.id}">channel</label>
+          <select id="climchan-${cfg.id}" data-climchan="${cfg.id}"
+                  title="Which channel's normal to paint"></select>
+        </div>
+        <div class="chan-row">
+          <label class="alpha-label" for="climver-${cfg.id}">version</label>
+          <select id="climver-${cfg.id}" data-climver="${cfg.id}"
+                  title="Which training years the normal averages over"></select>
+        </div>
+        <details class="clim-dl" data-climdl="${cfg.id}">
+          <summary>⤓ downloads</summary>
+          <div class="clim-dl-body" data-climdlbody="${cfg.id}"></div>
+        </details>
       </div>` : ""}
       <div class="sup-note" data-suppressed="${cfg.id}" hidden></div>
       <div class="alpha-row" data-alpharow="${cfg.id}" ${cfg.on ? "" : "style='display:none'"}>
@@ -6922,6 +7625,16 @@ function buildLayerPanel() {
       tensorSwitchChannel(ccfg);
       return;
     }
+    // The model climatology's two pickers, likewise in its own row.
+    const climId = e.target.getAttribute("data-climchan") || e.target.getAttribute("data-climver");
+    if (climId) {
+      const ccfg = GIBS_LAYERS.find((l) => l.id === climId);
+      const isVer = e.target.hasAttribute("data-climver");
+      if (isVer) ccfg.climVersion = e.target.value;
+      else ccfg.climChan = e.target.value;
+      climSwitch(ccfg, { version: isVer });
+      return;
+    }
     const id = e.target.getAttribute("data-id");
     if (!id) return;
     const cfg = GIBS_LAYERS.find((l) => l.id === id);
@@ -6935,6 +7648,7 @@ function buildLayerPanel() {
       maybeMonthlyGridToast(cfg);
       if (cfg.tensorGrid) tensorAnnounce(cfg);
       if (cfg.fishingGrid) fishingAnnounce(cfg);
+      if (cfg.climGrid) climAnnounce(cfg);
       maybeArchiveToast(cfg);
       maybeAnnualToast(cfg);
       maybeFineToast(cfg);
@@ -6969,6 +7683,9 @@ function buildLayerPanel() {
   // ½ toggles 50% ↔ 100%: the quick way to overlay two fields (e.g. SST at
   // half opacity over ocean currents to eyeball their correlation)
   list.addEventListener("click", (e) => {
+    // The climatology's "this channel, this month as CSV", from the plane in memory.
+    const csv = e.target.getAttribute?.("data-climcsv");
+    if (csv) { climDownloadCsv(GIBS_LAYERS.find((l) => l.id === csv)); return; }
     const id = e.target.getAttribute?.("data-alphahalf");
     if (!id) return;
     const slider = list.querySelector(`input[data-alpha="${id}"]`);
@@ -7017,6 +7734,7 @@ function buildLayerPanel() {
         refreshMonthlyGrids();       // crossing midnight can cross a month
         refreshTensorGrids();        // …and a pentad boundary
         refreshFishingGrids();       // …and the fishing grid's month
+        refreshClimGrids();          // …and the climatology's calendar month
         refreshLoitering();          // …and which loitering events overlap the day
       });
     } else {
@@ -7992,6 +8710,18 @@ async function probeEntryValue(entry, carto) {
      * value in the channel's own unit, and the z-score the archive actually
      * stores. `raw = z·sd + mean` is inverted here rather than re-read, so the
      * two can never describe different cells. */
+    /* The model climatology prints the normal in the unit AND as stored, names
+     * the month and the version, and adds the DEPARTURE from normal when — and
+     * only when — the Global tensor's slab for this pentad is already resident. */
+    if (cfg.climGrid && g.clim) {
+      const r = await climReadout(g, lon, lat);
+      if (!r) return { ...base, noData: true };
+      return { ...base, value: r.v, departure: r.dep,
+               extra: `${esc(r.label)} — ${esc(r.what)} · z = ${fmtVal(r.z)} as the tensor stores it` +
+                      `<br/>` + (r.dep.dv != null
+                        ? `departure from normal: ${climDepText(r.dep, r.units)}`
+                        : `<em>${r.dep.hint}</em>`) };
+    }
     if (cfg.tensorGrid && g.tensor) {
       const z = (v - g.tensor.mean) / g.tensor.sd;
       const spec = g.tensorSpec;
@@ -9094,6 +9824,16 @@ async function showPixelState(carto) {
                             h: fishingHoursAt(g, lon, lat) } : null))
         .catch(() => null);
     })()],
+    /* What the forecaster calls normal here — on the same terms as the two
+     * above: only while its layer is on, so the plane is already paid for. The
+     * departure inside it never reads a tensor slab (see climDeparture). */
+    ["model climatology", (() => {
+      const e = Object.values(state.layers).find((x) => x.cfg.climGrid && x.layer);
+      if (!e) return Promise.resolve(null);
+      return loadGridMonth(e.cfg)
+        .then(async (g) => (g ? { g, cfg: e.cfg, r: await climReadout(g, lon, lat) } : null))
+        .catch(() => null);
+    })()],
   ];
   const values = jobs.map(([, , empty]) => (empty === undefined ? null : empty));
   const done = new Array(jobs.length).fill(false);
@@ -9169,7 +9909,7 @@ async function showPixelState(carto) {
   await new Promise((r) => setTimeout(r, PIXEL_REDRAW_MS + 20));
 
   function drawPixelCard(values, missing, final) {
-    const [rasters, trueAnomRaw, grids, meteo, air, river, marine, climNow, climFut, oceanCol, oceanSurf, stations, trace, argo, driversGrid, tensorHit, fishingHit] = values;
+    const [rasters, trueAnomRaw, grids, meteo, air, river, marine, climNow, climFut, oceanCol, oceanSurf, stations, trace, argo, driversGrid, tensorHit, fishingHit, climHit] = values;
     const trueAnom = trueAnomRaw && !trueAnomRaw.none ? trueAnomRaw : null;
     if (pixelCardEl.classList.contains("hidden")) return;   // closed while loading
 
@@ -9376,6 +10116,21 @@ async function showPixelState(carto) {
       sec.push(`<div class="px-sec"><div class="px-sec-title">What the model reads ` +
         `<span class="px-src">family 7</span></div>` +
         pixelRow(spec ? spec.label : "channel", line, whenOfGrid(cfg, g)) + span + `</div>`);
+    }
+
+    /* -- what the forecaster calls normal here (E-083) ---------------------- */
+    /* Stamped with the version's training span — a fixed span, so no age. The
+     * departure is stamped with the tensor pentad it was read from. */
+    if (climHit && climHit.r) {
+      const { g, cfg, r } = climHit;
+      let rows = pixelRow("Model climatology",
+        `${fmtVal(r.v)} ${esc(r.units || "")} · z = ${fmtVal(r.z)} as stored — ` +
+        `${esc(r.label)}, ${esc(r.what)}`, whenOfGrid(cfg, g));
+      rows += r.dep.dv != null
+        ? pixelRow("departure from normal", climDepText(r.dep, r.units), whenAt("day", r.dep.binDate))
+        : `<div class="px-note">${r.dep.hint}.</div>`;
+      sec.push(`<div class="px-sec"><div class="px-sec-title">What the forecaster calls ` +
+        `normal <span class="px-src">family 7</span></div>${rows}</div>`);
     }
 
     /* -- the fishing fleet at this cell (AIS) -------------------------------- */
@@ -14161,7 +14916,7 @@ const sleepMs = (ms) => new Promise((r) => setTimeout(r, ms));
 function playbackLayers() {
   return Object.values(state.layers).filter(
     (e) => (e.layer || e.suppressed) &&
-           (e.cfg.timed || e.cfg.monthlyGrid || e.cfg.pentadGrid));
+           (e.cfg.timed || e.cfg.monthlyGrid || e.cfg.pentadGrid || e.cfg.climGrid));
 }
 
 // Stable identity of the CURRENT layer set, so a toggle mid-play is detectable
@@ -14178,6 +14933,7 @@ function playbackStepOf(cfg) {
   if (cfg.monthly) return "1mo";
   if (cfg.snap5d) return "5d";
   if (cfg.pentadGrid) return "5d";       // fixed five-day bins, so five-day frames
+  if (cfg.climGrid) return "1mo";        // one normal per calendar month
   if (cfg.monthlyGrid) {
     // keyLen 10 = day-keyed (the GFS forecast grids); anything else is monthly.
     const g = gridsLoaded.get(cfg.id);
@@ -14237,6 +14993,9 @@ function playbackSignature(dateStr, layers) {
       // days in five that request nothing new into one frame.
       const idx = tensorState.index;
       if (idx) parts.push(`${cfg.id}=${tensorBinOfDate(idx, dateStr)}`);
+    } else if (cfg.climGrid) {
+      // The calendar MONTH, never the year: a twelve-frame cycle.
+      parts.push(`${cfg.id}=${climMonthOf(dateStr)}`);
     } else if (cfg.grid) {
       const g = gridsLoaded.get(cfg.id);
       if (g) parts.push(`${cfg.id}=${resolveGridMonth(g, dateStr)}`);
@@ -14376,6 +15135,7 @@ async function playbackShowFrame(i) {
   if (!promoted) refreshTimedLayers({ hold: true, keepPreload: true });
   await refreshMonthlyGrids();
   await refreshTensorGrids();
+  await refreshClimGrids();
   await refreshYearlyLayers();
   if (sstEnsembleLayer) updateEnsembleLayer();
   playbackRender();
@@ -15284,6 +16044,13 @@ window.__earth = {
   fishingMonthRow,
   fishingLayerState,
   fishingSampleAt,
+  climLayerState,
+  climSampleAt,
+  climState,
+  climCsvParts,
+  climCsvName,
+  climGridFor,
+  hubRangeRead,
   fishingHoursAt,
   gridCellIndex,
   get fishingIndex() { return fishingState.index; },

@@ -21,7 +21,7 @@
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/cesium/1.133.1/Widgets/widgets.min.css" />
-  <link rel="stylesheet" href="src/style.css?v=fd757468" />
+  <link rel="stylesheet" href="src/style.css?v=8f413177" />
   <script>window.CESIUM_BASE_URL = "https://cdnjs.cloudflare.com/ajax/libs/cesium/1.133.1/";</script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/cesium/1.133.1/Cesium.js"></script>
 </head>
@@ -119,6 +119,11 @@
             at sea for hours in the last 30 days — the signature of transshipment. Both read
             the blanks carefully: AIS reception is uneven, so an empty cell means nobody was
             <em>heard</em> fishing, not that nobody fished.</li>
+          <li><strong>The model's own view</strong> — <em>Global tensor</em> paints what our
+            forecaster reads, one five-day frame of any of its channels; <em>Model
+            climatology</em> paints what it calls <em>normal</em> — the per-calendar-month
+            average it is trained against, so the date's month matters and its year doesn't
+            — with its files one click away under the row's ⤓ downloads.</li>
           <li><strong>Forecast</strong> — the two GFS layers (2 m temperature, daily rain) look
             <em>forward</em>: with one switched on, the date selector runs up to 10 days into
             the future. Observation layers can't follow and hold at their latest real
@@ -1161,7 +1166,7 @@
            not obvious from the page, and "I reloaded and see no change" is
            indistinguishable from "the change isn't there". This is the sha256
            prefix of src/app.js, the same string as its ?v= stamp. -->
-      <p class="build-line">Build <code id="build-id">ca369f01</code></p>
+      <p class="build-line">Build <code id="build-id">0240f8af</code></p>
     </section>
 
     <footer>
@@ -1222,6 +1227,6 @@
     <div id="toast-host" aria-live="assertive"></div>
   </div>
 
-  <script src="src/app.js?v=ca369f01"></script>
+  <script src="src/app.js?v=0240f8af"></script>
 </body>
 </html>

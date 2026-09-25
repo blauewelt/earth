@@ -6749,6 +6749,450 @@ test("family 7 degrades when the archive itself refuses the range read", async (
   expect(page.__errors, `page errors: ${page.__errors.join(" | ")}`).toHaveLength(0);
 });
 
+/* ============ the model's climatology (family 7) on the globe — E-083 §4 ====
+ *
+ * "What the forecaster calls normal": the per-calendar-month climatology every
+ * model is trained against, one (version, group, month, channel) plane of a
+ * `clim.npy` on the Hub per frame. The real files are hundreds of megabytes,
+ * so these tests serve `data/family7_clim/fixture/` — the same schema over the
+ * smoke tensor, decimated to 5°/10° — through the same two routes the family-7
+ * tests use: the index is swapped for the fixture's, and the Hub URLs it names
+ * are answered with the SLICED bytes and a real 206, so the offset arithmetic
+ * the browser computes is genuinely exercised. The fixture covers five pentads
+ * of January 2010, so January is the one month with finite values. */
+const CLIM_DIR = require("path").join(__dirname, "..", "data", "family7_clim", "fixture");
+
+function climIndex() {
+  return JSON.parse(require("fs").readFileSync(
+    require("path").join(CLIM_DIR, "family7_clim_index.json"), "utf8"));
+}
+
+async function serveClim(page, opts = {}) {
+  const fs = require("fs"), path = require("path");
+  const index = climIndex();
+  page.__climReads = [];
+  page.__climAll = [];
+  page.__climStats = [];
+  await page.route(/\/data\/family7_clim_index\.json(\?.*)?$/, (route) => {
+    // 404 is the real state until the export publishes — the default to degrade from
+    if (opts.noIndex) return route.fulfill({ status: 404, body: "" });
+    return route.fulfill({ status: 200, contentType: "application/json",
+                           body: JSON.stringify(index) });
+  });
+  // Registered AFTER serveFamily7's `tensors/.*\.npy` route when both are used,
+  // and Playwright runs the newest matching route first — so a clim URL never
+  // reaches the tensor fixture.
+  await page.route(/\/clim\/([^/]+)\/([^/]+)\/clim\.npy$/, (route) => {
+    const [, ver, group] = /\/clim\/([^/]+)\/([^/]+)\/clim\.npy$/.exec(route.request().url());
+    const buf = fs.readFileSync(path.join(CLIM_DIR, ver, group, "clim.npy"));
+    page.__climAll.push([ver, group]);
+    const range = route.request().headers()["range"];
+    const m = range && /bytes=(\d+)-(\d+)/.exec(range);
+    if (!m) return route.fulfill({ status: 200, body: buf });
+    const a = Number(m[1]), b = Number(m[2]);
+    page.__climReads.push([`${ver}/${group}`, a, b]);
+    return route.fulfill({
+      status: 206,
+      headers: { "content-range": `bytes ${a}-${b}/${buf.length}`,
+                 "accept-ranges": "bytes",
+                 "content-type": "application/octet-stream" },
+      body: buf.slice(a, b + 1),
+    });
+  });
+  await page.route(/\/clim\/([^/]+)\/([^/]+)\/stats\.json$/, (route) => {
+    const [, ver, group] = /\/clim\/([^/]+)\/([^/]+)\/stats\.json$/.exec(route.request().url());
+    page.__climStats.push(`${ver}/${group}`);
+    return route.fulfill({ status: 200, contentType: "application/json",
+      body: fs.readFileSync(path.join(CLIM_DIR, ver, group, "stats.json"), "utf8") });
+  });
+  return index;
+}
+
+// The float32 in the fixture, read the way the page reads it, and multiplied
+// back through the index's `norm` — so the expected value is the FILE'S OWN
+// BYTES and not a second computation of what they should have been.
+function climCell(index, ver, group, month, chan, iy, ix) {
+  const fs = require("fs"), path = require("path");
+  const f = index.files[ver][group].clim_npy;
+  const grp = index.groups[group];
+  const [, C, H, W] = f.shape;
+  const c = grp.chans.indexOf(chan);
+  const buf = fs.readFileSync(path.join(CLIM_DIR, ver, group, "clim.npy"));
+  const z = buf.readFloatLE(f.header_len + (month * C + c) * f.plane_bytes + (iy * W + ix) * 4);
+  const [mean, sd] = grp.norm[c];
+  return { z, raw: z * sd + mean, mean, sd, C, H, W, pb: f.plane_bytes, hl: f.header_len };
+}
+
+async function enableClim(page) {
+  await page.evaluate(() => {
+    const el = document.querySelector('#layer-list input[data-id="clim7"]');
+    el.checked = true;
+    el.dispatchEvent(new Event("change", { bubbles: true }));
+  });
+  await expect.poll(() => page.evaluate(() => window.__earth.climLayerState().ready),
+                    { timeout: 20000 }).toBe(true);
+}
+
+async function climSelect(page, attr, value) {
+  await page.evaluate(([attr, value]) => {
+    const s = document.querySelector(`select[${attr}="clim7"]`);
+    s.value = value;
+    s.dispatchEvent(new Event("change", { bubbles: true }));
+  }, [attr, value]);
+}
+
+test("model climatology: one range read paints a calendar month, and the probe reads the file's own float32",
+     async ({ page }) => {
+  test.setTimeout(120000);
+  const index = await serveClim(page);
+  const toasts = await recordToasts(page);
+  await setAppDate(page, "2010-01-20");
+  await enableClim(page);
+
+  // nothing about the channel list is in app.js: the first channel is the
+  // index's first, and the version is the index's default
+  const g0 = Object.keys(index.groups)[0];
+  const st = await page.evaluate(() => window.__earth.climLayerState());
+  expect(st.hasIndex).toBe(true);
+  expect(st.error).toBe(null);
+  expect(st.chan).toBe(`${g0}:${index.groups[g0].chans[0]}`);
+  expect(st.version).toBe(index.default_version);
+  expect(st.month).toBe(0);                            // January, 0-based
+  expect(st.grid.period).toBe(index.versions.find((v) => v.key === "all").train_span);
+  expect(st.grid.nx).toBe(index.groups[g0].grid.nx);
+  expect(st.grid.wrap).toBe(true);
+  expect(st.grid.west).toBeCloseTo(-180 - index.groups[g0].grid.step / 2, 6);
+
+  // EXACTLY ONE request, ranged, answered 206 — at the month's offset. The
+  // fixture's month block is small, so the whole month of the group comes in
+  // one read: offset header_len + month·C·plane_bytes, length C·plane_bytes.
+  const f = index.files.all[g0].clim_npy;
+  const C = f.shape[1];
+  expect(page.__climAll.length).toBe(1);
+  expect(page.__climReads.length).toBe(1);
+  expect(page.__climReads[0][0]).toBe(`all/${g0}`);
+  expect(page.__climReads[0][1]).toBe(f.header_len);
+  expect(page.__climReads[0][2] - page.__climReads[0][1] + 1).toBe(C * f.plane_bytes);
+
+  // ANOTHER CHANNEL OF THE SAME (version, group, month): a decode, no request
+  await climSelect(page, "data-climchan", "g100:t2m");
+  await expect.poll(() => page.evaluate(() => window.__earth.climLayerState().chan),
+                    { timeout: 20000 }).toBe("g100:t2m");
+  await expect.poll(() => page.evaluate(() => window.__earth.climLayerState().ready),
+                    { timeout: 20000 }).toBe(true);
+  expect(page.__climAll.length).toBe(1);
+
+  // the number under a point is the FIXTURE'S OWN float32, times sd, plus mean.
+  // Row 10 / col 20 of the 10° grid is lat −90+10·10 = 10°N, lon −180+10·20 = 20°E.
+  const cell = climCell(index, "all", "g100", 0, "t2m", 10, 20);
+  expect(Number.isFinite(cell.raw)).toBe(true);
+  const got = await page.evaluate(() => window.__earth.climSampleAt(20, 10));
+  expect(Math.abs(got - cell.raw)).toBeLessThan(1e-4);
+  const t2 = await page.evaluate(() => window.__earth.climLayerState());
+  expect(t2.norm[0]).toBeCloseTo(cell.mean, 5);
+  expect(t2.norm[1]).toBeCloseTo(cell.sd, 5);
+
+  // the LEGEND is in physical units — the channel's own, a range around its mean
+  expect(t2.units).toBe("°C");
+  expect(t2.vmin).toBeLessThan(cell.mean);
+  expect(t2.vmax).toBeGreaterThan(cell.mean);
+  const legend = page.locator("#legend-panel .legend-item", { hasText: "normal for January" });
+  await expect(legend).toContainText("Air temperature at 2 m");
+  await expect(legend.locator(".legend-range")).toContainText("°C");
+  await expect(legend.locator(".legend-range")).toContainText(String(t2.vmax));
+
+  // the probe: the normal in the unit AND as stored, the month and the version,
+  // stamped with the version's training span (a period — no age), a marked cell,
+  // and — with no tensor slab resident — a hint instead of a departure
+  const probe = await page.evaluate(async () =>
+    await window.__earth.probeValueAt(Cesium.Cartographic.fromDegrees(20, 10)));
+  expect(probe.title).toContain("Model climatology");
+  expect(probe.noData).toBeFalsy();
+  expect(Math.abs(probe.value - cell.raw)).toBeLessThan(1e-4);
+  expect(probe.units).toBe("°C");
+  expect(probe.extra).toContain("z =");
+  expect(probe.extra).toContain("normal for January");
+  expect(probe.extra).toContain("All years (1982–2024)");
+  expect(probe.when).toEqual({ kind: "period", t: "1982–2024" });
+  expect(probe.cell).toBeTruthy();
+  expect(probe.cell.east - probe.cell.west).toBeCloseTo(index.groups.g100.grid.step, 6);
+  expect(probe.departure.hint).toContain("Global tensor");
+  expect(probe.extra).toContain("switch on <em>Global tensor</em>");
+
+  // the toast: a per-calendar-month average, month matters, year doesn't
+  await expect.poll(toasts).toContain("month of the date selector matters, the year doesn't");
+  await expect.poll(toasts).toContain("All years (1982–2024)");
+  await expect.poll(toasts).toContain("January");
+  expect(await page.evaluate(() => window.__earth.datelessToast("clim7"))).toBeNull();
+
+  // the chip, so it can be switched off from the globe
+  await expect(page.locator("#active-layers")).toContainText("Model climatology");
+
+  expect(page.__errors, `page errors: ${page.__errors.join(" | ")}`).toHaveLength(0);
+});
+
+test("model climatology: the MONTH is the key — same month free, another month one read, a version one read",
+     async ({ page }) => {
+  test.setTimeout(120000);
+  const index = await serveClim(page);
+  await setAppDate(page, "2010-01-20");
+  await enableClim(page);
+  await climSelect(page, "data-climchan", "g100:t2m");
+  await expect.poll(() => page.evaluate(() => window.__earth.climLayerState().chan)).toBe("g100:t2m");
+  expect(page.__climAll.length).toBe(1);
+  const f = index.files.all.g100.clim_npy;
+  const C = f.shape[1];
+
+  // the Play tab walks the seasonal cycle at the layer's own cadence — a month
+  // (SST, on by default, is switched off so the finest cadence is this layer's)
+  const pb = await page.evaluate(() => {
+    const el = document.querySelector('#layer-list input[data-id="sst"]');
+    if (el?.checked) { el.checked = false; el.dispatchEvent(new Event("change", { bubbles: true })); }
+    return window.__earth.playbackFrames("2010-01-01", "2010-12-31", "auto");
+  });
+  expect(pb.step).toBe("1mo");
+  expect(pb.frames).toHaveLength(12);
+
+  // another day of January, and January of ANOTHER YEAR: no request at all
+  await setAppDate(page, "2010-01-03");
+  await page.waitForTimeout(400);
+  await setAppDate(page, "2015-01-28");
+  await page.waitForTimeout(400);
+  expect(page.__climAll.length).toBe(1);
+  expect(await page.evaluate(() => window.__earth.climLayerState().ready)).toBe(true);
+
+  // a DIFFERENT month: exactly one more read, at that month's block offset
+  await setAppDate(page, "2010-03-10");
+  await expect.poll(() => page.evaluate(() => window.__earth.climLayerState().grid?.month),
+                    { timeout: 30000 }).toBe(2);
+  expect(page.__climAll.length).toBe(2);
+  expect(page.__climReads[1][1]).toBe(f.header_len + 2 * C * f.plane_bytes);
+  // the fixture has no training sample outside January: NaN paints nothing,
+  // and the probe says "no data" rather than a zero
+  const march = await page.evaluate(async () =>
+    await window.__earth.probeValueAt(Cesium.Cartographic.fromDegrees(20, 10)));
+  expect(march.noData).toBe(true);
+  // back to January is free: the planes are in the LRU
+  await setAppDate(page, "2010-01-20");
+  await expect.poll(() => page.evaluate(() => window.__earth.climLayerState().grid?.month),
+                    { timeout: 30000 }).toBe(0);
+  expect(page.__climAll.length).toBe(2);
+
+  // a VERSION switch: one read, of the other version's file
+  const toasts = await recordToasts(page);
+  await climSelect(page, "data-climver", "dev");
+  await expect.poll(() => page.evaluate(() => window.__earth.climLayerState().grid?.version),
+                    { timeout: 30000 }).toBe("dev");
+  expect(page.__climAll.length).toBe(3);
+  expect(page.__climReads[2][0]).toBe("dev/g100");
+  const dev = index.versions.find((v) => v.key === "dev");
+  expect(await page.evaluate(() => window.__earth.climLayerState().grid.period)).toBe(dev.train_span);
+  await expect.poll(toasts).toContain(dev.name);
+  // the version option carries its rule as a tooltip
+  expect(await page.locator('select[data-climver="clim7"] option[value="dev"]').getAttribute("title"))
+    .toBe(dev.rule);
+
+  // THE SINGLE-PLANE PATH (what a 0.25° month takes: 7 × 4 MB is too much to
+  // read for one channel): with the block budget at zero, a channel switch is
+  // one read of plane_bytes at header_len + (month·C + c)·plane_bytes.
+  // (A version not read yet, so none of its planes is in the LRU.)
+  await page.evaluate(() => { window.__earth.climState.blockBytes = 0; });
+  await climSelect(page, "data-climver", "paper");
+  await expect.poll(() => page.evaluate(() => window.__earth.climLayerState().grid?.version),
+                    { timeout: 30000 }).toBe("paper");
+  expect(page.__climAll.length).toBe(4);
+  await climSelect(page, "data-climchan", "g100:sp");
+  await expect.poll(() => page.evaluate(() => window.__earth.climLayerState().grid?.chan),
+                    { timeout: 30000 }).toBe("sp");
+  expect(page.__climAll.length).toBe(5);
+  for (const [k, chan] of [[3, "t2m"], [4, "sp"]]) {
+    const c = index.groups.g100.chans.indexOf(chan);
+    const r = page.__climReads[k];
+    expect(r[0]).toBe("paper/g100");
+    expect(r[1]).toBe(f.header_len + (0 * C + c) * f.plane_bytes);
+    expect(r[2] - r[1] + 1).toBe(f.plane_bytes);
+  }
+  // and the single plane decodes to the same number the block did
+  const cell = climCell(index, "paper", "g100", 0, "sp", 10, 20);
+  const got = await page.evaluate(() => window.__earth.climSampleAt(20, 10));
+  expect(Math.abs(got - cell.raw)).toBeLessThan(1e-3);
+
+  expect(page.__errors, `page errors: ${page.__errors.join(" | ")}`).toHaveLength(0);
+});
+
+test("model climatology: hover card, downloads, the CSV, and no catalog record",
+     async ({ page }) => {
+  test.setTimeout(120000);
+  const index = await serveClim(page);
+  await setAppDate(page, "2010-01-20");
+  await enableClim(page);
+  await climSelect(page, "data-climchan", "g100:t2m");
+  await expect.poll(() => page.evaluate(() => window.__earth.climLayerState().chan)).toBe("g100:t2m");
+
+  // the title links the plan and states its pixel sizes
+  const head = page.locator('#layer-list input[data-id="clim7"]').locator("xpath=..");
+  await expect(head.locator("a.title-link")).toHaveAttribute("href", /E083_model_climatology\.md$/);
+  await expect(head).toContainText("0.25° / 1°");
+
+  // the hover card's four elements, the variable ones filled from the index
+  const tip = page.locator('#layer-list input[data-id="clim7"]')
+    .locator("xpath=ancestor::div[contains(@class,'layer-item')]").locator(".layer-tip");
+  expect((await tip.locator(".tip-sum").textContent()).length).toBeGreaterThan(120);
+  await expect(tip.locator('[data-tip="rec"]')).toContainText("average of the years 1982–2024");
+  await expect(tip.locator('[data-tip="rec"]')).toContainText("not one date");
+  await expect(tip.locator('[data-tip="int"]')).toContainText("one calendar month; the year does not matter");
+  await expect(tip.locator('[data-tip="sp"]'))
+    .toContainText(`${index.groups.g100.grid.step}° — this channel's group (g100)`);
+  // …and its Downloads block, for the selected version and group
+  const f = index.files.all.g100;
+  const tipLinks = await tip.locator('[data-tip="dl"] a').evaluateAll((as) =>
+    as.map((a) => [a.getAttribute("href"), a.target]));
+  const hrefs = tipLinks.map(([h]) => h);
+  expect(hrefs).toContain(f.clim_npy.url);
+  expect(hrefs).toContain(f.stats.url);
+  expect(hrefs).toContain("data/family7_clim_index.json");
+  expect(tipLinks.every(([, t]) => t === "_blank")).toBe(true);
+  // the fixture publishes no NetCDF, and the card says so rather than linking nothing
+  await expect(tip.locator('[data-tip="dl"]')).toContainText("NetCDF not published for this group");
+  await expect(tip.locator('[data-tip="dl"]')).toContainText("[12, C, H, W]");
+
+  // the row's own ⤓ downloads carries the same links, clickable, plus the CSV
+  const body = page.locator('[data-climdlbody="clim7"]');
+  const rowHrefs = await body.locator("a").evaluateAll((as) => as.map((a) => a.getAttribute("href")));
+  expect(rowHrefs).toEqual(hrefs);
+  await page.locator('details[data-climdl="clim7"] summary').click();
+  const [dl] = await Promise.all([
+    page.waitForEvent("download"),
+    body.locator("button[data-climcsv]").click(),
+  ]);
+  expect(dl.suggestedFilename()).toBe("family7_clim_all_g100_t2m_m01.csv");
+  const text = require("fs").readFileSync(await dl.path(), "utf8");
+  const lines = text.trim().split("\n");
+  const { ny, nx } = index.groups.g100.grid;
+  expect(lines[0]).toBe("lat,lon,value");
+  expect(lines.length).toBe(ny * nx + 1);
+  // row iy=10, ix=20 of a south-first grid is line 1 + 10·nx + 20
+  const cell = climCell(index, "all", "g100", 0, "t2m", 10, 20);
+  const [lat, lon, val] = lines[1 + 10 * nx + 20].split(",").map(Number);
+  expect([lat, lon]).toEqual([10, 20]);
+  expect(Math.abs(val - cell.raw)).toBeLessThan(1e-4);
+  // NaN is an EMPTY value, never "NaN": the soil channel is land-only
+  await climSelect(page, "data-climchan", "g100:soilw");
+  await expect.poll(() => page.evaluate(() => window.__earth.climLayerState().chan)).toBe("g100:soilw");
+  const soil = await page.evaluate(() => {
+    const E = window.__earth;
+    const g = E.climGridFor(E.GIBS_LAYERS.find((l) => l.id === "clim7"));
+    return E.climCsvParts(g).join("");
+  });
+  expect(soil).not.toContain("NaN");
+  expect(soil).toMatch(/,\n/);
+
+  // §2.6's exception: a picture of our own work carries no catalog record
+  const cat = JSON.parse(require("fs").readFileSync(
+    require("path").join(__dirname, "..", "data", "catalog.json"), "utf8"));
+  expect(JSON.stringify(cat)).not.toContain("clim7");
+  expect(JSON.stringify(cat)).not.toContain("Model climatology");
+
+  // and the Global tensor's card points at this layer
+  const tensorTip = await page.evaluate(() => window.__earth.LAYER_FACTS.family7.sum);
+  expect(tensorTip).toContain("Model climatology");
+
+  expect(page.__errors, `page errors: ${page.__errors.join(" | ")}`).toHaveLength(0);
+});
+
+test("model climatology: the departure from normal appears only when the tensor's slab is resident",
+     async ({ page }) => {
+  test.setTimeout(180000);
+  const f7 = await serveFamily7(page);
+  const index = await serveClim(page);           // after: its routes win for clim URLs
+  expect(index.stem).toBe(f7.stem);
+  await setAppDate(page, "2010-01-20");
+  await enableClim(page);
+  await climSelect(page, "data-climchan", "g100:t2m");
+  await expect.poll(() => page.evaluate(() => window.__earth.climLayerState().chan)).toBe("g100:t2m");
+  const probeClim = () => page.evaluate(async () => {
+    const e = window.__earth.colormapLayersTopDown().find((l) => l.cfg.id === "clim7");
+    return await window.__earth.probeEntryValue(e, Cesium.Cartographic.fromDegrees(20, 10));
+  });
+
+  // no tensor slab resident: the normal, and a hint — and NO tensor read
+  const before = await probeClim();
+  expect(before.departure.hint).toContain("Global tensor");
+  expect((page.__f7Reads || []).length).toBe(0);
+
+  // switch the Global tensor on, on the same channel: its g100 slab lands
+  await enableFamily7(page);
+  await page.evaluate(() => {
+    const s = document.querySelector('select[data-chan="family7"]');
+    s.value = "g100:t2m";
+    s.dispatchEvent(new Event("change", { bubbles: true }));
+  });
+  await expect.poll(() => page.evaluate(() => window.__earth.tensorLayerState().chan),
+                    { timeout: 20000 }).toBe("g100:t2m");
+  await expect.poll(() => page.evaluate(() => window.__earth.tensorLayerState().ready),
+                    { timeout: 20000 }).toBe(true);
+  // the two layers paint one channel IDENTICALLY: same ramp, same range, same unit
+  const [ts, cs] = await page.evaluate(() =>
+    [window.__earth.tensorLayerState(), window.__earth.climLayerState()]);
+  expect([cs.ramp, cs.vmin, cs.vmax, cs.units]).toEqual([ts.ramp, ts.vmin, ts.vmax, ts.grid.units]);
+
+  const nF7 = (page.__f7Reads || []).length;
+  const dep = await probeClim();
+  expect(dep.departure.dv).toBeDefined();
+  // value − normal, in the unit: the tensor's own float16 at bin 2049 minus
+  // the fixture's own float32 normal for January
+  const t = f7Cell(f7, "g100", 2049, "t2m", 10, 20);
+  const c = climCell(index, "all", "g100", 0, "t2m", 10, 20);
+  expect(Math.abs(dep.departure.dv - (t.raw - c.raw))).toBeLessThan(1e-3);
+  // …and as the trainer's z: (x − clim − mu) / den, from stats.json
+  const stats = JSON.parse(require("fs").readFileSync(
+    require("path").join(CLIM_DIR, "all", "g100", "stats.json"), "utf8"));
+  const ci = index.groups.g100.chans.indexOf("t2m");
+  const wantZ = (t.z - c.z - stats.mu[ci]) / stats.den[ci];
+  expect(Math.abs(dep.departure.dz - wantZ)).toBeLessThan(1e-3 * Math.max(1, Math.abs(wantZ)));
+  expect(dep.extra).toContain("departure from normal");
+  expect(dep.departure.binDate).toBe("2010-01-19");
+  // the departure read NOTHING from the tensor, and stats.json was fetched once
+  expect((page.__f7Reads || []).length).toBe(nF7);
+  await probeClim();
+  expect(page.__climStats).toEqual(["all/g100"]);
+
+  // the pixel card prints both rows, in their own section
+  await page.evaluate(() => {
+    window.__earth.showPixelState(Cesium.Cartographic.fromDegrees(20, 10));
+  });
+  const card = page.locator("#pixel-card");
+  await expect(card).toContainText("What the forecaster calls normal", { timeout: 30000 });
+  await expect(card).toContainText("Model climatology");
+  await expect(card).toContainText("departure from normal");
+  await expect(card).toContainText("1982–2024");
+
+  expect(page.__errors, `page errors: ${page.__errors.join(" | ")}`).toHaveLength(0);
+});
+
+test("model climatology degrades to a hint while its index is unpublished", async ({ page }) => {
+  test.setTimeout(120000);
+  await serveClim(page, { noIndex: true });
+  const toasts = await recordToasts(page);
+  await page.evaluate(() => {
+    const el = document.querySelector('#layer-list input[data-id="clim7"]');
+    el.checked = true;
+    el.dispatchEvent(new Event("change", { bubbles: true }));
+  });
+  await expect.poll(toasts, { timeout: 20000 }).toContain("has not been published yet");
+  await expect.poll(toasts).toContain("ml/export_family7_clim.py");
+  const st = await page.evaluate(() => window.__earth.climLayerState());
+  expect(st.hasIndex).toBe(false);
+  expect(st.unpublished).toBe(true);
+  expect(st.ready).toBe(false);
+  expect(page.__climAll.length).toBe(0);
+  // still a layer: a chip, a row, an untouched globe underneath
+  expect(await page.evaluate(() => !!window.__earth.state.layers.clim7?.layer)).toBe(true);
+  await expect(page.locator("#active-layers")).toContainText("Model climatology");
+  await expect(page.locator('select[data-climchan="clim7"]')).toContainText("the index has not landed");
+  expect(page.__errors, `page errors: ${page.__errors.join(" | ")}`).toHaveLength(0);
+});
+
 /* ==================================== Cones · DATA mode · LIVE (family 7) ===
  *
  * The Cones tab's data mode had one source: five pre-exported North Atlantic
