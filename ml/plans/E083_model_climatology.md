@@ -248,8 +248,27 @@ new layer.
 ## 6. Status
 
 - 2026-09-25: plan written. Nothing exported yet.
-- 2026-09-25: export script + tests landed (not yet run on the tensor) —
-  `ml/export_family7_clim.py`, `ml/pull_family7_tensor.py`,
-  `ml/publish_family7_clim_index.py`, `tests/test_export_family7_clim.py`,
-  `tests/test_pull_family7_tensor.py`, and the fixture in
-  `data/family7_clim/fixture/`.
+- 2026-09-25, later: export script + tests landed (d7e3fc5d), workflow
+  `family7-clim.yml` (054b6c70). **EXPORTED AND PUBLISHED**: family7-clim run #1
+  on a rented verified box (Japan, 129 GB RAM, $0.163/h) — pull 15 min for
+  61 GB, export 70 min for four groups × three versions, upload 30 s; the box's
+  container exited during its own restore check, so the index was written from
+  the sandbox: all 36 files under
+  `tensors/family7_global025_pentad_l2/clim/<version>/<group>/` downloaded
+  back and sha256-matched (each npy/nc sha256 equals the LFS oid the box
+  uploaded), CORS 206 with `allow-origin *`. Index committed (60a18039); the
+  layer, the fixture tests and `docs/FAMILY7_CLIM.md` deployed with it. Box
+  destroyed. Cost ≈ $0.50.
+- **The §5 live measurement holds.** Sea-surface temperature, `all` minus
+  `paper`, over every ocean cell × month of the 0.25° group: mean **+0.044 °C**,
+  median +0.042 °C, positive on **77.7 %** of cell-months — the sign of the
+  2021–2024 warming the paper's split leaves out of its normal. At the RAPID
+  line (26.5° N, 70° W) the July normal reads 28.33 °C (`all`), 28.28 (`dev`),
+  28.25 (`paper`); Niño 3.4 (0°, 150° W) 26.68 / 26.62 / 26.65; the
+  North Atlantic at 55° N, 30° W 11.75 / 11.75 / 11.71. The page's range-read
+  arithmetic replayed from node against the live file returns the same
+  28.33 °C at RAPID as the local export.
+- Follow-up: the box's publish step ran `hf_hub_download` for the 2.5 GB
+  restore from Japan and never finished before the container died — the next
+  run of the workflow should restore with `ml/pull_family7_tensor.py`'s ranged
+  puller (parallel, resumable) rather than one stream per file.
