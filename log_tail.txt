@@ -1,0 +1,25 @@
+store     swot — SWOT L2 LR sea-surface height, Expert (version D): the 2 km KaRIn swath, one row per valid pixel (tier P)
+family    family1_gf (1.gf) · public -> chfrank/earth-tensors:tensors/family1_gf/swot
+axis      2023-07-25 .. 2026-09-15  bins 3036..3265 · time_s int32 (schema 2)
+lane      d20230725-20260915 — this fetch writes parts/<year>/d20230725-20260915/ and pushes only that folder
+channels  C=3: ssha_karin, sig0_karin, ssh_karin_uncert
+work      /opt/runner/_work/earth/earth/ml/cache/family1_gf
+
+=== stage publish (swot) ===
+  hub: chfrank/earth-tensors with the token from $HF_TOKEN
+  restore: streamed and hashed as it arrives — no file touches the disk, no free-space preflight
+  verify-hub: 9 file(s) named by chfrank/earth-tensors:tensors/family1_gf/swot/store.json, 2 of them split on the Hub (['platform.npy', 'values.npy']); nothing will be uploaded but manifest.json
+  [verify-hub swot] start (9 items)  0/9  0.0s
+  [verify-hub swot] bin.npy  1/9  203.8s
+  [verify-hub swot] bin_offsets.npy  2/9  204.2s
+  [verify-hub swot] fp.npy  3/9  711.0s
+  [verify-hub swot] lat.npy  4/9  20978.4s
+::warning::tensors/family1_gf/swot/lon.npy: ChunkedEncodingError: ('Connection broken: IncompleteRead(19710204701 bytes read, 16786356547 more expected)', IncompleteRead(19710204701 bytes read, 16786356547 more expected)) at byte 19704840192 — attempt 1/12, resuming in 5s
+  [verify-hub swot] lon.npy  5/9  36786.3s
+  [verify-hub swot] platform.npy  6/9  37648.9s
+  [verify-hub swot] qc.npy  7/9  37743.6s
+  [verify-hub swot] time_s.npy  8/9  38122.6s
+  [verify-hub swot] values.npy  9/9  40124.1s
+  verify-hub: the tier-P grid step (publish_grid) is skipped — it uploads local files, and --verify-hub uploads nothing but the manifest
+  publish: 10 file(s) verified by restore -> https://huggingface.co/datasets/chfrank/earth-tensors/tree/main/tensors/family1_gf/swot
+=== stage publish done in 40126.7s ===
