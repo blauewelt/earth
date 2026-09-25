@@ -4042,11 +4042,16 @@ async function refreshTensorGrids() {
     const bin = tensorBinOfDate(idx, state.date);
     if (entry.tensorBin === bin) continue;
     entry.tensorBin = bin;
-    await ensureTensorGrid(entry.cfg);
+    /* A date step is one of the two things that trigger a read, so it owes the
+     * same degrade path the channel switch has: an empty layer AND the hint
+     * toast saying why (a failed read, or a pentad before the group's record
+     * starts). Without `toast` the step used to announce "Showing <pentad>"
+     * over a blank globe instead. */
+    const g = await ensureTensorGrid(entry.cfg, { toast: true });
     if (!state.layers[id] || !state.layers[id].layer) continue;
     removeLayer(id);
     addLayer(entry.cfg);
-    maybeTensorToast(entry.cfg, { replace: true });
+    if (g) maybeTensorToast(entry.cfg, { replace: true });
   }
 }
 

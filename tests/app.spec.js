@@ -7318,10 +7318,18 @@ test("Cones live mode: a coarse channel is read at its own coarse cell, and says
   await expect.poll(() => page.evaluate(() => window.__earth.coneState().data.live),
                     { timeout: 20000 }).toBe(true);
 
-  // the channel list is the TENSOR'S, and rg100 (the depth column) is not in it
+  /* The channel list is the TENSOR'S: every channel of every group
+   * `tensorChannelList` offers (g025, g100 and — since E-077 — oc025, the
+   * ocean colour that starts in 1997), minus the statics. rg100, the Argo depth
+   * column, is deliberately left out. The expectation is computed from the
+   * index by that same rule rather than typed as a sum, and a group the index
+   * gains that is in NEITHER list fails here, so adding one is a decision. */
+  const LISTED = ["g025", "g100", "oc025"], UNLISTED = ["rg100"];
+  expect(Object.keys(index.groups).filter((g) => !LISTED.includes(g) &&
+                                                 !UNLISTED.includes(g))).toEqual([]);
   const opts = await page.locator("#cn-channel option").allTextContents();
-  expect(opts.length).toBe(index.groups.g025.chans.length +
-                           index.groups.g100.chans.length);
+  expect(opts.length).toBe(LISTED.filter((g) => index.groups[g])
+    .reduce((n, g) => n + index.groups[g].chans.length, 0));
   expect(opts.join(" | ")).not.toContain("dbar");
 
   await page.evaluate(() => window.__earth.conesLiveAnchorAt(36, -30));
