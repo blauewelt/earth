@@ -1,0 +1,85 @@
+{
+ "_source": "ml/export_family7_clim.py \u2014 do not hand-edit",
+ "anomaly_transform": "ml/trainprobe.py::anomaly_transform",
+ "anomaly_transform_src_sha256": "e22a8154353cb6f6a4b49bee84672de1b7e528aee4b01e1968b54997420fbfd1",
+ "chans": [
+  "log_chl",
+  "chl_cov"
+ ],
+ "chunk": 64,
+ "copy": "ram",
+ "den": [
+  0.020323126727583688,
+  0.9918453869482445
+ ],
+ "dtype": "float32",
+ "dynamic": [
+  0,
+  1
+ ],
+ "finite_fraction": 0.08333333333333333,
+ "generated_utc": "2026-09-25T12:04:13Z",
+ "git_sha": "b029f41826e6a749e59218ddbd9da0e6d1d41bf0-dirty",
+ "group": "oc025",
+ "lats": [
+  -90.0,
+  90.0
+ ],
+ "layout": "[month, channel, lat, lon], C order; month 0 = January; z-units (physical = z * norm_sd + norm_mean)",
+ "lons": [
+  -180.0,
+  175.0
+ ],
+ "months_with_data": [
+  1
+ ],
+ "mu": [
+  1.2795272581479203e-08,
+  9.444042536602015e-05
+ ],
+ "n_bins": 4,
+ "n_train_bins": 4,
+ "norm": [
+  [
+   -0.4005306363105774,
+   0.1584557294845581
+  ],
+  [
+   0.7864680290222168,
+   0.3457113206386566
+  ]
+ ],
+ "note_nulls": "mu/sd/den are null where the pool was empty (never NaN in this file)",
+ "plan": "https://blauewelt.github.io/earth/docs.html?f=ml/plans/E083_model_climatology.md",
+ "sd": [
+  0.020322126727583687,
+  0.9918443869482445
+ ],
+ "shape": [
+  12,
+  2,
+  37,
+  72
+ ],
+ "static_channels": [],
+ "tensor_sha256": "55d1ee4af152828032403e4b204b8f7e0f2f58c13a9bb9cd750e8dbaf7fdc4c0",
+ "tensor_sha256_by_group": {
+  "g025": "a6ff94dfaa6bd8f2f141945fd32ccbf2530736f5048353801b276830e775c9bf",
+  "g100": "d1519e858d9641dcc1e721d6c31510036e93c5cd0ba4fed666e084d6ce31a227",
+  "oc025": "55d1ee4af152828032403e4b204b8f7e0f2f58c13a9bb9cd750e8dbaf7fdc4c0",
+  "rg100": "158a20aada98ebbfa92922670a92f2144fbdae064cc96d511c6269b0b7974ab8"
+ },
+ "tensor_sha256_verified": true,
+ "tensor_stem": "family7_global025_pentad_l1",
+ "version": {
+  "holdout_from": 2021,
+  "holdout_years": [
+   2009,
+   2017
+  ],
+  "key": "paper",
+  "name": "The paper's split \u2014 trained on 1982\u20132020 less 2009 and 2017",
+  "rule": "Training is 1982\u20132020 less the development years 2009 and 2017; those two years and every bin from 2021-01-01 on (the retrospective evaluation period 2021\u20132024) are held out of the climatology and of every statistic.",
+  "train_span": "1982\u20132020 less 2009 and 2017"
+ }
+}

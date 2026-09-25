@@ -125,6 +125,49 @@ the bandwidth (the Hub serves one stream at ≈ 2 MB/s; the box pulls the
    answering 206 — the family-7 measurement repeated on the new files, not
    assumed from them).
 
+**As built (2026-09-25) — where the code differs from, or pins down, the
+list above:**
+
+- **Pull** is its own script, `ml/pull_family7_tensor.py --dest <dir>
+  [--workers 16] [--chunk-mb 64] [--method range|hub]`: parallel `Range:`
+  reads (each must answer 206 with the exact Content-Range), resumable per
+  chunk (`<name>.part` + `<name>.part.done`, marked only after the bytes
+  land), `HF_TOKEN` from the env on every request, MB/s printed per file and
+  overall. The group `.npy` sha256s come from `data/family7_index.json`; the
+  index carries none for the `.npz`, so its sha256 comes from the tensor's
+  own `manifest.json` on the Hub (and the two must agree on every group).
+- **Export CLI**: `python3 ml/export_family7_clim.py --tensor <dir>/<stem>.npz
+  --index data/family7_index.json --out <dir> [--versions all,dev,paper]
+  [--groups g025,g100,oc025,rg100] [--chunk N] [--scratch DIR | --copy ram]
+  [--skip-sha] [--no-nc]`. The versions are the module-level `VERSIONS`
+  table; `paper` is written as `holdout_years: [2009, 2017]` plus
+  `holdout_from: 2021` (every bin of a year ≥ 2021), a field the other two
+  versions carry as `null`. The transform is reached through
+  `ml/export_cone_sample.py::_anomaly_transform` (import, or the `ast` lift).
+- **Box install line**: `pip install numpy netCDF4 huggingface_hub requests`
+  (netCDF4 is checked before the first group is copied; `--no-nc` skips
+  `clim.nc`).
+- **Static channels.** `anomaly_transform` writes 0.0 into the climatology of
+  any channel it finds static (no temporal variance of the spatial mean).
+  `clim.npy` keeps those bytes (it IS the function's array); `stats.json` and
+  the index list them as `static_channels` / `static_chans`, and the NetCDF
+  variable's `comment` says it is not a climatology. None is expected on the
+  real tensor; the toy test has one on purpose.
+- **Publish + index**: `python3 ml/publish_family7_clim_index.py upload --out
+  <dir>` (one `hub_commit` per version, every file downloaded back and
+  sha256-matched, CORS measured on `all/<first group>/clim.npy`, then
+  `data/family7_clim_index.json` with `restore_verified: true`).
+  `… index --out <dir>` rewrites the index from files already on the Hub
+  (still restored); `--local --no-cors` is the fixture's no-network form.
+- **The fixture** (`python3 ml/export_family7_clim.py --fixture`) runs the
+  real loader on `data/family7/fixture/`, whose metadata `.npz` is not in git
+  — it is rebuilt from that fixture's own index into a temp dir beside
+  symlinked sidecars. It ships **`g100` and `oc025` only, in all three
+  versions, without `clim.nc`** (2.27 MB; all four groups would be 8.1 MB),
+  and its index says `clim_nc: null`. The smoke tensor covers five pentads of
+  January 2010, so only month 1 is finite and the three versions are
+  byte-identical (2010 is a training year under all three rules).
+
 Cost: one verified box with ≥ 128 GB RAM and ≥ 200 GB disk for a few hours
 (pull ≈ 61 GB; then 3 versions × 3 passes over each group, page-cache
 resident); well under $5. The box is destroyed afterwards; nothing secret
@@ -184,8 +227,9 @@ new layer.
 - `tests/test_export_family7_clim.py`: on a toy tensor the exported
   `clim.npy` is bit-identical (after the transpose) to `stats["clim"]` from a
   direct `anomaly_transform` call under the same `t_hold`; the three
-  versions' `t_hold` masks are exactly the year rules of §2 (2009 bins held
-  out in `dev` and `paper`, 2023 only in `dev`, 2021–2024 only in `paper`,
+  versions' `t_hold` masks are exactly the year rules of §2 (2009 and 2017 bins held
+  out in `dev` and `paper`; 2023 held out in both — by name in `dev`, by the
+  2021-onward rule in `paper`; 2021, 2022 and 2024 held out only in `paper`;
   nothing in `all`); `rg100` is masked on its own months; the NetCDF's
   physical values equal `clim × sd + mean`; `stats.json` carries the tensor
   sha256s and git sha; an index built against a different family-7 stem is
@@ -204,3 +248,8 @@ new layer.
 ## 6. Status
 
 - 2026-09-25: plan written. Nothing exported yet.
+- 2026-09-25: export script + tests landed (not yet run on the tensor) —
+  `ml/export_family7_clim.py`, `ml/pull_family7_tensor.py`,
+  `ml/publish_family7_clim_index.py`, `tests/test_export_family7_clim.py`,
+  `tests/test_pull_family7_tensor.py`, and the fixture in
+  `data/family7_clim/fixture/`.
