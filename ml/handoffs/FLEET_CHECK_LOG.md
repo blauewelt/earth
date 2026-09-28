@@ -10,6 +10,60 @@ Newest first.
 
 ---
 
+## 2026-09-28 10:30Z — HEALTHY (exit 0), fleet unchanged from 09:30Z. 0 mutations, 0 fleet commits.
+
+`fleet_health.mjs`: `2 run(s) not finished · 0 runner(s) online+idle` / HEALTHY / EXIT=0.
+Reading at 10:30:48Z. **Every Vast number byte-identical to 09:30Z** (`fleet_box_detail.mjs`
+then a direct `/api/v1/instances/` read).
+
+- **CPU-BOUND** n/a — no box `running`, no job anywhere on the fleet. No threshold used,
+  no control read, no script to name.
+- **IDLE BURN** clean — 4 instances, all `cur_state=stopped`, 0 of 21 runners online.
+  **$0.00/h GPU burn.** No `gpu_box.mjs stop` issued.
+- **QUEUE STALL** cannot fire — `#650 Test & Deploy`, queued 2026-08-19T04:04:09Z, is the
+  known baseline (item 16); 0 runners online, so nothing to pair it with.
+- **DISK** clean — `50928407` 132/200 = **66.0%** (highest), `51415980` 184/420 = 43.8%,
+  `49102182` 89/300 = 29.7%, `47913006` 0.8/700 = 0.1%. All far under 90%.
+- **TELEMETRY** clean — `gpu_temp` 60.0 / 38.0 / 49.0 / 53.0 °C, all non-zero, no dead
+  frame. `50928407` still `stopped`/`loading`, the stale pair first noted 2026-09-25
+  12:30Z — fourth day, not billing GPU, not actioned.
+
+**Nothing changed this hour, so Chris was not notified.** The recording series now reads
+03:30 · 04:30 · 05:30 · [06:29] · [07:29] · 08:30 · 09:30 · 10:30 — **three consecutive
+recorded hours**, so the two-hour hole of 06:29/07:29 looks like a one-off rather than a
+continuing fault. 08:30Z's instruction still stands if a third gap appears: chase the
+recording path, not the fleet.
+
+**One correction to 09:30Z's forecast, worth a line.** It predicted `#1232 Test & Deploy`
+would end **`failure`** shortly, inside the 46.6–58.5 min band. It ended **`cancelled`** at
+09:33:11Z — superseded by `#1233`, which the 09:30Z check's own commit `95c4ea0` triggered
+at 09:32:54Z. The band was right about the duration (~59 min) and wrong about the verdict,
+because the 60-minute check cadence and the ~55-minute Test & Deploy runtime mean **each
+hourly commit now concurrency-cancels the previous hour's run before it can fail.** That is
+a property of this routine, not of the test suite: the last run to reach its own verdict was
+`#1231` (`failure`, 06:32:26Z). So `#650` + `#1233` (in_progress since 09:32:54Z, ~58 min at
+this reading) is the two, and the count is expected to stay at 2 indefinitely while the log
+keeps committing hourly. All `ubuntu-latest`, no Vast cost. Test & Deploy has been red for
+days: still noted, still not actioned, still not new. No new `ml-train` run — newest remains
+#554, 2026-09-07.
+
+**Budget — unchanged.** $0.00/h GPU; **$0.0815/h storage = $1.96/day** across the four
+stopped boxes (0.01296 + 0.01111 + 0.01852 + 0.03889, re-summed this hour). The ≈$41-of-$50
+figure is still 03:30Z's **extrapolation, not a reading** — Vast `/users/current/` exposes no
+balance field. At $1.96/day with nothing training, idle disk alone reaches the $50 cap around
+**2026-10-02**, buying no science. Per §0e reported, never acted on: no box stopped, started
+or destroyed.
+
+**Standing items.** **41 still open, BLOCKING, needs Chris** — the project store is over its
+2,000,000-token cap, so every project write still fails for every session; ~610 superseded
+hourly `fleet-check-*.md` docs are the bulk, and deleting project docs stays outside this
+routine's remit, so **nothing was deleted.** Sent at 08:30Z, unchanged, not re-notified.
+15 — 100th fresh-container bootstrap; re-cloned `earth` (shallow, `95c4ea0`) and rewrote
+`.gh_pat` + `.vast_key` from `claude/github-access.md` Rule 2b + `claude/vast-access.md`
+with the **Write tool, never argv**, `chmod 600`. Routine, not an event.
+
+---
+
 ## 2026-09-28 09:30Z — HEALTHY (exit 0), fleet unchanged from 08:30Z. 0 mutations, 0 fleet commits.
 
 `fleet_health.mjs`: `2 run(s) not finished · 0 runner(s) online+idle` / HEALTHY / EXIT=0.
