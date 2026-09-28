@@ -10,6 +10,70 @@ Newest first.
 
 ---
 
+## 2026-09-28 09:30Z — HEALTHY (exit 0), fleet unchanged from 08:30Z. 0 mutations, 0 fleet commits.
+
+`fleet_health.mjs`: `2 run(s) not finished · 0 runner(s) online+idle` / HEALTHY / EXIT=0.
+
+**All five conditions clean; every Vast reading byte-identical to 08:30Z (two frames,
+`fleet_box_detail.mjs` then a direct `/api/v1/instances/` read):**
+
+- **CPU-BOUND** n/a — no box `running`, no job anywhere on the fleet. No threshold used,
+  no control read, no script to name.
+- **IDLE BURN** clean — 4 instances, all `cur_state=stopped`, 0 of 21 runners online.
+  **$0.00/h GPU burn.**
+- **QUEUE STALL** cannot fire — `#650 Test & Deploy`, queued 2026-08-19T04:04:09Z, is the
+  known baseline (item 16); 0 runners online, so nothing to pair it with.
+- **DISK** clean — `50928407` 132/200 = **66%** (highest), `51415980` 184/420 = 44%,
+  `49102182` 89/300 = 30%, `47913006` 0.8/700 = 0%. All far under 90%.
+- **TELEMETRY** clean — all four `gpu_temp` non-zero (60.0 / 38.0 / 49.0 / 53.0 °C).
+  No dead frame. `50928407` still `stopped`/`loading`, the stale pair first noted
+  2026-09-25 12:30Z. Not billing GPU, not actioned.
+
+**THE HOLE DID NOT RECUR — that is this hour's only finding, and it closes 08:30Z's.**
+The scheduled task `trig_018EjzuU6evcGUqM2iBRvRVY` is enabled, cron `29 * * * *`,
+`last_fired_at` 2026-09-28T09:29:32Z (this run), next 10:29Z. 08:30Z left its commit
+`29d1f7c` and this entry follows it, so the series now reads 03:30 · 04:30 · 05:30 ·
+[06:29] · [07:29] · 08:30 · 09:30 — one two-hour gap, not a continuing one. Two consecutive
+recorded hours is not yet evidence the recording path is sound; if a third gap appears,
+08:30Z's instruction stands — chase the recording path, not the fleet. **Chris not notified
+this hour:** no fleet condition, and the two things that would warrant one (item 41, the
+budget arithmetic) were both sent at 08:30Z and are unchanged.
+
+**The 1→2 rise in "runs not finished" is the predicted one, not an event.** `#1232 Test &
+Deploy`, the 08:30Z check's own commit, has been `in_progress` since 08:34:18Z — ~57 min at
+this reading, inside the 46.6–58.5 min / all-`failure` band of the last eight non-cancelled
+runs, so expect it to end `failure` shortly. With `#650` that is the two. Test & Deploy has
+been red for days: **still noted, still not actioned, still not new.** All `ubuntu-latest`,
+no Vast cost. No new `ml-train` run — newest remains #554, 2026-09-07.
+
+**Budget — unchanged, and still the one thing moving.** $0.00/h GPU;
+**$0.0815/h storage = $1.96/day** across the four stopped boxes (0.0130 + 0.0111 + 0.0185
++ 0.0389, re-summed this hour). The ≈$41.2-of-$50 figure remains 03:30Z's **extrapolation,
+not a reading** — Vast `/users/current/` exposes no balance field. At $1.96/day with nothing
+training, idle disk alone reaches the $50 cap around **2026-10-02**, buying no science. Per
+§0e reported, never acted on: no box stopped, started or destroyed.
+
+**Standing items.** **41 still open, BLOCKING, needs Chris** — `project_info` read directly
+this hour: **knowledge_size 2,000,415 / max 2,000,000**, i.e. over the cap, so every project
+write still fails for every session. ~610 superseded hourly `fleet-check-*.md` docs are the
+bulk. Deleting project docs stays outside this routine's remit — **nothing was deleted.**
+15 — 99th fresh-container bootstrap; re-cloned `earth`, rewrote `.gh_pat` + `.vast_key` from
+the project docs with the Write tool, never argv, `chmod 600`. 40, 31, 37 unchanged. Mapping
+unchanged (4): `47913006`←`gpu-box-46996216`, `49102182`←`gpu-box-31299601`,
+`50928407`←`gpu-box-46694776`, `51415980`←`gpu-box-31947967`.
+
+**CPU-BOUND rule unchanged:** decide against a control's first `stage2_step` `wall_s`
+(`#478`, K=144/1024x16/batch256 → `wall_s 240`), **never a threshold**; exclude the k-fold
+ridge solves and a run's first 1–2 h of anomaly transform + embed; **name the script**;
+write the deadline and threshold down before the evidence closes; price both errors.
+Never destroy from this session; never stop a box with a running job.
+
+**For 10:29Z:** nothing in flight, no run to deadline, no box to watch. Expect `#1232` to
+have settled `failure` and this commit's own `#1233` to be the unfinished hosted run —
+known pattern, not a finding. Append here rather than creating a new file.
+
+---
+
 ## 2026-09-28 08:30Z — HEALTHY (exit 0), fleet unchanged from 05:30Z. 0 mutations, 0 fleet commits.
 
 `fleet_health.mjs`: `1 run(s) not finished · 0 runner(s) online+idle` / HEALTHY / EXIT=0.
