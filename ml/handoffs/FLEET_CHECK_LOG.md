@@ -10,6 +10,67 @@ Newest first.
 
 ---
 
+## 2026-09-28 12:30Z — HEALTHY (exit 0), fleet unchanged from 11:30Z. 0 mutations, 0 fleet commits.
+
+`fleet_health.mjs`: `1 run(s) not finished · 0 runner(s) online+idle` / HEALTHY / EXIT=0.
+Two frames — `gpu_box.mjs list` then a direct `/api/v1/instances/` read, ~12:33–12:35Z.
+
+- **CPU-BOUND** n/a — no box `running`, no job anywhere on the fleet. No threshold used,
+  no control read, no script to name.
+- **IDLE BURN** clean — 4 instances, all `cur_state=stopped`/`intended=stopped`, 0 of 21
+  runners online. **$0.00/h GPU burn.** No `gpu_box.mjs stop` issued.
+- **QUEUE STALL** cannot fire — `#650 Test & Deploy`, queued 2026-08-19T04:04:09Z, is the
+  known baseline (item 16); 0 runners online, so nothing to pair it with.
+- **DISK** clean — `50928407` 132/200 = **66.0%** (highest), `51415980` 184/420 = 43.8%,
+  `49102182` 89/300 = 29.7%, `47913006` 0.8/700 = 0.1%. Byte-identical to 11:30Z, all far
+  under 90%.
+- **TELEMETRY** clean — `gpu_temp` 60.0 / 38.0 / 49.0 / 53.0 °C, all non-zero, no dead
+  frame. `50928407` still `stopped`/`loading`, the stale pair first noted 2026-09-25
+  12:30Z — fourth day, not billing GPU, not actioned.
+
+**Nothing changed on the fleet this hour, so Chris was not notified.**
+
+**One data point that widens 11:30Z's band, and nothing more.** `#1235 Test & Deploy`
+(11:30Z's own commit `50d155e`) reached its own verdict — **`failure` at 12:11:18Z after
+38.9 min**, well short of the 46.6–58.5 min band the last nine non-cancelled runs sat in.
+Same red workflow, sooner. So the band is **46.6–58.5 min → now 38.9–58.5**, and the
+race 11:30Z described still holds: a run that finishes in ~39 min clears comfortably
+before the next hourly commit, which is why the count reads **1** again rather than 2.
+Hosted `ubuntu-latest`, no Vast cost, outside the five conditions — noted, not actioned,
+not new. Everything else green: `#71 Daily forecast refresh` 11:56Z, `#220
+tpu-status-mirror` 10:51Z, `#58 slatrack fetch` 05:58Z, `#97`/`#165 GLORYS` 05:33Z/04:08Z.
+No new `ml-train` run — newest remains #554, 2026-09-07. HEAD `764e1bc` (automated GFS
+refresh, 11:54Z).
+
+**Budget — unchanged.** $0.00/h GPU; **$0.0815/h storage = $1.96/day** across the four
+stopped boxes (0.01296 + 0.01111 + 0.01852 + 0.03889, re-summed this hour). The
+≈$41-of-$50 figure remains 03:30Z's **extrapolation, not a reading** — Vast
+`/users/current/` exposes no credit or balance field. At $1.96/day with nothing training,
+idle disk alone reaches the $50 cap around **2026-10-02**, buying no science. Reported at
+08:30Z; per §0e never acted on — no box stopped, started or destroyed from this session.
+
+**Standing items.** **41 still open, BLOCKING, needs Chris** — the project store is over
+its 2,000,000-token cap; every project write still fails for every session. ~610
+superseded hourly `fleet-check-*.md` docs are the bulk; deleting project docs is outside
+this routine's remit, so **nothing was deleted.** Sent at 08:30Z, unchanged, not
+re-notified. 15 — 102nd fresh-container bootstrap; re-cloned `earth` and rewrote
+`.gh_pat` + `.vast_key` from `claude/github-access.md` Rule 2b + `claude/vast-access.md`
+with the **Write tool, never argv**, `chmod 600`. Routine, not an event. 40, 31, 37
+unchanged. Mapping unchanged (4): `47913006`←`gpu-box-46996216`,
+`49102182`←`gpu-box-31299601`, `50928407`←`gpu-box-46694776`, `51415980`←`gpu-box-31947967`.
+
+**CPU-BOUND rule unchanged:** decide against a control's first `stage2_step` `wall_s`
+(`#478`, K=144/1024x16/batch256 → `wall_s 240`), **never a threshold**; exclude the k-fold
+ridge solves and a run's first 1–2 h of anomaly transform + embed; **name the script**;
+write the deadline and threshold down before the evidence closes; price both errors. Never
+destroy from this session; never stop a box with a running job.
+
+**For 13:30Z:** nothing in flight, no run to deadline, no box to watch. This commit will
+trigger `#1236`; whether 13:30Z sees it `failure` or `cancelled` turns on the race above —
+either way it is not a finding. Append here rather than creating a new file.
+
+---
+
 ## 2026-09-28 11:30Z — HEALTHY (exit 0), fleet unchanged from 10:30Z. 0 mutations, 0 fleet commits.
 
 `fleet_health.mjs`: `1 run(s) not finished · 0 runner(s) online+idle` / HEALTHY / EXIT=0.
