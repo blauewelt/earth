@@ -10,6 +10,77 @@ Newest first.
 
 ---
 
+## 2026-09-28 08:30Z — HEALTHY (exit 0), fleet unchanged from 05:30Z. 0 mutations, 0 fleet commits.
+
+`fleet_health.mjs`: `1 run(s) not finished · 0 runner(s) online+idle` / HEALTHY / EXIT=0.
+
+**All five conditions clean; every Vast reading byte-identical to 05:30Z:**
+
+- **CPU-BOUND** n/a — no box `running`, no job anywhere on the fleet. No threshold used,
+  no control read, no script to name.
+- **IDLE BURN** clean — 4 instances, all `cur_state=stopped`, 0 of 21 runners online.
+  **$0.00/h GPU burn.**
+- **QUEUE STALL** cannot fire — `#650 Test & Deploy`, queued 2026-08-19T04:04:09Z, is the
+  known baseline (item 16); 0 runners online, so nothing to pair it with.
+- **DISK** clean — `50928407` 132/200 = **66%** (highest), `51415980` 184/420 = 44%,
+  `49102182` 89/300 = 30%, `47913006` 0.8/700 = 0%. All far under 90%.
+- **TELEMETRY** clean — all four `gpu_temp` non-zero (60.0 / 38.0 / 49.0 / 53.0 °C).
+  No dead frame. `50928407` still `stopped`/`loading`, the stale pair first noted
+  2026-09-25 12:30Z. Not billing GPU, not actioned.
+
+**THE HOURLY SERIES HAS A TWO-HOUR HOLE, AND THAT IS THIS HOUR'S ONLY FINDING.** The
+scheduled task is healthy — `trig_018EjzuU6evcGUqM2iBRvRVY`, enabled, cron `29 * * * *`,
+`last_fired_at` 2026-09-28T08:30:07Z (this run), next 09:29Z — so **06:29Z and 07:29Z
+fired and left NO record anywhere**: no entry in this file, and `main` still stands at
+`0cfc1ac`, the 05:30Z check's own commit. Whether those two runs failed early or ran
+healthy and never committed is **not knowable from here** — only their absence is
+measured. Materially nothing was missed (the fleet was idle and is byte-identical), but
+the *mechanism* is the one that produced the ~60-hour gap of 09-25 → 09-28: a check that
+leaves no record is indistinguishable from a healthy one from the outside. **Chris
+notified this hour** for that reason, with the budget arithmetic below — not for a fleet
+condition, of which there is none.
+
+**Hosted lanes — two changes since 05:30Z, both predicted or benign, neither a fleet
+condition.** `#1231 Test & Deploy` (the 05:30Z check's own commit) ran 05:33:56Z →
+06:32:26Z (58.5 min) and ended `failure` — exactly what the 05:30Z entry said to expect,
+inside the 46.6–58.5 min / all-`failure` band of the last eight non-cancelled runs. Test &
+Deploy has now been red for days: **still noted, still not actioned, still not new.**
+`#58 slatrack fetch 1993-2024` **succeeded** 05:52:05Z → 05:58:16Z — the second
+consecutive success after #55/#56 failed on 09-27, so the intermittency the 03:30Z doc
+recorded (3 of 14) is currently clearing itself. `#97 GLORYS pull (global)`, `#165 GLORYS
+pull`, `#219 tpu-status-mirror` all green. All `ubuntu-latest`, no Vast cost.
+
+**Budget — unchanged, and the one thing still moving.** $0.00/h GPU;
+**$0.0815/h storage = $1.96/day** across the four stopped boxes (`storage_total_cost`
+summed this hour: 0.0130 + 0.0111 + 0.0185 + 0.0389). The ≈$41.2-of-$50 figure remains
+03:30Z's **extrapolation, not a reading** — Vast `/users/current/` exposes no balance
+field. At $1.96/day with nothing training, idle disk alone reaches the $50 cap around
+**2026-10-02**, buying no science. Per §0e this is reported, never acted on: no box was
+stopped, started or destroyed.
+
+**Standing items.** **41 still open, BLOCKING, needs Chris** — re-measured this hour, not
+assumed: a deliberately tiny `project_write` (~75 tokens) was refused, *"would exceed the
+project's maximum size (~2000000 tokens)"*. Every project write still fails for every
+session; ~610 superseded hourly `fleet-check-*.md` docs are the bulk. Deleting project
+docs stays outside this routine's remit — **nothing was deleted.** 15 — 98th
+fresh-container bootstrap; re-cloned `earth`, rewrote `.gh_pat` + `.vast_key` from the
+project docs with the Write tool, never argv, `chmod 600`. 40, 31, 37 unchanged. Mapping
+unchanged (4): `47913006`←`gpu-box-46996216`, `49102182`←`gpu-box-31299601`,
+`50928407`←`gpu-box-46694776`, `51415980`←`gpu-box-31947967`.
+
+**CPU-BOUND rule unchanged:** decide against a control's first `stage2_step` `wall_s`
+(`#478`, K=144/1024x16/batch256 → `wall_s 240`), **never a threshold**; exclude the k-fold
+ridge solves and a run's first 1–2 h of anomaly transform + embed; **name the script**;
+write the deadline and threshold down before the evidence closes; price both errors.
+Never destroy from this session; never stop a box with a running job.
+
+**For 09:29Z:** nothing in flight, no run to deadline, no box to watch. Expect this
+commit's own `Test & Deploy` (`#1232`) as an unfinished hosted run, failing in ~50 min —
+known pattern, not a finding. **If this file again shows a gap, the recording path itself
+is the fault to chase, not the fleet.** Append here rather than creating a new file.
+
+---
+
 ## 2026-09-28 05:30Z — HEALTHY (exit 0), unchanged from 04:30Z. 0 mutations, 0 fleet commits.
 
 `fleet_health.mjs`: `1 run(s) not finished · 0 runner(s) online+idle` / HEALTHY / EXIT=0.
