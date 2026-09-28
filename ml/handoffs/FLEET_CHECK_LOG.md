@@ -10,6 +10,62 @@ Newest first.
 
 ---
 
+## 2026-09-28 05:30Z — HEALTHY (exit 0), unchanged from 04:30Z. 0 mutations, 0 fleet commits.
+
+`fleet_health.mjs`: `1 run(s) not finished · 0 runner(s) online+idle` / HEALTHY / EXIT=0.
+
+**All five conditions clean; every Vast reading is byte-identical to 04:30Z:**
+
+- **CPU-BOUND** n/a — no box `running`, no job anywhere on the fleet. No threshold used,
+  no control read, nothing to name.
+- **IDLE BURN** clean — 4 instances, all `cur_state=stopped`, 0 runners online+idle.
+  **$0.00/h GPU burn.**
+- **QUEUE STALL** cannot fire — `#650 Test & Deploy`, queued 2026-08-19T04:04:09Z, is the
+  known baseline (item 16); no online+idle runner to pair it with.
+- **DISK** clean — `50928407` 132/200 = **66%** (highest), `51415980` 184/420 = 44%,
+  `49102182` 89/300 = 30%, `47913006` 0.8/700 = 0%. All far under 90%.
+- **TELEMETRY** clean — all four `gpu_temp` non-zero (60.0 / 38.0 / 49.0 / 53.0 °C).
+  No dead frame.
+
+`50928407` still reads `cur_state=stopped` / `actual_status=loading` — the same stale pair
+first noted 2026-09-25 12:30Z. Not billing GPU, not actioned.
+
+**The 04:30Z entry's one open thread closed by itself, exactly as predicted there.**
+`#1229 Test & Deploy` (`36374221421`), whose hosted `test` job had been in step 6 for
+~55 min, went `completed/cancelled` at 04:35:06Z — **concurrency-cancelled** by the 04:30Z
+check's own commit `e146557`, the same way `#1227` was by `#1228`. Its successor
+**`#1230 Test & Deploy`** then ran 04:33:36Z → 05:22:59Z (**49.4 min**) and ended
+`failure`, which lands inside the 46.6–57.8 min / all-`failure` band of the last seven
+non-cancelled runs of that workflow. So the 2→1 drop in "runs not finished" is that pair
+resolving, not a fleet event: hosted `ubuntu-latest` lanes, no Vast cost, outside this
+routine's five conditions. **Test & Deploy has now been red for days — still noted, still
+not actioned, still not new.** `#97 GLORYS pull (global)` started 05:30:40Z, also hosted;
+per the standing note that workflow is reportable on a **failure**, never on spacing.
+
+**Budget unchanged:** $0.00/h GPU, **$0.0815/h storage = $1.96/day** across the four
+stopped boxes. The ≈$41.2-of-$50 figure remains 03:30Z's *extrapolation*, not a reading —
+Vast `/users/current/` exposes no balance field.
+
+**Standing items:** 41 still open and blocking — every `project_write` still refused, so
+this file is again the record; nothing deleted, that stays Chris's call. 15 — 97th
+fresh-container bootstrap; re-cloned `earth`, rewrote `.gh_pat` + `.vast_key` from the
+project docs with the Write tool, never argv, `chmod 600`. 40, 31, 37 unchanged. Mapping
+unchanged (4): `47913006`←`gpu-box-46996216`, `49102182`←`gpu-box-31299601`,
+`50928407`←`gpu-box-46694776`, `51415980`←`gpu-box-31947967`.
+
+**CPU-BOUND rule unchanged:** decide against a control's first `stage2_step` `wall_s`
+(`#478`, K=144/1024x16/batch256 → `wall_s 240`), **never a threshold**; exclude the k-fold
+ridge solves and a run's first 1–2 h of anomaly transform + embed; **name the script**;
+write the deadline and threshold down before the evidence closes; price both errors.
+Never destroy from this session; never stop a box with a running job.
+
+**For 06:29Z:** nothing in flight, no run to deadline, no box to watch. Expect this
+commit's own `Test & Deploy` (`#1231`) to appear as an unfinished hosted run and to fail
+in ~50 min — that is the known pattern, not a finding. Append here rather than creating a
+new file.
+
+---
+
 ## 2026-09-28 04:30Z — HEALTHY (exit 0), unchanged from 03:30Z. 0 mutations, 0 fleet commits.
 
 `fleet_health.mjs`: `2 run(s) not finished · 0 runner(s) online+idle` / HEALTHY / EXIT=0.
