@@ -10,6 +10,62 @@ Newest first.
 
 ---
 
+## 2026-09-28 20:30Z — HEALTHY (exit 0), fleet unchanged from 19:30Z. 0 mutations, 0 fleet commits.
+
+`fleet_health.mjs`: `1 run(s) not finished · 0 runner(s) online+idle` / HEALTHY / EXIT=0.
+Two frames — `gpu_box.mjs list` ~20:31Z, then a direct `/api/v1/instances/` read ~20:32Z.
+
+**Item 42 check: the schedule did NOT skip this hour.** The entry immediately below is
+**19:30Z**, exactly one hour back. **Fifth consecutive clean hour** since the
+13:30Z/14:30Z hole. Item 42 stays open (five hours is not a fix) and is **not
+re-notified**.
+
+**All five conditions clean; every Vast field is byte-identical to 19:30Z:**
+
+- **CPU-BOUND** n/a — no box `running`, no job anywhere on the fleet, 0 of 21 runners
+  online. No threshold used, no control read, no script to name.
+- **IDLE BURN** clean — 4 instances, all `cur_state=stopped`/`intended=stopped`
+  (`actual_status` exited/exited/loading/exited). **$0.00/h GPU burn.** No
+  `gpu_box.mjs stop` issued.
+- **QUEUE STALL** cannot fire — `#650 Test & Deploy`, queued 2026-08-19T04:04:09Z, is the
+  known baseline (item 16); 0 runners online, so nothing to pair it with. It is now the
+  **only** unfinished run: the count fell 2 → 1 because `#1240` and `#1241` both ended.
+- **DISK** clean — `50928407` 132/200 = **66.0%** (highest), `51415980` 184/420 = 43.8%,
+  `49102182` 89/300 = 29.7%, `47913006` 0.75/700 = 0.1%. All far under 90%.
+- **TELEMETRY** clean — `gpu_temp` 60.0 / 38.0 / 49.0 / 53.0 °C, non-zero and identical
+  across both frames. No dead frame. `50928407` still `stopped`/`loading`, the stale pair
+  first noted 2026-09-25 12:30Z — sixth day, not billing GPU, not actioned.
+
+**The hosted lanes closed as predicted, no finding.** `#1241 Test & Deploy`
+(19:30Z's own commit `f7c6d47`, started 19:32:49Z) ended **failure** 20:09:19Z at ~37 min —
+inside the expected band and the expected conclusion (standing red, `app.spec.js`). Its
+start concurrency-**cancelled** `#1240` at 19:32:52Z, the same race logged at 10:30Z/11:30Z,
+not a rule. Both on GitHub-**hosted** `ubuntu-latest`: no runner is online, so neither can
+be a fleet job and neither costs Vast. `#221 tpu-status-mirror` **success** 18:20:01Z
+unchanged; newest `slatrack` remains `#59` (14:33Z, failure, logged); newest `ml-train`
+remains `#554`, 2026-09-07.
+
+**Budget unchanged:** $0.00/h GPU; **$0.0815/h storage = $1.96/day** across the four
+stopped boxes, re-summed from `storage_total_cost` (0.012963 + 0.011111 + 0.018519 +
+0.038889) — identical to 19:30Z. Per 15:30Z, **do not sum `storage_cost`** — that field is
+the host's $/GB/month rate. The ≈$41-of-$50 figure is still 03:30Z's **extrapolation, not a
+reading**. Idle disk alone still reaches the $50 cap around **2026-10-02**; reported
+08:30Z, per §0e never acted on from this session, **not re-notified.**
+
+**Standing items.** **41 still open, BLOCKING** — the project store is still over its
+2,000,000-token cap (660 docs listed this hour), so this file remains the record; nothing
+deleted, that stays Chris's call. **42 open** (see above). 40, 37, 31, 16 unchanged.
+15 — **110th** fresh-container bootstrap; re-cloned `earth` and rewrote `.gh_pat` +
+`.vast_key` from `claude/github-access.md` Rule 2b + `claude/vast-access.md` with the
+**Write tool, never argv**, `chmod 600`. Routine, not an event. Mapping unchanged (4):
+`47913006`←`gpu-box-46996216`, `49102182`←`gpu-box-31299601`,
+`50928407`←`gpu-box-46694776`, `51415980`←`gpu-box-31947967`.
+
+**No notification sent** — healthy, and nothing changed that Chris has not already been
+told about.
+
+---
+
 ## 2026-09-28 19:30Z — HEALTHY (exit 0), fleet unchanged from 18:30Z. 0 mutations, 0 fleet commits.
 
 `fleet_health.mjs`: `2 run(s) not finished · 0 runner(s) online+idle` / HEALTHY / EXIT=0.
