@@ -10,6 +10,86 @@ Newest first.
 
 ---
 
+## 2026-09-29 04:30Z — HEALTHY (exit 0, twice), fleet unchanged from 03:30Z. 0 mutations, 0 fleet commits.
+
+`fleet_health.mjs`: `2 run(s) not finished · 0 runner(s) online+idle` / HEALTHY / EXIT=0, at
+04:31:24Z and again at 04:34:21Z. **Item 42 did NOT recur** — 03:30Z is the entry directly
+below, so the schedule has now held five hours running (00:30Z–04:30Z).
+
+**The "2 not finished" is 1→2 and is NOT a change of state:** it is `#650` plus `#1248`,
+the hosted `Test & Deploy` on the 03:30Z check's own commit `602282f`, which the 03:30Z
+entry predicted by number. `in_progress` = exactly `#1248` (created 03:35:46Z,
+`ubuntu-latest`, **no fleet box, no Vast cost**); `queued` = exactly `#650`.
+
+**All five conditions clean; every Vast field byte-identical to 03:30Z, across two frames
+~135 s apart (04:31:59Z and 04:34:16Z):**
+
+- **CPU-BOUND** n/a — no box `running`, no job anywhere on the fleet, 0 runners online.
+  `gpu_util` and `cpu_util` 0 on all four. No threshold used, no control read, no script
+  to name.
+- **IDLE BURN** clean — 4 instances, all `cur_state=stopped` AND `intended_status=stopped`.
+  **$0.00/h GPU burn.** No `gpu_box.mjs stop` issued.
+- **QUEUE STALL** cannot fire — the queued run IS `#650 Test & Deploy`, queued
+  2026-08-19T04:04:09Z (item 16 baseline); 0 runners online, nothing to pair it with.
+- **DISK** clean — `50928407` 132/200 = **66.0%** (highest), `51415980` 184/420 = 43.8%,
+  `49102182` 89/300 = 29.7%, `47913006` 0.75/700 = 0.1%. All far under 90%.
+- **TELEMETRY** clean — `gpu_temp` 60.0 / 38.0 / 49.0 / 53.0 °C in both frames. No dead
+  frame. `50928407` still `stopped`/`loading`, the stale pair first noted 2026-09-25
+  12:30Z — eleventh day, not billing GPU, not actioned.
+
+**The hour's deltas are zero on the fleet and one off it.** `#1248` was still `in_progress`
+at 04:35:07Z, **59.4 min in — marginally PAST the top of the 45–58 min band** (#1247 45.5,
+#1246 44.6, #1245 45.5, #1244 58.0). Called **not a finding**, on three grounds: it is
+GitHub-hosted `ubuntu-latest`, so it spends **no Vast credit and touches no fleet box**;
+the band is a soft observed range that has already drifted once (2026-09-28 12:30Z widened
+it); and a hosted run's own 6 h timeout bounds the worst case at zero cost to the $50 cap.
+**Left running deliberately — nothing was cancelled.** If 05:30Z finds `#1248` still
+`in_progress` (>2 h), that IS a new pattern and worth reporting; a `failure` at 60–70 min
+is just the band widening again. **Runner registrations 19, unchanged**
+(21 on 09-25 → 20 → 19); all `offline busy=false`. Newest `ml-train` remains `#554`,
+2026-09-07. Nothing is meant to be in flight, and nothing is.
+
+**Budget unchanged:** $0.00/h GPU; **$0.0815/h storage = $1.96/day** across the four
+stopped boxes (`storage_total_cost` 0.012963 + 0.011111 + 0.018519 + 0.038889 — identical
+to 03:30Z, 02:30Z, 01:30Z and 00:30Z). The ≈$41-of-$50 figure is still 2026-09-28 03:30Z's
+**extrapolation, not a reading**.
+
+**Item 43 (open, dated):** idle-storage-reaches-$50 projection ~3 days out (≈2026-10-02).
+The re-notify is owed on **2026-10-01** and **not before** — today is 09-29, so **not
+re-notified this hour**, deliberately. Do not notify early; do not notify more than once.
+`47913006` remains **stop-only, never destroy** (sole copy of the 213 GB family-5 daily
+tensor).
+
+**Standing items.** **41 still open, BLOCKING** — re-checked read-only via `project_info`:
+`knowledge_size` **2,000,415 / 2,000,000**, byte-identical to 03:30Z, still *over* the cap;
+newest project doc still `claude/fleet-check-2026-09-25-1530Z.md`, so no write has landed
+in four days. This file remains the record; nothing deleted, which stays Chris's call.
+42, 40, 37, 31, 16 unchanged. 15 — **117th** fresh-container bootstrap; re-cloned `earth`
+(HEAD `602282f`) and rewrote `.gh_pat` + `.vast_key` from `claude/github-access.md` Rule 2b
++ `claude/vast-access.md` with the **Write tool, never argv**, `chmod 600`. Routine, not an
+event. Mapping unchanged (4): `47913006`←`gpu-box-46996216`, `49102182`←`gpu-box-31299601`,
+`50928407`←`gpu-box-46694776`, `51415980`←`gpu-box-31947967`.
+
+**CPU-BOUND rule unchanged:** decide against a control's first `stage2_step` `wall_s`
+(`#478`, K=144/1024x16/batch256 → `wall_s 240`), **never a threshold**; exclude the k-fold
+ridge solves and a run's first 1–2 h of anomaly transform + embed; **name the script**;
+write the deadline and threshold down before the evidence closes; price both errors. Never
+destroy from this session; never stop a box with a running job.
+
+**For 05:30Z:** nothing in flight on the fleet, no run to deadline, no box to watch.
+Expect `#1248` closed as `failure` (it was already 59.4 min in at 04:35Z, so 60–75 min
+total is the likely figure — record it, the band needs re-stating) and this commit's own
+run `#1249` to be the new unfinished hosted run. **If `#1248` is still `in_progress`, that
+is the one thing this hour deferred to you — report it.** Watch
+whether runner registrations keep shedding (19 now); benign at any count while `#650` is
+the only queued run. Append here rather than creating a new file.
+
+**No notification sent** — healthy, unchanged, and the hour's only motion is a hosted CI
+run still inside its usual band. See item 43 for the one dated thing that warrants a ping
+on 10-01.
+
+---
+
 ## 2026-09-29 03:30Z — HEALTHY (exit 0, twice), fleet unchanged from 02:30Z. 0 mutations, 0 fleet commits.
 
 `fleet_health.mjs`: `1 run(s) not finished · 0 runner(s) online+idle` / HEALTHY / EXIT=0, at
