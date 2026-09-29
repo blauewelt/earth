@@ -10,6 +10,91 @@ Newest first.
 
 ---
 
+## 2026-09-29 10:30Z — HEALTHY (exit 0, twice), fleet unchanged from 08:30Z. 0 mutations, 0 fleet commits.
+
+`fleet_health.mjs`: `1 run(s) not finished · 0 runner(s) online+idle` / HEALTHY / EXIT=0 at
+10:31:0xZ and again at 10:35:1xZ.
+
+**Item 42 checked first, per 08:30Z's instruction: it DID recur — the entry directly below is
+08:30Z, not 09:30Z, so the 09:30Z check never ran.** Skip history now 06:30Z/07:30Z, 13:30Z/14:30Z,
+22:30Z (all 09-28), 05:30Z and 09:30Z (09-29). **Not notified:** the fleet was idle across the gap
+— no box `running`, no job, $0/h GPU — and 08:30Z's own rule is that a skip across an idle fleet is
+not a notify, a skip with a box `running` is. Nothing was unwatched that needed watching.
+
+**All five conditions clean; every Vast field byte-identical to 08:30Z (and so to 07:30Z, 06:30Z,
+04:30Z), across two frames ~50 s apart (10:31:0xZ and 10:34:0xZ):**
+
+- **CPU-BOUND** n/a — no box `running`, no job anywhere on the fleet, 0 runners online.
+  `gpu_util` and `cpu_util` 0 on all four. No threshold used, no control read, no script to
+  name, no deadline to write down.
+- **IDLE BURN** clean — 4 instances, all `cur_state=stopped` AND `intended_status=stopped`.
+  **$0.00/h GPU burn.** No `gpu_box.mjs stop` issued.
+- **QUEUE STALL** cannot fire — `in_progress` is **empty (0 runs)**; `queued` is exactly
+  `#650 Test & Deploy`, queued 2026-08-19T04:04:09Z (item 16 baseline). 0 runners online,
+  nothing to pair it with. The single "run not finished" is `#650` and nothing else.
+- **DISK** clean — `50928407` 132/200 = **66.0%** (highest), `51415980` 184/420 = 43.8%,
+  `49102182` 89/300 = 29.7%, `47913006` 0.8/700 = 0.1%. All far under 90%.
+- **TELEMETRY** clean — `gpu_temp` 60.0 / 38.0 / 49.0 / 53.0 °C in both frames, `vmem`
+  0.473 / 0.471 / 0.340 / 0.369. No dead frame. `50928407` still `stopped`/`loading`, the
+  stale pair first noted 2026-09-25 12:30Z — fourteenth day, not billing GPU, not actioned.
+
+**08:30Z's one prediction landed exactly as predicted, so it is not a finding.** `#1252 Test &
+Deploy` — spawned by the 08:30Z check's own commit `19b5046` — ran 08:35:03Z → 09:31:50Z
+(**56.8 min**) and ended `failure`. **Inside the 45–58 min band, now unbroken across #1247
+(45.5 m), #1249 (56.9 m), #1250 (51.7 m), #1251 (56.3 m) and #1252 (56.8 m), all `failure`.**
+Test & Deploy has been red for days; **still noted, still not actioned, still not new.** It
+finished ~1 h before this check, so again there is **no unfinished hosted run at all** — which is
+why the count read 1 and not 2. Other hosted lanes unchanged and green: `#224 tpu-status-mirror`
+09:02:21Z→09:02:39Z success is the only new run since 08:30Z, and it is green; `#61 slatrack fetch`
+06:11Z, `#100 GLORYS pull (global)` 05:49Z all still success. All `ubuntu-latest`, **no fleet box,
+no Vast cost. Runner registrations 19, unchanged** (21 on 09-25 → 20 → 19), all `offline
+busy=false`. Nothing is meant to be in flight, and nothing is.
+
+**Budget unchanged:** $0.00/h GPU; **$0.0815/h storage = $1.96/day** across the four stopped
+boxes (`storage_total_cost` 0.012963 + 0.011111 + 0.018519 + 0.038889 — identical to 08:30Z and
+every hour back to 00:30Z). The ≈$41-of-$50 figure is still 2026-09-28 03:30Z's **extrapolation,
+not a reading**; Vast `/users/current/` exposes no balance field.
+
+**Item 43 (open, dated):** idle-storage-reaches-$50 projection ≈2026-10-02. The re-notify is
+owed on **2026-10-01** and **not before** — today is 09-29, so **not re-notified this hour**,
+deliberately. Do not notify early; do not notify more than once. `47913006` remains
+**stop-only, never destroy** (sole copy of the 213 GB family-5 daily tensor).
+
+**Standing items.** **41 still open, BLOCKING** — the session's own project-doc listing still
+shows **660 docs with `claude/fleet-check-2026-09-25-1530Z.md` newest**, i.e. no project write has
+landed in four days and the store is unpruned; `project_info` was NOT called this hour (the
+listing already answers it read-only). This file remains the record; nothing deleted, which stays
+Chris's call. 42 open and it fired this hour (above). 40, 37, 31, 16 unchanged. 15 — **121st**
+fresh-container bootstrap; the container had no `earth`, no `.gh_pat`, no `.vast_key`. Re-cloned at
+`19b5046` and rewrote both credential files from `claude/github-access.md` Rule 2b +
+`claude/vast-access.md` with the **Write tool, never argv**, `chmod 600`. The first
+`git clone --depth 1 --filter=blob:none` succeeded first try this time. Routine, not an event.
+Mapping unchanged (4): `47913006`←`gpu-box-46996216`, `49102182`←`gpu-box-31299601`,
+`50928407`←`gpu-box-46694776`, `51415980`←`gpu-box-31947967`.
+
+**The telemetry note holds and was used:** `fleet_box_detail.mjs` prints no `gpu_util`,
+`cpu_util`, `gpu_temp`, `vmem` or `disk_util` — the per-condition telemetry above is a direct
+Node `fetch` of `GET /api/v1/instances/` (**v1, not v0**; v0 returns an empty `instances` array
+with this key, which looks exactly like "no boxes exist").
+
+**CPU-BOUND rule unchanged:** decide against a control's first `stage2_step` `wall_s`
+(`#478`, K=144/1024x16/batch256 → `wall_s 240`), **never a threshold**; exclude the k-fold ridge
+solves and a run's first 1–2 h of anomaly transform + embed; **name the script**; write the
+deadline and threshold down before the evidence closes; price both errors. Never destroy from
+this session; never stop a box with a running job.
+
+**For 11:30Z:** nothing in flight on the fleet, no run to deadline, no box to watch. Expect this
+commit's own `Test & Deploy` as a new unfinished hosted run, failing in 45–58 min — known pattern,
+not a finding. **Check item 42 first**: if the entry directly below is not 10:30Z, the schedule
+skipped again; two consecutive skips across an idle fleet is still not a notify, but note the run
+of them. Append here rather than creating a new file.
+
+**No notification sent** — healthy, unchanged, the hour's only closed item (`#1252`) landed inside
+its known band, and the one skipped check happened over an idle fleet. See item 43 for the one
+dated thing that warrants a ping on 10-01.
+
+---
+
 ## 2026-09-29 08:30Z — HEALTHY (exit 0, twice), fleet unchanged from 07:30Z. 0 mutations, 0 fleet commits.
 
 `fleet_health.mjs`: `1 run(s) not finished · 0 runner(s) online+idle` / HEALTHY / EXIT=0 at
