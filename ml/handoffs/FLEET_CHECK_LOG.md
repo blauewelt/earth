@@ -10,6 +10,96 @@ Newest first.
 
 ---
 
+## 2026-09-29 18:30Z — HEALTHY (exit 0), fleet unchanged from 17:30Z. 0 mutations, 0 fleet commits.
+
+`fleet_health.mjs`: `1 run(s) not finished · 0 runner(s) online+idle` / HEALTHY / EXIT=0 at
+18:30:2xZ. The one unfinished run is `#650` (item 16 baseline).
+
+**Item 42 checked first: the schedule is ON TIME, third hour running.** Scheduled 18:29Z,
+container up and first command 18:29–18:30Z; the entry directly below is 17:30Z's, so no hour
+was skipped. Skip history unchanged: 06:30Z/07:30Z, 13:30Z/14:30Z, 22:30Z (09-28), 05:30Z,
+09:30Z, 14:30Z-late, 15:30Z-absorbed (09-29). Nothing added this hour. Not notified.
+
+**All five conditions clean; every Vast field byte-identical to 17:30Z (and so back to 04:30Z
+on 09-28), across two frames 104 s apart (18:31:16Z and 18:33:00Z):**
+
+- **CPU-BOUND** n/a — no box `running`, no job anywhere on the fleet, 0 runners online.
+  `gpu_util` and `cpu_util` 0 on all four. No threshold used, no control read, no script to
+  name, no deadline to write down.
+- **IDLE BURN** clean — 4 instances, all `cur_state=stopped` AND `intended_status=stopped`.
+  **$0.00/h GPU burn.** No `gpu_box.mjs stop` issued. §0e not needed — nothing dispatched.
+- **QUEUE STALL** cannot fire — `in_progress` is **empty (0 runs)**; `queued` is exactly
+  `#650 Test & Deploy`, queued 2026-08-19T04:04:09Z (item 16 baseline). 0 runners online,
+  nothing to pair it with.
+- **DISK** clean — `50928407` 132/200 = **66.0%** (highest), `51415980` 184/420 = 43.8%,
+  `49102182` 89/300 = 29.7%, `47913006` 0.8/700 = 0.1%. All far under 90%.
+- **TELEMETRY** clean — `gpu_temp` 60.0 / 38.0 / 49.0 / 53.0 °C in both frames, `vmem`
+  0.473 / 0.471 / 0.340 / 0.369. No dead frame. `50928407`'s stale pair is still
+  `cur_state=stopped` with `actual_status=loading` (`intended_status`/`next_state` both
+  `stopped`) — storage-billing only, not idle burn. Nineteenth day, not actioned.
+
+**17:30Z's prediction landed.** `#1259 Test & Deploy` — spawned by the 17:30Z check's own
+commit `45db07b` — ran 17:33:05Z → 18:19:00Z and ended `failure` in **45.9 min**, inside the
+36.6–58.0 min band. **Twelve consecutive `Test & Deploy` failures, band unmoved at 36.6–58.0
+min** for the second hour running. Red for days; noted, not actioned, not new. No other hosted
+lane closed this hour (`#225 tpu-status-mirror` unchanged at 15:47Z). Runner registrations
+**19, unchanged**, all offline, 0 busy.
+
+**Correction to 17:30Z's slatrack timing — `#63` is NOT late, it was not due.** The workflow's
+cron is `40 */6 * * *` (`family10-slatrack-fetch.yml:110`), i.e. 00:40 / 06:40 / 12:40 / 18:40Z,
+and GitHub's scheduled-run delay on this repo ran ~39 min last time (`#62` fired 13:19Z against
+a 12:40Z cron). So `#63` is due **18:40Z + delay ≈ 18:40–19:20Z**, which is *after* this check's
+window, not inside it. 17:30Z's "~18:30Z" was an estimate from the observed gap rather than from
+the cron; use the cron. **`#63` lands in the 19:30Z check.** The 13:30Z escalation threshold
+stands unchanged: report only if the *same* lane fails twice consecutively, or one run fails
+*all six* lanes — and `#62` failed at 13:19Z, so a same-lane failure in `#63` is the
+two-consecutive trigger and gets reported.
+
+**Budget unchanged:** $0.00/h GPU; **$0.0815/h storage = $1.96/day** across the four stopped
+boxes (`storage_total_cost` 0.012963 + 0.011111 + 0.018519 + 0.038889 — identical to 17:30Z and
+every hour back to 00:30Z on 09-28). The ≈$41-of-$50 figure is still 2026-09-28 03:30Z's
+**extrapolation, not a reading** — Vast `/users/current/` exposes no balance field.
+
+**Item 43 (open, dated):** idle-storage-reaches-$50 projection ≈2026-10-02; the re-notify is
+owed on **2026-10-01** and not before — today is 09-29, so **not re-notified this hour**,
+deliberately. `47913006` remains **stop-only, never destroy** (sole copy of the 213 GB family-5
+daily tensor).
+
+**Standing items.** **41 still open, BLOCKING** — the project store was read this hour (fresh
+container, and the project docs are the credential route); `claude/github-access.md` and
+`claude/vast-access.md` both read fine, but the newest project doc is still
+`claude/fleet-check-2026-09-25-1530Z.md`: **no project write has landed in nine days.** No
+project write was attempted, per 17:30Z. This file remains the record; nothing deleted, which
+stays Chris's call. 42 open, **did not fire** (on time, three hours running). 40, 37, 31, 16
+unchanged. 15 — **128th** fresh-container bootstrap; no `earth`, no `.gh_pat`, no `.vast_key`.
+Re-cloned at `45db07b` and rewrote both credential files from the project docs with the **Write
+tool, never argv**, `chmod 600`. Routine, not an event. Mapping unchanged (4):
+`47913006`←`gpu-box-46996216`, `49102182`←`gpu-box-31299601`, `50928407`←`gpu-box-46694776`,
+`51415980`←`gpu-box-31947967`.
+
+**Telemetry note holds and was used:** direct Node `fetch` of `GET /api/v1/instances/`
+(**v1, not v0**; v0 returns an empty `instances` array with this key, which looks exactly like
+"no boxes exist").
+
+**CPU-BOUND rule unchanged:** decide against a control's first `stage2_step` `wall_s` (`#478`,
+K=144/1024x16/batch256 → `wall_s 240`), **never a threshold**; exclude the k-fold ridge solves
+and a run's first 1–2 h of anomaly transform + embed; **name the script**; write the deadline
+and threshold down before the evidence closes; price both errors. Never destroy from this
+session; never stop a box with a running job.
+
+**For the next check (19:30Z):** nothing in flight on the fleet, no run to deadline, no box to
+watch. Expect this commit's own `Test & Deploy` as a new unfinished hosted run, failing in
+**36.6–58 min** — known pattern, not a finding. **`#63 slatrack` is due 18:40Z cron + ~39 min
+delay and should have closed by 19:30Z** — apply the escalation threshold above. **Check item 42
+first.** Append here rather than creating a new file.
+
+**No notification sent** — fleet healthy, every Vast field unchanged across two frames, the
+schedule on time, and the hour's one closed hosted run (`#1259`) was predicted, in its known
+failure class and inside its known band. See item 43 for the one dated thing that warrants a
+ping on 10-01.
+
+---
+
 ## 2026-09-29 17:30Z — HEALTHY (exit 0, twice), fleet unchanged from 16:30Z. 0 mutations, 0 fleet commits.
 
 `fleet_health.mjs`: `1 run(s) not finished · 0 runner(s) online+idle` / HEALTHY / EXIT=0 at
