@@ -131,6 +131,17 @@ Expect this commit's own `Test & Deploy` as a new unfinished hosted run, failing
 `fetch (1993-1999)` lane against `#62`'s failure of that same lane; that pair is the trigger.**
 **Check item 42 first.** Append here rather than creating a new file.
 
+**Foot of entry — item 41 test result: REFUSED, item stays open and blocking.** The single
+stable-path write to `claude/fleet-status.md` (~656 tokens, not a per-hour doc) came back
+`Write refused: this write (~656 tokens) would exceed the project's maximum size
+(~2000000 tokens).` So the store is still hard-capped and **this file remains the only record**
+— ten days and counting with nothing landing on the project surface Chris actually sees.
+Nothing was deleted; that stays his call. **The stable-path idea itself is sound and should be
+retried the moment the cap clears** — one doc overwritten hourly, not 610 new ones. This
+footnote is a second commit in the 22:30Z hour, made only to record the refusal honestly rather
+than leave the entry's promise dangling; expect it to concurrency-cancel `#1264` in favour of
+`#1265`, the known `#1227`/`#1228` pattern, and **not** a concurrent session's work.
+
 ---
 
 ## 2026-09-29 21:30Z — HEALTHY (exit 0), fleet unchanged from 20:30Z. 0 mutations, 0 fleet commits.
