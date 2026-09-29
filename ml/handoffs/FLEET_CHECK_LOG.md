@@ -10,6 +10,90 @@ Newest first.
 
 ---
 
+## 2026-09-29 11:30Z — HEALTHY (exit 0, twice), fleet unchanged from 10:30Z. 0 mutations, 0 fleet commits.
+
+`fleet_health.mjs`: `2 run(s) not finished · 0 runner(s) online+idle` / HEALTHY / EXIT=0 at
+11:30:5xZ, and `1 run(s) not finished` / HEALTHY / EXIT=0 at 11:34:1xZ — the count fell by one
+because `#72 Daily forecast refresh` finished between the frames, not because anything changed on
+the fleet.
+
+**Item 42 checked first, per 10:30Z's instruction: it did NOT recur** — the entry directly below
+is 10:30Z, so the schedule held. Skip history unchanged: 06:30Z/07:30Z, 13:30Z/14:30Z, 22:30Z
+(all 09-28), 05:30Z and 09:30Z (09-29).
+
+**All five conditions clean; every Vast field byte-identical to 10:30Z (and so back to 04:30Z),
+across two frames 94 s apart (11:31:35Z and 11:33:09Z):**
+
+- **CPU-BOUND** n/a — no box `running`, no job anywhere on the fleet, 0 runners online.
+  `gpu_util` and `cpu_util` 0 on all four. No threshold used, no control read, no script to
+  name, no deadline to write down.
+- **IDLE BURN** clean — 4 instances, all `cur_state=stopped` AND `intended_status=stopped`.
+  **$0.00/h GPU burn.** No `gpu_box.mjs stop` issued.
+- **QUEUE STALL** cannot fire — `queued` is exactly `#650 Test & Deploy`, queued
+  2026-08-19T04:04:09Z (item 16 baseline); 0 runners online, nothing to pair it with. The one
+  `in_progress` run at the first frame was `#72`, on `ubuntu-latest`, not a fleet box.
+- **DISK** clean — `50928407` 132/200 = **66.0%** (highest), `51415980` 184/420 = 43.8%,
+  `49102182` 89/300 = 29.7%, `47913006` 0.75/700 = 0.1%. All far under 90%.
+- **TELEMETRY** clean — `gpu_temp` 60.0 / 38.0 / 49.0 / 53.0 °C in both frames, `vmem`
+  0.473 / 0.471 / 0.340 / 0.369. No dead frame. `50928407` still `stopped`/`loading`, the stale
+  pair first noted 2026-09-25 12:30Z — fifteenth day, not billing GPU, not actioned.
+
+**10:30Z's prediction landed exactly, so it is not a finding.** `#1253 Test & Deploy` — spawned by
+the 10:30Z check's own commit `cb7ccb8` — ran 10:34:17Z → 11:30:22Z (**56.1 min**) and ended
+`failure`. **Inside the 45–58 min band, now unbroken across #1247 (45.5 m), #1249 (56.9 m), #1250
+(51.7 m), #1251 (56.3 m), #1252 (56.8 m) and #1253 (56.1 m), all `failure`.** Test & Deploy has
+been red for days; still noted, still not actioned, still not new.
+
+**One new hosted lane this hour, and it is the ordinary daily one.** `#72 Daily forecast refresh`
+(`.github/workflows/refresh-forecast.yml`, `schedule`, `ubuntu-latest`, job `refresh` on a hosted
+runner) started 11:29:59Z — 90 s before this check — and finished during it. Its last five runs
+(#67–#71, 09-24 → 09-28) are all `success` in 2–3 min, so a run of it in flight at 11:30Z is the
+schedule working, **not an anomaly**; it is why the first frame read 2 unfinished runs and the
+second read 1. No fleet box, no Vast cost. Runner registrations **19, unchanged**, all offline.
+
+**Budget unchanged:** $0.00/h GPU; **$0.0815/h storage = $1.96/day** across the four stopped boxes
+(`storage_total_cost` 0.012963 + 0.011111 + 0.018519 + 0.038889 — identical to 10:30Z and every
+hour back to 00:30Z). The ≈$41-of-$50 figure is still 2026-09-28 03:30Z's **extrapolation, not a
+reading**.
+
+**Item 43 (open, dated):** idle-storage-reaches-$50 projection ≈2026-10-02; the re-notify is owed
+on **2026-10-01** and not before — today is 09-29, so **not re-notified this hour**, deliberately.
+`47913006` remains **stop-only, never destroy** (sole copy of the 213 GB family-5 daily tensor).
+
+**Standing items.** **41 still open, BLOCKING** — `project_info` WAS called this hour (this
+container started with no repo at all, so the project docs were the only way to recover
+`github-access.md` Rule 2b and `vast-access.md`) and it reads **660 docs, `knowledge_size`
+2,000,415 / `max_knowledge_size` 2,000,000 — the store is OVER its cap**, with
+`claude/fleet-check-2026-09-25-1530Z.md` still the newest doc, i.e. no project write has landed in
+four days. This file remains the record; nothing deleted, which stays Chris's call. 42 open, did
+not fire. 40, 37, 31, 16 unchanged. 15 — **122nd** fresh-container bootstrap; no `earth`, no
+`.gh_pat`, no `.vast_key`. Re-cloned at `cb7ccb8` (`--depth 50`, first try) and rewrote both
+credential files with the **Write tool, never argv**, `chmod 600`. Routine, not an event. Mapping
+unchanged (4): `47913006`←`gpu-box-46996216`, `49102182`←`gpu-box-31299601`,
+`50928407`←`gpu-box-46694776`, `51415980`←`gpu-box-31947967`.
+
+**The telemetry note holds and was used:** the per-condition telemetry above is a direct Node
+`fetch` of `GET /api/v1/instances/` (**v1, not v0**; v0 returns an empty `instances` array with
+this key, which looks exactly like "no boxes exist").
+
+**CPU-BOUND rule unchanged:** decide against a control's first `stage2_step` `wall_s` (`#478`,
+K=144/1024x16/batch256 → `wall_s 240`), **never a threshold**; exclude the k-fold ridge solves and
+a run's first 1–2 h of anomaly transform + embed; **name the script**; write the deadline and
+threshold down before the evidence closes; price both errors. Never destroy from this session;
+never stop a box with a running job.
+
+**For 12:30Z:** nothing in flight on the fleet, no run to deadline, no box to watch. Expect this
+commit's own `Test & Deploy` as a new unfinished hosted run, failing in 45–58 min — known pattern,
+not a finding. `#72 Daily forecast refresh` has already run for today and should not reappear.
+**Check item 42 first**: if the entry directly below is not 11:30Z, the schedule skipped again.
+Append here rather than creating a new file.
+
+**No notification sent** — healthy, unchanged, the hour's two closed runs (`#1253` inside its known
+band, `#72` green on its normal daily schedule) are both expected. See item 43 for the one dated
+thing that warrants a ping on 10-01.
+
+---
+
 ## 2026-09-29 10:30Z — HEALTHY (exit 0, twice), fleet unchanged from 08:30Z. 0 mutations, 0 fleet commits.
 
 `fleet_health.mjs`: `1 run(s) not finished · 0 runner(s) online+idle` / HEALTHY / EXIT=0 at
