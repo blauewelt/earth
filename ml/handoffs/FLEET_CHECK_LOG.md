@@ -10,6 +10,74 @@ Newest first.
 
 ---
 
+## 2026-09-30 10:30Z — HEALTHY (exit 0, twice), fleet unchanged from 09:30Z. 0 mutations, 0 fleet commits. **Chris NOT notified** — nothing wrong, nothing changed.
+
+`fleet_health.mjs`: `2 run(s) not finished · 0 runner(s) online+idle` / HEALTHY / EXIT=0 at
+10:31Z, and the same on a second run. Box table empty — no instance `running`.
+
+**All five conditions clean; every Vast figure byte-identical to 09:30Z:**
+
+- **CPU-BOUND** n/a — no box `running`, no job anywhere on the fleet. All four read
+  `gpu_util=0` **and `cpu_util=0`**, so the condition's own conjunction cannot hold. No
+  threshold used, no control read, no script to name.
+- **IDLE BURN** clean — 4 instances, all `cur_state=stopped` / `intended_status=stopped`,
+  0 runners online+idle. **$0.00/h GPU burn.** §0e not engaged: nothing dispatched in the
+  window.
+- **QUEUE STALL** cannot fire — `#650 Test & Deploy` (queued 2026-08-19T04:04:09Z, id
+  `32214393689`) is the item-16 baseline; direct `?status=` query reads `queued: 1 ·
+  in_progress: 1`, and there is no online+idle runner to pair it with.
+- **DISK** clean — no box over 90%. `50928407` 132/200 = **66%** (highest), `51415980`
+  184/420 = 44%, `49102182` 89/300 = 30%, `47913006` 0.8/700 = 0%. Unchanged.
+- **TELEMETRY** clean — all four `gpu_temp` non-zero (60.0 / 38.0 / 49.0 / 53.0 °C). No
+  dead frame. Boxes stopped, so no step-count cross-check needed.
+
+`50928407` still `cur_state=stopped` / `actual_status=loading`, the stale pair first noted
+2026-09-25 12:30Z. Not billing GPU, not actioned. Runner registrations **17, unchanged**
+(0 online, 0 busy).
+
+**The second unfinished run is the predicted one.** `#1274 Test & Deploy`
+(`36696799184`), pushed by the 09:30Z check's own commit `bddf830` at 09:32:45Z. Its
+`deploy` job succeeded 09:32:49Z; its `test` job is on a GitHub-hosted `ubuntu-latest`
+(runner `GitHub Actions 1000006922`), sitting in step "Run test suite (data integrity +
+browser)" at ~59 min — inside the established 46.6–59.3 min band that has ended `failure`
+20 consecutive times. Hosted lane, no Vast cost, outside this routine's five conditions:
+**predicted, not a finding.** Nothing else fired since 09:30Z.
+
+**Budget unchanged:** $0.00/h GPU, **$0.0815/h storage = $1.96/day** across the four
+stopped boxes. The ≈$41–42-of-$50 figure remains an *extrapolation* — Vast
+`/users/current/` exposes no balance field (confirmed again this hour: the endpoint
+returns no `credit`/`balance` key).
+
+**Standing items.** **41 open and BLOCKING** — carried, **not re-measured this hour** (a
+`project_info` read costs the full 660-doc listing and the figure has not moved in six
+hours); this file is again the record. Nothing deleted — Chris's call, notified
+2026-09-25, not re-notified. **43 (open, dated):** idle-storage-reaches-$50 projection
+≈2026-10-02; the 2026-10-01 re-notify was discharged early at 06:30Z, nothing owed today.
+**42:** this slot ran, so no new skip — the count stands at two (01:30Z, 07:30Z). 40, 37,
+31, 16 unchanged. 15 — **fresh-container bootstrap again, 99th**; no `earth`, no
+`.gh_pat`, no `.vast_key`. Re-cloned (shallow, at `bddf830`) and rewrote both credential
+files from the project docs with the **Write tool, never argv**, `chmod 600`. Routine, not
+an event. Mapping unchanged (4): `47913006`←`gpu-box-46996216`,
+`49102182`←`gpu-box-31299601`, `50928407`←`gpu-box-46694776`,
+`51415980`←`gpu-box-31947967`.
+
+### For 11:30Z
+
+- **Nothing is in flight.** No run to deadline, no box to watch. Next check should be short.
+- **If any box reads `running`: §0e first** — a just-dispatched wave looks exactly like idle
+  burn in the gap before its job lands.
+- **CPU-BOUND unchanged:** decided against a control's first `stage2_step` `wall_s`
+  (`#478`, K=144/1024x16/batch256 → `wall_s 240`), **never a threshold**. Exclude k-fold
+  ridge solves and the first 1–2 h of anomaly transform + embed. **Name the script.** Write
+  deadline + threshold down before the evidence closes; price both errors.
+- **`#64`'s 429 fix is still unactioned** and is the working session's call, not this
+  routine's: `build_family7.py:1447 hub_repo()` calls `api.whoami()` bare while `:683`
+  already has the namespace-fallback pattern. Next `slatrack` failure reporting
+  `lane … is INCOMPLETE` — check for the 429 before believing the integrity alarm.
+- **Never destroy from this session; never stop a box with a running job.**
+
+---
+
 ## 2026-09-30 09:30Z — HEALTHY (exit 0), fleet unchanged from 08:30Z. 0 mutations, 0 fleet commits. **Chris NOT notified** — nothing wrong, nothing changed.
 
 `fleet_health.mjs`: `1 run(s) not finished · 0 runner(s) online+idle` / HEALTHY / EXIT=0 at
