@@ -10,6 +10,102 @@ Newest first.
 
 ---
 
+## 2026-09-30 03:30Z — HEALTHY (exit 0, twice), fleet unchanged from 02:30Z. 0 mutations, 0 fleet commits.
+
+`fleet_health.mjs`: `1 run(s) not finished · 0 runner(s) online+idle` / HEALTHY / EXIT=0, run twice
+(03:30:5xZ and 03:35:4xZ, identical). Box table empty — no instance `running`. The single
+unfinished run is `#650` (item 16 baseline).
+
+**Item 42 checked first: the schedule is ON TIME.** The entry directly below this one is 02:30Z's,
+so no hour was skipped; container up and first command 03:30Z against a 03:29Z slot. Skip history
+unchanged: 06:30Z/07:30Z, 13:30Z/14:30Z, 22:30Z (09-28), 05:30Z, 09:30Z, 14:30Z-late,
+15:30Z-absorbed (09-29), 01:30Z (09-30). Nothing added this hour.
+
+**All five conditions clean; every Vast field byte-identical to 02:30Z (and so back to 04:30Z on
+09-28), across two frames (03:31:48Z and 03:33:56Z):**
+
+- **CPU-BOUND** n/a — no box `running`, no job anywhere on the fleet, `in_progress` is **empty**
+  (zero hosted runs, zero fleet jobs), 0 runners online. `gpu_util` and `cpu_util` 0 on all four.
+  No threshold used, no control read, no script to name, no deadline to write down.
+- **IDLE BURN** clean — 4 instances, all `cur_state=stopped`. **$0.00/h GPU burn.** No
+  `gpu_box.mjs stop` issued. §0e not needed — nothing dispatched.
+- **QUEUE STALL** cannot fire — `queued` is exactly `#650 Test & Deploy`, queued
+  2026-08-19T04:04:09Z (item 16 baseline), now **42 days**. 0 runners online, nothing to pair.
+- **DISK** clean — `50928407` 132/200 = **66.0%** (highest), `51415980` 184/420 = 43.8%,
+  `49102182` 89/300 = 29.7%, `47913006` 0.8/700 = 0.1%. All far under 90%.
+- **TELEMETRY** clean — `gpu_temp` 60.0 / 38.0 / 49.0 / 53.0 °C in both frames, `vmem`
+  0.473 / 0.471 / 0.340 / 0.369. No dead frame. `50928407`'s stale pair is still
+  `cur_state=stopped` with `actual_status=loading` — storage-billing only, not idle burn.
+  Twenty-fifth day, not actioned.
+
+### Three hosted deltas, all predicted or benign; no fleet delta at all
+
+- **`#1268 Test & Deploy`** (`f210d86`, the 02:30Z check's own commit) ran 02:36:01Z → 03:30:32Z,
+  **`failure` in 54.5 min — inside 02:30Z's written-down 36.4–58 min band**, and the
+  **nineteenth consecutive** `Test & Deploy` failure. Chronic red on the untriaged `app.spec.js`
+  set (`:950`, `:1720`, `:812`, `6601`, `6865`). GitHub-hosted `ubuntu-latest`, no Vast cost,
+  outside the five conditions. Noted, not actioned, not new.
+- **`#228 tpu-status-mirror` fired 03:21:28Z → `success` in 22 s**, closing the 3 h 31 m gap since
+  `#227` at 23:50:52Z. That gap sat inside the observed 2 h 19 m – 6 h 45 m distribution the whole
+  time, exactly as 02:30Z said it would; **the cron line `*/15 * * * *` remains the wrong yardstick
+  for this workflow.** Twenty-first consecutive `success`.
+- **Runner registrations 19 → 18**, all offline, 0 busy. GitHub-side stale-registration
+  bookkeeping, not a Vast change: the instance count is **still 4** and the id→`--name` mapping is
+  untouched. Not item 37 (that tracks *instance* departures) and not one of the five conditions.
+- **`#63 slatrack`: watch stays closed, nothing owed.** Last fire 09-29 22:35:53Z `success`; the
+  `40 */6 * * *` slot at 00:40Z did not fire, and on the observed max delay of 5 h 46 m it is
+  **not late before 06:26Z**. Now 03:35Z — inside. The `fetch (1993-1999)` trigger stays disarmed.
+
+No other workflow ran since 03:21Z. Repo HEAD `f210d86` — advanced only by the 02:30Z check
+itself; no concurrent session committed in the hour since.
+
+**Budget unchanged:** $0.00/h GPU; **$0.0815/h storage = $1.96/day** across the four stopped boxes
+(`storage_total_cost` 0.012963 + 0.011111 + 0.018519 + 0.038889 = 0.081481 — identical to 02:30Z
+and every hour back to 00:30Z on 09-28). The ≈$41-of-$50 figure is still 2026-09-28 03:30Z's
+**extrapolation, not a reading** — Vast `/users/current/` exposes no balance field.
+
+**Item 43 (open, dated):** idle-storage-reaches-$50 projection ≈2026-10-02; the re-notify is owed
+on **2026-10-01** and not before — today is still 09-30, so **not re-notified this hour**,
+deliberately. It comes due on the next UTC day, i.e. the first check after 00:00Z tomorrow.
+`47913006` remains **stop-only, never destroy** (sole copy of the 213 GB family-5 daily tensor).
+
+**Standing items. 41 still open, BLOCKING — re-tested this hour, same refusal.** A 7-token doc
+write came back `Write refused: this write (~7 tokens) would exceed the project's maximum size
+(~2000000 tokens).` **Thirteen days with nothing landing on the project surface Chris actually
+sees**, and this file remains the only record. Nothing deleted — that stays Chris's call and is
+outside this routine's remit. The one cheap retest per hour is worth keeping, since a success is
+the signal that Chris has acted. **42 checked and did not fire** (03:30Z on time). 40, 37, 31, 16
+unchanged. 15 — **136th** fresh-container bootstrap; no `earth`, no `.gh_pat`, no `.vast_key`.
+Re-cloned at `f210d86` and rewrote both credential files from the project docs with the
+**Write tool, never argv**, `chmod 600`. Routine, not an event. Mapping unchanged (4):
+`47913006`←`gpu-box-46996216`, `49102182`←`gpu-box-31299601`,
+`50928407`←`gpu-box-46694776`, `51415980`←`gpu-box-31947967`.
+
+**Telemetry note holds and was used:** direct Node `fetch` of `GET /api/v1/instances/`
+(**v1, not v0**; v0 returns an empty `instances` array with this key, which looks exactly like
+"no boxes exist").
+
+**CPU-BOUND rule unchanged:** decide against a control's first `stage2_step` `wall_s` (`#478`,
+K=144/1024x16/batch256 → `wall_s 240`), **never a threshold**; exclude the k-fold ridge solves
+and a run's first 1–2 h of anomaly transform + embed; **name the script**; write the deadline
+and threshold down before the evidence closes; price both errors. Never destroy from this
+session; never stop a box with a running job.
+
+**No notification sent** — fleet healthy, every Vast field unchanged across two frames, no open
+watch carried in, and the hour's deltas (`#1268` failing inside its written band,
+`tpu-status-mirror` firing inside its observed gap distribution, one stale runner registration
+dropping) are all known patterns or bookkeeping. Item 41 is a real blocking problem but Chris was
+notified on 09-25 and the remedy is his to choose; re-notifying hourly is the noise this routine
+exists to avoid.
+
+**For 04:30Z:** nothing in flight, no run to deadline, no box to watch. This commit will trigger
+the next `Test & Deploy`, expected `failure` in **36.4–58 min** — not a finding either way.
+`#63 slatrack` is not late before **06:26Z**. Item 43's re-notify comes due **2026-10-01**.
+**Check item 42 first: if the entry directly below yours is not 03:30Z, the schedule skipped
+again.** Append here rather than creating a new file.
+
+---
+
 ## 2026-09-30 02:30Z — HEALTHY (exit 0), fleet unchanged from 00:30Z. 0 mutations, 0 fleet commits. **The 01:30Z check never ran.**
 
 `fleet_health.mjs`: `1 run(s) not finished · 0 runner(s) online+idle` / HEALTHY / EXIT=0.
