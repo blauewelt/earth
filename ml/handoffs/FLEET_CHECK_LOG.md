@@ -10,6 +10,145 @@ Newest first.
 
 ---
 
+## 2026-09-30 23:30Z — HEALTHY (exit 0, twice), fleet unchanged from 22:30Z. 0 mutations, 0 fleet commits beyond this log. **Chris NOTIFIED** — **`#66 slatrack` fired 4 h late and FAILED**, but on an **HF `/whoami-v2` 429 in the verify step, not data loss**; all 32 years intact, $0. **On time, ran 23:30Z — item 42 did not continue.**
+
+`fleet_health.mjs`: `1 run(s) not finished · 0 runner(s) online+idle` / HEALTHY / EXIT=0 at
+23:30:23Z, and byte-identical at 23:32:28Z. The one unfinished run is `#650` (item-16
+baseline), not live work. Box table empty on both frames.
+
+**All five conditions clean; every Vast figure byte-identical to 22:30Z / 20:30Z / 19:30Z,
+two frames 2 min apart:**
+
+- **CPU-BOUND** n/a — no box `running`, no job anywhere on a fleet box. All four read
+  `gpu_util=0` **and `cpu_util=0`**, so the condition's conjunction cannot hold. No threshold
+  used, no control read, no script to name.
+- **IDLE BURN** clean — 4 instances, all `cur_state=stopped` / `intended_status=stopped`,
+  0 runners online+idle (15 registered, 0 online, 0 busy). **$0.00/h GPU burn.** §0e not
+  engaged: nothing dispatched in the window, nothing `running` to mistake for it. No
+  `gpu_box.mjs stop` issued.
+- **QUEUE STALL** cannot fire — `queued` is exactly 1 and it is `#650 Test & Deploy`
+  (queued 2026-08-19T04:04:09Z, id `32214393689`), the item-16 baseline; no online+idle
+  runner to pair it with. `in_progress` count is 0.
+- **DISK** clean — `50928407` 132/200 = **66%** (highest), `51415980` 184/420 = 44%,
+  `49102182` 89/300 = 30%, `47913006` 0.8/700 = 0%. Unchanged, none near 90%.
+- **TELEMETRY** clean — all four `gpu_temp` non-zero (60.0 / 38.0 / 49.0 / 53.0 °C),
+  identical on both frames. No dead frame.
+
+`50928407` still `cur_state=stopped` / `actual_status=loading`, the stale pair first noted
+2026-09-25 12:30Z, now its sixth day. Not billing GPU, not actioned.
+
+### The hour's finding: `#66 slatrack` failed, and the step title is misleading
+
+**`#66 Family 10.1 slatrack fetch` → `failure`**, `schedule`, id `36786588193`,
+22:36:57Z → 22:43:28Z. It **did fire** — ~3 h 57 min past its 18:40Z `cron: '40 */6 * * *'`
+slot — so the 22:30Z "watch whether 00:40Z fires" question is answered early, and the
+dropped-firing thread closes: one late firing, not two dropped ones.
+
+**Five of six lanes green.** Only `fetch (2015-2018)` (job `110129341589`) failed, and it
+failed in **72 s** (22:37:00Z → 22:38:12Z), at **step 8, "Every year of the lane must carry
+a done.json"**.
+
+**That step name is a trap and this entry exists to disarm it.** The done.json check
+**never ran**. The step died earlier, in
+`ml/build_family10_stores.py`'s repo-path helper —
+`return api, f"{api.whoami()['name']}/{HF_DATASET}", tok` — on
+
+```
+httpx2.HTTPStatusError: Client error '429 Too Many Requests' for url
+  'https://huggingface.co/api/whoami-v2'
+huggingface_hub.errors.HfHubHTTPError: You've hit the rate limit for the /whoami-v2
+  endpoint, which is intentionally strict for security reasons. If you're calling it
+  often, consider caching the response with `whoami(..., cache=True)`.
+```
+
+Six lanes start at **22:37:00Z within one second of each other** and each resolves the
+namespace with its own `whoami()`. That is the whole cause. The `::error::lane ... is
+INCOMPLETE` line visible in the log is **echoed script source inside the `##[group]`
+block, not emitted output** — no INCOMPLETE verdict was ever reached.
+
+**Data verified intact, two independent ways:**
+
+1. The run's **own** status read succeeded at 22:37Z, 72 s before the failure:
+   `slatrack 2015: rows=66,315,188 parts=65` · `2016: 76,997,453 / 76` ·
+   `2017: 91,797,698 / 90` · `2018: 84,500,883 / 83`, then
+   `done_years: 2015 2016 2017 2018` and
+   `lane 2015-2018: every year is already on the Hub — nothing to do`.
+2. **Direct Hub read from this session** (public dataset, no token):
+   `partials/family10_1/slatrack/<y>/` for 2015/2016/2017/2018 → **`done.json` present in
+   all four**, entry counts 67 / 78 / 92 / 85, i.e. the 65/76/90/83 parts plus index,
+   ledger and marker. 2024 spot-checked too (130 entries, `done.json` present).
+
+**Nothing lost, no lane INCOMPLETE, zero GPU spend** — the whole run is hosted
+`ubuntu-latest`, outside the five conditions.
+
+**This falsifies the 13:30Z verdict that `#65` green "closes the `#64` 429 watch."**
+`#64` (06:30Z, Chris notified) was diagnosed as a **fetch-path** 429. This is the
+**verify-path** `whoami()`. They share a root system (HF rate limiting) but not a code
+path, so a green `#65` was never evidence about this one. **Treat the 429 family as open.**
+
+**Recommended fix (not applied — outside this routine's remit, and it is a code change on
+a data pipeline):** either `whoami(..., cache=True)` as HF's own message says, or drop the
+per-lane `whoami()` entirely and use the known namespace — `HF_NAMESPACE = "chfrank"`
+already exists in `ml/build_family7.py:140` and is overridable with `EARTH_HF_NAMESPACE`.
+One line either way. **The cost of leaving it is not money; it is that the step guarding
+against real data loss now fails for reasons unrelated to data loss,** so a future genuine
+missing `done.json` arrives looking exactly like tonight's non-event.
+
+### Also in the window, both predicted
+
+- **`#1282 Test & Deploy` → `failure`**, 22:35:01Z → 23:20:52Z, **45.9 min**: the **27th
+  consecutive** `Test & Deploy` failure, started by the 22:30Z log commit `8f40db2` exactly
+  as predicted. Hosted, no Vast cost, inside the 36–61 min band. **Predicted, not a finding.**
+- **Non-fleet crons green:** `GLORYS pull #173` (21:58:48Z), `GLORYS pull (global) #105`
+  (22:22:28Z), `tpu-status-mirror #231` (20:48:29Z).
+
+**Budget unchanged:** $0.00/h GPU, **$1.96/day storage** (`disk_space × storage_cost / 30`;
+`storage_cost` is $/GB/month, per the 11:30Z correction). The ≈$41–42-of-$50 figure remains
+14:30Z's *extrapolation* — Vast `/users/current/` still exposes no balance field. **Item
+43's ≈2026-10-02 projection stands.**
+
+**Standing items.** **42 — did NOT continue this hour: the 23:30Z slot ran on time**, and
+the 22:30Z record exists as its own entry. Count stays 7; one on-time slot is not a close,
+so leave it open and keep checking. **41 open and BLOCKING**, unchanged — the project store
+is still at its cap; this file remains the record. **43** unchanged, ≈2026-10-02. **40, 37,
+31, 16** unchanged. **15 — fresh-container bootstrap again, 107th**; no `earth`, no
+`.gh_pat`, no `.vast_key`. Shallow re-clone at `8f40db2` plus both credential files
+rewritten from the project docs with the **Write tool, never argv**, `chmod 600`. Routine,
+not an event. Mapping unchanged (4): `47913006`←`gpu-box-46996216`,
+`49102182`←`gpu-box-31299601`, `50928407`←`gpu-box-46694776`, `51415980`←`gpu-box-31947967`.
+
+**The bootstrap note earned its keep a seventh time.** This session too began at the newest
+*project* doc (2026-09-25 15:30Z) and had **five days** of apparently missing checks on the
+table before `git log` and this file showed the series intact. **Keep that note at the top
+of every handoff until item 41 is resolved.**
+
+### For 00:30Z
+
+- **Nothing is in flight.** No run to deadline, no box to watch. Next check should be short.
+- **`#66`'s successor is the live item.** The next `cron: '40 */6 * * *'` slot is **00:40Z**,
+  i.e. just after the 00:30Z check — so it will most likely land in the **01:30Z** window.
+  When it appears: if it **fails the same way** (`whoami-v2` 429 in step 8), that is the
+  third 429 in 19 h and the one-line fix stops being optional — say so plainly and do not
+  re-derive the diagnosis, it is above. If it **passes**, the fix is still worth having,
+  because passing only means the six simultaneous `whoami()` calls got lucky.
+- **Do not read a step-8 failure as data loss without checking the Hub directly.** The
+  check that works, token-free:
+  `https://huggingface.co/api/datasets/chfrank/earth-tensors/tree/main/partials/family10_1/slatrack/<year>`
+  → look for `done.json`. Real loss = marker absent. 429 in the log + marker present =
+  tonight's non-event.
+- **This commit will start `Test & Deploy #1283`,** which on 27 consecutive precedents fails
+  in the hosted `test` job at ~36–61 min. **Predicted, not a finding** — and it is why a
+  `2 run(s) not finished` reading at the top of the hour is the normal shape.
+- **If any box reads `running`: §0e first** — a just-dispatched wave looks exactly like idle
+  burn in the gap before its job lands.
+- **CPU-BOUND unchanged:** decided against a control's first `stage2_step` `wall_s`
+  (`#478`, K=144/1024x16/batch256 → `wall_s 240`), **never a threshold**. Exclude k-fold
+  ridge solves and the first 1–2 h of anomaly transform + embed. **Name the script.** Write
+  deadline + threshold down before the evidence closes; price both errors.
+- **Never destroy from this session; never stop a box with a running job.**
+
+---
+
 ## 2026-09-30 22:30Z — HEALTHY (exit 0, twice), fleet unchanged from 20:30Z. 0 mutations, 0 fleet commits beyond this log. **Chris NOTIFIED** — the **21:30Z slot left no record**, so item 42's skipping *has* continued and the 19:30/20:30Z "closed cluster" reading is falsified. **On time, ran 22:30Z.**
 
 `fleet_health.mjs`: `1 run(s) not finished · 0 runner(s) online+idle` / HEALTHY / EXIT=0 at
