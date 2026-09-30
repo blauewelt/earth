@@ -10,6 +10,76 @@ Newest first.
 
 ---
 
+## 2026-09-30 04:30Z — HEALTHY (exit 0), fleet unchanged from 03:30Z. 0 mutations, 0 fleet commits.
+
+`fleet_health.mjs`: `1 run(s) not finished · 0 runner(s) online+idle` / HEALTHY / EXIT=0.
+Box table empty — no instance `running`.
+
+**All five conditions clean, every Vast reading byte-identical to 03:30Z:**
+
+- **CPU-BOUND** n/a — no box `running`, no job anywhere on the fleet. No threshold used,
+  no control read, nothing to name.
+- **IDLE BURN** clean — 4 instances, all `cur_state=stopped`, 0 runners online+idle.
+  **$0.00/h GPU burn.**
+- **QUEUE STALL** cannot fire — `#650 Test & Deploy`, queued 2026-08-19T04:04:09Z, is the
+  known baseline (item 16) and the *only* unfinished run this hour; GitHub reports
+  `queued: 1 · in_progress: 0`, and there is no online+idle runner to pair it with.
+- **DISK** clean — `50928407` 132/200 = **66%** (highest), `51415980` 184/420 = 44%,
+  `49102182` 89/300 = 30%, `47913006` 0.8/700 = 0%. All far under 90%.
+- **TELEMETRY** clean — all four `gpu_temp` non-zero (60.0 / 38.0 / 49.0 / 53.0 °C),
+  the same four figures as 03:30Z. No dead frame, so no second frame was needed.
+
+`50928407` still reads `cur_state=stopped` / `actual_status=loading` — the same stale pair
+first noted 2026-09-25 12:30Z. Not billing GPU, not actioned.
+
+**The 03:30Z hour's one expectation held.** Nothing new appeared in flight: the queued set
+is `#650` alone and `in_progress` is empty, so `#1231 Test & Deploy` — which 03:30Z
+expected to show up and fail in ~50 min — has already resolved out of the unfinished set.
+No new hosted run was pushed this hour because **this hour has, so far, produced no
+commit of its own**; the commit carrying this entry will push the next one, and per the
+standing note that workflow is reportable on a `failure`, never on spacing. Test & Deploy
+remains red — still noted, still not actioned, still not new.
+
+**One cosmetic delta, not a fleet condition.** GitHub reports **18 registered runners,
+0 online, 0 busy** (the 2026-09-25 15:30Z project doc recorded 21/0/0). With every box
+`stopped` for five days this is GitHub ageing out offline self-hosted registrations, not a
+fleet event: the four *instances* are unchanged and the runner↔instance mapping below still
+resolves. Recorded so a later hour does not read 21→18 as a loss.
+
+**Budget unchanged:** $0.00/h GPU, **$0.0815/h storage = $1.96/day** across the four
+stopped boxes. The ≈$41–42-of-$50 figure remains an *extrapolation*, not a reading — Vast
+`/users/current/` still exposes no balance field (`credit: undefined` again this hour).
+
+**Standing items:** **41 still open and blocking** — the store reads **2,000,415 /
+2,000,000** this hour, identical to 2026-09-28 04:30Z, so it is over the hard cap and every
+`project_write` is still refused; this file is again the record. Nothing deleted — that
+stays Chris's call, and he was notified on 2026-09-25. **Not re-notified this hour:** the
+condition is unchanged and already in his hands. 15 — **98th fresh-container bootstrap**;
+re-cloned `earth` (`--depth 1 --filter=blob:none`, then `--deepen 300` to read this log's
+own history), rewrote `.gh_pat` + `.vast_key` from the project docs with the Write tool,
+never argv, `chmod 600`. 40, 31, 37 unchanged. Mapping unchanged (4):
+`47913006`←`gpu-box-46996216`, `49102182`←`gpu-box-31299601`,
+`50928407`←`gpu-box-46694776`, `51415980`←`gpu-box-31947967`.
+
+**One bootstrap trap worth recording (cost: one wrong inference this hour).** After a
+`--depth 1` clone, `git log --since=<5 days ago>` returns exactly **one** commit, and
+`git show --stat` on it lists every file in the repo as `new`. Read naively that looks like
+five days of missing fleet checks and a mass rewrite — it is neither; it is the grafted
+shallow boundary. **Deepen before drawing any conclusion from history in a fleet-check
+session**, or read the log file's contents rather than its commit graph.
+
+**CPU-BOUND rule unchanged:** decide against a control's first `stage2_step` `wall_s`
+(`#478`, K=144/1024x16/batch256 → `wall_s 240`), **never a threshold**; exclude the k-fold
+ridge solves and a run's first 1–2 h of anomaly transform + embed; **name the script**;
+write the deadline and threshold down before the evidence closes; price both errors.
+Never destroy from this session; never stop a box with a running job.
+
+**For 05:29Z:** nothing in flight, no run to deadline, no box to watch. Expect this
+commit's own `Test & Deploy` to appear as an unfinished hosted run and to fail in ~50 min —
+known pattern, not a finding. Append here rather than creating a new file.
+
+---
+
 ## 2026-09-30 03:30Z — HEALTHY (exit 0, twice), fleet unchanged from 02:30Z. 0 mutations, 0 fleet commits.
 
 `fleet_health.mjs`: `1 run(s) not finished · 0 runner(s) online+idle` / HEALTHY / EXIT=0, run twice
