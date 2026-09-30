@@ -10,6 +10,127 @@ Newest first.
 
 ---
 
+## 2026-09-30 06:30Z — HEALTHY (exit 0), fleet unchanged from 05:30Z. 0 mutations, 0 fleet commits. **Chris NOTIFIED** — not about the fleet.
+
+`fleet_health.mjs`: `1 run(s) not finished · 0 runner(s) online+idle` / HEALTHY / EXIT=0 at
+06:30Z. Box table empty — no instance `running`. On time (session start ~06:29Z); item 42
+clean, no hour skipped since 05:30Z.
+
+**All five conditions clean; every Vast figure byte-identical to 05:30Z:**
+
+- **CPU-BOUND** n/a — no box `running`, no job anywhere on the fleet. No threshold used, no
+  control read, no script to name.
+- **IDLE BURN** clean — 4 instances, all `cur_state=stopped`, 0 runners online+idle.
+  **$0.00/h GPU burn.** §0e not engaged: nothing dispatched, so no wave-gap ambiguity.
+- **QUEUE STALL** cannot fire — `#650 Test & Deploy` (queued 2026-08-19T04:04:09Z) is the
+  item-16 baseline and the only unfinished run; GitHub reports `queued: 1 · in_progress: 0`,
+  no online+idle runner to pair it with.
+- **DISK** clean — `50928407` 132/200 = **66%** (highest), `51415980` 184/420 = 44%,
+  `49102182` 89/300 = 30%, `47913006` 0.8/700 = 0%. All far under 90%.
+- **TELEMETRY** clean — all four `gpu_temp` non-zero (60.0 / 38.0 / 49.0 / 53.0 °C), the same
+  four figures as 05:30Z and 04:30Z. No dead frame, so no second frame was needed.
+
+`50928407` still `cur_state=stopped` / `actual_status=loading` — the stale pair first noted
+2026-09-25 12:30Z. Not billing GPU, not actioned. Runner registrations **17, unchanged**
+(0 online, 0 busy) — the cosmetic ageing-out has levelled off.
+
+**05:30Z's expectation held.** `#1271 Test & Deploy` (that hour's own commit) ran
+05:32:04Z → 06:08:46Z, **36.7 min**, `failure` — **18th consecutive failure**, at the bottom
+of the established 36.4–58 min band. Predicted, not a finding. `#103 GLORYS pull (global)`
+`success` 05:42:36Z — green, spacing not reportable.
+
+### The hour's one real finding: `#64 slatrack` failed TWO lanes, and the cause is now KNOWN
+
+`#64 slatrack fetch 1993-2024` (id `36675866163`, event `schedule`) ran 05:58:03Z → 06:02:52Z
+and ended `failure` with **two** lanes red — `fetch (2000-2005)` and `fetch (1993-1999)`.
+Every prior failure in this series (`#62`, `#59`, `#56`, `#55`) was a SINGLE lane, so two at
+once is new. It fired at 05:58:03Z, 5 h 18 m off its 00:40Z cron slot and inside the observed
+max delay of 5 h 46 m, so it was **not late** — the 06:26Z deadline 05:30Z carried is moot.
+
+**The 22:30Z escalation trigger did NOT fire, correctly.** It was armed as *two CONSECUTIVE
+failures of the same lane*; `#63` was all-six-green between `#62` and `#64`, so the
+`(1993-1999)` failures are not consecutive. All-six-lanes-fail also did not happen. Under the
+letter of the rule this hour is silence — **and the rule is still right**; what changed the
+verdict is that this hour produced the MECHANISM, which forty checks of tracking the flap
+never had.
+
+**Read from both failing jobs' own logs (`109760572673`, `109760572908`), identical in both:**
+
+```
+429 Too Many Requests: you have reached your 'api' rate limit.
+Retry after 157 seconds (0/2500 requests remaining in current 300s window).
+Url: https://huggingface.co/api/whoami-v2
+```
+
+with the traceback ending in `family10_parts_hub.py:1104 status()` →
+`:149 _hub()` → `build_family7.py:1447 hub_repo()` → `api.whoami()`. Both jobs carry the same
+Request-ID root `1-6abca544` — the same second. So:
+
+1. **The DATA IS INTACT. This is a false failure.** Step 6 on both lanes printed every year
+   with its rows, parts, bytes and timestamp, `done_years: 1993 … 1999` (and the 2000-2005
+   equivalent), **`missing_years:` EMPTY**, and step 7 exited 0 with *"every year is already
+   on the Hub — nothing to do"*. The lane that reported `INCOMPLETE: no done.json on the Hub`
+   never got far enough to check a `done.json` — it died authenticating. Nothing was lost and
+   nothing needs refetching.
+2. **The limit is ACCOUNT-WIDE, not a `whoami` quirk** — `0/2500 requests remaining in
+   current 300s window` is the Hugging Face **api** budget for the whole account, exhausted.
+   Six lanes run in parallel and each calls `status()`, which lists the dataset repo and then
+   `read_done()` per year per lane; two of the six lost the race. Anything else touching the
+   Hub in that window — checkpoints, tensors, the globe app's range reads — is inside the same
+   budget. *(That the six lanes are themselves the consumer is INFERENCE from the call
+   pattern, not a measurement; the 429 text is measured.)*
+3. **The fix pattern is already in the same file.** `build_family7.py:683-685` wraps a
+   `whoami()` in a try/except that falls back to the known namespace and prints
+   *"whoami failed … assuming"*; `hub_repo()` at `:1447` does not. HF's own error also names
+   `whoami(..., cache=True)`. `huggingface-access.md` already records the namespace as the
+   user `chfrank`, resolved from `whoami` on purpose — so the cheap change is to cache or fall
+   back, not to hardcode. **Not actioned from this session** — a repo change to a build
+   workflow is the working session's call, not the fleet watch's.
+
+**Why this was worth one notification when forty quiet hours were not:** the failure prints
+`lane … is INCOMPLETE` — an archive-integrity alarm — for a lane whose archive is complete.
+It has now fired on 5 of the last 10 runs. A genuine missing year would look identical and
+would be dismissed as *the usual slatrack flap*. That is the trap the escalation trigger was
+written to avoid, approached from the other side.
+
+**Budget unchanged:** $0.00/h GPU, **$0.0815/h storage = $1.96/day** across the four stopped
+boxes (`storage_total_cost` 0.012963 + 0.011111 + 0.018519 + 0.038889). The ≈$41–42-of-$50
+figure remains an *extrapolation* — Vast `/users/current/` exposes no balance field.
+
+**Standing items.** **41 still open and BLOCKING** — `project_info` reads
+**2,000,415 / 2,000,000**, identical to 05:30Z and to 2026-09-28 04:30Z; every
+`project_write` still refused, so this file is again the record. Nothing deleted — Chris's
+call, he was notified 2026-09-25, not re-notified for its own sake this hour. **43 (open,
+dated):** idle-storage-reaches-$50 projection ≈2026-10-02, re-notify owed **2026-10-01** —
+not due today, but mentioned in one line of this hour's notification since Chris is being
+interrupted anyway, which spends one interruption instead of two. 42 clean. 40, 37, 31, 16
+unchanged. 15 — **fresh-container bootstrap again**; no `earth`, no `.gh_pat`, no `.vast_key`.
+Re-cloned (shallow, at `7c8f1e5`) and rewrote both credential files from the project docs with
+the **Write tool, never argv**, `chmod 600`. Routine, not an event. Mapping unchanged (4):
+`47913006`←`gpu-box-46996216`, `49102182`←`gpu-box-31299601`, `50928407`←`gpu-box-46694776`,
+`51415980`←`gpu-box-31947967`.
+
+**Telemetry note holds and was used:** direct Node `fetch` of `GET /api/v1/instances/`
+(**v1, not v0**; v0 returns an empty `instances` array with this key, which looks exactly like
+"no boxes exist" — cost one round trip again this hour before switching).
+
+**CPU-BOUND rule unchanged:** decide against a control's first `stage2_step` `wall_s` (`#478`,
+K=144/1024x16/batch256 → `wall_s 240`), **never a threshold**; exclude the k-fold ridge solves
+and a run's first 1–2 h of anomaly transform + embed; **name the script**; write the deadline
+and threshold down before the evidence closes; price both errors. Never destroy from this
+session; never stop a box with a running job.
+
+**For 07:30Z:** nothing in flight on the fleet, no run to deadline, no box to watch. Expect
+this commit's own `Test & Deploy` to appear as an unfinished hosted run and fail in
+~36–58 min — known pattern, not a finding. **`#64`'s lesson is recorded, so do NOT re-notify
+on the next single-lane slatrack failure**; the escalation trigger stays as written (two
+consecutive failures of the SAME lane, or all six at once). **New, armed:** if a slatrack run
+fails with a `429` on the HF api budget AFTER a fix has landed in `hub_repo()`, that is a
+different and reportable fact. Next slatrack cron slot is **06:40Z**, then 12:40Z; observed
+max delay 5 h 46 m. Append here rather than creating a new file.
+
+---
+
 ## 2026-09-30 05:30Z — HEALTHY (exit 0), fleet unchanged from 04:30Z. 0 mutations, 0 fleet commits.
 
 `fleet_health.mjs`: `1 run(s) not finished · 0 runner(s) online+idle` / HEALTHY / EXIT=0.
