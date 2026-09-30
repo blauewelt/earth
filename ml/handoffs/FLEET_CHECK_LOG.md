@@ -10,6 +10,93 @@ Newest first.
 
 ---
 
+## 2026-09-30 11:30Z — HEALTHY (exit 0, twice), fleet unchanged from 10:30Z. 0 mutations, 0 fleet commits beyond this log. **Chris NOT notified** — nothing wrong, nothing changed.
+
+`fleet_health.mjs`: `1 run(s) not finished · 0 runner(s) online+idle` / HEALTHY / EXIT=0,
+and identical on a second run. Box table empty — no instance `running`.
+
+**All five conditions clean; every Vast figure byte-identical to 10:30Z, across two frames:**
+
+- **CPU-BOUND** n/a — no box `running`, no job anywhere on the fleet. All four read
+  `gpu_util=0` **and `cpu_util=0`**, so the condition's own conjunction cannot hold. No
+  threshold used, no control read, no script to name.
+- **IDLE BURN** clean — 4 instances, all `cur_state=stopped` / `intended_status=stopped`,
+  0 runners online+idle. **$0.00/h GPU burn.** §0e not engaged: nothing dispatched in the
+  window.
+- **QUEUE STALL** cannot fire — the single unfinished run is `#650 Test & Deploy` (queued
+  2026-08-19T04:04:09Z, id `32214393689`), the item-16 baseline, and there is no
+  online+idle runner to pair it with.
+- **DISK** clean — no box over 90%. `50928407` 132/200 = **66%** (highest), `51415980`
+  184/420 = 44%, `49102182` 89/300 = 30%, `47913006` 0.8/700 = 0%. Unchanged.
+- **TELEMETRY** clean — all four `gpu_temp` non-zero (60.0 / 38.0 / 49.0 / 53.0 °C),
+  identical on both frames. No dead frame. Boxes stopped, so no step-count cross-check
+  needed.
+
+`50928407` still `cur_state=stopped` / `actual_status=loading`, the stale pair first noted
+2026-09-25 12:30Z, now its sixth day. Not billing GPU, not actioned. Runner registrations
+**17, unchanged** (0 online, 0 busy).
+
+**10:30Z's predicted `#1274`/`#1275` thread closed as predicted, both hosted-lane.**
+`#1274` → `cancelled` 10:34:26Z (concurrency, superseded); `#1275` (`36697683264`, pushed
+by the 10:30Z commit `2724cab`) → **`failure` 11:16:29Z after 42.6 min**, the 21st
+consecutive `Test & Deploy` failure. `ubuntu-latest`, no Vast cost, outside this routine's
+five conditions: **predicted, not a finding.** `#73 Daily forecast refresh` green
+11:17:51Z→11:20:05Z and committed `4620272` (data-only, inside `data/`) — routine, silent.
+Nothing else fired since 10:30Z.
+
+**Measurement correction worth carrying (this hour's only new fact).** Vast's per-instance
+`storage_cost` is **$ per GB per month, not $ per hour** — summing the four raw values
+gives `0.1733`, which read as $/h extrapolates to a spurious **$4.16/day**, more than
+double the truth. The field is not proportional to `disk_space` (200 GB and 420 GB boxes
+both read `0.0667`), which is the tell. Correct arithmetic is `disk_space × storage_cost`:
+`47913006` 700×0.01333 = $9.33/mo, `49102182` 300×0.02667 = $8.00/mo, `50928407`
+200×0.06667 = $13.33/mo, `51415980` 420×0.06667 = $28.00/mo → **$58.67/month = $1.93/day**,
+which reconciles with 10:30Z's $1.96/day. **Budget unchanged**, and **item 43's ≈2026-10-02
+projection stands** — a future hour that sums the raw field would raise a false alarm on it.
+
+**Budget unchanged:** $0.00/h GPU, **$1.93/day storage** across the four stopped boxes. The
+≈$41–42-of-$50 figure remains an *extrapolation*; Vast `/users/current/` exposes no balance
+field.
+
+**Standing items.** **41 open and BLOCKING** — re-measured this hour as a by-product of a
+`project_info` call made before the repo log was found: **2,000,415 / 2,000,000 tokens, now
+over the cap, not merely at it.** Still ~660 docs, the ~610 hourly `fleet-check-*.md` the
+bulk. Nothing deleted — Chris's call, notified 2026-09-25, **not re-notified.** This file is
+again the record. **43 (open, dated):** ≈2026-10-02 projection stands, arithmetic re-derived
+above; the 2026-10-01 re-notify was discharged early at 06:30Z, nothing owed today. **42:**
+this slot ran, so no new skip — the count stands at two (01:30Z, 07:30Z). 40, 37, 31, 16
+unchanged. 15 — **fresh-container bootstrap again, 100th**; no `earth`, no `.gh_pat`, no
+`.vast_key`. Re-cloned (shallow, detached from the outset per item 10's caveat — finished in
+seconds) and rewrote both credential files from the project docs with the **Write tool,
+never argv**, `chmod 600`. Routine, not an event. Mapping unchanged (4):
+`47913006`←`gpu-box-46996216`, `49102182`←`gpu-box-31299601`,
+`50928407`←`gpu-box-46694776`, `51415980`←`gpu-box-31947967`.
+
+**One bootstrap note for the next hour.** The five-day gap in the *project* record
+(2026-09-25 15:34Z → today) is **not a gap in the routine** — the checks ran hourly
+throughout and the record moved into this file from 2026-09-28 03:30Z. A fresh container
+that reads only the project docs will mis-read that as five days of missed checks; read
+`git log` for `Fleet check` commits before concluding the routine lapsed.
+
+### For 12:30Z
+
+- **Nothing is in flight.** No run to deadline, no box to watch. Next check should be short.
+- **If any box reads `running`: §0e first** — a just-dispatched wave looks exactly like idle
+  burn in the gap before its job lands.
+- **CPU-BOUND unchanged:** decided against a control's first `stage2_step` `wall_s`
+  (`#478`, K=144/1024x16/batch256 → `wall_s 240`), **never a threshold**. Exclude k-fold
+  ridge solves and the first 1–2 h of anomaly transform + embed. **Name the script.** Write
+  deadline + threshold down before the evidence closes; price both errors.
+- **This commit will start `Test & Deploy #1276`,** which on 21 consecutive precedents
+  fails in the hosted `test` job at ~43–59 min. Predicted, not a finding.
+- **`#64`'s 429 fix is still unactioned** and is the working session's call, not this
+  routine's: `build_family7.py:1447 hub_repo()` calls `api.whoami()` bare while `:683`
+  already has the namespace-fallback pattern. Next `slatrack` failure reporting
+  `lane … is INCOMPLETE` — check for the 429 before believing the integrity alarm.
+- **Never destroy from this session; never stop a box with a running job.**
+
+---
+
 ## 2026-09-30 10:30Z — HEALTHY (exit 0, twice), fleet unchanged from 09:30Z. 0 mutations, 0 fleet commits. **Chris NOT notified** — nothing wrong, nothing changed.
 
 `fleet_health.mjs`: `2 run(s) not finished · 0 runner(s) online+idle` / HEALTHY / EXIT=0 at
