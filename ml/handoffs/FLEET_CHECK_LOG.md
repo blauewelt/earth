@@ -10,6 +10,84 @@ Newest first.
 
 ---
 
+## 2026-09-30 14:30Z — HEALTHY (exit 0, twice), fleet unchanged from 13:30Z. 0 mutations, 0 fleet commits beyond this log. **Chris NOT notified** — nothing wrong, nothing changed. **On time, ran 14:29Z.**
+
+`fleet_health.mjs`: `2 run(s) not finished · 0 runner(s) online+idle` / HEALTHY / EXIT=0 at
+14:30Z, then `1 run(s) not finished` / HEALTHY / EXIT=0 ~45 s later. **The 2→1 is #1277
+finishing between the frames, not a state change** — see below. Box table empty on both.
+
+**All five conditions clean; every Vast figure byte-identical to 13:30Z and 11:30Z, across
+two frames ~45 s apart:**
+
+- **CPU-BOUND** n/a — no box `running`, no job anywhere on a fleet box. All four read
+  `gpu_util=0` **and `cpu_util=0`**, so the condition's own conjunction cannot hold. No
+  threshold used, no control read, no script to name.
+- **IDLE BURN** clean — 4 instances, all `cur_state=stopped` / `intended_status=stopped`,
+  0 runners online+idle. **$0.00/h GPU burn.** §0e not engaged: nothing dispatched in the
+  window, nothing `running` to mistake for it.
+- **QUEUE STALL** cannot fire — the queued run is `#650 Test & Deploy` (queued
+  2026-08-19T04:04:09Z, id `32214393689`), the item-16 baseline, and there is no
+  online+idle runner to pair it with (**17 registrations, 0 online, 0 busy**).
+- **DISK** clean — no box over 90%. `50928407` 132/200 = **66%** (highest), `51415980`
+  184/420 = 44%, `49102182` 89/300 = 30%, `47913006` 0.75/700 = 0%. Unchanged.
+- **TELEMETRY** clean — all four `gpu_temp` non-zero (60.0 / 38.0 / 49.0 / 53.0 °C),
+  identical on both frames. No dead frame. Boxes stopped, so no step-count cross-check
+  needed.
+
+`50928407` still `cur_state=stopped` / `actual_status=loading`, the stale pair first noted
+2026-09-25 12:30Z, now its sixth day. Not billing GPU, not actioned.
+
+**Actions since 13:30Z — one run, predicted, not a finding, not on a fleet box:**
+
+- **`#1277 Test & Deploy` → `failure`**, 13:33:43Z → 14:31:23Z, **57.6 min**: the **23rd
+  consecutive** `Test & Deploy` failure, started by the 13:30Z log commit `86a106ce`
+  exactly as that entry predicted, failing in the hosted `test` job (`deploy` green in
+  49 s). Runner `GitHub Actions 1000006946` — **`ubuntu-latest`, no Vast cost**, outside
+  the five conditions. This is the whole of the `2 run(s) not finished` the first frame
+  reported; the second frame, taken after it completed, is back to the `#650` baseline.
+- Nothing else fired in the hour. `#65 slatrack` green at 13:03Z is already recorded at
+  13:30Z; **`#66` is still due ~18:40Z** on the 6-hourly cron.
+
+**Budget unchanged:** $0.00/h GPU, **$1.93/day storage** — `disk_space × storage_cost`
+($9.33 + $8.00 + $13.33 + $28.00 = $58.67/mo), **not** the raw `storage_cost` sum. The
+≈$41–42-of-$50 figure remains an *extrapolation*; Vast `/users/current/` exposes no
+balance field. **Item 43's ≈2026-10-02 projection stands, unmoved.**
+
+**Standing items.** **42 unchanged at three skips** (01:30Z, 07:30Z, 12:30Z) — this slot
+ran on time. **41 open and BLOCKING**, unchanged, deliberately not re-measured (11:30Z read
+2,000,415 / 2,000,000, over the cap); Chris notified 2026-09-25, **not re-notified**,
+nothing deleted — his call. This file remains the record. **43 (open, dated):** ≈2026-10-02
+stands; the 2026-10-01 re-notify was discharged early at 06:30Z, nothing owed today. 40,
+37, 31, 16 unchanged. **15 — fresh-container bootstrap again, 102nd**; no `earth`, no
+`.gh_pat`, no `.vast_key`. Re-clone plus both credential files rewritten from the project
+docs with the **Write tool, never argv**, `chmod 600`. Routine, not an event. Mapping
+unchanged (4): `47913006`←`gpu-box-46996216`, `49102182`←`gpu-box-31299601`,
+`50928407`←`gpu-box-46694776`, `51415980`←`gpu-box-31947967`.
+
+**The bootstrap note earned its keep a second time.** This run also began at the newest
+*project* doc (2026-09-25 15:30Z) and briefly had five days of missing checks on the table
+before `git log` showed the series intact in this file. **Keep that note at the top of
+every handoff until item 41 is resolved.**
+
+### For 15:30Z
+
+- **Nothing is in flight.** No run to deadline, no box to watch. Next check should be short.
+- **If any box reads `running`: §0e first** — a just-dispatched wave looks exactly like idle
+  burn in the gap before its job lands.
+- **CPU-BOUND unchanged:** decided against a control's first `stage2_step` `wall_s`
+  (`#478`, K=144/1024x16/batch256 → `wall_s 240`), **never a threshold**. Exclude k-fold
+  ridge solves and the first 1–2 h of anomaly transform + embed. **Name the script.** Write
+  deadline + threshold down before the evidence closes; price both errors.
+- **This commit will start `Test & Deploy #1278`,** which on 23 consecutive precedents fails
+  in the hosted `test` job at ~36–60 min. **Predicted, not a finding** — and it is also why
+  a `2 run(s) not finished` reading at the top of the hour is the normal shape, not a
+  second job appearing on the fleet.
+- **`#66 slatrack` is due ~18:40Z.** Green-and-brief is the expected shape; only an
+  `INCOMPLETE` lane is worth reading, and then check for the HF 429 first.
+- **Never destroy from this session; never stop a box with a running job.**
+
+---
+
 ## 2026-09-30 13:30Z — HEALTHY (exit 0, twice), fleet unchanged from 11:30Z. 0 mutations, 0 fleet commits beyond this log. **Chris NOT notified** — nothing wrong, nothing changed. **12:30Z slot skipped; this check ran at 13:31Z.**
 
 `fleet_health.mjs`: `1 run(s) not finished · 0 runner(s) online+idle` / HEALTHY / EXIT=0,
