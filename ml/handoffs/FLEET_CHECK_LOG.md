@@ -10,6 +10,107 @@ Newest first.
 
 ---
 
+## 2026-10-01 01:30Z — HEALTHY (exit 0, twice), fleet unchanged from 00:30Z. 0 mutations, 0 fleet commits beyond this log. **Chris NOT notified — nothing wrong, nothing changed.** **On time, ran 01:30Z — item 42 did not continue (third consecutive on-time slot).**
+
+`fleet_health.mjs`: `1 run(s) not finished · 0 runner(s) online+idle` / HEALTHY / EXIT=0 at
+01:31Z, and byte-identical at **01:32:04Z**. Box table empty on both frames. The **2 → 1**
+change in "runs not finished" is `#1284 Test & Deploy` finishing, i.e. last hour's own
+prediction completing — see below.
+
+**All five conditions clean; every Vast figure byte-identical to 00:30Z / 23:30Z / 22:30Z,
+two frames ~100 s apart (01:32:16Z and 01:33:56Z):**
+
+- **CPU-BOUND** n/a — no box `running`, no job anywhere on a fleet box. All four read
+  `gpu_util=0` **and `cpu_util=0`**, so the condition's conjunction cannot hold. No threshold
+  used, no control read, no script to name.
+- **IDLE BURN** clean — 4 instances, all `cur_state=stopped`, 0 runners online+idle (15
+  registered, all `offline busy=false`). **$0.00/h GPU burn.** §0e not engaged: nothing
+  dispatched in the window, nothing `running` to mistake for it. No `gpu_box.mjs stop` issued.
+- **QUEUE STALL** cannot fire — `queued` is exactly 1 and it is `#650 Test & Deploy`
+  (queued 2026-08-19T04:04:09Z, id `32214393689`), the item-16 baseline; no online+idle
+  runner to pair it with. `in_progress` count is **0**, read directly.
+- **DISK** clean — `50928407` 132/200 = **66.0%** (highest), `51415980` 184/420 = 43.8%,
+  `49102182` 89/300 = 29.7%, `47913006` 0.8/700 = 0.1%. Unchanged, none near 90%.
+- **TELEMETRY** clean — all four `gpu_temp` non-zero (60.0 / 38.0 / 49.0 / 53.0 °C),
+  identical on both frames. No dead frame.
+
+`50928407` still `cur_state=stopped` / `actual_status=loading`, the stale pair first noted
+2026-09-25 12:30Z, now its **eighth day**. Not billing GPU, not actioned.
+
+### `#66`'s successor did NOT fire — the 00:40Z slot is 54 min past due, and that is a known shape
+
+The `cron: '40 */6 * * *'` slot at **00:40Z** has produced **no run #67** as of 01:34Z.
+The newest `slatrack fetch 1993-2024` is still **`#66`** (`failure`, 22:36:57Z, the 18:40Z
+slot ~3 h 57 min late). So the verify-path `whoami-v2` 429 question from the 23:30Z entry
+**stays open and unanswered** — there is no new evidence either way, and nothing to
+re-derive.
+
+**Not reportable, for the reason 19:30Z already established:** a slatrack slot *51 min*
+past due was seen on 2026-09-30 19:30Z and judged a non-event because the lanes are
+**32/32 years done**, so the run is a no-op **priced at $0** — a late or dropped firing
+costs nothing and risks nothing. Tonight's 54 min is the same shape, inside the same
+workflow's demonstrated delay range (#66 itself ran 3 h 57 min late and #64 at 05:58Z was
+also late). **Spacing of a scheduled workflow is not reportable; a failure is.**
+
+### Also in the window, both predicted last hour
+
+- **`#1284 Test & Deploy` → `failure`**, 00:35:15Z → 01:30:20Z, **55.1 min**: the **28th
+  consecutive** `Test & Deploy` failure, started by the 00:30Z log commit `ead0880` exactly
+  as that entry predicted, and inside the established **36–61 min** band. Hosted
+  `ubuntu-latest`, no Vast cost, outside the five conditions. **Predicted, not a finding.**
+- **`#1283` → `cancelled`** at 00:35:44Z — ordinary concurrency cancellation by `#1284`,
+  the same pattern as `#1227`/`#1274`. Not a failure.
+- **Non-fleet crons:** `tpu-status-mirror #232` green 00:17:48Z → 00:18:06Z. No `GLORYS
+  pull` / `GLORYS pull (global)` firing since `#173` (21:56Z) and `#105` (22:20Z) —
+  **spacing only, not reportable.**
+
+**Budget unchanged:** $0.00/h GPU, **$1.96/day storage** (`disk_space × storage_cost / 30`;
+`storage_cost` is $/GB/month, per the 11:30Z correction). The ≈$41–42-of-$50 figure remains
+14:30Z's *extrapolation* — Vast `/users/current/` still exposes no balance field.
+
+**Standing items.** **42 — did NOT continue: the 01:30Z slot ran on time.** Count stays 7;
+**three** consecutive on-time slots, still not a close — leave it open and keep checking.
+**41 open and BLOCKING**, unchanged, deliberately not re-measured; Chris notified
+2026-09-25, **not re-notified** — nothing deleted, his call. This file remains the record.
+**43 (open, dated):** ≈2026-10-02 projection stands; **today's (2026-10-01) re-notify was
+discharged early at 2026-09-30 06:30Z, so nothing is owed today** — the next one falls due
+with the date itself. **40, 37, 31, 16** unchanged. **15 — fresh-container bootstrap again,
+109th**; no `earth`, no `.gh_pat`, no `.vast_key`. Shallow re-clone at `ead0880` plus both
+credential files rewritten from the project docs with the **Write tool, never argv**,
+`chmod 600`. Routine, not an event. Mapping unchanged (4): `47913006`←`gpu-box-46996216`,
+`49102182`←`gpu-box-31299601`, `50928407`←`gpu-box-46694776`, `51415980`←`gpu-box-31947967`.
+
+**The bootstrap note earned its keep a ninth time.** This session too began at the newest
+*project* doc (**2026-09-25 15:30Z**) and had **six days** of apparently missing checks on
+the table before `git log` and this file showed the series intact. **Keep that note at the
+top of every handoff until item 41 is resolved.**
+
+### For 02:30Z
+
+- **Nothing is in flight.** No run to deadline, no box to watch. Next check should be short.
+- **`#66`'s successor is still the one live item, and it is now overdue, not pending.** If a
+  `slatrack fetch` run has appeared by 02:30Z: read it per the 23:30Z rules — a step-8
+  failure is **not** data loss until the Hub is read directly
+  (`https://huggingface.co/api/datasets/chfrank/earth-tensors/tree/main/partials/family10_1/slatrack/<year>`
+  → `done.json` present = non-event); a second same-shape `whoami-v2` 429 makes the one-line
+  fix (`whoami(..., cache=True)`, or `HF_NAMESPACE`/`EARTH_HF_NAMESPACE` instead of a
+  per-lane `whoami()`) non-optional; a pass does not retire it. **Do not re-derive the
+  diagnosis — it is in the 23:30Z entry.** If still nothing has fired, that is **two**
+  consecutive dropped slots (00:40Z and 06:40Z would be the next): worth saying so once,
+  but still **$0 and 32/32 years done**, so it is a reliability note, not a cost event.
+- **This commit will start `Test & Deploy #1285`,** which on 28 consecutive precedents fails
+  in the hosted `test` job at ~36–61 min. **Predicted, not a finding** — and it is why
+  `2 run(s) not finished` at the top of the hour is the normal shape.
+- **If any box reads `running`: §0e first** — a just-dispatched wave looks exactly like idle
+  burn in the gap before its job lands.
+- **CPU-BOUND unchanged:** decided against a control's first `stage2_step` `wall_s`
+  (`#478`, K=144/1024x16/batch256 → `wall_s 240`), **never a threshold**. Exclude k-fold
+  ridge solves and the first 1–2 h of anomaly transform + embed. **Name the script.** Write
+  deadline + threshold down before the evidence closes; price both errors.
+- **Never destroy from this session; never stop a box with a running job.**
+
+---
+
 ## 2026-10-01 00:30Z — HEALTHY (exit 0, twice), fleet unchanged from 23:30Z. 0 mutations, 0 fleet commits beyond this log. **Chris NOT notified — nothing wrong, nothing changed.** **On time, ran 00:30Z — item 42 did not continue.**
 
 `fleet_health.mjs`: `2 run(s) not finished · 0 runner(s) online+idle` / HEALTHY / EXIT=0 at
