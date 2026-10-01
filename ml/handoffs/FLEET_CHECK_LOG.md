@@ -10,6 +10,96 @@ Newest first.
 
 ---
 
+## 2026-10-01 11:30Z — HEALTHY (exit 0), fleet byte-identical to 09:30Z. 0 mutations, 0 fleet commits beyond this log. **Chris NOT notified — nothing wrong on the fleet, nothing changed on it.** **The 10:30Z slot left NO record — item 42's next skip, over a dead-idle fleet, so it does not meet the notify test.**
+
+`fleet_health.mjs`: `1 run(s) not finished · 0 runner(s) online+idle` / HEALTHY / EXIT=0 at
+11:31:11Z. The 1 is the **`#650` baseline alone**; `in_progress` read directly from the
+Actions API: **0**. Nothing is running anywhere, hosted or on a fleet box.
+
+**All five conditions clean; every Vast figure byte-identical to 09:30Z, two frames ~3 min
+apart (11:31Z and 11:34Z), all eight readings identical to the digit:**
+
+- **CPU-BOUND** n/a — no box `running`, no job on a fleet box. All four read `gpu_util=0`
+  **and `cpu_util=0`**, so the condition's conjunction cannot hold. No threshold used, no
+  control read, no script to name.
+- **IDLE BURN** clean — 4 instances, all `cur_state=stopped`, **0 runners online+idle**
+  (15 registered, 0 online at all). **$0.00/h GPU burn.** §0e not engaged: nothing was
+  dispatched in the window and nothing reads `running`. No `gpu_box.mjs stop` issued.
+- **QUEUE STALL** cannot fire — `queued` is exactly 1 and it is `#650 Test & Deploy`
+  (queued 2026-08-19T04:04:09Z, id `32214393689`), the item-16 baseline; no online+idle
+  runner to pair it with.
+- **DISK** clean — `50928407` 132/200 = **66.0%** (highest), `51415980` 184/420 = 43.8%,
+  `49102182` 89/300 = 29.7%, `47913006` 0.8/700 = 0.1%. Unchanged, none near 90%.
+- **TELEMETRY** clean — all four `gpu_temp` non-zero (60.0 / 38.0 / 49.0 / 53.0 °C),
+  identical on both frames. No dead frame.
+
+`50928407` still `cur_state=stopped` / `actual_status=loading`, the stale pair first noted
+2026-09-25 12:30Z. Not billing GPU, not actioned.
+
+**Budget unchanged:** $0.00/h GPU; **$0.0815/h storage = $1.96/day** across the four
+stopped boxes. Still an extrapolation, not a reading.
+
+### Both hosted lanes resolved exactly as 09:30Z predicted
+
+- **`#1290`** ended `cancelled` at 09:34:54Z — concurrency-cancelled the moment `#1291`
+  started, which is the usual way one of these ends when the next log commit lands inside
+  its hour. 09:30Z predicted `failure`; the difference is the concurrency group, not a new
+  behaviour. **Not a finding.**
+- **`#1291`** (`09:33:58Z → 10:33:49Z`, from the 09:30Z log commit) ended **`failure` at
+  59.9 min** — inside the 46–60 min band, the `app.spec.js:1720` fix-or-quarantine item,
+  now 34+ consecutive. GitHub-hosted `ubuntu-latest`, no Vast cost, outside the five
+  conditions. **Not a finding.**
+
+Nothing else ran since 09:30Z. The 06:00–06:40Z scheduled band (`#67` slatrack, `#106`
+GLORYS global, `#174` GLORYS, `#233` tpu-status-mirror) was the last activity of any kind
+and all four were `success`.
+
+## Standing items (deltas only)
+
+- **15: manual bootstrap again** (≈117th by the series count) — fresh container, no
+  `earth`, no `.gh_pat`, no `.vast_key`. Shallow clone (`--depth 1 --filter=blob:none`) at
+  `4fc500a`, then `--deepen 40` to read this log's recent history; both credentials written
+  with the Write tool, never argv, `chmod 600`, per `claude/github-access.md` 2b and
+  `claude/vast-access.md`.
+- **41 (open, BLOCKING, needs Chris):** project store still at its 2,000,000-token cap, so
+  this record is in the repo log and not a project doc. Not re-measured. **Not re-notified.**
+- **42: one skip this hour** — the 10:30Z slot left no record; this slot fired at 11:31Z,
+  an hour late. **Deliberately not notified:** the test agreed at 08:30Z/09:30Z is that the
+  hour to notify is the first one where a slot drops **with a run or a rented box live**,
+  and the fleet was `$0/h` with nothing running across the whole gap. A missed slot over a
+  dead-idle fleet costs nothing and hides nothing. The skips are now frequent enough
+  (05:30Z, 07:30Z, 10:30Z today) that the scheduler itself is the standing concern, not any
+  single gap.
+- **43 (open, dated): falls due TODAY+1 → now TODAY (2026-10-02) at the next date rollover**
+  — the idle-storage-reaches-$50 projection. Still nothing owed on 10-01; last notified
+  2026-09-30 06:30Z. **The 10-02 slots inherit it and should notify if the projection still
+  holds.** At $1.96/day of pure idle storage this is the only live money question on the
+  programme.
+- **40, 37, 31, 16** unchanged. Mapping unchanged (4): `47913006`←`gpu-box-46996216`,
+  `49102182`←`gpu-box-31299601`, `50928407`←`gpu-box-46694776`,
+  `51415980`←`gpu-box-31947967`.
+
+## For 12:30Z
+
+- **Nothing is in flight.** No run to deadline, no box to watch. Next check should be short.
+- **Item 43 is the one thing with a date on it** — if the 10-02 checks still project idle
+  storage crossing $50, that is a real notify.
+- **Expect `#1292` (this commit's CI) to be the new unfinished run, failing at ~46–60 min**,
+  or `cancelled` if the 12:30Z commit lands inside its hour. Known pattern, not a finding.
+- **If any box reads `running`: §0e first** (a just-dispatched wave looks exactly like idle
+  burn) before calling it idle burn.
+- **CPU-BOUND unchanged:** probe-ladder run on a GPU box, `gpu_util` <5 % **with `cpu_util`
+  >20 %**, second reading, non-zero `gpu_temp`, decided against a control's first
+  `stage2_step` `wall_s` (`#478`, K=144/1024x16/batch256 → `wall_s 240`) — **never a
+  threshold**. Exclude k-fold ridge solves and the first 1–2 h of anomaly transform + embed.
+  **Name the script.** Write deadline + threshold down first; price both errors.
+- **`47913006` is stop-only — never destroy** (sole copy of the 213 GB family-5 daily tensor).
+- **Never destroy from this session; never stop a box with a running job.**
+- **The cron-lag watch stays CLOSED** — a scheduled workflow is reportable on a `failure`,
+  never on when it fired.
+
+---
+
 ## 2026-10-01 09:30Z — HEALTHY (exit 0), fleet byte-identical to 08:30Z. 0 mutations, 0 fleet commits beyond this log. **Chris NOT notified — nothing wrong on the fleet, nothing changed on it.** **Item 42 did NOT recur: this slot fired on time (09:29Z) and is recording.**
 
 `fleet_health.mjs`: `2 run(s) not finished · 0 runner(s) online+idle` / HEALTHY / EXIT=0 at
