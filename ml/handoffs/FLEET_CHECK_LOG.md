@@ -10,6 +10,95 @@ Newest first.
 
 ---
 
+## 2026-10-01 00:30Z — HEALTHY (exit 0, twice), fleet unchanged from 23:30Z. 0 mutations, 0 fleet commits beyond this log. **Chris NOT notified — nothing wrong, nothing changed.** **On time, ran 00:30Z — item 42 did not continue.**
+
+`fleet_health.mjs`: `2 run(s) not finished · 0 runner(s) online+idle` / HEALTHY / EXIT=0 at
+00:31Z, and byte-identical at **00:34:00Z**. Box table empty on both frames.
+
+**All five conditions clean; every Vast figure byte-identical to 23:30Z / 22:30Z / 20:30Z,
+two frames ~3 min apart:**
+
+- **CPU-BOUND** n/a — no box `running`, no job anywhere on a fleet box. All four read
+  `gpu_util=0` **and `cpu_util=0`**, so the condition's conjunction cannot hold. No threshold
+  used, no control read, no script to name.
+- **IDLE BURN** clean — 4 instances, all `cur_state=stopped`, 0 runners online+idle (15
+  registered, all `offline busy=false`). **$0.00/h GPU burn.** §0e not engaged: nothing
+  dispatched in the window, nothing `running` to mistake for it. No `gpu_box.mjs stop` issued.
+- **QUEUE STALL** cannot fire — `queued` is exactly 1 and it is `#650 Test & Deploy`
+  (queued 2026-08-19T04:04:09Z, id `32214393689`), the item-16 baseline; no online+idle
+  runner to pair it with.
+- **DISK** clean — `50928407` 132/200 = **66%** (highest), `51415980` 184/420 = 43.8%,
+  `49102182` 89/300 = 29.7%, `47913006` 0.8/700 = 0.1%. Unchanged, none near 90%.
+- **TELEMETRY** clean — all four `gpu_temp` non-zero (60.0 / 38.0 / 49.0 / 53.0 °C),
+  identical on both frames. No dead frame.
+
+`50928407` still `cur_state=stopped` / `actual_status=loading`, the stale pair first noted
+2026-09-25 12:30Z, now its seventh day. Not billing GPU, not actioned.
+
+### The 1 → 2 change in "runs not finished" is last hour's own prediction, not an event
+
+`#1283 Test & Deploy` (id `36791749473`, `push`, created **23:34:06Z**) was started by the
+23:30Z log commit **`2a70821`**, exactly as that entry said it would be. Hosted
+`ubuntu-latest`, **~59 min** in at the second frame, i.e. inside the **36–61 min** band of
+the 27 consecutive `Test & Deploy` failures. No Vast cost, outside the five conditions.
+**Predicted, not a finding.** `#1282` (the 27th) was already recorded last hour.
+
+### `#66`'s successor is not yet due — nothing to read
+
+The next `cron: '40 */6 * * *'` slot is **00:40Z**, six minutes *after* this check, so the
+verify-path `whoami-v2` 429 question stays open and lands in the **01:30Z** window. The
+23:30Z instructions for it stand verbatim: a step-8 failure is **not** data loss until the
+Hub is read directly
+(`https://huggingface.co/api/datasets/chfrank/earth-tensors/tree/main/partials/family10_1/slatrack/<year>`
+→ `done.json` present = non-event); a second same-shape failure makes the one-line fix
+(`whoami(..., cache=True)`, or `HF_NAMESPACE`/`EARTH_HF_NAMESPACE` instead of a per-lane
+`whoami()`) non-optional; a pass does not retire it. **Do not re-derive the diagnosis — it
+is in the 23:30Z entry.**
+
+**Other non-fleet crons in the window:** `tpu-status-mirror #232` green
+00:17:48Z → 00:18:06Z. No `GLORYS pull` / `GLORYS pull (global)` firing since `#173`
+(21:56Z) and `#105` (22:20Z) — **spacing only, which the standing note says is not
+reportable; those workflows are reportable on a failure.**
+
+**Budget unchanged:** $0.00/h GPU, **$1.96/day storage** (`disk_space × storage_cost / 30`;
+`storage_cost` is $/GB/month, per the 11:30Z correction). The ≈$41–42-of-$50 figure remains
+14:30Z's *extrapolation* — Vast `/users/current/` still exposes no balance field.
+
+**Standing items.** **42 — did NOT continue: the 00:30Z slot ran on time.** Count stays 7;
+two consecutive on-time slots is still not a close, so leave it open and keep checking.
+**41 open and BLOCKING**, unchanged, deliberately not re-measured; Chris notified
+2026-09-25, **not re-notified** — nothing deleted, his call. This file remains the record.
+**43 (open, dated):** ≈2026-10-02 projection stands; **today's (2026-10-01) re-notify was
+discharged early at 2026-09-30 06:30Z, so nothing is owed today** — the next one falls due
+with the date itself. **40, 37, 31, 16** unchanged. **15 — fresh-container bootstrap again,
+108th**; no `earth`, no `.gh_pat`, no `.vast_key`. Shallow re-clone at `2a70821` plus both
+credential files rewritten from the project docs with the **Write tool, never argv**,
+`chmod 600`. Routine, not an event. Mapping unchanged (4): `47913006`←`gpu-box-46996216`,
+`49102182`←`gpu-box-31299601`, `50928407`←`gpu-box-46694776`, `51415980`←`gpu-box-31947967`.
+
+**The bootstrap note earned its keep an eighth time.** This session too began at the newest
+*project* doc (**2026-09-25 15:30Z**) and had **five days** of apparently missing checks on
+the table before `git log` and this file showed the series intact. **Keep that note at the
+top of every handoff until item 41 is resolved.**
+
+### For 01:30Z
+
+- **Nothing is in flight.** No run to deadline, no box to watch. Next check should be short.
+- **`#66`'s 00:40Z firing is the one live item** and should be visible by then. Read it per
+  the rules above; report only a same-shape second 429 or genuine missing `done.json`.
+- **This commit will start `Test & Deploy #1284`,** which on 27 consecutive precedents fails
+  in the hosted `test` job at ~36–61 min. **Predicted, not a finding** — and it is why
+  `2 run(s) not finished` at the top of the hour is the normal shape.
+- **If any box reads `running`: §0e first** — a just-dispatched wave looks exactly like idle
+  burn in the gap before its job lands.
+- **CPU-BOUND unchanged:** decided against a control's first `stage2_step` `wall_s`
+  (`#478`, K=144/1024x16/batch256 → `wall_s 240`), **never a threshold**. Exclude k-fold
+  ridge solves and the first 1–2 h of anomaly transform + embed. **Name the script.** Write
+  deadline + threshold down before the evidence closes; price both errors.
+- **Never destroy from this session; never stop a box with a running job.**
+
+---
+
 ## 2026-09-30 23:30Z — HEALTHY (exit 0, twice), fleet unchanged from 22:30Z. 0 mutations, 0 fleet commits beyond this log. **Chris NOTIFIED** — **`#66 slatrack` fired 4 h late and FAILED**, but on an **HF `/whoami-v2` 429 in the verify step, not data loss**; all 32 years intact, $0. **On time, ran 23:30Z — item 42 did not continue.**
 
 `fleet_health.mjs`: `1 run(s) not finished · 0 runner(s) online+idle` / HEALTHY / EXIT=0 at
