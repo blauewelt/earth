@@ -10,6 +10,90 @@ Newest first.
 
 ---
 
+## 2026-10-01 06:30Z — HEALTHY (exit 0), fleet byte-identical to 04:30Z. 0 mutations, 0 fleet commits beyond this log. **Chris NOT notified — nothing wrong on the fleet, nothing changed on it.** **The 05:30Z slot left NO record — item 42's skipping has recurred and the six-slot on-time streak is broken.**
+
+`fleet_health.mjs`: `1 run(s) not finished · 0 runner(s) online+idle` / HEALTHY / EXIT=0 at
+06:31Z. The 1 is the **`#650` baseline alone**; `in_progress` read directly: **0**.
+
+**All five conditions clean; every Vast figure byte-identical to 04:30Z, two frames ~75 s
+apart (06:32:13Z and 06:33:28Z):**
+
+- **CPU-BOUND** n/a — no box `running`, no job anywhere on a fleet box. All four read
+  `gpu_util=0` **and `cpu_util=0`**, so the condition's conjunction cannot hold. No
+  threshold used, no control read, no script to name.
+- **IDLE BURN** clean — 4 instances, all `cur_state=stopped`, **0 runners online+idle**
+  (15 registered, 0 online at all). **$0.00/h GPU burn.** §0e not engaged: nothing
+  dispatched in the window, nothing `running` to mistake for it. No `gpu_box.mjs stop`.
+- **QUEUE STALL** cannot fire — `queued` is exactly 1 and it is `#650 Test & Deploy`
+  (queued 2026-08-19T04:04:09Z, id `32214393689`), the item-16 baseline; no online+idle
+  runner to pair it with.
+- **DISK** clean — `50928407` 132/200 = **66.0%** (highest), `51415980` 184/420 = 43.8%,
+  `49102182` 89/300 = 29.7%, `47913006` 0.75/700 = 0.1%. Unchanged, none near 90%.
+- **TELEMETRY** clean — all four `gpu_temp` non-zero (60.0 / 38.0 / 49.0 / 53.0 °C),
+  identical on both frames. No dead frame.
+
+`50928407` still `cur_state=stopped` / `actual_status=loading`, the stale pair first noted
+2026-09-25 12:30Z, now its **eighth day**. Not billing GPU, not actioned.
+
+### The 06:00–06:40Z cron band FIRED — 04:30Z's watch closes clean
+
+04:30Z named the 06:00–06:40Z band as the next real test of the repo-wide cron lag, and it
+fired normally: **`#106 GLORYS pull (global)` 06:03:25Z → 06:07:51Z `success`** and
+**`#233 tpu-status-mirror` 06:15:48Z → 06:16:11Z `success`**. With 04:30Z's three lanes all
+having landed normally the night before, the lag was a night and not a pattern. **Watch
+closed; nothing owed, nothing reportable** — spacing of a scheduled workflow is never
+reportable, a failure is.
+
+`#1288 Test & Deploy` completed `failure` 05:33:22Z after **60.0 min — the 32nd
+consecutive**, the standing `app.spec.js:1720` fix-or-quarantine item, not a new fault.
+
+### Item 42 recurred: the 05:30Z slot produced nothing
+
+No 05:30Z entry in this file, and no ~05:33Z `Test & Deploy` run (the hourly commit's own
+CI) — `#1288` at 04:33:24Z is the 04:30Z check's, `#1287` at 03:34:31Z the 03:30Z check's.
+So the slot did not run at all rather than running and failing to record. Checked from the
+scheduler side: the task is **`enabled`, `29 * * * *`, `ended_reason` empty,
+`suspension_reason` empty, `next_run_at` 07:29:00Z**, and its only recorded `last_run` is
+**this** run (`fired_at` 06:29:44Z). Nothing failed; the 05:29Z firing is simply absent.
+**Platform-side skip, outside the fleet and outside this routine's five conditions** —
+same shape as the 2026-09-30 15:30–17:30Z and 21:30Z gaps Chris was already notified about
+at 22:30Z that day. **Not re-notified:** the fleet is idle at $0.00/h, so a skipped slot
+costs nothing and changes nothing; it is logged for the pattern's sake. If slots keep
+dropping while something IS in flight, that is the hour to notify.
+
+## Standing items (deltas only)
+
+- **15: manual bootstrap again** — fresh container, no `earth`, no `.gh_pat`, no
+  `.vast_key`. Shallow clone (`--depth 1 --filter=blob:none`), both credentials written
+  with the Write tool, never argv, `chmod 600`, per `claude/github-access.md` 2b and
+  `claude/vast-access.md`.
+- **41 (open, BLOCKING, needs Chris):** the project store is still at its 2,000,000-token
+  cap, so this record is in the repo log and NOT a project doc — which is what this file
+  exists for. Unchanged; **not re-notified.**
+- **42: streak BROKEN at six.** 05:30Z missing; see above. Scheduler reports healthy.
+
+## For 07:30Z
+
+- **Nothing is in flight.** No run to deadline, no box to watch. Next check should be short.
+- **If any box reads `running`: §0e first** (a just-dispatched wave looks exactly like idle
+  burn) before calling it idle burn.
+- **Mapping is four** — `47913006`←`gpu-box-46996216`, `49102182`←`gpu-box-31299601`,
+  `50928407`←`gpu-box-46694776`, `51415980`←`gpu-box-31947967`.
+- **CPU-BOUND unchanged:** probe-ladder run on a GPU box, `gpu_util` <5 % **with `cpu_util`
+  >20 %**, second reading, non-zero `gpu_temp`, decided against a control's first
+  `stage2_step` `wall_s` (`#478`, K=144/1024x16/batch256 → `wall_s 240`) — **never a
+  threshold**. Exclude k-fold ridge solves and the first 1–2 h of anomaly transform + embed.
+  **Name the script.** Write deadline + threshold down first; price both errors.
+- **`47913006` is stop-only — never destroy** (sole copy of the 213 GB family-5 daily tensor).
+- **Never destroy from this session; never stop a box with a running job.**
+- **The cron-lag watch is CLOSED** — do not re-open it on spacing alone; a scheduled
+  workflow is reportable on a `failure`, never on when it fired.
+- **Expect `#1289` to fail at ~55–60 min.** That is this log's own commit CI and the
+  `app.spec.js:1720` item; it is not a finding.
+- **If item 42 drops another slot, note it here;** notify only if something is in flight.
+
+---
+
 ## 2026-10-01 04:30Z — HEALTHY (exit 0), fleet byte-identical to 03:30Z. 0 mutations, 0 fleet commits beyond this log. **Chris NOT notified — nothing wrong, nothing changed.** **On time, ran 04:31Z — item 42 did not continue (sixth consecutive on-time slot).**
 
 `fleet_health.mjs`: `1 run(s) not finished · 0 runner(s) online+idle` / HEALTHY / EXIT=0 at
