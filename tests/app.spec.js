@@ -6660,11 +6660,17 @@ test("family 7: the colour group's rows are counted from its own first bin",
     el.value = d;
     el.dispatchEvent(new Event("change", { bubbles: true }));
   }, dayOfBin(index.bin_first));
-  await expect.poll(() => page.evaluate(() => window.__earth.tensorLayerState().ready),
-                    { timeout: 20000 }).toBe(false);
+  // Wait for the ERROR, not for `ready` to drop: `ready` compares the cached
+  // slab's key with state.date, so it turns false the instant the input's
+  // change handler writes the date — while the move itself is still queued in
+  // scrubApply (held up to PLAY_FRAME_CEILING_MS, 8 s, behind the previous
+  // move's tiles). Polling `ready` therefore exited immediately and read the
+  // previous load's `error: null`; on CI that race was lost on most runs.
+  await expect.poll(() => page.evaluate(() => window.__earth.tensorLayerState().error ?? ""),
+                    { timeout: 20000 }).toContain("before that record starts");
   const before = await page.evaluate(() => window.__earth.tensorLayerState());
+  expect(before.ready).toBe(false);
   expect(before.bin).toBe(index.bin_first);
-  expect(before.error).toContain("before that record starts");
   expect((page.__f7Reads || []).length).toBe(nReads);   // no bad range read
   await expect.poll(toasts).toContain("could not be read");
 
