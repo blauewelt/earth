@@ -1734,8 +1734,11 @@ test("daily precip aggregates (dry = zero); 30-min layer steps through the day",
   expect(daily.agg).toBe(true);
   expect(daily.name).toBe("AggregateProvider");
   expect(daily.zero).toBe(true);  // transparent = "no rain", counted as 0 in the mean
-  // no ⚠ on its chip — it is genuinely being drawn as an average
-  const chip = page.locator("#active-layers .chip", { hasText: "GPM IMERG V07)" });
+  // no ⚠ on its chip — it is genuinely being drawn as an average. The chip
+  // carries the layer's full title, which gained its pixel size on 2026-08-31
+  // (e7f65cf1, §2.1); matching the old "…V07)" ending found no chip at all.
+  const chip = page.locator("#active-layers .chip",
+                            { hasText: "Precipitation rate (GPM IMERG V07, 10 km)" });
   await expect(chip).not.toHaveClass(/chip-warn/);
   await page.evaluate(() => {
     const s = document.getElementById("window-days"); s.value = "1";
@@ -2783,10 +2786,15 @@ test("Climate TRACE is year-aware: the date's year picks the inventory", async (
 
   // a top-emitter marker's popup carries the shown year
   const before = await page.evaluate(() => window.__earth.pointLayers.climatetrace.__json.assets_by_year["2024"][0][3]);
-  // step the year back two: the layer rebuilds for 2022
+  // step the year back two: the layer rebuilds for 2022.
+  // A date move is coalesced through scrubApply: while the previous move is
+  // still waiting for its tiles, the next one is held for up to
+  // PLAY_FRAME_CEILING_MS (8 s) before it applies. The default 5 s expect
+  // timeout is shorter than that, so the waits after a date change are 20 s.
   await page.click('#date-steps button[data-step="-1y"]');
   await page.click('#date-steps button[data-step="-1y"]');
-  await expect(page.locator("#meta-climatetrace")).toContainText("2022 inventory");
+  await expect(page.locator("#meta-climatetrace")).toContainText("2022 inventory",
+                                                                 { timeout: 20000 });
   const loadedYear = await page.evaluate(() => window.__earth.state.date.slice(0, 4));
   expect(loadedYear).toBe("2022");
 
@@ -2795,7 +2803,8 @@ test("Climate TRACE is year-aware: the date's year picks the inventory", async (
     const d = document.getElementById("layer-date");
     d.value = "2010-03-01"; d.dispatchEvent(new Event("change"));
   });
-  await expect(page.locator("#meta-climatetrace")).toContainText("2021 inventory"); // clamped up
+  await expect(page.locator("#meta-climatetrace")).toContainText("2021 inventory", // clamped up
+                                                                 { timeout: 20000 });
 });
 
 test("OPERA disturbance layers are classifications: swatch legend, class-label probe", async ({ page }) => {
@@ -4691,9 +4700,14 @@ test("a slow source is only late, not lost — the card redraws when it lands", 
   const card = page.locator("#pixel-card");
   // first pass: drawn without it, and honest about why
   await expect(card).toContainText(/Still loading[^\u2026]*ocean column/, { timeout: 90000 });
-  // second pass: the straggler lands, its section appears, the notice is gone
+  // second pass: the straggler lands, its section appears, and the notice no
+  // longer names it. Only the notice's mention of THIS source is asserted:
+  // the other ~20 sources (the Open-Meteo hosts above all) can legitimately
+  // still be in flight at this moment, and on CI they often are — requiring
+  // the whole notice to vanish tested their latency, not this behaviour.
   await expect(card).toContainText("Ocean column", { timeout: 90000 });
-  await expect(card).not.toContainText("Still loading");
+  await expect(card).not.toContainText(/Still loading[^…]*ocean column/,
+                                       { timeout: 20000 });
 });
 
 test("a straggler cannot redraw the card under a newer point", async ({ page }) => {
