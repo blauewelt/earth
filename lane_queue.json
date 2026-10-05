@@ -31,17 +31,6 @@
  ],
  "dispatched": [
   {
-   "store": "era5_q",
-   "stage": "index,fetch",
-   "start": "2017-01-01",
-   "end": "2021-12-31",
-   "runner": "ubuntu-latest",
-   "extra_args": "--push-parts",
-   "adapter_env": "",
-   "retries": 2,
-   "at": "2026-10-05T19:13:35.592Z"
-  },
-  {
    "store": "era5_t",
    "stage": "index,fetch",
    "start": "2017-01-01",
@@ -3725,6 +3714,19 @@
    "at": "2026-10-05T19:01:10.132Z",
    "run_number": 948,
    "finished": "2026-10-05T19:40:42Z"
+  },
+  {
+   "store": "era5_q",
+   "stage": "index,fetch",
+   "start": "2017-01-01",
+   "end": "2021-12-31",
+   "runner": "ubuntu-latest",
+   "extra_args": "--push-parts",
+   "adapter_env": "",
+   "retries": 2,
+   "at": "2026-10-05T19:13:35.592Z",
+   "run_number": 951,
+   "finished": "2026-10-05T19:45:13Z"
   }
  ],
  "failed": []
