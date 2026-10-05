@@ -13,20 +13,6 @@
     37363351150
    ],
    "not_before": "2026-10-05T19:56:27.133Z"
-  },
-  {
-   "store": "era5_v",
-   "stage": "index,fetch",
-   "start": "2022-01-01",
-   "end": "2026-12-31",
-   "runner": "ubuntu-latest",
-   "extra_args": "--push-parts",
-   "adapter_env": "",
-   "retries": 3,
-   "seen_runs": [
-    37362985960
-   ],
-   "not_before": "2026-10-05T19:53:22.877Z"
   }
  ],
  "dispatched": [
@@ -51,6 +37,20 @@
    "adapter_env": "",
    "retries": 2,
    "at": "2026-10-05T19:26:06.395Z"
+  },
+  {
+   "store": "era5_v",
+   "stage": "index,fetch",
+   "start": "2022-01-01",
+   "end": "2026-12-31",
+   "runner": "ubuntu-latest",
+   "extra_args": "--push-parts",
+   "adapter_env": "",
+   "retries": 3,
+   "seen_runs": [
+    37362985960
+   ],
+   "at": "2026-10-05T19:53:47.305Z"
   }
  ],
  "done": [
