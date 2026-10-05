@@ -2,31 +2,6 @@
  "pending": [],
  "dispatched": [
   {
-   "store": "era5_t",
-   "stage": "index,fetch",
-   "start": "2017-01-01",
-   "end": "2021-12-31",
-   "runner": "ubuntu-latest",
-   "extra_args": "--push-parts",
-   "adapter_env": "",
-   "retries": 2,
-   "at": "2026-10-05T19:22:56.083Z"
-  },
-  {
-   "store": "era5_v",
-   "stage": "index,fetch",
-   "start": "2022-01-01",
-   "end": "2026-12-31",
-   "runner": "ubuntu-latest",
-   "extra_args": "--push-parts",
-   "adapter_env": "",
-   "retries": 3,
-   "seen_runs": [
-    37362985960
-   ],
-   "at": "2026-10-05T19:53:47.305Z"
-  },
-  {
    "store": "era5_u",
    "stage": "index,fetch",
    "start": "2017-01-01",
@@ -3728,7 +3703,39 @@
    "at": "2026-10-05T19:26:06.395Z",
    "run_number": 955,
    "finished": "2026-10-05T20:01:17Z"
+  },
+  {
+   "store": "era5_t",
+   "stage": "index,fetch",
+   "start": "2017-01-01",
+   "end": "2021-12-31",
+   "runner": "ubuntu-latest",
+   "extra_args": "--push-parts",
+   "adapter_env": "",
+   "retries": 2,
+   "at": "2026-10-05T19:22:56.083Z",
+   "run_number": 953,
+   "finished": "2026-10-05T20:06:43Z"
   }
  ],
- "failed": []
+ "failed": [
+  {
+   "store": "era5_v",
+   "stage": "index,fetch",
+   "start": "2022-01-01",
+   "end": "2026-12-31",
+   "runner": "ubuntu-latest",
+   "extra_args": "--push-parts",
+   "adapter_env": "",
+   "retries": 3,
+   "seen_runs": [
+    37362985960
+   ],
+   "at": "2026-10-05T19:53:47.305Z",
+   "run_number": 956,
+   "url": "https://github.com/blauewelt/earth/actions/runs/37366338817",
+   "reason": "retries exhausted",
+   "finished": "2026-10-05T20:08:52Z"
+  }
+ ]
 }
