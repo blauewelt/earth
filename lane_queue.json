@@ -1,17 +1,21 @@
 {
- "pending": [],
- "dispatched": [
+ "pending": [
   {
-   "store": "era5_q",
+   "store": "era5_v",
    "stage": "index,fetch",
-   "start": "2012-01-01",
-   "end": "2016-12-31",
+   "start": "2022-01-01",
+   "end": "2026-12-31",
    "runner": "ubuntu-latest",
    "extra_args": "--push-parts",
    "adapter_env": "",
-   "retries": 2,
-   "at": "2026-10-05T19:01:06.237Z"
-  },
+   "retries": 3,
+   "seen_runs": [
+    37362985960
+   ],
+   "not_before": "2026-10-05T19:53:22.877Z"
+  }
+ ],
+ "dispatched": [
   {
    "store": "era5_t",
    "stage": "index,fetch",
@@ -24,17 +28,6 @@
    "at": "2026-10-05T19:01:10.132Z"
   },
   {
-   "store": "era5_v",
-   "stage": "index,fetch",
-   "start": "2012-01-01",
-   "end": "2016-12-31",
-   "runner": "ubuntu-latest",
-   "extra_args": "--push-parts",
-   "adapter_env": "",
-   "retries": 2,
-   "at": "2026-10-05T19:10:28.674Z"
-  },
-  {
    "store": "era5_q",
    "stage": "index,fetch",
    "start": "2017-01-01",
@@ -44,17 +37,6 @@
    "adapter_env": "",
    "retries": 2,
    "at": "2026-10-05T19:13:35.592Z"
-  },
-  {
-   "store": "era5_v",
-   "stage": "index,fetch",
-   "start": "2022-01-01",
-   "end": "2026-12-31",
-   "runner": "ubuntu-latest",
-   "extra_args": "--push-parts",
-   "adapter_env": "",
-   "retries": 2,
-   "at": "2026-10-05T19:22:52.181Z"
   },
   {
    "store": "era5_t",
@@ -3712,6 +3694,32 @@
    "at": "2026-10-05T19:01:13.949Z",
    "run_number": 949,
    "finished": "2026-10-05T19:33:50Z"
+  },
+  {
+   "store": "era5_q",
+   "stage": "index,fetch",
+   "start": "2012-01-01",
+   "end": "2016-12-31",
+   "runner": "ubuntu-latest",
+   "extra_args": "--push-parts",
+   "adapter_env": "",
+   "retries": 2,
+   "at": "2026-10-05T19:01:06.237Z",
+   "run_number": 947,
+   "finished": "2026-10-05T19:36:12Z"
+  },
+  {
+   "store": "era5_v",
+   "stage": "index,fetch",
+   "start": "2012-01-01",
+   "end": "2016-12-31",
+   "runner": "ubuntu-latest",
+   "extra_args": "--push-parts",
+   "adapter_env": "",
+   "retries": 2,
+   "at": "2026-10-05T19:10:28.674Z",
+   "run_number": 950,
+   "finished": "2026-10-05T19:38:08Z"
   }
  ],
  "failed": []
