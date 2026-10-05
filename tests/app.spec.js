@@ -4683,12 +4683,16 @@ test("a slow source is only late, not lost — the card redraws when it lands", 
   test.setTimeout(240000);
   const deadline = await page.evaluate(() => window.__earth.PIXEL_DEADLINE_MS);
   expect(deadline).toBeGreaterThan(0);
+  // The test itself holds the straggler, so the test knows — without asking
+  // the page — whether the ocean column can possibly have arrived yet.
+  let released = false;
   await page.route(/ocean_column\.json/, async (route) => {
     // Comfortably past the deadline: the draw is fired by a wall-clock timer,
     // and on the sandbox's starved render loop a 15 s timer has been measured
     // firing at 20-25 s. A margin under that drift would let the "straggler"
     // arrive before the first draw, and the test would prove nothing.
     await new Promise((r) => setTimeout(r, deadline + 20000));   // late, but it arrives
+    released = true;
     await route.continue();
   });
   // Fire and FORGET — showPixelState resolves only after its second pass, so
@@ -4697,17 +4701,47 @@ test("a slow source is only late, not lost — the card redraws when it lands", 
   await page.evaluate(() => {
     window.__earth.showPixelState(Cesium.Cartographic.fromDegrees(-30, 40));
   });
-  const card = page.locator("#pixel-card");
-  // first pass: drawn without it, and honest about why
-  await expect(card).toContainText(/Still loading[^\u2026]*ocean column/, { timeout: 90000 });
-  // second pass: the straggler lands, its section appears, and the notice no
-  // longer names it. Only the notice's mention of THIS source is asserted:
-  // the other ~20 sources (the Open-Meteo hosts above all) can legitimately
-  // still be in flight at this moment, and on CI they often are — requiring
-  // the whole notice to vanish tested their latency, not this behaviour.
-  await expect(card).toContainText("Ocean column", { timeout: 90000 });
-  await expect(card).not.toContainText(/Still loading[^…]*ocean column/,
-                                       { timeout: 20000 });
+  // One read of the card per poll, so every fact below describes the SAME
+  // draw: the body is rebuilt wholesale on each arrival, and two separate
+  // locator checks could straddle a redraw.
+  const snap = () => page.evaluate(() => {
+    const card = document.getElementById("pixel-card");
+    const titles = [...card.querySelectorAll(".px-sec-title")].map((t) => t.textContent);
+    const loading = card.querySelector(".px-loading");
+    return { titles, ocean: titles.some((t) => t.startsWith("Ocean column")),
+             loading: loading ? loading.textContent : null };
+  });
+  // First pass: drawn (some section is up), WITHOUT the ocean column, and
+  // honest that more is coming. NOT asserted: that the notice spells out
+  // "ocean column". The notice names three sources and counts the rest ("…
+  // and 4 more") while more than four are out, and on CI (run #1293) the
+  // ocean column was hidden in that count until it landed — the old regex
+  // waited for a name the notice was never obliged to print.
+  await expect.poll(async () => {
+    const s = await snap();
+    return s.titles.length > 0 && s.loading !== null;
+  }, { timeout: 90000 }).toBe(true);
+  const first = await snap();
+  // Read AFTER the snapshot: if the file was still held now, it was held while
+  // that draw happened, so its absence is the deadline at work, not a fluke —
+  // and the ocean column is necessarily among the sources the notice counts.
+  expect(released, "the straggler landed before the first draw — the test proved nothing").toBe(false);
+  expect(first.ocean).toBe(false);
+  expect(first.loading).toMatch(/^Still loading /);
+  // When the list is short enough to be printed whole, it must name it.
+  if (!/ and \d+ more…$/.test(first.loading)) expect(first.loading).toContain("ocean column");
+  // Second pass: the straggler lands and its section appears. In the draw
+  // that shows the section, a fully printed notice no longer names it (under
+  // truncation that check would be vacuous, so it is only made when it can
+  // fail). The other ~20 sources (the Open-Meteo hosts above all) can
+  // legitimately still be in flight here, and on CI they often are —
+  // requiring the whole notice to vanish tested their latency, not this.
+  await expect.poll(async () => (await snap()).ocean, { timeout: 90000 }).toBe(true);
+  const second = await snap();
+  expect(second.ocean).toBe(true);
+  if (second.loading && !/ and \d+ more…$/.test(second.loading)) {
+    expect(second.loading).not.toContain("ocean column");
+  }
 });
 
 test("a straggler cannot redraw the card under a newer point", async ({ page }) => {
