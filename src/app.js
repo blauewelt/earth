@@ -4939,14 +4939,21 @@ function climFillSelects(cfg) {
  * in the row, where it can be clicked — the plane on screen as CSV. */
 function climDownloadsHtml(cfg, { inTip = false } = {}) {
   const idx = climState.index;
+  // The pointer to the Data tab (E-084), whatever this layer has published:
+  // the tab is where a period, a month, a box and a resolution are chosen.
+  // A button in the row (it switches tabs); plain words in the hover card,
+  // which takes no pointer events.
+  const toData = `<div class="clim-to-data">More stores, any period, month, box and ` +
+    `resolution: ${inTip ? "the Data tab"
+      : `<button type="button" class="tag-link" data-opentab="data">the Data tab</button>`}</div>`;
   if (!idx) {
     return `nothing yet — the index <code>data/family7_clim_index.json</code> has not ` +
       `been published (made by <code>ml/export_family7_clim.py</code> → ` +
-      `<code>ml/publish_family7_clim_index.py upload</code>).`;
+      `<code>ml/publish_family7_clim_index.py upload</code>).` + toData;
   }
   const at = climKeyFor(idx, cfg);
   const f = at && climFiles(idx, at.ver.key, at.spec.group);
-  if (!f) return `no files for this group in this version.`;
+  if (!f) return `no files for this group in this version.` + toData;
   const a = (url, text) => `<a href="${esc(url)}" target="_blank" rel="noopener">${text}</a>`;
   const shape = (f.clim_npy && f.clim_npy.shape) || [];
   const items = [
@@ -4964,7 +4971,7 @@ function climDownloadsHtml(cfg, { inTip = false } = {}) {
         `this month as CSV</button>`,
   ];
   return `<div class="clim-dl-head">${esc(at.ver.name)} · ${esc(at.spec.group)} ` +
-    `(${at.spec.step}°)</div><ul>${items.map((x) => `<li>${x}</li>`).join("")}</ul>`;
+    `(${at.spec.step}°)</div><ul>${items.map((x) => `<li>${x}</li>`).join("")}</ul>` + toData;
 }
 
 /* Everything in the row and the hover card that follows the selection. */
@@ -7691,6 +7698,9 @@ function buildLayerPanel() {
     // The climatology's "this channel, this month as CSV", from the plane in memory.
     const csv = e.target.getAttribute?.("data-climcsv");
     if (csv) { climDownloadCsv(GIBS_LAYERS.find((l) => l.id === csv)); return; }
+    // "…: the Data tab" in the climatology's downloads — switch to that tab
+    const toTab = e.target.getAttribute?.("data-opentab");
+    if (toTab) { document.getElementById(`tab-${toTab}`)?.click(); return; }
     const id = e.target.getAttribute?.("data-alphahalf");
     if (!id) return;
     const slider = list.querySelector(`input[data-alpha="${id}"]`);
@@ -15770,11 +15780,1003 @@ function loadPlayback() {
   playbackRender();
 }
 
+/* ----------------------------------------------------------------- data tab */
+
+/* THE DATA TAB (E-084 §3). Family 1.gf — the global observation stores kept at
+ * their own resolution, 10 km / 5 days or finer — selected, estimated,
+ * previewed and downloaded in the browser. Everything that touches bytes is
+ * the reader's (`src/f1data.js`, `window.F1Data`, plan §4); this block is the
+ * selection, the box on the globe, the live estimate, the preview painting and
+ * the file save. Its contract with the reader is exactly:
+ *
+ *   F1Data.loadRegistry()        → {stores:[{name,title,gist,kind,channels,span,
+ *                                    frameSeconds,framesPerBin,grid,folderUrl}]}
+ *   F1Data.estimate(sel)         → {requests, readBytes, outBytes, frames|rows, overCap, why}
+ *   F1Data.preview(sel,{signal}) → Result for one frame / one bin
+ *   F1Data.run(sel,{onProgress,signal}) → Result
+ *   F1Data.toNetCDF(result) / F1Data.toCSV(result) → Blob
+ *
+ * and nothing else, so the reader can change how it reads without this file
+ * noticing. `sel` is built in ONE place (`dtReadSel`) from the controls, which
+ * is what makes the estimate, the preview and the download agree about what
+ * was asked for. The selection survives a reload through localStorage (a
+ * convenience: a blocked or empty store just means the defaults).
+ *
+ * The tab owns three things on the globe — the box outline, the preview
+ * picture and the preview dots — and the tab switch has no leave hook, so
+ * `dataTabHide` is called on every tab click that is not ours (the Cones
+ * pattern) and takes all three down, cancelling any read in flight. */
+
+const DT_LS_KEY = "dataTabSel";
+// CSV of a grid writes "time,lat,lon,value" per cell: ~30 bytes for every
+// 4-byte float, so it is offered only while the result is small enough that
+// the text file stays a file a spreadsheet can open.
+const DT_CSV_GRID_MAX_BYTES = 8e6;
+const DT_PREVIEW_MAX_PX = 2048;     // canvas side cap for a native-resolution preview
+const DT_PREVIEW_MAX_DOTS = 20000;
+// The six places are the Cones tab's own (#cn-presets): a box round each.
+const DT_PRESET_DLAT = 5, DT_PRESET_DLON = 7.5;
+const DT_MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun",
+  "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+const dt = {
+  reg: null,             // the registry, once loaded
+  regPromise: null,
+  store: null,           // the selected store's registry record
+  outline: null,         // the box on the globe (entity)
+  pvEnt: null,           // the preview picture (rectangle entity)
+  pvDots: null,          // the preview dots (PointPrimitiveCollection)
+  estTimer: null,
+  estSeq: 0,
+  lastEstimate: null,
+  lastEstimateFor: null, // JSON of the sel the last estimate answered
+  lastSel: null,
+  dlCtrl: null,          // AbortController of the download in flight
+  pvCtrl: null,          // AbortController of the preview in flight
+  lastDownload: null,    // {name, type, size} — what the tests read
+  lastPreview: null,     // {kind, min, max, unit, n}
+  wired: false,
+};
+
+function dtEl(id) { return document.getElementById(id); }
+
+function dataTabVisible() {
+  const p = dtEl("panel-data");
+  return !!p && !p.classList.contains("hidden");
+}
+
+function dtReader() {
+  const R = window.F1Data;
+  return R && typeof R.loadRegistry === "function" && typeof R.estimate === "function" ? R : null;
+}
+
+const dtYear = (iso) => Number(String(iso || "").slice(0, 4));
+const dtIsGrid = (st) => !!st && st.kind === "grid";
+/* Sub-daily time exists for every point store and for a grid whose frames are
+ * shorter than a day (the 3-hourly cloud tops). */
+const dtHasHours = (st) => !!st && (!dtIsGrid(st) || (Number(st.frameSeconds) > 0 && Number(st.frameSeconds) < 86400));
+
+function dtCadence(st) {
+  if (!st) return "";
+  if (!dtIsGrid(st)) return "per report";
+  const s = Number(st.frameSeconds);
+  if (s === 86400) return "daily";
+  if (s > 0 && s < 86400 && 86400 % s === 0) return `${s / 3600}-hourly`;
+  if (s > 0) return `every ${(s / 86400).toFixed(1)} days`;
+  return "as stored";
+}
+
+function dtNativeDeg(st) {
+  const g = st && st.grid;
+  if (!g) return null;
+  const d = Math.abs(Number(g.dlat) || Number(g.dlon) || 0);
+  if (d > 0) return d;
+  return g.H ? 180 / g.H : null;
+}
+
+function dtFmtDeg(d) {
+  if (!d) return "";
+  const inv = 1 / d;
+  if (Math.abs(inv - Math.round(inv)) < 1e-6 && inv > 1) return `1/${Math.round(inv)}°`;
+  return `${+d.toFixed(3)}°`;
+}
+
+function dtFmtMB(bytes) {
+  const mb = (Number(bytes) || 0) / 1e6;
+  if (mb === 0) return "0 MB";
+  if (mb < 0.1) return "< 0.1 MB";
+  if (mb < 100) return `${mb.toFixed(1)} MB`;
+  return `${Math.round(mb).toLocaleString("en-US")} MB`;
+}
+/* A pixel size in kilometres at the equator (111.2 km per degree), to one
+ * decimal below 10 km: 1/24° is 4.6 km, 0.02° is 2.2 km. */
+const dtKm = (deg) => { const k = (Number(deg) || 0) * 111.2; return k < 10 ? k.toFixed(1) : String(Math.round(k)); };
+const dtFmtInt = (n) => Math.round(Number(n) || 0).toLocaleString("en-US");
+
+/* ---- the selection ------------------------------------------------------ */
+
+function dtSpanYears(st) {
+  const sp = (st && st.span) || [];
+  const y0 = dtYear(sp[0]) || 1900, y1 = dtYear(sp[1]) || new Date().getUTCFullYear();
+  return [y0, y1];
+}
+
+function dtClampYear(v, st, fallback) {
+  const [a, b] = dtSpanYears(st);
+  const n = Math.round(Number(v));
+  if (!Number.isFinite(n) || String(v).trim() === "") return fallback;
+  return Math.max(a, Math.min(b, n));
+}
+
+/* The box from the four fields: null when all four are empty (no box — the
+ * whole globe, legal for point stores), {error} when something is off, the box
+ * otherwise. W > E is legal and means the box crosses the dateline. */
+function dtBoxFromFields() {
+  const raw = ["dt-w", "dt-s", "dt-e", "dt-n"].map((id) => dtEl(id).value.trim());
+  if (raw.every((v) => v === "")) return null;
+  if (raw.some((v) => v === "")) return { error: "fill all four box edges (or none, for the whole globe)" };
+  const [w, s, e, n] = raw.map(Number);
+  if (![w, s, e, n].every(Number.isFinite)) return { error: "the box edges must be numbers" };
+  if (w < -180 || w > 180 || e < -180 || e > 180) return { error: "W and E must lie between −180 and 180" };
+  if (s < -90 || n > 90) return { error: "S and N must lie between −90 and 90" };
+  if (s >= n) return { error: "S must be south of N" };
+  if (w === e) return { error: "W and E must differ" };
+  return { w, s, e, n };
+}
+
+function dtWriteBox(b) {
+  const f = (v) => (v === undefined || v === null ? "" : String(+Number(v).toFixed(2)));
+  dtEl("dt-w").value = b ? f(b.w) : "";
+  dtEl("dt-s").value = b ? f(b.s) : "";
+  dtEl("dt-e").value = b ? f(b.e) : "";
+  dtEl("dt-n").value = b ? f(b.n) : "";
+}
+
+/* Read every control into the reader's `sel` (plan §4). The one place it is
+ * built, so the estimate, the preview and the download cannot disagree. */
+function dtReadSel() {
+  const st = dt.store;
+  if (!st) return null;
+  const channels = [...document.querySelectorAll("#dt-channels input:checked")].map((i) => i.value);
+  const b = dtSpanYears(st)[1];
+  let yearStart = dtClampYear(dtEl("dt-y0").value, st, b);
+  let yearEnd = dtClampYear(dtEl("dt-y1").value, st, yearStart);
+  if (yearEnd < yearStart) yearEnd = yearStart;
+  const months = [...document.querySelectorAll("#dt-months button.active")]
+    .map((x) => Number(x.dataset.month)).sort((x, y) => x - y);
+  let hours = null;
+  if (dtHasHours(st)) {
+    const h0 = Math.max(0, Math.min(23, Math.round(Number(dtEl("dt-h0").value) || 0)));
+    const h1v = dtEl("dt-h1").value.trim();
+    const h1 = Math.max(1, Math.min(24, Math.round(h1v === "" ? 24 : Number(h1v))));
+    if (!(h0 === 0 && h1 === 24) && h0 !== h1) hours = [h0, h1];
+  }
+  const box = dtBoxFromFields();
+  const resV = dtEl("dt-res").value;
+  // a store in several parts names the part (the reader's optional `group`);
+  // a one-part store leaves it out, as plan §4's `sel` does
+  const group = Array.isArray(st.groups) && st.groups.length > 1 ? dtEl("dt-group").value : null;
+  const res = resV === "native" ? "native" : Number(resV);
+  const rows = !dtIsGrid(st) && res === "native";
+  return {
+    store: st.name,
+    channels,
+    yearStart,
+    yearEnd,
+    months,
+    hours,
+    bbox: box && !box.error ? { w: box.w, s: box.s, e: box.e, n: box.n } : null,
+    // rows keep each report's own time: a time step is a binning choice; and
+    // binned cells need a mean in time (dtSyncStepRes says why)
+    step: rows ? "native"
+      : (!dtIsGrid(st) && dtEl("dt-step").value === "native") ? "pentad" : dtEl("dt-step").value,
+    res,
+    ...(group ? { group } : {}),
+  };
+}
+
+/* What stops a selection before the reader is even asked. */
+function dtSelProblem(sel) {
+  const box = dtBoxFromFields();
+  if (box && box.error) return box.error;
+  if (!sel.channels.length) return "pick at least one channel";
+  if (!sel.months.length) return "pick at least one month";
+  if (dtIsGrid(dt.store) && !sel.bbox) {
+    return "a box is required for a satellite map store — type one, press “use the current view”, or pick a place";
+  }
+  return null;
+}
+
+function dtSave() {
+  const sel = dtReadSel();
+  if (!sel) return;
+  try {
+    localStorage.setItem(DT_LS_KEY, JSON.stringify({
+      ...sel, box: ["dt-w", "dt-s", "dt-e", "dt-n"].map((id) => dtEl(id).value),
+      step: dtEl("dt-step").value, fmt: dtEl("dt-format").value,
+    }));
+  } catch { /* ok: private mode, quota — the defaults are fine */ }
+}
+
+function dtLoadSaved() {
+  try {
+    const v = JSON.parse(localStorage.getItem(DT_LS_KEY) || "null");
+    return v && typeof v === "object" ? v : null;
+  } catch { return null; }
+}
+
+/* ---- building the controls for a store ---------------------------------- */
+
+function dtFillStores() {
+  const sel = dtEl("dt-store");
+  sel.innerHTML = dt.reg.stores.map((st) =>
+    `<option value="${esc(st.name)}">${esc(st.title || st.name)} (${esc(st.name)})</option>`).join("");
+}
+
+function dtStoreAbout(st) {
+  const [y0, y1] = [(st.span || [])[0], (st.span || [])[1]];
+  const kind = dtIsGrid(st)
+    ? `a satellite map store at ${esc(dtFmtDeg(dtNativeDeg(st)))} (≈ ${dtKm(dtNativeDeg(st))} km), ${esc(dtCadence(st))}`
+    : "a point store: every report at its own position and time";
+  return `<code class="dt-code">${esc(st.name)}</code> ${esc(st.gist || "")}` +
+    `<br><span class="dt-k">kind</span> ${kind} · <span class="dt-k">record</span> ` +
+    `${esc(String(y0 || "?").slice(0, 10))} → ${esc(String(y1 || "?").slice(0, 10))}`;
+}
+
+function dtFillChannels(st, keep) {
+  const want = new Set(keep && keep.length ? keep : []);
+  const chans = st.channels || [];
+  if (![...want].some((n) => chans.some((c) => c.name === n)) && chans.length) want.add(chans[0].name);
+  dtEl("dt-channels").innerHTML = chans.map((c) =>
+    `<label class="dt-chip" title="${esc(c.unit || "")}"><input type="checkbox" value="${esc(c.name)}"` +
+    `${want.has(c.name) ? " checked" : ""} /> ${esc(c.name)}</label>`).join("");
+  dtEl("dt-chan-note").textContent = chans.length > 12 ? `${chans.length} — scroll` : "";
+}
+
+function dtFillRes(st, keep) {
+  const r = dtEl("dt-res");
+  const opts = [];
+  if (dtIsGrid(st)) {
+    const nat = dtNativeDeg(st);
+    opts.push(["native", `native (${dtFmtDeg(nat)}, ≈ ${dtKm(nat)} km)`]);
+    for (const d of [0.25, 1]) if (!nat || d > nat + 1e-9) opts.push([String(d), `${d}° — box average with count`]);
+  } else {
+    opts.push(["native", "rows — every report as it is"]);
+    opts.push(["0.25", "0.25° cells — mean with count"]);
+    opts.push(["1", "1° cells — mean with count"]);
+  }
+  r.innerHTML = opts.map(([v, t]) => `<option value="${v}">${esc(t)}</option>`).join("");
+  r.value = opts.some(([v]) => v === String(keep)) ? String(keep) : "native";
+}
+
+/* The time step and the resolution constrain each other for a point store:
+ * ROWS keep every report's own time, so there is no step to choose; BINNED
+ * cells are a mean over a cell AND a stretch of time, and "native" time for a
+ * point store is every report's own second — a cell per second is not a bin —
+ * so binning needs one of the three means. Enforced here (the option is
+ * disabled, and a native choice moves to the five-day mean) and said in words
+ * under the control, because a silently changed select reads as a bug. */
+function dtSyncStepRes() {
+  const st = dt.store;
+  const step = dtEl("dt-step");
+  const note = dtEl("dt-step-note");
+  const points = !dtIsGrid(st);
+  const rows = points && dtEl("dt-res").value === "native";
+  const binned = points && !rows;
+  step.options[0].textContent = binned ? "native — not for binned cells" : `native (${dtCadence(st)})`;
+  step.options[0].disabled = binned;
+  step.disabled = rows;
+  if (rows) step.value = "native";
+  let moved = false;
+  if (binned && step.value === "native") { step.value = "pentad"; moved = true; }
+  step.title = rows ? "rows keep each report's own time — choose 0.25° or 1° cells to bin in time" : "";
+  if (note) {
+    note.textContent = rows
+      ? "Rows keep each report's own time; choose 0.25° or 1° cells to average over time as well."
+      : binned
+        ? `Binned cells average every report in a cell over a stretch of time, so they need a ` +
+          `five-day, monthly or whole-selection mean${moved ? " — switched to the five-day mean" : ""}.`
+        : "";
+    note.classList.toggle("hidden", !note.textContent);
+  }
+}
+
+function dtApplyStore(st, saved) {
+  dt.store = st;
+  dtEl("dt-store").value = st.name;
+  dtEl("dt-store-about").innerHTML = dtStoreAbout(st);
+  const parts = Array.isArray(st.groups) ? st.groups : [];
+  dtEl("dt-group-row").classList.toggle("hidden", parts.length < 2);
+  dtEl("dt-group").innerHTML = parts.length > 1
+    ? parts.map((g) => `<option value="${esc(g.name)}">${esc(g.name)}</option>`).join("") : "";
+  dtFillChannels(st, saved && saved.channels);
+  const [a, b] = dtSpanYears(st);
+  for (const id of ["dt-y0", "dt-y1"]) { dtEl(id).min = a; dtEl(id).max = b; }
+  // default: the store's last year — small enough to stay under the cap
+  dtEl("dt-y0").value = saved ? dtClampYear(saved.yearStart, st, b) : b;
+  dtEl("dt-y1").value = saved ? dtClampYear(saved.yearEnd, st, b) : b;
+  dtEl("dt-span").textContent = `record ${a}–${b}`;
+  dtEl("dt-hours-row").classList.toggle("hidden", !dtHasHours(st));
+  dtFillRes(st, saved && saved.res);
+  dtSyncStepRes();
+  dtEl("dt-box-note").textContent = dtIsGrid(st)
+    ? "— required for a map store; W > E crosses the dateline"
+    : "— optional for a point store (empty: the whole globe)";
+  dtEl("dt-box-clear").disabled = dtIsGrid(st);
+  dtClearPreview();
+}
+
+function dtFillPresets() {
+  const host = dtEl("dt-presets");
+  const src = [...document.querySelectorAll("#cn-presets button")];
+  host.innerHTML = src.map((b) =>
+    `<button type="button" data-lat="${esc(b.dataset.lat)}" data-lon="${esc(b.dataset.lon)}" ` +
+    `title="${esc(b.title || "")}, ±${DT_PRESET_DLAT}° latitude × ±${DT_PRESET_DLON}° longitude">` +
+    `${esc(b.textContent.trim())}</button>`).join("");
+}
+
+/* A box round one of the six places: ±5° × ±7.5°, latitudes clamped, the
+ * longitudes wrapped into [−180, 180] so a place near the dateline gets a
+ * W > E box rather than an edge at 187°. */
+function dtPresetBox(lat, lon) {
+  const wrap = (x) => ((x + 540) % 360) - 180;
+  return {
+    w: wrap(lon - DT_PRESET_DLON), e: wrap(lon + DT_PRESET_DLON),
+    s: Math.max(-90, lat - DT_PRESET_DLAT), n: Math.min(90, lat + DT_PRESET_DLAT),
+  };
+}
+
+function dtViewBox() {
+  const r = viewer.camera.computeViewRectangle(viewer.scene.globe.ellipsoid);
+  if (!r || ![r.west, r.south, r.east, r.north].every(Number.isFinite)) return null;
+  const D = Cesium.Math.DEGREES_PER_RADIAN;
+  const rd = (x) => Math.round(x * 10) / 10;
+  const b = {
+    w: rd(Math.max(-180, Math.min(180, r.west * D))), e: rd(Math.max(-180, Math.min(180, r.east * D))),
+    s: rd(Math.max(-90, r.south * D)), n: rd(Math.min(90, r.north * D)),
+  };
+  if (b.w === b.e) { b.w = -180; b.e = 180; }
+  if (b.s >= b.n) return null;
+  return b;
+}
+
+/* ---- the box on the globe ----------------------------------------------- */
+
+/* The ring of a lat/lon box, densified along the parallels: consecutive points
+ * are ≤ 5° apart, so neither a rhumb segment nor Cesium's shortest-way choice
+ * can send an edge the wrong way round the planet — which is what makes a
+ * W > E box (across the dateline) and a box wider than 180° both draw as the
+ * box the fields describe. */
+function dtBoxRing(b) {
+  let e = b.e;
+  if (e <= b.w) e += 360;
+  const span = e - b.w;
+  const k = Math.max(2, Math.ceil(span / 5));
+  const pts = [];
+  for (let i = 0; i <= k; i++) pts.push(b.w + (span * i) / k, b.s);
+  for (let i = k; i >= 0; i--) pts.push(b.w + (span * i) / k, b.n);
+  pts.push(b.w, b.s);
+  return pts;
+}
+
+function dtDrawBox() {
+  const box = dtBoxFromFields();
+  if (!dataTabVisible() || !box || box.error) {
+    if (dt.outline) { viewer.entities.remove(dt.outline); dt.outline = null; }
+    viewer.scene.requestRender();
+    return;
+  }
+  const positions = Cesium.Cartesian3.fromDegreesArray(dtBoxRing(box));
+  if (!dt.outline) {
+    dt.outline = viewer.entities.add({
+      polyline: {
+        positions, width: 2, arcType: Cesium.ArcType.RHUMB,
+        material: Cesium.Color.fromCssColorString("#4493f8").withAlpha(0.95),
+      },
+    });
+  } else {
+    dt.outline.polyline.positions = positions;
+  }
+  viewer.scene.requestRender();
+}
+
+/* ---- the estimate ------------------------------------------------------- */
+
+function dtScheduleEstimate() {
+  clearTimeout(dt.estTimer);
+  dt.estTimer = setTimeout(dtRunEstimate, 300);
+}
+
+function dtCanCsv(st, sel, est) {
+  if (!dtIsGrid(st) && sel.res === "native") return true;           // rows
+  return !!est && Number(est.outBytes) <= DT_CSV_GRID_MAX_BYTES;
+}
+
+function dtSyncFormats(sel, est) {
+  const st = dt.store;
+  const f = dtEl("dt-format");
+  const rows = !dtIsGrid(st) && sel.res === "native";
+  const nc = f.querySelector('option[value="nc"]'), csv = f.querySelector('option[value="csv"]');
+  nc.disabled = rows;
+  nc.textContent = rows ? "NetCDF — not for rows (choose 0.25° or 1° cells)" : "NetCDF";
+  const csvOk = dtCanCsv(st, sel, est);
+  csv.disabled = !csvOk;
+  csv.textContent = csvOk ? "CSV" : "CSV — only for small grids (≤ 2 million values)";
+  if (f.selectedOptions[0]?.disabled) f.value = rows ? "csv" : "nc";
+}
+
+function dtSetDownloadEnabled(on) {
+  dtEl("dt-download").disabled = !on || !!dt.dlCtrl;
+}
+
+async function dtRunEstimate() {
+  const R = dtReader();
+  const out = dtEl("dt-estimate");
+  const sel = dtReadSel();
+  if (!R || !sel) return;
+  dt.lastSel = sel;
+  const seq = ++dt.estSeq;
+  dtSyncFormats(sel, dt.lastEstimate);
+  const problem = dtSelProblem(sel);
+  if (problem) {
+    dt.lastEstimate = null;
+    out.className = "dt-estimate dt-over";
+    out.textContent = problem;
+    dtSetDownloadEnabled(false);
+    dtEl("dt-preview").disabled = true;
+    return;
+  }
+  out.className = "dt-estimate dt-busy";
+  let est;
+  try {
+    est = await R.estimate(sel);
+  } catch (err) {
+    if (seq !== dt.estSeq) return;
+    dt.lastEstimate = null;
+    out.className = "dt-estimate dt-over";
+    out.textContent = `could not estimate: ${err && err.message ? err.message : err}`;
+    dtSetDownloadEnabled(false);
+    return;
+  }
+  if (seq !== dt.estSeq) return;             // a newer selection is already being estimated
+  dt.lastEstimate = est;
+  dt.lastEstimateFor = JSON.stringify(sel);
+  dtSyncFormats(sel, est);
+  const unit = est.rows !== undefined && est.rows !== null ? "rows" : "frames";
+  const count = unit === "rows" ? est.rows : est.frames;
+  const parts = [
+    `<strong>${dtFmtInt(est.requests)}</strong> requests`,
+    `<strong>${est.exact === false ? "≈ " : ""}${dtFmtMB(est.readBytes)}</strong> to read`,
+    `<strong>${dtFmtInt(count)}</strong> ${unit === "rows" ? (Number(count) === 1 ? "row" : "rows") : (Number(count) === 1 ? "frame" : "frames")}`,
+    `<strong>${dtFmtMB(est.outBytes)}</strong> file`,
+  ];
+  let html = parts.join(" · ");
+  if (est.overCap) {
+    // the reader's own sentence, verbatim, then the store's folder as a link
+    const why = String(est.why || "over the cap").trim();
+    const link = dt.store.folderUrl
+      ? ` <a href="${esc(dt.store.folderUrl)}" target="_blank" rel="noopener">The store's files on the data store.</a>`
+      : "";
+    html += `<div class="dt-why">${/^too large/i.test(why) ? "" : "Too large for the browser: "}${esc(why)}` +
+      `${/[.!?]$/.test(why) ? "" : "."}${link}</div>`;
+  } else if (est.exact === false) {
+    html += `<div class="dt-how">The read is estimated from a sample of the store's files; the ` +
+      `download reads exactly what the selection needs.</div>`;
+  }
+  out.className = `dt-estimate${est.overCap ? " dt-over" : ""}`;
+  out.innerHTML = html;
+  dtSetDownloadEnabled(!est.overCap);
+  dtEl("dt-preview").disabled = false;
+}
+
+/* Any control moved: one funnel, so the box, the saved selection and the
+ * estimate always follow the same reading of the controls. */
+function dtChanged() {
+  if (!dt.store) return;
+  dtSyncStepRes();
+  // a preview is a picture OF a selection: once the selection moves it is a
+  // picture of something no longer asked for, so it goes
+  if (dt.pvCtrl || dt.pvEnt || dt.pvDots) dtClearPreview();
+  dtDrawBox();
+  dtSave();
+  dtScheduleEstimate();
+}
+
+/* ---- preview ------------------------------------------------------------ */
+
+function dtClearPreview() {
+  if (dt.pvCtrl) { dt.pvCtrl.abort(); dt.pvCtrl = null; }
+  if (dt.pvEnt) { viewer.entities.remove(dt.pvEnt); dt.pvEnt = null; }
+  if (dt.pvDots) { viewer.scene.primitives.remove(dt.pvDots); dt.pvDots = null; }
+  dt.lastPreview = null;
+  const lg = dtEl("dt-legend");
+  if (lg) { lg.classList.add("hidden"); lg.innerHTML = ""; }
+  dtEl("dt-preview-clear")?.classList.add("hidden");
+  viewer.scene.requestRender();
+}
+
+/* The colour scale of a preview: the app's own ramps, the thermal one for a
+ * temperature (°C or kelvin — the same cold-to-warm reading as the SST
+ * layers) and the perceptual violet-to-yellow one for everything else. */
+function dtRampFor(unit) {
+  const u = String(unit || "").trim();
+  return /^(deg ?C|°C|kelvin)\b/i.test(u) || /^K\b/.test(u) ? "sst" : "effort";
+}
+const dtRampCss = (ramp) => `linear-gradient(to right, ${RAMPS[ramp].map(([t, r, g, b]) =>
+  `rgb(${r},${g},${b}) ${Math.round(t * 100)}%`).join(", ")})`;
+
+/* The legend's range: the CHANNEL's own min / max from the registry, so the
+ * same colour means the same value from one preview to the next — unless the
+ * reader converted the values to a different unit than the registry states
+ * (cloud-top temperature arrives in kelvin, stored as kelvin − 160), in which
+ * case the registry's numbers describe something else and the frame's own
+ * range is the honest scale. */
+function dtScaleFor(res, ci, dataLo, dataHi) {
+  const name = (res.channels || [])[ci];
+  const ch = (dt.store.channels || []).find((c) => c.name === name);
+  const unit = dtUnitOf(res, ci);
+  if (ch && Number.isFinite(Number(ch.min)) && Number.isFinite(Number(ch.max)) &&
+      Number(ch.max) > Number(ch.min) && (!ch.unit || !unit || ch.unit === unit)) {
+    return { lo: Number(ch.min), hi: Number(ch.max), from: "registry" };
+  }
+  return { lo: dataLo, hi: dataHi, from: "frame" };
+}
+
+function dtMinMax(arr, start, n, stride = 1) {
+  let lo = Infinity, hi = -Infinity, k = 0;
+  for (let i = 0; i < n; i++) {
+    const v = arr[start + i * stride];
+    if (Number.isFinite(v)) { k++; if (v < lo) lo = v; if (v > hi) hi = v; }
+  }
+  return { lo, hi, k };
+}
+
+function dtUnitOf(res, ci) {
+  const u = res.units;
+  if (Array.isArray(u) && u[ci] !== undefined) return u[ci];
+  if (u && typeof u === "object" && res.channels && u[res.channels[ci]] !== undefined) return u[res.channels[ci]];
+  const ch = (dt.store.channels || []).find((c) => c.name === (res.channels || [])[ci]);
+  return (ch && ch.unit) || "";
+}
+
+const dtIso = (sec) => (Number.isFinite(sec) ? new Date(sec * 1000).toISOString().slice(0, 16).replace("T", " ") : "?");
+
+/* One frame of a grid Result, channel `ci`, painted on a canvas and laid on the
+ * globe as ONE rectangle. Rows are flipped to north-up, and a box across the
+ * dateline is a rectangle whose west is east of its east, which Cesium draws
+ * across ±180°. */
+function dtPaintGrid(res, ci) {
+  const lat = res.lat, lon = res.lon;
+  const H = lat.length, W = lon.length;
+  const off = ci * H * W;               // frame 0, channel ci of [T, C, H, W]
+  const mm = dtMinMax(res.data, off, H * W);
+  if (!mm.k) return null;
+  const { lo, hi, from } = dtScaleFor(res, ci, mm.lo, mm.hi);
+  const ramp = dtRampFor(dtUnitOf(res, ci));
+  const sx = Math.max(1, Math.ceil(W / DT_PREVIEW_MAX_PX)), sy = Math.max(1, Math.ceil(H / DT_PREVIEW_MAX_PX));
+  const cw = Math.ceil(W / sx), chh = Math.ceil(H / sy);
+  const cv = document.createElement("canvas");
+  cv.width = cw; cv.height = chh;
+  const ctx = cv.getContext("2d");
+  const img = ctx.createImageData(cw, chh);
+  const northFirst = H < 2 || lat[0] > lat[H - 1];
+  const span = hi - lo || 1;
+  for (let y = 0; y < chh; y++) {
+    const iy = northFirst ? y * sy : H - 1 - y * sy;
+    for (let x = 0; x < cw; x++) {
+      const v = res.data[off + iy * W + x * sx];
+      const p = (y * cw + x) * 4;
+      if (!Number.isFinite(v)) { img.data[p + 3] = 0; continue; }
+      const [r, g, b] = rampColor(ramp, (v - lo) / span);
+      img.data[p] = r; img.data[p + 1] = g; img.data[p + 2] = b; img.data[p + 3] = 230;
+    }
+  }
+  ctx.putImageData(img, 0, 0);
+  // The globe samples the picture with linear filtering, which smears a
+  // coarse grid (a 1° box is a few dozen pixels) into blobs that are not the
+  // data. Scaling it up by a whole factor with smoothing OFF first keeps every
+  // cell a square of its own colour, which is what a reader is looking at.
+  let pic = cv;
+  const k = Math.max(1, Math.min(8, Math.floor(1024 / Math.max(cw, chh))));
+  if (k > 1) {
+    pic = document.createElement("canvas");
+    pic.width = cw * k; pic.height = chh * k;
+    const c2 = pic.getContext("2d");
+    c2.imageSmoothingEnabled = false;
+    c2.drawImage(cv, 0, 0, pic.width, pic.height);
+  }
+  // cell edges from the centres; the longitude step taken modulo 360 so an
+  // axis that runs 179.9 → −179.9 still reads as one small step east
+  const dlon = W > 1 ? ((((lon[1] - lon[0]) % 360) + 540) % 360) - 180 : (dtNativeDeg(dt.store) || 1);
+  const dlat = H > 1 ? Math.abs(lat[1] - lat[0]) : (dtNativeDeg(dt.store) || 1);
+  let lonSpan = Math.abs(dlon) * W;
+  const wrap = (x) => ((((x + 180) % 360) + 360) % 360) - 180;
+  let west = wrap(lon[0] - Math.abs(dlon) / 2), east;
+  if (lonSpan >= 359.999) { west = -180; east = 180; lonSpan = 360; } else { east = wrap(west + lonSpan); }
+  const south = Math.max(-90, Math.min(lat[0], lat[H - 1]) - dlat / 2);
+  const north = Math.min(90, Math.max(lat[0], lat[H - 1]) + dlat / 2);
+  dt.pvEnt = viewer.entities.add({
+    rectangle: {
+      coordinates: Cesium.Rectangle.fromDegrees(west, south, east, north),
+      material: new Cesium.ImageMaterialProperty({ image: pic, transparent: true }),
+      height: 0,
+    },
+  });
+  return { lo, hi, from, ramp, dataLo: mm.lo, dataHi: mm.hi, n: mm.k, unit: dtUnitOf(res, ci),
+    when: res.time && res.time[0] };
+}
+
+function dtPaintPoints(res, ci) {
+  const N = res.lat ? res.lat.length : 0;
+  const C = (res.channels || []).length || 1;
+  const mm = dtMinMax(res.values, ci, N, C);
+  if (!N) return null;
+  const { lo, hi, from } = mm.k ? dtScaleFor(res, ci, mm.lo, mm.hi) : { lo: NaN, hi: NaN, from: "frame" };
+  const ramp = dtRampFor(dtUnitOf(res, ci));
+  dt.pvDots = viewer.scene.primitives.add(new Cesium.PointPrimitiveCollection());
+  const stride = Math.max(1, Math.ceil(N / DT_PREVIEW_MAX_DOTS));
+  const span = hi - lo || 1;
+  let drawn = 0;
+  for (let i = 0; i < N; i += stride) {
+    const v = res.values[i * C + ci];
+    const color = Number.isFinite(v)
+      ? Cesium.Color.fromBytes(...rampColor(ramp, (v - lo) / span), 255)
+      : Cesium.Color.fromCssColorString("#8b949e").withAlpha(0.6);
+    dt.pvDots.add({
+      position: Cesium.Cartesian3.fromDegrees(res.lon[i], res.lat[i]),
+      pixelSize: 5, color, outlineColor: Cesium.Color.BLACK.withAlpha(0.5), outlineWidth: 1,
+      disableDepthTestDistance: Number.POSITIVE_INFINITY,
+    });
+    drawn++;
+  }
+  return { lo, hi, from, ramp, dataLo: mm.k ? mm.lo : NaN, dataHi: mm.k ? mm.hi : NaN, n: drawn,
+    unit: dtUnitOf(res, ci), when: res.time && res.time[0] };
+}
+
+function dtShowLegend(info, res, ci) {
+  const lg = dtEl("dt-legend");
+  const name = (res.channels || [])[ci] || "";
+  const fmt = (v) => (Number.isFinite(v) ? (+v.toPrecision(4)).toString() : "–");
+  const what = res.kind === "grid"
+    ? `first frame with data, ${esc(dtIso(info.when))} UTC`
+    : `${dtFmtInt(info.n)} reports from the first five-day bin with data, from ${esc(dtIso(info.when))} UTC`;
+  lg.innerHTML = `<div class="dt-lg-name">${esc(name)} <span class="dt-k">— ${what}</span></div>` +
+    `<div class="dt-lg-bar" style="background:${dtRampCss(info.ramp)}"></div>` +
+    `<div class="dt-lg-scale"><span>${fmt(info.lo)}</span><span>${fmt(info.hi)}</span></div>` +
+    `<div class="dt-lg-unit">${esc(info.unit || "")}` +
+    `${info.from === "registry" ? " · the channel's full range" : " · this frame's range"}` +
+    ` · this preview spans ${fmt(info.dataLo)} to ${fmt(info.dataHi)}</div>`;
+  lg.classList.remove("hidden");
+}
+
+async function dtPreview() {
+  const R = dtReader();
+  const sel = dtReadSel();
+  if (!R || !sel) return;
+  const problem = dtSelProblem(sel);
+  if (problem) { dtStatus(problem); return; }
+  dtClearPreview();
+  const ctrl = new AbortController();
+  dt.pvCtrl = ctrl;
+  dtStatus("reading one frame for the preview…");
+  let res;
+  try {
+    res = await R.preview(sel, { signal: ctrl.signal });
+  } catch (err) {
+    if (dt.pvCtrl !== ctrl) return;
+    dt.pvCtrl = null;
+    dtStatus(err && err.name === "AbortError" ? "preview cancelled" : `preview failed: ${err && err.message ? err.message : err}`, true);
+    return;
+  }
+  if (dt.pvCtrl !== ctrl || !dataTabVisible()) return;
+  dt.pvCtrl = null;
+  if (!res) { dtStatus("nothing in this selection to preview — no frame has data"); return; }
+  const ci = 0;                           // the first channel of the selection
+  const info = res.kind === "grid" ? dtPaintGrid(res, ci) : dtPaintPoints(res, ci);
+  if (!info) { dtStatus("nothing in this selection to preview — the first frame is empty"); return; }
+  dt.lastPreview = { kind: res.kind, min: info.dataLo, max: info.dataHi, scaleMin: info.lo,
+    scaleMax: info.hi, scaleFrom: info.from, ramp: info.ramp, unit: info.unit, n: info.n };
+  dtShowLegend(info, res, ci);
+  dtEl("dt-preview-clear").classList.remove("hidden");
+  dtStatus("");
+  viewer.scene.requestRender();
+}
+
+/* ---- download ----------------------------------------------------------- */
+
+function dtStatus(text, isError = false) {
+  const s = dtEl("dt-status");
+  if (!s) return;
+  s.textContent = text;
+  s.classList.toggle("dt-error", !!isError);
+}
+
+/* e.g. oc4k_log_chl_1998-2004_m02_native.nc — store, channel(s), years,
+ * months (left out when all twelve), hours, resolution, time step. */
+function dtFileName(sel, ext) {
+  const clean = (s) => String(s).replace(/[^\w.-]+/g, "-");
+  const ch = sel.channels.length === 1 ? clean(sel.channels[0])
+    : sel.channels.length <= 3 ? sel.channels.map(clean).join("+")
+      : `${clean(sel.channels[0])}+${sel.channels.length - 1}more`;
+  const yrs = sel.yearStart === sel.yearEnd ? `${sel.yearStart}` : `${sel.yearStart}-${sel.yearEnd}`;
+  const mo = sel.months.length === 12 ? ""
+    : `_m${sel.months.map((m) => String(m).padStart(2, "0")).join("-")}`;
+  const hr = sel.hours ? `_h${String(sel.hours[0]).padStart(2, "0")}-${String(sel.hours[1]).padStart(2, "0")}` : "";
+  const res = sel.res === "native" ? (dtIsGrid(dt.store) ? "native" : "rows") : `${sel.res}deg`;
+  const step = sel.step === "native" ? "" : `_${sel.step}`;
+  return `${clean(sel.store)}_${ch}_${yrs}${mo}${hr}_${res}${step}.${ext}`;
+}
+
+/* `onProgress` is the reader's; its argument may be a fraction, a percentage
+ * or an object — the bar takes whichever it is given. */
+function dtProgressFraction(p) {
+  if (typeof p === "number") return p > 1 ? p / 100 : p;
+  if (!p || typeof p !== "object") return null;
+  if (Number.isFinite(p.fraction)) return p.fraction;
+  const pairs = [["done", "total"], ["readBytes", "totalBytes"], ["bytes", "totalBytes"],
+    ["requestsDone", "requests"], ["loaded", "total"]];
+  for (const [a, b] of pairs) {
+    if (Number.isFinite(p[a]) && Number(p[b]) > 0) return p[a] / p[b];
+  }
+  return null;
+}
+
+function dtSaveBlob(blob, name) {
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = name;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 60000);
+}
+
+async function dtDownload() {
+  const R = dtReader();
+  const sel = dtReadSel();
+  if (!R || !sel || dt.dlCtrl) return;
+  const problem = dtSelProblem(sel);
+  if (problem) { dtStatus(problem, true); return; }
+  if (dt.lastEstimate && dt.lastEstimate.overCap) return;
+  const fmt = dtEl("dt-format").value;
+  const ctrl = new AbortController();
+  dt.dlCtrl = ctrl;
+  const bar = dtEl("dt-progress");
+  bar.classList.remove("hidden");
+  bar.value = 0;
+  dtEl("dt-download").disabled = true;
+  dtEl("dt-cancel").disabled = false;
+  dtStatus("reading…");
+  const done = () => {
+    if (dt.dlCtrl === ctrl) dt.dlCtrl = null;
+    dtEl("dt-cancel").disabled = true;
+    dtSetDownloadEnabled(!(dt.lastEstimate && dt.lastEstimate.overCap));
+  };
+  try {
+    const res = await R.run(sel, {
+      signal: ctrl.signal,
+      onProgress: (p) => {
+        if (dt.dlCtrl !== ctrl) return;
+        const f = dtProgressFraction(p);
+        if (f !== null && Number.isFinite(f)) bar.value = Math.max(0, Math.min(1, f));
+        const got = p && typeof p === "object" ? (Number.isFinite(p.bytes) ? p.bytes : p.readBytes) : NaN;
+        if (Number.isFinite(got)) dtStatus(`reading… ${dtFmtMB(got)}`);
+      },
+    });
+    if (ctrl.signal.aborted) throw new DOMException("cancelled", "AbortError");
+    dtStatus("writing the file…");
+    const blob = await (fmt === "csv" ? R.toCSV(res) : R.toNetCDF(res));
+    if (ctrl.signal.aborted) throw new DOMException("cancelled", "AbortError");
+    const name = dtFileName(sel, fmt);
+    dtSaveBlob(blob, name);
+    bar.value = 1;
+    dt.lastDownload = { name, type: blob.type, size: blob.size };
+    dtStatus(`saved ${name} (${dtFmtMB(blob.size)})`);
+  } catch (err) {
+    if (err && err.name === "AbortError") {
+      dtStatus("cancelled — nothing was saved");
+    } else {
+      const msg = err && err.message ? err.message : String(err);
+      dtStatus(`download failed: ${msg}`, true);
+      showToast(`<strong>Data</strong>: the download failed and nothing was saved — ${esc(msg)}`,
+        { key: "data-download-failed" });
+    }
+    bar.classList.add("hidden");
+  } finally {
+    done();
+  }
+}
+
+function dtCancel() {
+  if (dt.dlCtrl) { dt.dlCtrl.abort(); }
+}
+
+/* ---- show / hide -------------------------------------------------------- */
+
+function dtWire() {
+  if (dt.wired) return;
+  dt.wired = true;
+  const panel = dtEl("panel-data");
+  dtEl("dt-store").addEventListener("change", (e) => {
+    const st = dt.reg.stores.find((s) => s.name === e.target.value);
+    if (!st) return;
+    // the period and the box carry over (clamped to the new record); the
+    // channels and the resolution are the new store's own
+    const keepBox = dtBoxFromFields();
+    const cur = dtReadSel();
+    dtApplyStore(st, cur ? { yearStart: cur.yearStart, yearEnd: cur.yearEnd } : null);
+    if (dtIsGrid(st) && !keepBox) dtWriteBox(dtPresetBox(36, -70));
+    dtChanged();
+  });
+  panel.addEventListener("change", (e) => {
+    if (e.target.id === "dt-store") return;
+    if (e.target.id === "dt-y0" || e.target.id === "dt-y1") {
+      // clamp in place, so the field shows what will be read
+      const sel = dtReadSel();
+      dtEl("dt-y0").value = sel.yearStart;
+      dtEl("dt-y1").value = sel.yearEnd;
+    }
+    if (e.target.id === "dt-format") { dtSave(); return; }
+    dtChanged();
+  });
+  // the box fields redraw while typing; the estimate waits for the debounce
+  for (const id of ["dt-w", "dt-s", "dt-e", "dt-n"]) dtEl(id).addEventListener("input", dtChanged);
+  dtEl("dt-months").addEventListener("click", (e) => {
+    const b = e.target.closest("button[data-month]");
+    if (!b) return;
+    b.classList.toggle("active");
+    b.setAttribute("aria-pressed", b.classList.contains("active") ? "true" : "false");
+    dtChanged();
+  });
+  const setMonths = (on) => {
+    for (const b of document.querySelectorAll("#dt-months button")) {
+      b.classList.toggle("active", on);
+      b.setAttribute("aria-pressed", on ? "true" : "false");
+    }
+    dtChanged();
+  };
+  dtEl("dt-months-all").addEventListener("click", () => setMonths(true));
+  dtEl("dt-months-none").addEventListener("click", () => setMonths(false));
+  dtEl("dt-view").addEventListener("click", () => {
+    const b = dtViewBox();
+    if (!b) {
+      showToast("<strong>Data</strong>: the view shows the edge of the globe, so it has no box — " +
+        "zoom in until the globe fills the screen, or type the four edges.", { key: "data-view-box" });
+      return;
+    }
+    dtWriteBox(b);
+    dtChanged();
+  });
+  dtEl("dt-box-clear").addEventListener("click", () => { dtWriteBox(null); dtChanged(); });
+  dtEl("dt-presets").addEventListener("click", (e) => {
+    const b = e.target.closest("button[data-lat]");
+    if (!b) return;
+    const box = dtPresetBox(Number(b.dataset.lat), Number(b.dataset.lon));
+    dtWriteBox(box);
+    dtChanged();
+    // fly to the box with a margin; the wrap keeps a dateline box W > E
+    const wrap = (x) => ((((x + 180) % 360) + 360) % 360) - 180;
+    viewer.camera.flyTo({
+      destination: Cesium.Rectangle.fromDegrees(wrap(box.w - 4), Math.max(-90, box.s - 4),
+        wrap(box.e + 4), Math.min(90, box.n + 4)),
+      duration: 1.2,
+    });
+  });
+  dtEl("dt-preview").addEventListener("click", dtPreview);
+  dtEl("dt-preview-clear").addEventListener("click", dtClearPreview);
+  dtEl("dt-download").addEventListener("click", dtDownload);
+  dtEl("dt-cancel").addEventListener("click", dtCancel);
+}
+
+async function loadDataTab() {
+  const R = dtReader();
+  const missing = dtEl("dt-missing");
+  if (!R) {
+    missing.classList.remove("hidden");
+    dtEl("dt-body").classList.add("hidden");
+    return;
+  }
+  missing.classList.add("hidden");
+  dtWire();
+  if (!dt.reg) {
+    if (!dt.regPromise) {
+      dtEl("dt-estimate").textContent = "reading the list of stores…";
+      dt.regPromise = Promise.resolve().then(() => R.loadRegistry());
+    }
+    let reg;
+    try {
+      reg = await dt.regPromise;
+    } catch (err) {
+      dt.regPromise = null;
+      const e = dtEl("dt-reg-error");
+      e.textContent = `Could not read the list of stores: ${err && err.message ? err.message : err}`;
+      e.classList.remove("hidden");
+      dtEl("dt-body").classList.add("hidden");
+      return;
+    }
+    if (dt.reg) { dtDrawBox(); return; }          // a second click raced the first
+    if (!reg || !Array.isArray(reg.stores) || !reg.stores.length) {
+      const e = dtEl("dt-reg-error");
+      e.textContent = "The list of stores is empty — nothing has been published yet.";
+      e.classList.remove("hidden");
+      dtEl("dt-body").classList.add("hidden");
+      return;
+    }
+    dt.reg = reg;
+    dtEl("dt-reg-error").classList.add("hidden");
+    dtEl("dt-body").classList.remove("hidden");
+    dtFillStores();
+    dtFillPresets();
+    const saved = dtLoadSaved();
+    const st = (saved && reg.stores.find((s) => s.name === saved.store)) || reg.stores[0];
+    const ok = saved && saved.store === st.name;
+    dtApplyStore(st, ok ? saved : null);
+    if (ok && Array.isArray(saved.months)) {
+      for (const b of document.querySelectorAll("#dt-months button")) {
+        const on = saved.months.includes(Number(b.dataset.month));
+        b.classList.toggle("active", on);
+        b.setAttribute("aria-pressed", on ? "true" : "false");
+      }
+    } else {
+      for (const b of document.querySelectorAll("#dt-months button")) {
+        b.classList.add("active"); b.setAttribute("aria-pressed", "true");
+      }
+    }
+    if (ok && Array.isArray(saved.box) && saved.box.length === 4) {
+      ["dt-w", "dt-s", "dt-e", "dt-n"].forEach((id, i) => { dtEl(id).value = saved.box[i] ?? ""; });
+    } else {
+      dtWriteBox(dtIsGrid(st) ? dtPresetBox(36, -70) : null);
+    }
+    if (ok && Array.isArray(saved.hours)) { dtEl("dt-h0").value = saved.hours[0]; dtEl("dt-h1").value = saved.hours[1]; }
+    if (ok && saved.step && !dtEl("dt-step").disabled) dtEl("dt-step").value = saved.step;
+    if (ok && saved.fmt) dtEl("dt-format").value = saved.fmt;
+    dtSyncStepRes();
+  }
+  dtDrawBox();
+  dtScheduleEstimate();
+}
+
+/* Everything this tab put on the globe, off, and every read in flight
+ * cancelled — called on every tab click that is not ours. */
+function dataTabHide() {
+  clearTimeout(dt.estTimer);
+  if (dt.dlCtrl) dt.dlCtrl.abort();
+  if (dt.pvCtrl || dt.pvEnt || dt.pvDots) dtClearPreview();
+  if (dt.outline) { viewer.entities.remove(dt.outline); dt.outline = null; }
+  viewer.scene.requestRender();
+}
+
+/* What the tests read instead of pixels. */
+function dataTabState() {
+  return {
+    visible: dataTabVisible(),
+    store: dt.store && dt.store.name,
+    sel: dt.store ? dtReadSel() : null,
+    outlineShown: !!dt.outline && viewer.entities.contains(dt.outline),
+    outlineDegrees: dt.outline ? (() => {
+      const p = dt.outline.polyline.positions.getValue(Cesium.JulianDate.now());
+      return p.map((c) => {
+        const g = Cesium.Cartographic.fromCartesian(c);
+        return [g.longitude * Cesium.Math.DEGREES_PER_RADIAN, g.latitude * Cesium.Math.DEGREES_PER_RADIAN];
+      });
+    })() : null,
+    previewShown: (!!dt.pvEnt && viewer.entities.contains(dt.pvEnt)) ||
+      (!!dt.pvDots && viewer.scene.primitives.contains(dt.pvDots) && dt.pvDots.length > 0),
+    lastPreview: dt.lastPreview,
+    lastEstimate: dt.lastEstimate,
+    // true once the estimate on screen is the one for the controls as they are
+    // now (the estimate is debounced, so for ~300 ms after a change it is not)
+    estimateCurrent: !!dt.store && !!dt.lastEstimate && dt.lastEstimateFor === JSON.stringify(dtReadSel()),
+    lastDownload: dt.lastDownload,
+    downloading: !!dt.dlCtrl,
+  };
+}
+
 /* --------------------------------------------------------------------- tabs */
 
 const tabs = { layers: "panel-layers", temp: "panel-temp", energy: "panel-energy",
   amoc: "panel-amoc", sealevel: "panel-sealevel", tides: "panel-tides",
-  cones: "panel-cones", play: "panel-play", catalog: "panel-catalog",
+  cones: "panel-cones", data: "panel-data", play: "panel-play", catalog: "panel-catalog",
   about: "panel-about" };
 for (const t of Object.keys(tabs)) {
   document.getElementById(`tab-${t}`)?.addEventListener("click", () => {
@@ -15791,6 +16793,8 @@ for (const t of Object.keys(tabs)) {
     // them down — and this loop has no leave hook, so every click that is not
     // ours is the leave hook.
     if (t === "cones") loadCones(); else conesHide();
+    // the Data tab's box, preview and any read in flight: same rule
+    if (t === "data") loadDataTab(); else dataTabHide();
     if (t === "play") loadPlayback();
   });
 }
@@ -16055,6 +17059,17 @@ window.__earth = {
   climCsvParts,
   climCsvName,
   climGridFor,
+  climDownloadsHtml,
+  // the Data tab (E-084 §3): the tests drive the box and read the estimate
+  // through these, because a preset flies the camera (CLAUDE.md §4)
+  loadDataTab,
+  dataTabHide,
+  dataTabState,
+  dtReadSel,
+  dtBoxRing,
+  dtPresetBox,
+  dtFileName,
+  dtProgressFraction,
   hubRangeRead,
   fishingHoursAt,
   gridCellIndex,

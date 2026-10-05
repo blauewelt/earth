@@ -1135,8 +1135,20 @@ test.describe("cache-busting stamps and the web app manifest", () => {
       expect(m, `${asset} is not version-stamped in index.html`).not.toBeNull();
       expect(m[1], `${asset} stamp is stale — run scripts/stamp_assets.py`).toBe(digest(asset));
     }
+    // The Data tab's reader (E-084 §4) and its zstd decoder: always stamped in
+    // index.html, and — once the files are in the tree — stamped with THEIR
+    // hash. A tree that references them before they land carries the
+    // placeholder, which stamp_assets.py leaves alone until the file exists.
+    for (const asset of ["lib/fzstd.js", "src/f1data.js"]) {
+      const m = html.match(
+        new RegExp(`(?<![\\w./-])${asset.replace(/[.*+?^${}()|[\\]\\\\]/g, "\\$&")}\\?v=([0-9a-f]{8})`));
+      expect(m, `${asset} is not version-stamped in index.html`).not.toBeNull();
+      if (fs.existsSync(path.join(ROOT, asset))) {
+        expect(m[1], `${asset} stamp is stale — run scripts/stamp_assets.py`).toBe(digest(asset));
+      }
+    }
     // and nothing local is left unstamped
-    expect(html).not.toMatch(/(?:href|src)="(?:src\/[\w.-]+|icon-[\w.-]+\.png|manifest\.json)"/);
+    expect(html).not.toMatch(/(?:href|src)="(?:src\/[\w.-]+|lib\/[\w.-]+\.js|icon-[\w.-]+\.png|manifest\.json)"/);
   });
 
   test("the visible build marker matches the script it labels", () => {

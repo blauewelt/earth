@@ -852,3 +852,93 @@ footer a { color: var(--fg-dim); }
 }
 .clim-csv:hover { border-color: var(--accent); }
 .layer-tip .tip-dl-body, .layer-tip .tip-dl-body div { display: block; }
+
+/* ---- Data tab (E-084 §3). The same primitives as Cones and Play
+ * (.control-row, .td-btn, .hint, .hint-details); what this panel needs of its
+ * own: a label column the rows line up on, chip rows that WRAP (twelve months
+ * and up to 128 channels must fit a 360 px phone without a sideways scroll),
+ * a 2×2 box grid, the estimate line, and a progress bar. */
+#panel-data .control-row > label:first-child { flex: 0 0 72px; color: var(--fg-dim); font-size: 12px; }
+#panel-data .dt-wrap { flex-wrap: wrap; row-gap: 6px; }
+#panel-data .dt-tight { gap: 6px; }
+#dt-store, #dt-group, #dt-step, #dt-res, #dt-format {
+  flex: 1 1 140px; min-width: 0; max-width: 100%; background: var(--bg); color: var(--fg);
+  border: 1px solid var(--border); border-radius: 6px; padding: 5px 6px; font-size: 12.5px;
+}
+#dt-format { flex: 1 1 90px; }
+#dt-store-about { margin: 2px 0 8px; line-height: 1.5; overflow-wrap: anywhere; }
+#dt-store-about .dt-code, .dt-code {
+  font-size: 10.5px; color: var(--fg-dim); background: #0a0f16; border: 1px solid var(--border);
+  border-radius: 4px; padding: 0 4px;
+}
+.dt-k { color: var(--fg-dim); }
+#dt-store-about .dt-k { color: #6e7681; }
+.dt-head { font-size: 12px; color: var(--fg-dim); margin: 10px 0 4px; display: flex;
+  flex-wrap: wrap; align-items: center; gap: 6px; }
+.dt-head-note { font-size: 11px; color: #6e7681; }
+.dt-num {
+  flex: 0 1 72px; width: 72px; min-width: 0; background: var(--bg); color: var(--fg);
+  border: 1px solid var(--border); border-radius: 6px; padding: 5px 6px; font-size: 12.5px;
+  font-variant-numeric: tabular-nums;
+}
+.dt-num.dt-hr { flex-basis: 56px; width: 56px; }
+.dt-to { font-size: 12px; color: var(--fg-dim); }
+.hint.dt-inline { margin: 0; flex: 1 1 100%; }
+.dt-chips { display: flex; flex-wrap: wrap; gap: 4px; }
+#dt-channels { max-height: 132px; overflow-y: auto; }
+.dt-chip {
+  display: inline-flex; align-items: center; gap: 4px; padding: 3px 7px; border-radius: 12px;
+  background: #21262d; border: 1px solid var(--border); font-size: 11.5px; color: #c9d1d9;
+  cursor: pointer; max-width: 100%; overflow-wrap: anywhere;
+}
+.dt-chip input { margin: 0; accent-color: var(--accent); }
+.dt-chip:has(input:checked) { border-color: var(--accent); color: var(--fg); }
+.dt-months button {
+  flex: 1 0 calc(16.66% - 4px); min-width: 0; padding: 4px 0; border-radius: 6px; font-size: 11.5px;
+  background: #21262d; color: #8b949e; border: 1px solid var(--border); cursor: pointer;
+}
+.dt-months button.active { border-color: var(--accent); color: var(--fg); background: rgba(68, 147, 248, 0.14); }
+.dt-mini {
+  background: none; border: 1px solid var(--border); color: var(--accent); border-radius: 4px;
+  font-size: 10.5px; padding: 1px 6px; cursor: pointer;
+}
+.dt-mini:hover { border-color: var(--accent); }
+.dt-box { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 10px; }
+.dt-box label { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--fg-dim); }
+.dt-box input {
+  flex: 1; min-width: 0; background: var(--bg); color: var(--fg); border: 1px solid var(--border);
+  border-radius: 6px; padding: 5px 6px; font-size: 12.5px; font-variant-numeric: tabular-nums;
+}
+.td-btn.dt-btn { font-size: 12px; padding: 4px 10px; }
+.td-btn:disabled, .dt-mini:disabled { opacity: 0.45; cursor: not-allowed; }
+.td-btn.dt-go:not(:disabled) { border-color: var(--accent); color: var(--fg); }
+#dt-presets { gap: 4px; flex-wrap: wrap; margin-top: 2px; }
+#dt-presets button {
+  flex: 1 1 30%; min-width: 0; background: #21262d; color: #c9d1d9; border: 1px solid #30363d;
+  border-radius: 6px; padding: 4px 2px; font-size: 11px; white-space: nowrap; cursor: pointer;
+}
+#dt-presets button:hover { background: #30363d; }
+.dt-estimate {
+  margin: 10px 0 4px; padding: 7px 10px; border-radius: 7px; font-size: 12px; line-height: 1.5;
+  background: #0a0f16; border: 1px solid var(--border); color: var(--fg-dim);
+  font-variant-numeric: tabular-nums; overflow-wrap: anywhere;
+}
+.dt-estimate strong { color: var(--fg); font-weight: 600; }
+.dt-estimate.dt-busy { opacity: 0.6; }
+.dt-estimate.dt-over { border-color: rgba(240, 216, 97, 0.55); color: #f0d861; }
+.dt-estimate .dt-why { margin-top: 4px; color: #f0d861; }
+.dt-estimate a { color: var(--accent); }
+#dt-progress { display: block; width: 100%; height: 8px; margin: 4px 0 2px; accent-color: var(--accent); }
+#dt-status { overflow-wrap: anywhere; }
+#dt-status.dt-error, .dt-missing { color: #ff9a90; }
+#dt-legend { margin: 6px 0; font-size: 11.5px; }
+#dt-legend .dt-lg-name { color: var(--fg); margin-bottom: 3px; overflow-wrap: anywhere; }
+#dt-legend .dt-lg-bar { height: 10px; border-radius: 3px; border: 1px solid var(--border); }
+#dt-legend .dt-lg-scale {
+  display: flex; justify-content: space-between; font-size: 10.5px; color: var(--fg-dim);
+  font-variant-numeric: tabular-nums; margin-top: 2px;
+}
+#dt-legend .dt-lg-unit { font-size: 11px; color: var(--fg-dim); margin-top: 1px; overflow-wrap: anywhere; }
+.clim-to-data { margin-top: 4px; }
+#panel-data .hint.dt-note { margin: 0 0 6px; color: #8b949e; }
+.dt-estimate .dt-how { margin-top: 4px; font-size: 11px; color: #8b949e; }

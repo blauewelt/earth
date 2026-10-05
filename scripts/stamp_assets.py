@@ -32,7 +32,18 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ICONS = ["icon-192.png", "icon-512.png", "icon-512-maskable.png"]
 # index.html's local assets, in the order they must be hashed: manifest.json
 # last, since stamping the icons rewrites it.
-HTML_ASSETS = ICONS + ["src/style.css", "src/app.js", "manifest.json"]
+HTML_ASSETS = ICONS + ["src/style.css", "lib/fzstd.js", "src/f1data.js", "src/app.js",
+                       "manifest.json"]
+# The Data tab's reader (E-084 §4) is written on its own branch, so a tree can
+# reference these two before it holds them. A file that is not on disk keeps
+# whatever stamp index.html carries (the placeholder 00000000 until it lands)
+# and is reported, rather than failing the whole stamp; the moment the file
+# exists it is stamped like every other asset, and tests/data.spec.js checks it.
+OPTIONAL = {"lib/fzstd.js", "src/f1data.js"}
+
+
+def present(rel):
+    return os.path.exists(os.path.join(ROOT, rel))
 
 
 def digest(rel):
@@ -74,6 +85,8 @@ def main():
     original = open(idx_path, encoding="utf-8").read()
     idx = original
     for asset in HTML_ASSETS:
+        if asset in OPTIONAL and not present(asset):
+            continue
         idx = restamp(idx, asset, digest(asset))
     idx = re.sub(r'(<code id="build-id">)[0-9a-f]{8}(</code>)',
                  lambda m: m.group(1) + digest("src/app.js") + m.group(2), idx)
@@ -90,7 +103,7 @@ def main():
         return 0
     print("stamped: " + (", ".join(stale) if stale else "nothing to do"))
     for a in HTML_ASSETS:
-        print(f"  {a:24s} {digest(a)}")
+        print(f"  {a:24s} {digest(a) if present(a) else 'not on disk - stamp left as it is'}")
     return 0
 
 

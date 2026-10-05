@@ -21,7 +21,7 @@
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/cesium/1.133.1/Widgets/widgets.min.css" />
-  <link rel="stylesheet" href="src/style.css?v=8f413177" />
+  <link rel="stylesheet" href="src/style.css?v=7239deac" />
   <script>window.CESIUM_BASE_URL = "https://cdnjs.cloudflare.com/ajax/libs/cesium/1.133.1/";</script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/cesium/1.133.1/Cesium.js"></script>
 </head>
@@ -54,6 +54,7 @@
         <button id="tab-sealevel" class="tab">Sea level</button>
         <button id="tab-tides" class="tab">Tides</button>
         <button id="tab-cones" class="tab">Cones</button>
+        <button id="tab-data" class="tab">Data</button>
         <button id="tab-play" class="tab">Play</button>
         <button id="tab-catalog" class="tab">Catalog</button>
         <button id="tab-about" class="tab">About</button>
@@ -142,6 +143,9 @@
           anywhere on Earth, drawn on the globe in kilometres, with a <em>Data</em> switch
           that fills it with the real values out of the global training tensor and lets you
           tap any dot to read it ·
+          <em>Data</em> — download the fine observation stores (satellite ocean colour,
+          sea-surface temperature, cloud tops, ship, float and bottle measurements) for any
+          period, month, box and resolution, as a file built in your browser ·
           <em>Catalog</em> — all 276 datasets ·
           <em>About</em> — background &amp; further reading.</p>
       </details>
@@ -1007,6 +1011,165 @@
     </section>
 
 
+    <!-- Data (E-084 §3). The fine observation stores of family 1.gf — every
+         global store kept at its own resolution, 10 km / 5 days or finer —
+         filtered and downloaded IN THE BROWSER. Nothing is precomputed: the
+         reader (src/f1data.js, window.F1Data) range-reads the store's own
+         compressed tiles from the public data store, and this panel is only
+         the selection, the estimate, the preview and the save. The list of
+         stores comes from the reader's registry, never from this file, so a
+         store appears here the day it is published. -->
+    <section id="panel-data" class="panel hidden">
+      <h2>Download observations</h2>
+      <p class="hint">Pick one of the fine observation stores — satellite maps at 2–4 km and
+        ship, float, bottle and mooring measurements at their own points — choose a period,
+        months, a box and a resolution, and the file is built here, in your browser, from the
+        store's own files. The estimate line says what it will cost before anything is read.</p>
+      <p class="hint dt-missing hidden" id="dt-missing">The data reader failed to load, so this
+        tab cannot read any store. Reload the page; if it persists, the files are still there
+        to download by hand from the
+        <a href="https://huggingface.co/datasets/chfrank/earth-tensors/tree/main" target="_blank"
+           rel="noopener">public data store</a>.</p>
+      <p class="hint hidden" id="dt-reg-error"></p>
+      <div id="dt-body">
+        <div class="control-row">
+          <label for="dt-store">store</label>
+          <select id="dt-store"></select>
+        </div>
+        <div id="dt-store-about" class="hint"></div>
+        <!-- Only for a store published in several parts (groups) on their own
+             grids; every store in the registry today has one, so it is hidden. -->
+        <div class="control-row hidden" id="dt-group-row">
+          <label for="dt-group">part</label>
+          <select id="dt-group"></select>
+        </div>
+
+        <div class="dt-head">channels <span class="dt-head-note" id="dt-chan-note"></span></div>
+        <div id="dt-channels" class="dt-chips"></div>
+
+        <div class="control-row dt-wrap">
+          <label for="dt-y0">years</label>
+          <input type="number" id="dt-y0" class="dt-num" inputmode="numeric" />
+          <span class="dt-to">to</span>
+          <input type="number" id="dt-y1" class="dt-num" inputmode="numeric" />
+          <span class="hint dt-inline" id="dt-span"></span>
+        </div>
+
+        <div class="dt-head">months
+          <button type="button" class="dt-mini" id="dt-months-all">all</button>
+          <button type="button" class="dt-mini" id="dt-months-none">none</button>
+        </div>
+        <div id="dt-months" class="dt-chips dt-months">
+          <button type="button" data-month="1">Jan</button><button type="button" data-month="2">Feb</button><button type="button" data-month="3">Mar</button><button type="button" data-month="4">Apr</button><button type="button" data-month="5">May</button><button type="button" data-month="6">Jun</button><button type="button" data-month="7">Jul</button><button type="button" data-month="8">Aug</button><button type="button" data-month="9">Sep</button><button type="button" data-month="10">Oct</button><button type="button" data-month="11">Nov</button><button type="button" data-month="12">Dec</button>
+        </div>
+
+        <!-- Only where the store has a time of day finer than a day: the
+             3-hourly cloud tops and every point store. A daily map has no
+             hour to filter on, and a control that changes nothing reads as a
+             broken page. -->
+        <div class="control-row dt-wrap hidden" id="dt-hours-row">
+          <label for="dt-h0">hours</label>
+          <input type="number" id="dt-h0" class="dt-num dt-hr" min="0" max="23" value="0" inputmode="numeric" />
+          <span class="dt-to">to</span>
+          <input type="number" id="dt-h1" class="dt-num dt-hr" min="1" max="24" value="24" inputmode="numeric" />
+          <span class="hint dt-inline">UTC; 0 to 24 is the whole day, 22 to 2 wraps midnight</span>
+        </div>
+
+        <div class="dt-head">box <span class="dt-head-note" id="dt-box-note"></span></div>
+        <div class="dt-box">
+          <label>W <input type="number" id="dt-w" step="0.1" min="-180" max="180" inputmode="decimal" /></label>
+          <label>S <input type="number" id="dt-s" step="0.1" min="-90" max="90" inputmode="decimal" /></label>
+          <label>E <input type="number" id="dt-e" step="0.1" min="-180" max="180" inputmode="decimal" /></label>
+          <label>N <input type="number" id="dt-n" step="0.1" min="-90" max="90" inputmode="decimal" /></label>
+        </div>
+        <div class="control-row dt-wrap dt-tight">
+          <button type="button" class="td-btn dt-btn" id="dt-view"
+                  title="the part of the globe on screen, as a box">use the current view</button>
+          <button type="button" class="td-btn dt-btn" id="dt-box-clear"
+                  title="no box: the whole globe (point stores only)">whole globe</button>
+        </div>
+        <!-- Filled from the Cones tab's own six places (#cn-presets), so the
+             two tabs can never disagree about where "Kuroshio" is. -->
+        <div class="control-row" id="dt-presets"></div>
+
+        <div class="control-row">
+          <label for="dt-step">time step</label>
+          <select id="dt-step">
+            <option value="native">native</option>
+            <option value="pentad">five-day mean</option>
+            <option value="month">monthly mean</option>
+            <option value="all">one mean over the whole selection</option>
+          </select>
+        </div>
+        <p class="hint dt-note hidden" id="dt-step-note"></p>
+        <div class="control-row">
+          <label for="dt-res">resolution</label>
+          <select id="dt-res"></select>
+        </div>
+
+        <div id="dt-estimate" class="dt-estimate" aria-live="polite">–</div>
+
+        <div class="control-row dt-wrap dt-tight">
+          <button type="button" class="td-btn dt-btn" id="dt-preview"
+                  title="read one frame (or one five-day bin of points) and paint it inside the box">Preview on the globe</button>
+          <button type="button" class="td-btn dt-btn hidden" id="dt-preview-clear">clear preview</button>
+        </div>
+        <div id="dt-legend" class="hidden"></div>
+
+        <div class="control-row dt-wrap dt-tight">
+          <label for="dt-format">file</label>
+          <select id="dt-format">
+            <option value="nc">NetCDF</option>
+            <option value="csv">CSV</option>
+          </select>
+          <button type="button" class="td-btn dt-btn dt-go" id="dt-download">Download</button>
+          <button type="button" class="td-btn dt-btn" id="dt-cancel" disabled>Cancel</button>
+        </div>
+        <progress id="dt-progress" max="1" value="0" class="hidden"></progress>
+        <div id="dt-status" class="hint" aria-live="polite"></div>
+
+        <details class="hint-details" id="dt-how">
+          <summary>How this works / limits</summary>
+          <p class="hint"><strong>Where the numbers come from.</strong> Each store is a set of
+            files on the project's public data store (a Hugging Face dataset). A satellite map
+            store keeps one file per five-day bin, every daily (or 3-hourly) map in it cut into
+            256 × 256 tiles that are compressed one by one, so a box is a few tiles and a period
+            is a list of bins. A point store keeps its reports sorted by time, so a period is one
+            stretch of each column. The page asks for exactly those byte ranges — nothing is
+            computed on a server — and refuses any answer that is not the range it asked for, so
+            a failed read stops the whole download with the address in the message, rather than
+            leaving a silent hole in the file.</p>
+          <p class="hint"><strong>The cap.</strong> At most 600 MB read or 400 MB of result,
+            whichever comes first. One five-day bin of the whole globe at 4 km is about 108 MB,
+            so a year of the whole globe (about 8 GB) is refused and the estimate links the
+            store's files instead; the same year over the North Atlantic is a few hundred
+            megabytes.</p>
+          <p class="hint"><strong>Coarser is not cheaper to read.</strong> A coarser resolution
+            or a time mean is computed here <em>after</em> the native bytes are read: it shrinks
+            the file, not the download. That is why the estimate prints both numbers. Every mean
+            skips missing values and comes with a per-cell count of the observations it
+            averaged.</p>
+          <p class="hint"><strong>Point stores read the whole period.</strong> A box filters the
+            reports here, after their positions have been read, so a short period is cheap and a
+            long one is not, whatever the box. The row count in the estimate is exact — the store
+            records where every five-day bin starts.</p>
+          <p class="hint"><strong>What the values are.</strong> Sea-surface temperature from
+            satellites (<code>sst_acspo02</code>) has gaps wherever there was cloud — it is what the
+            satellite saw, not a gap-filled analysis, and not a finer version of the 0.25° daily
+            analysis (OISST) the rest of this site uses. Cloud-top brightness temperature
+            (<code>irtb</code>) is kept every three hours, although the satellites see every half
+            hour, and is stored as a whole number of kelvin minus 160; the file carries kelvin. Ocean-colour chlorophyll is the base-10
+            logarithm of the concentration, not the concentration itself. Each file states its
+            units and, in its attributes, the store and the selection that made it.</p>
+        </details>
+      </div>
+      <p class="hint">Guide:
+        <a href="https://blauewelt.github.io/earth/docs.html?f=docs/DATA_TAB.md"
+           target="_blank" rel="noopener">the Data tab, control by control</a> ·
+        <a href="https://blauewelt.github.io/earth/docs.html?f=ml/plans/E084_data_tab.md"
+           target="_blank" rel="noopener">the plan (E-084: this tab and its reader)</a></p>
+    </section>
+
     <!-- Playback (E-041 §3). This tab is a control room for a CLOCK: it drives
          the Date selector in the Layers tab and nothing else, so every render
          mode the app already has — compare wipe, computed difference, rolling
@@ -1166,7 +1329,7 @@
            not obvious from the page, and "I reloaded and see no change" is
            indistinguishable from "the change isn't there". This is the sha256
            prefix of src/app.js, the same string as its ?v= stamp. -->
-      <p class="build-line">Build <code id="build-id">4de2371f</code></p>
+      <p class="build-line">Build <code id="build-id">001a67d5</code></p>
     </section>
 
     <footer>
@@ -1227,6 +1390,11 @@
     <div id="toast-host" aria-live="assertive"></div>
   </div>
 
-  <script src="src/app.js?v=4de2371f"></script>
+  <!-- The Data tab's reader (E-084 §4): a vendored zstd decoder, then the
+       family-1.gf reader that publishes window.F1Data. Both load BEFORE the
+       app, and the app copes when they did not (the tab says so). -->
+  <script src="lib/fzstd.js?v=00000000"></script>
+  <script src="src/f1data.js?v=00000000"></script>
+  <script src="src/app.js?v=001a67d5"></script>
 </body>
 </html>
