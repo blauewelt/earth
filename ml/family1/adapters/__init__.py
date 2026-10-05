@@ -39,6 +39,9 @@ FAMILIES = {
     "1gf": ("family1_gf", "1.gf", "family1_gf"),
     "1tf": ("family1_tf", "1.0.tf", "family1_tf"),
     "09tf": ("family09_tf", "0.9.tf", "family09_tf"),
+    # family 1.2 = family 1.gf (inherited by reference) + ERA5's upper air
+    # (E-085); its own stores live under tensors/family1_2/
+    "12": ("family1_2", "1.2", "family1_2"),
 }
 DISTRIBUTIONS = ("public", "private")
 REDISTRIBUTION = ("yes", "attribution", "no")

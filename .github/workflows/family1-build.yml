@@ -249,8 +249,12 @@ jobs:
           # level-15 tiles to different bytes (measured 2026-09-23 against the
           # published oc4k shards). numpy's AVX-512 path is disabled in the
           # build step's env for the same reason.
-          pip install --quiet numpy "huggingface_hub<2" "zstandard==0.23.0" netCDF4 requests rasterio pyhdf scipy pyarrow h5py
-          python3 -c "import importlib.metadata as m, numpy, huggingface_hub, zstandard, netCDF4, requests, rasterio, scipy, pyhdf.SD, pyarrow, h5py; print('deps ok', rasterio.__version__, rasterio.__gdal_version__, 'pyhdf', m.version('pyhdf'), 'scipy', scipy.__version__, 'pyarrow', pyarrow.__version__, 'h5py', h5py.__version__)"
+          # numcodecs decodes the ERA5 archive's blosc chunks (family 1.2,
+          # E-085). Unpinned on purpose: decoding is lossless, so every
+          # version yields the same floats, and the stored bytes depend only
+          # on zstandard (pinned above) and numpy.
+          pip install --quiet numpy "huggingface_hub<2" "zstandard==0.23.0" netCDF4 requests rasterio pyhdf scipy pyarrow h5py numcodecs
+          python3 -c "import importlib.metadata as m, numpy, huggingface_hub, zstandard, netCDF4, requests, rasterio, scipy, pyhdf.SD, pyarrow, h5py, numcodecs; print('deps ok', rasterio.__version__, rasterio.__gdal_version__, 'pyhdf', m.version('pyhdf'), 'scipy', scipy.__version__, 'pyarrow', pyarrow.__version__, 'h5py', h5py.__version__, 'numcodecs', numcodecs.__version__)"
 
       - name: Earthdata Login check (hosted runner only)
         if: ${{ github.event.inputs.check_credentials == 'true' }}

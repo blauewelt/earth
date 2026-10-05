@@ -31,7 +31,11 @@ import build_family10_registry as reg10                         # noqa: E402
 import build_family1_registry as r1                             # noqa: E402
 from family1.adapters import FAMILIES, REGISTRY                 # noqa: E402
 
-CODES = ("1gf", "1tf", "09tf")
+CODES = ("1gf", "1tf", "09tf", "12")
+#: the three family 10.2's `siblings` line names (family 1.2 is not there yet:
+#: E-085 added it after that line was written, and family 10's builder is
+#: not changed by it)
+SIBLING_CODES = ("1gf", "1tf", "09tf")
 
 
 # --------------------------------------------------------------- the stub --
@@ -74,8 +78,7 @@ def offline(tmp_path_factory):
 
 
 # =============================================================== the shape ==
-def test_there_are_exactly_three_registries_and_they_are_the_three_families(
-        offline):
+def test_there_is_one_registry_per_family_and_no_other(offline):
     assert sorted(offline) == sorted(FAMILIES) == sorted(CODES)
     for code in CODES:
         r = offline[code]
@@ -162,9 +165,41 @@ def test_09tf_inherits_1tf_by_reference_and_lists_only_its_own(offline):
     # its own groups are only what 0.9.tf builds itself — today, none
     own = {g["name"] for g in r["groups"]}
     assert own & set(b["groups"]) == set()
-    # and the other two registries do NOT carry an inherits key
+    # and the two root registries do NOT carry an inherits key
     for code in ("1gf", "1tf"):
         assert "inherits" not in offline[code]
+
+
+def test_1_2_inherits_1gf_by_reference_and_names_its_exception(offline):
+    """Family 1.2 (E-085) is 1.gf unchanged plus ERA5's upper air: the parent
+    is listed BY REFERENCE (no byte copied), the four new stores carry the
+    pressure levels, and the reanalysis is an exception BY NUMBER."""
+    r = offline["12"]
+    assert r["family"] == "family1_2" and r["family_version"] == "1.2"
+    assert r["registry"] == "tensors/family1_2/family12.json"
+    assert r["inherits"] == "family1gf"
+    b = r["inherits_block"]
+    assert b["family_code"] == "1gf"
+    assert b["registry"] == "tensors/family1_gf/family1gf.json"
+    assert b["groups"] == sorted(g["name"] for g in offline["1gf"]["groups"])
+    own = sorted(g["name"] for g in r["groups"])
+    assert own == ["era5_q", "era5_t", "era5_u", "era5_v"]
+    assert set(own) & set(b["groups"]) == set()
+    (ex,) = r["exceptions"]
+    assert ex["id"] == "E4" and sorted(ex["stores"]) == own
+    for g in r["groups"]:
+        assert g["path"] == f"tensors/family1_2/{g['name']}"
+        assert g["levels_hpa"] == [50, 100, 150, 200, 250, 300, 400, 500,
+                                   600, 700, 850, 925, 1000]
+        v = g["name"][-1]
+        assert [c["name"] for c in g["channels"]] == \
+            [f"{v}_{p}" for p in g["levels_hpa"]]
+        assert g["exception"] == "E4"
+        assert g["licence"]["redistribution"] == "attribution"
+        assert "Copernicus" in g["licence"]["attribution"]
+        assert g["distribution"] == "public"
+        assert g["cadence"] == "6-hourly"
+        assert g["frames_per_bin"] == 20 and g["frame_seconds"] == 21600
 
 
 # ============================================================== the numbers ==
@@ -338,11 +373,12 @@ def test_family_10_2_names_the_three_registries_family_1_really_writes():
     """The one additive key on family 10.2's side. Its three names are the
     contract between the two builders, so they are asserted against what
     `build_family1_registry` actually writes rather than against a copy."""
-    want = {f"tensors/{FAMILIES[c][2]}/{r1.REGISTRY_NAME[c]}" for c in CODES}
+    want = {f"tensors/{FAMILIES[c][2]}/{r1.REGISTRY_NAME[c]}"
+            for c in SIBLING_CODES}
     got = {s["registry"] for s in reg10.SIBLING_REGISTRIES}
     assert got == want
     assert {s["family_version"] for s in reg10.SIBLING_REGISTRIES} == \
-        {FAMILIES[c][1] for c in CODES}
+        {FAMILIES[c][1] for c in SIBLING_CODES}
     # and the block family 1's own builder offers agrees with it
     mine = {s["registry"] for s in r1.siblings_block()["registries"]}
     assert mine == want

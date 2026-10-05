@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""The REGISTRIES of families 1.gf, 1.0.tf and 0.9.tf — one file per family.
+"""The REGISTRIES of families 1.gf, 1.0.tf, 0.9.tf and 1.2 — one file each.
 
 E-082 §4 ("the three registries"), modelled on `ml/build_family10_registry.py`
 and written for the same reader: **a consumer dispatches on `tier` and needs
@@ -10,6 +10,10 @@ no other document.** Writes three files beside family 10's own registry:
     family09tf.json   family 0.9.tf — 1.0.tf with the raw satellite imagery
                                       replaced by an embedding; everything
                                       else INHERITED by reference
+    family12.json     family 1.2    — 1.gf INHERITED by reference, plus
+                                      ERA5's upper air (E-085): the one
+                                      numbered exception, E4, to 1.gf's
+                                      "observations at <= 10 km" rule
 
 WHAT IS DIFFERENT FROM FAMILY 10'S REGISTRY, and why.
 
@@ -47,6 +51,16 @@ WHAT IS DIFFERENT FROM FAMILY 10'S REGISTRY, and why.
   `inherited_groups` list, and `groups` holds only what 0.9.tf builds itself.
   A reader resolves the inheritance by reading the named registry, which is
   the one arrangement in which the two cannot drift.
+
+  **1.2 inherits 1.gf the same way, and adds four stores of its own.**
+  Family 1.2 (E-085, Chris 2026-10-05) is family 1.gf unchanged plus ERA5
+  temperature, specific humidity and wind on 13 pressure levels. Its
+  registry carries `inherits: "family1gf"`, the resolved list, and in
+  `groups` only the `era5_*` stores, each with `levels_hpa` so a consumer
+  can rebuild the vertical axis from the channels. It also carries an
+  `exceptions` list: ERA5 is a ~31 km model-filled reanalysis, which 1.gf's
+  rule would exclude, so it is admitted by NAME (E4, after the note's
+  E1-E3), never silently.
 
   **An access failure is not evidence of absence** (ml/CLAUDE.md §0.2). A 404
   from the Hub means the store is not published; a 401 or a 403 means the read
@@ -101,13 +115,75 @@ REGISTRY_DIR = os.path.join(HERE, "cache", f10.CACHE_DIRNAME)
 #: family code -> (registry file name, the note that designs it)
 REGISTRY_NAME = {"1gf": "family1gf.json",
                  "1tf": "family1tf.json",
-                 "09tf": "family09tf.json"}
+                 "09tf": "family09tf.json",
+                 "12": "family12.json"}
+PLAN_E085 = "ml/plans/E085_family12_atmosphere.md"
 NOTE = {"1gf": "ml/paper/notes/family1gf.tex",
         "1tf": "ml/paper/notes/family1tf.tex",
-        "09tf": "ml/paper/notes/family09tf.tex"}
-#: 0.9.tf is 1.0.tf with the imagery replaced; everything else is the same
-#: bytes under the same path, so it is inherited by reference.
-INHERITS = {"09tf": "1tf"}
+        "09tf": "ml/paper/notes/family09tf.tex",
+        "12": PLAN_E085}
+#: 0.9.tf is 1.0.tf with the imagery replaced; 1.2 is 1.gf with ERA5's
+#: upper air added. In both, every parent store is the same bytes under the
+#: same path, so it is inherited by reference.
+INHERITS = {"09tf": "1tf", "12": "1gf"}
+INHERIT_NOTE = {
+    "09tf": ("family {version} is family {pversion} with the raw satellite "
+             "imagery replaced by Google's AlphaEarth embedding. Every other "
+             "store is the SAME BYTES under the same path, so it is listed BY "
+             "REFERENCE: read the named registry for them. `groups` below "
+             "holds only what {version} builds itself — a copy of the "
+             "parent's rows is the thing that would go stale."),
+    "12": ("family {version} is family {pversion} UNCHANGED plus ERA5's "
+           "temperature, specific humidity and wind on 13 pressure levels "
+           "(E-085). Every {pversion} store is the SAME BYTES under its own "
+           "path (`tensors/family1_gf/<store>`), listed BY REFERENCE — no "
+           "byte is copied: read the named registry for them. `groups` below "
+           "holds only the stores {version} adds, under tensors/family1_2/."),
+}
+DESCRIPTION_1 = (
+    "Family 1 is the FINE observation families: everything at 10 km or finer "
+    "and 5 days or finer that the model reads beside the 0.25° global "
+    "tensor. Nothing is resampled to a common grid at storage time; every "
+    "store keeps its own resolution and cadence and carries the "
+    "measurement's footprint, so a consumer can tell a 500 m monthly "
+    "burned-area map from a half-hourly flux tower at the same place. "
+    "Dispatch on `tier`.")
+DESCRIPTION = {
+    "12": (
+        "Family 1.2 is family 1.gf — the global fine observation stores, "
+        "inherited by reference and unchanged — plus the upper air the "
+        "observations cannot give globally: ERA5 air temperature, specific "
+        "humidity and wind (eastward u, northward v) on the 13 standard "
+        "pressure levels 50..1000 hPa, one frame per six-hourly analysis "
+        "instant on a 1-degree grid (conservative box means). One store per "
+        "variable, the levels folded into the channel axis (`t_500` is "
+        "temperature at 500 hPa; each entry's `levels_hpa` rebuilds the "
+        "vertical axis). ERA5 is a model-filled reanalysis at ~31 km, so it "
+        "is the named exception E4 to 1.gf's rule (`exceptions`). Dispatch "
+        "on `tier`."),
+}
+#: the numbered exceptions a family admits against its parent's rule
+EXCEPTIONS = {
+    "12": [{
+        "id": "E4",
+        "stores": ["era5_q", "era5_t", "era5_u", "era5_v"],
+        "rule": ("family 1.gf admits global OBSERVATIONS whose spatial "
+                 "support is <= 10 km and temporal support <= 5 days "
+                 "(ml/paper/notes/family1gf.tex §1); E1-E3 are that note's"),
+        "fails_by": ("ERA5 is a model-filled REANALYSIS, not an observation, "
+                     "at ~31 km native resolution (spectral TL639), stored "
+                     "here as 1-degree (~111 km) box means"),
+        "why_admitted": ("the three-dimensional state of the atmosphere — "
+                         "temperature, humidity and wind through the depth "
+                         "of the troposphere and lower stratosphere — is "
+                         "observed globally by no instrument family at this "
+                         "cadence; radiosondes (igra) are points over land"),
+        "decided": "Chris, 2026-10-05 (family 1.2 = 1.gf + three 3-D "
+                   "six-hourly atmospheric channels)",
+        "plan": PLAN_E085,
+        "phase_b": "0.25-degree, the archive's native grid, recorded in the "
+                   "plan and not built"}],
+}
 
 PLAN = "ml/plans/E082_family1_builds.md"
 DESIGN = "ml/plans/E078_multi_granularity.md"
@@ -312,6 +388,11 @@ def entry(store, ad, repo, use_hub=True, work=None, probe_dir=PROBE_DIR):
         "adapter": f"ml/family1/adapters/{store}.py",
         "builder": "ml/build_family1_stores.py",
     }
+    if getattr(ad, "levels_hpa", None):
+        out["levels_hpa"] = [int(x) for x in ad.levels_hpa]
+        out["channel_axis"] = getattr(ad, "channel_axis", "")
+    if getattr(ad, "exception", None):
+        out["exception"] = ad.exception
     if tier_of(ad) == "G":
         out["frames_per_bin"] = int(getattr(ad, "frames_per_bin", 1))
         out["frame_seconds"] = int(getattr(ad, "frame_seconds",
@@ -394,15 +475,9 @@ def build_one(code, repo=PUBLIC_REPO, use_hub=True, work=None,
             "before 1914 forces int64. Tier G stores carry frames rather than "
             "rows and have no time column at all — their bin axis is the "
             "shard index."),
-        "description": (
-            "Family 1 is the FINE observation families: everything at 10 km "
-            "or finer and 5 days or finer that the model reads beside the "
-            "0.25° global tensor. Nothing is resampled to a common grid at "
-            "storage time; every store keeps its own resolution and cadence "
-            "and carries the measurement's footprint, so a consumer can tell "
-            "a 500 m monthly burned-area map from a half-hourly flux tower at "
-            "the same place. Dispatch on `tier`."),
-        "plan": PLAN, "design": DESIGN, "wave6": WAVE6, "contract": CONTRACT,
+        "description": DESCRIPTION.get(code, DESCRIPTION_1),
+        "plan": PLAN_E085 if code == "12" else PLAN,
+        "design": DESIGN, "wave6": WAVE6, "contract": CONTRACT,
         "note": NOTE[code],
         "epoch": str(sh.EPOCH), "pentad_days": f10.PENTAD_DAYS,
         "bin_rule": ("bin = floor(time_s / 432000 s) for a tier-P store; for "
@@ -439,15 +514,11 @@ def build_one(code, repo=PUBLIC_REPO, use_hub=True, work=None,
             "registry": f"tensors/{pslug}/{REGISTRY_NAME[parent]}",
             "root": f"tensors/{pslug}",
             "groups": stores_of(parent),
-            "note": (
-                f"family {version} is family {pversion} with the raw "
-                f"satellite imagery replaced by Google's AlphaEarth "
-                f"embedding. Every other store is the SAME BYTES under the "
-                f"same path, so it is listed BY REFERENCE: read the named "
-                f"registry for them. `groups` below holds only what "
-                f"{version} builds itself — a copy of the parent's rows is "
-                f"the thing that would go stale."),
+            "note": INHERIT_NOTE[code].format(version=version,
+                                              pversion=pversion),
         }
+    if code in EXCEPTIONS:
+        reg["exceptions"] = json.loads(json.dumps(EXCEPTIONS[code]))
     return reg
 
 
@@ -546,9 +617,9 @@ def publish_one(path, code, repo=None):
 # ===================================================================== main ==
 def main():
     ap = argparse.ArgumentParser(
-        description="Write family1gf.json, family1tf.json and "
-                    "family09tf.json — the three family-1 registries "
-                    "(E-082 §4).")
+        description="Write family1gf.json, family1tf.json, family09tf.json "
+                    "and family12.json — the family-1 registries (E-082 §4, "
+                    "E-085).")
     ap.add_argument("--out-dir", default=REGISTRY_DIR,
                     help="where to write them (default: beside family 10's "
                          "own registry)")
@@ -565,7 +636,7 @@ def main():
                     help="build and verify that every registered adapter is "
                          "in exactly one registry; exit non-zero otherwise")
     ap.add_argument("--publish", action="store_true",
-                    help="upload all three and verify each restore")
+                    help="upload every registry and verify each restore")
     a = ap.parse_args()
 
     regs = build_all(repo=a.repo, use_hub=not a.no_hub,
