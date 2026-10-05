@@ -1,0 +1,10 @@
+{
+ "at": "2026-10-05T21:55:11+00:00",
+ "done": 6505,
+ "elapsed_s": 711.5,
+ "eta_s": 0.0,
+ "files": 6505,
+ "item": "store.json",
+ "stage": "publish era5_q",
+ "total": 6505
+}
