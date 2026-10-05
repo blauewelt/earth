@@ -1,0 +1,58 @@
+{
+ "default_version": "all",
+ "layout": "[month, channel, lat, lon] float32 z-units",
+ "files": {
+  "all": {
+   "fxg": {
+    "clim_npy": {
+     "url": "clim/fxg/clim.npy",
+     "dtype": "<f4",
+     "header_len": 128,
+     "plane_bytes": 2736
+    }
+   }
+  }
+ },
+ "groups": {
+  "fxg": {
+   "chans": [
+    "sst",
+    "t2m",
+    "ssh"
+   ],
+   "grid": {
+    "lat0": -90.0,
+    "lon0": -180.0,
+    "nx": 36,
+    "ny": 19,
+    "south_first": true,
+    "step": 10.0,
+    "wrap": true
+   },
+   "labels": {
+    "sst": "Sea-surface temperature",
+    "t2m": "Air temperature at 2 m",
+    "ssh": "Sea surface height"
+   },
+   "units": {
+    "sst": "\u00b0C",
+    "t2m": "\u00b0C",
+    "ssh": "m"
+   },
+   "norm": [
+    [
+     15.0,
+     8.0
+    ],
+    [
+     10.0,
+     12.0
+    ],
+    [
+     -0.2,
+     0.7
+    ]
+   ]
+  }
+ }
+}

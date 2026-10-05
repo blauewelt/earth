@@ -8393,11 +8393,12 @@ test("Data tab: the real reader over the fixture stores — list, hours, estimat
   // the unbuilt and the private entry are not offered
   await expect(page.locator("#dt-store option")).toHaveCount(3, { timeout: 20000 });
   const names = await page.locator("#dt-store option").evaluateAll((os) => os.map((o) => o.value));
-  expect(names.sort()).toEqual(["fxgrid", "fxpts", "fxtb"]);
+  // option values are family/name since the tab reads several registries
+  expect(names.sort()).toEqual(["1.gf/fxgrid", "1.gf/fxpts", "1.gf/fxtb"]);
   await expect(page.locator("#dt-estimate")).toContainText("MB to read", { timeout: 20000 });
 
   // the daily grid: no hours; one recent year by default; the Atlantic patch
-  await dtSet(page, { "dt-store": "fxgrid" });
+  await dtSet(page, { "dt-store": "1.gf/fxgrid" });
   await expect(page.locator("#dt-hours-row")).toBeHidden();
   await dtSet(page, { "dt-y0": "2009", "dt-y1": "2010",
                       "dt-w": "-30", "dt-s": "-20", "dt-e": "10", "dt-n": "20" });
@@ -8428,14 +8429,14 @@ test("Data tab: the real reader over the fixture stores — list, hours, estimat
 
   // the 3-hourly band has a time of day; it covers 15°S–15°N only, and a box
   // outside that is said in words with the download off, not a file of nothing
-  await dtSet(page, { "dt-store": "fxtb" });
+  await dtSet(page, { "dt-store": "1.gf/fxtb" });
   await expect(page.locator("#dt-hours-row")).toBeVisible();
   await dtSet(page, { "dt-s": "30", "dt-n": "40" });
   await expect(page.locator("#dt-estimate")).toContainText("outside this store's coverage", { timeout: 20000 });
   await expect(page.locator("#dt-download")).toBeDisabled();
 
   // the point store: rows as CSV with one column per channel ticked
-  await dtSet(page, { "dt-store": "fxpts" });
+  await dtSet(page, { "dt-store": "1.gf/fxpts" });
   await expect(page.locator("#dt-hours-row")).toBeVisible();
   await expect(page.locator("#dt-format")).toHaveValue("csv");
   await settled();
@@ -8482,5 +8483,101 @@ test("Data tab: every store opens on a first look under the cap; a chosen period
   await settled();
   expect((await dtState(page)).sel).toMatchObject({ yearStart: 2005, yearEnd: 2006 });
   expect((await dtState(page)).touched).toBe(true);
+  expect(page.__errors, `page errors: ${page.__errors.join(" | ")}`).toHaveLength(0);
+});
+
+/* The multi-registry tab (E-084's extension to family 10 and the derived
+ * maps), through the REAL reader over two fixtures served with genuine 206s:
+ * data/family1_fixture (family 1.gf) and data/family10_fixture (written by
+ * tests/make_family10_fixture.py with the repo's own writers: a z-scored
+ * bin-major tensor group, a levelled monthly group, a schema-1 Argo-layout
+ * store, a store with negative bins, a month-major grid and a climatology). */
+function serveFixtureDir(page, prefix, dir, reads) {
+  const fs = require("fs"), path = require("path");
+  const re = new RegExp(`/${prefix}/(.+?)(\\?.*)?$`);
+  return page.route(re, (route) => {
+    const rel = decodeURIComponent(re.exec(route.request().url())[1]);
+    const file = path.join(dir, rel);
+    if (!file.startsWith(dir) || !fs.existsSync(file)) return route.fulfill({ status: 404, body: "" });
+    const buf = fs.readFileSync(file);
+    const m = /bytes=(\d+)-(\d*)/.exec(route.request().headers()["range"] || "");
+    if (!m) return route.fulfill({ status: 200, body: buf });
+    const a = Number(m[1]), b = Math.min(buf.length - 1, m[2] === "" ? buf.length - 1 : Number(m[2]));
+    if (reads) reads.push([prefix, rel, a, b]);
+    return route.fulfill({ status: 206, body: buf.subarray(a, b + 1),
+      headers: { "content-range": `bytes ${a}-${b}/${buf.length}`, "accept-ranges": "bytes",
+                 "content-type": "application/octet-stream" } });
+  });
+}
+
+test("Data tab: the store list is grouped by family, a missing registry is a named line, and a family-10 download works",
+     async ({ page }) => {
+  test.setTimeout(240000);
+  const real = await page.evaluate(() =>
+    !!window.F1Data && !window.F1Data.__stub && typeof window.F1Data.configure === "function");
+  test.skip(!real, "src/f1data.js is not in this tree");
+  const path = require("path"), fs = require("fs");
+  const reads = [];
+  await serveFixtureDir(page, "f1fixture", path.join(__dirname, "..", "data", "family1_fixture"), reads);
+  await serveFixtureDir(page, "f10fixture", path.join(__dirname, "..", "data", "family10_fixture"), reads);
+  await page.evaluate(() => {
+    const o = location.origin;
+    window.F1Data.configure({ registries: [
+      { family: "1.gf", title: "Fine observations (family 1.gf)", kind: "family1", url: `${o}/f1fixture/family1gf.json` },
+      { family: "10", title: "Global tensor and point observations (family 10)", kind: "family10",
+        url: `${o}/f10fixture/family10.json`, root: `${o}/f10fixture/`, norms: "/f10fixture/family7_index.json" },
+      { family: "derived", title: "Derived maps", kind: "derived",
+        fishing: "/f10fixture/fishing_index.json", clim: "/f10fixture/clim_index.json" },
+      { family: "gone", title: "A family whose registry is not published", kind: "family1", url: `${o}/f1fixture/nope/x.json` }] });
+    try { localStorage.removeItem("dataTabSel"); } catch {}
+  });
+  await dtTap(page, "#tab-data");
+  await expect(page.locator("#dt-store optgroup")).toHaveCount(3, { timeout: 30000 });
+  expect(await page.locator("#dt-store optgroup").evaluateAll((gs) => gs.map((g) => g.label))).toEqual([
+    "Fine observations (family 1.gf)", "Global tensor and point observations (family 10)", "Derived maps"]);
+  expect(await page.locator('#dt-store optgroup[label="Derived maps"] option').evaluateAll((os) => os.map((o) => o.value)))
+    .toEqual(["derived/fishing_grid", "derived/clim_fxg"]);
+  // the family that failed is named, visibly, and the tab still works
+  await expect(page.locator("#dt-reg-error")).toBeVisible();
+  await expect(page.locator("#dt-reg-error")).toContainText("A family whose registry is not published");
+  await expect(page.locator("#dt-reg-error")).toContainText("HTTP 404");
+  const settled = () => expect.poll(async () => (await dtState(page)).estimateCurrent, { timeout: 30000 }).toBe(true);
+
+  // a levelled store offers variables × levels, not one checkbox per channel
+  await dtSet(page, { "dt-store": "10/fxrg" });
+  await settled();
+  await expect(page.locator("#dt-channels input[data-var]")).toHaveCount(2);
+  await expect(page.locator("#dt-channels button[data-level]")).toHaveCount(3);
+  expect((await dtState(page)).sel.channels).toEqual(["rg_t10"]);
+  await dtTap(page, '#dt-channels button[data-level="30"]');
+  await page.evaluate(() => { const i = document.querySelector('#dt-channels input[data-var="rg_s"]'); i.checked = true; i.dispatchEvent(new Event("change", { bubbles: true })); });
+  expect((await dtState(page)).sel.channels).toEqual(["rg_t10", "rg_t30", "rg_s10", "rg_s30"]);
+  // a 10° store offers no coarser resolution than its own
+  expect(await page.locator("#dt-res option").evaluateAll((os) => os.map((o) => o.value))).toEqual(["native"]);
+
+  // a climatology has no years: the period rows go and a sentence says why
+  await dtSet(page, { "dt-store": "derived/clim_fxg" });
+  await settled();
+  await expect(page.locator("#dt-y0")).toBeHidden();
+  await expect(page.locator("#dt-d0")).toBeHidden();
+  await expect(page.locator("#dt-cal-note")).toBeVisible();
+  await expect(page.locator("#dt-estimate")).toContainText("calendar-month map");
+
+  // the bin-major z-scored group: January 2010 over a box → a NetCDF built
+  // from range reads of the box's rows
+  await dtSet(page, { "dt-store": "10/fxg" });
+  await settled();
+  await dtSet(page, { "dt-y0": "2010", "dt-y1": "2010", "dt-w": "-40", "dt-s": "-30", "dt-e": "40", "dt-n": "30" });
+  await dtTap(page, "#dt-months-none");
+  await dtTap(page, '#dt-months button[data-month="1"]');
+  await settled();
+  await expect(page.locator("#dt-estimate")).toContainText("4 five-day maps");
+  reads.length = 0;
+  const [dl] = await Promise.all([page.waitForEvent("download", { timeout: 60000 }), dtTap(page, "#dt-download")]);
+  expect(dl.suggestedFilename()).toBe("f10_fxg_sst_2010_m01_native.nc");
+  const nc = fs.readFileSync(await dl.path());
+  expect(nc.subarray(0, 3).toString("latin1")).toBe("CDF");
+  expect(nc.length).toBeGreaterThan(500);
+  expect(reads.some(([p, rel]) => p === "f10fixture" && /fx7_X_fxg\.npy$/.test(rel))).toBe(true);
   expect(page.__errors, `page errors: ${page.__errors.join(" | ")}`).toHaveLength(0);
 });

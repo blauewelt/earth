@@ -502,8 +502,10 @@ to a hint toast and an empty layer on any failure (`docs/FAMILY7_GLOBE.md`).
 Since then the same family-7 path also serves the Model climatology layer
 (one plane per month and channel) and the fishing-effort grid (one month per
 read), and — added 2026-10-05 for E-084 — the **Data tab** reads the family
-1.gf observation stores under `tensors/family1_gf/`: index and tile ranges of
-the gridded stores, column ranges of the point stores, every one a `Range:`
+1.gf observation stores under `tensors/family1_gf/` and the family-10 stores
+under `tensors/family10_2/` (plus the fishing map and the climatology through
+their site indexes): index and tile ranges of the gridded stores, row-band
+ranges of the bin-major grids, column ranges of the point stores, every one a `Range:`
 request answered 206, at most six in flight, issued only by an explicit
 Estimate / Preview / Download and bounded by the tab's cap (600 MB read,
 400 MB of result) rather than by the archive. Its failure mode is the
@@ -2088,8 +2090,8 @@ index.
   and a toast names the chain; `data/family7_clim/fixture/` is what the tests
   serve. `docs/FAMILY7_CLIM.md` explains it and says how to regenerate.
 
-**The Data tab — every public family 1.gf store, filtered and downloaded in the
-browser (2026-10-05, E-084).** Chris, on the Model climatology download:
+**The Data tab — every public store of family 1.gf, family 10 and the derived
+maps, filtered and downloaded in the browser (2026-10-05, E-084).** Chris, on the Model climatology download:
 *"I would suggest we make it a tab instead (which lets us take care of all the
 controls we need)"*, refinable by period, month, time of day, box and
 resolution, over *"all the channels in family 1.gf"* at native granularity.
@@ -2131,6 +2133,42 @@ in kelvin). Tests: `tests/f1data.test.mjs` (node, the fixture
 "Data tab: …" specs in `tests/app.spec.js` (a stub reader, plus the real
 reader over the fixture served with genuine 206s). `docs/DATA_TAB.md` is the
 reader's guide; `ml/plans/E084_data_tab.md` the plan.
+
+*Extended the same day to the union of families* — Chris: *"all channels for
+all granularities are fine for this, also derived channels"*. The reader now
+loads a LIST of registries (`F1Data.DEFAULT_REGISTRIES`, replaceable through
+`configure({registries})`): family 1.gf, family 10
+(`tensors/family10_2/family10.json`) and "derived" (the site's
+`data/fishing_index.json` and `data/family7_clim_index.json`), with family 1.2
+(`tensors/family1_2/family12.json`) a commented one-line slot. Stores are keyed
+`family/name` (`sel.family`; a bare `sel.store` still resolves when it is
+unambiguous) and the tab groups them in three optgroups. **A registry or store
+that fails does not take the others down**: it lands in `registry.errors[]`
+and the tab prints it as a "Not available: …" line; an `optional` registry
+answering 404 goes to `missing` silently. Three more layout handlers sit
+behind the same six functions: **bin-major** (the family-10 grids,
+`[T,H,W,C]` float16, south-first point-registered — one `Range` per frame for
+the box's row band, coalesced across frames when the box is full height, so a
+read always covers ALL C channels and the estimate says so), **month-major**
+(the fishing grid, `[month,H,W,2]` float32 sums — coarser steps AVERAGE the
+sums) and **calendar** (the climatology, `[12,C,H,W]` float32 in z-units, no
+year axis; the tab hides the years and days). **The family-10 grids are
+z-scored on disk and the norms exist only in the site's
+`data/family7_index.json`**: the reader de-normalises every value
+(`z·sd + mean`) and a grid whose channel has no norm is a named per-store
+error, never raw z-scores in physical clothing. Family-10 point stores come in
+two schemas — family 8's schema 1 (Argo: `time_days` float32 converted with
+round-half-to-even exactly like `ml/family10_store.py`, separate `temp`/`psal`
+blocks, `wmo` for platform, no qc) and the family-1 layout, with negative bins
+before 1982 (drifters from 1979, SOCAT from 1957). Levelled channels
+(`temp_10` … or `rg_t10` …) are exposed as `store.levels` and per-channel
+`{var, level}`, and the tab shows a variables × levels picker. Verified live on
+2026-10-05: five downloads equal to independent numpy reads (a 0.25° five-day
+frame to 1e-6 after de-z-scoring, a 1° monthly mean with equal counts, the
+Argo rows equal to `ml/family10_store.py`'s with identical times, a 1980
+drifter month from the negative bins, a fishing-grid month exactly equal).
+Fixture `data/family10_fixture/` (written by `tests/make_family10_fixture.py`
+through `ml/tensor_io.py`, the family-8 writer and the family-10 assembler).
 
 **The fishing fleet, in two layers (2026-09-16, E-081 §4).** Chris: *"add what
 you propose to family 10.2 (and build the family). At the same time make sure

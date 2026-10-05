@@ -942,3 +942,11 @@ footer a { color: var(--fg-dim); }
 .clim-to-data { margin-top: 4px; }
 #panel-data .hint.dt-note { margin: 0 0 6px; color: #8b949e; }
 .dt-estimate .dt-how { margin-top: 4px; font-size: 11px; color: #8b949e; }
+.dt-sub { font-size: 11px; color: #8b949e; margin: 6px 0 3px; display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.dt-levels button {
+  flex: 0 1 auto; min-width: 44px; padding: 3px 6px; border-radius: 6px; font-size: 11px;
+  background: #21262d; color: #8b949e; border: 1px solid var(--border); cursor: pointer; font-variant-numeric: tabular-nums;
+}
+.dt-levels button.active { border-color: var(--accent); color: var(--fg); background: rgba(68, 147, 248, 0.14); }
+#dt-reg-error .dt-reg-line { color: #f0d861; margin: 2px 0; overflow-wrap: anywhere; }
+#dt-store optgroup { color: var(--fg-dim); font-style: normal; }

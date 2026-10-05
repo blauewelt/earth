@@ -109,7 +109,24 @@
   "use strict";
 
   // ------------------------------------------------------------ constants --
-  var DEFAULT_BASE = "https://huggingface.co/datasets/chfrank/earth-tensors/resolve/main/tensors/family1_gf/";
+  var HUB_ROOT = "https://huggingface.co/datasets/chfrank/earth-tensors/resolve/main/";
+  var DEFAULT_BASE = HUB_ROOT + "tensors/family1_gf/";
+  // The families the Data tab offers, in the order its store list shows them.
+  // `url` is a registry JSON on the Hub; `norms` / `fishing` / `clim` are the
+  // site's own indexes (relative to the page, or to cfg.siteBase in node).
+  // A registry that fails to load is reported in `registry.errors` and the
+  // others still load; one marked `optional` that answers 404 is simply absent.
+  var DEFAULT_REGISTRIES = [
+    { family: "1.gf", title: "Fine observations (family 1.gf)", kind: "family1",
+      url: DEFAULT_BASE + "family1gf.json" },
+    { family: "10", title: "Global tensor and point observations (family 10)", kind: "family10",
+      url: HUB_ROOT + "tensors/family10_2/family10.json", norms: "data/family7_index.json" },
+    { family: "derived", title: "Derived maps", kind: "derived",
+      fishing: "data/fishing_index.json", clim: "data/family7_clim_index.json", climVersion: "all" }
+    // family 1.2 — one line when its registry is published:
+    // , { family: "1.2", title: "… (family 1.2)", kind: "family1", optional: true,
+    //     url: HUB_ROOT + "tensors/family1_2/family12.json" }
+  ];
   var EPOCH_UNIX = 378691200;            // 1982-01-01T00:00:00Z
   var EPOCH_DAYS = 4383;                 // days 1970-01-01 → 1982-01-01
   var BIN_S = 432000;                    // one five-day bin
@@ -135,7 +152,8 @@
     throw new Error("f1data.js assumes a little-endian host");
   }
 
-  var cfg = { base: DEFAULT_BASE, fetch: null, concurrency: MAX_CONCURRENCY };
+  var cfg = { base: DEFAULT_BASE, fetch: null, concurrency: MAX_CONCURRENCY,
+    registries: DEFAULT_REGISTRIES.slice(), siteBase: null };
   var cache = new Map();                 // url/key → Promise
   var idxCache = new Map();              // url|off|len → Uint8Array (LRU)
   var idxCacheBytes = 0;
@@ -149,9 +167,17 @@
   function configure(o) {
     o = o || {};
     if (o.base != null) {
+      // the phase-1 form: one family 1.gf registry at `base` and nothing else
       var b = String(o.base);
       cfg.base = b.endsWith("/") ? b : b + "/";
+      cfg.registries = [{ family: "1.gf", title: "Fine observations (family 1.gf)", kind: "family1",
+        url: cfg.base + "family1gf.json" }];
     }
+    if (o.registries != null) {
+      if (!Array.isArray(o.registries)) throw new Error("registries must be a list");
+      cfg.registries = o.registries.map(function (r) { return Object.assign({}, r); });
+    }
+    if (o.siteBase !== undefined) cfg.siteBase = o.siteBase;
     if (o.fetch !== undefined) cfg.fetch = o.fetch;
     if (o.concurrency != null) {
       cfg.concurrency = Math.max(1, Math.min(MAX_CONCURRENCY, o.concurrency | 0));
@@ -159,7 +185,36 @@
     cache.clear();
     idxCache.clear();
     idxCacheBytes = 0;
-    return { base: cfg.base, concurrency: cfg.concurrency };
+    return { base: cfg.base, concurrency: cfg.concurrency, registries: cfg.registries.slice() };
+  }
+
+  // a site-relative URL ("data/x.json") against the page, or cfg.siteBase
+  function siteUrl(u) {
+    if (/^[a-z]+:\/\//i.test(u)) return u;
+    var b = cfg.siteBase;
+    if (!b && typeof document !== "undefined" && document.baseURI) b = document.baseURI;
+    if (!b && typeof location !== "undefined" && location.href) b = location.href;
+    if (!b) throw new Error("no base to resolve " + JSON.stringify(u) + " against — configure({siteBase})");
+    return new URL(u, b).href;
+  }
+
+  function dirOf(u) { return String(u).replace(/[^/]*$/, ""); }
+
+  // the site's own small JSON (an index we publish beside the page): a plain
+  // GET — Range is the rule for the store's data, not for our own metadata,
+  // and a static test server answers it 200
+  function readSiteJSON(url, ctx) {
+    return cached("sitejson:" + url, async function () {
+      checkAbort(ctx && ctx.signal);
+      var res = await fetchFn()(url, { signal: ctx && ctx.signal });
+      if (res.status !== 200) {
+        var e = new Error("HTTP " + res.status + " for " + url);
+        e.status = res.status; e.url = url;
+        throw e;
+      }
+      try { return JSON.parse(await res.text()); }
+      catch (e2) { throw new Error("not JSON: " + url + " (" + e2.message + ")"); }
+    });
   }
 
   // --------------------------------------------------------- small helpers --
@@ -481,7 +536,39 @@
     swh: ["Significant wave height along altimeter tracks (ESA CCI)",
       "Wave height measured by radar altimeters along their ground tracks, one row per second (about 7 km apart), 1991–2023."],
     swot: ["Sea-level anomaly on SWOT's 2 km swaths",
-      "The SWOT satellite's wide-swath sea-surface height anomaly at 2 km, one row per valid pixel — a very large store, so keep the period short."]
+      "The SWOT satellite's wide-swath sea-surface height anomaly at 2 km, one row per valid pixel — a very large store, so keep the period short."],
+    // family 10 — [title, one-sentence gist, cadence label (optional)]
+    "10/g025": ["Ocean surface state, 0.25° five-day (the global tensor)",
+      "The forecaster's own global input at 0.25°: surface current speed and direction, mixed-layer depth, sea-surface height, observed sea-surface temperature and sea ice, as five-day means since 1982."],
+    "10/g100": ["Air–sea fluxes, weather and land, 1° five-day (the global tensor)",
+      "The global tensor's 1° group: wind stress, 2 m air and skin temperature, 10 m wind, surface pressure, precipitation, snow, soil moisture and temperature, and the turbulent heat fluxes, as five-day means since 1982."],
+    "10/oc025": ["Ocean colour, 0.25° five-day (the global tensor)",
+      "Satellite chlorophyll (as its base-10 logarithm) and the clear-sky fraction behind each value, averaged onto 0.25° five-day cells, from September 1997."],
+    "10/rg100": ["Ocean temperature and salinity at 16 depths, 1° monthly (Argo)",
+      "The Roemmich–Gilson monthly map built from Argo floats: temperature and salinity at 16 pressures from 10 to 1,900 dbar, on a 1° grid from 2004.", "monthly"],
+    "10/argo": ["Argo float profiles (temperature and salinity at 16 depths)",
+      "Every quality-controlled Argo float profile since 2004, interpolated to 16 pressures from 10 to 1,900 dbar, one row per profile."],
+    "10/gdp": ["Surface drifters (Global Drifter Program)",
+      "Drifting buoys' surface current (eastward and northward), sea-surface temperature and whether the drogue was attached, every six hours since 1979."],
+    "10/gtmba": ["Tropical moored buoys (TAO, PIRATA, RAMA)",
+      "The tropical mooring arrays' daily sea and air temperature, salinity, wind, currents and temperature at depth, one row per site and day since 1977."],
+    "10/socat": ["Ship measurements of ocean CO₂ (SOCAT)",
+      "Measurements of the ocean surface's CO₂ fugacity from ships, with the sea temperature, salinity and air pressure taken alongside, since 1957."],
+    "10/slatrack": ["Sea-level anomaly along altimeter tracks",
+      "Sea-level anomaly (filtered and unfiltered) and the mean dynamic topography along every altimeter's ground track since 1993, one row per second — a very large store, so keep the period short."],
+    "10/fishing": ["Fishing effort per vessel and day (AIS, Global Fishing Watch)",
+      "Apparent fishing hours and hours broadcasting, one row per vessel, day and 0.1° cell, from AIS since 2012 — Powered by Global Fishing Watch, CC BY-NC 4.0; absence of effort is not absence of fishing."],
+    // derived maps
+    "derived/fishing_grid": ["Fishing effort map, 0.25° monthly (AIS)",
+      "Global Fishing Watch's apparent fishing hours and AIS broadcasting hours summed per 0.25° cell and month since 2012 — CC BY-NC 4.0; zero means no vessel broadcast there, not that nobody fished.", "monthly sums"],
+    "derived/clim_g025": ["What the forecaster calls normal: ocean surface, 0.25°",
+      "The model climatology — the calendar-month average over all years 1982–2024 that the forecaster is trained and scored against — for the 0.25° ocean surface channels; twelve maps, no years."],
+    "derived/clim_g100": ["What the forecaster calls normal: fluxes, weather and land, 1°",
+      "The model climatology (all years 1982–2024, one map per calendar month) for the 1° flux, weather and land channels; twelve maps, no years."],
+    "derived/clim_oc025": ["What the forecaster calls normal: ocean colour, 0.25°",
+      "The model climatology (all years, one map per calendar month) of the 0.25° chlorophyll channels; twelve maps, no years."],
+    "derived/clim_rg100": ["What the forecaster calls normal: ocean temperature and salinity at depth, 1°",
+      "The model climatology (all years, one map per calendar month) of the Argo temperature and salinity at 16 depths; twelve maps, no years."]
   };
 
   // documented physical conversions, keyed on the STORED unit's own words
@@ -502,14 +589,8 @@
   function binStartIso(b) { return isoDate82(b * BIN_S); }
   function binEndIso(b) { return isoDate82(b * BIN_S + BIN_S - 1); }
 
-  function folderUrlOf(rel) {
-    var b = cfg.base;
-    if (/\/resolve\/main\//.test(b)) return b.replace("/resolve/main/", "/tree/main/") + rel;
-    return b + rel;
-  }
-
-  async function registryRaw(ctx) {
-    return readJSON(cfg.base + "family1gf.json", ctx);
+  function treeUrl(u) {
+    return /\/resolve\/main\//.test(u) ? u.replace("/resolve/main/", "/tree/main/") : u;
   }
 
   function relPath(reg, path) {
@@ -519,69 +600,361 @@
     throw new Error("store path " + p + " is not under the registry's hf_root " + root);
   }
 
-  async function storeDesc(name, ctx) {
+  // a store by `family/name`, by sel {family, store}, or by a bare name when
+  // exactly one family has it
+  async function storeDesc(sel, ctx) {
     var reg = await loadRegistry(ctx);
-    var s = reg._byName[name];
-    if (!s) throw new Error("no readable store named " + JSON.stringify(name) + " in the registry");
+    var fam = sel && typeof sel === "object" ? sel.family : null;
+    var name = sel && typeof sel === "object" ? sel.store : sel;
+    var key = fam != null && fam !== "" ? fam + "/" + name : String(name);
+    var s = reg._byName[key];
+    if (s === AMBIGUOUS) {
+      throw new Error("the store name " + JSON.stringify(name) + " exists in several families (" +
+        reg.stores.filter(function (x) { return x.name === name; }).map(function (x) { return x.family; }).join(", ") +
+        "): name one as sel.family");
+    }
+    if (!s) throw new Error("no readable store " + JSON.stringify(key) + " in the registry");
     return s;
+  }
+  var AMBIGUOUS = { ambiguous: true };
+
+  // Channels whose names encode a LEVEL ("rg_t10", "temp_1900", "DOXY_10"):
+  // a variable is levelled when at least three of its channels differ only
+  // by a trailing number. The tab then offers a variable × level picker.
+  function annotateLevels(d) {
+    var byVar = {};
+    d.channels.forEach(function (c) {
+      var m = /^(.+)_(\d+(?:\.\d+)?)$/.exec(c.name) || /^(.*[A-Za-z])(\d+(?:\.\d+)?)$/.exec(c.name);
+      if (m) (byVar[m[1]] = byVar[m[1]] || []).push([c, Number(m[2])]);
+    });
+    var levels = new Set(), vars = [];
+    Object.keys(byVar).forEach(function (v) {
+      if (byVar[v].length < 3) return;
+      byVar[v].forEach(function (x) { x[0].var = v; x[0].level = x[1]; levels.add(x[1]); });
+    });
+    if (!levels.size) return;
+    var seen = {};
+    d.channels.forEach(function (c) {
+      var v = c.var || c.name;
+      if (!c.var) { c.var = c.name; c.level = null; }
+      if (seen[v]) { seen[v].levels.push(c.level); return; }
+      var lab = c.label ? String(c.label).replace(/\s+at\s+[\d.]+\s*[a-zA-Z]*\s*$/, "") : null;
+      seen[v] = { var: v, label: lab, unit: c.unit, levels: c.level == null ? [] : [c.level] };
+      vars.push(seen[v]);
+    });
+    d.levels = Array.from(levels).sort(function (a, b) { return a - b; });
+    d.vars = vars;
+    var lu = (d.channels.find(function (c) { return c.label && /\bdbar\b/.test(c.label); }) || {}).label;
+    d.levelUnit = lu ? "dbar" : (d.levelUnitHint || "dbar");
+  }
+
+  function baseDesc(fam, name, extra) {
+    var gist = GISTS[fam.family + "/" + name] || GISTS[name];
+    var d = Object.assign({
+      name: name, code: name, family: fam.family, familyTitle: fam.title, id: fam.family + "/" + name,
+      title: gist ? gist[0] : name, gist: gist ? gist[1] : name,
+      kind: "grid", channels: [], span: null, frameSeconds: null, framesPerBin: null,
+      grid: null, folderUrl: null, cadence: null, cadenceLabel: null, subDaily: false,
+      N: null, binFirst: null, binLast: null, groups: null, layout: null,
+      levels: null, vars: null, calendar: false
+    }, extra || {});
+    if (gist && gist[2]) d.cadenceLabel = gist[2];
+    return d;
+  }
+
+  // ---- family 1.gf (and any registry in its shape: a `groups` list of tier
+  // G sharded grids and tier P point stores under `hf_root`)
+  async function loadFamily1(fam, ctx, out) {
+    var url = /^[a-z]+:\/\//i.test(fam.url) ? fam.url : siteUrl(fam.url);
+    var reg = await readJSON(url, ctx);
+    var base = fam.base || dirOf(url);
+    var groups = Array.isArray(reg.groups) ? reg.groups : Object.values(reg.groups || {});
+    var jobs = [];
+    groups.forEach(function (g) {
+      if (!g || !g.built || g.distribution !== "public") return;
+      if (g.tier !== "G" && g.tier !== "P") return;
+      var rel = relPath(reg, g.path);
+      var chans = (g.channels || []).map(function (c) {
+        var cv = conversionOf(c.unit);
+        var o = { name: c.name, unit: cv.unit, min: c.min, max: c.max, storedUnit: c.unit, note: cv.note, label: c.label || null };
+        if (cv.offset) { o.min = c.min + cv.offset; o.max = c.max + cv.offset; }
+        return o;
+      });
+      var d = baseDesc(fam, g.name, {
+        kind: g.tier === "G" ? "grid" : "points",
+        layout: g.tier === "G" ? "sharded" : "points",
+        channels: chans,
+        frameSeconds: g.tier === "G" ? g.frame_seconds : null,
+        framesPerBin: g.tier === "G" ? g.frames_per_bin : null,
+        folderUrl: treeUrl(base + rel), cadence: g.cadence || null,
+        subDaily: g.tier === "P" ? true : (g.frame_seconds < 86400),
+        N: g.N == null ? null : g.N
+      });
+      if (!GISTS[fam.family + "/" + g.name] && !GISTS[g.name] && g.title) { d.title = g.title; d.gist = g.title; }
+      hide(d, "_base", base + rel + "/");
+      hide(d, "_raw", g);
+      if (g.tier === "G") {
+        var sg = g.store_groups || {};
+        var names = Object.keys(sg).sort();
+        if (!names.length) return;            // built but nothing to read
+        d.groups = names.map(function (gn) { var o = { name: gn, grid: null }; hide(o, "_sg", sg[gn]); return o; });
+        d.binFirst = Math.min.apply(null, names.map(function (gn) { return sg[gn].bin_first; }));
+        d.binLast = Math.max.apply(null, names.map(function (gn) { return sg[gn].bin_last; }));
+        jobs.push(Promise.all(d.groups.map(function (gg) {
+          return tileGrid(d, gg.name, ctx).then(function (tg) { gg.grid = gridOf(tg, gg.name); });
+        })).then(function () { d.grid = d.groups[0].grid; return d; }));
+      } else {
+        d.binFirst = g.bin_first;
+        d.binLast = g.bin_last;
+        jobs.push(Promise.resolve(d));
+      }
+      if (d.binFirst != null && d.binLast != null) d.span = [binStartIso(d.binFirst), binEndIso(d.binLast)];
+      else if (g.record_span) d.span = g.record_span.slice();
+    });
+    await settleStores(fam, jobs, out);
+    return reg;
+  }
+
+  // one failing store is a named error line, never the whole family's
+  async function settleStores(fam, jobs, out) {
+    var res = await Promise.all(jobs.map(function (p) {
+      return p.then(function (d) { return { d: d }; }, function (e) { return { e: e }; });
+    }));
+    res.forEach(function (r) {
+      if (r.d) { annotateLevels(r.d); out.stores.push(r.d); }
+      else out.errors.push({ family: fam.family, title: fam.title, store: r.e && r.e.store || null,
+        message: r.e && r.e.message ? r.e.message : String(r.e) });
+    });
+  }
+
+  function hubRootOf(fam, url) {
+    if (fam.root) return /^[a-z]+:\/\//i.test(fam.root) ? fam.root : siteUrl(fam.root);
+    var m = /^(.*\/resolve\/main\/)/.exec(url);
+    return m ? m[1] : dirOf(url);
+  }
+
+  // the five-day bins as dates: t82 seconds → {y, m, d}
+  function frameOfBin(b, i) {
+    var t = b * BIN_S, q = ymh82(t);
+    return { i: i, t: t, y: q.y, m: q.m, d: q.d };
+  }
+
+  // ---- family 10: the four family-7.2 tensor groups (one bin-major .npy
+  // each, z-scored) and the tier-P point stores (family 10.1 / 10.2, and
+  // family 8's schema-1 Argo store)
+  async function loadFamily10(fam, ctx, out) {
+    var url = /^[a-z]+:\/\//i.test(fam.url) ? fam.url : siteUrl(fam.url);
+    var reg = await readJSON(url, ctx);
+    var root = hubRootOf(fam, url);
+    var norms = null, normErr = null;
+    if (fam.norms) {
+      try { norms = await readSiteJSON(siteUrl(fam.norms), ctx); }
+      catch (e) { normErr = e; }
+    }
+    var groups = Array.isArray(reg.groups) ? reg.groups : Object.values(reg.groups || {});
+    var jobs = [];
+    groups.forEach(function (g) {
+      if (!g || (g.tier !== "G" && g.tier !== "P")) return;
+      var prefix = String(g.prefix || g.path || "").replace(/\/+$/, "");
+      var chans = (g.channels || []).map(function (c) {
+        var cv = conversionOf(c.unit);
+        return { name: c.name, unit: cv.unit, min: c.min == null ? null : c.min, max: c.max == null ? null : c.max,
+          storedUnit: c.unit, note: cv.note, label: c.label || null };
+      });
+      if (g.tier === "P") {
+        var d = baseDesc(fam, g.name, {
+          kind: "points", layout: "points", channels: chans, folderUrl: treeUrl(root + prefix),
+          cadence: g.cadence || null, subDaily: true, N: g.N == null ? null : g.N,
+          binFirst: g.bin_first, binLast: g.bin_last != null ? g.bin_last : g.bin_first + (g.n_bins || 1) - 1,
+          schema: g.schema_version || null
+        });
+        // the record the store states, else the bins it indexes (family 8's
+        // index runs from the epoch whatever the floats did)
+        if (Array.isArray(g.date_range) && g.date_range.length === 2) d.span = g.date_range.slice();
+        else if (d.binFirst != null && d.binLast != null) d.span = [binStartIso(d.binFirst), binEndIso(d.binLast)];
+        hide(d, "_base", root + prefix + "/");
+        hide(d, "_raw", g);
+        jobs.push(Promise.resolve(d));
+        return;
+      }
+      // tier G: one bin-major file per group
+      jobs.push((async function () {
+        var f = (g.files || [])[0];
+        if (!f || !f.name) { var e0 = new Error("group " + g.name + " lists no file"); e0.store = g.name; throw e0; }
+        if (!norms) {
+          var e1 = new Error("the z-score table for " + g.name + " (" + fam.norms + ") could not be read: " +
+            (normErr && normErr.message ? normErr.message : "not configured"));
+          e1.store = g.name;
+          throw e1;
+        }
+        var ng = (norms.groups || {})[g.name];
+        if (!ng || !Array.isArray(ng.norm) || ng.norm.length !== g.C) {
+          var e2 = new Error("no (mean, sd) for every channel of " + g.name + " in " + fam.norms); e2.store = g.name; throw e2;
+        }
+        var gr = g.grid || ng.grid, step = Number(gr.step);
+        var dd = baseDesc(fam, g.name, {
+          kind: "grid", layout: "binmajor", channels: chans, folderUrl: treeUrl(root + prefix),
+          cadence: g.cadence || null, subDaily: false,
+          frameSeconds: g.cadence === "monthly" ? null : BIN_S
+        });
+        if (!dd.cadenceLabel) dd.cadenceLabel = g.cadence === "monthly" ? "monthly" : "five-day means";
+        dd.channels.forEach(function (c, k) {
+          if (ng.units && ng.units[c.name] && !c.unit) c.unit = ng.units[c.name];
+          if (ng.labels && ng.labels[c.name] && !c.label) c.label = ng.labels[c.name];
+          var mu = Number(ng.norm[k][0]), sd = Number(ng.norm[k][1]);
+          c.norm = [mu, sd];
+          if (c.min == null) { c.min = mu - 2.5 * sd; c.max = mu + 2.5 * sd; c.rangeFromNorm = true; }
+        });
+        var frames = [];
+        if (g.live_bins_only || ng.live_only === true || ng.live_only === "True") {
+          var bi = ng.bin_index || [];
+          if (bi.length !== g.n_bins) { var e3 = new Error(g.name + ": bin_index has " + bi.length + " entries, the group " + g.n_bins + " frames"); e3.store = g.name; throw e3; }
+          bi.forEach(function (b, i) {
+            // a monthly frame is filed under the pentad holding its month's
+            // 15th: the frame IS that calendar month
+            var q = ymh82(b * BIN_S + 2.5 * 86400);
+            frames.push({ i: i, t: sec82OfCivil(q.y, q.m, 1), y: q.y, m: q.m, d: null, monthly: true });
+          });
+        } else {
+          for (var i = 0; i < g.n_bins; i++) frames.push(frameOfBin(g.bin_first + i, i));
+        }
+        hide(dd, "_dense", {
+          url: root + prefix + "/" + f.name, order: "HWC", H: gr.ny, W: gr.nx, C: g.C,
+          dtype: String(g.dtype || ng.dtype).replace(/^[<|=]/, ""), headerLen: g.header_len, slabBytes: g.slab_bytes,
+          shape: g.shape, lat0: gr.lat0, lon0: gr.lon0, step: step, southFirst: gr.south_first !== false,
+          frames: frames, zscored: true, normFrom: fam.norms
+        });
+        setDenseMeta(dd);
+        hide(dd, "_raw", g);
+        return dd;
+      })().catch(function (e) { if (!e.store) e.store = g.name; throw e; }));
+    });
+    await settleStores(fam, jobs, out);
+    return reg;
+  }
+
+  // the derived grids: the fishing-effort month-major grid and the model
+  // climatology, both addressed from the site's own indexes
+  async function loadDerived(fam, ctx, out) {
+    var jobs = [];
+    if (fam.fishing) jobs.push((async function () {
+      var ixUrl = siteUrl(fam.fishing);
+      var ix = await readSiteJSON(ixUrl, ctx);
+      var gr = ix.grid, months = ix.months || [];
+      var furl = new URL(ix.url, ixUrl).href;          // absolute on the site; relative in a fixture
+      var d = baseDesc(fam, "fishing_grid", {
+        kind: "grid", layout: "monthmajor", folderUrl: treeUrl(dirOf(furl)),
+        channels: (ix.chans || []).map(function (c) {
+          return { name: c, unit: (ix.units || {})[c] || "", label: (ix.labels || {})[c] || null, min: 0, max: null };
+        })
+      });
+      if (!d.cadenceLabel) d.cadenceLabel = "monthly sums";
+      var frames = months.map(function (ym, i) {
+        var y = Number(ym.slice(0, 4)), m = Number(ym.slice(5, 7));
+        return { i: i, t: sec82OfCivil(y, m, 1), y: y, m: m, d: null, monthly: true };
+      });
+      hide(d, "_dense", {
+        url: furl, order: "HWC", H: gr.ny, W: gr.nx, C: ix.chans.length,
+        dtype: String(ix.dtype).replace(/^[<|=]/, ""), headerLen: ix.header_len, slabBytes: ix.slab_bytes,
+        shape: ix.shape, lat0: gr.lat0, lon0: gr.lon0, step: Number(gr.step), southFirst: gr.south_first !== false,
+        frames: frames, zscored: false, sums: true
+      });
+      setDenseMeta(d);
+      return d;
+    })().catch(function (e) { if (!e.store) e.store = "fishing_grid"; throw e; }));
+    if (fam.clim) {
+      var cx = null, cxErr = null, cxUrl = null;
+      try { cxUrl = siteUrl(fam.clim); cx = await readSiteJSON(cxUrl, ctx); } catch (e) { cxErr = e; }
+      if (!cx) {
+        out.errors.push({ family: fam.family, title: fam.title, store: "clim",
+          message: "the model climatology index (" + fam.clim + ") could not be read: " + (cxErr && cxErr.message) });
+      } else {
+        var ver = fam.climVersion || cx.default_version || "all";
+        var files = (cx.files || {})[ver] || {};
+        Object.keys(files).sort().forEach(function (gname) {
+          jobs.push((async function () {
+            var fl = files[gname].clim_npy, cg = (cx.groups || {})[gname];
+            if (!fl || !cg) { var e0 = new Error("no clim.npy for " + gname); e0.store = "clim_" + gname; throw e0; }
+            var gr = cg.grid, curl = new URL(fl.url, cxUrl).href;
+            var d = baseDesc(fam, "clim_" + gname, {
+              kind: "grid", layout: "clim", calendar: true, folderUrl: treeUrl(dirOf(curl)),
+              channels: cg.chans.map(function (c, k) {
+                var mu = Number(cg.norm[k][0]), sd = Number(cg.norm[k][1]);
+                return { name: c, unit: (cg.units || {})[c] || "", label: (cg.labels || {})[c] || null,
+                  norm: [mu, sd], min: mu - 2.5 * sd, max: mu + 2.5 * sd, rangeFromNorm: true };
+              })
+            });
+            if (!d.cadenceLabel) d.cadenceLabel = "one map per calendar month (a climatology — no years)";
+            var frames = [];
+            for (var m = 1; m <= 12; m++) frames.push({ i: m - 1, t: sec82OfCivil(2000, m, 1), y: null, m: m, d: null, monthly: true });
+            hide(d, "_dense", {
+              url: curl, order: "MCHW", H: gr.ny, W: gr.nx, C: cg.chans.length,
+              dtype: String(fl.dtype).replace(/^[<|=]/, ""), headerLen: fl.header_len, planeBytes: fl.plane_bytes,
+              lat0: gr.lat0, lon0: gr.lon0, step: Number(gr.step), southFirst: gr.south_first !== false,
+              frames: frames, zscored: true, normFrom: fam.clim, version: ver
+            });
+            setDenseMeta(d);
+            return d;
+          })().catch(function (e) { if (!e.store) e.store = "clim_" + gname; throw e; }));
+        });
+      }
+    }
+    await settleStores(fam, jobs, out);
+  }
+
+  // what the tab reads about a dense grid: its geometry and record
+  function setDenseMeta(d) {
+    var G = d._dense;
+    var lat0 = G.southFirst ? G.lat0 : G.lat0, dlat = G.southFirst ? G.step : -G.step;
+    d.grid = { H: G.H, W: G.W, lat0: lat0, lon0: G.lon0, dlat: dlat, dlon: G.step, step: G.step };
+    if (G.frames.length && !d.calendar) {
+      var f0 = G.frames[0], f1 = G.frames[G.frames.length - 1];
+      var endIso = f1.monthly
+        ? isoOfUnix(EPOCH_UNIX + (f1.m === 12 ? sec82OfCivil(f1.y + 1, 1, 1) : sec82OfCivil(f1.y, f1.m + 1, 1)) - 86400).slice(0, 10)
+        : binEndIso(Math.floor(f1.t / BIN_S));
+      d.span = [isoDate82(f0.t), endIso];
+    }
   }
 
   function loadRegistry(ctx) {
     return cached("registry", async function () {
-      var reg = await registryRaw(ctx);
-      var groups = Array.isArray(reg.groups) ? reg.groups : Object.values(reg.groups || {});
-      var stores = [], byName = {};
-      var tgJobs = [];
-      groups.forEach(function (g) {
-        if (!g || !g.built || g.distribution !== "public") return;
-        if (g.tier !== "G" && g.tier !== "P") return;
-        var rel = relPath(reg, g.path);
-        var gist = GISTS[g.name];
-        var chans = (g.channels || []).map(function (c) {
-          var cv = conversionOf(c.unit);
-          var o = { name: c.name, unit: cv.unit, min: c.min, max: c.max, storedUnit: c.unit, note: cv.note };
-          if (cv.offset) { o.min = c.min + cv.offset; o.max = c.max + cv.offset; }
-          return o;
-        });
-        var d = {
-          name: g.name, code: g.name,
-          title: gist ? gist[0] : (g.title || g.name),
-          gist: gist ? gist[1] : (g.title || g.name),
-          kind: g.tier === "G" ? "grid" : "points",
-          channels: chans, span: null,
-          frameSeconds: g.tier === "G" ? g.frame_seconds : null,
-          framesPerBin: g.tier === "G" ? g.frames_per_bin : null,
-          grid: null, folderUrl: folderUrlOf(rel), cadence: g.cadence || null,
-          subDaily: g.tier === "P" ? true : (g.frame_seconds < 86400),
-          N: g.N == null ? null : g.N, binFirst: null, binLast: null,
-          groups: null
-        };
-        hide(d, "_rel", rel);
-        hide(d, "_raw", g);
-        if (g.tier === "G") {
-          var sg = g.store_groups || {};
-          var names = Object.keys(sg).sort();
-          if (!names.length) return;            // built but nothing to read
-          d.groups = names.map(function (gn) { var o = { name: gn, grid: null }; hide(o, "_sg", sg[gn]); return o; });
-          d.binFirst = Math.min.apply(null, names.map(function (gn) { return sg[gn].bin_first; }));
-          d.binLast = Math.max.apply(null, names.map(function (gn) { return sg[gn].bin_last; }));
-          d.groups.forEach(function (gg) {
-            tgJobs.push(tileGrid(d, gg.name, ctx).then(function (tg) { gg.grid = gridOf(tg, gg.name); }));
-          });
-        } else {
-          d.binFirst = g.bin_first;
-          d.binLast = g.bin_last;
+      var out = { stores: [], errors: [], missing: [], families: [] };
+      var raws = {};
+      await Promise.all(cfg.registries.map(async function (fam) {
+        out.families.push({ family: fam.family, title: fam.title });
+        try {
+          if (fam.kind === "family1") raws[fam.family] = await loadFamily1(fam, ctx, out);
+          else if (fam.kind === "family10") raws[fam.family] = await loadFamily10(fam, ctx, out);
+          else if (fam.kind === "derived") await loadDerived(fam, ctx, out);
+          else throw new Error("unknown registry kind " + JSON.stringify(fam.kind));
+        } catch (e) {
+          var msg = e && e.message ? e.message : String(e);
+          if (fam.optional && /HTTP 404/.test(msg)) out.missing.push({ family: fam.family, title: fam.title, url: fam.url });
+          else out.errors.push({ family: fam.family, title: fam.title, store: null, message: msg });
         }
-        if (d.binFirst != null && d.binLast != null) d.span = [binStartIso(d.binFirst), binEndIso(d.binLast)];
-        else if (g.record_span) d.span = g.record_span.slice();
-        stores.push(d);
-        byName[d.name] = d;
+      }));
+      // registry order, then each family's own order
+      var order = cfg.registries.map(function (f) { return f.family; });
+      out.families.sort(function (a, b) { return order.indexOf(a.family) - order.indexOf(b.family); });
+      var seq = new Map(out.stores.map(function (d, i) { return [d, i]; }));
+      out.stores.sort(function (a, b) {
+        return (order.indexOf(a.family) - order.indexOf(b.family)) || (seq.get(a) - seq.get(b));
       });
-      await Promise.all(tgJobs);
-      stores.forEach(function (d) { if (d.groups) d.grid = d.groups[0].grid; });
-      var out = { stores: stores, generated: reg.generated_utc || null, base: cfg.base };
+      out.families = out.families.filter(function (f) { return out.stores.some(function (d) { return d.family === f.family; }); });
+      var byName = {};
+      out.stores.forEach(function (d) {
+        byName[d.id] = d;
+        byName[d.name] = byName[d.name] && byName[d.name] !== d ? AMBIGUOUS : d;
+      });
+      out.generated = null;
+      out.base = cfg.base;
       Object.defineProperty(out, "_byName", { value: byName, enumerable: false });
-      Object.defineProperty(out, "_raw", { value: reg, enumerable: false });
+      // the raw registry JSONs, by family (`_raw` = family 1.gf's, as before)
+      Object.defineProperty(out, "_raws", { value: raws, enumerable: false });
+      Object.defineProperty(out, "_raw", { value: raws["1.gf"] || raws[Object.keys(raws)[0]] || null, enumerable: false });
+      if (!out.stores.length && out.errors.length) {
+        throw new Error("no store could be loaded: " + out.errors.map(function (e) { return e.family + (e.store ? "/" + e.store : "") + ": " + e.message; }).join("; "));
+      }
       return out;
     });
   }
@@ -602,13 +975,13 @@
   function groupUrl(d, group) {
     var gg = (d.groups || []).find(function (x) { return x.name === group; });
     var prefix = gg && gg._sg && gg._sg.prefix ? gg._sg.prefix : group;
-    return cfg.base + d._rel + "/" + prefix + "/";
+    return d._base + prefix + "/";
   }
 
   function tileGrid(d, group, ctx) {
     var gg = (d.groups || []).find(function (x) { return x.name === group; });
     var rel = gg && gg._sg && gg._sg.tile_grid ? gg._sg.tile_grid : group + "/tile_grid.json";
-    var url = cfg.base + d._rel + "/" + rel;
+    var url = d._base + rel;
     return readJSON(url, ctx).then(function (tg) {
       if (tg.format !== "family1-sharded/1") {
         throw new Error("tile_grid.json format " + JSON.stringify(tg.format) + " is not family1-sharded/1: " + url);
@@ -621,7 +994,7 @@
   function shardIndex(d, group, ctx) {
     var gg = (d.groups || []).find(function (x) { return x.name === group; });
     var rel = gg && gg._sg && gg._sg.shard_index ? gg._sg.shard_index : group + "/shard_index.npy";
-    var url = cfg.base + d._rel + "/" + rel;
+    var url = d._base + rel;
     return cached("shardindex:" + url, async function () {
       var r = await readWholeNpy(url, ctx);
       var h = r.hdr;
@@ -804,7 +1177,7 @@
 
   async function gridPlan(sel, ctx, opts) {
     opts = opts || {};
-    var d = await storeDesc(sel.store, ctx);
+    var d = await storeDesc(sel, ctx);
     if (d.kind !== "grid") throw new Error("store " + d.name + " is not a grid");
     var s = normSel(sel, d);
     if (!s.bbox) {
@@ -1094,19 +1467,258 @@
     return n;
   }
 
-  // ============================================================== POINTS ===
-  function pointStoreJson(d, ctx) {
-    return readJSON(cfg.base + d._rel + "/store.json", ctx);
+  // ======================================================== DENSE GRIDS ===
+  // Grids stored as ONE uncompressed .npy whose frames are contiguous slabs:
+  //   binmajor   [T, H, W, C] float16, z-scored — family 7.2's tensor groups
+  //              (family 10's g025, g100, oc025, rg100); one five-day bin (or,
+  //              for rg100, one month) per slab;
+  //   monthmajor [M, H, W, C] float32, raw — the fishing-effort grid;
+  //   clim       [12, C, H, W] float32, z-scored — the model climatology, one
+  //              calendar month per slab, one channel per plane.
+  // A box is a band of ROWS: within a frame the rows are contiguous, so one
+  // frame is one range per band (split at MAX_RANGE), and frames whose band
+  // is the whole height run on into each other and are coalesced. Columns
+  // are cut after reading, and in the H-W-C layouts every channel of those
+  // rows is read whatever the channels asked for — the estimate counts it.
+  async function denseSpec(d, ctx) {
+    var G = d._dense;
+    return cached("densespec:" + G.url, async function () {
+      var h = await npyHeaderAt(G.url, ctx);
+      var want = G.order === "MCHW" ? [G.frames.length, G.C, G.H, G.W] : [G.frames.length, G.H, G.W, G.C];
+      if (h.descr !== G.dtype) throw new Error(d.name + ": the .npy is " + h.descr + ", the index says " + G.dtype + " — " + G.url);
+      if (h.shape.length !== 4 || h.shape.some(function (v, k) { return v !== want[k]; })) {
+        throw new Error(d.name + ": the .npy shape is [" + h.shape.join(", ") + "], expected [" + want.join(", ") + "] — " + G.url);
+      }
+      if (G.headerLen != null && Number(G.headerLen) !== h.dataOffset) {
+        throw new Error(d.name + ": the .npy header is " + h.dataOffset + " bytes, the index says " + G.headerLen + " — " + G.url);
+      }
+      var isz = h.itemsize, rowBytes = G.order === "MCHW" ? G.W * isz : G.W * G.C * isz;
+      var slab = G.order === "MCHW" ? G.C * G.H * G.W * isz : G.H * rowBytes;
+      if (G.slabBytes != null && G.order !== "MCHW" && Number(G.slabBytes) !== slab) {
+        throw new Error(d.name + ": a frame is " + slab + " bytes by the header, " + G.slabBytes + " by the index — " + G.url);
+      }
+      if (G.planeBytes != null && G.order === "MCHW" && Number(G.planeBytes) !== G.H * G.W * isz) {
+        throw new Error(d.name + ": a plane is " + (G.H * G.W * isz) + " bytes by the header, " + G.planeBytes + " by the index — " + G.url);
+      }
+      return { hdr: h.dataOffset, isz: isz, rowBytes: rowBytes, slab: slab, plane: G.H * G.W * isz };
+    });
   }
 
+  function denseTg(G) {
+    // boxGeometry's pseudo tile grid: one "tile" covering the whole array
+    var dy = G.southFirst ? G.step : -G.step;
+    return { H: G.H, W: G.W, tile: Math.max(G.H, G.W),
+      grid: { x0: G.lon0 - G.step / 2, y0: G.lat0 - dy / 2, dx: G.step, dy: dy } };
+  }
+
+  async function densePlan(d, sel, ctx, opts) {
+    opts = opts || {};
+    var G = d._dense;
+    var s = normSel(sel, d);
+    if (!s.bbox) {
+      var e = new Error("a box (bbox) is required for the gridded store " + d.name);
+      e.needBox = true;
+      throw e;
+    }
+    var sp = await denseSpec(d, ctx);
+    var tg = denseTg(G);
+    var geo = boxGeometry(tg, s.bbox, s.res);
+    var rowsT = geo.byTy.get(0) || [], rowOut = new Int32Array(G.H).fill(-1), rmin = Infinity, rmax = -1;
+    for (var a = 0; a < rowsT.length; a += 2) {
+      rowOut[rowsT[a]] = rowsT[a + 1];
+      if (rowsT[a] < rmin) rmin = rowsT[a];
+      if (rowsT[a] > rmax) rmax = rowsT[a];
+    }
+    var colsT = geo.byTx.get(0) || [];
+    var allC = d.channels.map(function (c) { return c.name; });
+    var chIdx = s.channels.map(function (c) { return allC.indexOf(c); });
+    var monthOk = {};
+    s.months.forEach(function (m) { monthOk[m] = true; });
+    var frames = G.frames.filter(function (fr) {
+      if (!monthOk[fr.m]) return false;
+      if (d.calendar) return true;
+      if (fr.y < s.yearStart || fr.y > s.yearEnd) return false;
+      if (s.days && !fr.monthly && (fr.d < s.days[0] || fr.d > s.days[1])) return false;
+      return true;
+    });
+    if (opts.onlyFrame) frames = [opts.onlyFrame];
+    var step = s.step === "pentad" && frames.length && frames[0].monthly ? "native" : s.step;
+    var stepKey = function (fr) {
+      if (step === "native" || step === "pentad") return fr.i;
+      if (step === "month") return d.calendar ? fr.m : fr.y * 12 + fr.m - 1;
+      return 0;
+    };
+    var keys = [], keyIdx = new Map(), perStep = new Map();
+    frames = frames.map(function (fr) {
+      var k = stepKey(fr);
+      if (!keyIdx.has(k)) { keyIdx.set(k, keys.length); keys.push(fr); }
+      perStep.set(k, (perStep.get(k) || 0) + 1);
+      return Object.assign({}, fr, { si: keyIdx.get(k) });
+    });
+    var times = new Float64Array(keys.length);
+    keys.forEach(function (fr, i) {
+      if (step === "month" && !d.calendar) times[i] = daysFromCivil(fr.y, fr.m, 1) * 86400;
+      else times[i] = EPOCH_UNIX + fr.t;
+    });
+    var mean = !(step === "native" && s.res === "native");
+    var maxFrames = Math.max.apply(null, [1].concat(Array.from(perStep.values())));
+    var maxCount = (step === "native" ? 1 : maxFrames) * geo.maxPerCell;
+    var Cs = s.channels.length;
+    var countBytes = mean ? (maxCount > 65535 ? 4 : 2) : 0;
+    var outBytes = keys.length * Cs * geo.Ho * geo.Wo * (4 + countBytes) + 8 * (keys.length + geo.Ho + geo.Wo);
+    // the byte segments: one per (frame[, channel]) over rows rmin..rmax
+    var segs = [];
+    if (rmax >= 0 && geo.nCols > 0) {
+      frames.forEach(function (fr) {
+        var parts = G.order === "MCHW"
+          ? chIdx.map(function (c) { return { c: c, base: sp.hdr + (fr.i * G.C + c) * sp.plane }; })
+          : [{ c: null, base: sp.hdr + fr.i * sp.slab }];
+        parts.forEach(function (pt) {
+          // split the band into pieces of at most MAX_RANGE
+          var per = Math.max(1, Math.floor(MAX_RANGE / sp.rowBytes));
+          for (var r0 = rmin; r0 <= rmax; r0 += per) {
+            var r1 = Math.min(rmax, r0 + per - 1);
+            segs.push({ fr: fr, c: pt.c, r0: r0, r1: r1, a: pt.base + r0 * sp.rowBytes, z: pt.base + (r1 + 1) * sp.rowBytes });
+          }
+        });
+      });
+    }
+    // coalesce byte-contiguous segments into requests of at most MAX_RANGE
+    var reqs = [];
+    segs.forEach(function (sg) {
+      var last = reqs[reqs.length - 1];
+      if (last && last.z === sg.a && sg.z - last.a <= MAX_RANGE) { last.z = sg.z; last.segs.push(sg); }
+      else reqs.push({ a: sg.a, z: sg.z, segs: [sg] });
+    });
+    var readBytes = reqs.reduce(function (t, q) { return t + (q.z - q.a); }, 0);
+    var conv = s.channels.map(function () { return { unit: null, offset: 0, note: null }; });
+    s.channels.forEach(function (c, k) { conv[k].unit = d.channels[chIdx[k]].unit; });
+    return {
+      dense: true, d: d, s: s, G: G, sp: sp, geo: geo, rowOut: rowOut, colsT: colsT, rmin: rmin, rmax: rmax,
+      frames: frames, times: times, T: keys.length, Cs: Cs, chIdx: chIdx, conv: conv, mean: mean, step: step,
+      countBytes: countBytes, outBytes: outBytes, maxCount: maxCount, reqs: reqs, readBytes: readBytes,
+      group: d.name, source: G.url
+    };
+  }
+
+  async function denseRun(plan, ctx, onProgress) {
+    var G = plan.G, sp = plan.sp, geo = plan.geo, Cs = plan.Cs, C = G.C;
+    var HW = geo.Ho * geo.Wo, nOut = plan.T * Cs * HW;
+    var data = new Float32Array(nOut);
+    var count = null;
+    if (plan.mean) count = plan.countBytes === 4 ? new Uint32Array(nOut) : new Uint16Array(nOut);
+    else data.fill(NaN);
+    var f16 = sp.isz === 2, colsT = plan.colsT, rowOut = plan.rowOut, W = G.W;
+    var norm = plan.chIdx.map(function (ci) { var c = plan.d.channels[ci]; return G.zscored ? c.norm : [0, 1]; });
+    var progress = { done: 0, total: plan.reqs.length, bytes: 0 };
+    var tell = function () { if (onProgress) { try { onProgress({ done: progress.done, total: progress.total, bytes: progress.bytes }); } catch (e) { /* the caller's */ } } };
+    var rctx = Object.assign({}, ctx, { onRead: function (n) { progress.done++; progress.bytes += n; tell(); } });
+    tell();
+    var f32 = null;
+    await pool(plan.reqs, async function (q) {
+      var buf = await rangeRead(G.url, q.a, q.z - q.a, rctx);
+      var dv = f16 ? null : new DataView(buf.buffer, buf.byteOffset, buf.byteLength);
+      q.segs.forEach(function (sg) {
+        var off0 = sg.a - q.a, fr = sg.fr;
+        for (var r = sg.r0; r <= sg.r1; r++) {
+          var orow = rowOut[r];
+          if (orow < 0) continue;
+          var rb = off0 + (r - sg.r0) * sp.rowBytes;
+          for (var k = 0; k < Cs; k++) {
+            var ch = plan.chIdx[k];
+            if (sg.c != null && sg.c !== ch) continue;
+            var mu = norm[k][0], sd = norm[k][1];
+            var base = (fr.si * Cs + k) * HW + orow * geo.Wo;
+            for (var cc = 0; cc < colsT.length; cc += 2) {
+              var col = colsT[cc];
+              var e = sg.c != null ? col : col * C + ch;
+              var v;
+              if (f16) { var p = rb + 2 * e; v = F16[buf[p] | (buf[p + 1] << 8)]; }
+              else v = dv.getFloat32(rb + 4 * e, true);
+              v = v * sd + mu;
+              var oi = base + colsT[cc + 1];
+              if (!plan.mean) data[oi] = v;
+              else if (v === v) { data[oi] += v; count[oi]++; }
+            }
+          }
+        }
+      });
+    }, ctx);
+    if (plan.mean) {
+      for (var i = 0; i < nOut; i++) data[i] = count[i] ? data[i] / count[i] : NaN;
+    }
+    return { data: data, count: count };
+  }
+
+  function denseNotes(plan) {
+    var n = [], d = plan.d, G = plan.G;
+    if (G.zscored) n.push("stored z-scored; returned in physical units as value = z × sd + mean, with each channel's (mean, sd) from " + (G.normFrom || "the store's index"));
+    d.channels.forEach(function (c) { if (plan.s.channels.indexOf(c.name) >= 0 && /log/i.test(c.name + " " + (c.unit || ""))) n.push(c.name + ": kept as the logarithm the unit names, not converted back"); });
+    if (G.order !== "MCHW" && G.C > plan.Cs) n.push("the store keeps its " + G.C + " channels side by side, so reading " + plan.Cs + " of them read all " + G.C + " for the box's rows");
+    if (d.calendar) n.push("a calendar-month climatology: each step is a calendar month averaged over the record (" + (G.version || "all") + " version); the year in the time axis is nominal (2000) and means nothing");
+    if (G.frames.length && G.frames[0].monthly && !d.calendar) n.push("one frame per calendar month; the days filter does not apply");
+    if (G.sums) n.push("each value is a monthly SUM of vessel-hours in its 0.25° cell; a coarser cell or a longer time step AVERAGES those sums (mean per 0.25° cell and month), it does not add them up; zero is a measurement (no vessel broadcast there), and absence of effort is not absence of fishing");
+    if (d.levels) n.push("levelled channels are written one variable per channel and level; the name carries the level (" + d.levelUnit + ")");
+    if (plan.s.bbox && plan.s.bbox.w > plan.s.bbox.e) n.push("the box crosses the dateline: longitudes run past 180° (subtract 360 for −180..180)");
+    if (plan.mean) n.push("each value is the mean of the finite values in its cell and time step; the count arrays say how many");
+    return n;
+  }
+
+  function denseEstimate(plan) {
+    var nf = plan.frames.length;
+    var what = plan.d.calendar ? "calendar month" : (plan.G.frames[0] && plan.G.frames[0].monthly ? "monthly frame" : "five-day frame");
+    var wh = nf + " " + what + (nf === 1 ? "" : "s") + ": " + plan.reqs.length + " requests, " + fmtMB(plan.readBytes) +
+      " to read (exact: the rows of the box";
+    if (plan.G.order !== "MCHW" && plan.G.C > plan.Cs) wh += ", every one of the store's " + plan.G.C + " channels — they are stored side by side";
+    wh += "); the result is " + plan.T + " × " + plan.Cs + " × " + plan.geo.Ho + " × " + plan.geo.Wo + " (" + fmtMB(plan.outBytes) + ")." +
+      (plan.mean ? " Coarser steps or cells shrink the file, not the read." : "");
+    return { requests: plan.reqs.length, readBytes: plan.readBytes, outBytes: plan.outBytes, frames: nf, exact: true,
+      shape: [plan.T, plan.Cs, plan.geo.Ho, plan.geo.Wo], why: wh,
+      shrink: plan.d.calendar ? "Pick fewer months or channels, or shrink the box." : "Shorten the period, pick fewer months, or shrink the box." };
+  }
+
+  function denseResult(plan, g, ctx, t0, empty) {
+    return {
+      kind: "grid", store: plan.d.name, family: plan.d.family, channels: plan.s.channels.slice(),
+      units: plan.conv.map(function (c) { return c.unit; }),
+      lat: plan.geo.outLat, lon: plan.geo.outLon, time: empty ? new Float64Array(0) : plan.times,
+      data: g.data, count: g.count, sel: plan.s, notes: denseNotes(plan), frames: empty ? 0 : plan.frames.length,
+      group: plan.d.name, source: plan.G.url, title: plan.d.title,
+      levels: plan.d.levels ? plan.s.channels.map(function (c) { var x = plan.d.channels.find(function (y) { return y.name === c; }); return x && x.level != null ? x.level : null; }) : null,
+      stats: { requests: ctx.stats.requests, bytes: ctx.stats.bytes, ms: Date.now() - t0 }
+    };
+  }
+
+  // ============================================================== POINTS ===
+  function pointStoreJson(d, ctx) {
+    return readJSON(d._base + "store.json", ctx);
+  }
+
+  // The columns of a tier-P store. Two layouts are read:
+  //   family 10 / 1.gf — time_s.npy (int32 s, schema 2; int64, schema 3),
+  //     values.npy [N, C] float16, platform.npy int64, qc.npy uint8;
+  //   family 8's Argo store (schema 1) — time_days.npy float32 DAYS, the
+  //     values as separate [N, 16] float16 blocks temp.npy and psal.npy (read
+  //     as one 32-column matrix, temp levels then psal levels, the way
+  //     ml/family10_store.py reads it), wmo.npy int32 as the platform, no qc.
   async function pointColumns(d, ctx) {
-    return cached("pcols:" + d.name + ":" + cfg.base, async function () {
+    return cached("pcols:" + d.id + ":" + d._base, async function () {
       var meta = await pointStoreJson(d, ctx);
       var split = meta.hub_split || {};
-      var base = cfg.base + d._rel + "/";
-      var names = ["time_s", "lat", "lon", "values", "platform", "qc"];
+      var base = d._base;
+      var sch = Number(meta.schema_version || (d.schema || 2));
+      var files = meta.sha256 || meta.files || null;
+      var has = function (nm) {
+        if (!files) return null;
+        if (Array.isArray(files)) return files.some(function (f) { return f && f.name === nm + ".npy"; });
+        return Object.prototype.hasOwnProperty.call(files, nm + ".npy");
+      };
+      var v1 = sch === 1 || has("time_days") === true;
+      var blocks = v1 && has("values") !== true ? ["temp", "psal"] : null;
+      var names = [v1 ? "time_days" : "time_s", "lat", "lon"].concat(blocks || ["values"]);
+      var optional = v1 ? ["wmo"] : ["platform", "qc"];
       var cols = {};
-      await Promise.all(names.map(async function (nm) {
+      async function openCol(nm, opt) {
         var file = nm + ".npy", parts;
         if (split[file]) {
           var cum = 0;
@@ -1119,30 +1731,96 @@
         } else {
           parts = [{ url: base + file, start: 0, bytes: Infinity }];
         }
-        var h = await npyHeaderAt(parts[0].url, ctx);
+        var h;
+        try { h = await npyHeaderAt(parts[0].url, ctx); }
+        catch (e) { if (opt && /HTTP 404/.test(e.message || "")) return; throw e; }
         if (h.descr === "struct") throw new Error(file + " is a structured array: " + parts[0].url);
         var rowElems = h.shape.slice(1).reduce(function (a, b) { return a * b; }, 1);
         cols[nm] = { name: nm, parts: parts, hdr: h.dataOffset, descr: h.descr, itemsize: h.itemsize, shape: h.shape, rowBytes: h.itemsize * rowElems, width: rowElems };
-      }));
+      }
+      await Promise.all(names.map(function (nm) { return openCol(nm, false); })
+        .concat(optional.map(function (nm) { return openCol(nm, true); })));
       var N = cols.lat.shape[0];
-      names.forEach(function (nm) {
+      Object.keys(cols).forEach(function (nm) {
         if (cols[nm].shape[0] !== N) throw new Error(nm + ".npy has " + cols[nm].shape[0] + " rows, lat.npy " + N + " (" + d.name + ")");
       });
-      var want = { time_s: ["i4", "i8"], lat: ["f4"], lon: ["f4"], values: ["f2"], platform: ["i8"], qc: ["u1"] };
-      names.forEach(function (nm) {
+      var want = { time_s: ["i4", "i8"], time_days: ["f4"], lat: ["f4"], lon: ["f4"], values: ["f2"], temp: ["f2"], psal: ["f2"],
+        platform: ["i8"], wmo: ["i4", "i8"], qc: ["u1"] };
+      Object.keys(cols).forEach(function (nm) {
         if (want[nm].indexOf(cols[nm].descr) < 0) throw new Error(nm + ".npy is " + cols[nm].descr + ", expected " + want[nm].join(" or ") + " (" + d.name + ")");
       });
-      var sch = Number(meta.schema_version || 2);
-      if ((sch === 3) !== (cols.time_s.descr === "i8")) {
+      if (!v1 && (sch === 3) !== (cols.time_s.descr === "i8")) {
         throw new Error("store.json says schema " + sch + " but time_s.npy is " + cols.time_s.descr + " (" + d.name + ")");
       }
+      var time = cols[v1 ? "time_days" : "time_s"];
+      time.kind = v1 ? "days32" : (time.descr === "i8" ? "s64" : "s32");
+      var vblocks = blocks ? blocks.map(function (b) { return cols[b]; }) : [cols.values];
+      var values = { blocks: vblocks, width: vblocks.reduce(function (a, b) { return a + b.width; }, 0),
+        rowBytes: vblocks.reduce(function (a, b) { return a + b.rowBytes; }, 0) };
       var offs = await readWholeNpy(base + "bin_offsets.npy", ctx);
       if (offs.hdr.descr !== "i8") throw new Error("bin_offsets.npy is " + offs.hdr.descr + " (" + d.name + ")");
       var off = new Float64Array(offs.n);
       for (var i = 0; i < offs.n; i++) off[i] = i64At(offs.body, 8 * i);
       if (off[0] !== 0 || off[offs.n - 1] !== N) throw new Error("bin_offsets.npy runs " + off[0] + ".." + off[offs.n - 1] + " over " + N + " rows (" + d.name + ")");
-      return { meta: meta, cols: cols, N: N, C: cols.values.width, off: off, binFirst: Number(meta.bin_first), nBins: offs.n - 1 };
+      var bf = meta.bin_first != null ? Number(meta.bin_first) : (d.binFirst != null ? Number(d.binFirst) : 0);
+      return { meta: meta, cols: { time: time, lat: cols.lat, lon: cols.lon, values: values,
+        platform: cols.platform || cols.wmo || null, qc: cols.qc || null },
+        schema: v1 ? 1 : sch, N: N, C: values.width, off: off, binFirst: bf, nBins: offs.n - 1 };
     });
+  }
+
+  // a time column's row i as SECONDS since 1982 (schema 1: float32 days,
+  // rounded to the second — the precision the column has, nothing more)
+  var _f32 = new Float32Array(1), _f32u8 = new Uint8Array(_f32.buffer);
+  function timeAt(col, u8, i) {
+    if (col.kind === "s64") return i64At(u8, 8 * i);
+    if (col.kind === "s32") return i32At(u8, 4 * i);
+    var o = 4 * i;
+    _f32u8[0] = u8[o]; _f32u8[1] = u8[o + 1]; _f32u8[2] = u8[o + 2]; _f32u8[3] = u8[o + 3];
+    return roundHalfEven(_f32[0] * 86400);
+  }
+
+  // numpy's rint — ml/family10_store.py::seconds_of_days rounds the schema-1
+  // days this way, and a float32 day often lands exactly on half a second
+  // (measured: 52 of 900 Argo profiles in one month), where Math.round would
+  // put the profile one second later than the reference reader does
+  function roundHalfEven(x) {
+    var f = Math.floor(x), d = x - f;
+    if (d > 0.5) return f + 1;
+    if (d < 0.5) return f;
+    return f % 2 === 0 ? f : f + 1;
+  }
+
+  // rows [r0, r1) of the value matrix as float16 bytes [n, C], whatever the
+  // number of blocks it is stored in
+  async function readValueRows(values, r0, r1, ctx) {
+    if (values.blocks.length === 1) return readColumnRows(values.blocks[0], r0, r1, ctx);
+    var parts = await Promise.all(values.blocks.map(function (b) { return readColumnRows(b, r0, r1, ctx); }));
+    var n = r1 - r0, out = new Uint8Array(n * values.rowBytes);
+    for (var r = 0; r < n; r++) {
+      var o = r * values.rowBytes;
+      for (var k = 0; k < parts.length; k++) {
+        var rb = values.blocks[k].rowBytes;
+        out.set(parts[k].subarray(r * rb, (r + 1) * rb), o);
+        o += rb;
+      }
+    }
+    return out;
+  }
+
+  async function readPlatformRows(col, r0, r1, ctx) {
+    var n = r1 - r0;
+    if (!col) return new BigInt64Array(n);
+    var b = await readColumnRows(col, r0, r1, ctx);
+    if (col.descr === "i8") { var pb = aligned(b, 8); return new BigInt64Array(pb.buffer, pb.byteOffset, n); }
+    var out = new BigInt64Array(n);
+    for (var i = 0; i < n; i++) out[i] = BigInt(i32At(b, 4 * i));
+    return out;
+  }
+
+  async function readQcRows(col, r0, r1, ctx) {
+    if (!col) return new Uint8Array(r1 - r0);
+    return readColumnRows(col, r0, r1, ctx);
   }
 
   // read rows [r0, r1) of one column, across hub_split parts if need be
@@ -1177,8 +1855,8 @@
   // through the whole store; an interpolation search on small windows finds
   // the row in a few reads.
   async function firstRowAtOrAfter(col, r0, r1, target, ctx) {
-    var W = 4096, i64 = col.descr === "i8", sz = i64 ? 8 : 4;
-    var tAt = function (u8, i) { return i64 ? i64At(u8, i * sz) : i32At(u8, i * sz); };
+    var W = 4096;
+    var tAt = function (u8, i) { return timeAt(col, u8, i); };
     var lo = r0, hi = r1;
     var ends = await Promise.all([readColumnRows(col, lo, lo + 1, ctx), readColumnRows(col, hi - 1, hi, ctx)]);
     var tlo = tAt(ends[0], 0), thi = tAt(ends[1], 0);
@@ -1243,7 +1921,7 @@
   }
 
   async function trimRunsToWindows(pc, wins, br, ctx) {
-    var bf = pc.binFirst, bl = pc.binFirst + pc.nBins - 1, col = pc.cols.time_s;
+    var bf = pc.binFirst, bl = pc.binFirst + pc.nBins - 1, col = pc.cols.time;
     var cut = await pool(wins, async function (w) {
       var b0 = Math.max(bf, Math.floor(w[0] / BIN_S)), b1 = Math.min(bl, Math.floor(w[1] / BIN_S));
       if (b1 < b0) return null;
@@ -1264,7 +1942,7 @@
   }
 
   async function pointPlan(sel, ctx, popts) {
-    var d = await storeDesc(sel.store, ctx);
+    var d = await storeDesc(sel, ctx);
     if (d.kind !== "points") throw new Error("store " + d.name + " is not a point store");
     var s = normSel(sel, d);
     var pc = await pointColumns(d, ctx);
@@ -1283,8 +1961,8 @@
     var binned = s.res !== "native" || s.step !== "native";
     var res = s.res === "native" ? 0.25 : s.res;
     var step = s.step === "native" ? "pentad" : s.step;
-    var rowBytesCore = pc.cols.time_s.rowBytes + 8;
-    var rowBytesRest = pc.cols.values.rowBytes + 9;
+    var rowBytesCore = pc.cols.time.rowBytes + 8;
+    var rowBytesRest = pc.cols.values.rowBytes + (pc.cols.platform ? pc.cols.platform.rowBytes : 0) + (pc.cols.qc ? 1 : 0);
     var chunkRows = Math.max(4096, Math.min(1 << 20, Math.floor(CHUNK_BYTES / (rowBytesCore + rowBytesRest))));
     var chunks = [];
     br.runs.forEach(function (r) {
@@ -1340,7 +2018,7 @@
     var monthOk = [];
     s.months.forEach(function (m) { monthOk[m] = true; });
     var bx = s.bbox, dl = bx && bx.w > bx.e;
-    var i64time = cols.time_s.descr === "i8";
+    var tcol = cols.time;
     var offs = plan.conv.map(function (c) { return c.offset || 0; });
     var progress = { done: 0, total: plan.chunks.length * 3, bytes: 0 };
     var tell = function () { if (onProgress) { try { onProgress({ done: progress.done, total: progress.total, bytes: progress.bytes }); } catch (e) { /* the caller's */ } } };
@@ -1355,7 +2033,7 @@
       var ch = plan.chunks[ci], r0 = ch[0], r1 = ch[1], n = r1 - r0;
       if (stopAt != null && r0 >= stopAt.r1) return;
       var parts = await Promise.all([
-        readColumnRows(cols.time_s, r0, r1, rctx),
+        readColumnRows(tcol, r0, r1, rctx),
         readColumnRows(cols.lat, r0, r1, rctx),
         readColumnRows(cols.lon, r0, r1, rctx)]);
       var tb = parts[0];
@@ -1367,7 +2045,7 @@
       var curDay = NaN, cy = 0, cm = 0, cd = 0;
       for (var i = 0; i < n; i++) {
         if (stopAt != null && r0 + i >= stopAt.r1) break;
-        var t = i64time ? i64At(tb, 8 * i) : i32At(tb, 4 * i);
+        var t = timeAt(tcol, tb, i);
         t82[i] = t;
         var day = Math.floor(t / 86400);
         if (day !== curDay) { var c = civil(day + EPOCH_DAYS); cy = c[0]; cm = c[1]; cd = c[2]; curDay = day; }
@@ -1396,9 +2074,9 @@
       if (first < 0) { chunkOut[ci] = null; return; }
       var a = r0 + first, z = r0 + last + 1, m = z - a;
       var more = await Promise.all([
-        readColumnRows(cols.values, a, z, rctx),
-        plan.binned ? null : readColumnRows(cols.platform, a, z, rctx),
-        plan.binned ? null : readColumnRows(cols.qc, a, z, rctx)]);
+        readValueRows(cols.values, a, z, rctx),
+        plan.binned ? null : readPlatformRows(cols.platform, a, z, rctx),
+        plan.binned ? null : readQcRows(cols.qc, a, z, rctx)]);
       if (plan.binned) progress.done += 2;
       var vb = more[0];
       var nk = 0;
@@ -1435,8 +2113,7 @@
         chunkOut[ci] = null;
         return;
       }
-      var pb = aligned(more[1], 8), qb = more[2];
-      var pl = new BigInt64Array(pb.buffer, pb.byteOffset, m);
+      var pl = more[1], qb = more[2];
       var out = { time: new Float64Array(nk), lat: new Float32Array(nk), lon: new Float32Array(nk), values: new Float32Array(nk * Cs), platform: new BigInt64Array(nk), qc: new Uint8Array(nk) };
       var o = 0;
       for (var q3 = first; q3 <= last; q3++) {
@@ -1464,7 +2141,7 @@
       for (var yy = s.yearStart; yy <= s.yearEnd && startT === Infinity; yy++) {
         for (var mm = 1; mm <= 12; mm++) if (monthOk[mm]) { startT = sec82OfCivil(yy, mm, s.days ? s.days[0] : 1); break; }
       }
-      var rs = await firstRowAtOrAfter(cols.time_s, run0.r0, run0.r1, startT, rctx);
+      var rs = await firstRowAtOrAfter(tcol, run0.r0, run0.r1, startT, rctx);
       var pcr = Math.min(PREVIEW_CHUNK_ROWS, plan.chunks.length ? plan.chunks[0][1] - plan.chunks[0][0] : PREVIEW_CHUNK_ROWS);
       plan.chunks = [];
       plan.br.runs.forEach(function (r, k) {
@@ -1580,7 +2257,7 @@
   // ============================================================= public ===
   async function estimate(sel, opts) {
     var ctx = makeCtx(opts && opts.signal);
-    var d = await storeDesc(sel && sel.store, ctx);
+    var d = await storeDesc(sel, ctx);
     var cap = function (o) {
       var over = [];
       if (o.readBytes > CAP_READ) over.push("would read " + fmtMB(o.readBytes) + " (the limit is " + fmtMB(CAP_READ) + ")");
@@ -1593,6 +2270,18 @@
       delete o.shrink;
       return o;
     };
+    if (d._dense) {
+      var dp;
+      try { dp = await densePlan(d, sel, ctx); }
+      catch (e) {
+        if (e.needBox) {
+          return { requests: 0, readBytes: 0, outBytes: 0, frames: 0, overCap: true, exact: true, shape: null,
+            why: "Draw or type a box first: a gridded store is read row band by row band, so a box is required." };
+        }
+        throw e;
+      }
+      return cap(denseEstimate(dp));
+    }
     if (d.kind === "grid") {
       var plan;
       try { plan = await gridPlan(sel, ctx); }
@@ -1636,7 +2325,13 @@
     var ctx = makeCtx(opts.signal);
     var t0 = Date.now();
     try {
-      var d = await storeDesc(sel && sel.store, ctx);
+      var d = await storeDesc(sel, ctx);
+      if (d._dense) {
+        var dp = await densePlan(d, sel, ctx);
+        if (dp.readBytes > CAP_READ) throw new Error("over the cap: this selection reads " + fmtMB(dp.readBytes) + " (limit " + fmtMB(CAP_READ) + ")");
+        if (dp.outBytes > CAP_OUT) throw new Error("over the cap: the result would be " + fmtMB(dp.outBytes) + " of arrays (limit " + fmtMB(CAP_OUT) + ")");
+        return denseResult(dp, await denseRun(dp, ctx, opts.onProgress), ctx, t0);
+      }
       if (d.kind === "grid") {
         var plan = await gridPlan(sel, ctx);
         if (plan.outBytes > CAP_OUT) throw new Error("over the cap: the result would be " + fmtMB(plan.outBytes) + " of arrays (limit " + fmtMB(CAP_OUT) + ")");
@@ -1659,7 +2354,23 @@
     var ctx = makeCtx(opts.signal);
     var t0 = Date.now();
     try {
-      var d = await storeDesc(sel && sel.store, ctx);
+      var d = await storeDesc(sel, ctx);
+      if (d._dense) {
+        // the first selected frame with a finite value in the box, at most
+        // PREVIEW_GRID_TRIES frames read
+        var s0 = Object.assign({}, sel, { step: "native" });
+        var all = await densePlan(d, s0, ctx);
+        var fb = null;
+        for (var fi = 0; fi < all.frames.length && fi < PREVIEW_GRID_TRIES; fi++) {
+          var one = await densePlan(d, s0, ctx, { onlyFrame: Object.assign({}, all.frames[fi], { si: undefined }) });
+          var gg = await denseRun(one, ctx, null);
+          var rr = denseResult(one, gg, ctx, t0);
+          for (var qq = 0; qq < gg.data.length; qq++) if (gg.data[qq] === gg.data[qq]) return rr;
+          if (!fb) fb = rr;
+        }
+        if (fb) { fb.notes.push("none of the first " + Math.min(all.frames.length, PREVIEW_GRID_TRIES) + " frames had a finite value in the box"); return fb; }
+        return denseResult(all, { data: new Float32Array(0), count: null }, ctx, t0, true);
+      }
       if (d.kind === "grid") {
         // the first selected native frame whose box holds a stored tile
         var s1 = Object.assign({}, sel, { step: "native" });
@@ -1721,7 +2432,7 @@
   function gridResult(plan, g, ctx, t0, empty) {
     var units = plan.conv.map(function (c) { return c.unit; });
     return {
-      kind: "grid", store: plan.d.name, channels: plan.s.channels.slice(), units: units,
+      kind: "grid", store: plan.d.name, family: plan.d.family, channels: plan.s.channels.slice(), units: units,
       lat: plan.geo.outLat, lon: plan.geo.outLon, time: empty ? new Float64Array(0) : plan.times,
       data: g.data, count: g.count, sel: plan.s,
       notes: gridNotes(plan), frames: empty ? 0 : plan.frames.length, group: plan.group,
@@ -1737,7 +2448,7 @@
     if (r.truncated) notes.push(r.truncated);
     var common = {
       store: plan.d.name, channels: plan.s.channels.slice(), units: units, sel: plan.s,
-      rowsRead: plan.br.rows, source: cfg.base + plan.d._rel + "/", title: plan.d.title,
+      rowsRead: plan.br.rows, source: plan.d._base, title: plan.d.title, family: plan.d.family,
       stats: { requests: ctx.stats.requests, bytes: ctx.stats.bytes, ms: Date.now() - t0 },
       truncated: !!r.truncated
     };
@@ -2000,6 +2711,7 @@
     toCSV: toCSV,
     CAPS: { readBytes: CAP_READ, outBytes: CAP_OUT, concurrency: MAX_CONCURRENCY },
     DEFAULT_BASE: DEFAULT_BASE,
+    DEFAULT_REGISTRIES: DEFAULT_REGISTRIES,
     // for tests only — not part of the contract
     _internal: { parseNpyHeader: parseNpyHeader, civil: civil, daysFromCivil: daysFromCivil, F16: F16, normBox: normBox, conversionOf: conversionOf, isoOfUnix: isoOfUnix }
   };

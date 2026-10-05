@@ -1,0 +1,39 @@
+{
+ "chans": [
+  "fishing_hours",
+  "hours"
+ ],
+ "dtype": "<f4",
+ "header_len": 128,
+ "shape": [
+  3,
+  19,
+  36,
+  2
+ ],
+ "slab_bytes": 5472,
+ "months": [
+  "2010-01",
+  "2010-02",
+  "2010-03"
+ ],
+ "grid": {
+  "lat0": -90.0,
+  "lon0": -180.0,
+  "nx": 36,
+  "ny": 19,
+  "south_first": true,
+  "step": 10.0,
+  "wrap": true
+ },
+ "units": {
+  "fishing_hours": "vessel-hours per month",
+  "hours": "vessel-hours per month"
+ },
+ "labels": {
+  "fishing_hours": "Apparent fishing hours",
+  "hours": "Hours broadcasting on AIS"
+ },
+ "url": "fishing/fishing_grid.npy",
+ "fixture": true
+}

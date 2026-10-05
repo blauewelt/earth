@@ -1,0 +1,36 @@
+{
+ "N": 400,
+ "n_bins": 2060,
+ "levels": [
+  10.0,
+  30.0,
+  50.0
+ ],
+ "epoch": "1982-01-01",
+ "pentad_days": 5,
+ "recipe": "f8argo_smoke",
+ "stem": "family8_argo_smoke",
+ "normalisation": "RAW \u2014 not z-scored and not anomalised",
+ "synthetic": true,
+ "note": "fixture",
+ "footprint": {
+  "log2_fp": -4.0,
+  "log2_dt": -4.0
+ },
+ "sha256": {
+  "bin.npy": "5ae4a838c17f4eb791052f1e0daf692af9ba1eea5801222ad5fdb36d721f3c58",
+  "bin_offsets.npy": "a530c1f7b5c1fc343a8fea4da5910e48c1a90f18908cbd050cd72ad9d5d72364",
+  "cycle.npy": "8734b2b16e4fb98ba15ce4f9cd061808d5d7fc00ec30f2e71d785412e4f8dd68",
+  "lat.npy": "4233b171c027ab4ad41b09a185737953ebba90d76dab2f231cb45acc93f699e6",
+  "lon.npy": "20db0fefa3fcad6ff588dc95d9bc1caa47b38fb7f5880c07a1350b34749d081f",
+  "maxpres.npy": "a8ce42cfa04446426d5790cdc794c094c42f747c3cd658ef41f523a3ab37661c",
+  "mode.npy": "9c24e9c907c3cbf2c685aa140b0bf9908a464897f5e578255a3bd5bd12513065",
+  "nlev.npy": "2cb2d286dc3a2a315d851d7aa57d9194d4b8934446bb386741e59a8a762f213b",
+  "psal.npy": "c1602cb8f86b2f178e717213f0d5a7512b8daaecd20577b5eaf6b9c5e20230fd",
+  "temp.npy": "103f384d0a16b2d5cd5c02c4594bd74203938c67ba09d27c91b16c9d5af361dc",
+  "time_days.npy": "52ca461c204f344f91dab2136cc711a55be744a5858bb77f6ce1420789196a6c",
+  "wmo.npy": "ca4b8b0eac0f3da458599ab39396d3d9401db924ad6efd6d14b5957e3d3994d1"
+ },
+ "schema_version": 1,
+ "bin_first": 0
+}

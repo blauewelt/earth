@@ -1,0 +1,205 @@
+{
+ "family": "family10",
+ "family_version": "10.2",
+ "repo": "fixture",
+ "epoch": "1982-01-01",
+ "pentad_days": 5,
+ "generated_utc": "fixture",
+ "groups": [
+  {
+   "name": "fxg",
+   "tier": "G",
+   "C": 3,
+   "bin_first": 2044,
+   "n_bins": 6,
+   "cadence": "pentad",
+   "dtype": "<f2",
+   "channels": [
+    {
+     "name": "sst",
+     "unit": "\u00b0C",
+     "label": "Sea-surface temperature"
+    },
+    {
+     "name": "t2m",
+     "unit": "\u00b0C",
+     "label": "Air temperature at 2 m"
+    },
+    {
+     "name": "ssh",
+     "unit": "m",
+     "label": "Sea surface height"
+    }
+   ],
+   "files": [
+    {
+     "name": "fx7_X_fxg.npy",
+     "bytes": 24752
+    }
+   ],
+   "grid": {
+    "lat0": -90.0,
+    "lon0": -180.0,
+    "nx": 36,
+    "ny": 19,
+    "south_first": true,
+    "step": 10.0,
+    "wrap": true
+   },
+   "header_len": 128,
+   "live_bins_only": false,
+   "prefix": "tensors/fx7",
+   "path": "tensors/fx7",
+   "repo": "fixture",
+   "shape": [
+    6,
+    19,
+    36,
+    3
+   ],
+   "slab_bytes": 4104,
+   "normalisation": "z-scored at build time"
+  },
+  {
+   "name": "fxrg",
+   "tier": "G",
+   "C": 6,
+   "bin_first": 0,
+   "n_bins": 3,
+   "cadence": "monthly",
+   "dtype": "<f2",
+   "channels": [
+    {
+     "name": "rg_t10",
+     "unit": "\u00b0C",
+     "label": "Ocean temperature at 10 dbar"
+    },
+    {
+     "name": "rg_t30",
+     "unit": "\u00b0C",
+     "label": "Ocean temperature at 30 dbar"
+    },
+    {
+     "name": "rg_t50",
+     "unit": "\u00b0C",
+     "label": "Ocean temperature at 50 dbar"
+    },
+    {
+     "name": "rg_s10",
+     "unit": "PSU",
+     "label": "Ocean salinity at 10 dbar"
+    },
+    {
+     "name": "rg_s30",
+     "unit": "PSU",
+     "label": "Ocean salinity at 30 dbar"
+    },
+    {
+     "name": "rg_s50",
+     "unit": "PSU",
+     "label": "Ocean salinity at 50 dbar"
+    }
+   ],
+   "files": [
+    {
+     "name": "fx7_X_fxrg.npy",
+     "bytes": 24752
+    }
+   ],
+   "grid": {
+    "lat0": -90.0,
+    "lon0": -180.0,
+    "nx": 36,
+    "ny": 19,
+    "south_first": true,
+    "step": 10.0,
+    "wrap": true
+   },
+   "header_len": 128,
+   "live_bins_only": true,
+   "prefix": "tensors/fx7",
+   "path": "tensors/fx7",
+   "repo": "fixture",
+   "shape": [
+    3,
+    19,
+    36,
+    6
+   ],
+   "slab_bytes": 8208,
+   "normalisation": "z-scored at build time"
+  },
+  {
+   "name": "fxargo",
+   "tier": "P",
+   "C": 6,
+   "N": 400,
+   "bin_first": 0,
+   "bin_last": null,
+   "n_bins": 2060,
+   "schema_version": 1,
+   "cadence": "irregular (per observation)",
+   "channels": [
+    {
+     "name": "temp_10",
+     "unit": "degC"
+    },
+    {
+     "name": "temp_30",
+     "unit": "degC"
+    },
+    {
+     "name": "temp_50",
+     "unit": "degC"
+    },
+    {
+     "name": "psal_10",
+     "unit": "PSU"
+    },
+    {
+     "name": "psal_30",
+     "unit": "PSU"
+    },
+    {
+     "name": "psal_50",
+     "unit": "PSU"
+    }
+   ],
+   "date_range": [
+    "2009-12-20",
+    "2010-02-20"
+   ],
+   "prefix": "tensors/fxargo",
+   "path": "tensors/fxargo",
+   "repo": "fixture"
+  },
+  {
+   "name": "fxneg",
+   "tier": "P",
+   "C": 2,
+   "N": 600,
+   "bin_first": -147,
+   "bin_last": -123,
+   "n_bins": 25,
+   "schema_version": 2,
+   "cadence": "6-hourly",
+   "channels": [
+    {
+     "name": "u",
+     "unit": "m s-1"
+    },
+    {
+     "name": "sst",
+     "unit": "degC"
+    }
+   ],
+   "date_range": [
+    "1980-01-01",
+    "1980-04-30"
+   ],
+   "prefix": "tensors/fxneg",
+   "path": "tensors/fxneg",
+   "repo": "fixture"
+  }
+ ]
+}

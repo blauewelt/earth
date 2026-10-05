@@ -169,3 +169,32 @@ native bytes.
 ## 8. Status
 
 - 2026-10-05: plan written; reader and tab dispatched to two Opus agents.
+- 2026-10-05: **phase 1 shipped** as commit `4a3be69` — the tab and its
+  reader over the twelve public family 1.gf stores, verified end to end
+  against the live store (per-store first looks under the cap, a day-of-month
+  range, outputs equal to the Python readers).
+- 2026-10-05, the same evening — **the union of families** (Chris: *"all
+  channels for all granularities are fine for this, also derived channels"*).
+  The reader is MULTI-REGISTRY: `F1Data.configure({registries:[{family,
+  title, kind, url|base, …}]})` with a built-in list of family 1.gf, family 10
+  (registry `tensors/family10_2/family10.json`) and the derived maps, plus a
+  commented slot for family 1.2 (`tensors/family1_2/family12.json`) — adding
+  it is one line. A registry or store that fails is a named line in
+  `registry.errors` and in the tab; the rest load. Stores are keyed
+  `family/name` (`sel.family`; a bare `sel.store` still works when
+  unambiguous). New layouts: **binmajor** (family 7.2's four tensor groups,
+  `[T, H, W, C]` float16 z-scored — de-normalised as z × sd + mean from
+  `data/family7_index.json`; a box is one range of rows per bin, coalesced
+  across bins when the band is the whole height; every channel of those rows
+  is read and the estimate says so), **monthmajor** (the fishing-effort grid,
+  float32 month-major) and **clim** (the model climatology, `[12, C, H, W]`
+  float32 z-units, no years — only the chosen channels' planes are read).
+  Point stores now also read family 8's **schema-1** Argo layout (float32
+  `time_days`, rounded half-to-even exactly as `ml/family10_store.py` does;
+  `temp`/`psal` blocks as one matrix; `wmo` as the platform) and NEGATIVE
+  five-day bins (drifters 1979, SOCAT 1957). Channels whose names carry a
+  level (`rg_t10` … `rg_s1900`, `temp_10`, `DOXY_10`) are exposed as
+  variables × levels and picked that way in the tab. Verified live: all 27
+  stores open on a downloadable first look, and five downloads through the
+  buttons equal independent numpy / `ml/family10_store.py` reads.
+

@@ -1,0 +1,178 @@
+{
+ "C": 2,
+ "N": 600,
+ "bin_first": -147,
+ "bin_last": -123,
+ "bins_requested": [
+  -147,
+  -123
+ ],
+ "builder": "ml/build_family1_stores.py",
+ "builder_git_sha": "4a3be69bbb5e5b1b9d99f515cf4827301099ccca",
+ "built_at": "2026-10-05T15:38:57+00:00",
+ "channels": [
+  {
+   "max": 3.0,
+   "min": -3.0,
+   "name": "u",
+   "unit": "m s-1"
+  },
+  {
+   "max": 40.0,
+   "min": -2.5,
+   "name": "sst",
+   "unit": "degC"
+  }
+ ],
+ "counts": {
+  "rows": 600
+ },
+ "date_range": [
+  "1980-01-01",
+  "1980-04-30"
+ ],
+ "distribution": "public",
+ "epoch": "1982-01-01",
+ "family": "family1_gf",
+ "family_code": "1gf",
+ "family_version": "1.gf",
+ "footprint": {
+  "log2_dt": -4.0,
+  "log2_fp": -4.0,
+  "note": "E-078 \u00a72: log2(footprint_km / 27.83) and log2(support_days / 5), clamped to +/-12; constant for this source but stored per row so every tier-P store reads identically"
+ },
+ "licence": {
+  "derived_works": "free",
+  "name": "test fixture",
+  "redistribution": "yes"
+ },
+ "n_bins": 25,
+ "n_live_bins": 25,
+ "normalisation": "RAW \u2014 not z-scored and not anomalised; the sampler standardises from training years only",
+ "pentad_days": 5,
+ "per_channel": {
+  "sst": {
+   "bounds": [
+    -2.5,
+    40.0
+   ],
+   "fraction": 1.0,
+   "max": 29.953125,
+   "mean": 18.040319010416667,
+   "measured": 600,
+   "min": 5.046875,
+   "unit": "degC"
+  },
+  "u": {
+   "bounds": [
+    -3.0,
+    3.0
+   ],
+   "fraction": 1.0,
+   "max": 1.2685546875,
+   "mean": 0.01100068211555481,
+   "measured": 600,
+   "min": -1.1982421875,
+   "unit": "m s-1"
+  }
+ },
+ "per_year": {
+  "1980": 600
+ },
+ "plan": {
+  "dataset": "fixture"
+ },
+ "platform_id": "a numeric source id where the archive has one, else int(sha1(id)[:15], 16) \u2014 deterministic across machines and python versions, 60 bits, never negative",
+ "qc_keep_max": 2,
+ "qc_policy": "",
+ "resume_granularity": "year",
+ "schema": {
+  "bin.npy": {
+   "dtype": "int16",
+   "meaning": "floor(time_s / 432000 s) \u2014 exact integer arithmetic; NEGATIVE before 1982 and kept",
+   "shape": [
+    600
+   ]
+  },
+  "bin_offsets.npy": {
+   "dtype": "int64",
+   "meaning": "CSR: rows of bin b are [off[b - bin_first], off[b - bin_first + 1])",
+   "shape": [
+    26
+   ]
+  },
+  "fp.npy": {
+   "dtype": "float16",
+   "meaning": "(log2_fp, log2_dt), E-078 \u00a72, per row",
+   "shape": [
+    600,
+    2
+   ]
+  },
+  "lat.npy": {
+   "dtype": "float32",
+   "meaning": "degrees north",
+   "shape": [
+    600
+   ]
+  },
+  "lon.npy": {
+   "dtype": "float32",
+   "meaning": "degrees east, in [-180, 180)",
+   "shape": [
+    600
+   ]
+  },
+  "platform.npy": {
+   "dtype": "int64",
+   "meaning": "platform id; see platform_id",
+   "shape": [
+    600
+   ]
+  },
+  "qc.npy": {
+   "dtype": "uint8",
+   "meaning": "0 not assessed, 1 good, 2 probably good, 3+ the source's worse grades",
+   "shape": [
+    600
+   ]
+  },
+  "time_s.npy": {
+   "dtype": "int32",
+   "meaning": "seconds since 1982-01-01T00:00:00Z, negative before it; int32 spans 1913-12-13T20:45:52Z .. 2050-01-19T03:14:07Z and the builder refuses a row past it",
+   "shape": [
+    600
+   ]
+  },
+  "values.npy": {
+   "dtype": "float16",
+   "meaning": "the channels below, RAW units, NaN = not measured",
+   "shape": [
+    600,
+    2
+   ]
+  }
+ },
+ "schema_version": 2,
+ "schema_version_note": "schema 2 (family 10.1): the time column is `time_s`, int32 SECONDS since 1982-01-01T00:00:00Z. Schema 1 (family 10, family 8) carried `time_days`, float32 days, which resolves 21 s in 1993 and 84 s in 2024 \u2014 against slatrack's 1 Hz sampling, up to 316 consecutive samples shared a timestamp. `ml/family10_store.py` reads BOTH; only the time column changed, and the bins, footprints, channels and QC policy are identical.",
+ "sha256": {
+  "bin.npy": "ee0332be016983739cad25c3a6b3c842e1d05ae7c24d2089febb66c3656629c5",
+  "bin_offsets.npy": "80959eed7bfd839a561fa53cbbb953e62b0184a07583548350785db61834e679",
+  "fp.npy": "313c1f3004e68d367ba1c7fe2e5387ff98e2686cd1560e2bbe7a8fd0477685e6",
+  "lat.npy": "5d210753a6b3dc69d9199a17544aba901b772956eedb036199a7ef73b6f9abd0",
+  "lon.npy": "1f334d7dfa085a7c8cf0eca0224b29f17929e4e07df5032756b1b0f303a09c26",
+  "platform.npy": "0cf9feccafda0419215ab6217d953762b58bd55177fdfaebfadba48696d56816",
+  "qc.npy": "e583d9c823fb563ce27634589131934a95b4919b62b8acce0a9646a380b19f19",
+  "time_s.npy": "8f0ed4a3b3093e2e1589f17893016ae10381fe25aaac2c6906d662b7be305e99",
+  "values.npy": "fbeb9f441f443fefe6aa2e04c159cf2e001f1374c5c1e6cd9dbb460343653ce5"
+ },
+ "source_dir": "file:///tmp/f10fixture_ko_ktmbx/n/src",
+ "sources": [
+  "synthetic"
+ ],
+ "store": "fxneg",
+ "tier": "P",
+ "title": "fixture: drifter-like reports from 1980 (negative bins)",
+ "values_measured_fraction": 1.0,
+ "verified": ""
+}

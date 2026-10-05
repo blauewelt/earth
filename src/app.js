@@ -15863,6 +15863,7 @@ const dtHasHours = (st) => !!st && (!dtIsGrid(st) || (Number(st.frameSeconds) > 
 
 function dtCadence(st) {
   if (!st) return "";
+  if (st.cadenceLabel) return st.cadenceLabel;
   if (!dtIsGrid(st)) return "per report";
   const s = Number(st.frameSeconds);
   if (s === 86400) return "daily";
@@ -15942,7 +15943,7 @@ function dtWriteBox(b) {
 function dtReadSel() {
   const st = dt.store;
   if (!st) return null;
-  const channels = [...document.querySelectorAll("#dt-channels input:checked")].map((i) => i.value);
+  const channels = dtSelectedChannels(st);
   const b = dtSpanYears(st)[1];
   let yearStart = dtClampYear(dtEl("dt-y0").value, st, b);
   let yearEnd = dtClampYear(dtEl("dt-y1").value, st, yearStart);
@@ -15968,6 +15969,7 @@ function dtReadSel() {
   const res = resV === "native" ? "native" : Number(resV);
   const rows = !dtIsGrid(st) && res === "native";
   return {
+    ...(st.family ? { family: st.family } : {}),
     store: st.name,
     channels,
     yearStart,
@@ -16017,28 +16019,89 @@ function dtLoadSaved() {
 
 /* ---- building the controls for a store ---------------------------------- */
 
+/* A store's key in the select: `family/name` when the reader gives it one
+ * (the same name can exist in two families), the bare name otherwise. */
+const dtStoreKey = (st) => (st && (st.id || st.name)) || "";
+function dtFindStore(key) {
+  const all = (dt.reg && dt.reg.stores) || [];
+  return all.find((s) => dtStoreKey(s) === key) || all.find((s) => s.name === key) || null;
+}
+
+/* Grouped by family, in the reader's order, each group under its own
+ * plain-English label. */
 function dtFillStores() {
   const sel = dtEl("dt-store");
-  sel.innerHTML = dt.reg.stores.map((st) =>
-    `<option value="${esc(st.name)}">${esc(st.title || st.name)} (${esc(st.name)})</option>`).join("");
+  const opt = (st) => `<option value="${esc(dtStoreKey(st))}">${esc(st.title || st.name)} (${esc(st.name)})</option>`;
+  const fams = Array.isArray(dt.reg.families) ? dt.reg.families : [];
+  if (!fams.length || !dt.reg.stores.some((s) => s.family)) {
+    sel.innerHTML = dt.reg.stores.map(opt).join("");
+    return;
+  }
+  sel.innerHTML = fams.map((f) => {
+    const ss = dt.reg.stores.filter((s) => s.family === f.family);
+    return ss.length ? `<optgroup label="${esc(f.title || f.family)}">${ss.map(opt).join("")}</optgroup>` : "";
+  }).join("");
+}
+
+/* What could not be loaded, by name, while the rest of the tab works. */
+function dtShowRegistryErrors(reg) {
+  const e = dtEl("dt-reg-error");
+  const errs = (reg && reg.errors) || [];
+  if (!errs.length) { e.classList.add("hidden"); e.innerHTML = ""; return; }
+  e.innerHTML = errs.map((x) => `<div class="dt-reg-line">Not available: <strong>${esc(x.title || x.family)}` +
+    `${x.store ? ` — ${esc(x.store)}` : ""}</strong>: ${esc(x.message)}</div>`).join("");
+  e.classList.remove("hidden");
 }
 
 function dtStoreAbout(st) {
   const [y0, y1] = [(st.span || [])[0], (st.span || [])[1]];
   const kind = dtIsGrid(st)
-    ? `a satellite map store at ${esc(dtFmtDeg(dtNativeDeg(st)))} (≈ ${dtKm(dtNativeDeg(st))} km), ${esc(dtCadence(st))}`
+    ? `a map store at ${esc(dtFmtDeg(dtNativeDeg(st)))} (≈ ${dtKm(dtNativeDeg(st))} km), ${esc(dtCadence(st))}`
     : "a point store: every report at its own position and time";
+  const rec = st.calendar ? "twelve calendar months — no years"
+    : `${esc(String(y0 || "?").slice(0, 10))} → ${esc(String(y1 || "?").slice(0, 10))}`;
   return `<code class="dt-code">${esc(st.name)}</code> ${esc(st.gist || "")}` +
-    `<br><span class="dt-k">kind</span> ${kind} · <span class="dt-k">record</span> ` +
-    `${esc(String(y0 || "?").slice(0, 10))} → ${esc(String(y1 || "?").slice(0, 10))}`;
+    `<br><span class="dt-k">kind</span> ${kind} · <span class="dt-k">record</span> ${rec}`;
+}
+
+/* The channels the controls pick. A LEVELLED store (the reader found
+ * channels that differ only by a trailing pressure: "rg_t10" … "rg_t1900")
+ * is picked as variables × levels instead of 32 or 128 checkboxes. */
+function dtSelectedChannels(st) {
+  if (st && st.levels && st.vars) {
+    const vars = new Set([...document.querySelectorAll("#dt-channels input[data-var]:checked")].map((i) => i.dataset.var));
+    const lv = new Set([...document.querySelectorAll("#dt-channels button[data-level].active")].map((b) => Number(b.dataset.level)));
+    return st.channels.filter((c) => vars.has(c.var) && (c.level == null || lv.has(c.level))).map((c) => c.name);
+  }
+  return [...document.querySelectorAll("#dt-channels input:checked")].map((i) => i.value);
 }
 
 function dtFillChannels(st, keep) {
   const want = new Set(keep && keep.length ? keep : []);
   const chans = st.channels || [];
+  if (st.levels && st.vars) {
+    const kept = chans.filter((c) => want.has(c.name));
+    const vOn = new Set(kept.map((c) => c.var));
+    const lOn = new Set(kept.filter((c) => c.level != null).map((c) => c.level));
+    if (!vOn.size) vOn.add(st.vars[0].var);
+    if (!lOn.size) lOn.add(st.levels[0]);
+    const vlabel = (v) => esc(v.label || v.var) + (v.label ? ` <span class="dt-k">${esc(v.var)}</span>` : "");
+    dtEl("dt-channels").innerHTML =
+      `<div class="dt-sub">variables</div><div class="dt-chips">` +
+      st.vars.map((v) => `<label class="dt-chip" title="${esc(v.unit || "")}"><input type="checkbox" data-var="${esc(v.var)}"` +
+        `${vOn.has(v.var) ? " checked" : ""} /> ${vlabel(v)}</label>`).join("") + `</div>` +
+      `<div class="dt-sub">levels (${esc(st.levelUnit || "")}) ` +
+      `<button type="button" class="dt-mini" data-levels="all">all</button>` +
+      `<button type="button" class="dt-mini" data-levels="none">none</button></div>` +
+      `<div class="dt-chips dt-levels">` +
+      st.levels.map((l) => `<button type="button" data-level="${l}" class="${lOn.has(l) ? "active" : ""}" ` +
+        `aria-pressed="${lOn.has(l) ? "true" : "false"}">${l}</button>`).join("") + `</div>`;
+    dtEl("dt-chan-note").textContent = `${chans.length} channels as ${st.vars.length} variables × ${st.levels.length} levels`;
+    return;
+  }
   if (![...want].some((n) => chans.some((c) => c.name === n)) && chans.length) want.add(chans[0].name);
   dtEl("dt-channels").innerHTML = chans.map((c) =>
-    `<label class="dt-chip" title="${esc(c.unit || "")}"><input type="checkbox" value="${esc(c.name)}"` +
+    `<label class="dt-chip" title="${esc([c.label, c.unit].filter(Boolean).join(" · "))}"><input type="checkbox" value="${esc(c.name)}"` +
     `${want.has(c.name) ? " checked" : ""} /> ${esc(c.name)}</label>`).join("");
   dtEl("dt-chan-note").textContent = chans.length > 12 ? `${chans.length} — scroll` : "";
 }
@@ -16093,8 +16156,13 @@ function dtSyncStepRes() {
 
 function dtApplyStore(st, saved) {
   dt.store = st;
-  dtEl("dt-store").value = st.name;
+  dtEl("dt-store").value = dtStoreKey(st);
   dtEl("dt-store-about").innerHTML = dtStoreAbout(st);
+  // a calendar-month climatology has no years and no days: its rows are
+  // hidden and a sentence says why, rather than leaving controls that do nothing
+  dtEl("dt-y0").closest(".control-row").classList.toggle("hidden", !!st.calendar);
+  dtEl("dt-d0").closest(".control-row").classList.toggle("hidden", !!st.calendar);
+  dtEl("dt-cal-note").classList.toggle("hidden", !st.calendar);
   const parts = Array.isArray(st.groups) ? st.groups : [];
   dtEl("dt-group-row").classList.toggle("hidden", parts.length < 2);
   dtEl("dt-group").innerHTML = parts.length > 1
@@ -16169,6 +16237,15 @@ function dtDefaultBoxFor(st) {
 const DT_FIRST_LOOK_MB = 40;
 async function dtFirstLook(st) {
   const R = dtReader();
+  if (st.calendar) {
+    // twelve maps and no years: this month's normal, in the default box
+    dt.lookSeq++;
+    dtWriteBox(dtDefaultBoxFor(st));
+    dtSetPeriod(2000, 2000, [new Date().getUTCMonth() + 1], null);
+    dt.touched = false;
+    dtChanged();
+    return;
+  }
   const seq = ++dt.lookSeq;
   dt.looking = true;
   const out = dtEl("dt-estimate");
@@ -16415,11 +16492,21 @@ function dtCountHtml(sel, est) {
       `<strong>${dtFmtInt(T)}</strong> ${plural(T, words[0], words[1])} on ${sel.res}° cells`;
   }
   const n = est.frames;
-  const maps = `${dtCadence(st)} ${plural(n, "map", "maps")}`;
+  const maps = `${dtFrameAdj(st)} ${plural(n, "map", "maps")}`;
   if (sel.step === "native" || T === null || !words) {
     return `<strong>${dtFmtInt(n)}</strong> ${maps}`;
   }
   return `<strong>${dtFmtInt(n)}</strong> ${maps} read → <strong>${dtFmtInt(T)}</strong> ${plural(T, words[0], words[1])}`;
+}
+
+/* The adjective for one frame of a map store: "daily", "3-hourly",
+ * "five-day", "monthly", "calendar-month". */
+function dtFrameAdj(st) {
+  if (st.calendar) return "calendar-month";
+  const c = String(st.cadenceLabel || "");
+  if (/five-day/.test(c)) return "five-day";
+  if (/month/.test(c)) return "monthly";
+  return dtCadence(st);
 }
 
 function dtEstimateEmpty(sel, est) {
@@ -16717,7 +16804,11 @@ function dtFileName(sel, ext) {
   const hr = sel.hours ? `_h${String(sel.hours[0]).padStart(2, "0")}-${String(sel.hours[1]).padStart(2, "0")}` : "";
   const res = sel.res === "native" ? (dtIsGrid(dt.store) ? "native" : "rows") : `${sel.res}deg`;
   const step = sel.step === "native" ? "" : `_${sel.step}`;
-  return `${clean(sel.store)}_${ch}_${yrs}${mo}${dy}${hr}_${res}${step}.${ext}`;
+  // a store outside family 1.gf carries its family, so g025 from family 10
+  // and a later family's g025 cannot save under the same name
+  const fam = sel.family && sel.family !== "1.gf" ? `f${clean(sel.family)}_` : "";
+  const when = dt.store && dt.store.calendar ? "clim" : yrs;
+  return `${fam}${clean(sel.store)}_${ch}_${when}${mo}${dy}${hr}_${res}${step}.${ext}`;
 }
 
 /* `onProgress` is the reader's; its argument may be a fraction, a percentage
@@ -16811,7 +16902,7 @@ function dtWire() {
   dt.wired = true;
   const panel = dtEl("panel-data");
   dtEl("dt-store").addEventListener("change", (e) => {
-    const st = dt.reg.stores.find((s) => s.name === e.target.value);
+    const st = dtFindStore(e.target.value);
     if (!st) return;
     // A period the visitor CHOSE (and the box, months, days) carries over,
     // clamped to the new record — "every February 1998–2004" is a question
@@ -16901,6 +16992,17 @@ function dtWire() {
   dtEl("dt-preview").addEventListener("click", dtPreview);
   dtEl("dt-pv-chan").addEventListener("change", (e) => dtRepaintPreview(Number(e.target.value)));
   dtEl("dt-preview-clear").addEventListener("click", dtClearPreview);
+  // the level chips of a levelled store (variables are checkboxes and arrive
+  // through the panel's change handler)
+  dtEl("dt-channels").addEventListener("click", (e) => {
+    const b = e.target.closest("button[data-level], button[data-levels]");
+    if (!b) return;
+    const btns = [...document.querySelectorAll("#dt-channels button[data-level]")];
+    const set = (el, on) => { el.classList.toggle("active", on); el.setAttribute("aria-pressed", on ? "true" : "false"); };
+    if (b.dataset.levels) btns.forEach((x) => set(x, b.dataset.levels === "all"));
+    else set(b, !b.classList.contains("active"));
+    dtChanged();
+  });
   dtEl("dt-download").addEventListener("click", dtDownload);
   dtEl("dt-cancel").addEventListener("click", dtCancel);
 }
@@ -16940,15 +17042,16 @@ async function loadDataTab() {
       return;
     }
     dt.reg = reg;
-    dtEl("dt-reg-error").classList.add("hidden");
+    dtShowRegistryErrors(reg);
     dtEl("dt-body").classList.remove("hidden");
     dtFillStores();
     dtFillPresets();
     const saved = dtLoadSaved();
     // the flagship store first: four-kilometre ocean colour, if published
-    const st = (saved && reg.stores.find((s) => s.name === saved.store)) ||
+    const savedKey = saved ? (saved.family ? `${saved.family}/${saved.store}` : saved.store) : null;
+    const st = (savedKey && dtFindStore(savedKey)) ||
       reg.stores.find((s) => s.name === DT_FIRST_STORE) || reg.stores[0];
-    const ok = saved && saved.store === st.name;
+    const ok = saved && saved.store === st.name && (!saved.family || saved.family === st.family);
     dtApplyStore(st, ok ? saved : null);
     if (!ok) { dtFirstLook(st); return; }
     dtSetMonths(Array.isArray(saved.months) ? saved.months : [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]);

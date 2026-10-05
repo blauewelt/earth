@@ -25,6 +25,9 @@ import { fileURLToPath } from "node:url";
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.dirname(HERE);
 const FIX = path.join(ROOT, "data", "family1_fixture");
+// the family-10 / derived fixture (tests/make_family10_fixture.py), served as /ok10/
+const FIX10 = path.join(ROOT, "data", "family10_fixture");
+const EXP10 = JSON.parse(fs.readFileSync(path.join(FIX10, "expected.json"), "utf8"));
 const require = createRequire(import.meta.url);
 const F1 = require("../src/f1data.js");
 const EXP = JSON.parse(fs.readFileSync(path.join(FIX, "expected.json"), "utf8"));
@@ -41,10 +44,11 @@ let inflight = 0, maxInflight = 0;
 
 function serve(req, res) {
   const url = new URL(req.url, "http://x");
-  const m = /^\/(ok|bad200|nozst)\/(.*)$/.exec(url.pathname);
+  const m = /^\/(ok|bad200|nozst|ok10)\/(.*)$/.exec(url.pathname);
   const rel = m ? decodeURIComponent(m[2]) : "";
-  const file = path.join(FIX, rel);
-  if (!m || !file.startsWith(FIX) || !fs.existsSync(file) || fs.statSync(file).isDirectory() ||
+  const root = m && m[1] === "ok10" ? FIX10 : FIX;
+  const file = path.join(root, rel);
+  if (!m || !file.startsWith(root) || !fs.existsSync(file) || fs.statSync(file).isDirectory() ||
       (m[1] === "nozst" && rel.endsWith(".zst"))) {
     res.writeHead(404); res.end("not found"); return;
   }
@@ -453,6 +457,164 @@ print(json.dumps({"p": p, "q": q}))
     }
     assert.equal(gt.length, cells + 1);
     assert.equal(gt[0], "time,lat,lon,sst,log_chl,sst_count,log_chl_count");
+  });
+
+
+  // ---- the multi-registry reader: family 10 and the derived maps ----------
+  function multi(extra) {
+    const b10 = base("ok10");
+    F1.configure({ siteBase: b10, registries: [
+      { family: "1.gf", title: "Fine observations (family 1.gf)", kind: "family1", url: base("ok") + "family1gf.json" },
+      { family: "10", title: "Global tensor and point observations (family 10)", kind: "family10",
+        url: b10 + "family10.json", root: b10, norms: "family7_index.json" },
+      { family: "derived", title: "Derived maps", kind: "derived", fishing: "fishing_index.json", clim: "clim_index.json" },
+    ].concat(extra || []) });
+  }
+  const case10 = (name) => { const c = EXP10.cases.find((x) => x.name === name); assert.ok(c, name); return JSON.parse(JSON.stringify(c)); };
+
+  test("multi-registry: three families load, ids are family/name, a 404 registry is listed in errors and the rest work", async () => {
+    multi([{ family: "gone", title: "A family that is not published", kind: "family1", url: base("ok") + "no/such/registry.json" },
+      { family: "1.2", title: "An optional family", kind: "family1", optional: true, url: base("ok") + "no/family12.json" }]);
+    try {
+      const reg = await F1.loadRegistry();
+      assert.deepEqual(reg.families.map((f) => f.family), ["1.gf", "10", "derived"]);
+      assert.deepEqual(reg.stores.filter((d) => d.family === "10").map((d) => d.name), ["fxg", "fxrg", "fxargo", "fxneg"]);
+      assert.deepEqual(reg.stores.filter((d) => d.family === "derived").map((d) => d.id), ["derived/fishing_grid", "derived/clim_fxg"]);
+      assert.equal(reg.errors.length, 1);
+      assert.equal(reg.errors[0].family, "gone");
+      assert.match(reg.errors[0].message, /HTTP 404/);
+      assert.deepEqual(reg.missing.map((m) => m.family), ["1.2"], "an optional family that 404s is absent, not an error");
+      // and a store of the families that did load still reads
+      const r = await F1.run(case10("monthmajor").sel);
+      assert.ok(r.data.length > 0);
+      // the levelled group exposes variables × levels
+      const rg = reg.stores.find((d) => d.id === "10/fxrg");
+      assert.deepEqual(rg.levels, [10, 30, 50]);
+      assert.deepEqual(rg.vars.map((v) => v.var), ["rg_t", "rg_s"]);
+      assert.deepEqual(rg.channels.map((c) => [c.var, c.level]).slice(0, 2), [["rg_t", 10], ["rg_t", 30]]);
+      const ar = reg.stores.find((d) => d.id === "10/fxargo");
+      assert.deepEqual(ar.vars.map((v) => v.var), ["temp", "psal"]);
+      assert.deepEqual(ar.span, ["2009-12-20", "2010-02-20"]);
+      // a bare name still resolves when it is unambiguous, family/name always
+      await F1.estimate(Object.assign({}, case10("monthmajor").sel, { family: undefined }));
+    } finally { F1.configure({ base: base("ok") }); }
+  });
+
+  test("binmajor: one bin is a range of the box's rows, values are z × sd + mean, months and years select bins", async () => {
+    multi();
+    try {
+      const c = case10("binmajor native");
+      log.length = 0;
+      const e = await F1.estimate(c.sel);
+      const r = await F1.run(c.sel);
+      assert.deepEqual([r.time.length, r.channels.length, r.lat.length, r.lon.length], c.shape);
+      assert.deepEqual(Array.from(r.time), c.time);
+      assert.deepEqual(Array.from(r.lat), c.lat);
+      assert.deepEqual(Array.from(r.lon), c.lon);
+      closeArr(r.data, c.data, { rel: 2e-6, label: "de-z-scored values" });
+      // exact estimate: one request per bin, covering the box's latitude band only,
+      // with every one of the group's 3 channels in those rows
+      const shards = log.filter((x) => /fx7_X_fxg\.npy/.test(x.rel) && x.range && !/bytes=0-1023$/.test(x.range));
+      assert.equal(e.requests, c.time.length);
+      assert.equal(shards.length, c.time.length);
+      const rowBytes = 36 * 3 * 2;
+      for (const x of shards) assert.equal(x.bytes, c.lat.length * rowBytes);
+      assert.equal(e.readBytes, c.time.length * c.lat.length * rowBytes);
+      assert.match(e.why, /every one of the store's 3 channels/);
+      assert.ok(r.notes.some((n) => /z × sd \+ mean/.test(n)));
+    } finally { F1.configure({ base: base("ok") }); }
+  });
+
+  test("binmajor: a monthly mean equals nanmean over the bins with the finite count; a full-height band coalesces bins", async () => {
+    multi();
+    try {
+      const c = case10("binmajor month mean");
+      const r = await F1.run(c.sel);
+      assert.equal(r.time.length, 1);
+      closeArr(r.data, c.data, { rel: 2e-6, label: "monthly mean" });
+      assert.deepEqual(Array.from(r.count), c.count);
+      // the whole globe: rows 0..H-1 of consecutive bins are contiguous, so the
+      // four January bins are one range (the store is small enough)
+      const g = Object.assign({}, c.sel, { bbox: { w: -180, s: -90, e: 180, n: 90 } });
+      const e = await F1.estimate(g);
+      assert.equal(e.requests, 1);
+      assert.equal(e.readBytes, 4 * 19 * 36 * 3 * 2);
+    } finally { F1.configure({ base: base("ok") }); }
+  });
+
+  test("binmajor monthly group: frames are calendar months, levelled channels read, a 1° store offers nothing coarser than 1°", async () => {
+    multi();
+    try {
+      const c = case10("levelled monthly");
+      const r = await F1.run(c.sel);
+      assert.deepEqual(Array.from(r.time), c.time);
+      closeArr(r.data, c.data, { rel: 2e-6, label: "rg values" });
+      assert.deepEqual(r.levels, [10, 50]);
+      assert.ok(r.notes.some((n) => /one frame per calendar month/.test(n)));
+    } finally { F1.configure({ base: base("ok") }); }
+  });
+
+  test("schema 1 (family 8 Argo layout): float32 days become seconds like the Python reader, temp/psal blocks read as one matrix", async () => {
+    multi();
+    try {
+      const c = case10("schema1 rows");
+      const r = await F1.run(c.sel);
+      assert.equal(r.kind, "points");
+      assert.deepEqual(Array.from(r.time), c.time);
+      closeArr(r.values, c.values, { label: "temp_10, temp_50" });
+      // wmo is the platform; there is no qc column, so 0 = not assessed
+      assert.ok(r.platform[0] >= 1900000n);
+      assert.equal(r.qc.reduce((a, b) => a + b, 0), 0);
+    } finally { F1.configure({ base: base("ok") }); }
+  });
+
+  test("negative bins: rows from before the 1982 epoch read and keep their times", async () => {
+    multi();
+    try {
+      const c = case10("negative bins");
+      assert.ok(c.bins[0] < 0 && c.bins[1] < 0);
+      const r = await F1.run(c.sel);
+      assert.deepEqual(Array.from(r.time), c.time);
+      closeArr(r.values, c.values, { label: "sst" });
+      assert.equal(new Date(r.time[0] * 1000).getUTCFullYear(), 1980);
+    } finally { F1.configure({ base: base("ok") }); }
+  });
+
+  test("derived: the month-major grid is raw float32, the climatology de-z-scored with no years", async () => {
+    multi();
+    try {
+      const m = case10("monthmajor");
+      const rm = await F1.run(m.sel);
+      closeArr(rm.data, m.data, { label: "fishing" });
+      assert.ok(rm.notes.some((n) => /monthly SUM/.test(n)));
+      const c = case10("clim");
+      const rc = await F1.run(c.sel);
+      closeArr(rc.data, c.data, { rel: 2e-6, label: "clim" });
+      assert.equal(rc.time.length, 2);
+      assert.equal(new Date(rc.time[1] * 1000).getUTCMonth(), 6);
+      assert.ok(rc.notes.some((n) => /calendar-month climatology/.test(n)));
+      const reg = await F1.loadRegistry();
+      assert.equal(reg.stores.find((d) => d.id === "derived/clim_fxg").calendar, true);
+      // only the chosen channel's planes are read: 2 months × 1 channel
+      const e = await F1.estimate(c.sel);
+      assert.equal(e.requests, 2);
+      assert.equal(e.readBytes, 2 * 7 * 36 * 4);          // 2 planes × 7 rows × 36 columns × float32
+      // NetCDF opens and carries the data
+      const nc = new Uint8Array(await F1.toNetCDF(rc).arrayBuffer());
+      assert.equal(String.fromCharCode(nc[0], nc[1], nc[2]), "CDF");
+    } finally { F1.configure({ base: base("ok") }); }
+  });
+
+  test("a store whose z-score table is missing is a named error, its family's other stores still load", async () => {
+    const b10 = base("ok10");
+    F1.configure({ siteBase: b10, registries: [
+      { family: "10", title: "Family 10", kind: "family10", url: b10 + "family10.json", root: b10, norms: "no-such-index.json" }] });
+    try {
+      const reg = await F1.loadRegistry();
+      assert.deepEqual(reg.stores.map((d) => d.name), ["fxargo", "fxneg"]);
+      assert.deepEqual(reg.errors.map((e) => e.store).sort(), ["fxg", "fxrg"]);
+      assert.match(reg.errors[0].message, /z-score table/);
+    } finally { F1.configure({ base: base("ok") }); }
   });
 
   test("internals: float16 table and the calendar", () => {

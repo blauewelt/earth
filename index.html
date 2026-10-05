@@ -21,7 +21,7 @@
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/cesium/1.133.1/Widgets/widgets.min.css" />
-  <link rel="stylesheet" href="src/style.css?v=f18dd03c" />
+  <link rel="stylesheet" href="src/style.css?v=29bac486" />
   <script>window.CESIUM_BASE_URL = "https://cdnjs.cloudflare.com/ajax/libs/cesium/1.133.1/";</script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/cesium/1.133.1/Cesium.js"></script>
 </head>
@@ -143,9 +143,11 @@
           anywhere on Earth, drawn on the globe in kilometres, with a <em>Data</em> switch
           that fills it with the real values out of the global training tensor and lets you
           tap any dot to read it ·
-          <em>Data</em> — download the fine observation stores (satellite ocean colour,
-          sea-surface temperature, cloud tops, ship, float and bottle measurements) for any
-          period, month, box and resolution, as a file built in your browser ·
+          <em>Data</em> — download the observation stores (satellite ocean colour,
+          sea-surface temperature, cloud tops, ship, float, drifter, mooring and bottle
+          measurements), the global tensor the forecaster reads, and derived maps (fishing
+          effort, the model's climatology) for any period, month, box and resolution, as a file
+          built in your browser ·
           <em>Catalog</em> — all 276 datasets ·
           <em>About</em> — background &amp; further reading.</p>
       </details>
@@ -1021,8 +1023,9 @@
          store appears here the day it is published. -->
     <section id="panel-data" class="panel hidden">
       <h2>Download observations</h2>
-      <p class="hint">Pick one of the fine observation stores — satellite maps at 2–4 km and
-        ship, float, bottle and mooring measurements at their own points — choose a period,
+      <p class="hint">Pick a store — the fine observation stores (satellite maps at 2–4 km and
+        ship, float, bottle and mooring measurements at their own points), the global tensor the
+        forecaster reads with its own point observations, or a derived map — choose a period,
         months, a box and a resolution, and the file is built here, in your browser, from the
         store's own files. The estimate line says what it will cost before anything is read.</p>
       <p class="hint dt-missing hidden" id="dt-missing">The data reader failed to load, so this
@@ -1065,6 +1068,9 @@
           <span class="hint dt-inline">of each chosen month; 1 to 31 is the whole month</span>
         </div>
 
+        <p class="hint dt-note hidden" id="dt-cal-note">This store is a climatology: one map per
+          calendar month, averaged over all the years 1982–2024, so it has no years and no days —
+          the months below pick which calendar months.</p>
         <div class="dt-head">months
           <button type="button" class="dt-mini" id="dt-months-all">all</button>
           <button type="button" class="dt-mini" id="dt-months-none">none</button>
@@ -1171,6 +1177,13 @@
             records where every five-day bin starts. The <em>days</em> fields are how to make a
             period short: a few days of the densest stores (the SWOT swaths, the altimeter
             tracks) is tens of megabytes where a month is gigabytes.</p>
+          <p class="hint"><strong>Three kinds of store.</strong> The fine observation stores keep
+            each source at its own resolution. The global tensor (the forecaster's own input,
+            0.25° and 1° five-day maps since 1982) is stored as one uncompressed file per group
+            with every channel side by side, so a box reads a band of rows across ALL of a group's
+            channels whatever you tick — the estimate counts it — and its values are stored as
+            standard scores, which the page turns back into physical units with each channel's
+            mean and spread. The model climatology is twelve calendar-month maps with no years.</p>
           <p class="hint"><strong>What the values are.</strong> Sea-surface temperature from
             satellites (<code>sst_acspo02</code>) has gaps wherever there was cloud — it is what the
             satellite saw, not a gap-filled analysis, and not a finer version of the 0.25° daily
@@ -1347,7 +1360,7 @@
            not obvious from the page, and "I reloaded and see no change" is
            indistinguishable from "the change isn't there". This is the sha256
            prefix of src/app.js, the same string as its ?v= stamp. -->
-      <p class="build-line">Build <code id="build-id">1a8ece61</code></p>
+      <p class="build-line">Build <code id="build-id">b18ddcd7</code></p>
     </section>
 
     <footer>
@@ -1412,7 +1425,7 @@
        family-1.gf reader that publishes window.F1Data. Both load BEFORE the
        app, and the app copes when they did not (the tab says so). -->
   <script src="lib/fzstd.js?v=207dc305"></script>
-  <script src="src/f1data.js?v=23761520"></script>
-  <script src="src/app.js?v=1a8ece61"></script>
+  <script src="src/f1data.js?v=4fb285ae"></script>
+  <script src="src/app.js?v=b18ddcd7"></script>
 </body>
 </html>
