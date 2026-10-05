@@ -1,20 +1,5 @@
 {
- "pending": [
-  {
-   "store": "era5_u",
-   "stage": "index,fetch",
-   "start": "2017-01-01",
-   "end": "2021-12-31",
-   "runner": "ubuntu-latest",
-   "extra_args": "--push-parts",
-   "adapter_env": "",
-   "retries": 3,
-   "seen_runs": [
-    37363351150
-   ],
-   "not_before": "2026-10-05T19:56:27.133Z"
-  }
- ],
+ "pending": [],
  "dispatched": [
   {
    "store": "era5_t",
@@ -51,6 +36,20 @@
     37362985960
    ],
    "at": "2026-10-05T19:53:47.305Z"
+  },
+  {
+   "store": "era5_u",
+   "stage": "index,fetch",
+   "start": "2017-01-01",
+   "end": "2021-12-31",
+   "runner": "ubuntu-latest",
+   "extra_args": "--push-parts",
+   "adapter_env": "",
+   "retries": 3,
+   "seen_runs": [
+    37363351150
+   ],
+   "at": "2026-10-05T19:56:53.944Z"
   }
  ],
  "done": [
