@@ -1,0 +1,80 @@
+  [verify era5_v before publish] check: check era5_v 1900/3251  59.5s
+  [verify era5_v before publish] check: check era5_v 2000/3251  59.6s
+  [verify era5_v before publish] check: check era5_v 2100/3251  59.7s
+  [verify era5_v before publish] check: check era5_v 2200/3251  59.8s
+  [verify era5_v before publish] check: check era5_v 2300/3251  59.9s
+  [verify era5_v before publish] check: check era5_v 2400/3251  60.0s
+  [verify era5_v before publish] check: check era5_v 2500/3251  60.1s
+  [verify era5_v before publish] check: check era5_v 2600/3251  60.2s
+  [verify era5_v before publish] check: check era5_v 2700/3251  60.3s
+  [verify era5_v before publish] check: check era5_v 2800/3251  60.4s
+  [verify era5_v before publish] check: check era5_v 2900/3251  60.5s
+  [verify era5_v before publish] check: check era5_v 3000/3251  60.6s
+  [verify era5_v before publish] check: check era5_v 3100/3251  60.7s
+  [verify era5_v before publish] check: check era5_v 3200/3251  60.8s
+  [verify era5_v before publish] check: check era5_v 3251/3251  60.8s
+  hub: chfrank/earth-tensors with the token from $HF_TOKEN
+  [publish era5_v] start (6505 items)  0/6505  0.0s
+Upload 0 LFS files: 0it [00:00, ?it/s]Upload 0 LFS files: 0it [00:00, ?it/s]
+Upload 0 LFS files: 0it [00:00, ?it/s]Upload 0 LFS files: 0it [00:00, ?it/s]
+Upload 0 LFS files: 0it [00:00, ?it/s]Upload 0 LFS files: 0it [00:00, ?it/s]
+Upload 0 LFS files: 0it [00:00, ?it/s]Upload 0 LFS files: 0it [00:00, ?it/s]
+Upload 0 LFS files: 0it [00:00, ?it/s]Upload 0 LFS files: 0it [00:00, ?it/s]
+Upload 0 LFS files: 0it [00:00, ?it/s]Upload 0 LFS files: 0it [00:00, ?it/s]
+Upload 0 LFS files: 0it [00:00, ?it/s]Upload 0 LFS files: 0it [00:00, ?it/s]
+Upload 0 LFS files: 0it [00:00, ?it/s]Upload 0 LFS files: 0it [00:00, ?it/s]
+Upload 0 LFS files: 0it [00:00, ?it/s]Upload 0 LFS files: 0it [00:00, ?it/s]
+Upload 0 LFS files: 0it [00:00, ?it/s]Upload 0 LFS files: 0it [00:00, ?it/s]
+Upload 0 LFS files: 0it [00:00, ?it/s]Upload 0 LFS files: 0it [00:00, ?it/s]
+Upload 0 LFS files: 0it [00:00, ?it/s]Upload 0 LFS files: 0it [00:00, ?it/s]
+Upload 0 LFS files: 0it [00:00, ?it/s]Upload 0 LFS files: 0it [00:00, ?it/s]
+shard_index.npy:   0%|          | 0.00/1.65M [00:00<?, ?B/s]shard_index.npy:  96%|█████████▌| 1.57M/1.65M [00:00<00:00, 12.6MB/s]shard_index.npy: 100%|██████████| 1.65M/1.65M [00:00<00:00, 4.74MB/s]
+  [publish era5_v] era5_v  2/6505  174.0s
+  [publish era5_v] era5_v/1982  148/6505  186.5s
+  [publish era5_v] era5_v/1983  294/6505  198.9s
+  [publish era5_v] era5_v/1984  442/6505  212.2s
+  [publish era5_v] era5_v/1985  588/6505  224.1s
+  [publish era5_v] era5_v/1986  734/6505  236.4s
+  [publish era5_v] era5_v/1987  880/6505  248.7s
+  [publish era5_v] era5_v/1988  1026/6505  260.8s
+  [publish era5_v] era5_v/1989  1172/6505  274.0s
+  [publish era5_v] era5_v/1990  1318/6505  287.2s
+  [publish era5_v] era5_v/1991  1464/6505  299.3s
+  [publish era5_v] era5_v/1992  1610/6505  311.5s
+  [publish era5_v] era5_v/1993  1756/6505  323.7s
+  [publish era5_v] era5_v/1994  1902/6505  336.3s
+  [publish era5_v] era5_v/1995  2048/6505  349.1s
+  [publish era5_v] era5_v/1996  2194/6505  361.4s
+  [publish era5_v] era5_v/1997  2340/6505  373.7s
+  [publish era5_v] era5_v/1998  2486/6505  386.5s
+  [publish era5_v] era5_v/1999  2632/6505  398.7s
+  [publish era5_v] era5_v/2000  2778/6505  411.0s
+  [publish era5_v] era5_v/2001  2924/6505  423.0s
+  [publish era5_v] era5_v/2002  3070/6505  435.5s
+  [publish era5_v] era5_v/2003  3216/6505  447.7s
+  [publish era5_v] era5_v/2004  3364/6505  460.7s
+  [publish era5_v] era5_v/2005  3510/6505  472.8s
+  [publish era5_v] era5_v/2006  3656/6505  485.1s
+  [publish era5_v] era5_v/2007  3802/6505  497.6s
+  [publish era5_v] era5_v/2008  3948/6505  510.2s
+  [publish era5_v] era5_v/2009  4094/6505  522.6s
+  [publish era5_v] era5_v/2010  4240/6505  534.8s
+  [publish era5_v] era5_v/2011  4386/6505  546.8s
+  [publish era5_v] era5_v/2012  4532/6505  559.4s
+  [publish era5_v] era5_v/2013  4678/6505  572.2s
+  [publish era5_v] era5_v/2014  4824/6505  584.3s
+  [publish era5_v] era5_v/2015  4970/6505  596.4s
+  [publish era5_v] era5_v/2016  5116/6505  608.2s
+  [publish era5_v] era5_v/2017  5262/6505  621.1s
+  [publish era5_v] era5_v/2018  5408/6505  633.0s
+  [publish era5_v] era5_v/2019  5554/6505  644.9s
+  [publish era5_v] era5_v/2020  5700/6505  656.8s
+  [publish era5_v] era5_v/2021  5846/6505  668.9s
+  [publish era5_v] era5_v/2022  5992/6505  681.3s
+  [publish era5_v] era5_v/2023  6138/6505  693.0s
+  [publish era5_v] era5_v/2024  6286/6505  705.8s
+  [publish era5_v] era5_v/2025  6432/6505  718.7s
+  [publish era5_v] era5_v/2026  6504/6505  725.2s
+  [publish era5_v] store.json  6505/6505  725.6s
+  publish: 6505 file(s) verified by restore, 50 tile(s) decompressed, HTTP range {'checked': 5} -> https://huggingface.co/datasets/chfrank/earth-tensors/tree/main/tensors/family1_2/era5_v
+=== stage publish done in 801.2s ===
