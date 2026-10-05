@@ -1,0 +1,171 @@
+# E-084 · The Data tab — every fine observation store, filtered and downloaded in the browser
+
+Written 2026-10-05 (Fable plans, Opus implements — `ml/CLAUDE.md` §0b).
+
+Chris, 2026-10-05, on the "Model climatology" layer (E-083 — the per-calendar-month
+average the forecaster is scored against, published as a globe layer with three
+fixed versions): *"I would suggest we make it a tab instead (which lets us take
+care of all the controls we need)."* The download should be refinable by
+**period** (start year, end year), **month** (e.g. all Februaries 1982–2004),
+**date / time of day** where the data has it, **bounding box**, and
+**resolution** (nothing coarser than 1°; finer wherever the source is finer).
+*"So no 'paper holdout' or similar anymore, just setting a period is enough."*
+Then: *"please build all the channels in family 1.gf (and can we achieve native
+temporal granularity for them as a default, too?)"*
+
+**Family 1.gf** is the global set of observation stores at 10 km / 5 days or
+finer, each kept at its own resolution
+([design note](https://blauewelt.github.io/earth/ml/paper/notes/family1gf.pdf),
+[build log](https://blauewelt.github.io/earth/docs.html?f=ml/family1/BUILD_LOG.md)).
+
+## 1. The finding that shapes the plan
+
+Nothing has to be precomputed for family 1.gf. Its stores are already laid out
+for exactly this read, and the public data store (the Hugging Face dataset
+`chfrank/earth-tensors`) answers cross-origin `Range:` requests with 206
+(measured 2026-10-05 from `Origin: https://blauewelt.org` on
+`oc4k/oc4k/2010/bin_2050.zst`: 302 → CDN → 206, `access-control-allow-origin: *`).
+
+- **Gridded stores** ("tier G, sharded" — `ml/family1/sharded.py`): one file
+  per five-day bin holding every daily (or 3-hourly) frame cut into 256×256
+  tiles, each tile compressed on its own with zstd. A bounding box is a few
+  tiles; a period is a list of bins; a month filter is a subset of those bins;
+  native time resolution is simply "keep the frames apart".
+- **Point stores** ("tier P" — family 10's column layout): rows sorted by
+  (five-day bin, second), with an offsets array saying where each bin starts.
+  A period is one contiguous byte range per column; the row count of any
+  period is known from the offsets before a single data byte is read.
+
+So phase 1 is front-end only: no rented box, no new files on the store.
+
+## 2. The stores (registry `tensors/family1_gf/family1gf.json`, generated 2026-09-25)
+
+| store | what it measures | kind | native space | native time (the default) | record |
+|---|---|---|---|---|---|
+| `oc4k` | chlorophyll (log₁₀), water clarity `kd_490`, observation count | grid 4320×8640 | 4 km (1/24°) | daily | 1997-09 → 2022-12 |
+| `pace4k` | chlorophyll, particulate carbon, phytoplankton carbon … (7 channels) from NASA's PACE instrument | grid | 4 km | daily | 2024-03 → 2026-09 |
+| `sst_acspo02` | sea-surface temperature as satellites measured it (clear sky only) + quality grade | grid | 0.02° (2 km) | daily | 2000-02 → 2026-09 |
+| `irtb` | cloud-top brightness temperature from geostationary satellites | grid | 4 km | 3-hourly as stored (40 frames per bin; the source is half-hourly) | 1998 → 2026-09 |
+| `icoads` | ship and buoy reports: sea and air temperature, pressure, wind, dew point, waves, cloud | points | point | per report | 1662 → 2026 |
+| `wod` | ship casts: temperature, salinity, oxygen … at 16 pressures (128 channels) | profiles | point | per cast | 1772 → 2026 |
+| `glodap` | bottle samples: carbon, alkalinity, pH, oxygen, nutrients (13 channels) | points | point | per bottle | 1972 → 2023 |
+| `bgcargo` | biogeochemical floats: oxygen, nitrate, pH, chlorophyll, backscatter … at 16 pressures (96 channels) | profiles | point | per profile | 2002 → 2026 |
+| `oceansites` | open-ocean moorings (28 channels) | points | point | hourly | 1980 → 2026 |
+| `xco2` | column CO₂ soundings (OCO-2, OCO-3, GOSAT) | points | < 3 km² | per sounding | 2009 → 2026 |
+| `swh` | significant wave height along altimeter tracks | points | ≈ 7 km | 1 per second along track | 1991 → 2023 |
+| `swot` | sea-level anomaly on SWOT's 2 km swaths | points | 2 km | per pass | 2023-07 → 2026-09 |
+
+Not offered: `seaice_asi` (Bremen 6.25 km sea ice) is on the private track
+until Bremen answers on redistribution — a browser has no token and must not
+have one. `sst_cci05`, `precip01`, `deep_arrays`, `wind12` are in the design
+note but not built; the tab reads the registry, so a store appears when it lands.
+
+## 3. The tab
+
+A new tab **Data** between *Cones* and *Play*. Controls, top to bottom:
+
+1. **Store** and **channel(s)** — from the registry, labelled in plain English
+   (one sentence per store; the code name in small type beside it).
+2. **Period** — start year, end year, clamped to the store's record.
+3. **Months** — twelve chips, all on by default.
+4. **Time of day (UTC)** — a from–to hour pair; shown only where the store has
+   sub-daily time (`irtb`, every point store).
+5. **Box** — W / S / E / N fields, a "use the current view" button, presets
+   (the Cones tab's six places), and the box drawn on the globe. Boxes across
+   the dateline (W > E) are legal. A box is **required** for gridded stores.
+6. **Time step** — *native* (default), *five-day mean*, *monthly mean*, *one
+   mean over the whole selection*. Means are NaN-aware and always come with a
+   per-cell **count** of contributing observations.
+7. **Resolution** (gridded) — *native* (default), 0.25°, 1°: NaN-aware box
+   average in the browser, with count. (Point stores: *rows* by default, or
+   binned to 0.25° / 1° cells × the chosen time step: mean + count.)
+8. **Estimate** — live, before any data is read: requests, megabytes to read,
+   frames or rows, megabytes of the file. Over the cap (§5) the button is
+   disabled and the line says what to shrink and links the store's folder.
+9. **Preview on the globe** — paints one frame / one bin of the selection
+   inside the box (points as dots), with the channel's legend.
+10. **Download** — NetCDF (grids and binned points) or CSV (rows; small grids
+    as `time,lat,lon,value`). Progress bar, cancel button.
+
+The "Model climatology" row in *Layers* keeps its checkbox; its downloads
+block gains a line pointing at this tab. Its version selector and the family-7
+per-year files are **phase 2** (§7), not this build.
+
+## 4. Code layout
+
+- `lib/fzstd.js` — vendored zstd decoder (MIT; add its licence file beside it,
+  as `lib/marked.LICENSE.md` does). Pin the version in a comment.
+- **`src/f1data.js`** — the reader, no DOM, usable from node ≥ 18 and the
+  browser (`window.F1Data`). This is the contract between the two halves:
+
+  ```js
+  F1Data.loadRegistry()            // → {stores:[{name,title,gist,kind:'grid'|'points',channels:[{name,unit,min,max}],
+                                   //     span:[iso,iso], frameSeconds, framesPerBin, grid:{H,W,lat0,lon0,dlat,dlon,...}, folderUrl}]}
+  F1Data.estimate(sel)             // → Promise<{requests, readBytes, outBytes, frames|rows, overCap:boolean, why:string}>
+  F1Data.run(sel, {onProgress, signal})   // → Promise<Result>
+  F1Data.preview(sel, {signal})    // → Promise<Result> for ONE frame/bin (the first with data), same shape
+  F1Data.toNetCDF(result)          // → Blob (NetCDF-3 classic, 64-bit offset; CF attributes; source + selection in global attrs)
+  F1Data.toCSV(result)             // → Blob
+  // sel = {store, channels:[names], yearStart, yearEnd, months:[1..12], hours:[h0,h1]|null,
+  //        bbox:{w,s,e,n}|null, step:'native'|'pentad'|'month'|'all', res:'native'|0.25|1}
+  // Result (grid)   = {kind:'grid', store, channels, units, lat:Float64Array, lon:Float64Array,
+  //                    time:Float64Array /*unix s, start of each step*/, data:Float32Array /*[T,C,H,W]*/,
+  //                    count:Uint16Array|null /*[T,C,H,W] when a mean was taken*/, sel}
+  // Result (points) = {kind:'points', store, channels, units, time:Float64Array, lat:Float32Array, lon:Float32Array,
+  //                    values:Float32Array /*[N,C]*/, platform, qc, sel}
+  ```
+
+  Every HTTP read asks for a `Range` and **refuses a 200** (the app's
+  `hubRangeRead` rule). A failed read rejects the whole run with the URL in
+  the message — never a silent hole in the file (Chris, 2026-09-14: no
+  "download failed → skip" paths). Concurrency ≤ 6.
+- `index.html` / `src/app.js` / `src/style.css` — the tab (§3).
+- `docs/DATA_TAB.md` — reader's guide; registered in `docs.html` with this plan.
+
+## 5. Limits, stated on the page
+
+- Cap: 600 MB to read or 400 MB of result arrays, whichever binds. One global
+  five-day bin of `oc4k` is ≈ 108 MB, so a year of the whole globe (≈ 8 GB) is
+  refused with a pointer to the files; the same year over the North Atlantic
+  is a few hundred megabytes.
+- Coarser resolution and time means are computed **after** reading native
+  bytes: they shrink the file, not the read. The estimate shows both numbers.
+- A point store filters the box in the browser after reading the period's
+  lat/lon columns, so a short period is cheap and a long one is not, whatever
+  the box. The estimate is exact (offsets), and binned output streams bin by
+  bin so memory follows the output, not the rows.
+- `sst_acspo02` has gaps (cloud); it is not a finer OISST. `irtb` is stored as
+  uint8 K − 160. `oc4k`'s chlorophyll is log₁₀. The page says each in words
+  and the file carries physical units where a conversion is defined.
+
+## 6. Tests and falsifiers
+
+- `tests/f1data.test.mjs` (node `--test`): a synthetic sharded store and a
+  synthetic point store written by the real Python writers
+  (`ml/family1/sharded.py`, the family-10 store writer) into
+  `data/family1_fixture/` (< 2 MB), read back through `F1Data` over a local
+  HTTP server that honours `Range` — values equal to the bytes the writer was
+  given; a box across the dateline; a missing frame (offset −1) is absent from
+  `time`, not zero-filled; a 200 answer is refused; means equal numpy's
+  `nanmean` and counts equal the finite count; the NetCDF opens in Python
+  (`netCDF4` or `scipy.io.netcdf_file`) with the same values.
+- Live check (not in the hourly suite): one `oc4k` tile and one `glodap` bin
+  read from the store through `F1Data` equal the same read through the Python
+  readers.
+- `tests/app.spec.js`: the tab opens; the estimate reacts to period, months
+  and box; over-cap disables the button; a fixture download has the right
+  shape.
+
+## 7. Phase 2 (not this build)
+
+The family-7 channels (the 56-channel 0.25° / 1° tensor the forecaster reads)
+join the same tab: native five-day frames straight from the tensor, and one
+mean per year and calendar month (with counts) computed on a rented box so a
+free period is two reads instead of hundreds — which is what replaces the
+three holdout versions. Precomputed monthly means and 0.25° / 1° pyramids for
+the 1.gf grids go with it, so a long period at coarse resolution stops costing
+native bytes.
+
+## 8. Status
+
+- 2026-10-05: plan written; reader and tab dispatched to two Opus agents.
