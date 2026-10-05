@@ -1,16 +1,6 @@
 {
  "pending": [
   {
-   "store": "era5_v",
-   "stage": "index,fetch",
-   "start": "2012-01-01",
-   "end": "2016-12-31",
-   "runner": "ubuntu-latest",
-   "extra_args": "--push-parts",
-   "adapter_env": "",
-   "retries": 2
-  },
-  {
    "store": "era5_q",
    "stage": "index,fetch",
    "start": "2017-01-01",
@@ -108,17 +98,6 @@
    "at": "2026-10-05T18:42:20.084Z"
   },
   {
-   "store": "era5_q",
-   "stage": "index,fetch",
-   "start": "2007-01-01",
-   "end": "2011-12-31",
-   "runner": "ubuntu-latest",
-   "extra_args": "--push-parts",
-   "adapter_env": "",
-   "retries": 2,
-   "at": "2026-10-05T18:45:27.495Z"
-  },
-  {
    "store": "era5_t",
    "stage": "index,fetch",
    "start": "2007-01-01",
@@ -183,6 +162,17 @@
    "adapter_env": "",
    "retries": 2,
    "at": "2026-10-05T19:01:13.949Z"
+  },
+  {
+   "store": "era5_v",
+   "stage": "index,fetch",
+   "start": "2012-01-01",
+   "end": "2016-12-31",
+   "runner": "ubuntu-latest",
+   "extra_args": "--push-parts",
+   "adapter_env": "",
+   "retries": 2,
+   "at": "2026-10-05T19:10:28.674Z"
   }
  ],
  "done": [
@@ -3690,6 +3680,19 @@
    "at": "2026-10-05T18:32:49.229Z",
    "run_number": 937,
    "finished": "2026-10-05T18:58:14Z"
+  },
+  {
+   "store": "era5_q",
+   "stage": "index,fetch",
+   "start": "2007-01-01",
+   "end": "2011-12-31",
+   "runner": "ubuntu-latest",
+   "extra_args": "--push-parts",
+   "adapter_env": "",
+   "retries": 2,
+   "at": "2026-10-05T18:45:27.495Z",
+   "run_number": 943,
+   "finished": "2026-10-05T19:10:13Z"
   }
  ],
  "failed": []
