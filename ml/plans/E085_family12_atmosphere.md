@@ -58,8 +58,25 @@ Links:
 
 ## 1 · Decisions
 
-Made by the planning session on 2026-10-05 and not reopened here; the
-measurements in §2 and §4 are what each choice rests on.
+**Numbered decisions of the planning session, 2026-10-05, on the probe report
+(§4).** These are the ones a later session must not quietly reopen:
+
+- **D1 — build the four stores exactly as probed:** 1°, six-hourly instants,
+  the 13 levels, one store per variable, float16, humidity in g/kg.
+- **D2 — the shard byte order does NOT change.** The planar, byte-shuffled
+  tile order of §4 would save ~26 % of 349 GB, which is not worth a format
+  fork across every reader of `sharded.py`. It stays a recorded option.
+- **D3 — geopotential stays out** (it does not fit float16 without a
+  transform of its own).
+- **D4 — ERA5T stays out:** the record ends where final ERA5 ends
+  (`valid_time_stop`, 2026-06-30).
+- **D5 — specific humidity's lower bound is −0.01 g/kg, not 0.** ERA5's own
+  small negative humidities (January 2015: 11 values, the lowest −0.0042
+  g/kg, at 100–200 hPa in the tropics) are kept as ERA5 gives them;
+  anything below −0.01 g/kg is corrupt (NaN, counted).
+
+The table below is the full set of choices, with what each rests on;
+the measurements in §2 and §4 are its evidence.
 
 | decision | choice | why |
 |---|---|---|
@@ -246,45 +263,93 @@ figure is what the store costs as designed.
 
 ## 6 · The build ladder
 
-Nothing below has run. Each step is dispatched only after the previous one is
-read.
+Step 1 is running (§8); steps 2–4 have not been dispatched.
 
 1. **Hosted fetch lanes** (`.github/workflows/family1-build.yml`, `runner:
    ubuntu-latest`, `stage: index,fetch`, `extra_args: --push-parts`, the
    store and a window of whole calendar years — an unnamed lane per window,
-   parts parked at `partials/family1_2/<store>/<year>/`). No credential is
-   needed (the source is keyless), so the lanes need nothing from the
-   repository's secrets. **The binding constraint is disk**, not time: a lane
-   keeps every year's parts until it pushes. Planned for the ~14 GB free disk
-   the brief gives for a hosted runner:
+   parts parked at `partials/family1_2/<store>/<year>/`, every part
+   restore-hashed and each year's `done.json` written last). The source is
+   keyless, so the lanes need no secret.
 
-   | store | lane width | lanes | parts per lane | time per lane (sandbox-measured rate) |
-   |---|---|---|---|---|
-   | `era5_t` | 10 years (2022–2026 is the 5th) | 5 | ≤ 12.2 GB | A: 10 × 1,461 × 0.28 s ≈ 70 min; tail lane ≈ 6,568 × 0.43 s ≈ 50 min |
-   | `era5_q`, `era5_u`, `era5_v` | 5 years | 9 each | ≤ 11.4 GB | A: 5 × 1,461 × 0.22–0.29 s ≈ 27–35 min; tail lane (2022–2026) ≈ 6,568 × 0.45–0.50 s ≈ 50–55 min |
+   **The hosted runner, MEASURED by the canary #920 (era5_t 1982–1991, the
+   first lane, 2026-10-05):** `/dev/root` 145 GB with **85 GB free** (91.0 GB
+   decimal at the parts directory), **4 vCPU, 15 GiB RAM**. The "~14 GB"
+   planning figure was wrong and the ADAPTER_CONTRACT's "~86 GB" is right.
+   Rates: `era5_t` 212 s per year of fetch (0.145 s a frame, ~33 MB/s of
+   source); `era5_q`/`era5_v` 117–133 s per year; the push of a lane's parts
+   (upload, then download back and hash every file, then `done.json`)
+   ~145 s per GB-year of t (1,450 s for the canary's 12.1 GB). The build
+   step now prints `df -h`, `nproc` and `free -g` before the first byte, and
+   the ERA5 preflight sizes every lane's parts against the free disk and
+   refuses in seconds if they do not fit.
 
-   **32 lanes, about 20 runner-hours, $0** (hosted runners on a public
-   repository). The rates are this 2-vCPU sandbox's — encoding, not the
-   network, bounds path A (0.13–0.21 s a frame of zstd at level 15), and a
-   hosted runner has 4 vCPU; path B reads at 75–100 MB/s with 16 threads. If
-   a hosted lane really has the ~86 GB ADAPTER_CONTRACT.md quotes, the lanes
-   widen to the 6-hour limit instead (t 40 years in one lane, q/u/v about
-   30 years) and the count drops to about 10; the first lane should print
-   `df -h` and settle it.
-2. **Assembly on one rented, verified box** (`--parts-from-hub --stage all`,
-   one store at a time, `free_cache` between them): the stores are 54–101 GB
-   and no hosted runner holds one. Pull ≈ the store's size; the assembler
-   hard-links the parts (no copy); publish uploads byte-identical files
-   (the Hub de-duplicated oc4k's 176 GB in ~200 s for exactly this reason)
-   and downloads every one back; `check` decompresses every tile — 1.17 M
-   per store, against oc4k's 3.64 M in ~3.8 h on a weak box. Expect **2–3 h
-   per store, 8–12 h for four, ≈ $2–6** on a verified host with ≥ 250 GB of
-   disk and fast upload (ml/CLAUDE.md §7, "rent a verified host for a big
-   transfer").
-3. **The registry**: `python3 ml/build_family1_registry.py --publish` writes
-   and restore-verifies `tensors/family1_2/family12.json` (built today
-   offline: 4 stores, `inherits: family1gf`, the E4 exception, `levels_hpa`
-   per store, each probe summarised).
+   **Re-planned from those numbers:** disk no longer binds (a 5-year lane
+   is ≤ 11.4 GB of 85). Lanes are **5 calendar years** for all four stores —
+   about 30–55 min each — chosen for parallelism under the 12-lane ceiling
+   and to keep a failure's blast radius small, not for disk. 34 lanes after
+   the canary (t 1992–2026 in 7, q/u/v 1982–2026 in 9 each; the last lane of
+   each is 2022–2026, the 0.25° tail), queued on the `f1-queue` branch's
+   `lane_queue.json` and kept at ≤ 12 in flight by the repository's
+   queue keeper (`family1-queue.yml`, `max` 12). Each lane carries
+   `retries: 2`, so the keeper re-dispatches a fast (< 20 min) failure once
+   and then marks it failed; a slow failure is failed at once, and the log is
+   read before any re-dispatch. Cost $0.
+
+2. **Assembly on one rented, verified box, one store at a time** — prepared,
+   NOT rented. Per store `S` in `era5_t`, `era5_q`, `era5_u`, `era5_v`, on the
+   box's runner `gpu-box-<offerId>`:
+
+   ```json
+   {"store":"S","stage":"all","start":"1982-01-01","end":"2026-12-31",
+    "runner":"gpu-box-<offerId>","extra_args":"--parts-from-hub --assemble streaming"}
+   ```
+
+   (`stage=all` on a tier-G store is index, fetch — which with
+   `--parts-from-hub` PULLS the parked parts and reads no source —,
+   assemble and publish, the publish uploading and downloading back every
+   file; both `start` and `end` must be passed or the workflow's default end
+   of 2024-12-31 silently drops 2025–2026), then the full decode by name:
+
+   ```json
+   {"store":"S","stage":"check","start":"1982-01-01","end":"2026-12-31",
+    "runner":"gpu-box-<offerId>","extra_args":""}
+   ```
+
+   and, before the next store, `free_cache: "family1_2/S"` on that store's
+   next dispatch (the step deletes a work directory only if it carries
+   `publish.done` AND `check.done`).
+
+   **The box:** a *verified* Vast host (ml/CLAUDE.md §7), no GPU needed
+   (the work is pull, hard-link, hash, upload, download-back, decode);
+   **disk ≥ 200 GB** — the largest store's parts are ~102 GB (`era5_v`,
+   hard-linked into the store, not copied), plus the publish's one-year
+   restore scratch (~2.3 GB), the checkout and pip environment (~10 GB), and
+   ~2× headroom so a store can be checked while the next one's pull starts;
+   or ≥ 450 GB to keep all four without `free_cache`; **RAM ≥ 16 GB** (the
+   assembler links files and the check decodes 64 × 64 × 13 tiles one at a
+   time — the January store peaked at 0.8 GB); **inet_down ≥ 1 Gbps**
+   (each store is pulled once and downloaded back once by publish, ~200 GB
+   per large store) and **inet_up ≥ 300 Mbps** (the upload is mostly
+   de-duplicated by the Hub — the parts ARE the store files — so it is
+   metadata plus whatever the Hub does not already hold). `node
+   scripts/gpu_box.mjs offers` prints `inet_up`, `inet_down` and
+   `verification`; its filter asks for an RTX 4090 and must be widened for a
+   CPU-only job. Estimate **2–3 h per store, 8–12 h for four, ≈ $2–6**.
+
+3. **The registry**, after all four stores are published and checked:
+   `python3 ml/build_family1_registry.py --check` then `python3
+   ml/build_family1_registry.py --publish`, which writes and
+   restore-verifies `tensors/family1_2/family12.json` (and rewrites the
+   other three family-1 registries, content unchanged apart from their
+   timestamps). It needs `HF_TOKEN` with write access to
+   `chfrank/earth-tensors`. This sandbox does not hold one, and no workflow
+   runs the registry builder today (family1-build's steps hand `HF_TOKEN`
+   only to `build_family1_stores.py`), so it needs either a machine holding
+   the token or a small registry mode added to a workflow — an open item, not
+   a blocker for the stores themselves. Offline
+   today it lists 4 stores, `inherits: family1gf`, the E4 exception,
+   `levels_hpa` per store and each probe.
 4. **Phase B** (0.25°) only on Chris's word, and only after the byte-order
    decision in §4.
 
@@ -312,18 +377,29 @@ read.
 
 ## 8 · Status
 
-- **Built in this session (branch `family12`, then main):**
-  `ml/family1/adapters/_era5.py` (source, block reader, regrid, adapter base,
-  smoke archive) and `era5_t.py`, `era5_q.py`, `era5_u.py`, `era5_v.py`;
-  `FAMILIES["12"]` in `ml/family1/adapters/__init__.py`; family 1.2 in
-  `ml/build_family1_registry.py` (inheritance by reference, `exceptions`,
-  `levels_hpa`; the three existing registries are unchanged in content);
-  `ml/family1/era5_check.py`; four probe reports; `numcodecs` in the
-  workflow's install step; `tests/test_family12_era5.py` and the registry
-  test's family list.
-- **Measured:** the four January-2015 probes and checks above.
-- **Not done:** no lane, no box, no upload, no registry publish. The hosted
-  runner's free disk and CPU rate are not measured (the lane plan uses the
-  brief's 14 GB and the sandbox's rates). ERA5T is not admitted. Family
-  10.2's `siblings` line still names three family-1 registries, not four.
-  The byte-order option (§4) is open.
+**2026-10-05, fetch phase running; nothing assembled, no box rented.**
+
+- **Built and on main:** the adapters (`_era5.py`, `era5_t/q/u/v.py`), family
+  code 12, family 1.2 in the registry builder (offline it lists 4 stores,
+  `inherits: family1gf`, E4, `levels_hpa`), `era5_check.py`, the four
+  January-2015 probe reports, the tests, `numcodecs` and an early `df -h` /
+  `nproc` / `free -g` in the workflow, and a disk preflight that sizes each
+  lane from the probe's bytes per frame (c8ffcd2).
+- **Decisions D1–D5 (§1)** recorded on the probe report: build as probed,
+  byte order unchanged, no geopotential, no ERA5T, q's lower bound
+  −0.01 g/kg.
+- **The canary #920** (era5_t 1982–1991) is parked and verified (its
+  effect read off the Hub: ten `done.json`, 14,620 frames, 12.08 GB, one part
+  re-hashed here), and it measured the hosted runner: 85 GB free, 4 vCPU,
+  15 GiB. The other 34 five-year lanes are on the queue keeper at ≤ 12 in
+  flight. The lane ledger, with each lane's run, status, frames and parked
+  bytes, is the E-085 entry at the end of
+  [the family-1 build log](https://blauewelt.github.io/earth/docs.html?f=ml/family1/BUILD_LOG.md).
+- **The 0.25° tail path ran in real lanes** (2022 for all four stores,
+  361–433 s a year) with stored sizes matching the 1° years'.
+- **Next:** when every lane is parked (every year 1982–2026 of every store
+  has a `done.json`), assemble per §6 step 2 on one verified box, one store
+  at a time, then `--stage check`, then the registry (§6 step 3, which needs
+  a machine holding `HF_TOKEN`).
+- **Not measured:** nothing about the assembly yet (its time and cost are the
+  §6 estimates).

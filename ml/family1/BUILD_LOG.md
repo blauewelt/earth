@@ -1425,3 +1425,106 @@ a rented box.** It needs the Earthdata credentials, which never go on a
 stranger's machine. So fetch stays on hosted runners. **The whole-record
 assemblies go to one box per store**, each assembling from the parked parts
 with `--parts-from-hub`.
+
+## E-085 · family 1.2's ERA5 atmosphere — the fetch lanes (2026-10-05)
+
+*Family 1.2 is family 1.gf (inherited by reference) plus four new stores of
+the upper air from ERA5, ECMWF's reanalysis: air temperature `era5_t`,
+specific humidity `era5_q` (g/kg), and the eastward and northward wind
+`era5_u`/`era5_v`, each on the 13 standard pressure levels 50–1000 hPa,
+one frame per six-hourly analysis instant, on a 1° grid. The plan, with
+the decisions and the January-2015 probe, is
+[E-085](https://blauewelt.github.io/earth/docs.html?f=ml/plans/E085_family12_atmosphere.md).
+This entry is the FETCH phase only: hosted lanes park each year's parts
+under `partials/family1_2/<store>/<year>/` (every part uploaded, downloaded
+back and hashed, `done.json` written last). No store is assembled yet.
+Ledger as of 2026-10-05 19:11Z.*
+
+**The hosted runner, measured by the canary.** `#920` (era5_t 1982–1991,
+the first lane) printed the machine before its first byte: `/dev/root`
+145 GB, **85 GB free** (91.0 GB decimal at the parts directory), **4 vCPU,
+15 GiB RAM**. The "~14 GB free" figure the lanes were first planned on was
+wrong; ADAPTER_CONTRACT.md's "~86 GB" is right. The build step now prints
+`df -h`, `nproc` and `free -g` first, and the ERA5 preflight sizes a lane's
+parts from the probe's bytes per frame against the free disk and refuses
+in seconds if they cannot fit (c8ffcd2).
+
+**The canary, verified by its effect.** All ten years carry a `done.json`
+listing 148 files (150 for the 74-bin 1984); every ledger says 1,460 frames
+(1,480 in 1984), all from the 1° archive, 0 missing, 0 absent, 0 out of
+bounds; one part downloaded here independently (`1987/era5_t__bin_0366.zst`,
+16.5 MB) matches its `done.json` sha256, and so did one random part of
+`era5_q` 1984, `era5_u` 1983, `era5_v` 1989 and `era5_t` 1994 once those
+lanes parked. **A year holds 1,460 or 1,480 frames, not 1,460/1,464:** a
+year owns the five-day bins whose FIRST day falls in it, 73 or 74 of them,
+times 20 frames. The canary took 59 min: 212 s of fetch a year (0.145 s a
+frame, ~33 MB/s from the archive) and ~1,450 s to push and restore-hash
+12.1 GB.
+
+**Re-planned lanes.** With 85 GB free the disk no longer binds, so the
+other 34 lanes are five calendar years each (t 1992–2026 in 7, q/u/v
+1982–2026 in 9 each, the last of each being 2022–2026, the 0.25° tail),
+chosen for parallelism and a small blast radius. They are queued on the
+`f1-queue` branch's `lane_queue.json` and kept at ≤ 12 in flight by the
+queue keeper (`family1-queue.yml` #10, `max` 12; the site's Test & Deploy
+shares the account's 20 jobs). Each lane carries `retries: 2`, so a fast
+(< 20 min) failure is re-dispatched once and then failed; a slow failure is
+failed at once and its log read before anything is re-dispatched. The four
+tail lanes were moved to the head of the queue so the 0.25° path ran in a
+real lane early: 361–433 s per year (0.25–0.30 s a frame, 114–153 MB/s from
+the archive), stored bytes per year within 0.5 % of the 1° years'.
+`family1-build.yml` has no `doc` input, so each lane's absolute description
+(ml/CLAUDE.md §0d) is the ledger's fourth column.
+
+**Per store, parked and verified so far, against the probe's extrapolation:**
+
+| store | lanes parked | years | frames | parked bytes | stored per frame | probe's full-record estimate |
+|---|---|---|---|---|---|---|
+| `era5_t` | 4 of 8 | 25 | 36,540 | 30.21 GB | 0.827 MB (-0.6 % vs the probe's 0.832) | 54.1 GB |
+| `era5_q` | 6 of 9 | 30 | 43,840 | 63.88 GB | 1.457 MB (+0.8 % vs the probe's 1.446) | 94.0 GB |
+| `era5_u` | 5 of 9 | 25 | 36,540 | 55.63 GB | 1.523 MB (-0.2 % vs the probe's 1.525) | 99.2 GB |
+| `era5_v` | 4 of 9 | 20 | 29,220 | 45.51 GB | 1.557 MB (-0.1 % vs the probe's 1.559) | 101.3 GB |
+
+**The lane ledger.** Runs are family1-build workflow runs
+([the Actions list](https://github.com/blauewelt/earth/actions/workflows/family1-build.yml));
+"parked, verified" means the run went green AND every year of its window
+has a `done.json` on the Hub, read back by this session.
+
+| store | years | run | what it does (absolute) | status | frames parked | parked bytes |
+|---|---|---|---|---|---|---|
+| `era5_t` | 1982–1991 | [#920](https://github.com/blauewelt/earth/actions/runs/37345050107) | E-085 · fetch ERA5 air temperature on 13 pressure levels, six-hourly, 1982–1991, from the 1° archive (the producer's regrid), and park the parts on the Hub · store `era5_t` · stage index,fetch · runner ubuntu-latest · `--push-parts` | parked, verified (59 min) | 14620 | 12.08 GB |
+| `era5_q` | 1982–1986 | [#921](https://github.com/blauewelt/earth/actions/runs/37353157929) | E-085 · fetch ERA5 specific humidity (g/kg) on 13 pressure levels, six-hourly, 1982–1986, from the 1° archive (the producer's regrid), and park the parts on the Hub · store `era5_q` · stage index,fetch · runner ubuntu-latest · `--push-parts` | parked, verified (24 min) | 7320 | 10.63 GB |
+| `era5_u` | 1982–1986 | [#922](https://github.com/blauewelt/earth/actions/runs/37353166185) | E-085 · fetch ERA5 eastward wind on 13 pressure levels, six-hourly, 1982–1986, from the 1° archive (the producer's regrid), and park the parts on the Hub · store `era5_u` · stage index,fetch · runner ubuntu-latest · `--push-parts` | parked, verified (25 min) | 7320 | 11.15 GB |
+| `era5_v` | 1982–1986 | [#923](https://github.com/blauewelt/earth/actions/runs/37353174060) | E-085 · fetch ERA5 northward wind on 13 pressure levels, six-hourly, 1982–1986, from the 1° archive (the producer's regrid), and park the parts on the Hub · store `era5_v` · stage index,fetch · runner ubuntu-latest · `--push-parts` | parked, verified (25 min) | 7320 | 11.40 GB |
+| `era5_q` | 1987–1991 | [#924](https://github.com/blauewelt/earth/actions/runs/37353182693) | E-085 · fetch ERA5 specific humidity (g/kg) on 13 pressure levels, six-hourly, 1987–1991, from the 1° archive (the producer's regrid), and park the parts on the Hub · store `era5_q` · stage index,fetch · runner ubuntu-latest · `--push-parts` | parked, verified (26 min) | 7300 | 10.62 GB |
+| `era5_u` | 1987–1991 | [#925](https://github.com/blauewelt/earth/actions/runs/37353190756) | E-085 · fetch ERA5 eastward wind on 13 pressure levels, six-hourly, 1987–1991, from the 1° archive (the producer's regrid), and park the parts on the Hub · store `era5_u` · stage index,fetch · runner ubuntu-latest · `--push-parts` | parked, verified (33 min) | 7300 | 11.11 GB |
+| `era5_v` | 1987–1991 | [#926](https://github.com/blauewelt/earth/actions/runs/37353198653) | E-085 · fetch ERA5 northward wind on 13 pressure levels, six-hourly, 1987–1991, from the 1° archive (the producer's regrid), and park the parts on the Hub · store `era5_v` · stage index,fetch · runner ubuntu-latest · `--push-parts` | parked, verified (32 min) | 7300 | 11.37 GB |
+| `era5_q` | 1992–1996 | [#927](https://github.com/blauewelt/earth/actions/runs/37353206614) | E-085 · fetch ERA5 specific humidity (g/kg) on 13 pressure levels, six-hourly, 1992–1996, from the 1° archive (the producer's regrid), and park the parts on the Hub · store `era5_q` · stage index,fetch · runner ubuntu-latest · `--push-parts` | parked, verified (40 min) | 7300 | 10.63 GB |
+| `era5_t` | 1992–1996 | [#928](https://github.com/blauewelt/earth/actions/runs/37353215016) | E-085 · fetch ERA5 air temperature on 13 pressure levels, six-hourly, 1992–1996, from the 1° archive (the producer's regrid), and park the parts on the Hub · store `era5_t` · stage index,fetch · runner ubuntu-latest · `--push-parts` | parked, verified (23 min) | 7300 | 6.04 GB |
+| `era5_u` | 1992–1996 | [#929](https://github.com/blauewelt/earth/actions/runs/37353223690) | E-085 · fetch ERA5 eastward wind on 13 pressure levels, six-hourly, 1992–1996, from the 1° archive (the producer's regrid), and park the parts on the Hub · store `era5_u` · stage index,fetch · runner ubuntu-latest · `--push-parts` | parked, verified (37 min) | 7300 | 11.12 GB |
+| `era5_v` | 1992–1996 | [#930](https://github.com/blauewelt/earth/actions/runs/37353232012) | E-085 · fetch ERA5 northward wind on 13 pressure levels, six-hourly, 1992–1996, from the 1° archive (the producer's regrid), and park the parts on the Hub · store `era5_v` · stage index,fetch · runner ubuntu-latest · `--push-parts` | parked, verified (32 min) | 7300 | 11.37 GB |
+| `era5_q` | 1997–2001 | [#931](https://github.com/blauewelt/earth/actions/runs/37353240116) | E-085 · fetch ERA5 specific humidity (g/kg) on 13 pressure levels, six-hourly, 1997–2001, from the 1° archive (the producer's regrid), and park the parts on the Hub · store `era5_q` · stage index,fetch · runner ubuntu-latest · `--push-parts` | parked, verified (40 min) | 7300 | 10.67 GB |
+| `era5_t` | 1997–2001 | [#932](https://github.com/blauewelt/earth/actions/runs/37353248235) | E-085 · fetch ERA5 air temperature on 13 pressure levels, six-hourly, 1997–2001, from the 1° archive (the producer's regrid), and park the parts on the Hub · store `era5_t` · stage index,fetch · runner ubuntu-latest · `--push-parts` | parked, verified (34 min) | 7300 | 6.03 GB |
+| `era5_u` | 1997–2001 | [#933](https://github.com/blauewelt/earth/actions/runs/37356338399) | E-085 · fetch ERA5 eastward wind on 13 pressure levels, six-hourly, 1997–2001, from the 1° archive (the producer's regrid), and park the parts on the Hub · store `era5_u` · stage index,fetch · runner ubuntu-latest · `--push-parts` | parked, verified (30 min) | 7300 | 11.11 GB |
+| `era5_v` | 1997–2001 | [#934](https://github.com/blauewelt/earth/actions/runs/37356347031) | E-085 · fetch ERA5 northward wind on 13 pressure levels, six-hourly, 1997–2001, from the 1° archive (the producer's regrid), and park the parts on the Hub · store `era5_v` · stage index,fetch · runner ubuntu-latest · `--push-parts` | parked, verified (31 min) | 7300 | 11.37 GB |
+| `era5_q` | 2002–2006 | [#935](https://github.com/blauewelt/earth/actions/runs/37356355412) | E-085 · fetch ERA5 specific humidity (g/kg) on 13 pressure levels, six-hourly, 2002–2006, from the 1° archive (the producer's regrid), and park the parts on the Hub · store `era5_q` · stage index,fetch · runner ubuntu-latest · `--push-parts` | parked, verified (28 min) | 7320 | 10.70 GB |
+| `era5_t` | 2002–2006 | [#936](https://github.com/blauewelt/earth/actions/runs/37356363222) | E-085 · fetch ERA5 air temperature on 13 pressure levels, six-hourly, 2002–2006, from the 1° archive (the producer's regrid), and park the parts on the Hub · store `era5_t` · stage index,fetch · runner ubuntu-latest · `--push-parts` | parked, verified (30 min) | 7320 | 6.06 GB |
+| `era5_u` | 2002–2006 | [#937](https://github.com/blauewelt/earth/actions/runs/37356756236) | E-085 · fetch ERA5 eastward wind on 13 pressure levels, six-hourly, 2002–2006, from the 1° archive (the producer's regrid), and park the parts on the Hub · store `era5_u` · stage index,fetch · runner ubuntu-latest · `--push-parts` | parked, verified (25 min) | 7320 | 11.15 GB |
+| `era5_v` | 2002–2006 | [#942](https://github.com/blauewelt/earth/actions/runs/37357956288) | E-085 · fetch ERA5 northward wind on 13 pressure levels, six-hourly, 2002–2006, from the 1° archive (the producer's regrid), and park the parts on the Hub · store `era5_v` · stage index,fetch · runner ubuntu-latest · `--push-parts` | running (or pushing) | — | 11.40 GB |
+| `era5_q` | 2007–2011 | [#943](https://github.com/blauewelt/earth/actions/runs/37358358771) | E-085 · fetch ERA5 specific humidity (g/kg) on 13 pressure levels, six-hourly, 2007–2011, from the 1° archive (the producer's regrid), and park the parts on the Hub · store `era5_q` · stage index,fetch · runner ubuntu-latest · `--push-parts` | parked, verified (25 min) | 7300 | 10.63 GB |
+| `era5_t` | 2007–2011 | [#944](https://github.com/blauewelt/earth/actions/runs/37358367626) | E-085 · fetch ERA5 air temperature on 13 pressure levels, six-hourly, 2007–2011, from the 1° archive (the producer's regrid), and park the parts on the Hub · store `era5_t` · stage index,fetch · runner ubuntu-latest · `--push-parts` | running (or pushing) | — | 0.00 GB |
+| `era5_u` | 2007–2011 | [#945](https://github.com/blauewelt/earth/actions/runs/37360306302) | E-085 · fetch ERA5 eastward wind on 13 pressure levels, six-hourly, 2007–2011, from the 1° archive (the producer's regrid), and park the parts on the Hub · store `era5_u` · stage index,fetch · runner ubuntu-latest · `--push-parts` | running (or pushing) | — | 0.00 GB |
+| `era5_v` | 2007–2011 | [#946](https://github.com/blauewelt/earth/actions/runs/37360314780) | E-085 · fetch ERA5 northward wind on 13 pressure levels, six-hourly, 2007–2011, from the 1° archive (the producer's regrid), and park the parts on the Hub · store `era5_v` · stage index,fetch · runner ubuntu-latest · `--push-parts` | running (or pushing) | — | 0.00 GB |
+| `era5_q` | 2012–2016 | [#947](https://github.com/blauewelt/earth/actions/runs/37360323227) | E-085 · fetch ERA5 specific humidity (g/kg) on 13 pressure levels, six-hourly, 2012–2016, from the 1° archive (the producer's regrid), and park the parts on the Hub · store `era5_q` · stage index,fetch · runner ubuntu-latest · `--push-parts` | running (or pushing) | — | 0.00 GB |
+| `era5_t` | 2012–2016 | [#948](https://github.com/blauewelt/earth/actions/runs/37360331137) | E-085 · fetch ERA5 air temperature on 13 pressure levels, six-hourly, 2012–2016, from the 1° archive (the producer's regrid), and park the parts on the Hub · store `era5_t` · stage index,fetch · runner ubuntu-latest · `--push-parts` | running (or pushing) | — | 0.00 GB |
+| `era5_u` | 2012–2016 | [#949](https://github.com/blauewelt/earth/actions/runs/37360339705) | E-085 · fetch ERA5 eastward wind on 13 pressure levels, six-hourly, 2012–2016, from the 1° archive (the producer's regrid), and park the parts on the Hub · store `era5_u` · stage index,fetch · runner ubuntu-latest · `--push-parts` | running (or pushing) | — | 0.00 GB |
+| `era5_v` | 2012–2016 | — | E-085 · fetch ERA5 northward wind on 13 pressure levels, six-hourly, 2012–2016, from the 1° archive (the producer's regrid), and park the parts on the Hub · store `era5_v` · stage index,fetch · runner ubuntu-latest · `--push-parts` | queued on the keeper | — | 0.00 GB |
+| `era5_q` | 2017–2021 | — | E-085 · fetch ERA5 specific humidity (g/kg) on 13 pressure levels, six-hourly, 2017–2021, from the 1° archive (the producer's regrid), and park the parts on the Hub · store `era5_q` · stage index,fetch · runner ubuntu-latest · `--push-parts` | queued on the keeper | — | 0.00 GB |
+| `era5_t` | 2017–2021 | — | E-085 · fetch ERA5 air temperature on 13 pressure levels, six-hourly, 2017–2021, from the 1° archive (the producer's regrid), and park the parts on the Hub · store `era5_t` · stage index,fetch · runner ubuntu-latest · `--push-parts` | queued on the keeper | — | 0.00 GB |
+| `era5_u` | 2017–2021 | — | E-085 · fetch ERA5 eastward wind on 13 pressure levels, six-hourly, 2017–2021, from the 1° archive (the producer's regrid), and park the parts on the Hub · store `era5_u` · stage index,fetch · runner ubuntu-latest · `--push-parts` | queued on the keeper | — | 0.00 GB |
+| `era5_v` | 2017–2021 | — | E-085 · fetch ERA5 northward wind on 13 pressure levels, six-hourly, 2017–2021, from the 1° archive (the producer's regrid), and park the parts on the Hub · store `era5_v` · stage index,fetch · runner ubuntu-latest · `--push-parts` | queued on the keeper | — | 0.00 GB |
+| `era5_q` | 2022–2026 | [#938](https://github.com/blauewelt/earth/actions/runs/37357539665) | E-085 · fetch ERA5 specific humidity (g/kg) on 13 pressure levels, six-hourly, 2022–2026, from the 0.25° archive regridded here, and park the parts on the Hub · store `era5_q` · stage index,fetch · runner ubuntu-latest · `--push-parts` | running (or pushing) | — | 0.00 GB |
+| `era5_t` | 2022–2026 | [#939](https://github.com/blauewelt/earth/actions/runs/37357547998) | E-085 · fetch ERA5 air temperature on 13 pressure levels, six-hourly, 2022–2026, from the 0.25° archive regridded here, and park the parts on the Hub · store `era5_t` · stage index,fetch · runner ubuntu-latest · `--push-parts` | running (or pushing) | — | 0.00 GB |
+| `era5_u` | 2022–2026 | [#940](https://github.com/blauewelt/earth/actions/runs/37357556450) | E-085 · fetch ERA5 eastward wind on 13 pressure levels, six-hourly, 2022–2026, from the 0.25° archive regridded here, and park the parts on the Hub · store `era5_u` · stage index,fetch · runner ubuntu-latest · `--push-parts` | running (or pushing) | — | 0.00 GB |
+| `era5_v` | 2022–2026 | [#941](https://github.com/blauewelt/earth/actions/runs/37357947951) | E-085 · fetch ERA5 northward wind on 13 pressure levels, six-hourly, 2022–2026, from the 0.25° archive regridded here, and park the parts on the Hub · store `era5_v` · stage index,fetch · runner ubuntu-latest · `--push-parts` | running (or pushing) | — | 0.00 GB |
+
