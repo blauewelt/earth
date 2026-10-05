@@ -1,0 +1,455 @@
+// tests/f1data.test.mjs — src/f1data.js against the fixture the REAL writers
+// produced (tests/make_family1_fixture.py → data/family1_fixture/), served over
+// a local HTTP server that honours Range (E-084 §6).
+//
+//     node --test tests/f1data.test.mjs
+//
+// The server has three faces: /ok/ answers Range with 206 (and counts every
+// request, its Range header and the requests in flight), /bad200/ ignores the
+// Range and answers 200 with the whole file — which the reader must refuse —
+// and /nozst/ answers 404 for every shard, which must reject the whole run with
+// the shard's URL in the message.
+//
+// This file is node:test, not Playwright. Playwright's default testMatch also
+// matches *.test.mjs, so the suite registers nothing unless node runs it.
+import { createRequire } from "node:module";
+import { test, before, after } from "node:test";
+import assert from "node:assert/strict";
+import http from "node:http";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
+import { execFileSync } from "node:child_process";
+import { fileURLToPath } from "node:url";
+
+const HERE = path.dirname(fileURLToPath(import.meta.url));
+const ROOT = path.dirname(HERE);
+const FIX = path.join(ROOT, "data", "family1_fixture");
+const require = createRequire(import.meta.url);
+const F1 = require("../src/f1data.js");
+const EXP = JSON.parse(fs.readFileSync(path.join(FIX, "expected.json"), "utf8"));
+// Register only when node itself is running this file (node --test sets
+// NODE_TEST_CONTEXT in the child it spawns; `node tests/f1data.test.mjs` runs it
+// directly). Playwright's loader imports it too and must find nothing to do.
+const runByNode = !!process.env.NODE_TEST_CONTEXT ||
+  (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url));
+const inPlaywright = !runByNode || process.env.TEST_WORKER_INDEX !== undefined;
+
+let server, port;
+const log = [];
+let inflight = 0, maxInflight = 0;
+
+function serve(req, res) {
+  const url = new URL(req.url, "http://x");
+  const m = /^\/(ok|bad200|nozst)\/(.*)$/.exec(url.pathname);
+  const rel = m ? decodeURIComponent(m[2]) : "";
+  const file = path.join(FIX, rel);
+  if (!m || !file.startsWith(FIX) || !fs.existsSync(file) || fs.statSync(file).isDirectory() ||
+      (m[1] === "nozst" && rel.endsWith(".zst"))) {
+    res.writeHead(404); res.end("not found"); return;
+  }
+  const buf = fs.readFileSync(file);
+  const range = req.headers.range;
+  const entry = { mode: m[1], rel, range: range || null, bytes: 0 };
+  log.push(entry);
+  inflight++; maxInflight = Math.max(maxInflight, inflight);
+  setTimeout(() => {
+    inflight--;
+    if (m[1] === "bad200" || !range) {
+      entry.bytes = buf.length;
+      res.writeHead(200, { "content-length": buf.length, "accept-ranges": "bytes" });
+      res.end(buf);
+      return;
+    }
+    const r = /^bytes=(\d+)-(\d*)$/.exec(range);
+    const a = Number(r[1]);
+    const z = r[2] === "" ? buf.length - 1 : Math.min(Number(r[2]), buf.length - 1);
+    if (a >= buf.length) { res.writeHead(416, { "content-range": `bytes */${buf.length}` }); res.end(); return; }
+    const part = buf.subarray(a, z + 1);
+    entry.bytes = part.length;
+    res.writeHead(206, { "content-range": `bytes ${a}-${z}/${buf.length}`, "content-length": part.length, "accept-ranges": "bytes" });
+    res.end(part);
+  }, 3);
+}
+
+const base = (mode) => `http://127.0.0.1:${port}/${mode}/`;
+
+
+// ------------------------------------------------------------------ helpers
+const cases = (re) => EXP.cases.filter((c) => re.test(c.name));
+const isNum = (x) => typeof x === "number" && Number.isFinite(x);
+
+function closeArr(got, want, { rel = 0, label = "" } = {}) {
+  assert.equal(got.length, want.length, `${label}: length ${got.length} vs ${want.length}`);
+  let bad = 0, first = null;
+  for (let i = 0; i < want.length; i++) {
+    const g = got[i], w = want[i];
+    const ok = w === null ? Number.isNaN(g)
+      : rel === 0 ? g === w : Math.abs(g - w) <= rel * Math.max(1, Math.abs(w));
+    if (!ok) { bad++; if (first === null) first = [i, g, w]; }
+  }
+  assert.equal(bad, 0, `${label}: ${bad} mismatches, first at ${first && first.join(" / ")}`);
+}
+
+function selOf(c) { return JSON.parse(JSON.stringify(c.sel)); }
+
+function nanmeanJS(stack) { // stack: array of Float32Array → [mean, count]
+  const n = stack[0].length, m = new Float64Array(n), k = new Uint32Array(n);
+  for (const a of stack) for (let i = 0; i < n; i++) if (!Number.isNaN(a[i])) { m[i] += a[i]; k[i]++; }
+  return [Array.from(m, (v, i) => (k[i] ? v / k[i] : NaN)), k];
+}
+
+function python(code, ...args) {
+  return execFileSync("python3", ["-c", code, ...args], { encoding: "utf8", maxBuffer: 1 << 28 });
+}
+
+function defineTests() {
+  test("registry: built public stores only, units after conversion, grid geometry", async () => {
+    const reg = await F1.loadRegistry();
+    const names = reg.stores.map((s) => s.name).sort();
+    assert.deepEqual(names, ["fxgrid", "fxpts", "fxtb"]);
+    const tb = reg.stores.find((s) => s.name === "fxtb");
+    assert.equal(tb.kind, "grid");
+    assert.equal(tb.channels[0].unit, "K");
+    assert.equal(tb.channels[0].min, 160);
+    assert.equal(tb.channels[0].max, 414);
+    assert.equal(tb.frameSeconds, 10800);
+    assert.equal(tb.framesPerBin, 40);
+    assert.equal(tb.subDaily, true);
+    assert.equal(tb.grid.H, 60);
+    assert.equal(tb.grid.dlat, 0.5);              // row 0 is the SOUTHERN row
+    assert.equal(tb.grid.lat0, -14.75);
+    const g = reg.stores.find((s) => s.name === "fxgrid");
+    assert.deepEqual(g.span, ["2009-12-25", "2010-01-08"]);
+    assert.equal(g.grid.lat0, 89.75);
+    assert.equal(g.grid.dlat, -0.5);
+    assert.match(g.channels[1].note, /logarithm/);
+    const p = reg.stores.find((s) => s.name === "fxpts");
+    assert.equal(p.kind, "points");
+    assert.equal(p.N, 5000);
+    assert.equal(p.grid, null);
+    // every request so far asked for a Range
+    assert.ok(log.length > 0 && log.every((e) => e.range), "a request went out without a Range header");
+  });
+
+  for (const c of cases(/^(grid|uint8) /)) {
+    test(`grid: ${c.name} — values equal what the writer was given`, async () => {
+      const r = await F1.run(selOf(c));
+      const x = c.expect;
+      assert.equal(r.kind, "grid");
+      assert.deepEqual([r.time.length, r.channels.length, r.lat.length, r.lon.length], x.shape);
+      closeArr(r.lat, x.lat, { label: "lat" });
+      closeArr(r.lon, x.lon, { label: "lon" });
+      closeArr(r.time, x.time, { label: "time" });
+      const mean = c.sel.step !== "native" || c.sel.res !== "native";
+      closeArr(r.data, x.data, { rel: mean ? 2e-6 : 0, label: "data" });
+      if (x.count === null) assert.equal(r.count, null);
+      else closeArr(r.count, x.count, { label: "count" });
+      assert.equal(r.frames, x.frames);
+      for (let i = 1; i < r.lon.length; i++) assert.ok(r.lon[i] > r.lon[i - 1], "lon must be monotonic");
+      if (c.sel.store === "fxtb") assert.deepEqual(r.units, ["K"]);
+    });
+  }
+
+  test("grid: an absent frame (offset −1) is left out of time; a present empty-tile frame is kept", async () => {
+    const c = cases(/^grid native box$/)[0];
+    const r = await F1.run(selOf(c));
+    const iso = Array.from(r.time, (t) => new Date(t * 1000).toISOString().slice(0, 10));
+    assert.equal(iso.length, 14);
+    assert.ok(!iso.includes("2010-01-05"), "the absent frame must not appear");
+    assert.ok(iso.includes("2009-12-27"), "the frame with an empty tile is a real frame");
+    const fi = iso.indexOf("2009-12-27");
+    const H = r.lat.length, W = r.lon.length;
+    // inside the emptied tile (lon −20 .. −4.25, lat 10 .. −5.75) every pixel is missing
+    let inside = 0;
+    for (let y = 0; y < H; y++) for (let xx = 0; xx < W; xx++) {
+      if (r.lon[xx] <= -4.25 && r.lat[y] >= -5.75) {
+        inside++;
+        assert.ok(Number.isNaN(r.data[(fi * 2) * H * W + y * W + xx]));
+      }
+    }
+    assert.ok(inside > 0);
+  });
+
+  test("grid: dateline box runs west → 180 → east with lon > 180", async () => {
+    const c = cases(/^grid dateline box$/)[0];
+    const r = await F1.run(selOf(c));
+    assert.equal(r.lon[0], 175.25);
+    assert.equal(r.lon[r.lon.length - 1], 183.75);
+    assert.ok(r.notes.some((n) => /dateline/.test(n)));
+  });
+
+  test("grid: pentad / month / all means equal nanmean over the native frames, counts the finite count", async () => {
+    const base = selOf(cases(/^grid native box$/)[0]);
+    const nat = await F1.run(base);
+    const H = nat.lat.length, W = nat.lon.length, C = 2, HW = H * W;
+    const frame = (t, k) => nat.data.subarray((t * C + k) * HW, (t * C + k + 1) * HW);
+    for (const step of ["pentad", "month", "all"]) {
+      const m = await F1.run({ ...base, step });
+      const keyOf = (t) => {
+        const d = new Date(t * 1000);
+        if (step === "pentad") return Math.floor((t - 378691200) / 432000);
+        if (step === "month") return d.getUTCFullYear() * 12 + d.getUTCMonth();
+        return 0;
+      };
+      const groups = new Map();
+      Array.from(nat.time).forEach((t, i) => { const k = keyOf(t); if (!groups.has(k)) groups.set(k, []); groups.get(k).push(i); });
+      const keys = [...groups.keys()].sort((a, b) => a - b);
+      assert.equal(m.time.length, keys.length, step);
+      keys.forEach((key, ti) => {
+        for (let k = 0; k < C; k++) {
+          const [mean, cnt] = nanmeanJS(groups.get(key).map((i) => frame(i, k)));
+          const got = m.data.subarray((ti * C + k) * HW, (ti * C + k + 1) * HW);
+          const gotC = m.count.subarray((ti * C + k) * HW, (ti * C + k + 1) * HW);
+          closeArr(got, mean.map((v) => (Number.isNaN(v) ? null : v)), { rel: 2e-6, label: `${step} mean` });
+          closeArr(gotC, Array.from(cnt), { label: `${step} count` });
+        }
+      });
+    }
+  });
+
+  test("grid: a box is required; estimate says so instead of reading", async () => {
+    const e = await F1.estimate({ ...selOf(cases(/^grid native box$/)[0]), bbox: null });
+    assert.equal(e.overCap, true);
+    assert.match(e.why, /box/);
+    await assert.rejects(F1.run({ ...selOf(cases(/^grid native box$/)[0]), bbox: null }), /box/);
+  });
+
+  test("grid: estimate is exact — its requests and bytes are what the run then fetches", async () => {
+    const sel = selOf(cases(/^grid native box$/)[0]);
+    F1.configure({ base: base("ok") });
+    const e = await F1.estimate(sel);
+    assert.equal(e.exact, true);
+    assert.equal(e.frames, 14);
+    assert.deepEqual(e.shape, [14, 2, 14, 18]);
+    assert.equal(e.overCap, false);
+    F1.configure({ base: base("ok") });
+    const mark = log.length;
+    const r = await F1.run(sel);
+    const data = log.slice(mark).filter((x) => /\.(zst|idx\.npy)$/.test(x.rel));
+    assert.equal(data.length, e.requests);
+    assert.equal(data.reduce((a, x) => a + x.bytes, 0), e.readBytes);
+    assert.equal(e.outBytes, r.data.byteLength + 8 * (r.time.length + r.lat.length + r.lon.length));
+  });
+
+  test("grid: estimate flags over-cap selections in plain English", async () => {
+    const sel = selOf(cases(/^grid native box$/)[0]);
+    // the whole globe is 360 x 720 at 0.5°: small here, so shrink the caps' view
+    // through a long period at native resolution — 2 channels × 14 frames
+    // is far below the cap; make it over by asking for the whole globe at
+    // native resolution and checking the arithmetic instead
+    const e = await F1.estimate({ ...sel, bbox: { w: -180, s: -90, e: 180, n: 90 } });
+    assert.equal(e.shape.join(), "14,2,360,720");
+    assert.equal(e.outBytes, 14 * 2 * 360 * 720 * 4 + 8 * (14 + 360 + 720));
+    assert.equal(e.overCap, false);
+    assert.ok(F1.CAPS.readBytes === 600e6 && F1.CAPS.outBytes === 400e6);
+  });
+
+  test("HTTP: a 200 answer to a Range request is refused, with the URL", async () => {
+    F1.configure({ base: base("bad200") });
+    await assert.rejects(F1.loadRegistry(), (e) => /HTTP 200/.test(e.message) && e.message.includes(base("bad200") + "family1gf.json"));
+    F1.configure({ base: base("ok") });
+  });
+
+  test("HTTP: a failed read rejects the whole run with the URL in the message", async () => {
+    F1.configure({ base: base("nozst") });
+    const sel = selOf(cases(/^grid native box$/)[0]);
+    await assert.rejects(F1.run(sel), (e) => /HTTP 404/.test(e.message) && /\/nozst\/fxgrid\/fxgrid\/2009\/bin_2044\.zst/.test(e.message));
+    F1.configure({ base: base("ok") });
+  });
+
+  test("HTTP: at most 6 requests in flight, every one with a Range header", async () => {
+    maxInflight = 0;
+    F1.configure({ base: base("ok") });
+    const mark = log.length;
+    await F1.run(selOf(cases(/^uint8 pentad$/)[0]));
+    assert.ok(maxInflight <= 6, `max in flight ${maxInflight}`);
+    assert.ok(maxInflight >= 2, "the run should actually overlap requests");
+    assert.ok(log.slice(mark).every((e) => e.range));
+  });
+
+  test("abort: an aborted run rejects with AbortError and progress is reported", async () => {
+    F1.configure({ base: base("ok") });
+    const ac = new AbortController();
+    const seen = [];
+    const p = F1.run(selOf(cases(/^uint8 pentad$/)[0]), {
+      signal: ac.signal,
+      onProgress: (x) => { seen.push(x); if (x.done >= 3) ac.abort(); },
+    });
+    await assert.rejects(p, (e) => e.name === "AbortError");
+    assert.ok(seen.length >= 3 && seen.every((x) => isNum(x.done) && isNum(x.total) && isNum(x.bytes)));
+    const done = [];
+    await F1.run(selOf(cases(/^uint8 pentad$/)[0]), { onProgress: (x) => done.push(x) });
+    const last = done[done.length - 1];
+    assert.equal(last.done, last.total);
+  });
+
+  test("preview: one frame, the first with data", async () => {
+    const sel = { ...selOf(cases(/^grid native box$/)[0]), step: "month" };
+    const r = await F1.preview(sel);
+    assert.equal(r.time.length, 1);
+    assert.equal(new Date(r.time[0] * 1000).toISOString().slice(0, 10), "2009-12-25");
+    const n = await F1.run(selOf(cases(/^grid native box$/)[0]));
+    closeArr(r.data, Array.from(n.data.subarray(0, r.data.length), (v) => (Number.isNaN(v) ? null : v)), { label: "preview" });
+    const pp = await F1.preview(selOf(cases(/^points box january/)[0]));
+    assert.equal(pp.kind, "points");
+    assert.ok(pp.time.length > 0);
+    const bins = new Set(Array.from(pp.time, (t) => Math.floor((t - 378691200) / 432000)));
+    assert.equal(bins.size, 1);
+  });
+
+  for (const c of cases(/^points (?!binned)/)) {
+    test(`points: ${c.name} — period, month, hour and box filtering`, async () => {
+      const e = await F1.estimate(selOf(c));
+      assert.equal(e.rows, c.expect.rowsRead, "estimate rows = rows in the selected bins (exact)");
+      const r = await F1.run(selOf(c));
+      assert.equal(r.kind, "points");
+      assert.equal(r.rowsRead, c.expect.rowsRead);
+      assert.equal(r.time.length, c.expect.n);
+      closeArr(r.time, c.expect.time, { label: "time" });
+      closeArr(r.lat, c.expect.lat, { label: "lat" });
+      closeArr(r.lon, c.expect.lon, { label: "lon" });
+      closeArr(r.values, c.expect.values, { label: "values" });
+      assert.deepEqual(Array.from(r.platform, (x) => x.toString()), c.expect.platform);
+      assert.deepEqual(Array.from(r.qc), c.expect.qc);
+      assert.ok(r.platform instanceof BigInt64Array);
+    });
+  }
+
+  for (const c of cases(/^points binned/)) {
+    test(`points: ${c.name} — binned mean and count`, async () => {
+      const r = await F1.run(selOf(c));
+      assert.equal(r.kind, "grid");
+      assert.equal(r.binnedFrom, "points");
+      closeArr(r.time, c.expect.steps, { label: "steps" });
+      const H = r.lat.length, W = r.lon.length, C = r.channels.length, HW = H * W;
+      const seen = new Set();
+      for (const cell of c.expect.cells) {
+        const t = Array.from(r.time).indexOf(cell.time);
+        const y = Array.from(r.lat).findIndex((v) => Math.abs(v - cell.lat) < 1e-9);
+        const x = Array.from(r.lon).findIndex((v) => Math.abs(v - cell.lon) < 1e-9);
+        assert.ok(t >= 0 && y >= 0 && x >= 0, `cell ${JSON.stringify(cell)} not on the output grid`);
+        for (let k = 0; k < C; k++) {
+          const j = (t * C + k) * HW + y * W + x;
+          seen.add(j);
+          assert.equal(r.count[j], cell.count[k]);
+          if (cell.mean[k] === null) assert.ok(Number.isNaN(r.data[j]));
+          else assert.ok(Math.abs(r.data[j] - cell.mean[k]) <= 2e-6 * Math.max(1, Math.abs(cell.mean[k])), `${r.data[j]} vs ${cell.mean[k]}`);
+        }
+      }
+      for (let j = 0; j < r.count.length; j++) if (!seen.has(j)) assert.equal(r.count[j], 0);
+    });
+  }
+
+  test("NetCDF: opens in Python (scipy) with identical values — grid mean with counts", async () => {
+    const sel = selOf(cases(/^grid res 1 month mean$/)[0]);
+    const r = await F1.run(sel);
+    const f = path.join(os.tmpdir(), `f1data-test-${process.pid}-grid.nc`);
+    fs.writeFileSync(f, Buffer.from(await F1.toNetCDF(r).arrayBuffer()));
+    const out = JSON.parse(python(`
+import json, sys, numpy as np
+from scipy.io import netcdf_file
+with netcdf_file(sys.argv[1], "r", mmap=False) as nc:
+    v = nc.variables
+    def L(a): return [None if not np.isfinite(x) else float(x) for x in np.asarray(a, np.float64).ravel()]
+    def S(x): return x.decode() if isinstance(x, bytes) else x
+    print(json.dumps({"version": int(nc.version_byte), "dims": {k: int(n) for k, n in nc.dimensions.items()},
+      "time": L(v["time"][:]), "lat": L(v["lat"][:]), "lon": L(v["lon"][:]),
+      "sst": L(v["sst"][:]), "log_chl": L(v["log_chl"][:]), "sst_count": np.asarray(v["sst_count"][:]).ravel().tolist(),
+      "log_chl_count": np.asarray(v["log_chl_count"][:]).ravel().tolist(),
+      "units": S(v["log_chl"].units), "tunits": S(v["time"].units), "source": S(nc.source), "selection": json.loads(S(nc.selection))}))
+`, f));
+    fs.unlinkSync(f);
+    assert.equal(out.version, 2, "64-bit offset NetCDF-3");
+    assert.deepEqual(out.dims, { time: r.time.length, lat: r.lat.length, lon: r.lon.length });
+    closeArr(out.time, Array.from(r.time), { label: "time" });
+    closeArr(out.lat, Array.from(r.lat), { label: "lat" });
+    closeArr(out.lon, Array.from(r.lon), { label: "lon" });
+    const HW = r.lat.length * r.lon.length, C = 2;
+    const chan = (k, arr) => { const o = []; for (let t = 0; t < r.time.length; t++) for (let i = 0; i < HW; i++) o.push(arr[(t * C + k) * HW + i]); return o; };
+    closeArr(chan(0, r.data), out.sst, { label: "sst" });
+    closeArr(chan(1, r.data), out.log_chl, { label: "log_chl" });
+    assert.deepEqual(chan(0, r.count), out.sst_count);
+    assert.deepEqual(chan(1, r.count), out.log_chl_count);
+    assert.match(out.units, /LOGARITHM/);
+    assert.equal(out.tunits, "seconds since 1970-01-01 00:00:00");
+    assert.match(out.source, /fxgrid/);
+    assert.equal(out.selection.store, "fxgrid");
+  });
+
+  test("NetCDF: points, and the uint8 store in kelvin", async () => {
+    const r = await F1.run(selOf(cases(/^points box january/)[0]));
+    const f = path.join(os.tmpdir(), `f1data-test-${process.pid}-pts.nc`);
+    fs.writeFileSync(f, Buffer.from(await F1.toNetCDF(r).arrayBuffer()));
+    const t = await F1.run(selOf(cases(/^uint8 native kelvin/)[0]));
+    const g = path.join(os.tmpdir(), `f1data-test-${process.pid}-tb.nc`);
+    fs.writeFileSync(g, Buffer.from(await F1.toNetCDF(t).arrayBuffer()));
+    const out = JSON.parse(python(`
+import json, sys, numpy as np
+from scipy.io import netcdf_file
+def L(a): return [None if not np.isfinite(x) else float(x) for x in np.asarray(a, np.float64).ravel()]
+with netcdf_file(sys.argv[1], "r", mmap=False) as nc:
+    v = nc.variables
+    plat = [b"".join(row).decode() for row in v["platform"][:]]
+    p = {"n": int(nc.dimensions["obs"]), "time": L(v["time"][:]), "oxy": L(v["oxy"][:]), "platform": plat, "qc": v["qc"][:].tolist()}
+with netcdf_file(sys.argv[2], "r", mmap=False) as nc:
+    tb = nc.variables["tb"]
+    q = {"tb": L(tb[:]), "units": tb.units.decode()}
+print(json.dumps({"p": p, "q": q}))
+`, f, g));
+    fs.unlinkSync(f); fs.unlinkSync(g);
+    assert.equal(out.p.n, r.time.length);
+    closeArr(out.p.time, Array.from(r.time), { label: "time" });
+    closeArr(Array.from({ length: r.time.length }, (_, i) => r.values[i * 3 + 2]), out.p.oxy, { label: "oxy" });
+    assert.deepEqual(out.p.platform, Array.from(r.platform, (x) => x.toString()));
+    assert.deepEqual(out.p.qc, Array.from(r.qc));
+    assert.equal(out.q.units, "K");
+    closeArr(Array.from(t.data), out.q.tb, { label: "tb" });
+  });
+
+  test("CSV: one row per observation (points) and per non-empty cell (grids)", async () => {
+    const r = await F1.run(selOf(cases(/^points dateline all months/)[0]));
+    const txt = await F1.toCSV(r).text();
+    const lines = txt.trimEnd().split("\n");
+    assert.equal(lines.length, r.time.length + 1);
+    assert.equal(lines[0], "time,lat,lon,oxy,temp,platform,qc");
+    assert.match(lines[1], /^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ,/);
+    const g = await F1.run(selOf(cases(/^grid res 1 month mean$/)[0]));
+    const gt = (await F1.toCSV(g).text()).trimEnd().split("\n");
+    const C = g.channels.length, HW = g.lat.length * g.lon.length;
+    let cells = 0;
+    for (let t = 0; t < g.time.length; t++) for (let i = 0; i < HW; i++) {
+      let any = false;
+      for (let k = 0; k < C; k++) if (!Number.isNaN(g.data[(t * C + k) * HW + i])) any = true;
+      if (any) cells++;
+    }
+    assert.equal(gt.length, cells + 1);
+    assert.equal(gt[0], "time,lat,lon,sst,log_chl,sst_count,log_chl_count");
+  });
+
+  test("internals: float16 table and the calendar", () => {
+    const { F16, civil, daysFromCivil, isoOfUnix } = F1._internal;
+    assert.equal(F16[0x3c00], 1);
+    assert.equal(F16[0xc000], -2);
+    assert.equal(F16[0x7bff], 65504);
+    assert.ok(Number.isNaN(F16[0x7e00]));
+    assert.equal(F16[0x0001], Math.pow(2, -24));
+    for (const z of [-200000, -1, 0, 4383, 15000, 30000]) {
+      const [y, m, d] = civil(z);
+      assert.equal(daysFromCivil(y, m, d), z);
+      if (y >= 1000) assert.equal(new Date(z * 86400000).toISOString().slice(0, 10), `${y}-${String(m).padStart(2, "0")}-${String(d).padStart(2, "0")}`);
+    }
+    assert.equal(isoOfUnix(378691200), "1982-01-01T00:00:00Z");
+  });
+}
+
+if (!inPlaywright) {
+  before(async () => {
+    server = http.createServer(serve);
+    await new Promise((r) => server.listen(0, "127.0.0.1", r));
+    port = server.address().port;
+    F1.configure({ base: base("ok") });
+  });
+  after(() => new Promise((r) => server.close(r)));
+  defineTests();
+}
