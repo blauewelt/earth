@@ -1,0 +1,197 @@
+{
+ "C": 3,
+ "N": 5000,
+ "bin_first": 2043,
+ "bin_last": 2053,
+ "bins_requested": [
+  2043,
+  2053
+ ],
+ "builder": "ml/build_family1_stores.py",
+ "builder_git_sha": "1d75bcc991bf2de07e63800f67cc663d542e4443",
+ "built_at": "2026-10-05T13:01:09+00:00",
+ "channels": [
+  {
+   "max": 40.0,
+   "min": -2.5,
+   "name": "temp",
+   "unit": "degC"
+  },
+  {
+   "max": 42.0,
+   "min": 0.0,
+   "name": "sal",
+   "unit": "PSS-78"
+  },
+  {
+   "max": 600.0,
+   "min": 0.0,
+   "name": "oxy",
+   "unit": "umol/kg"
+  }
+ ],
+ "counts": {
+  "rows": 5000
+ },
+ "date_range": [
+  "2009-12-20",
+  "2010-02-10"
+ ],
+ "distribution": "public",
+ "epoch": "1982-01-01",
+ "family": "family1_gf",
+ "family_code": "1gf",
+ "family_version": "1.gf",
+ "footprint": {
+  "log2_dt": -4.0,
+  "log2_fp": -4.0,
+  "note": "E-078 \u00a72: log2(footprint_km / 27.83) and log2(support_days / 5), clamped to +/-12; constant for this source but stored per row so every tier-P store reads identically"
+ },
+ "licence": {
+  "derived_works": "free",
+  "name": "test fixture",
+  "redistribution": "yes"
+ },
+ "n_bins": 11,
+ "n_live_bins": 11,
+ "normalisation": "RAW \u2014 not z-scored and not anomalised; the sampler standardises from training years only",
+ "pentad_days": 5,
+ "per_channel": {
+  "oxy": {
+   "bounds": [
+    0.0,
+    600.0
+   ],
+   "fraction": 0.8094,
+   "max": 350.0,
+   "mean": 250.78181368915247,
+   "measured": 4047,
+   "min": 150.0,
+   "unit": "umol/kg"
+  },
+  "sal": {
+   "bounds": [
+    0.0,
+    42.0
+   ],
+   "fraction": 0.8064,
+   "max": 38.0,
+   "mean": 33.94120086185516,
+   "measured": 4032,
+   "min": 30.0,
+   "unit": "PSS-78"
+  },
+  "temp": {
+   "bounds": [
+    -2.5,
+    40.0
+   ],
+   "fraction": 0.8104,
+   "max": 30.0,
+   "mean": 15.108535304827376,
+   "measured": 4052,
+   "min": 0.0019359588623046875,
+   "unit": "degC"
+  }
+ },
+ "per_year": {
+  "2009": 1131,
+  "2010": 3869
+ },
+ "plan": {
+  "dataset": "fixture"
+ },
+ "platform_id": "a numeric source id where the archive has one, else int(sha1(id)[:15], 16) \u2014 deterministic across machines and python versions, 60 bits, never negative",
+ "qc_keep_max": 2,
+ "qc_policy": "",
+ "resume_granularity": "year",
+ "schema": {
+  "bin.npy": {
+   "dtype": "int16",
+   "meaning": "floor(time_s / 432000 s) \u2014 exact integer arithmetic; NEGATIVE before 1982 and kept",
+   "shape": [
+    5000
+   ]
+  },
+  "bin_offsets.npy": {
+   "dtype": "int64",
+   "meaning": "CSR: rows of bin b are [off[b - bin_first], off[b - bin_first + 1])",
+   "shape": [
+    12
+   ]
+  },
+  "fp.npy": {
+   "dtype": "float16",
+   "meaning": "(log2_fp, log2_dt), E-078 \u00a72, per row",
+   "shape": [
+    5000,
+    2
+   ]
+  },
+  "lat.npy": {
+   "dtype": "float32",
+   "meaning": "degrees north",
+   "shape": [
+    5000
+   ]
+  },
+  "lon.npy": {
+   "dtype": "float32",
+   "meaning": "degrees east, in [-180, 180)",
+   "shape": [
+    5000
+   ]
+  },
+  "platform.npy": {
+   "dtype": "int64",
+   "meaning": "platform id; see platform_id",
+   "shape": [
+    5000
+   ]
+  },
+  "qc.npy": {
+   "dtype": "uint8",
+   "meaning": "0 not assessed, 1 good, 2 probably good, 3+ the source's worse grades",
+   "shape": [
+    5000
+   ]
+  },
+  "time_s.npy": {
+   "dtype": "int32",
+   "meaning": "seconds since 1982-01-01T00:00:00Z, negative before it; int32 spans 1913-12-13T20:45:52Z .. 2050-01-19T03:14:07Z and the builder refuses a row past it",
+   "shape": [
+    5000
+   ]
+  },
+  "values.npy": {
+   "dtype": "float16",
+   "meaning": "the channels below, RAW units, NaN = not measured",
+   "shape": [
+    5000,
+    3
+   ]
+  }
+ },
+ "schema_version": 2,
+ "schema_version_note": "schema 2 (family 10.1): the time column is `time_s`, int32 SECONDS since 1982-01-01T00:00:00Z. Schema 1 (family 10, family 8) carried `time_days`, float32 days, which resolves 21 s in 1993 and 84 s in 2024 \u2014 against slatrack's 1 Hz sampling, up to 316 consecutive samples shared a timestamp. `ml/family10_store.py` reads BOTH; only the time column changed, and the bins, footprints, channels and QC policy are identical.",
+ "sha256": {
+  "bin.npy": "23bb0bce97c455791ed1c96021455dc95a1c77eb3cfac9f5faf41caab7a3584a",
+  "bin_offsets.npy": "be1a68c808ba0770bcca6682b064e822f27d0625c51797f64b1b5443529d9b6e",
+  "fp.npy": "c24d3637d062235d154ea7c07618846ccfe0e64d141d770ef794079fdbb49b85",
+  "lat.npy": "b833839c912a2c231209c0bc06046883ebbd16fc2cf658ddfa666db8bd8fe62c",
+  "lon.npy": "fdd5de94d16981c38c97fb930d845ceffa729e11adfb827781b74502080dd880",
+  "platform.npy": "ebbc604aa19dc8c7eee6042f5c87f6547bd2f53dafa5276fe9c738a54fdc1e54",
+  "qc.npy": "c1f29fabf7bc44cd648c7968ff59d47c5a63ef921a74c09543780d685a1d4739",
+  "time_s.npy": "82e731f3e0c0f3f61d37d1a16c2789e69b6c934d60a3de02d107153be0d49e81",
+  "values.npy": "34cbf99e83bbcd77b75cc2c3904f0a60bb43597ada915b57212bdedf10cf31f7"
+ },
+ "source_dir": "file:///tmp/f1fixture_8cvtyieo/p/src",
+ "sources": [
+  "synthetic"
+ ],
+ "store": "fxpts",
+ "tier": "P",
+ "title": "fixture: ship-like point reports, three channels",
+ "values_measured_fraction": 0.808733,
+ "verified": ""
+}

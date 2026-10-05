@@ -1,0 +1,132 @@
+{
+ "C": 2,
+ "bins_requested": [
+  2044,
+  2046
+ ],
+ "builder": "ml/build_family1_stores.py",
+ "builder_git_sha": "1d75bcc991bf2de07e63800f67cc663d542e4443",
+ "built_at": "2026-10-05T13:01:09+00:00",
+ "channels": [
+  {
+   "max": 40.0,
+   "min": -2.5,
+   "name": "sst",
+   "unit": "degC"
+  },
+  {
+   "max": 2.5,
+   "min": -4.0,
+   "name": "log_chl",
+   "unit": "log10(mg m-3) - the base-10 LOGARITHM of chlorophyll"
+  }
+ ],
+ "counts": {
+  "fetch_seconds": 0.4,
+  "files_read": 14,
+  "frames_missing": {
+   "absent_upstream": 1
+  },
+  "frames_present": {
+   "fxgrid": 14
+  },
+  "frames_wanted": 15
+ },
+ "date_range": [
+  "2009-12-25",
+  "2010-01-08"
+ ],
+ "distribution": "public",
+ "dtype": "float16",
+ "epoch": "1982-01-01",
+ "family": "family1_gf",
+ "family_code": "1gf",
+ "family_version": "1.gf",
+ "footprint": {
+  "log2_dt": -2.32,
+  "log2_fp": -2.0,
+  "note": "E-078 \u00a72: log2(pixel_km / 27.83) and log2(frame_days / 5); one token per pixel centre"
+ },
+ "format": "family1-sharded/1",
+ "frame_seconds": 86400,
+ "frames_missing_by_reason": {
+  "absent_upstream": 1
+ },
+ "frames_per_bin": 5,
+ "groups": {
+  "fxgrid": {
+   "C": 2,
+   "H": 360,
+   "W": 720,
+   "bin_first": 2044,
+   "bin_last": 2046,
+   "bins": 3,
+   "bytes": 240053,
+   "crs": "EPSG:4326",
+   "dtype": "float16",
+   "frame_seconds": 86400,
+   "frames_missing": 1,
+   "frames_per_bin": 5,
+   "frames_present": 14,
+   "n_tiles_x": 23,
+   "n_tiles_y": 12,
+   "prefix": "fxgrid",
+   "shard_index": "fxgrid/shard_index.npy",
+   "tile": 32,
+   "tile_grid": "fxgrid/tile_grid.json",
+   "tiles_stored": 237,
+   "valid_fraction": [
+    0.011082451499118165,
+    0.01099647266313933
+   ]
+  }
+ },
+ "layout": "sharded",
+ "licence": {
+  "derived_works": "free",
+  "name": "test fixture",
+  "redistribution": "yes"
+ },
+ "missing_frames": [
+  {
+   "bin": 2046,
+   "day": "2010-01-05",
+   "frame": 1,
+   "group": "fxgrid",
+   "reason": "absent_upstream"
+  }
+ ],
+ "normalisation": "RAW units \u2014 not z-scored, not anomalised",
+ "pentad_days": 5,
+ "per_year": {
+  "2009": {
+   "fxgrid": 10
+  },
+  "2010": {
+   "fxgrid": 4
+  }
+ },
+ "plan": {
+  "dataset": "fixture"
+ },
+ "qc_policy": "",
+ "resume_granularity": "year \u2014 the bins whose FIRST day falls in the year; every frame of a chosen bin is fetched",
+ "sha256": {
+  "fxgrid/2009/bin_2044.idx.npy": "eba25d1d92d6395ebef88898e1c8dc23e9da1569e9620ddb776c6bda2d87b1c0",
+  "fxgrid/2009/bin_2044.zst": "6f50aafd5426d8d930dba347c09568e672d3be0a27b793bde30ff9b5a5d4c1b8",
+  "fxgrid/2009/bin_2045.idx.npy": "78df821b4d729463f831c3ea2eb89a0b1ebf220b8615de10425b0340ee33b100",
+  "fxgrid/2009/bin_2045.zst": "49580b6f63cdcf37c36756eb6c4fd414a67be820d3b44574112860faaa713480",
+  "fxgrid/2010/bin_2046.idx.npy": "29d38bb6fb5596bd5c47c3149ef02b443b39421258c470af745b01b310667b68",
+  "fxgrid/2010/bin_2046.zst": "bfd3d3066d3f1a3f3fda67050d95b35600e1b5c90ddb46474a6daf848e3129a1",
+  "fxgrid/shard_index.npy": "d6e88aa9ce150f84756329f2c5c4c73a2a02a0bd11a18fce916f8a690af741e4",
+  "fxgrid/tile_grid.json": "385dd0d8d65cea5deef0c47d1382727d35dd2b3bf443a1d0176141c2847a7007"
+ },
+ "source_dir": "file:///tmp/f1fixture_8cvtyieo/g/src",
+ "sources": [
+  "synthetic"
+ ],
+ "store": "fxgrid",
+ "tier": "G",
+ "title": "fixture: a global 0.5-degree float16 grid, two channels",
+ "verified": ""
+}

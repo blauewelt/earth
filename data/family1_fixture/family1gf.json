@@ -1,0 +1,186 @@
+{
+ "family": "family1_gf",
+ "family_version": "1.gf",
+ "hf_root": "tensors/family1_gf",
+ "repo": "fixture",
+ "epoch": "1982-01-01",
+ "pentad_days": 5,
+ "generated_utc": "fixture",
+ "groups": [
+  {
+   "name": "fxgrid",
+   "title": "fixture: a global 0.5-degree float16 grid, two channels",
+   "tier": "G",
+   "channels": [
+    {
+     "name": "sst",
+     "unit": "degC",
+     "min": -2.5,
+     "max": 40.0
+    },
+    {
+     "name": "log_chl",
+     "unit": "log10(mg m-3) - the base-10 LOGARITHM of chlorophyll",
+     "min": -4.0,
+     "max": 2.5
+    }
+   ],
+   "C": 2,
+   "built": true,
+   "distribution": "public",
+   "path": "tensors/family1_gf/fxgrid",
+   "family_version": "1.gf",
+   "schema_version": 2,
+   "time_dtype": "int32",
+   "cadence": "daily",
+   "frames_per_bin": 5,
+   "frame_seconds": 86400,
+   "dtype": "float16",
+   "N": null,
+   "bin_first": null,
+   "bin_last": null,
+   "store_groups": {
+    "fxgrid": {
+     "H": 360,
+     "W": 720,
+     "C": 2,
+     "tile": 32,
+     "n_tiles_x": 23,
+     "n_tiles_y": 12,
+     "dtype": "float16",
+     "frames_per_bin": 5,
+     "frame_seconds": 86400,
+     "bin_first": 2044,
+     "bin_last": 2046,
+     "bins": 3,
+     "bytes": 240053,
+     "prefix": "fxgrid",
+     "tile_grid": "fxgrid/tile_grid.json",
+     "shard_index": "fxgrid/shard_index.npy",
+     "valid_fraction": [
+      0.011098764836788177,
+      0.011000449769198895
+     ]
+    }
+   },
+   "record_span": [
+    "2009-12-25",
+    "2010-01-08"
+   ]
+  },
+  {
+   "name": "fxtb",
+   "title": "fixture: a uint8 K-160 three-hourly tropical band",
+   "tier": "G",
+   "channels": [
+    {
+     "name": "tb",
+     "unit": "K - 160 (uint8; add 160 for kelvin)",
+     "min": 0.0,
+     "max": 254.0
+    }
+   ],
+   "C": 1,
+   "built": true,
+   "distribution": "public",
+   "path": "tensors/family1_gf/fxtb",
+   "family_version": "1.gf",
+   "schema_version": 2,
+   "time_dtype": "int32",
+   "cadence": "3-hourly",
+   "frames_per_bin": 40,
+   "frame_seconds": 10800,
+   "dtype": "uint8",
+   "N": null,
+   "bin_first": null,
+   "bin_last": null,
+   "store_groups": {
+    "fxtb": {
+     "H": 60,
+     "W": 720,
+     "C": 1,
+     "tile": 32,
+     "n_tiles_x": 23,
+     "n_tiles_y": 2,
+     "dtype": "uint8",
+     "frames_per_bin": 40,
+     "frame_seconds": 10800,
+     "bin_first": 2045,
+     "bin_last": 2046,
+     "bins": 2,
+     "bytes": 29806,
+     "prefix": "fxtb",
+     "tile_grid": "fxtb/tile_grid.json",
+     "shard_index": "fxtb/shard_index.npy",
+     "valid_fraction": [
+      0.004637961275875568
+     ]
+    }
+   },
+   "record_span": [
+    "2009-12-30",
+    "2010-01-08"
+   ]
+  },
+  {
+   "name": "fxpts",
+   "title": "fixture: ship-like point reports, three channels",
+   "tier": "P",
+   "channels": [
+    {
+     "name": "temp",
+     "unit": "degC",
+     "min": -2.5,
+     "max": 40.0
+    },
+    {
+     "name": "sal",
+     "unit": "PSS-78",
+     "min": 0.0,
+     "max": 42.0
+    },
+    {
+     "name": "oxy",
+     "unit": "umol/kg",
+     "min": 0.0,
+     "max": 600.0
+    }
+   ],
+   "C": 3,
+   "built": true,
+   "distribution": "public",
+   "path": "tensors/family1_gf/fxpts",
+   "family_version": "1.gf",
+   "schema_version": 2,
+   "time_dtype": "int32",
+   "cadence": "irregular (per observation)",
+   "frames_per_bin": null,
+   "frame_seconds": null,
+   "N": 5000,
+   "bin_first": 2043,
+   "bin_last": 2053,
+   "n_bins": 11,
+   "store_groups": null,
+   "record_span": [
+    "2009-12-20",
+    "2010-02-10"
+   ]
+  },
+  {
+   "name": "fxunbuilt",
+   "tier": "G",
+   "built": false,
+   "distribution": "public",
+   "channels": [],
+   "path": "tensors/family1_gf/fxunbuilt"
+  },
+  {
+   "name": "fxprivate",
+   "tier": "P",
+   "built": true,
+   "distribution": "private",
+   "channels": [],
+   "path": "tensors/family1_gf/fxprivate"
+  }
+ ]
+}

@@ -1,0 +1,169 @@
+{
+ "C": 1,
+ "H": 60,
+ "W": 720,
+ "bin_seconds": 432000,
+ "channels": [
+  {
+   "max": 254.0,
+   "min": 0.0,
+   "name": "tb",
+   "unit": "K - 160 (uint8; add 160 for kelvin)"
+  }
+ ],
+ "col_extents": [
+  [
+   0,
+   32
+  ],
+  [
+   32,
+   64
+  ],
+  [
+   64,
+   96
+  ],
+  [
+   96,
+   128
+  ],
+  [
+   128,
+   160
+  ],
+  [
+   160,
+   192
+  ],
+  [
+   192,
+   224
+  ],
+  [
+   224,
+   256
+  ],
+  [
+   256,
+   288
+  ],
+  [
+   288,
+   320
+  ],
+  [
+   320,
+   352
+  ],
+  [
+   352,
+   384
+  ],
+  [
+   384,
+   416
+  ],
+  [
+   416,
+   448
+  ],
+  [
+   448,
+   480
+  ],
+  [
+   480,
+   512
+  ],
+  [
+   512,
+   544
+  ],
+  [
+   544,
+   576
+  ],
+  [
+   576,
+   608
+  ],
+  [
+   608,
+   640
+  ],
+  [
+   640,
+   672
+  ],
+  [
+   672,
+   704
+  ],
+  [
+   704,
+   720
+  ]
+ ],
+ "compression": {
+  "codec": "zstd",
+  "level": 3,
+  "unit": "one zstd frame per tile"
+ },
+ "dtype": "uint8",
+ "epoch": "1982-01-01",
+ "footprint": {
+  "log2_dt": -7.9,
+  "log2_fp": -2.0
+ },
+ "format": "family1-sharded/1",
+ "frame_rule": "frame f of bin b covers [b * bin_seconds + f * frame_seconds, + frame_seconds) seconds since the epoch",
+ "frame_seconds": 10800,
+ "frames_per_bin": 40,
+ "grid": {
+  "H": 60,
+  "W": 720,
+  "coordinates": "lon = x0 + (col + 0.5) * dx, lat = y0 + (row + 0.5) * dy",
+  "crs": "EPSG:4326",
+  "dx": 0.5,
+  "dy": 0.5,
+  "row_order": "row 0 is the SOUTHERNMOST row",
+  "x0": -180.0,
+  "y0": -15.0
+ },
+ "group": "fxtb",
+ "index_dtype": "<i8",
+ "index_header_bytes": 128,
+ "index_path": "<yyyy>/bin_<NNNN>.idx.npy",
+ "index_semantics": "(offset, length): offset >= 0 and length > 0 a stored tile; offset >= 0 and length 0 a present frame's tile with no valid pixel (not stored); offset -1 and length 0 the frame is not in the shard",
+ "index_shape": [
+  40,
+  2,
+  23,
+  2
+ ],
+ "missing": 255,
+ "n_tiles_x": 23,
+ "n_tiles_y": 2,
+ "pad_cols": 16,
+ "pad_rows": 4,
+ "pad_value": 255,
+ "row_extents": [
+  [
+   0,
+   32
+  ],
+  [
+   32,
+   60
+  ]
+ ],
+ "shard_path": "<yyyy>/bin_<NNNN>.zst (yyyy = year of the bin's first day)",
+ "tile": 32,
+ "tile_order": "C order [row, col, channel], little-endian",
+ "tile_shape": [
+  32,
+  32,
+  1
+ ]
+}
