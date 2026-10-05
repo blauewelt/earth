@@ -1528,3 +1528,86 @@ has a `done.json` on the Hub, read back by this session.
 | `era5_u` | 2022–2026 | [#940](https://github.com/blauewelt/earth/actions/runs/37357556450) | E-085 · fetch ERA5 eastward wind on 13 pressure levels, six-hourly, 2022–2026, from the 0.25° archive regridded here, and park the parts on the Hub · store `era5_u` · stage index,fetch · runner ubuntu-latest · `--push-parts` | running (or pushing) | — | 0.00 GB |
 | `era5_v` | 2022–2026 | [#941](https://github.com/blauewelt/earth/actions/runs/37357947951) | E-085 · fetch ERA5 northward wind on 13 pressure levels, six-hourly, 2022–2026, from the 0.25° archive regridded here, and park the parts on the Hub · store `era5_v` · stage index,fetch · runner ubuntu-latest · `--push-parts` | running (or pushing) | — | 0.00 GB |
 
+
+### E-085 · the fetch is complete, and `era5_t` is assembled, published and checked (2026-10-05, 20:15–21:30Z)
+
+**Fetch: every year of every store is parked, read off the Hub.** All four
+stores hold a `done.json` for each year 1982–2026, and each year's ledger
+holds exactly 20 frames × the bins that start in it (1,460 or 1,480; 2026
+stops at the record's end, 2026-06-30 18 UTC), with 0 frames absent and 752
+`after_record` per store (the 37 bins after the record plus the last bin's
+12 trailing frames):
+
+| store | frames | bins | parked bytes | probe's estimate |
+|---|---|---|---|---|
+| `era5_t` | 65,008 | 3,251 | 53.83 GB | 54.1 GB |
+| `era5_q` | 65,008 | 3,251 | 94.73 GB | 94.0 GB |
+| `era5_u` | 65,008 | 3,251 | 98.97 GB | 99.2 GB |
+| `era5_v` | 65,008 | 3,251 | 101.23 GB | 101.3 GB |
+
+Two lanes did not run first time, both for the same reason, and neither was
+our code. `era5_u` 2017–2021 (#954, then the keeper's retry #957) and a
+duplicate dispatch of `era5_v` 2022–2026 (#952, #956 — that lane had already
+parked as #941) were each **cancelled after ~15 minutes with "The job was not
+acquired by Runner of type hosted even after multiple attempts"**, during a
+GitHub Actions incident (githubstatus: Actions "degraded performance",
+investigating from 19:50Z). `era5_u` 2017–2021 was re-dispatched once by hand
+as **#958** (fetch ERA5 eastward wind 2017–2021 from the 1° archive and park
+it) and parked in 39 min. The `era5_v` duplicate needed nothing.
+
+**`era5_q` has out-of-bounds values the January probe did not see.** Every
+year of `era5_q` carries a few to ~200 out-of-bounds values, which can only
+be below the −0.01 g/kg lower bound (decision D5) — the upper bound, 40 g/kg,
+is unreachable at 100–500 hPa, and the counter does not record the side — mostly at 100–250 hPa and rising after 2000 (2022: 91
+at `q_150`). They became NaN and were counted, never clipped (contract rule 3),
+so they sit in `out_of_bounds` per year and as NaN in the store. Out of ~1.2
+billion values per year this is negligible, but it means ERA5's negative
+humidities reach below −0.01 g/kg. Whether D5's bound should be lower is for
+the planning session; changing it means re-fetching `era5_q`.
+
+**The box.** Vast instance **54376323** (offer 41247428, runner
+`gpu-box-41247428`), a *verified* Texas host: RTX 3060 (unused), 64 vCPU
+visible to the container, 251 GiB RAM, **450 GB disk**, listed at 6,584 Mbps
+up and 6,801 down, reliability 99.7 %, **$0.302/h** with the disk. Rented
+2026-10-05 20:19:45Z with `BOX_PROFILE=assembly DISK_GB=450 node
+scripts/gpu_box.mjs create 41247428`. The runner registered and was idle
+within ten minutes.
+
+**`era5_t` assembly #959** (assemble ERA5 temperature from its parked parts on
+the box and publish it to `tensors/family1_2/era5_t`; `stage=all
+--parts-from-hub --assemble streaming`, 1982-01-01..2026-12-31): pull
+**792 s** (53.8 GB, ~68 MB/s), assemble **64 s** (hard links), publish
+**628 s** (6,505 files uploaded, every one downloaded back and hashed, 50
+tiles decoded, 5 HTTP range reads checked). **26 min end to end.**
+Then **#960** (`stage=check`: decode every tile of the published store and
+compare the Hub's manifest): 6,504 files verified, **1,170,144 tiles
+decompressed, "Hub chfrank/earth-tensors agrees"**, 1,547 s. Published:
+**53,830,272,913 bytes**, 3,251 bins, 65,008 frames.
+
+**Read back from the Hub, by this session** (`ml/family1/era5_hub_check.py`,
+which reads through `sharded.ShardedGroup` on the Hub's `resolve/main` URL and
+compares with xarray + zarr reads of the source that share no code with the
+adapter):
+
+| frame | which source the store holds | reference | Hub reads | max abs diff | within half a float16 step |
+|---|---|---|---|---|---|
+| 2015-01-15 12 UTC (bin 2413, frame 10) | before the seam, the 1° archive | the 1° archive, reindexed | 36 | 0.125 K | all 847,080 values |
+| 2023-07-15 06 UTC | after the seam, the 0.25° archive regridded | the 0.25° archive, regridded by the check's own dense-matrix code | 36 | 0.125 K | all 847,080 values |
+
+The two regrids (the adapter's sparse sums and the check's dense matrices)
+agree to 1.7e-13 K before rounding. store.json, tile_grid.json (`levels_hpa`
+the 13 levels, 64-pixel tiles, F = 20 × 21,600 s) and shard_index.npy (3,251
+rows, 65,008 frames, two files per bin plus the two group files) all match.
+
+**The registry.** `.github/workflows/family1-registry.yml` run #1 (publish
+family 1.2's registry and add it to family 10.2's `siblings` line; hosted)
+published **`tensors/family1_2/family12.json`** — 4 stores, `era5_t` built,
+`era5_q`/`era5_u`/`era5_v` listed as not built, inheriting family 1.gf's 13
+stores by reference, exception E4 — and rebuilt family 10.2's registry with
+its own builder: the guard found only the new sibling and 48 null file sizes
+filled from the stores' manifests, and the restore verified.
+
+**Queued on the box, in order:** #961 `era5_q` all (running at 21:26Z), #962
+`era5_v` all, #963 `era5_u` all, then #964/#965/#966 the three checks. #961
+carries `free_cache: family1_2/era5_t`, which deletes the box's copy of the
+published-and-checked `era5_t` before the pull.
