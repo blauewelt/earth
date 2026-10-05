@@ -1,16 +1,6 @@
 {
  "pending": [
   {
-   "store": "era5_t",
-   "stage": "index,fetch",
-   "start": "2017-01-01",
-   "end": "2021-12-31",
-   "runner": "ubuntu-latest",
-   "extra_args": "--push-parts",
-   "adapter_env": "",
-   "retries": 2
-  },
-  {
    "store": "era5_u",
    "stage": "index,fetch",
    "start": "2017-01-01",
@@ -44,17 +34,6 @@
    "at": "2026-10-05T18:38:59.519Z"
   },
   {
-   "store": "era5_t",
-   "stage": "index,fetch",
-   "start": "2022-01-01",
-   "end": "2026-12-31",
-   "runner": "ubuntu-latest",
-   "extra_args": "--push-parts",
-   "adapter_env": "",
-   "retries": 2,
-   "at": "2026-10-05T18:39:03.586Z"
-  },
-  {
    "store": "era5_u",
    "stage": "index,fetch",
    "start": "2022-01-01",
@@ -64,17 +43,6 @@
    "adapter_env": "",
    "retries": 2,
    "at": "2026-10-05T18:39:07.553Z"
-  },
-  {
-   "store": "era5_v",
-   "stage": "index,fetch",
-   "start": "2022-01-01",
-   "end": "2026-12-31",
-   "runner": "ubuntu-latest",
-   "extra_args": "--push-parts",
-   "adapter_env": "",
-   "retries": 2,
-   "at": "2026-10-05T18:42:16.039Z"
   },
   {
    "store": "era5_t",
@@ -163,6 +131,28 @@
    "adapter_env": "",
    "retries": 2,
    "at": "2026-10-05T19:13:35.592Z"
+  },
+  {
+   "store": "era5_v",
+   "stage": "index,fetch",
+   "start": "2022-01-01",
+   "end": "2026-12-31",
+   "runner": "ubuntu-latest",
+   "extra_args": "--push-parts",
+   "adapter_env": "",
+   "retries": 2,
+   "at": "2026-10-05T19:22:52.181Z"
+  },
+  {
+   "store": "era5_t",
+   "stage": "index,fetch",
+   "start": "2017-01-01",
+   "end": "2021-12-31",
+   "runner": "ubuntu-latest",
+   "extra_args": "--push-parts",
+   "adapter_env": "",
+   "retries": 2,
+   "at": "2026-10-05T19:22:56.083Z"
   }
  ],
  "done": [
@@ -3696,6 +3686,19 @@
    "at": "2026-10-05T18:42:20.084Z",
    "run_number": 942,
    "finished": "2026-10-05T19:13:15Z"
+  },
+  {
+   "store": "era5_t",
+   "stage": "index,fetch",
+   "start": "2022-01-01",
+   "end": "2026-12-31",
+   "runner": "ubuntu-latest",
+   "extra_args": "--push-parts",
+   "adapter_env": "",
+   "retries": 2,
+   "at": "2026-10-05T18:39:03.586Z",
+   "run_number": 939,
+   "finished": "2026-10-05T19:20:59Z"
   }
  ],
  "failed": []
