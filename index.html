@@ -21,7 +21,7 @@
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/cesium/1.133.1/Widgets/widgets.min.css" />
-  <link rel="stylesheet" href="src/style.css?v=7239deac" />
+  <link rel="stylesheet" href="src/style.css?v=f18dd03c" />
   <script>window.CESIUM_BASE_URL = "https://cdnjs.cloudflare.com/ajax/libs/cesium/1.133.1/";</script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/cesium/1.133.1/Cesium.js"></script>
 </head>
@@ -1054,6 +1054,16 @@
           <input type="number" id="dt-y1" class="dt-num" inputmode="numeric" />
           <span class="hint dt-inline" id="dt-span"></span>
         </div>
+        <!-- Days of each chosen month: the finest period control. It narrows
+             the READ (unlike the box and the hours of a point store), so it is
+             what makes the dense swath stores downloadable at all. -->
+        <div class="control-row dt-wrap">
+          <label for="dt-d0">days</label>
+          <input type="number" id="dt-d0" class="dt-num dt-hr" min="1" max="31" value="1" inputmode="numeric" />
+          <span class="dt-to">to</span>
+          <input type="number" id="dt-d1" class="dt-num dt-hr" min="1" max="31" value="31" inputmode="numeric" />
+          <span class="hint dt-inline">of each chosen month; 1 to 31 is the whole month</span>
+        </div>
 
         <div class="dt-head">months
           <button type="button" class="dt-mini" id="dt-months-all">all</button>
@@ -1072,7 +1082,7 @@
           <input type="number" id="dt-h0" class="dt-num dt-hr" min="0" max="23" value="0" inputmode="numeric" />
           <span class="dt-to">to</span>
           <input type="number" id="dt-h1" class="dt-num dt-hr" min="1" max="24" value="24" inputmode="numeric" />
-          <span class="hint dt-inline">UTC; 0 to 24 is the whole day, 22 to 2 wraps midnight</span>
+          <span class="hint dt-inline">UTC, from the first hour up to (not including) the second; 0 to 24 is the whole day, 22 to 2 wraps midnight</span>
         </div>
 
         <div class="dt-head">box <span class="dt-head-note" id="dt-box-note"></span></div>
@@ -1114,6 +1124,12 @@
                   title="read one frame (or one five-day bin of points) and paint it inside the box">Preview on the globe</button>
           <button type="button" class="td-btn dt-btn hidden" id="dt-preview-clear">clear preview</button>
         </div>
+        <!-- With more than one channel ticked, which one the preview shows:
+             switching repaints the frame already read, it reads nothing. -->
+        <div class="control-row hidden" id="dt-pv-chan-row">
+          <label for="dt-pv-chan">showing</label>
+          <select id="dt-pv-chan"></select>
+        </div>
         <div id="dt-legend" class="hidden"></div>
 
         <div class="control-row dt-wrap dt-tight">
@@ -1152,7 +1168,9 @@
           <p class="hint"><strong>Point stores read the whole period.</strong> A box filters the
             reports here, after their positions have been read, so a short period is cheap and a
             long one is not, whatever the box. The row count in the estimate is exact — the store
-            records where every five-day bin starts.</p>
+            records where every five-day bin starts. The <em>days</em> fields are how to make a
+            period short: a few days of the densest stores (the SWOT swaths, the altimeter
+            tracks) is tens of megabytes where a month is gigabytes.</p>
           <p class="hint"><strong>What the values are.</strong> Sea-surface temperature from
             satellites (<code>sst_acspo02</code>) has gaps wherever there was cloud — it is what the
             satellite saw, not a gap-filled analysis, and not a finer version of the 0.25° daily
@@ -1329,7 +1347,7 @@
            not obvious from the page, and "I reloaded and see no change" is
            indistinguishable from "the change isn't there". This is the sha256
            prefix of src/app.js, the same string as its ?v= stamp. -->
-      <p class="build-line">Build <code id="build-id">001a67d5</code></p>
+      <p class="build-line">Build <code id="build-id">1a8ece61</code></p>
     </section>
 
     <footer>
@@ -1394,7 +1412,7 @@
        family-1.gf reader that publishes window.F1Data. Both load BEFORE the
        app, and the app copes when they did not (the tab says so). -->
   <script src="lib/fzstd.js?v=207dc305"></script>
-  <script src="src/f1data.js?v=16b280fa"></script>
-  <script src="src/app.js?v=001a67d5"></script>
+  <script src="src/f1data.js?v=23761520"></script>
+  <script src="src/app.js?v=1a8ece61"></script>
 </body>
 </html>

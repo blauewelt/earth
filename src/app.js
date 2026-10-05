@@ -15808,6 +15808,7 @@ function loadPlayback() {
  * pattern) and takes all three down, cancelling any read in flight. */
 
 const DT_LS_KEY = "dataTabSel";
+const DT_FIRST_STORE = "oc4k";
 // CSV of a grid writes "time,lat,lon,value" per cell: ~30 bytes for every
 // 4-byte float, so it is offered only while the result is small enough that
 // the text file stays a file a spreadsheet can open.
@@ -15830,6 +15831,10 @@ const dt = {
   estSeq: 0,
   lastEstimate: null,
   lastEstimateFor: null, // JSON of the sel the last estimate answered
+  touched: false,        // the visitor moved the period, months, days, hours or box
+  lookSeq: 0,            // the first-look search in flight (a newer one cancels it)
+  looking: false,
+  pvResult: null,        // the preview's Result, kept so a channel switch repaints without a read
   lastSel: null,
   dlCtrl: null,          // AbortController of the download in flight
   pvCtrl: null,          // AbortController of the preview in flight
@@ -15951,6 +15956,10 @@ function dtReadSel() {
     const h1 = Math.max(1, Math.min(24, Math.round(h1v === "" ? 24 : Number(h1v))));
     if (!(h0 === 0 && h1 === 24) && h0 !== h1) hours = [h0, h1];
   }
+  const d0 = Math.max(1, Math.min(31, Math.round(Number(dtEl("dt-d0").value) || 1)));
+  const d1v = dtEl("dt-d1").value.trim();
+  const d1 = Math.max(d0, Math.min(31, Math.round(d1v === "" ? 31 : Number(d1v))));
+  const days = d0 === 1 && d1 === 31 ? null : [d0, d1];
   const box = dtBoxFromFields();
   const resV = dtEl("dt-res").value;
   // a store in several parts names the part (the reader's optional `group`);
@@ -15964,6 +15973,7 @@ function dtReadSel() {
     yearStart,
     yearEnd,
     months,
+    days,
     hours,
     bbox: box && !box.error ? { w: box.w, s: box.s, e: box.e, n: box.n } : null,
     // rows keep each report's own time: a time step is a binning choice; and
@@ -15993,7 +16003,7 @@ function dtSave() {
   try {
     localStorage.setItem(DT_LS_KEY, JSON.stringify({
       ...sel, box: ["dt-w", "dt-s", "dt-e", "dt-n"].map((id) => dtEl(id).value),
-      step: dtEl("dt-step").value, fmt: dtEl("dt-format").value,
+      step: dtEl("dt-step").value, fmt: dtEl("dt-format").value, touched: dt.touched,
     }));
   } catch { /* ok: private mode, quota — the defaults are fine */ }
 }
@@ -16106,6 +16116,113 @@ function dtApplyStore(st, saved) {
   dtClearPreview();
 }
 
+function dtSetMonths(list) {
+  const on = new Set(list);
+  for (const b of document.querySelectorAll("#dt-months button")) {
+    const a = on.has(Number(b.dataset.month));
+    b.classList.toggle("active", a);
+    b.setAttribute("aria-pressed", a ? "true" : "false");
+  }
+}
+
+function dtSetPeriod(y0, y1, months, days) {
+  dtEl("dt-y0").value = y0;
+  dtEl("dt-y1").value = y1;
+  dtSetMonths(months);
+  dtEl("dt-d0").value = days ? days[0] : 1;
+  dtEl("dt-d1").value = days ? days[1] : 31;
+}
+
+/* The latitudes a gridded store covers (pixel centres), from its registry
+ * grid; the cloud tops, for one, are a ±30° band. */
+function dtLatRange(st) {
+  const g = st && st.grid;
+  if (!g || !Number.isFinite(Number(g.lat0)) || !Number.isFinite(Number(g.dlat)) || !g.H) return [-90, 90];
+  const a = Number(g.lat0), b = a + (g.H - 1) * Number(g.dlat);
+  return [Math.min(a, b), Math.max(a, b)];
+}
+
+/* A map store's first box: the first of the Cones tab's six places whose box
+ * lies inside the store's latitudes (the Gulf Stream for most; Niño 3.4 for
+ * the tropical cloud-top band), else a box on the store's middle latitude. */
+function dtDefaultBoxFor(st) {
+  const [lo, hi] = dtLatRange(st);
+  const places = [...document.querySelectorAll("#cn-presets button")]
+    .map((b) => [Number(b.dataset.lat), Number(b.dataset.lon)]);
+  if (!places.length) places.push([36, -70]);
+  for (const [lat, lon] of places) {
+    const b = dtPresetBox(lat, lon);
+    if (b.s >= lo && b.n <= hi) return b;
+  }
+  const mid = Math.round((lo + hi) / 2);
+  return dtPresetBox(mid, -150);
+}
+
+/* What a store opens on when the visitor has not chosen a period: the most
+ * recent month that has data, shortened to the first 10, 5, 2 or 1 days until
+ * the estimate is a first look rather than a commitment (≤ DT_FIRST_LOOK_MB
+ * to read and to build). A fixed default cannot do this: the stores span five
+ * orders of magnitude — the bottle samples hold ~70 rows a month, the SWOT
+ * swaths ~140 million — and a year that suits one is 36 GB of another. The
+ * search asks the reader's own estimate, so it is right by construction and
+ * costs a handful of index reads (cached by the reader). */
+const DT_FIRST_LOOK_MB = 40;
+async function dtFirstLook(st) {
+  const R = dtReader();
+  const seq = ++dt.lookSeq;
+  dt.looking = true;
+  const out = dtEl("dt-estimate");
+  out.className = "dt-estimate dt-busy";
+  out.textContent = "choosing a first selection that fits — the most recent month with data…";
+  dtSetDownloadEnabled(false);
+  dtEl("dt-preview").disabled = true;
+  dtWriteBox(dtIsGrid(st) ? dtDefaultBoxFor(st) : null);
+  const spanEnd = Date.parse((st.span || [])[1]);
+  const end = new Date(Math.min(Number.isFinite(spanEnd) ? spanEnd : Date.now(), Date.now()));
+  let y = end.getUTCFullYear(), m = end.getUTCMonth() + 1;
+  const y0 = dtSpanYears(st)[0];
+  const ladder = [null, [1, 10], [1, 5], [1, 2], [1, 1]];
+  const target = DT_FIRST_LOOK_MB * 1e6;
+  let pick = null;
+  try {
+    for (let k = 0; k < 48 && y >= y0 && !pick; k++) {
+      let best = null, last = null;
+      for (const days of ladder) {
+        dtSetPeriod(y, y, [m], days);
+        const sel = dtReadSel();
+        // whole-bin counting: an upper bound with no row search, so sizing a
+        // dozen candidates costs index reads only (the final estimate is exact)
+        const est = await R.estimate(sel, { exactDays: false }).catch(() => null);
+        if (seq !== dt.lookSeq) return;
+        const n = est ? Number(est.rows ?? est.frames) : 0;
+        if (!est || !(n > 0) || dtEmptyShape(est)) {
+          if (!days) break;                      // no data this month: step back
+          continue;
+        }
+        last = { y, m, days };
+        if (!est.overCap) best = last;
+        if (!est.overCap && est.readBytes <= target && est.outBytes <= target) { best = last; break; }
+      }
+      if (best || last) pick = best || last;
+      m -= 1; if (m < 1) { m = 12; y -= 1; }
+    }
+  } finally {
+    if (seq === dt.lookSeq) dt.looking = false;
+  }
+  if (seq !== dt.lookSeq) return;
+  if (pick) dtSetPeriod(pick.y, pick.y, [pick.m], pick.days);
+  else { const b = dtSpanYears(st)[1]; dtSetPeriod(b, b, [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12], null); }
+  dt.touched = false;
+  dtChanged();
+}
+
+/* The reader's estimate of a grid whose box misses the store: zero rows or
+ * columns. A download of that would be a file of nothing. */
+function dtEmptyShape(est) {
+  const sh = est && est.shape;
+  return Array.isArray(sh) && sh.length === 4 && (Number(sh[2]) === 0 || Number(sh[3]) === 0);
+}
+
 function dtFillPresets() {
   const host = dtEl("dt-presets");
   const src = [...document.querySelectorAll("#cn-presets button")];
@@ -16213,7 +16330,7 @@ async function dtRunEstimate() {
   const R = dtReader();
   const out = dtEl("dt-estimate");
   const sel = dtReadSel();
-  if (!R || !sel) return;
+  if (!R || !sel || dt.looking) return;
   dt.lastSel = sel;
   const seq = ++dt.estSeq;
   dtSyncFormats(sel, dt.lastEstimate);
@@ -16242,12 +16359,20 @@ async function dtRunEstimate() {
   dt.lastEstimate = est;
   dt.lastEstimateFor = JSON.stringify(sel);
   dtSyncFormats(sel, est);
-  const unit = est.rows !== undefined && est.rows !== null ? "rows" : "frames";
-  const count = unit === "rows" ? est.rows : est.frames;
+  // nothing to save: a box outside the store's coverage, or a period with no
+  // data — said in words, and the buttons off, rather than a file of nothing
+  const empty = dtEstimateEmpty(sel, est);
+  if (empty) {
+    out.className = "dt-estimate dt-over";
+    out.textContent = empty;
+    dtSetDownloadEnabled(false);
+    dtEl("dt-preview").disabled = true;
+    return;
+  }
   const parts = [
     `<strong>${dtFmtInt(est.requests)}</strong> requests`,
     `<strong>${est.exact === false ? "≈ " : ""}${dtFmtMB(est.readBytes)}</strong> to read`,
-    `<strong>${dtFmtInt(count)}</strong> ${unit === "rows" ? (Number(count) === 1 ? "row" : "rows") : (Number(count) === 1 ? "frame" : "frames")}`,
+    dtCountHtml(sel, est),
     `<strong>${dtFmtMB(est.outBytes)}</strong> file`,
   ];
   let html = parts.join(" · ");
@@ -16267,6 +16392,52 @@ async function dtRunEstimate() {
   out.innerHTML = html;
   dtSetDownloadEnabled(!est.overCap);
   dtEl("dt-preview").disabled = false;
+}
+
+/* What the estimate counts, in the words of the selection. Native: the maps
+ * (or rows) the file will hold. With a time mean the file holds the MEANS,
+ * not the maps, so both are said — "30 daily maps read → 1 monthly mean" —
+ * because the read follows the first number and the file the second. */
+const DT_STEP_WORDS = { pentad: ["five-day mean", "five-day means"],
+  month: ["monthly mean", "monthly means"], all: ["mean over the whole selection", "means"] };
+function dtCountHtml(sel, est) {
+  const st = dt.store;
+  const plural = (n, one, many) => (Number(n) === 1 ? one : many);
+  const sh = Array.isArray(est.shape) ? est.shape : null;
+  const T = sh && sh.length === 4 ? Number(sh[0]) : null;
+  const words = DT_STEP_WORDS[sel.step];
+  if (!dtIsGrid(st)) {
+    const rows = est.rows;
+    if (sel.res === "native" || T === null || !words) {
+      return `<strong>${dtFmtInt(rows)}</strong> ${plural(rows, "row", "rows")}`;
+    }
+    return `<strong>${dtFmtInt(rows)}</strong> ${plural(rows, "report", "reports")} read → ` +
+      `<strong>${dtFmtInt(T)}</strong> ${plural(T, words[0], words[1])} on ${sel.res}° cells`;
+  }
+  const n = est.frames;
+  const maps = `${dtCadence(st)} ${plural(n, "map", "maps")}`;
+  if (sel.step === "native" || T === null || !words) {
+    return `<strong>${dtFmtInt(n)}</strong> ${maps}`;
+  }
+  return `<strong>${dtFmtInt(n)}</strong> ${maps} read → <strong>${dtFmtInt(T)}</strong> ${plural(T, words[0], words[1])}`;
+}
+
+function dtEstimateEmpty(sel, est) {
+  if (est.overCap) return null;
+  const st = dt.store;
+  if (dtIsGrid(st) && dtEmptyShape(est)) {
+    const [lo, hi] = dtLatRange(st);
+    const f = (v) => `${Math.abs(Math.round(v))}°${v < 0 ? "S" : "N"}`;
+    return `the box lies outside this store's coverage — it covers ${f(lo)} to ${f(hi)}; ` +
+      "move the box or pick a place inside it";
+  }
+  const n = Number(dtIsGrid(st) ? est.frames : est.rows);
+  if (Number.isFinite(n) && n === 0) {
+    const sp = st.span || [];
+    return `no data in this period — the store's record runs ${String(sp[0] || "?").slice(0, 10)} → ` +
+      `${String(sp[1] || "?").slice(0, 10)}, and none of it falls in the chosen years, months and days`;
+  }
+  return null;
 }
 
 /* Any control moved: one funnel, so the box, the saved selection and the
@@ -16289,6 +16460,8 @@ function dtClearPreview() {
   if (dt.pvEnt) { viewer.entities.remove(dt.pvEnt); dt.pvEnt = null; }
   if (dt.pvDots) { viewer.scene.primitives.remove(dt.pvDots); dt.pvDots = null; }
   dt.lastPreview = null;
+  dt.pvResult = null;
+  dtEl("dt-pv-chan-row")?.classList.add("hidden");
   const lg = dtEl("dt-legend");
   if (lg) { lg.classList.add("hidden"); lg.innerHTML = ""; }
   dtEl("dt-preview-clear")?.classList.add("hidden");
@@ -16311,15 +16484,25 @@ const dtRampCss = (ramp) => `linear-gradient(to right, ${RAMPS[ramp].map(([t, r,
  * (cloud-top temperature arrives in kelvin, stored as kelvin − 160), in which
  * case the registry's numbers describe something else and the frame's own
  * range is the honest scale. */
+const DT_REGISTRY_SCALE_SHARE = 0.5;
 function dtScaleFor(res, ci, dataLo, dataHi) {
   const name = (res.channels || [])[ci];
   const ch = (dt.store.channels || []).find((c) => c.name === name);
   const unit = dtUnitOf(res, ci);
-  if (ch && Number.isFinite(Number(ch.min)) && Number.isFinite(Number(ch.max)) &&
-      Number(ch.max) > Number(ch.min) && (!ch.unit || !unit || ch.unit === unit)) {
-    return { lo: Number(ch.min), hi: Number(ch.max), from: "registry" };
+  const regOk = ch && Number.isFinite(Number(ch.min)) && Number.isFinite(Number(ch.max)) &&
+    Number(ch.max) > Number(ch.min) && (!ch.unit || !unit || ch.unit === unit);
+  // ...but only while the frame actually spans a fair part of that range.
+  // Measured on the live store (2026-10-05): a December Gulf Stream frame of
+  // oc4k chlorophyll spans −1.2 to 1.8 of the registry's −4 to 2.5, and on the
+  // full range it painted as one flat teal. A picture whose colours carry no
+  // information is worse than a scale that moves, so then the frame's own
+  // range is the scale and the legend says so (and prints the full range).
+  const reg = regOk ? { lo: Number(ch.min), hi: Number(ch.max) } : null;
+  if (reg && (dataHi - dataLo) >= DT_REGISTRY_SCALE_SHARE * (reg.hi - reg.lo)) {
+    return { lo: reg.lo, hi: reg.hi, from: "registry", reg };
   }
-  return { lo: dataLo, hi: dataHi, from: "frame" };
+  if (dataHi > dataLo) return { lo: dataLo, hi: dataHi, from: "frame", reg };
+  return reg ? { lo: reg.lo, hi: reg.hi, from: "registry", reg } : { lo: dataLo, hi: dataLo + 1, from: "frame", reg };
 }
 
 function dtMinMax(arr, start, n, stride = 1) {
@@ -16351,7 +16534,7 @@ function dtPaintGrid(res, ci) {
   const off = ci * H * W;               // frame 0, channel ci of [T, C, H, W]
   const mm = dtMinMax(res.data, off, H * W);
   if (!mm.k) return null;
-  const { lo, hi, from } = dtScaleFor(res, ci, mm.lo, mm.hi);
+  const { lo, hi, from, reg } = dtScaleFor(res, ci, mm.lo, mm.hi);
   const ramp = dtRampFor(dtUnitOf(res, ci));
   const sx = Math.max(1, Math.ceil(W / DT_PREVIEW_MAX_PX)), sy = Math.max(1, Math.ceil(H / DT_PREVIEW_MAX_PX));
   const cw = Math.ceil(W / sx), chh = Math.ceil(H / sy);
@@ -16402,7 +16585,7 @@ function dtPaintGrid(res, ci) {
       height: 0,
     },
   });
-  return { lo, hi, from, ramp, dataLo: mm.lo, dataHi: mm.hi, n: mm.k, unit: dtUnitOf(res, ci),
+  return { lo, hi, from, reg, ramp, dataLo: mm.lo, dataHi: mm.hi, n: mm.k, unit: dtUnitOf(res, ci),
     when: res.time && res.time[0] };
 }
 
@@ -16411,7 +16594,7 @@ function dtPaintPoints(res, ci) {
   const C = (res.channels || []).length || 1;
   const mm = dtMinMax(res.values, ci, N, C);
   if (!N) return null;
-  const { lo, hi, from } = mm.k ? dtScaleFor(res, ci, mm.lo, mm.hi) : { lo: NaN, hi: NaN, from: "frame" };
+  const { lo, hi, from, reg } = mm.k ? dtScaleFor(res, ci, mm.lo, mm.hi) : { lo: NaN, hi: NaN, from: "frame", reg: null };
   const ramp = dtRampFor(dtUnitOf(res, ci));
   dt.pvDots = viewer.scene.primitives.add(new Cesium.PointPrimitiveCollection());
   const stride = Math.max(1, Math.ceil(N / DT_PREVIEW_MAX_DOTS));
@@ -16424,12 +16607,14 @@ function dtPaintPoints(res, ci) {
       : Cesium.Color.fromCssColorString("#8b949e").withAlpha(0.6);
     dt.pvDots.add({
       position: Cesium.Cartesian3.fromDegrees(res.lon[i], res.lat[i]),
-      pixelSize: 5, color, outlineColor: Cesium.Color.BLACK.withAlpha(0.5), outlineWidth: 1,
+      // white-ringed and larger than a tile pixel: the dots sit on top of
+      // whatever map layer is on, often one on a similar ramp
+      pixelSize: 7, color, outlineColor: Cesium.Color.WHITE.withAlpha(0.9), outlineWidth: 1.5,
       disableDepthTestDistance: Number.POSITIVE_INFINITY,
     });
     drawn++;
   }
-  return { lo, hi, from, ramp, dataLo: mm.k ? mm.lo : NaN, dataHi: mm.k ? mm.hi : NaN, n: drawn,
+  return { lo, hi, from, reg, ramp, dataLo: mm.k ? mm.lo : NaN, dataHi: mm.k ? mm.hi : NaN, n: drawn,
     unit: dtUnitOf(res, ci), when: res.time && res.time[0] };
 }
 
@@ -16444,8 +16629,11 @@ function dtShowLegend(info, res, ci) {
     `<div class="dt-lg-bar" style="background:${dtRampCss(info.ramp)}"></div>` +
     `<div class="dt-lg-scale"><span>${fmt(info.lo)}</span><span>${fmt(info.hi)}</span></div>` +
     `<div class="dt-lg-unit">${esc(info.unit || "")}` +
-    `${info.from === "registry" ? " · the channel's full range" : " · this frame's range"}` +
-    ` · this preview spans ${fmt(info.dataLo)} to ${fmt(info.dataHi)}</div>`;
+    (info.from === "registry"
+      ? ` · the scale is the channel's full range; this preview spans ${fmt(info.dataLo)} to ${fmt(info.dataHi)}`
+      : ` · the scale is this preview's own range` +
+        (info.reg ? ` (the channel's full range is ${fmt(info.reg.lo)} to ${fmt(info.reg.hi)})` : "")) +
+    `</div>`;
   lg.classList.remove("hidden");
 }
 
@@ -16471,15 +16659,39 @@ async function dtPreview() {
   if (dt.pvCtrl !== ctrl || !dataTabVisible()) return;
   dt.pvCtrl = null;
   if (!res) { dtStatus("nothing in this selection to preview — no frame has data"); return; }
-  const ci = 0;                           // the first channel of the selection
-  const info = res.kind === "grid" ? dtPaintGrid(res, ci) : dtPaintPoints(res, ci);
-  if (!info) { dtStatus("nothing in this selection to preview — the first frame is empty"); return; }
-  dt.lastPreview = { kind: res.kind, min: info.dataLo, max: info.dataHi, scaleMin: info.lo,
-    scaleMax: info.hi, scaleFrom: info.from, ramp: info.ramp, unit: info.unit, n: info.n };
-  dtShowLegend(info, res, ci);
+  dt.pvResult = res;
+  const chans = res.channels || [];
+  const pick = dtEl("dt-pv-chan");
+  pick.innerHTML = chans.map((c, i) => `<option value="${i}">${esc(c)}</option>`).join("");
+  pick.value = "0";
+  dtEl("dt-pv-chan-row").classList.toggle("hidden", chans.length < 2);
+  if (!dtRepaintPreview(0)) { dtStatus("nothing in this selection to preview — the first frame is empty"); return; }
   dtEl("dt-preview-clear").classList.remove("hidden");
   dtStatus("");
+}
+
+/* Paint channel `ci` of the preview already read — the channel picker calls
+ * this, so switching channels costs no request. */
+function dtRepaintPreview(ci) {
+  const res = dt.pvResult;
+  if (!res) return false;
+  if (dt.pvEnt) { viewer.entities.remove(dt.pvEnt); dt.pvEnt = null; }
+  if (dt.pvDots) { viewer.scene.primitives.remove(dt.pvDots); dt.pvDots = null; }
+  const info = res.kind === "grid" ? dtPaintGrid(res, ci) : dtPaintPoints(res, ci);
+  if (!info) {
+    dt.lastPreview = null;
+    const lg = dtEl("dt-legend");
+    lg.innerHTML = `<div class="dt-lg-name">${esc((res.channels || [])[ci] || "")} ` +
+      `<span class="dt-k">— no valid value in this frame</span></div>`;
+    lg.classList.remove("hidden");
+    viewer.scene.requestRender();
+    return false;
+  }
+  dt.lastPreview = { kind: res.kind, channel: (res.channels || [])[ci], min: info.dataLo, max: info.dataHi,
+    scaleMin: info.lo, scaleMax: info.hi, scaleFrom: info.from, ramp: info.ramp, unit: info.unit, n: info.n };
+  dtShowLegend(info, res, ci);
   viewer.scene.requestRender();
+  return true;
 }
 
 /* ---- download ----------------------------------------------------------- */
@@ -16501,10 +16713,11 @@ function dtFileName(sel, ext) {
   const yrs = sel.yearStart === sel.yearEnd ? `${sel.yearStart}` : `${sel.yearStart}-${sel.yearEnd}`;
   const mo = sel.months.length === 12 ? ""
     : `_m${sel.months.map((m) => String(m).padStart(2, "0")).join("-")}`;
+  const dy = sel.days ? `_d${String(sel.days[0]).padStart(2, "0")}-${String(sel.days[1]).padStart(2, "0")}` : "";
   const hr = sel.hours ? `_h${String(sel.hours[0]).padStart(2, "0")}-${String(sel.hours[1]).padStart(2, "0")}` : "";
   const res = sel.res === "native" ? (dtIsGrid(dt.store) ? "native" : "rows") : `${sel.res}deg`;
   const step = sel.step === "native" ? "" : `_${sel.step}`;
-  return `${clean(sel.store)}_${ch}_${yrs}${mo}${hr}_${res}${step}.${ext}`;
+  return `${clean(sel.store)}_${ch}_${yrs}${mo}${dy}${hr}_${res}${step}.${ext}`;
 }
 
 /* `onProgress` is the reader's; its argument may be a fraction, a percentage
@@ -16600,32 +16813,50 @@ function dtWire() {
   dtEl("dt-store").addEventListener("change", (e) => {
     const st = dt.reg.stores.find((s) => s.name === e.target.value);
     if (!st) return;
-    // the period and the box carry over (clamped to the new record); the
-    // channels and the resolution are the new store's own
+    // A period the visitor CHOSE (and the box, months, days) carries over,
+    // clamped to the new record — "every February 1998–2004" is a question
+    // to ask of several stores. A period nobody chose does not: each store
+    // opens on its own first look, which is under the cap by construction.
+    // The channels and the resolution are always the new store's own.
     const keepBox = dtBoxFromFields();
     const cur = dtReadSel();
-    dtApplyStore(st, cur ? { yearStart: cur.yearStart, yearEnd: cur.yearEnd } : null);
-    if (dtIsGrid(st) && !keepBox) dtWriteBox(dtPresetBox(36, -70));
-    dtChanged();
+    if (dt.touched && cur) {
+      dtApplyStore(st, { yearStart: cur.yearStart, yearEnd: cur.yearEnd });
+      if (dtIsGrid(st) && !keepBox) dtWriteBox(dtDefaultBoxFor(st));
+      dtChanged();
+    } else {
+      dtApplyStore(st, null);
+      dtFirstLook(st);
+    }
   });
+  // what counts as the visitor choosing a period (see the store handler)
+  const PERIOD_IDS = new Set(["dt-y0", "dt-y1", "dt-d0", "dt-d1", "dt-h0", "dt-h1",
+    "dt-w", "dt-s", "dt-e", "dt-n"]);
   panel.addEventListener("change", (e) => {
     if (e.target.id === "dt-store") return;
-    if (e.target.id === "dt-y0" || e.target.id === "dt-y1") {
-      // clamp in place, so the field shows what will be read
+    if (e.target.id === "dt-pv-chan") return;
+    if (PERIOD_IDS.has(e.target.id)) { dt.touched = true; dt.lookSeq++; dt.looking = false; }
+    if (["dt-y0", "dt-y1", "dt-d0", "dt-d1"].includes(e.target.id)) {
+      // clamp in place, so the fields show what will be read
       const sel = dtReadSel();
       dtEl("dt-y0").value = sel.yearStart;
       dtEl("dt-y1").value = sel.yearEnd;
+      dtEl("dt-d0").value = sel.days ? sel.days[0] : 1;
+      dtEl("dt-d1").value = sel.days ? sel.days[1] : 31;
     }
     if (e.target.id === "dt-format") { dtSave(); return; }
     dtChanged();
   });
   // the box fields redraw while typing; the estimate waits for the debounce
-  for (const id of ["dt-w", "dt-s", "dt-e", "dt-n"]) dtEl(id).addEventListener("input", dtChanged);
+  for (const id of ["dt-w", "dt-s", "dt-e", "dt-n"]) {
+    dtEl(id).addEventListener("input", () => { dt.touched = true; dt.lookSeq++; dtChanged(); });
+  }
   dtEl("dt-months").addEventListener("click", (e) => {
     const b = e.target.closest("button[data-month]");
     if (!b) return;
     b.classList.toggle("active");
     b.setAttribute("aria-pressed", b.classList.contains("active") ? "true" : "false");
+    dt.touched = true; dt.lookSeq++;
     dtChanged();
   });
   const setMonths = (on) => {
@@ -16633,6 +16864,7 @@ function dtWire() {
       b.classList.toggle("active", on);
       b.setAttribute("aria-pressed", on ? "true" : "false");
     }
+    dt.touched = true; dt.lookSeq++;
     dtChanged();
   };
   dtEl("dt-months-all").addEventListener("click", () => setMonths(true));
@@ -16645,14 +16877,18 @@ function dtWire() {
       return;
     }
     dtWriteBox(b);
+    dt.touched = true; dt.lookSeq++;
     dtChanged();
   });
-  dtEl("dt-box-clear").addEventListener("click", () => { dtWriteBox(null); dtChanged(); });
+  dtEl("dt-box-clear").addEventListener("click", () => {
+    dtWriteBox(null); dt.touched = true; dt.lookSeq++; dtChanged();
+  });
   dtEl("dt-presets").addEventListener("click", (e) => {
     const b = e.target.closest("button[data-lat]");
     if (!b) return;
     const box = dtPresetBox(Number(b.dataset.lat), Number(b.dataset.lon));
     dtWriteBox(box);
+    dt.touched = true; dt.lookSeq++;
     dtChanged();
     // fly to the box with a margin; the wrap keeps a dateline box W > E
     const wrap = (x) => ((((x + 180) % 360) + 360) % 360) - 180;
@@ -16663,6 +16899,7 @@ function dtWire() {
     });
   });
   dtEl("dt-preview").addEventListener("click", dtPreview);
+  dtEl("dt-pv-chan").addEventListener("change", (e) => dtRepaintPreview(Number(e.target.value)));
   dtEl("dt-preview-clear").addEventListener("click", dtClearPreview);
   dtEl("dt-download").addEventListener("click", dtDownload);
   dtEl("dt-cancel").addEventListener("click", dtCancel);
@@ -16708,30 +16945,27 @@ async function loadDataTab() {
     dtFillStores();
     dtFillPresets();
     const saved = dtLoadSaved();
-    const st = (saved && reg.stores.find((s) => s.name === saved.store)) || reg.stores[0];
+    // the flagship store first: four-kilometre ocean colour, if published
+    const st = (saved && reg.stores.find((s) => s.name === saved.store)) ||
+      reg.stores.find((s) => s.name === DT_FIRST_STORE) || reg.stores[0];
     const ok = saved && saved.store === st.name;
     dtApplyStore(st, ok ? saved : null);
-    if (ok && Array.isArray(saved.months)) {
-      for (const b of document.querySelectorAll("#dt-months button")) {
-        const on = saved.months.includes(Number(b.dataset.month));
-        b.classList.toggle("active", on);
-        b.setAttribute("aria-pressed", on ? "true" : "false");
-      }
-    } else {
-      for (const b of document.querySelectorAll("#dt-months button")) {
-        b.classList.add("active"); b.setAttribute("aria-pressed", "true");
-      }
-    }
-    if (ok && Array.isArray(saved.box) && saved.box.length === 4) {
+    if (!ok) { dtFirstLook(st); return; }
+    dtSetMonths(Array.isArray(saved.months) ? saved.months : [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]);
+    dtEl("dt-d0").value = Array.isArray(saved.days) ? saved.days[0] : 1;
+    dtEl("dt-d1").value = Array.isArray(saved.days) ? saved.days[1] : 31;
+    if (Array.isArray(saved.box) && saved.box.length === 4) {
       ["dt-w", "dt-s", "dt-e", "dt-n"].forEach((id, i) => { dtEl(id).value = saved.box[i] ?? ""; });
     } else {
-      dtWriteBox(dtIsGrid(st) ? dtPresetBox(36, -70) : null);
+      dtWriteBox(dtIsGrid(st) ? dtDefaultBoxFor(st) : null);
     }
-    if (ok && Array.isArray(saved.hours)) { dtEl("dt-h0").value = saved.hours[0]; dtEl("dt-h1").value = saved.hours[1]; }
-    if (ok && saved.step && !dtEl("dt-step").disabled) dtEl("dt-step").value = saved.step;
-    if (ok && saved.fmt) dtEl("dt-format").value = saved.fmt;
+    if (Array.isArray(saved.hours)) { dtEl("dt-h0").value = saved.hours[0]; dtEl("dt-h1").value = saved.hours[1]; }
+    if (saved.step && !dtEl("dt-step").disabled) dtEl("dt-step").value = saved.step;
+    if (saved.fmt) dtEl("dt-format").value = saved.fmt;
+    dt.touched = !!saved.touched;
     dtSyncStepRes();
   }
+  if (dt.looking) return;                 // the first look schedules its own estimate
   dtDrawBox();
   dtScheduleEstimate();
 }
@@ -16763,10 +16997,12 @@ function dataTabState() {
     previewShown: (!!dt.pvEnt && viewer.entities.contains(dt.pvEnt)) ||
       (!!dt.pvDots && viewer.scene.primitives.contains(dt.pvDots) && dt.pvDots.length > 0),
     lastPreview: dt.lastPreview,
+    looking: dt.looking,
+    touched: dt.touched,
     lastEstimate: dt.lastEstimate,
     // true once the estimate on screen is the one for the controls as they are
     // now (the estimate is debounced, so for ~300 ms after a change it is not)
-    estimateCurrent: !!dt.store && !!dt.lastEstimate && dt.lastEstimateFor === JSON.stringify(dtReadSel()),
+    estimateCurrent: !dt.looking && !!dt.store && !!dt.lastEstimate && dt.lastEstimateFor === JSON.stringify(dtReadSel()),
     lastDownload: dt.lastDownload,
     downloading: !!dt.dlCtrl,
   };

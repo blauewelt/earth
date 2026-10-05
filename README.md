@@ -29,6 +29,7 @@ The long-term goal: layer enough observational and model data onto the globe to 
 - **Rolling aggregation** — an *Aggregate* slider (1–730 days) averages over the past N days ending on the chosen date, for every continuous layer, and orthogonally to the comparison mode. The mean is per pixel and layer-aware: for clear-sky products, missing samples are excluded so gaps fill instead of darkening; for precipitation, dry (transparent) pixels count as *zero*, so multi-day rain is a true mean rate rather than "rate when raining". "Past 365 days vs 10 years ago" reveals broad ocean warming and the subpolar cold blob cleanly, without daily weather noise.
 - **SST ensemble** — combines independent GHRSST L4 analyses (MUR, OISST, GAMSSA) client-side into a **mean** or a **spread** map; the spread highlights where the analyses disagree (fronts, eddies, under-observed ocean).
 - **Every layer explains itself** — the title is a link to the dataset's own documentation, and a hover card gives a plain-language gist plus what period is *recorded*, at what *interval*, and at what *spatial* granularity. Colormapped layers carry an interactive legend, and hovering the globe probes the actual value under the cursor.
+- **Download the observations themselves** — the *Data* tab offers every public family 1.gf store (the project's global observation stores kept at native resolution: ocean colour at 4 km, satellite sea-surface temperature at 2 km, 3-hourly cloud tops, and ship, float, bottle, mooring, CO₂-sounding, wave-height and SWOT point stores) filtered by period, months, days, hours, box, time step and resolution. A live estimate says what will be read and what the file will weigh before anything is fetched; the file — NetCDF or CSV — is built in the browser from HTTP range reads of the public Hugging Face store, with no server of ours in between. See [docs/DATA_TAB.md](docs/DATA_TAB.md).
 - **Active-layer chips** on the globe list what is currently switched on, so any layer can be turned off in one click from any tab — including the dashboards, where the layer list isn't on screen at all.
 - **"Everything we know" (pixel inspector)** — a layer that answers clicks instead of drawing pixels: click anywhere on the globe for one card composing everything the app can know about that point — live weather and a 7-day forecast, CAMS air quality, river discharge, waves and a per-pixel 2050 climate outlook (Open-Meteo family), all fifteen satellite fields probed at the chosen date, why any forest at that point was lost, climate normals, and nearby context (monitoring sites, Argo floats, major emitters, glaciers). Every single value says *when* it was observed — down to the half-hour where the data has it, a day, a month, a year, or a fixed span like 1991–2020 — with its age beside it where an age means anything, because these rows are routinely years apart even when they sit side by side. With it off, a click reads the value of the layer you're viewing; with no layer active, the card opens anyway. It is [docs/PIXEL_STATE.md](docs/PIXEL_STATE.md) made clickable.
 - **Point and inventory layers** — Climate TRACE's top 1,000 facility emitters · the ~3,800-float active Argo fleet · the AMOC monitoring network (RAPID, OSNAP, MOVE, SAMBA, the Florida Current cable, the subpolar "cold blob" region) and reference GHG stations (Mauna Loa, Jungfraujoch, …) as clickable markers with data links · all 274,531 glaciers of the Randolph Glacier Inventory v7, colourable by extent or by their 2000–2020 melt rate from Hugonnet et al. 2021 (240,542 matched; ~78% thinning, and the Karakoram anomaly is visible).
@@ -54,15 +55,17 @@ Or just use the [live deployment](https://blauewelt.github.io/earth/), which Git
 
 ## Testing
 
-The repo ships a Playwright regression suite (137 specs): data-snapshot integrity
+The repo ships a Playwright regression suite (317 specs): data-snapshot integrity
 (`tests/data.spec.js` — catalog, RAPID series, Argo fleet, Climate TRACE, stations,
 sea-level budget, GISTEMP, glaciers, species, the four climatology grids, the place
 gazetteer, the island file) and full browser tests (`tests/app.spec.js` — GIBS tiling-scheme math
 including the Pacific partial-tile regression, layer and date handling, comparison
 split and computed-delta mode, aggregation, hover cards, legends, the value probe,
 active-layer chips, zoom and pinch gestures, point layers, place and island names
-and search,
-dashboards, catalog browser).
+and search, the Data tab against a stub reader and against the real reader over
+a fixture store, dashboards, catalog browser), plus the Data tab's reader on its
+own under node (`node --test tests/f1data.test.mjs` — the family 1.gf fixture
+written by the real store writers, served over a server that honours `Range`).
 
 ```bash
 npm ci

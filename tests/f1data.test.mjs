@@ -407,6 +407,34 @@ print(json.dumps({"p": p, "q": q}))
     closeArr(Array.from(t.data), out.q.tb, { label: "tb" });
   });
 
+  test("days: a day-of-month range keeps exactly the frames and rows on those days, and reads less", async () => {
+    const dom = (t) => new Date(t * 1000).getUTCDate();
+    // grid: the native box over 2009-12-25 .. 2010-01-08, days 26–31 of every month
+    const g = selOf(cases(/^grid native box$/)[0]);
+    const all = await F1.run(g);
+    const some = await F1.run(Object.assign({}, g, { days: [26, 31] }));
+    const want = Array.from(all.time).filter((t) => dom(t) >= 26 && dom(t) <= 31);
+    assert.ok(want.length > 0 && want.length < all.time.length);
+    assert.deepEqual(Array.from(some.time), want);
+    // points: every row of the full selection whose day is 3–9, in order — the
+    // row search over the sorted time column must neither drop nor add a row
+    const p = { store: "fxpts", channels: ["temp"], yearStart: 2009, yearEnd: 2010,
+      months: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12], hours: null, bbox: null, step: "native", res: "native" };
+    const pa = await F1.run(p);
+    const pd = Object.assign({}, p, { days: [3, 9] });
+    const pb = await F1.run(pd);
+    const keep = [];
+    for (let i = 0; i < pa.time.length; i++) if (dom(pa.time[i]) >= 3 && dom(pa.time[i]) <= 9) keep.push(i);
+    assert.ok(keep.length > 0 && keep.length < pa.time.length);
+    assert.deepEqual(Array.from(pb.time), keep.map((i) => pa.time[i]));
+    assert.deepEqual(Array.from(pb.values), keep.map((i) => pa.values[i]));
+    const ea = await F1.estimate(p), eb = await F1.estimate(pd);
+    assert.ok(eb.rows >= keep.length, "the estimate never under-counts");
+    assert.ok(eb.rows < ea.rows && eb.readBytes < ea.readBytes, "days narrower than a bin read fewer rows");
+    // and a nonsense range is refused in words
+    await assert.rejects(F1.estimate(Object.assign({}, p, { days: [9, 3] })), /days must be/);
+  });
+
   test("CSV: one row per observation (points) and per non-empty cell (grids)", async () => {
     const r = await F1.run(selOf(cases(/^points dateline all months/)[0]));
     const txt = await F1.toCSV(r).text();

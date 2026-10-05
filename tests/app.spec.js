@@ -7899,26 +7899,29 @@ function installF1Stub() {
     const st = storeOf(sel.store);
     const years = sel.yearEnd - sel.yearStart + 1, m = sel.months.length, C = sel.channels.length;
     const [bw, bh] = boxWH(sel.bbox);
+    const dayShare = sel.days ? (sel.days[1] - sel.days[0] + 1) / 30.44 : 1;
     if (st.kind === "grid") {
       const tiles = Math.ceil(bw / (256 / 24)) * Math.ceil(bh / (256 / 24));
-      const bins = Math.max(1, Math.round(years * m * 73 / 12));
+      const bins = Math.max(1, Math.round(years * m * 73 / 12 * dayShare));
       const frames = bins * (st.framesPerBin || 5);
       const deg = sel.res === "native" ? 1 / 24 : sel.res;
-      const cells = Math.round(bw / deg) * Math.round(bh / deg);
+      const Hc = Math.round(bh / deg), Wc = Math.round(bw / deg);
       const T = sel.step === "native" ? frames : sel.step === "pentad" ? bins
         : sel.step === "month" ? years * m : 1;
       const mean = sel.step !== "native" || sel.res !== "native";
+      // like the reader: `frames` counts the native frames READ, shape[0] the
+      // time steps of the file
       return { st, requests: bins * tiles * C, readBytes: bins * tiles * C * 5 * 40e3,
-        outBytes: T * C * cells * (mean ? 6 : 4), frames: T };
+        outBytes: T * C * Hc * Wc * (mean ? 6 : 4), frames, shape: [T, C, Hc, Wc] };
     }
-    const allRows = years * m * 900;
+    const allRows = Math.round(years * m * 900 * dayShare);
     const rows = Math.round(allRows * (bw * bh) / (360 * 180));
     const readBytes = allRows * (16 + 4 * C);
-    if (sel.res === "native") return { st, requests: 2 + C, readBytes, outBytes: rows * (3 + C) * 4, rows };
-    const cells = Math.round(bw / sel.res) * Math.round(bh / sel.res);
+    if (sel.res === "native") return { st, requests: 2 + C, readBytes, outBytes: rows * (3 + C) * 4, rows, shape: [rows, C] };
+    const Hc = Math.round(bh / sel.res), Wc = Math.round(bw / sel.res);
     const T = sel.step === "native" || sel.step === "pentad" ? Math.round(years * m * 73 / 12)
       : sel.step === "month" ? years * m : 1;
-    return { st, requests: 2 + C, readBytes, outBytes: T * C * cells * 6, frames: T };
+    return { st, requests: 2 + C, readBytes, outBytes: T * C * Hc * Wc * 6, rows: allRows, shape: [T, C, Hc, Wc] };
   }
 
   async function estimate(sel) {
@@ -7933,6 +7936,7 @@ function installF1Stub() {
         ? `${Math.round(s.readBytes / 1e6)} MB to read is over the 600 MB cap — shorten the period or shrink the box`
         : `${Math.round(s.outBytes / 1e6)} MB of result is over the 400 MB cap — coarsen the resolution or take a time mean`) : "" };
     if (s.rows !== undefined) out.rows = s.rows; else out.frames = s.frames;
+    out.shape = s.shape;
     return out;
   }
 
@@ -7985,7 +7989,7 @@ function installF1Stub() {
     loadRegistry: async () => ({ stores: STORES }),
     estimate,
     run: (sel, { onProgress, signal } = {}) => build(sel, 3, signal, onProgress),
-    preview: (sel, { signal } = {}) => build(sel, 1, signal, null),
+    preview: (sel, { signal } = {}) => { window.__f1PreviewCalls = (window.__f1PreviewCalls || 0) + 1; return build(sel, 1, signal, null); },
     toNetCDF: (r) => new Blob([new Uint8Array([67, 68, 70, 2]), new Uint8Array(r.data ? r.data.buffer : r.values.buffer)],
       { type: "application/x-netcdf" }),
     toCSV: (r) => {
@@ -8050,12 +8054,15 @@ test("Data tab: opens between Cones and Play, lists the reader's stores, and its
   await expect(page.locator("#dt-channels input")).toHaveCount(3);
   expect(await page.locator("#dt-channels input").evaluateAll((is) => is.map((i) => i.checked)))
     .toEqual([true, false, false]);
-  await expect(page.locator("#dt-months button.active")).toHaveCount(12);
+  // the first look: the store's most recent month with data, under the cap
+  await expect.poll(async () => (await dtState(page)).estimateCurrent, { timeout: 20000 }).toBe(true);
+  await expect(page.locator("#dt-months button.active")).toHaveCount(1);
+  await expect(page.locator('#dt-months button[data-month="12"]')).toHaveClass(/active/);
   await expect(page.locator("#dt-hours-row")).toBeHidden();
   await expect(page.locator("#dt-y0")).toHaveValue("2022");
   await expect(page.locator("#dt-y0")).toHaveAttribute("min", "1997");
-  await expect(page.locator("#dt-estimate")).toContainText("MB to read", { timeout: 10000 });
-  await expect(page.locator("#dt-estimate")).toContainText("frames");
+  await expect(page.locator("#dt-estimate")).toContainText("MB to read");
+  await expect(page.locator("#dt-estimate")).toContainText("30 daily maps");
   // the Cones tab's six places, as boxes
   await expect(page.locator("#dt-presets button")).toHaveCount(6);
   await expect(page.locator("#dt-presets button").nth(3)).toHaveText("Kuroshio");
@@ -8063,8 +8070,9 @@ test("Data tab: opens between Cones and Play, lists the reader's stores, and its
   // the selection the controls build is exactly the plan's `sel`
   let st = await dtState(page);
   expect(st.sel).toEqual({ store: "oc4k", channels: ["log_chl"], yearStart: 2022, yearEnd: 2022,
-    months: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12], hours: null,
+    months: [12], days: null, hours: null,
     bbox: { w: -77.5, s: 31, e: -62.5, n: 41 }, step: "native", res: "native" });
+  expect(st.touched).toBe(false);
 
   // the box is drawn, and follows the fields
   expect(st.outlineShown).toBe(true);
@@ -8157,10 +8165,27 @@ test("Data tab: the estimate follows period, months and box, and over the cap Do
   await expect(est).toContainText("pick at least one month");
   await expect(page.locator("#dt-download")).toBeDisabled();
   await dtTap(page, '#dt-months button[data-month="2"]');
+  await dtTap(page, '#dt-months button[data-month="3"]');
   await expect(est).toContainText("requests");
+  await expect.poll(async () => (await dtState(page)).estimateCurrent).toBe(true);
   const t2 = await text();
   expect(t2).not.toBe(t1);
-  expect((await dtState(page)).sel.months).toEqual([2]);
+  expect((await dtState(page)).sel.months).toEqual([2, 3]);
+
+  // days: the finest period control, and the read follows it
+  await dtSet(page, { "dt-d0": "1", "dt-d1": "5" });
+  await expect.poll(async () => (await dtState(page)).estimateCurrent).toBe(true);
+  expect((await dtState(page)).sel.days).toEqual([1, 5]);
+  expect(await text()).not.toBe(t2);
+  await dtSet(page, { "dt-d0": "9", "dt-d1": "3" });
+  // an end before the start is pulled up to the start, in the field itself
+  await expect(page.locator("#dt-d1")).toHaveValue("9");
+  await dtSet(page, { "dt-d0": "1", "dt-d1": "31" });
+  await expect.poll(async () => (await dtState(page)).sel.days).toBe(null);
+  // a time mean: the line says what is read AND what the file holds
+  await dtSet(page, { "dt-step": "month" });
+  await expect(est).toContainText(/daily maps read → \d+ monthly means/);
+  await dtSet(page, { "dt-step": "native" });
 
   // box
   await dtSet(page, { "dt-n": "55" });
@@ -8208,10 +8233,38 @@ test("Data tab: the preview paints inside the box, and a download saves the file
   const pv = (await dtState(page)).lastPreview;
   expect(pv.kind).toBe("grid");
   expect(pv.max).toBeGreaterThan(pv.min);
-  // the colour scale is the channel's own range from the registry, so a
-  // colour means the same value in every preview
-  expect([pv.scaleMin, pv.scaleMax, pv.scaleFrom]).toEqual([-4, 2.5, "registry"]);
-  await expect(page.locator("#dt-legend")).toContainText("the channel's full range");
+  // the colour scale is the channel's registry range when the frame spans at
+  // least half of it; this frame spans ~2 of its 6.5 (a flat picture on the
+  // full range — measured live on oc4k), so the scale is the frame's own and
+  // the legend says so, with the full range beside it
+  expect(pv.scaleFrom).toBe("frame");
+  expect([pv.scaleMin, pv.scaleMax]).toEqual([pv.min, pv.max]);
+  await expect(page.locator("#dt-legend")).toContainText("the scale is this preview's own range");
+  await expect(page.locator("#dt-legend")).toContainText("the channel's full range is -4 to 2.5");
+  // two channels ticked: a picker beside the legend repaints the frame
+  // already read — it reads nothing
+  await page.evaluate(() => {
+    const i = document.querySelector('#dt-channels input[value="kd_490"]');
+    i.checked = true; i.dispatchEvent(new Event("change", { bubbles: true }));
+  });
+  await expect(page.locator("#dt-pv-chan-row")).toBeHidden();      // the change cleared the preview
+  await dtTap(page, "#dt-preview");
+  await expect.poll(async () => (await dtState(page)).previewShown).toBe(true);
+  await expect(page.locator("#dt-pv-chan-row")).toBeVisible();
+  await expect(page.locator("#dt-pv-chan option")).toHaveText(["log_chl", "kd_490"]);
+  const calls = await page.evaluate(() => window.__f1PreviewCalls);
+  await dtSet(page, { "dt-pv-chan": "1" });
+  await expect.poll(async () => (await dtState(page)).lastPreview?.channel).toBe("kd_490");
+  await expect(page.locator("#dt-legend")).toContainText("kd_490");
+  expect(await page.evaluate(() => window.__f1PreviewCalls)).toBe(calls);
+  expect((await dtState(page)).previewShown).toBe(true);
+  await page.evaluate(() => {
+    const i = document.querySelector('#dt-channels input[value="kd_490"]');
+    i.checked = false; i.dispatchEvent(new Event("change", { bubbles: true }));
+  });
+  await dtTap(page, "#dt-preview");
+  await expect.poll(async () => (await dtState(page)).lastPreview?.channel).toBe("log_chl");
+
   // and a change to the selection takes the preview down: it pictured
   // something no longer asked for
   await dtSet(page, { "dt-n": "42" });
@@ -8348,6 +8401,7 @@ test("Data tab: the real reader over the fixture stores — list, hours, estimat
   await expect(page.locator("#dt-hours-row")).toBeHidden();
   await dtSet(page, { "dt-y0": "2009", "dt-y1": "2010",
                       "dt-w": "-30", "dt-s": "-20", "dt-e": "10", "dt-n": "20" });
+  await dtTap(page, "#dt-months-all");
   const settled = () => expect.poll(async () => (await dtState(page)).estimateCurrent, { timeout: 20000 }).toBe(true);
   await settled();
   const e1 = (await dtState(page)).lastEstimate;
@@ -8372,9 +8426,13 @@ test("Data tab: the real reader over the fixture stores — list, hours, estimat
   // every byte of it came through ranged reads
   expect(reads.some(([rel]) => /\.zst$/.test(rel))).toBe(true);
 
-  // the 3-hourly band has a time of day
+  // the 3-hourly band has a time of day; it covers 15°S–15°N only, and a box
+  // outside that is said in words with the download off, not a file of nothing
   await dtSet(page, { "dt-store": "fxtb" });
   await expect(page.locator("#dt-hours-row")).toBeVisible();
+  await dtSet(page, { "dt-s": "30", "dt-n": "40" });
+  await expect(page.locator("#dt-estimate")).toContainText("outside this store's coverage", { timeout: 20000 });
+  await expect(page.locator("#dt-download")).toBeDisabled();
 
   // the point store: rows as CSV with one column per channel ticked
   await dtSet(page, { "dt-store": "fxpts" });
@@ -8386,5 +8444,43 @@ test("Data tab: the real reader over the fixture stores — list, hours, estimat
   const csv = require("fs").readFileSync(await dl2.path(), "utf8");
   expect(csv.length).toBeGreaterThan(0);
   expect(csv.split("\n")[0]).toContain("temp");
+  expect(page.__errors, `page errors: ${page.__errors.join(" | ")}`).toHaveLength(0);
+});
+
+/* Each store opens on its own first look: the most recent month with data,
+ * shortened in days until the estimate is a few tens of megabytes. Measured
+ * live (2026-10-05) a fixed default could not do this — a year of the SWOT
+ * swaths is 36 GB, a year of the bottle samples 0.3 MB — so the tab asks the
+ * reader's own estimate. A period the visitor CHOSE carries over instead. */
+test("Data tab: every store opens on a first look under the cap; a chosen period carries over",
+     async ({ page }) => {
+  test.setTimeout(120000);
+  await openDataTab(page);
+  await page.evaluate(() => { try { localStorage.removeItem("dataTabSel"); } catch {} });
+  await dtTap(page, "#tab-data");
+  const settled = () => expect.poll(async () => (await dtState(page)).estimateCurrent, { timeout: 20000 }).toBe(true);
+  for (const name of ["oc4k", "irtb", "glodap"]) {
+    await dtSet(page, { "dt-store": name });
+    await settled();
+    const s = await dtState(page);
+    expect(s.touched, name).toBe(false);
+    expect(s.lastEstimate.overCap, name).toBe(false);
+    expect(s.lastEstimate.readBytes, name).toBeLessThanOrEqual(40e6);
+    expect(s.lastEstimate.outBytes, name).toBeLessThanOrEqual(40e6);
+    expect(Number(s.lastEstimate.rows ?? s.lastEstimate.frames), name).toBeGreaterThan(0);
+    expect(s.sel.months.length, name).toBe(1);
+    await expect(page.locator("#dt-download")).toBeEnabled();
+  }
+  // the 3-hourly store needed days: a whole month of it is over the first-look size
+  await dtSet(page, { "dt-store": "irtb" });
+  await settled();
+  expect((await dtState(page)).sel.days).not.toBe(null);
+  expect((await dtState(page)).sel.bbox).toEqual({ w: -77.5, s: 31, e: -62.5, n: 41 });
+  // a chosen period travels to the next store
+  await dtSet(page, { "dt-y0": "2005", "dt-y1": "2006" });
+  await dtSet(page, { "dt-store": "oc4k" });
+  await settled();
+  expect((await dtState(page)).sel).toMatchObject({ yearStart: 2005, yearEnd: 2006 });
+  expect((await dtState(page)).touched).toBe(true);
   expect(page.__errors, `page errors: ${page.__errors.join(" | ")}`).toHaveLength(0);
 });

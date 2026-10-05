@@ -31,7 +31,7 @@ appears in the tab the day it is published; this table is the set as of
 | `oc4k` | ocean colour: chlorophyll (as its base-10 logarithm), water clarity (`kd_490`), observation count | map | 4 km (1/24°) | daily | 1997-09 → 2022-12 |
 | `pace4k` | chlorophyll, particulate carbon, phytoplankton carbon and four more, from NASA's PACE satellite | map | 4 km | daily | 2024-03 → 2026-09 |
 | `sst_acspo02` | sea-surface temperature as satellites saw it, clear sky only, with a quality grade | map | 0.02° (2 km) | daily | 2000-02 → 2026-09 |
-| `irtb` | cloud-top brightness temperature from geostationary satellites | map | 4 km | 3-hourly as stored | 1998 → 2026-09 |
+| `irtb` | cloud-top brightness temperature from geostationary satellites, 30°S–30°N | map | 4 km | 3-hourly as stored | 1998 → 2026-09 |
 | `icoads` | ship and buoy reports: sea and air temperature, pressure, wind, dew point, waves, cloud | points | per report | per report | 1662 → 2026 |
 | `wod` | ship casts: temperature, salinity, oxygen and more at 16 pressures | points | per cast | per cast | 1772 → 2026 |
 | `glodap` | bottle samples: carbon, alkalinity, pH, oxygen, nutrients | points | per bottle | per bottle | 1972 → 2023 |
@@ -50,21 +50,36 @@ and must not have one.
 1. **Store and channels.** The store list shows each store's plain-English title
    with its code name beside it; under it, one sentence on what the store is,
    its native resolution and its record. Tick one or more channels.
-2. **Years.** A start and an end year, clamped to the store's record. The
-   default is the store's most recent year, which keeps the first estimate you
-   see under the cap.
-3. **Months.** Twelve chips, all on by default, with *all* / *none*. "Every
-   February from 1998 to 2004" is: years 1998 to 2004, only *Feb* on.
+2. **Years.** A start and an end year, clamped to the store's record.
+3. **Months.** Twelve chips with *all* / *none*. "Every February from 1998 to
+   2004" is: years 1998 to 2004, only *Feb* on.
+   **Days.** A day-of-month range applied inside every chosen month (*1 to 31*
+   is the whole month). It is the finest period control, and the one that
+   makes the densest stores downloadable at all: a month of SWOT swaths is
+   about 3 GB to read, a single day about 50–150 MB.
+
+   **What a store opens on.** Unless you have chosen a period yourself, each
+   store opens on its own *first look*: the most recent month that has data,
+   shortened to its first 10, 5, 2 or 1 days until the estimate is at most
+   about 40 MB to read and to build — so the first estimate you see is always
+   downloadable. (The stores differ too much for one fixed default: a year of
+   bottle samples is 0.3 MB, a year of SWOT 36 GB.) Once you set the years,
+   months, days, hours or box yourself, that choice carries over when you
+   switch stores.
 4. **Hours (UTC).** Shown only where the store has a time of day finer than a
-   day — the 3-hourly cloud tops and every point store. *0 to 24* is the whole
-   day; *22 to 2* wraps across midnight.
+   day — the 3-hourly cloud tops and every point store. The range runs from
+   the first hour up to, not including, the second: *0 to 6* keeps the 00:00
+   and 03:00 cloud-top maps. *0 to 24* is the whole day; *22 to 2* wraps
+   across midnight.
 5. **Box.** West, south, east and north edges in degrees. *Use the current view*
    copies the part of the globe on screen; the six place buttons (the same
    places the Cones tab uses) put a box of ±5° latitude × ±7.5° longitude round
    each. A box whose west edge is east of its east edge crosses the dateline,
    and that is allowed. The box is drawn on the globe while the tab is open. A
    map store **needs** a box; a point store may leave it empty for the whole
-   globe.
+   globe. The cloud-top store covers only 30°S–30°N, so its first box is the
+   Niño 3.4 place; a box outside a store's coverage is said in words and the
+   download stays off.
 6. **Time step.** *Native* keeps every frame (or every report); *five-day mean*,
    *monthly mean* and *one mean over the whole selection* average in time.
 7. **Resolution.** For a map store: *native*, 0.25° or 1°, the coarser two being
@@ -75,17 +90,25 @@ and must not have one.
    mean and says so. Every mean skips missing values and comes with a per-cell
    **count** of the observations it averaged.
 8. **Estimate.** Updated as you change anything, before any data is read:
-   the number of requests, the megabytes to read, the number of frames (or
-   rows), and the megabytes of the file. Over the cap the download button is
+   the number of requests, the megabytes to read, what the file will hold, and
+   the megabytes of the file. With the native time step it counts maps (or
+   rows); with a time mean it says both what is read and what is kept —
+   "30 daily maps read → 1 monthly mean" — because the read follows the first
+   number and the file the second. A selection with no data in it (a period
+   outside the record, a box outside the coverage) is said in words. Over the cap the download button is
    off, the line says which limit is binding and what to shrink, and it links
    the store's folder on the data store so you can fetch the files directly.
 9. **Preview on the globe.** Reads one frame (or one five-day bin of points),
    the first one in the selection that has data, and paints it inside the box —
-   a picture for a map store, dots for a point store — with a legend for the
-   first ticked channel. The colour scale is the channel's full range from the
-   registry, so the same colour means the same value from one preview to the
-   next; the legend also prints the range actually in the preview. The preview
-   disappears when you change the selection or leave the tab.
+   a picture for a map store, dots for a point store — with a legend. With
+   more than one channel ticked, a *showing* picker beside the legend switches
+   channel without reading anything again. The colour scale is the channel's
+   full range from the registry whenever the frame spans at least half of it,
+   so the same colour means the same value from one preview to the next;
+   otherwise it is the frame's own range (on the full range, a December frame
+   of chlorophyll painted as one flat colour), and the legend says which and
+   prints the other. The preview disappears when you change the selection or
+   leave the tab.
 10. **Download.** *NetCDF* for map stores and binned points; *CSV* for rows,
     and for map selections small enough that a `time,lat,lon,value` text file
     stays something a spreadsheet can open. A progress bar runs while the

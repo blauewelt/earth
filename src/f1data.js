@@ -83,12 +83,12 @@
  *        unit,min,max,+note,+storedUnit}],span,frameSeconds,framesPerBin,
  *        grid,folderUrl,+code,+cadence,+subDaily,+N,+binFirst,+binLast,
  *        +groups}]}
- *   F1Data.estimate(sel, +{signal}) → {requests, readBytes, outBytes,
+ *   F1Data.estimate(sel, +{signal, exactDays}) → {requests, readBytes, outBytes,
  *        frames|rows, overCap, why, +exact, +shape}
  *   F1Data.run(sel, {onProgress, signal}) → Result
  *   F1Data.preview(sel, {signal}) → Result for one frame / one bin
  *   F1Data.toNetCDF(result) → Blob     F1Data.toCSV(result) → Blob
- *   sel = {store, channels, yearStart, yearEnd, months, hours:[h0,h1]|null,
+ *   sel = {store, channels, yearStart, yearEnd, months, hours:[h0,h1]|null, +days:[d0,d1]|null,
  *          bbox:{w,s,e,n}|null, step, res, +group}
  *   Result(grid) = {kind:'grid', store, channels, units, lat, lon, time, data,
  *          count, sel, +notes, +frames, +group, +title, +source, +stats
@@ -125,6 +125,7 @@
   var CHUNK_BYTES = 8 * MB;              // point stores: bytes per row chunk
   var IDX_CACHE_BYTES = 32 * MB;
   var PREVIEW_SCAN_BYTES = 32 * MB;      // a point preview gives up looking after this
+  var DAY_TRIM_WINDOWS = 24;             // days narrower than a bin: rows searched for at most this many windows
   var PREVIEW_MAX_ROWS = 50000;          // … and stops once it holds this many rows
   var PREVIEW_CHUNK_ROWS = 65536;
   var PREVIEW_GRID_TRIES = 8;            // frames a grid preview tries for one with data
@@ -206,7 +207,7 @@
   function ymh82(t) {
     var days = Math.floor(t / 86400);
     var c = civil(days + EPOCH_DAYS);
-    return { y: c[0], m: c[1], h: Math.floor((t - days * 86400) / 3600) };
+    return { y: c[0], m: c[1], d: c[2], h: Math.floor((t - days * 86400) / 3600) };
   }
 
   function sec82OfCivil(y, m, d) {
@@ -669,6 +670,16 @@
     s.months = (sel.months && sel.months.length) ? sel.months.map(Number) : [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
     s.months.forEach(function (m) { if (!(m >= 1 && m <= 12 && Number.isInteger(m))) throw new Error("month " + m + " is not 1..12"); });
     s.hours = sel.hours ? [Number(sel.hours[0]), Number(sel.hours[1])] : null;
+    // + days: an inclusive day-of-month range [d0, d1] inside every chosen
+    // month (null = the whole month). It narrows the READ, unlike the box and
+    // the hours of a point store: the dense swath stores (SWOT reads ~3 GB a
+    // month) are only downloadable a few days at a time.
+    s.days = sel.days ? [Number(sel.days[0]), Number(sel.days[1])] : null;
+    if (s.days && !(Number.isInteger(s.days[0]) && Number.isInteger(s.days[1]) &&
+        s.days[0] >= 1 && s.days[1] <= 31 && s.days[0] <= s.days[1])) {
+      throw new Error("days must be two whole days of the month 1..31, the first not after the second");
+    }
+    if (s.days && s.days[0] === 1 && s.days[1] === 31) s.days = null;
     if (s.hours && !(s.hours[0] >= 0 && s.hours[0] <= 24 && s.hours[1] >= 0 && s.hours[1] <= 24)) {
       throw new Error("hours must be two numbers 0..24");
     }
@@ -827,6 +838,7 @@
         var t = b * BIN_S + f * fs;
         var q = ymh82(t);
         if (q.y < s.yearStart || q.y > s.yearEnd || !monthOk[q.m]) continue;
+        if (s.days && (q.d < s.days[0] || q.d > s.days[1])) continue;
         if (fs < 86400 && !hourOk(q.h, s.hours)) continue;
         var fr = { b: b, f: f, t: t, y: q.y, m: q.m };
         fl.push(fr);
@@ -1192,15 +1204,28 @@
     throw new Error("firstRowAtOrAfter did not converge on " + col.name + ".npy");
   }
 
-  function pointBinRuns(pc, s) {
-    var want = new Set();
+  // the period as time windows [a, z] (seconds since 1982, inclusive), one
+  // per chosen month of every year, narrowed to the chosen days
+  function periodWindows(s) {
+    var wins = [];
     for (var y = s.yearStart; y <= s.yearEnd; y++) {
       s.months.forEach(function (m) {
-        var a = sec82OfCivil(y, m, 1);
-        var z = (m === 12 ? sec82OfCivil(y + 1, 1, 1) : sec82OfCivil(y, m + 1, 1)) - 1;
-        for (var b = Math.floor(a / BIN_S); b <= Math.floor(z / BIN_S); b++) want.add(b);
+        var mEnd = m === 12 ? sec82OfCivil(y + 1, 1, 1) : sec82OfCivil(y, m + 1, 1);
+        var a = sec82OfCivil(y, m, s.days ? s.days[0] : 1);
+        // daysFromCivil is linear in the day, so day d1 + 1 of a month is the
+        // next month's first day when d1 is the last; clamp to the month end
+        var z = Math.min(mEnd, s.days ? sec82OfCivil(y, m, s.days[1] + 1) : mEnd) - 1;
+        if (z >= a) wins.push([a, z]);             // (days 30–31 of February: none)
       });
     }
+    return wins;
+  }
+
+  function pointBinRuns(pc, s) {
+    var want = new Set();
+    periodWindows(s).forEach(function (w) {
+      for (var b = Math.floor(w[0] / BIN_S); b <= Math.floor(w[1] / BIN_S); b++) want.add(b);
+    });
     var bf = pc.binFirst, bl = pc.binFirst + pc.nBins - 1;
     var bins = Array.from(want).filter(function (b) { return b >= bf && b <= bl; }).sort(function (a, b) { return a - b; });
     var runs = [];
@@ -1217,13 +1242,44 @@
     return { runs: runs.filter(function (r) { return r.r1 > r.r0; }), rows: rows, bins: bins.length };
   }
 
-  async function pointPlan(sel, ctx) {
+  async function trimRunsToWindows(pc, wins, br, ctx) {
+    var bf = pc.binFirst, bl = pc.binFirst + pc.nBins - 1, col = pc.cols.time_s;
+    var cut = await pool(wins, async function (w) {
+      var b0 = Math.max(bf, Math.floor(w[0] / BIN_S)), b1 = Math.min(bl, Math.floor(w[1] / BIN_S));
+      if (b1 < b0) return null;
+      var r0 = pc.off[b0 - bf], r1 = pc.off[b1 - bf + 1];
+      if (r1 <= r0) return null;
+      var a = await firstRowAtOrAfter(col, r0, r1, w[0], ctx);
+      var z = a >= r1 ? a : await firstRowAtOrAfter(col, a, r1, w[1] + 1, ctx);
+      return z > a ? { b0: b0, b1: b1, r0: a, r1: z } : null;
+    }, ctx);
+    var runs = [];
+    cut.filter(Boolean).sort(function (x, y) { return x.r0 - y.r0; }).forEach(function (r) {
+      var last = runs[runs.length - 1];
+      if (last && r.r0 <= last.r1) { last.r1 = Math.max(last.r1, r.r1); last.b1 = Math.max(last.b1, r.b1); }
+      else runs.push(r);
+    });
+    var rows = runs.reduce(function (t, r) { return t + (r.r1 - r.r0); }, 0);
+    return { runs: runs, rows: rows, bins: br.bins, trimmed: true };
+  }
+
+  async function pointPlan(sel, ctx, popts) {
     var d = await storeDesc(sel.store, ctx);
     if (d.kind !== "points") throw new Error("store " + d.name + " is not a point store");
     var s = normSel(sel, d);
     var pc = await pointColumns(d, ctx);
     if (pc.C !== d.channels.length) throw new Error("values.npy is " + pc.C + " wide, the registry lists " + d.channels.length + " channels (" + d.name + ")");
     var br = pointBinRuns(pc, s);
+    // Days narrower than a five-day bin: the bins alone would read up to five
+    // times the rows wanted (one SWOT day is ~4 million rows; its bin ~19
+    // million), so cut each window to its exact rows by searching the sorted
+    // time column — a few 16 kB reads per window, bounded so a long period
+    // falls back to whole bins rather than to thousands of searches. The row
+    // filter in pointRun still applies the days, so this only reads less.
+    if (s.days && !(popts && popts.exactDays === false)) {
+      var wins = periodWindows(s);
+      if (wins.length <= DAY_TRIM_WINDOWS && br.rows > 0) br = await trimRunsToWindows(pc, wins, br, ctx);
+    }
     var binned = s.res !== "native" || s.step !== "native";
     var res = s.res === "native" ? 0.25 : s.res;
     var step = s.step === "native" ? "pentad" : s.step;
@@ -1308,14 +1364,15 @@
       var lonB = aligned(parts[2], 4);
       var lon = new Float32Array(lonB.buffer, lonB.byteOffset, n);
       var keep = new Uint8Array(n), first = -1, last = -1, t82 = new Float64Array(n);
-      var curDay = NaN, cy = 0, cm = 0;
+      var curDay = NaN, cy = 0, cm = 0, cd = 0;
       for (var i = 0; i < n; i++) {
         if (stopAt != null && r0 + i >= stopAt.r1) break;
         var t = i64time ? i64At(tb, 8 * i) : i32At(tb, 4 * i);
         t82[i] = t;
         var day = Math.floor(t / 86400);
-        if (day !== curDay) { var c = civil(day + EPOCH_DAYS); cy = c[0]; cm = c[1]; curDay = day; }
+        if (day !== curDay) { var c = civil(day + EPOCH_DAYS); cy = c[0]; cm = c[1]; cd = c[2]; curDay = day; }
         if (cy < s.yearStart || cy > s.yearEnd || !monthOk[cm]) continue;
+        if (s.days && (cd < s.days[0] || cd > s.days[1])) continue;
         if (s.hours && !hourOk(Math.floor((t - day * 86400) / 3600), s.hours)) continue;
         if (bx) {
           var la = lat[i], lo = lon[i];
@@ -1405,7 +1462,7 @@
       // the bin that holds it (one swot day is ~8 M rows)
       var run0 = plan.br.runs[0], startT = Infinity;
       for (var yy = s.yearStart; yy <= s.yearEnd && startT === Infinity; yy++) {
-        for (var mm = 1; mm <= 12; mm++) if (monthOk[mm]) { startT = sec82OfCivil(yy, mm, 1); break; }
+        for (var mm = 1; mm <= 12; mm++) if (monthOk[mm]) { startT = sec82OfCivil(yy, mm, s.days ? s.days[0] : 1); break; }
       }
       var rs = await firstRowAtOrAfter(cols.time_s, run0.r0, run0.r1, startT, rctx);
       var pcr = Math.min(PREVIEW_CHUNK_ROWS, plan.chunks.length ? plan.chunks[0][1] - plan.chunks[0][0] : PREVIEW_CHUNK_ROWS);
@@ -1554,11 +1611,13 @@
           " five-day file" + (plan.bins.length === 1 ? "" : "s") + ": " + g.requests + " requests, " + fmtMB(g.readBytes) +
           " to read (" + g.how + "); the result is " + plan.T + " × " + plan.Cs + " × " + plan.geo.Ho + " × " + plan.geo.Wo +
           " (" + fmtMB(plan.outBytes) + ")." + (plan.mean ? " Coarser steps or cells shrink the file, not the read." : ""),
-        shrink: "Shorten the period, pick fewer months, or shrink the box."
+        shrink: "Shorten the period, pick fewer months or fewer days, or shrink the box."
       };
       return cap(o);
     }
-    var pp = await pointPlan(sel, ctx);
+    // + opts.exactDays === false: count days by whole five-day bins (an
+    // upper bound, no row search) — for a caller sizing many candidates
+    var pp = await pointPlan(sel, ctx, opts);
     var pe = pointEstimateOf(pp);
     var po = {
       requests: pe.requests, readBytes: pe.readBytes, outBytes: pe.outBytes, rows: pe.rows, exact: false,
@@ -1567,7 +1626,7 @@
         pe.requests + " requests and " + fmtMB(pe.readBytes) + " to read — the box and the hours are applied after reading each row's " +
         "time and position, so fewer rows may be kept." + (pp.binned ? " Binned to " + pp.res + "° cells per " +
         (pp.step === "pentad" ? "five-day bin" : pp.step) + ": at most " + fmtMB(pe.outBytes) + " of arrays." : ""),
-      shrink: "A point store reads the whole period's times and positions whatever the box, so shorten the period or pick fewer months."
+      shrink: "A point store reads the whole period's times and positions whatever the box, so shorten the period, or pick fewer months or fewer days."
     };
     return cap(po);
   }

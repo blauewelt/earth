@@ -861,7 +861,7 @@ footer a { color: var(--fg-dim); }
 #panel-data .control-row > label:first-child { flex: 0 0 72px; color: var(--fg-dim); font-size: 12px; }
 #panel-data .dt-wrap { flex-wrap: wrap; row-gap: 6px; }
 #panel-data .dt-tight { gap: 6px; }
-#dt-store, #dt-group, #dt-step, #dt-res, #dt-format {
+#dt-store, #dt-group, #dt-step, #dt-res, #dt-format, #dt-pv-chan {
   flex: 1 1 140px; min-width: 0; max-width: 100%; background: var(--bg); color: var(--fg);
   border: 1px solid var(--border); border-radius: 6px; padding: 5px 6px; font-size: 12.5px;
 }

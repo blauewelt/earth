@@ -499,6 +499,17 @@ by the frame rather than by the archive, addressed from
 `data/family7_index.json`'s measured header offsets, coalesced through
 `scrubApply` so a held date key costs one read per settled date, and degrading
 to a hint toast and an empty layer on any failure (`docs/FAMILY7_GLOBE.md`).
+Since then the same family-7 path also serves the Model climatology layer
+(one plane per month and channel) and the fishing-effort grid (one month per
+read), and — added 2026-10-05 for E-084 — the **Data tab** reads the family
+1.gf observation stores under `tensors/family1_gf/`: index and tile ranges of
+the gridded stores, column ranges of the point stores, every one a `Range:`
+request answered 206, at most six in flight, issued only by an explicit
+Estimate / Preview / Download and bounded by the tab's cap (600 MB read,
+400 MB of result) rather than by the archive. Its failure mode is the
+opposite of the others on purpose: a download that cannot read a range FAILS,
+with the URL in the panel, instead of degrading — a file with a silent hole
+is worse than no file (Chris, 2026-09-14).
 
 Any further live endpoint must clear the same bar (no key, no quota pain,
 click-triggered, degrades to an omitted card section on failure) and be added
@@ -2076,6 +2087,50 @@ index.
   index is absent until the export publishes — the layer then paints nothing
   and a toast names the chain; `data/family7_clim/fixture/` is what the tests
   serve. `docs/FAMILY7_CLIM.md` explains it and says how to regenerate.
+
+**The Data tab — every public family 1.gf store, filtered and downloaded in the
+browser (2026-10-05, E-084).** Chris, on the Model climatology download:
+*"I would suggest we make it a tab instead (which lets us take care of all the
+controls we need)"*, refinable by period, month, time of day, box and
+resolution, over *"all the channels in family 1.gf"* at native granularity.
+Family 1.gf is the global set of observation stores at 10 km / 5 days or
+finer, each at its own resolution (twelve public on the Hub: ocean colour and
+PACE at 4 km daily, ACSPO sea-surface temperature at 2 km, geostationary cloud
+tops 3-hourly in a ±30° band, and the ICOADS, WOD, GLODAP, BGC-Argo,
+OceanSITES, column-CO₂, wave-height and SWOT point stores). Nothing is
+precomputed: the stores are already laid out for range reads (gridded:
+one file per five-day bin of independently zstd-compressed 256 × 256 tiles;
+points: rows sorted by time with per-bin offsets). **`src/f1data.js`
+(`window.F1Data`, also a node module) is the single reader** — registry,
+estimate, run, preview, NetCDF-3 and CSV writers, with `lib/fzstd.js` vendored
+for the tiles — and the tab in `src/app.js` builds the selection in ONE place
+(`dtReadSel`) and touches no bytes. Rules worth keeping: every read sends
+`Range` and **refuses a 200**, and any failed read rejects the whole run with
+its URL (never "skip the missing file"); the cap is 600 MB read / 400 MB of
+arrays, and the estimate prints BOTH because a coarser resolution or a time
+mean shrinks the file, not the read; a point store reads the whole period's
+times and positions whatever the box, so the PERIOD controls (years, months,
+and a day-of-month range, which the reader turns into exact row ranges by
+searching the sorted time column) are what bound its cost. **Each store opens
+on a measured first look** (`dtFirstLook`): the most recent month with data,
+shortened to 10, 5, 2 or 1 days until the reader's own estimate is ≤ 40 MB —
+a fixed default cannot work across stores whose year ranges from 0.3 MB
+(GLODAP) to 36 GB (SWOT); a period the visitor chose carries over between
+stores instead. The preview paints one frame (a grid as one canvas
+rectangle, nearest-neighbour upscaled; points as dots) on the channel's
+registry range when the frame spans at least half of it, else on its own
+range — measured live, a December oc4k frame on the full range painted as
+one flat colour. Verified end to end against the live store on 2026-10-05
+(an oc4k download equal value for value to `ml/family1/sharded.py` over the
+same tiles; a monthly 0.25° mean equal to numpy's nanmean of the native file
+with identical counts; a GLODAP CSV with the row count the reader's live
+check reports; an hours-filtered cloud-top day returning only those frames,
+in kelvin). Tests: `tests/f1data.test.mjs` (node, the fixture
+`data/family1_fixture/` written by the real Python writers),
+`scripts/f1data_live_check.mjs` (the real Hub, not in the suite), and the
+"Data tab: …" specs in `tests/app.spec.js` (a stub reader, plus the real
+reader over the fixture served with genuine 206s). `docs/DATA_TAB.md` is the
+reader's guide; `ml/plans/E084_data_tab.md` the plan.
 
 **The fishing fleet, in two layers (2026-09-16, E-081 §4).** Chris: *"add what
 you propose to family 10.2 (and build the family). At the same time make sure
