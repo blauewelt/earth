@@ -156,6 +156,16 @@ VARIABLES = {
           "northward wind"),
 }
 
+#: stored bytes per frame, MEASURED by the January-2015 probes (E-085 §4,
+#: ml/family1/probes/era5_<v>_2015-01.json) — what a fetch lane's parts cost
+#: on disk before it pushes, used by `fetch_preflight` to size the lane
+PROBE_BYTES_PER_FRAME = {"t": 831656, "q": 1445900, "u": 1525392,
+                         "v": 1558604}
+#: headroom on that projection: frame sizes vary by season and level of
+#: activity, and the push restores each part to scratch to hash it
+DISK_MARGIN = 1.15
+DISK_SPARE_BYTES = 2_000_000_000
+
 LICENCE = {
     "name": "CC BY 4.0 (ERA5, Copernicus Climate Change Service)",
     "redistribution": "attribution",
@@ -987,6 +997,36 @@ class ERA5Base(sh.GridAdapter):
                      f"(pip install numcodecs) — it decodes the archive's "
                      f"blosc chunks. Nothing has been fetched.")
         self.sources_for(ctx)
+        self.disk_preflight(ctx)
+
+    def disk_preflight(self, ctx):
+        """SIZE THE LANE FROM ITS OWN ALLOCATION (ml/CLAUDE.md §5.18).
+
+        A lane keeps every year's parts on disk until `--push-parts` parks
+        them, so its peak is the window's frames x the probe's measured
+        stored bytes per frame. Checked here, while the inputs are all the
+        lane has cost, rather than as an ENOSPC at hour two. Skipped for a
+        synthetic source (the smoke's grid is not the probe's)."""
+        import shutil
+        bins = sum(len(v) for v in (getattr(ctx, "grid_bins", None)
+                                    or {}).values())
+        frames = bins * FRAMES_PER_BIN
+        per = PROBE_BYTES_PER_FRAME[self.var]
+        need = int(frames * per * DISK_MARGIN) + DISK_SPARE_BYTES
+        os.makedirs(ctx.parts, exist_ok=True)
+        free = shutil.disk_usage(ctx.parts).free
+        print(f"  disk: {free / 1e9:.1f} GB free at {ctx.parts}; this "
+              f"window's {frames} frames project to "
+              f"{frames * per / 1e9:.1f} GB of parts "
+              f"({per / 1e6:.3f} MB a frame, the probe's), "
+              f"{need / 1e9:.1f} GB with margin", flush=True)
+        if ctx.source_dir:
+            return
+        if free < need:
+            sys.exit(f"REFUSING {self.store}: the lane needs ~{need / 1e9:.1f} "
+                     f"GB for its parts and the disk has {free / 1e9:.1f} GB "
+                     f"free. Split the window into shorter year ranges. "
+                     f"Nothing has been fetched.")
 
     def index(self, ctx):
         s = self.sources_for(ctx)

@@ -439,6 +439,13 @@ jobs:
             echo "::notice::adapter env ${name}=${val}"
           done
           mkdir -p "${WORK}/${STORE}"
+          # THE MACHINE, MEASURED BEFORE THE FIRST BYTE: disk free where the
+          # parts go, cores and memory. A lane's size is planned from these
+          # (E-085: 14 GB or 86 GB free on a hosted runner was a guess).
+          echo "::group::machine"
+          df -h "${WORK}" "${RUNNER_TEMP}" / 2>&1 || true
+          echo "nproc $(nproc)"; free -g 2>&1 || true
+          echo "::endgroup::"
           LOG="${WORK}/${STORE}/build.log"
           : > "${LOG}"
           ship() {
