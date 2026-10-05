@@ -1,36 +1,6 @@
 {
  "pending": [
   {
-   "store": "era5_q",
-   "stage": "index,fetch",
-   "start": "2022-01-01",
-   "end": "2026-12-31",
-   "runner": "ubuntu-latest",
-   "extra_args": "--push-parts",
-   "adapter_env": "",
-   "retries": 2
-  },
-  {
-   "store": "era5_t",
-   "stage": "index,fetch",
-   "start": "2022-01-01",
-   "end": "2026-12-31",
-   "runner": "ubuntu-latest",
-   "extra_args": "--push-parts",
-   "adapter_env": "",
-   "retries": 2
-  },
-  {
-   "store": "era5_u",
-   "stage": "index,fetch",
-   "start": "2022-01-01",
-   "end": "2026-12-31",
-   "runner": "ubuntu-latest",
-   "extra_args": "--push-parts",
-   "adapter_env": "",
-   "retries": 2
-  },
-  {
    "store": "era5_v",
    "stage": "index,fetch",
    "start": "2022-01-01",
@@ -173,28 +143,6 @@
  ],
  "dispatched": [
   {
-   "store": "era5_u",
-   "stage": "index,fetch",
-   "start": "1987-01-01",
-   "end": "1991-12-31",
-   "runner": "ubuntu-latest",
-   "extra_args": "--push-parts",
-   "adapter_env": "",
-   "retries": 2,
-   "at": "2026-10-05T18:04:23.572Z"
-  },
-  {
-   "store": "era5_v",
-   "stage": "index,fetch",
-   "start": "1987-01-01",
-   "end": "1991-12-31",
-   "runner": "ubuntu-latest",
-   "extra_args": "--push-parts",
-   "adapter_env": "",
-   "retries": 2,
-   "at": "2026-10-05T18:04:27.652Z"
-  },
-  {
    "store": "era5_q",
    "stage": "index,fetch",
    "start": "1992-01-01",
@@ -215,17 +163,6 @@
    "adapter_env": "",
    "retries": 2,
    "at": "2026-10-05T18:04:39.512Z"
-  },
-  {
-   "store": "era5_v",
-   "stage": "index,fetch",
-   "start": "1992-01-01",
-   "end": "1996-12-31",
-   "runner": "ubuntu-latest",
-   "extra_args": "--push-parts",
-   "adapter_env": "",
-   "retries": 2,
-   "at": "2026-10-05T18:04:43.715Z"
   },
   {
    "store": "era5_q",
@@ -303,6 +240,39 @@
    "adapter_env": "",
    "retries": 2,
    "at": "2026-10-05T18:32:49.229Z"
+  },
+  {
+   "store": "era5_q",
+   "stage": "index,fetch",
+   "start": "2022-01-01",
+   "end": "2026-12-31",
+   "runner": "ubuntu-latest",
+   "extra_args": "--push-parts",
+   "adapter_env": "",
+   "retries": 2,
+   "at": "2026-10-05T18:38:59.519Z"
+  },
+  {
+   "store": "era5_t",
+   "stage": "index,fetch",
+   "start": "2022-01-01",
+   "end": "2026-12-31",
+   "runner": "ubuntu-latest",
+   "extra_args": "--push-parts",
+   "adapter_env": "",
+   "retries": 2,
+   "at": "2026-10-05T18:39:03.586Z"
+  },
+  {
+   "store": "era5_u",
+   "stage": "index,fetch",
+   "start": "2022-01-01",
+   "end": "2026-12-31",
+   "runner": "ubuntu-latest",
+   "extra_args": "--push-parts",
+   "adapter_env": "",
+   "retries": 2,
+   "at": "2026-10-05T18:39:07.553Z"
   }
  ],
  "done": [
@@ -3654,6 +3624,45 @@
    "at": "2026-10-05T18:04:19.316Z",
    "run_number": 924,
    "finished": "2026-10-05T18:30:46Z"
+  },
+  {
+   "store": "era5_u",
+   "stage": "index,fetch",
+   "start": "1987-01-01",
+   "end": "1991-12-31",
+   "runner": "ubuntu-latest",
+   "extra_args": "--push-parts",
+   "adapter_env": "",
+   "retries": 2,
+   "at": "2026-10-05T18:04:23.572Z",
+   "run_number": 925,
+   "finished": "2026-10-05T18:37:16Z"
+  },
+  {
+   "store": "era5_v",
+   "stage": "index,fetch",
+   "start": "1987-01-01",
+   "end": "1991-12-31",
+   "runner": "ubuntu-latest",
+   "extra_args": "--push-parts",
+   "adapter_env": "",
+   "retries": 2,
+   "at": "2026-10-05T18:04:27.652Z",
+   "run_number": 926,
+   "finished": "2026-10-05T18:36:21Z"
+  },
+  {
+   "store": "era5_v",
+   "stage": "index,fetch",
+   "start": "1992-01-01",
+   "end": "1996-12-31",
+   "runner": "ubuntu-latest",
+   "extra_args": "--push-parts",
+   "adapter_env": "",
+   "retries": 2,
+   "at": "2026-10-05T18:04:43.715Z",
+   "run_number": 930,
+   "finished": "2026-10-05T18:36:44Z"
   }
  ],
  "failed": []
