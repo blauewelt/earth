@@ -1,0 +1,80 @@
+
+
+era5_q__bin_3245.zst:   0%|          | 0.00/29.3M [00:00<?, ?B/s][A[A[A[A[Aera5_q__bin_3245.idx.npy: 100%|██████████| 5.89k/5.89k [00:00<00:00, 51.9kB/s]
+era5_q__bin_3242.zst: 100%|██████████| 29.3M/29.3M [00:00<00:00, 51.4MB/s]
+
+era5_q__bin_3243.zst:  55%|█████▍    | 16.1M/29.3M [00:00<00:00, 49.9MB/s][A
+
+era5_q__bin_3244.zst:  55%|█████▍    | 16.1M/29.2M [00:00<00:00, 61.2MB/s][A[AUpload 70 LFS files:  79%|███████▊  | 55/70 [00:06<00:01,  8.97it/s]
+
+
+era5_q__bin_3246.idx.npy:   0%|          | 0.00/5.89k [00:00<?, ?B/s][A[A[A
+
+
+
+era5_q__bin_3246.zst:   0%|          | 0.00/29.3M [00:00<?, ?B/s][A[A[A[Aera5_q__bin_3243.zst: 100%|██████████| 29.3M/29.3M [00:00<00:00, 53.3MB/s]
+era5_q__bin_3246.idx.npy: 100%|██████████| 5.89k/5.89k [00:00<00:00, 47.9kB/s]
+
+
+
+
+
+era5_q__bin_3245.zst:  55%|█████▍    | 16.1M/29.3M [00:00<00:00, 50.8MB/s][A[A[A[A[Aera5_q__bin_3244.zst: 100%|██████████| 29.2M/29.2M [00:00<00:00, 58.9MB/s]
+
+
+
+
+era5_q__bin_3246.zst:  22%|██▏       | 6.36M/29.3M [00:00<00:00, 36.3MB/s][A[A[A[AUpload 70 LFS files:  81%|████████▏ | 57/70 [00:07<00:01,  8.14it/s]
+era5_q__bin_3247.idx.npy:   0%|          | 0.00/5.89k [00:00<?, ?B/s][A
+
+era5_q__bin_3247.zst:   0%|          | 0.00/29.3M [00:00<?, ?B/s][A[Aera5_q__bin_3245.zst: 100%|██████████| 29.3M/29.3M [00:00<00:00, 54.1MB/s]
+
+
+
+
+era5_q__bin_3246.zst:  34%|███▍      | 10.0M/29.3M [00:00<00:00, 27.7MB/s][A[A[A[A
+
+
+era5_q__bin_3248.idx.npy:   0%|          | 0.00/5.89k [00:00<?, ?B/s][A[A[Aera5_q__bin_3247.idx.npy: 100%|██████████| 5.89k/5.89k [00:00<00:00, 35.1kB/s]
+era5_q__bin_3248.idx.npy: 100%|██████████| 5.89k/5.89k [00:00<00:00, 49.0kB/s]
+Upload 70 LFS files:  86%|████████▌ | 60/70 [00:07<00:01,  9.29it/s]
+era5_q__bin_3248.zst:   0%|          | 0.00/29.3M [00:00<?, ?B/s][A
+
+era5_q__bin_3247.zst:  55%|█████▍    | 16.1M/29.3M [00:00<00:00, 61.7MB/s][A[A
+
+
+era5_q__bin_3249.idx.npy:   0%|          | 0.00/5.89k [00:00<?, ?B/s][A[A[AUpload 70 LFS files:  89%|████████▊ | 62/70 [00:07<00:00, 10.68it/s]
+
+
+
+
+era5_q__bin_3249.zst:   0%|          | 0.00/29.3M [00:00<?, ?B/s][A[A[A[A[A
+
+
+
+era5_q__bin_3246.zst:  55%|█████▍    | 16.1M/29.3M [00:00<00:00, 21.3MB/s][A[A[A[Aera5_q__bin_3249.idx.npy: 100%|██████████| 5.89k/5.89k [00:00<00:00, 52.5kB/s]
+era5_q__bin_3247.zst: 100%|██████████| 29.3M/29.3M [00:00<00:00, 55.4MB/s]
+
+era5_q__bin_3248.zst:  55%|█████▍    | 16.1M/29.3M [00:00<00:00, 54.9MB/s][Aera5_q__bin_3246.zst: 100%|██████████| 29.3M/29.3M [00:00<00:00, 31.6MB/s]
+
+
+
+
+
+era5_q__bin_3249.zst:  55%|█████▍    | 16.1M/29.3M [00:00<00:00, 57.4MB/s][A[A[A[A[A
+
+era5_q__bin_3250.idx.npy:   0%|          | 0.00/5.89k [00:00<?, ?B/s][A[AUpload 70 LFS files:  91%|█████████▏| 64/70 [00:07<00:00,  8.46it/s]
+
+
+era5_q__bin_3250.zst:   0%|          | 0.00/11.7M [00:00<?, ?B/s][A[A[Aera5_q__bin_3250.idx.npy: 100%|██████████| 5.89k/5.89k [00:00<00:00, 56.2kB/s]
+era5_q__bin_3248.zst: 100%|██████████| 29.3M/29.3M [00:00<00:00, 52.8MB/s]
+
+era5_q__shard_index.npy:   0%|          | 0.00/18.6k [00:00<?, ?B/s][Aera5_q__bin_3249.zst: 100%|██████████| 29.3M/29.3M [00:00<00:00, 59.0MB/s]
+era5_q__shard_index.npy: 100%|██████████| 18.6k/18.6k [00:00<00:00, 157kB/s]
+era5_q__bin_3250.zst: 100%|██████████| 11.7M/11.7M [00:00<00:00, 50.2MB/s]
+Upload 70 LFS files:  94%|█████████▍| 66/70 [00:08<00:00,  8.05it/s]Upload 70 LFS files:  99%|█████████▊| 69/70 [00:08<00:00, 10.61it/s]Upload 70 LFS files: 100%|██████████| 70/70 [00:08<00:00,  8.51it/s]
+::warning::partials/family1_2/era5_q/2025/era5_q__bin_3158.zst: OSError: HTTP 503 at byte 0 — attempt 1/12, resuming in 5s
+::warning::partials/family1_2/era5_q/2025/era5_q__bin_3158.zst: OSError: HTTP 503 at byte 0 — attempt 2/12, resuming in 15s
+  era5_q: 5 year(s) pushed and verified in 3 part commit(s), done.json written last (0 already present)
+  push-parts: 5 year(s) on the Hub under partials/family1_2/era5_q/
+=== stage fetch done in 2662.4s ===
