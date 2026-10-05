@@ -1,6 +1,46 @@
 {
  "pending": [
   {
+   "store": "era5_q",
+   "stage": "index,fetch",
+   "start": "2022-01-01",
+   "end": "2026-12-31",
+   "runner": "ubuntu-latest",
+   "extra_args": "--push-parts",
+   "adapter_env": "",
+   "retries": 2
+  },
+  {
+   "store": "era5_t",
+   "stage": "index,fetch",
+   "start": "2022-01-01",
+   "end": "2026-12-31",
+   "runner": "ubuntu-latest",
+   "extra_args": "--push-parts",
+   "adapter_env": "",
+   "retries": 2
+  },
+  {
+   "store": "era5_u",
+   "stage": "index,fetch",
+   "start": "2022-01-01",
+   "end": "2026-12-31",
+   "runner": "ubuntu-latest",
+   "extra_args": "--push-parts",
+   "adapter_env": "",
+   "retries": 2
+  },
+  {
+   "store": "era5_v",
+   "stage": "index,fetch",
+   "start": "2022-01-01",
+   "end": "2026-12-31",
+   "runner": "ubuntu-latest",
+   "extra_args": "--push-parts",
+   "adapter_env": "",
+   "retries": 2
+  },
+  {
    "store": "era5_v",
    "stage": "index,fetch",
    "start": "2002-01-01",
@@ -125,46 +165,6 @@
    "stage": "index,fetch",
    "start": "2017-01-01",
    "end": "2021-12-31",
-   "runner": "ubuntu-latest",
-   "extra_args": "--push-parts",
-   "adapter_env": "",
-   "retries": 2
-  },
-  {
-   "store": "era5_q",
-   "stage": "index,fetch",
-   "start": "2022-01-01",
-   "end": "2026-12-31",
-   "runner": "ubuntu-latest",
-   "extra_args": "--push-parts",
-   "adapter_env": "",
-   "retries": 2
-  },
-  {
-   "store": "era5_t",
-   "stage": "index,fetch",
-   "start": "2022-01-01",
-   "end": "2026-12-31",
-   "runner": "ubuntu-latest",
-   "extra_args": "--push-parts",
-   "adapter_env": "",
-   "retries": 2
-  },
-  {
-   "store": "era5_u",
-   "stage": "index,fetch",
-   "start": "2022-01-01",
-   "end": "2026-12-31",
-   "runner": "ubuntu-latest",
-   "extra_args": "--push-parts",
-   "adapter_env": "",
-   "retries": 2
-  },
-  {
-   "store": "era5_v",
-   "stage": "index,fetch",
-   "start": "2022-01-01",
-   "end": "2026-12-31",
    "runner": "ubuntu-latest",
    "extra_args": "--push-parts",
    "adapter_env": "",
