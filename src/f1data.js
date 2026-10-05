@@ -119,13 +119,16 @@
   var DEFAULT_REGISTRIES = [
     { family: "1.gf", title: "Fine observations (family 1.gf)", kind: "family1",
       url: DEFAULT_BASE + "family1gf.json" },
+    // family 1.2 = family 1.gf (inherited BY REFERENCE: its stores are the
+    // same bytes, so they are listed once, under 1.gf) + ERA5 on pressure
+    // levels. A store the registry marks not built is never selectable; it is
+    // named in `registry.coming` and appears the day the registry flips it.
+    { family: "1.2", title: "Atmosphere on pressure levels (family 1.2 — ERA5 reanalysis)", kind: "family1",
+      optional: true, url: HUB_ROOT + "tensors/family1_2/family12.json" },
     { family: "10", title: "Global tensor and point observations (family 10)", kind: "family10",
       url: HUB_ROOT + "tensors/family10_2/family10.json", norms: "data/family7_index.json" },
     { family: "derived", title: "Derived maps", kind: "derived",
       fishing: "data/fishing_index.json", clim: "data/family7_clim_index.json", climVersion: "all" }
-    // family 1.2 — one line when its registry is published:
-    // , { family: "1.2", title: "… (family 1.2)", kind: "family1", optional: true,
-    //     url: HUB_ROOT + "tensors/family1_2/family12.json" }
   ];
   var EPOCH_UNIX = 378691200;            // 1982-01-01T00:00:00Z
   var EPOCH_DAYS = 4383;                 // days 1970-01-01 → 1982-01-01
@@ -558,6 +561,19 @@
       "Sea-level anomaly (filtered and unfiltered) and the mean dynamic topography along every altimeter's ground track since 1993, one row per second — a very large store, so keep the period short."],
     "10/fishing": ["Fishing effort per vessel and day (AIS, Global Fishing Watch)",
       "Apparent fishing hours and hours broadcasting, one row per vessel, day and 0.1° cell, from AIS since 2012 — Powered by Global Fishing Watch, CC BY-NC 4.0; absence of effort is not absence of fishing."],
+    // family 1.2 — ERA5, a model-filled reanalysis, not an observation
+    "1.2/era5_t": ["Air temperature on 13 pressure levels (ERA5), 1° six-hourly",
+      "ECMWF's ERA5 reanalysis — a weather model filled in with observations, ~31 km natively and averaged here onto a 1° grid, not a measurement — giving air temperature in kelvin at 13 pressure levels from 50 hPa (~20 km up) to 1000 hPa (the surface), as instants at 00, 06, 12 and 18 UTC since 1982.",
+      "six-hourly instants"],
+    "1.2/era5_q": ["Specific humidity on 13 pressure levels (ERA5), 1° six-hourly",
+      "ECMWF's ERA5 reanalysis — model-filled, ~31 km natively and averaged onto 1°, not a measurement — giving specific humidity in grams of water vapour per kilogram of air (1000 × ERA5's kg/kg) at 13 pressure levels, every six hours since 1982.",
+      "six-hourly instants"],
+    "1.2/era5_u": ["Eastward wind on 13 pressure levels (ERA5), 1° six-hourly",
+      "ECMWF's ERA5 reanalysis — model-filled, ~31 km natively and averaged onto 1°, not a measurement — giving the eastward wind in m/s (positive toward the east) at 13 pressure levels, every six hours since 1982.",
+      "six-hourly instants"],
+    "1.2/era5_v": ["Northward wind on 13 pressure levels (ERA5), 1° six-hourly",
+      "ECMWF's ERA5 reanalysis — model-filled, ~31 km natively and averaged onto 1°, not a measurement — giving the northward wind in m/s (positive toward the north) at 13 pressure levels, every six hours since 1982.",
+      "six-hourly instants"],
     // derived maps
     "derived/fishing_grid": ["Fishing effort map, 0.25° monthly (AIS)",
       "Global Fishing Watch's apparent fishing hours and AIS broadcasting hours summed per 0.25° cell and month since 2012 — CC BY-NC 4.0; zero means no vessel broadcast there, not that nobody fished.", "monthly sums"],
@@ -571,9 +587,17 @@
       "The model climatology (all years, one map per calendar month) of the Argo temperature and salinity at 16 depths; twelve maps, no years."]
   };
 
+  var VAR_LABELS = { "1.2/era5_t": "air temperature", "1.2/era5_q": "specific humidity",
+    "1.2/era5_u": "eastward wind", "1.2/era5_v": "northward wind" };
+
   // documented physical conversions, keyed on the STORED unit's own words
   function conversionOf(unit) {
     var u = String(unit || "");
+    if (/^g\/kg\s*\(1000\s*x/i.test(u)) {
+      return { unit: "g/kg", offset: 0, note: "grams of water vapour per kilogram of air, as stored: 1000 × ERA5's kg/kg" };
+    }
+    var mw = /^m\/s\s*\((eastward|northward)\)\s*$/i.exec(u);
+    if (mw) return { unit: "m/s", offset: 0, note: null, direction: mw[1].toLowerCase() };
     if (/^K\s*-\s*160\b/.test(u) || /add 160 for kelvin/i.test(u)) {
       return { unit: "K", offset: 160, note: "stored as kelvin − 160 in one byte; 160 added back, so the values are kelvin" };
     }
@@ -645,7 +669,7 @@
     d.levels = Array.from(levels).sort(function (a, b) { return a - b; });
     d.vars = vars;
     var lu = (d.channels.find(function (c) { return c.label && /\bdbar\b/.test(c.label); }) || {}).label;
-    d.levelUnit = lu ? "dbar" : (d.levelUnitHint || "dbar");
+    d.levelUnit = d.levelUnitHint || "dbar";
   }
 
   function baseDesc(fam, name, extra) {
@@ -669,10 +693,23 @@
     var reg = await readJSON(url, ctx);
     var base = fam.base || dirOf(url);
     var groups = Array.isArray(reg.groups) ? reg.groups : Object.values(reg.groups || {});
+    // a registry that inherits another family's stores BY REFERENCE (family
+    // 1.2 ⊃ 1.gf) lists them once, under the family that owns the bytes
+    var inherited = new Set(reg.inherits_block && Array.isArray(reg.inherits_block.groups) ? reg.inherits_block.groups : []);
     var jobs = [];
     groups.forEach(function (g) {
-      if (!g || !g.built || g.distribution !== "public") return;
-      if (g.tier !== "G" && g.tier !== "P") return;
+      if (!g || inherited.has(g.name)) return;
+      if (g.distribution !== "public" || (g.tier !== "G" && g.tier !== "P")) return;
+      if (!g.built) {
+        // published in the registry, not yet on the Hub: named, never offered.
+        // A store whose licence still waits on the producer is not "coming" —
+        // nothing says it will be published — so it is not named either.
+        if (g.licence && (g.licence.pending || g.licence.redistribution_confirmed === false)) return;
+        var cg = GISTS[fam.family + "/" + g.name] || GISTS[g.name];
+        out.coming.push({ family: fam.family, familyTitle: fam.title, store: g.name,
+          title: cg ? cg[0] : String(g.title || g.name).replace(/\s+—\s+family.*$/, "") });
+        return;
+      }
       var rel = relPath(reg, g.path);
       var chans = (g.channels || []).map(function (c) {
         var cv = conversionOf(c.unit);
@@ -691,6 +728,22 @@
         N: g.N == null ? null : g.N
       });
       if (!GISTS[fam.family + "/" + g.name] && !GISTS[g.name] && g.title) { d.title = g.title; d.gist = g.title; }
+      // the licence the registry states, carried into the panel and the file
+      if (g.licence && (g.licence.name || g.licence.attribution)) {
+        d.licence = { name: g.licence.name || null, attribution: g.licence.attribution || null };
+      }
+      if (/reanalysis/i.test(String(g.notes || ""))) d.reanalysis = true;
+      // levels the registry names in hPa (ERA5): the picker's unit, and one
+      // mid-troposphere level to start on rather than the stratosphere
+      if (Array.isArray(g.levels_hpa) && g.levels_hpa.length) {
+        d.levelUnitHint = "hPa";
+        d.defaultLevel = g.levels_hpa.indexOf(500) >= 0 ? 500 : g.levels_hpa[Math.floor(g.levels_hpa.length / 2)];
+        var vl = VAR_LABELS[fam.family + "/" + g.name];
+        if (vl) d.channels.forEach(function (c) {
+          var m = /_(\d+)$/.exec(c.name);
+          if (!c.label && m) c.label = vl + " at " + m[1] + " hPa";
+        });
+      }
       hide(d, "_base", base + rel + "/");
       hide(d, "_raw", g);
       if (g.tier === "G") {
@@ -918,7 +971,7 @@
 
   function loadRegistry(ctx) {
     return cached("registry", async function () {
-      var out = { stores: [], errors: [], missing: [], families: [] };
+      var out = { stores: [], errors: [], missing: [], families: [], coming: [] };
       var raws = {};
       await Promise.all(cfg.registries.map(async function (fam) {
         out.families.push({ family: fam.family, title: fam.title });
@@ -941,6 +994,7 @@
         return (order.indexOf(a.family) - order.indexOf(b.family)) || (seq.get(a) - seq.get(b));
       });
       out.families = out.families.filter(function (f) { return out.stores.some(function (d) { return d.family === f.family; }); });
+      out.coming.sort(function (a, b) { return order.indexOf(a.family) - order.indexOf(b.family); });
       var byName = {};
       out.stores.forEach(function (d) {
         byName[d.id] = d;
@@ -1025,6 +1079,25 @@
 
   function frameBit(row, f) {
     return f < 32 ? ((row.maskLo >>> f) & 1) : ((row.maskHi >>> (f - 32)) & 1);
+  }
+
+  // The record a sharded store REALLY holds, from its shard index: the first
+  // and last frame present. At load time only the bins are known, and a last
+  // bin can be partly filled (ERA5's ends 2026-06-30 inside a bin that runs to
+  // 07-03), so the span is tightened the first time the index is read.
+  function exactSpan(d, si, F, fs) {
+    if (d.spanExact) return;
+    var bins = Array.from(si.rows.keys()).sort(function (a, b) { return a - b; });
+    var first = null, last = null;
+    for (var i = 0; i < bins.length && first === null; i++) {
+      for (var f = 0; f < F; f++) if (frameBit(si.rows.get(bins[i]), f)) { first = bins[i] * BIN_S + f * fs; break; }
+    }
+    for (var j = bins.length - 1; j >= 0 && last === null; j--) {
+      for (var f2 = F - 1; f2 >= 0; f2--) if (frameBit(si.rows.get(bins[j]), f2)) { last = bins[j] * BIN_S + f2 * fs; break; }
+    }
+    if (first === null || last === null) return;
+    d.span = [isoDate82(first), isoDate82(last + fs - 1)];
+    d.spanExact = true;
   }
 
   // ------------------------------------------------------------ selection --
@@ -1191,6 +1264,7 @@
     var geo = boxGeometry(tg, s.bbox, s.res);
     var F = tg.frames_per_bin, fs = tg.frame_seconds;
     if (F * fs !== BIN_S) throw new Error(d.name + ": " + F + " frames × " + fs + " s is not one five-day bin");
+    exactSpan(d, si, F, fs);
     var allC = tg.channels.map(function (c) { return c.name; });
     var chIdx = s.channels.map(function (c) {
       var i = allC.indexOf(c);
@@ -1461,6 +1535,7 @@
 
   function gridNotes(plan) {
     var n = [];
+    if (plan.d.reanalysis) n.push("a REANALYSIS — a weather model's analysis constrained by observations (ERA5 at ~31 km, averaged here onto a 1° grid), not an observation; each frame is an instant (00, 06, 12 or 18 UTC), not a six-hour mean");
     plan.conv.forEach(function (c, k) { if (c.note) n.push(plan.s.channels[k] + ": " + c.note); });
     if (plan.s.bbox && plan.s.bbox.w > plan.s.bbox.e) n.push("the box crosses the dateline: longitudes run past 180° (subtract 360 for −180..180)");
     if (plan.mean) n.push("each value is the mean of the finite observations in its cell and time step; the count arrays say how many");
@@ -1674,6 +1749,7 @@
       (plan.mean ? " Coarser steps or cells shrink the file, not the read." : "");
     return { requests: plan.reqs.length, readBytes: plan.readBytes, outBytes: plan.outBytes, frames: nf, exact: true,
       shape: [plan.T, plan.Cs, plan.geo.Ho, plan.geo.Wo], why: wh,
+      channelsRead: plan.G.order !== "MCHW" ? plan.G.C : plan.Cs, channelsKept: plan.Cs, channelWord: plan.d.levels ? "levels" : "channels",
       shrink: plan.d.calendar ? "Pick fewer months or channels, or shrink the box." : "Shorten the period, pick fewer months, or shrink the box." };
   }
 
@@ -2296,9 +2372,13 @@
       var o = {
         requests: g.requests, readBytes: g.readBytes, outBytes: plan.outBytes, frames: plan.frames.length,
         exact: g.exact, shape: [plan.T, plan.Cs, plan.geo.Ho, plan.geo.Wo],
+        // a tile holds every channel side by side ([row, col, channel]), so
+        // the read is all C of them whichever were ticked
+        channelsRead: plan.tg.C, channelsKept: plan.Cs, channelWord: plan.d.levels ? "levels" : "channels",
         why: plan.frames.length + " frame" + (plan.frames.length === 1 ? "" : "s") + " from " + plan.bins.length +
           " five-day file" + (plan.bins.length === 1 ? "" : "s") + ": " + g.requests + " requests, " + fmtMB(g.readBytes) +
-          " to read (" + g.how + "); the result is " + plan.T + " × " + plan.Cs + " × " + plan.geo.Ho + " × " + plan.geo.Wo +
+          " to read (" + g.how + (plan.tg.C > plan.Cs ? "; every tile holds all " + plan.tg.C + " " +
+          (plan.d.levels ? "levels" : "channels") + " side by side, so all of them are read" : "") + "); the result is " + plan.T + " × " + plan.Cs + " × " + plan.geo.Ho + " × " + plan.geo.Wo +
           " (" + fmtMB(plan.outBytes) + ")." + (plan.mean ? " Coarser steps or cells shrink the file, not the read." : ""),
         shrink: "Shorten the period, pick fewer months or fewer days, or shrink the box."
       };
@@ -2436,7 +2516,7 @@
       lat: plan.geo.outLat, lon: plan.geo.outLon, time: empty ? new Float64Array(0) : plan.times,
       data: g.data, count: g.count, sel: plan.s,
       notes: gridNotes(plan), frames: empty ? 0 : plan.frames.length, group: plan.group,
-      source: groupUrl(plan.d, plan.group), title: plan.d.title,
+      source: groupUrl(plan.d, plan.group), title: plan.d.title, licence: plan.d.licence || null,
       stats: { requests: ctx.stats.requests, bytes: ctx.stats.bytes, ms: Date.now() - t0 }
     };
   }
@@ -2448,7 +2528,7 @@
     if (r.truncated) notes.push(r.truncated);
     var common = {
       store: plan.d.name, channels: plan.s.channels.slice(), units: units, sel: plan.s,
-      rowsRead: plan.br.rows, source: plan.d._base, title: plan.d.title, family: plan.d.family,
+      rowsRead: plan.br.rows, source: plan.d._base, title: plan.d.title, family: plan.d.family, licence: plan.d.licence || null,
       stats: { requests: ctx.stats.requests, bytes: ctx.stats.bytes, ms: Date.now() - t0 },
       truncated: !!r.truncated
     };
@@ -2558,14 +2638,18 @@
 
   function globalAttrs(result, extra) {
     var selJson = JSON.stringify(result.sel);
+    var fam = result.family || "1.gf";
+    var famWord = fam === "derived" ? "derived map" : "family " + fam + " store";
     var a = [
       ["Conventions", "CF-1.8"],
-      ["title", "family 1.gf store " + result.store + (result.title ? " — " + result.title : "")],
-      ["source", "Hugging Face dataset chfrank/earth-tensors, tensors/family1_gf/" + result.store + " (family 1.gf), read by blauewelt.org's Data tab (src/f1data.js)"],
+      ["title", famWord + " " + result.store + (result.title ? " — " + result.title : "")],
+      ["source", "Hugging Face dataset chfrank/earth-tensors (" + famWord + " " + result.store + "), read by blauewelt.org's Data tab (src/f1data.js)"],
       ["source_url", result.source || cfg.base],
       ["selection", selJson],
       ["history", new Date().toISOString() + " written by src/f1data.js from HTTP range reads of the store"]
     ];
+    if (result.licence && result.licence.name) a.push(["license", result.licence.name]);
+    if (result.licence && result.licence.attribution) a.push(["attribution", result.licence.attribution]);
     if (result.notes && result.notes.length) a.push(["comment", result.notes.join("; ")]);
     if (result.frames != null) a.push(["frames_read", result.frames, NC.INT]);
     return a.concat(extra || []);

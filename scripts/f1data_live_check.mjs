@@ -16,14 +16,16 @@
 //   4. compares one oc4k tile with ml/family1/sharded.py's ShardedGroup reading
 //      the same Hub URL, and one glodap bin with ml/family10_store.py's Store
 //      opened from the Hub, value for value.
-//   5. loads the DEFAULT registry list (family 1.gf, family 10, derived maps),
-//      reads small real selections of every new layout — the z-scored
-//      bin-major tensor groups, the levelled monthly Argo map, family 8's
-//      schema-1 Argo store, the pre-1982 drifter bins, the month-major fishing
-//      grid and the calendar-month climatology — and previews every store;
+//   5. loads the DEFAULT registry list (family 1.gf, family 1.2, family 10,
+//      derived maps), prints the stores announced but not built, reads small
+//      real selections of every new layout — ERA5 on pressure levels, the
+//      z-scored bin-major tensor groups, the levelled monthly Argo map, family
+//      8's schema-1 Argo store, the pre-1982 drifter bins, the month-major
+//      fishing grid and the calendar-month climatology — and previews every store;
 //   6. compares those with independent numpy range reads of the same bytes
-//      (de-z-scored through data/family7_index.json) and the Argo month with
-//      ml/family10_store.py.
+//      (de-z-scored through data/family7_index.json), the Argo month with
+//      ml/family10_store.py, and the ERA5 frame with ml/family1/sharded.py
+//      (raw float16, exact).
 // It exits non-zero on the first disagreement or failed read.
 import { createRequire } from "node:module";
 import { execFileSync } from "node:child_process";
@@ -147,8 +149,8 @@ for (const s of reg.stores) {
   }
 }
 
-// ---------------------------------------------------------------- 5. family 10 and the derived maps
-// The reader's DEFAULT registry list (family 1.gf, family 10, derived) with
+// ---------------------------------------------------------------- 5. family 1.2, family 10 and the derived maps
+// The reader's DEFAULT registry list (family 1.gf, family 1.2, family 10, derived) with
 // the site's own indexes (data/family7_index.json, data/fishing_index.json,
 // data/family7_clim_index.json) read from this checkout, and everything else
 // from the real Hub through the counting fetch.
@@ -164,9 +166,10 @@ F1.configure({ registries: F1.DEFAULT_REGISTRIES, siteBase: "file://" + ROOT + "
 const regAll = (await measure(F1.loadRegistry)()).r;
 console.log(`\nall registries: ${regAll.families.map((f) => f.family + " (" + regAll.stores.filter((s) => s.family === f.family).length + " stores)").join(", ")}; errors ${regAll.errors.length}`);
 regAll.errors.forEach((e) => console.log(`  ERROR ${e.family}${e.store ? "/" + e.store : ""}: ${e.message}`));
+console.log(`coming (announced, not built — never selectable): ${(regAll.coming || []).map((c) => c.family + "/" + c.store).join(", ") || "none"}`);
 if (regAll.errors.length) fail("a registry or store failed to load");
 for (const s of regAll.stores.filter((x) => x.family !== "1.gf")) {
-  console.log(`  ${s.id.padEnd(22)} ${s.kind.padEnd(6)} ${s.layout.padEnd(10)} ${s.calendar ? "12 calendar months" : s.span.join(" → ")} · ${s.channels.length} ch${s.levels ? ` (${s.vars.length} variables × ${s.levels.length} levels)` : ""}${s.grid ? ` · ${s.grid.H}×${s.grid.W} at ${s.grid.step}°` : ""}`);
+  console.log(`  ${s.id.padEnd(22)} ${s.kind.padEnd(6)} ${s.layout.padEnd(10)} ${s.calendar ? "12 calendar months" : s.span.join(" → ")} · ${s.channels.length} ch${s.levels ? ` (${s.vars.length} variables × ${s.levels.length} levels)` : ""}${s.grid ? ` · ${s.grid.H}×${s.grid.W} at ${s.grid.step ?? Math.abs(s.grid.dlat)}°` : ""}`);
 }
 const NA = { w: -50, s: 35, e: -40, n: 45 };
 const SELS10 = {
@@ -177,6 +180,8 @@ const SELS10 = {
   gdp: { family: "10", store: "gdp", channels: ["sst"], yearStart: 1980, yearEnd: 1980, months: [3], hours: null, bbox: null, step: "native", res: "native" },
   fishing_grid: { family: "derived", store: "fishing_grid", channels: ["fishing_hours", "hours"], yearStart: 2020, yearEnd: 2020, months: [3], hours: null, bbox: { w: 0, s: 50, e: 10, n: 60 }, step: "native", res: "native" },
   clim_g025: { family: "derived", store: "clim_g025", channels: ["sst"], yearStart: 2000, yearEnd: 2000, months: [1, 7], hours: null, bbox: NA, step: "native", res: "native" },
+  // family 1.2: ERA5 temperature at 500 hPa, 2015-01-15, 12 UTC only
+  era5_t: { family: "1.2", store: "era5_t", channels: ["t_500"], yearStart: 2015, yearEnd: 2015, months: [1], days: [15, 15], hours: [12, 18], bbox: { w: -60, s: 30, e: -10, n: 60 }, step: "native", res: "native" },
 };
 const results10 = {};
 for (const [name, sel] of Object.entries(SELS10)) {
@@ -187,11 +192,11 @@ for (const [name, sel] of Object.entries(SELS10)) {
   const f = finite(r.kind === "grid" ? r.data : r.values);
   console.log(`\n${sel.family}/${name}: estimate ${e.r.requests} requests / ${mb(e.r.readBytes)} · run ${m.requests} requests, ${mb(m.bytes)}, ${(m.ms / 1000).toFixed(2)} s · statuses ${[...new Set(m.log.map((x) => x.status))].join(",")} · every request ranged: ${m.log.every((x) => /^bytes=\d+-\d*$/.test(x.range || ""))}`);
   console.log(`  result: ${r.kind === "grid" ? `${r.time.length} × ${r.channels.length} × ${r.lat.length} × ${r.lon.length}` : r.time.length.toLocaleString("en-US") + " rows"}; first ${new Date(r.time[0] * 1000).toISOString().slice(0, 16)}; finite ${f.n}, range ${f.lo} .. ${f.hi} ${r.units.join(" | ")}`);
-  if (r.kind === "grid" && sel.store !== "argo" && e.r.exact && m.log.filter((x) => /\.npy$/.test(x.url) && !/bytes=0-1023$/.test(x.range || "")).reduce((a, x) => a + x.bytes, 0) !== e.r.readBytes) {
+  if (r.kind === "grid" && sel.store !== "argo" && !/^1\./.test(sel.family) && e.r.exact && m.log.filter((x) => /\.npy$/.test(x.url) && !/bytes=0-1023$/.test(x.range || "")).reduce((a, x) => a + x.bytes, 0) !== e.r.readBytes) {
     fail(`${name}: exact estimate bytes differ from the run's`);
   }
 }
-console.log("\npreview of every family-10 and derived store once:");
+console.log("\npreview of every family-1.2, family-10 and derived store once:");
 for (const s of regAll.stores.filter((x) => x.family !== "1.gf")) {
   const last = s.calendar ? 2000 : Number(s.span[1].slice(0, 4));
   const yy = s.calendar ? 2000 : Math.min(last, 2015);
@@ -268,6 +273,24 @@ print(json.dumps({"n": int(k.sum()), "t": sorted((sec[k] + 378691200).tolist())}
   const at = Array.from(results10.argo.time).sort((a, b) => a - b);
   console.log(`argo June 2015 in a box: ${at.length} rows by f1data, ${ao.n} by ml/family10_store.py; times identical: ${at.join() === ao.t.join()}`);
   if (at.length !== ao.n || at.join() !== ao.t.join()) fail("argo disagrees with ml/family10_store.py");
+  // ERA5 (family 1.2) against ml/family1/sharded.py: the same float16 values
+  const er = results10.era5_t;
+  const eo = JSON.parse(py(`
+import json, sys
+import numpy as np
+from family1 import sharded as sh
+g = sh.ShardedGroup(sys.argv[1]); sp = g.spec; k = sp["levels_hpa"].index(500)
+b, f = int(sys.argv[2]), int(sys.argv[3])
+out = np.full((sp["H"], sp["W"]), np.nan, np.float32)
+for ty in (1, 2):
+    for tx in (1, 2):
+        t = g.read_tile(b, f, ty, tx, raw=True, crop=True)
+        r0, r1 = sp["row_extents"][ty]; c0, c1 = sp["col_extents"][tx]
+        out[r0:r1, c0:c1] = t[..., k].astype(np.float32)
+print(json.dumps([float(x) for x in out[120:151, 120:171].ravel()]))
+`, HUB.replace("family1_gf/", "family1_2/") + "era5_t/era5_t", Math.floor((er.time[0] - 378691200) / 432000), ((er.time[0] - 378691200) % 432000) / 21600));
+  console.log(`era5_t 500 hPa ${new Date(er.time[0] * 1000).toISOString().slice(0, 16)} against ml/family1/sharded.py (raw float16):`);
+  cmp(Array.from(er.data), eo, 0, "  era5_t");
 }
 
 // ---------------------------------------------------------------- 4a. oc4k tile vs ShardedGroup

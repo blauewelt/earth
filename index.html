@@ -21,7 +21,7 @@
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/cesium/1.133.1/Widgets/widgets.min.css" />
-  <link rel="stylesheet" href="src/style.css?v=29bac486" />
+  <link rel="stylesheet" href="src/style.css?v=e7733eba" />
   <script>window.CESIUM_BASE_URL = "https://cdnjs.cloudflare.com/ajax/libs/cesium/1.133.1/";</script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/cesium/1.133.1/Cesium.js"></script>
 </head>
@@ -145,7 +145,8 @@
           tap any dot to read it ·
           <em>Data</em> — download the observation stores (satellite ocean colour,
           sea-surface temperature, cloud tops, ship, float, drifter, mooring and bottle
-          measurements), the global tensor the forecaster reads, and derived maps (fishing
+          measurements), the global tensor the forecaster reads, the atmosphere's temperature,
+          humidity and wind at 13 heights from the ERA5 reanalysis, and derived maps (fishing
           effort, the model's climatology) for any period, month, box and resolution, as a file
           built in your browser ·
           <em>Catalog</em> — all 276 datasets ·
@@ -1025,7 +1026,8 @@
       <h2>Download observations</h2>
       <p class="hint">Pick a store — the fine observation stores (satellite maps at 2–4 km and
         ship, float, bottle and mooring measurements at their own points), the global tensor the
-        forecaster reads with its own point observations, or a derived map — choose a period,
+        forecaster reads with its own point observations, the atmosphere on pressure levels from the
+        ERA5 reanalysis, or a derived map — choose a period,
         months, a box and a resolution, and the file is built here, in your browser, from the
         store's own files. The estimate line says what it will cost before anything is read.</p>
       <p class="hint dt-missing hidden" id="dt-missing">The data reader failed to load, so this
@@ -1034,6 +1036,7 @@
         <a href="https://huggingface.co/datasets/chfrank/earth-tensors/tree/main" target="_blank"
            rel="noopener">public data store</a>.</p>
       <p class="hint hidden" id="dt-reg-error"></p>
+      <p class="hint dt-coming hidden" id="dt-reg-coming"></p>
       <div id="dt-body">
         <div class="control-row">
           <label for="dt-store">store</label>
@@ -1184,6 +1187,17 @@
             channels whatever you tick — the estimate counts it — and its values are stored as
             standard scores, which the page turns back into physical units with each channel's
             mean and spread. The model climatology is twelve calendar-month maps with no years.</p>
+          <p class="hint"><strong>The atmosphere is a reanalysis, not an observation.</strong> The
+            ERA5 stores (family 1.2) hold temperature, humidity and wind at 13 pressure levels, from
+            50 hPa (about 20 km up) to 1000 hPa (the surface), every six hours since 1982. ERA5 is
+            ECMWF's reanalysis: a weather model run forward and pulled toward every available
+            observation, at about 31 km, averaged here onto a 1° grid. It fills places and heights
+            nobody measured, which is what makes it global — and why it is a model's best estimate,
+            not a measurement. Each map is an instant at 00, 06, 12 or 18 UTC, not a six-hour mean.
+            Humidity is in grams of water vapour per kilogram of air (1000 × ERA5's kg/kg). All 13
+            levels sit side by side in every tile, so one level reads as much as thirteen — the
+            estimate counts it. Contains modified Copernicus Climate Change Service information,
+            CC BY 4.0; every file carries the full attribution.</p>
           <p class="hint"><strong>What the values are.</strong> Sea-surface temperature from
             satellites (<code>sst_acspo02</code>) has gaps wherever there was cloud — it is what the
             satellite saw, not a gap-filled analysis, and not a finer version of the 0.25° daily
@@ -1360,7 +1374,7 @@
            not obvious from the page, and "I reloaded and see no change" is
            indistinguishable from "the change isn't there". This is the sha256
            prefix of src/app.js, the same string as its ?v= stamp. -->
-      <p class="build-line">Build <code id="build-id">b18ddcd7</code></p>
+      <p class="build-line">Build <code id="build-id">8d361eb2</code></p>
     </section>
 
     <footer>
@@ -1425,7 +1439,7 @@
        family-1.gf reader that publishes window.F1Data. Both load BEFORE the
        app, and the app copes when they did not (the tab says so). -->
   <script src="lib/fzstd.js?v=207dc305"></script>
-  <script src="src/f1data.js?v=4fb285ae"></script>
-  <script src="src/app.js?v=b18ddcd7"></script>
+  <script src="src/f1data.js?v=155efe7f"></script>
+  <script src="src/app.js?v=8d361eb2"></script>
 </body>
 </html>

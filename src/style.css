@@ -949,4 +949,6 @@ footer a { color: var(--fg-dim); }
 }
 .dt-levels button.active { border-color: var(--accent); color: var(--fg); background: rgba(68, 147, 248, 0.14); }
 #dt-reg-error .dt-reg-line { color: #f0d861; margin: 2px 0; overflow-wrap: anywhere; }
+#dt-reg-coming { color: #8b949e; font-size: 11px; overflow-wrap: anywhere; }
+#dt-store-about .dt-attrib { display: block; font-size: 10.5px; color: #8b949e; margin-top: 2px; overflow-wrap: anywhere; }
 #dt-store optgroup { color: var(--fg-dim); font-style: normal; }

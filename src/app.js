@@ -16043,14 +16043,25 @@ function dtFillStores() {
   }).join("");
 }
 
-/* What could not be loaded, by name, while the rest of the tab works. */
+/* What could not be loaded, by name, while the rest of the tab works — and,
+ * quietly, what a registry announces but has not published yet (never in the
+ * store list: it appears there the day the registry marks it built). */
 function dtShowRegistryErrors(reg) {
   const e = dtEl("dt-reg-error");
   const errs = (reg && reg.errors) || [];
-  if (!errs.length) { e.classList.add("hidden"); e.innerHTML = ""; return; }
-  e.innerHTML = errs.map((x) => `<div class="dt-reg-line">Not available: <strong>${esc(x.title || x.family)}` +
-    `${x.store ? ` — ${esc(x.store)}` : ""}</strong>: ${esc(x.message)}</div>`).join("");
-  e.classList.remove("hidden");
+  if (!errs.length) { e.classList.add("hidden"); e.innerHTML = ""; }
+  else {
+    e.innerHTML = errs.map((x) => `<div class="dt-reg-line">Not available: <strong>${esc(x.title || x.family)}` +
+      `${x.store ? ` — ${esc(x.store)}` : ""}</strong>: ${esc(x.message)}</div>`).join("");
+    e.classList.remove("hidden");
+  }
+  const c = dtEl("dt-reg-coming");
+  const coming = (reg && reg.coming) || [];
+  if (!c) return;
+  if (!coming.length) { c.classList.add("hidden"); c.innerHTML = ""; return; }
+  c.innerHTML = `Coming: ${coming.map((x) => `${esc(x.title)} <span class="dt-k">${esc(x.store)}</span>`).join(" · ")}` +
+    ` — announced in the registry, not published yet; each appears in the list once it is.`;
+  c.classList.remove("hidden");
 }
 
 function dtStoreAbout(st) {
@@ -16060,8 +16071,16 @@ function dtStoreAbout(st) {
     : "a point store: every report at its own position and time";
   const rec = st.calendar ? "twelve calendar months — no years"
     : `${esc(String(y0 || "?").slice(0, 10))} → ${esc(String(y1 || "?").slice(0, 10))}`;
+  const lic = st.licence
+    ? `<br><span class="dt-k">licence</span> ${esc(st.licence.name || "")}` +
+      (st.licence.attribution ? `<span class="dt-attrib">${esc(st.licence.attribution)}</span>` : "")
+    : "";
+  const levels = st.levels && st.levelUnit === "hPa"
+    ? ` · <span class="dt-k">levels</span> ${st.levels.length} pressures, ${st.levels[0]}–${st.levels[st.levels.length - 1]} hPa`
+    : "";
   return `<code class="dt-code">${esc(st.name)}</code> ${esc(st.gist || "")}` +
-    `<br><span class="dt-k">kind</span> ${kind} · <span class="dt-k">record</span> ${rec}`;
+    `<br><span class="dt-k">kind</span> ${kind}${st.reanalysis ? " — a model-filled reanalysis, not an observation" : ""}` +
+    `${levels} · <span class="dt-k">record</span> ${rec}${lic}`;
 }
 
 /* The channels the controls pick. A LEVELLED store (the reader found
@@ -16084,7 +16103,9 @@ function dtFillChannels(st, keep) {
     const vOn = new Set(kept.map((c) => c.var));
     const lOn = new Set(kept.filter((c) => c.level != null).map((c) => c.level));
     if (!vOn.size) vOn.add(st.vars[0].var);
-    if (!lOn.size) lOn.add(st.levels[0]);
+    // one level to start on: the store's own choice (500 hPa, the middle of
+    // the troposphere, for ERA5), else the first
+    if (!lOn.size) lOn.add(st.levels.includes(st.defaultLevel) ? st.defaultLevel : st.levels[0]);
     const vlabel = (v) => esc(v.label || v.var) + (v.label ? ` <span class="dt-k">${esc(v.var)}</span>` : "");
     dtEl("dt-channels").innerHTML =
       `<div class="dt-sub">variables</div><div class="dt-chips">` +
@@ -16289,6 +16310,13 @@ async function dtFirstLook(st) {
   if (seq !== dt.lookSeq) return;
   if (pick) dtSetPeriod(pick.y, pick.y, [pick.m], pick.days);
   else { const b = dtSpanYears(st)[1]; dtSetPeriod(b, b, [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12], null); }
+  // the reader tightens a sharded store's record to the frames it really
+  // holds once it has read the store's index; say the tightened one
+  if (dt.store === st) {
+    dtEl("dt-store-about").innerHTML = dtStoreAbout(st);
+    const [a, b] = dtSpanYears(st);
+    dtEl("dt-span").textContent = `record ${a}–${b}`;
+  }
   dt.touched = false;
   dtChanged();
 }
@@ -16465,6 +16493,12 @@ async function dtRunEstimate() {
     html += `<div class="dt-how">The read is estimated from a sample of the store's files; the ` +
       `download reads exactly what the selection needs.</div>`;
   }
+  if (!est.overCap && Number(est.channelsRead) > Number(est.channelsKept)) {
+    const w = est.channelWord || "channels";
+    html += `<div class="dt-how">The read covers all ${dtFmtInt(est.channelsRead)} ${esc(w)}, not only the ` +
+      `${dtFmtInt(est.channelsKept)} ticked: the store keeps them side by side in every tile, so the ` +
+      `megabytes above are what is really fetched.</div>`;
+  }
   out.className = `dt-estimate${est.overCap ? " dt-over" : ""}`;
   out.innerHTML = html;
   dtSetDownloadEnabled(!est.overCap);
@@ -16506,6 +16540,8 @@ function dtFrameAdj(st) {
   const c = String(st.cadenceLabel || "");
   if (/five-day/.test(c)) return "five-day";
   if (/month/.test(c)) return "monthly";
+  const h = /^((?:six|three|\d+)-hourly)/.exec(c);
+  if (h) return h[1];
   return dtCadence(st);
 }
 

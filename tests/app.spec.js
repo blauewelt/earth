@@ -8510,6 +8510,72 @@ function serveFixtureDir(page, prefix, dir, reads) {
   });
 }
 
+test("Data tab: family 1.2's ERA5-shaped store — its own group, a not-built store only named as coming, levels in hPa from 500, six-hourly hours, the attribution in panel and file",
+     async ({ page }) => {
+  test.setTimeout(240000);
+  const real = await page.evaluate(() =>
+    !!window.F1Data && !window.F1Data.__stub && typeof window.F1Data.configure === "function");
+  test.skip(!real, "src/f1data.js is not in this tree");
+  const path = require("path"), fs = require("fs");
+  const reads = [];
+  await serveFixtureDir(page, "f1fixture", path.join(__dirname, "..", "data", "family1_fixture"), reads);
+  await serveFixtureDir(page, "f12fixture", path.join(__dirname, "..", "data", "family12_fixture"), reads);
+  await page.evaluate(() => {
+    const o = location.origin;
+    window.F1Data.configure({ registries: [
+      { family: "1.gf", title: "Fine observations (family 1.gf)", kind: "family1", url: `${o}/f1fixture/family1gf.json` },
+      { family: "1.2", title: "Atmosphere on pressure levels (family 1.2 — ERA5 reanalysis)", kind: "family1",
+        optional: true, url: `${o}/f12fixture/family12.json` }] });
+    try { localStorage.removeItem("dataTabSel"); } catch {}
+  });
+  await dtTap(page, "#tab-data");
+  await expect(page.locator("#dt-store optgroup")).toHaveCount(2, { timeout: 30000 });
+  expect(await page.locator("#dt-store optgroup").evaluateAll((gs) => gs.map((g) => g.label))).toEqual([
+    "Fine observations (family 1.gf)", "Atmosphere on pressure levels (family 1.2 — ERA5 reanalysis)"]);
+  // the inherited store is listed once, under 1.gf; the 1.2 group holds only
+  // what is BUILT — the not-built humidity store is no option at all
+  const values = await page.locator("#dt-store option").evaluateAll((os) => os.map((o) => o.value));
+  expect(values.filter((v) => /fxgrid$/.test(v))).toEqual(["1.gf/fxgrid"]);
+  expect(await page.locator('#dt-store optgroup[label^="Atmosphere"] option').evaluateAll((os) => os.map((o) => o.value)))
+    .toEqual(["1.2/fxera"]);
+  expect(values.some((v) => /fxera_q|fxwait/.test(v))).toBe(false);
+  // … but it is named, quietly, as coming; the licence-pending one is not
+  await expect(page.locator("#dt-reg-coming")).toBeVisible();
+  await expect(page.locator("#dt-reg-coming")).toContainText("fxera_q");
+  await expect(page.locator("#dt-reg-coming")).not.toContainText("fxwait");
+  await expect(page.locator("#dt-reg-error")).toBeHidden();
+
+  const settled = () => expect.poll(async () => (await dtState(page)).estimateCurrent, { timeout: 30000 }).toBe(true);
+  await dtSet(page, { "dt-store": "1.2/fxera" });
+  await settled();
+  // variables × levels in hPa, starting on 500; the hours control is there
+  await expect(page.locator("#dt-channels button[data-level]")).toHaveCount(3);
+  await expect(page.locator("#dt-chan-note")).toContainText("3 channels as 1 variables × 3 levels");
+  await expect(page.locator("#dt-channels")).toContainText("levels (hPa)");
+  expect((await dtState(page)).sel.channels).toEqual(["t_500"]);
+  await expect(page.locator("#dt-hours-row")).toBeVisible();
+  await expect(page.locator("#dt-store-about")).toContainText("a model-filled reanalysis, not an observation");
+  await expect(page.locator("#dt-store-about")).toContainText("Contains modified Copernicus Climate Change Service information");
+  // the record line says the frames the store really holds (its last bin is half full)
+  await expect(page.locator("#dt-store-about")).toContainText("2009-12-25 → 2010-01-01");
+  // one day, 12 up to 18 UTC: one six-hourly map; the read covers all 3 levels
+  await dtSet(page, { "dt-y0": "2009", "dt-y1": "2009", "dt-d0": "28", "dt-d1": "28", "dt-h0": "12", "dt-h1": "18",
+    "dt-w": "-55", "dt-s": "25", "dt-e": "-25", "dt-n": "55" });
+  await dtTap(page, "#dt-months-none");
+  await dtTap(page, '#dt-months button[data-month="12"]');
+  await settled();
+  await expect(page.locator("#dt-estimate")).toContainText("1 6-hourly map");
+  await expect(page.locator("#dt-estimate")).toContainText("covers all 3 levels");
+  reads.length = 0;
+  const [dl] = await Promise.all([page.waitForEvent("download", { timeout: 60000 }), dtTap(page, "#dt-download")]);
+  expect(dl.suggestedFilename()).toBe("f1.2_fxera_t_500_2009_m12_d28-28_h12-18_native.nc");
+  const nc = fs.readFileSync(await dl.path());
+  expect(nc.subarray(0, 3).toString("latin1")).toBe("CDF");
+  expect(nc.toString("latin1")).toContain("Contains modified Copernicus Climate Change Service information");
+  expect(reads.some(([p, rel]) => p === "f12fixture" && /fxera\/2009\/bin_2044\.zst$/.test(rel))).toBe(true);
+  expect(page.__errors, `page errors: ${page.__errors.join(" | ")}`).toHaveLength(0);
+});
+
 test("Data tab: the store list is grouped by family, a missing registry is a named line, and a family-10 download works",
      async ({ page }) => {
   test.setTimeout(240000);

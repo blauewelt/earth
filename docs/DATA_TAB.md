@@ -6,11 +6,17 @@ resolution you want, see what that will cost before anything is read, preview it
 on the globe, and save it as a NetCDF or CSV file. The file is built **in your
 browser** from the store's own files: no server computes anything.
 
-The store list is the union of three groups, each read from its own registry:
+The store list is the union of four groups, each read from its own registry:
 
 - **Fine observations (family 1.gf)** — the global set of observation stores
   at 10 km / 5 days or finer, each kept at its own native resolution rather
   than resampled onto a common grid; registry `tensors/family1_gf/family1gf.json`.
+- **Atmosphere on pressure levels (family 1.2 — ERA5 reanalysis)** — family
+  1.2 is family 1.gf plus ECMWF's ERA5 reanalysis of the atmosphere:
+  temperature, humidity and wind at 13 pressure levels, six-hourly, on a 1°
+  grid; registry `tensors/family1_2/family12.json`. It *inherits* every 1.gf
+  store by reference (the same bytes), so those are listed once, under 1.gf,
+  and the 1.2 group shows only what 1.2 adds.
 - **Global tensor and point observations (family 10)** — the 0.25° and 1°
   five-day grids the forecaster is trained on, the monthly Argo grid at 16
   depths, and the point stores beside them (Argo profiles, drifters, moored
@@ -23,10 +29,13 @@ The store list is the union of three groups, each read from its own registry:
 
 All the data live on the project's public data store, the Hugging Face dataset
 [chfrank/earth-tensors](https://huggingface.co/datasets/chfrank/earth-tensors).
-A future **family 1.2** registry (`tensors/family1_2/family12.json`) is one
-line in the reader's registry list; until it is published it is simply not
-offered. If one registry or one store cannot be read, the others still load and
-the tab prints a line naming what is unavailable and why. The plan that specified this tab and its reader is
+A store a registry announces but has not built yet is **never selectable**: the
+tab names it in one quiet "Coming: …" line under the heading, and it appears in
+the list by itself the day the registry marks it built — the tab reads the
+registries every time it opens, so no change to the page is needed. (A store
+whose licence still waits on its producer is not "coming" and is not named.)
+If one registry or one store cannot be read, the others still load and the tab
+prints a line naming what is unavailable and why. The plan that specified this tab and its reader is
 [E-084](https://blauewelt.github.io/earth/docs.html?f=ml/plans/E084_data_tab.md);
 the stores themselves are described in the
 [family 1.gf design note](https://blauewelt.github.io/earth/ml/paper/notes/family1gf.pdf).
@@ -35,7 +44,7 @@ the stores themselves are described in the
 
 The tab reads the list of stores from the registries at run time, so a store
 appears in the tab the day it is published; these tables are the set as of
-2026-10-05 (27 stores). Three kinds:
+2026-10-06 (28 stores). Three kinds:
 
 - a **map store** (a gridded product): one value per pixel per frame;
 - a **point store**: every report at its own position and time — a ship's
@@ -63,6 +72,33 @@ are coarser than the store itself.
 | `xco2` | column carbon dioxide soundings from three satellites (OCO-2, OCO-3, GOSAT) | points | under 3 km² | per sounding | 2009 → 2026 |
 | `swh` | significant wave height along satellite altimeter tracks | points | about 7 km | one per second along track | 1991 → 2023 |
 | `swot` | sea-level anomaly on the SWOT satellite's 2 km swaths | points | 2 km | per pass | 2023-07 → 2026-09 |
+
+### Atmosphere on pressure levels (family 1.2 — ERA5 reanalysis)
+
+| store | what it measures | kind | native space | native time | levels | record |
+|---|---|---|---|---|---|---|
+| `era5_t` | air temperature, K | map | 1° (from ERA5's ~31 km) | six-hourly instants, 00/06/12/18 UTC | 13 | 1982-01-01 → 2026-06-30 |
+| `era5_q` | specific humidity, **g/kg** (grams of water vapour per kilogram of air — 1000 × ERA5's kg/kg) | map | 1° | six-hourly instants | 13 | coming |
+| `era5_u` | eastward wind, m/s (positive toward the east) | map | 1° | six-hourly instants | 13 | coming |
+| `era5_v` | northward wind, m/s (positive toward the north) | map | 1° | six-hourly instants | 13 | coming |
+
+The 13 levels are pressures: 50, 100, 150, 200, 250, 300, 400, 500, 600, 700,
+850, 925 and 1000 hPa — from about 20 km up down to the surface. The tab shows
+them as a level picker beside the variable and starts on **500 hPa**, the
+middle of the troposphere. "Coming" means the registry lists the store and
+marks it not built yet; it is not selectable until it is.
+
+**This is a reanalysis, not an observation.** ERA5 is ECMWF's best estimate of
+the atmosphere: a weather model run forward and pulled toward every available
+observation, natively at about 31 km and averaged here (area-weighted) onto a
+1° grid. It is global and gap-free *because* the model fills every place and
+height nobody measured, so it does not belong with the stores above as a
+measurement. Each frame is the analysis at one instant (00, 06, 12 or 18 UTC),
+not a six-hour mean. Every file carries the licence (CC BY 4.0, Copernicus
+Climate Change Service) and the full attribution in its global attributes, and
+the panel prints it under the store. **Reading one level reads all 13**: the
+levels sit side by side in every compressed tile, so the estimate counts the
+real read and says so.
 
 ### Global tensor and point observations (family 10)
 
@@ -113,8 +149,9 @@ and must not have one.
    one or more channels. A store measured at depths (the Argo grid and
    profiles, the casts, the floats, the moorings) shows two rows instead of a
    long list: the **variables** (temperature, salinity, …) and the **levels**
-   (pressures in dbar), with *all* / *none*; the channels are every variable
-   at every level that is on.
+   (pressures in dbar for the ocean, hPa for the atmosphere), with *all* /
+   *none*; the channels are every variable at every level that is on. ERA5
+   opens on one level, 500 hPa.
 2. **Years.** A start and an end year, clamped to the store's record. A
    calendar store has no years: the year and day rows are hidden and only the
    months are offered.
@@ -135,7 +172,8 @@ and must not have one.
    months, days, hours or box yourself, that choice carries over when you
    switch stores.
 4. **Hours (UTC).** Shown only where the store has a time of day finer than a
-   day — the 3-hourly cloud tops and every point store. The range runs from
+   day — the 3-hourly cloud tops, the six-hourly ERA5 maps and every point
+   store. The range runs from
    the first hour up to, not including, the second: *0 to 6* keeps the 00:00
    and 03:00 cloud-top maps. *0 to 24* is the whole day; *22 to 2* wraps
    across midnight.
@@ -210,6 +248,10 @@ and must not have one.
   pixel), 3-hourly; the source is half-hourly. The file carries kelvin.
 - **`oc4k`'s chlorophyll** is the base-10 logarithm of the concentration in
   mg m⁻³, not the concentration itself: 0 is 1 mg m⁻³, −1 is 0.1 mg m⁻³.
+- **ERA5** (family 1.2) is a reanalysis — a model's analysis, not a
+  measurement (§1). Temperature is in kelvin, humidity in **g/kg** (not
+  ERA5's kg/kg: 1000 × it, as stored), winds in m/s. Each map is an instant
+  at 00, 06, 12 or 18 UTC.
 - **The family-10 grids** are the physical values recovered from z-scores
   (see §1), to within the 16-bit storage: about one part in a thousand of the
   channel's spread. Channels named `log_…` are logarithms as the forecaster
@@ -234,7 +276,7 @@ and must not have one.
 | the zstd decoder the reader uses for the compressed tiles | `lib/fzstd.js` |
 | the tab: controls, box on the globe, estimate line, preview, save | `src/app.js` (the block headed "data tab"), `index.html` (`#panel-data`), `src/style.css` |
 | tests of the tab | `tests/app.spec.js` ("Data tab: …") |
-| tests of the reader, and the small fixtures they read | `tests/f1data.test.mjs`; `data/family1_fixture/` and `data/family10_fixture/`, written by `tests/make_family1_fixture.py` and `tests/make_family10_fixture.py` through the project's own store writers |
+| tests of the reader, and the small fixtures they read | `tests/f1data.test.mjs`; `data/family1_fixture/`, `data/family12_fixture/` (an ERA5-shaped store with levels and six-hourly frames) and `data/family10_fixture/`, written by `tests/make_family1_fixture.py`, `tests/make_family12_fixture.py` and `tests/make_family10_fixture.py` through the project's own store writers |
 | a check against the live data store, with independent Python reads | `scripts/f1data_live_check.mjs` |
 
 The reader keeps one handler per layout — the zstd-tiled family-1.gf grids,

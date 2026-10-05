@@ -502,7 +502,8 @@ to a hint toast and an empty layer on any failure (`docs/FAMILY7_GLOBE.md`).
 Since then the same family-7 path also serves the Model climatology layer
 (one plane per month and channel) and the fishing-effort grid (one month per
 read), and — added 2026-10-05 for E-084 — the **Data tab** reads the family
-1.gf observation stores under `tensors/family1_gf/` and the family-10 stores
+1.gf observation stores under `tensors/family1_gf/`, family 1.2's ERA5 stores
+under `tensors/family1_2/`, the family-10 stores
 under `tensors/family10_2/` (plus the fishing map and the climatology through
 their site indexes): index and tile ranges of the gridded stores, row-band
 ranges of the bin-major grids, column ranges of the point stores, every one a `Range:`
@@ -2139,8 +2140,8 @@ all granularities are fine for this, also derived channels"*. The reader now
 loads a LIST of registries (`F1Data.DEFAULT_REGISTRIES`, replaceable through
 `configure({registries})`): family 1.gf, family 10
 (`tensors/family10_2/family10.json`) and "derived" (the site's
-`data/fishing_index.json` and `data/family7_clim_index.json`), with family 1.2
-(`tensors/family1_2/family12.json`) a commented one-line slot. Stores are keyed
+`data/fishing_index.json` and `data/family7_clim_index.json`), and — switched on
+2026-10-06 — family 1.2 (`tensors/family1_2/family12.json`). Stores are keyed
 `family/name` (`sel.family`; a bare `sel.store` still resolves when it is
 unambiguous) and the tab groups them in three optgroups. **A registry or store
 that fails does not take the others down**: it lands in `registry.errors[]`
@@ -2169,6 +2170,40 @@ Argo rows equal to `ml/family10_store.py`'s with identical times, a 1980
 drifter month from the negative bins, a fishing-grid month exactly equal).
 Fixture `data/family10_fixture/` (written by `tests/make_family10_fixture.py`
 through `ml/tensor_io.py`, the family-8 writer and the family-10 assembler).
+
+*Family 1.2 — the atmosphere on pressure levels (2026-10-06, E-085).* Family
+1.2 is family 1.gf plus ECMWF's ERA5 reanalysis — temperature (K), specific
+humidity (stored and served in **g/kg**, 1000 × ERA5's kg/kg) and the
+eastward/northward wind (m/s) at 13 pressure levels 50…1000 hPa, folded into
+channels `t_500` etc. with `levels_hpa` in the registry; 1° (181 × 360, row 0 =
+−90°, col 0 = −180°), six-hourly INSTANTS (20 frames per five-day bin), in the
+same sharded tier-G layout as the 1.gf grids (64 × 64 float16 tiles), so it
+reads through the existing sharded handler with no new layout code. Five rules
+it added. **Inherited stores are listed once**: the registry's `inherits_block`
+names the 1.gf stores it shares by reference, and the reader skips them, so the
+tab's "Atmosphere on pressure levels (family 1.2 — ERA5 reanalysis)" group holds
+only what 1.2 adds. **A not-built store is never selectable**: the reader reads
+`built` at every load, puts a public not-built store in `registry.coming` (one
+whose licence is still pending is not named at all), and the tab prints a quiet
+"Coming: …" line — q/u/v appear by themselves the day the registry flips them.
+**It is a reanalysis and says so** — in the gist, the store line, the
+explainer, and a `comment` note in every file — and the registry's licence
+(CC BY 4.0, Copernicus Climate Change Service) travels as `license` and
+`attribution` global attributes in the NetCDF and is printed under the store
+(the CSV is a plain table and does not carry it). **One level reads all 13**:
+the levels are interleaved in each tile, so the estimate returns
+`channelsRead`/`channelsKept` and the tab adds a sentence saying the megabytes
+are the real read. **The record end is the shard index's, not the bins'**:
+ERA5's last bin is two-fifths full (it ends 2026-06-30 inside a bin running to
+07-03), so `exactSpan` tightens a sharded store's span to its last present
+frame the first time the index is read, and the tab re-renders the record line
+after the first look. ERA5 opens on 500 hPa (`defaultLevel`), the latest month,
+the first preset box: 247 requests, 11.3 MB to read. Verified live 2026-10-06:
+a 500 hPa 2015-01-15 12 UTC frame and a 2023-07-15 06 UTC frame equal
+`ml/family1/sharded.py`'s float16 values exactly, and a January-2015 monthly mean
+equals numpy's nanmean of the 124 native frames with counts of 124 everywhere.
+Fixture `data/family12_fixture/` (`tests/make_family12_fixture.py`, the real
+tier-G writer).
 
 **The fishing fleet, in two layers (2026-09-16, E-081 §4).** Chris: *"add what
 you propose to family 10.2 (and build the family). At the same time make sure

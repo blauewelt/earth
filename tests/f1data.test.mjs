@@ -28,6 +28,10 @@ const FIX = path.join(ROOT, "data", "family1_fixture");
 // the family-10 / derived fixture (tests/make_family10_fixture.py), served as /ok10/
 const FIX10 = path.join(ROOT, "data", "family10_fixture");
 const EXP10 = JSON.parse(fs.readFileSync(path.join(FIX10, "expected.json"), "utf8"));
+// the family-1.2 fixture (tests/make_family12_fixture.py: ERA5-shaped levels,
+// six-hourly frames), served as /ok12/
+const FIX12 = path.join(ROOT, "data", "family12_fixture");
+const EXP12 = JSON.parse(fs.readFileSync(path.join(FIX12, "expected.json"), "utf8"));
 const require = createRequire(import.meta.url);
 const F1 = require("../src/f1data.js");
 const EXP = JSON.parse(fs.readFileSync(path.join(FIX, "expected.json"), "utf8"));
@@ -44,9 +48,9 @@ let inflight = 0, maxInflight = 0;
 
 function serve(req, res) {
   const url = new URL(req.url, "http://x");
-  const m = /^\/(ok|bad200|nozst|ok10)\/(.*)$/.exec(url.pathname);
+  const m = /^\/(ok|bad200|nozst|ok10|ok12)\/(.*)$/.exec(url.pathname);
   const rel = m ? decodeURIComponent(m[2]) : "";
-  const root = m && m[1] === "ok10" ? FIX10 : FIX;
+  const root = m && m[1] === "ok10" ? FIX10 : m && m[1] === "ok12" ? FIX12 : FIX;
   const file = path.join(root, rel);
   if (!m || !file.startsWith(root) || !fs.existsSync(file) || fs.statSync(file).isDirectory() ||
       (m[1] === "nozst" && rel.endsWith(".zst"))) {
@@ -616,6 +620,74 @@ print(json.dumps({"p": p, "q": q}))
       assert.match(reg.errors[0].message, /z-score table/);
     } finally { F1.configure({ base: base("ok") }); }
   });
+
+  // ---- family 1.2: ERA5-shaped pressure levels, six-hourly instants -------
+  function multi12() {
+    F1.configure({ registries: [
+      { family: "1.gf", title: "Fine observations (family 1.gf)", kind: "family1", url: base("ok") + "family1gf.json" },
+      { family: "1.2", title: "Atmosphere on pressure levels (family 1.2 — ERA5 reanalysis)", kind: "family1",
+        optional: true, url: base("ok12") + "family12.json" },
+    ] });
+  }
+  const case12 = (name) => { const c = EXP12.cases.find((x) => x.name === name); assert.ok(c, name); return JSON.parse(JSON.stringify(c)); };
+
+  test("family 1.2: inherited stores listed once, a not-built store is only 'coming', levels in hPa start at 500, the record end comes from the shard index", async () => {
+    multi12();
+    try {
+      const reg = await F1.loadRegistry();
+      assert.deepEqual(reg.families.map((f) => f.family), ["1.gf", "1.2"]);
+      assert.deepEqual(reg.stores.filter((d) => d.name === "fxgrid").map((d) => d.id), ["1.gf/fxgrid"],
+        "an inherited store appears once, under the family that owns its bytes");
+      assert.deepEqual(reg.stores.filter((d) => d.family === "1.2").map((d) => d.name), ["fxera"]);
+      assert.deepEqual(reg.coming.filter((c) => c.family === "1.2").map((c) => c.store), EXP12.coming,
+        "not built → coming; licence pending → not named");
+      assert.deepEqual(reg.coming.map((c) => c.family), ["1.gf", "1.2"], "coming follows the registry order");
+      assert.ok(!reg.stores.some((d) => d.name === "fxera_q" || d.name === "fxwait"));
+      const d = reg.stores.find((x) => x.id === "1.2/fxera");
+      assert.deepEqual(d.levels, [100, 500, 850]);
+      assert.equal(d.levelUnit, "hPa");
+      assert.equal(d.defaultLevel, 500);
+      assert.equal(d.frameSeconds, 21600);
+      assert.equal(d.grid.lat0, -90);
+      assert.equal(d.grid.dlat, 10);
+      assert.equal(d.reanalysis, true);
+      assert.match(d.licence.attribution, /Copernicus Climate Change Service/);
+      // before any read the span is whole bins; the first plan reads the
+      // shard index and tightens it to the last frame present
+      assert.deepEqual(d.span, ["2009-12-25", "2010-01-03"]);
+      const e = await F1.estimate(case12("level 500 one day hours 12-18").sel);
+      assert.deepEqual(d.span, EXP12.span);
+      assert.equal(e.frames, 1);
+      assert.equal(e.channelsRead, 3, "a tile holds all three levels, so all three are read");
+      assert.equal(e.channelsKept, 1);
+      assert.equal(e.channelWord, "levels");
+      assert.match(e.why, /all 3 levels side by side/);
+    } finally { F1.configure({ base: base("ok") }); }
+  });
+
+  for (const c of EXP12.cases) {
+    test(`family 1.2: ${c.name} — level selection, six-hourly frames and the hours filter equal numpy`, async () => {
+      multi12();
+      try {
+        const r = await F1.run(selOf(c));
+        const x = c.expect;
+        assert.equal(r.frames, x.frames);
+        assert.deepEqual([r.time.length, r.channels.length, r.lat.length, r.lon.length], x.shape);
+        assert.deepEqual(Array.from(r.time), x.time);
+        assert.deepEqual(Array.from(r.lat), x.lat);
+        assert.deepEqual(Array.from(r.lon), x.lon);
+        closeArr(r.data, x.data, { rel: x.count ? 1e-6 : 0, label: c.name });
+        if (x.count) assert.deepEqual(Array.from(r.count), x.count);
+        // every native frame is an instant at 00, 06, 12 or 18 UTC
+        if (c.sel.step === "native") for (const t of r.time) assert.equal((t % 86400) % 21600, 0);
+        assert.ok(r.notes.some((n) => /REANALYSIS/.test(n)));
+        // the attribution the licence requires travels in the file
+        const nc = Buffer.from(await F1.toNetCDF(r).arrayBuffer()).toString("latin1");
+        assert.ok(nc.includes("Contains modified Copernicus Climate Change Service information"));
+        assert.ok(nc.includes("family 1.2 store fxera"));
+      } finally { F1.configure({ base: base("ok") }); }
+    });
+  }
 
   test("internals: float16 table and the calendar", () => {
     const { F16, civil, daysFromCivil, isoOfUnix } = F1._internal;

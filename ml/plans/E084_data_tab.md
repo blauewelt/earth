@@ -198,3 +198,17 @@ native bytes.
   stores open on a downloadable first look, and five downloads through the
   buttons equal independent numpy / `ml/family10_store.py` reads.
 
+- **Family 1.2 switched on, 2026-10-06.** The registry
+  `tensors/family1_2/family12.json` (family 1.gf by reference + ECMWF's ERA5
+  reanalysis on 13 pressure levels, six-hourly, 1°) is in the default list
+  under "Atmosphere on pressure levels (family 1.2 — ERA5 reanalysis)". Its
+  inherited 1.gf stores are listed once (under 1.gf); a store the registry
+  marks not built is never selectable and is named in a quiet "Coming: …"
+  line (today `era5_q`, `era5_u`, `era5_v`; they appear on their own when the
+  registry flips `built`). The store's licence attribution is printed under
+  it and written into every NetCDF; the estimate says that one level reads
+  all 13 (they are interleaved in each tile); the record end comes from the
+  shard index (2026-06-30), not the last bin. Verified live: two 500 hPa
+  frames (2015-01-15 12 UTC, 2023-07-15 06 UTC) equal `ml/family1/sharded.py`'s
+  float16 values exactly; a January-2015 mean equals numpy's nanmean of the
+  124 frames, counts 124.
