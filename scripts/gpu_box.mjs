@@ -67,7 +67,7 @@ const DISK = Number(process.env.DISK_GB || 100);
 // GPU-bound in the middle, so the filter asks for real RAM and disk as well
 // as the card — a 24GB 4090 next to 8GB of system RAM would OOM in
 // build_dataset.py long before it ever reached torch.
-const WANT = {
+const WANT_GPU = {
   gpu_name: { eq: "RTX 4090" },
   num_gpus: { eq: 1 },
   cpu_ram: { gte: 32000 },       // MB
@@ -78,6 +78,32 @@ const WANT = {
   type: "on-demand",             // NOT interruptible: preemption mid-run
   order: [["dph_total", "asc"]], // costs more in wasted hours than it saves
 };
+// BOX_PROFILE=assembly — a STORE ASSEMBLY box (family 1's `--parts-from-hub`
+// jobs: pull, hard-link, hash, upload, download back, decode). The GPU is
+// irrelevant, so any card qualifies; what decides the job is disk, RAM and
+// the network, and the host must be VERIFIED (ml/CLAUDE.md §7: two
+// deverified hosts were lemons at boot, one advertised 332 Mbps up and
+// delivered 0.3 MB/s). Thresholds are env-overridable: DISK_GB, MIN_RAM_GB
+// (32), MIN_UP_MBPS (300), MIN_DOWN_MBPS (1000), MIN_REL (0.98).
+const WANT_ASSEMBLY = {
+  num_gpus: { gte: 1 },
+  cpu_ram: { gte: Number(process.env.MIN_RAM_GB || 32) * 1000 },
+  disk_space: { gte: DISK },
+  reliability2: { gte: Number(process.env.MIN_REL || 0.98) },
+  inet_up: { gte: Number(process.env.MIN_UP_MBPS || 300) },
+  inet_down: { gte: Number(process.env.MIN_DOWN_MBPS || 1000) },
+  verified: { eq: true },
+  rentable: { eq: true },
+  rented: { eq: false },
+  type: "on-demand",
+  order: [["dph_total", "asc"]],
+};
+const PROFILE = process.env.BOX_PROFILE || "gpu";
+if (!["gpu", "assembly"].includes(PROFILE)) {
+  console.error(`BOX_PROFILE=${PROFILE}: expected gpu or assembly`);
+  process.exit(1);
+}
+const WANT = PROFILE === "assembly" ? WANT_ASSEMBLY : WANT_GPU;
 
 async function vast(method, path, body, base = BASE) {
   const res = await fetch(`${base}${path}`, {
@@ -165,13 +191,14 @@ if (cmd === "offers") {
   // 332Mbps up sustained ~0.3MB/s to the Hub for seven hours (15.6 of 67GB,
   // cancelled) while a "verified" host finished the same job in 92 minutes.
   // A listing that hides these three numbers can only be ranked by price.
-  console.log(`(priced at DISK=${DISK}GB; idle = storage only, charged while stopped; up/down in Mbps)`);
+  console.log(`(profile ${PROFILE}; priced at DISK=${DISK}GB; idle = storage only, charged while stopped; up/down in Mbps)`);
   for (const { o, store, total } of priced.slice(0, 10))
     console.log(`${String(o.id).padEnd(10)} $${total.toFixed(3)}/h  ` +
       `(gpu $${(o.dph_base ?? o.dph_total).toFixed(3)} + idle $${store.toFixed(3)})  ` +
       `${Math.round(o.cpu_ram / 1000)}GB ram  rel ${(o.reliability2 * 100).toFixed(1)}%  ` +
       `up ${Math.round(o.inet_up ?? 0)}  down ${Math.round(o.inet_down ?? 0)}  ` +
-      `${(o.verification ?? "?").padEnd(11)} ${o.geolocation ?? ""}`);
+      `${(o.verification ?? "?").padEnd(11)} ${o.geolocation ?? ""}  ` +
+      `${o.cpu_cores_effective ?? o.cpu_cores ?? "?"} cpu  ${o.gpu_name ?? ""}  disk ${Math.round(o.disk_space ?? 0)}GB  machine ${o.machine_id ?? "?"}`);
 } else if (cmd === "create") {
   const token = await registrationToken();
   const r = await vast("PUT", `/asks/${target}/`, {

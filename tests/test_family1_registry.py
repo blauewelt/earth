@@ -32,10 +32,9 @@ import build_family1_registry as r1                             # noqa: E402
 from family1.adapters import FAMILIES, REGISTRY                 # noqa: E402
 
 CODES = ("1gf", "1tf", "09tf", "12")
-#: the three family 10.2's `siblings` line names (family 1.2 is not there yet:
-#: E-085 added it after that line was written, and family 10's builder is
-#: not changed by it)
-SIBLING_CODES = ("1gf", "1tf", "09tf")
+#: the registries family 10.2's `siblings` line names — all four (family 1.2
+#: joined it in E-085)
+SIBLING_CODES = ("1gf", "1tf", "09tf", "12")
 
 
 # --------------------------------------------------------------- the stub --

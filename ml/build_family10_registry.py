@@ -137,6 +137,9 @@ SIBLING_REGISTRIES = (
      "registry": "tensors/family1_tf/family1tf.json"},
     {"family": "family09_tf", "family_version": "0.9.tf",
      "registry": "tensors/family09_tf/family09tf.json"},
+    # E-085: family 1.2 = 1.gf by reference + ERA5's upper air
+    {"family": "family1_2", "family_version": "1.2",
+     "registry": "tensors/family1_2/family12.json"},
 )
 
 
@@ -312,7 +315,26 @@ def tier_g_groups(repo, use_hub=True, index_path=F7_INDEX):
 
 
 # ================================================================== tier P ===
-def _store_entry(name, meta, repo, prefix, local=None):
+def hub_sizes(repo, prefix, meta):
+    """{file: bytes} from the store's published manifest.json, for a store
+    read from the Hub rather than from a local build directory — only for
+    files whose manifest sha256 equals store.json's, so a size is never
+    attached to bytes it does not describe. {} when there is no manifest.
+
+    E-085: a registry rebuilt on a hosted runner (no local stores) used to
+    print `bytes: null` for every file, so rebuilding it to add one sibling
+    line would have erased the sizes the box-built registry carried."""
+    man = hub_json(repo, f"{prefix}/manifest.json")
+    want = meta.get("sha256") or {}
+    out = {}
+    for f in (man or {}).get("files") or []:
+        n, h, b = f.get("name"), f.get("sha256"), f.get("bytes")
+        if n in want and h == want[n] and isinstance(b, int):
+            out[n] = b
+    return out
+
+
+def _store_entry(name, meta, repo, prefix, local=None, sizes=None):
     """One tier-P group, out of a store.json that already says everything."""
     ch = meta.get("channels")
     if ch and isinstance(ch[0], dict):
@@ -330,7 +352,7 @@ def _store_entry(name, meta, repo, prefix, local=None):
     files = [{"name": n, "sha256": h,
               "bytes": (os.path.getsize(os.path.join(local, n))
                         if local and os.path.exists(os.path.join(local, n))
-                        else None)}
+                        else (sizes or {}).get(n))}
              for n, h in sorted((meta.get("sha256") or {}).items())]
     # The store's OWN schema, out of its own store.json. Family 8's Argo store
     # is schema 1 and stays so; E-079 §10.1's four rebuilds are schema 2.
@@ -417,7 +439,10 @@ def tier_p_groups(repo, work=None, stores=F10_STORES, use_hub=True,
         if meta is None:
             missing.append(F8_NAME)
         else:
-            out.append(_store_entry(F8_NAME, meta, repo, F8_PREFIX, local))
+            out.append(_store_entry(
+                F8_NAME, meta, repo, F8_PREFIX, local,
+                sizes=(hub_sizes(repo, F8_PREFIX, meta)
+                       if local is None and use_hub else None)))
     for s in stores:
         meta, local = None, None
         root = store_root(s)
@@ -440,7 +465,10 @@ def tier_p_groups(repo, work=None, stores=F10_STORES, use_hub=True,
         if meta is None:
             missing.append(s)
             continue
-        out.append(_store_entry(s, meta, repo, f"{root}/{s}", local))
+        out.append(_store_entry(
+            s, meta, repo, f"{root}/{s}", local,
+            sizes=(hub_sizes(repo, f"{root}/{s}", meta)
+                   if local is None and use_hub else None)))
     return out, missing
 
 

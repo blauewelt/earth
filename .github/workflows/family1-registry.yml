@@ -1,0 +1,107 @@
+# E-085: PUBLISH A FAMILY-1 REGISTRY where the Hugging Face write token
+# already is — a repository secret on a GitHub-hosted runner — rather than on
+# a machine that holds the token by hand.
+#
+# WHAT IT RUNS.
+#   1. `ml/build_family1_registry.py --check --publish --only <families>`:
+#      builds every family-1 registry (1.gf, 1.0.tf, 0.9.tf, 1.2) from the
+#      adapters, the probe reports in ml/family1/probes/ and each store's
+#      store.json on the Hub; refuses (exit 1) if any adapter is missing from
+#      the registries; uploads ONLY the named families and downloads each
+#      back to compare sha256. A store whose store.json is not on the Hub yet
+#      is listed `built: false`, so the registry can be published while a
+#      family is part-built (as family 1.gf was with seaice_asi).
+#   2. with `siblings10=true`: family 10.2's registry rebuilt by ITS OWN
+#      builder (`ml/build_family10_registry.py`), and published only if
+#      `ml/registry_guard.py` finds nothing changed beyond the `siblings`
+#      line, the timestamps and null file sizes filled from the stores' own
+#      manifests. A hosted runner holds no store locally, so a rebuild reads
+#      the Hub; the guard is what stops that from quietly rewriting
+#      anything else in a registry a box wrote.
+#
+# workflow_dispatch ONLY, on ubuntu-latest ONLY (ml/CLAUDE.md §6). It holds
+# HF_TOKEN; a pull_request / schedule / workflow_run trigger would hand it to
+# anyone who opens a PR.
+name: Family 1 registry publish (E-085)
+run-name: family1-registry ${{ inputs.families }} siblings10=${{ inputs.siblings10 }}
+
+on:
+  workflow_dispatch:
+    inputs:
+      families:
+        description: "family codes to publish, comma list (1gf,1tf,09tf,12). Every registry is built and checked; only these are uploaded"
+        default: "12"
+      siblings10:
+        description: "also rebuild family 10.2's registry with its own builder and publish it if only its siblings line (and null sizes) changed"
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: family1-registry
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install
+        run: |
+          # the registry imports every family-1 adapter module, so it needs
+          # the same imports family1-build installs
+          pip install --quiet numpy "huggingface_hub<2" "zstandard==0.23.0" netCDF4 requests rasterio pyhdf scipy pyarrow h5py numcodecs
+          python3 -c "import numpy, huggingface_hub, zstandard, numcodecs; print('deps ok')"
+
+      - name: Build, check and publish the family-1 registries
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+          HF_HUB_DISABLE_XET: "1"
+          FAMILIES: ${{ inputs.families }}
+        run: |
+          set -euo pipefail
+          [ -n "${HF_TOKEN}" ] || { echo "::error::HF_TOKEN is not set"; exit 1; }
+          out="${RUNNER_TEMP}/registries"
+          python3 -u ml/build_family1_registry.py --out-dir "${out}" \
+              --check --publish --only "${FAMILIES}"
+          for f in $(echo "${FAMILIES}" | tr ',' ' '); do
+            python3 - "$f" <<'PY'
+          import json, sys, urllib.request
+          sys.path.insert(0, "ml")
+          from family1.adapters import FAMILIES
+          import build_family1_registry as r
+          code = sys.argv[1]
+          slug = FAMILIES[code][2]
+          url = (f"https://huggingface.co/datasets/chfrank/earth-tensors/"
+                 f"resolve/main/tensors/{slug}/{r.REGISTRY_NAME[code]}")
+          d = json.loads(urllib.request.urlopen(url, timeout=60).read())
+          print(f"PUBLISHED {url}: family {d['family_version']}, "
+                f"{d['n_groups']} store(s), built {d['built']}, "
+                f"not built {d['not_built']}, inherits {d.get('inherits')}")
+          PY
+          done
+
+      - name: Family 10.2's siblings line (its own builder, guarded)
+        if: ${{ inputs.siblings10 }}
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+          HF_HUB_DISABLE_XET: "1"
+        run: |
+          set -euo pipefail
+          d="${RUNNER_TEMP}/reg10"
+          mkdir -p "${d}/work"
+          curl -fsSL -o "${d}/published.json" \
+            https://huggingface.co/datasets/chfrank/earth-tensors/resolve/main/tensors/family10_2/family10.json
+          python3 -u ml/build_family10_registry.py --work "${d}/work" \
+              --out "${d}/family10.json"
+          python3 ml/registry_guard.py "${d}/published.json" "${d}/family10.json"
+          python3 - "${d}/family10.json" <<'PY'
+          import sys
+          sys.path.insert(0, "ml")
+          import build_family10_registry as r
+          r.publish(sys.argv[1])
+          PY

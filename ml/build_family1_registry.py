@@ -545,7 +545,7 @@ def siblings_block():
             {"family": FAMILIES[c][0], "family_version": FAMILIES[c][1],
              "registry": f"tensors/{FAMILIES[c][2]}/{REGISTRY_NAME[c]}",
              "builder": "ml/build_family1_registry.py"}
-            for c in ("1gf", "1tf", "09tf")],
+            for c in ("1gf", "1tf", "09tf", "12")],
     }
 
 
@@ -637,7 +637,19 @@ def main():
                          "in exactly one registry; exit non-zero otherwise")
     ap.add_argument("--publish", action="store_true",
                     help="upload every registry and verify each restore")
+    ap.add_argument("--only", default="",
+                    help="with --publish: upload only these family codes "
+                         "(comma list, e.g. 12) — every registry is still "
+                         "built and checked, so --check keeps covering every "
+                         "adapter, but a family whose stores did not change "
+                         "is not re-uploaded (E-085: the family-1.2 registry "
+                         "is published on its own as its stores land)")
     a = ap.parse_args()
+    only = [c.strip() for c in a.only.split(",") if c.strip()]
+    bad = [c for c in only if c not in FAMILIES]
+    if bad:
+        print(f"--only {bad}: not family codes ({sorted(FAMILIES)})")
+        return 2
 
     regs = build_all(repo=a.repo, use_hub=not a.no_hub,
                      work=(os.path.abspath(a.work) if a.work else None),
@@ -677,7 +689,13 @@ def main():
         print(f"CHECK OK: {len(REGISTRY)} adapter(s), each in exactly one of "
               f"{', '.join(REGISTRY_NAME[c] for c in sorted(FAMILIES))}")
     if a.publish:
+        if problems:
+            print("REFUSING to publish: the registries do not cover the "
+                  "adapters (see above)")
+            return 1
         for code in sorted(FAMILIES):
+            if only and code not in only:
+                continue
             publish_one(paths[code], code, repo=a.repo)
     return 0
 
