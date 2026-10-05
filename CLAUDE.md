@@ -598,6 +598,16 @@ The dev sandbox's *browser* cannot reach external hosts (curl can). Therefore:
   time, but four intervening chip assertions on a page still pulling Arctic
   tiles outlived it, and Playwright reported "element(s) not found" — which
   reads exactly like the feature being missing.
+- **Fix flaky tests without asking.** Chris, 2026-10-05: "make it a standing
+  rule to not ask about such things, always fix flakes if you have a
+  meaningful and also acceptable resolution for them". When a test is flaky
+  (failed then passed on retry, or intermittently red) and the fix is
+  *meaningful* — it addresses the cause: a race, an assertion on a truncated
+  string, a wait shorter than a documented delay — and *acceptable* — it does
+  not weaken what the test asserts and is test-only or otherwise low-risk —
+  fix it, run it repeatedly (`--repeat-each`), push, and then report what you
+  did. Ask first only when the fix would weaken the test, change app
+  behaviour, or is a guess at a cause you have not found.
 
 ### 4b. Date-independence must be announced
 
