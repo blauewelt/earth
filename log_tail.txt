@@ -1,0 +1,80 @@
+  [verify glorys025d before publish] check: check glorys025d 600/2458  35.7s
+  [verify glorys025d before publish] check: check glorys025d 700/2458  35.7s
+  [verify glorys025d before publish] check: check glorys025d 800/2458  35.8s
+  [verify glorys025d before publish] check: check glorys025d 900/2458  35.8s
+  [verify glorys025d before publish] check: check glorys025d 1000/2458  35.8s
+  [verify glorys025d before publish] check: check glorys025d 1100/2458  35.9s
+  [verify glorys025d before publish] check: check glorys025d 1200/2458  35.9s
+  [verify glorys025d before publish] check: check glorys025d 1300/2458  35.9s
+  [verify glorys025d before publish] check: check glorys025d 1400/2458  36.0s
+  [verify glorys025d before publish] check: check glorys025d 1500/2458  36.0s
+  [verify glorys025d before publish] check: check glorys025d 1600/2458  36.0s
+  [verify glorys025d before publish] check: check glorys025d 1700/2458  36.1s
+  [verify glorys025d before publish] check: check glorys025d 1800/2458  36.1s
+  [verify glorys025d before publish] check: check glorys025d 1900/2458  36.1s
+  [verify glorys025d before publish] check: check glorys025d 2000/2458  36.2s
+  [verify glorys025d before publish] check: check glorys025d 2100/2458  36.2s
+  [verify glorys025d before publish] check: check glorys025d 2200/2458  36.2s
+  [verify glorys025d before publish] check: check glorys025d 2300/2458  36.3s
+  [verify glorys025d before publish] check: check glorys025d 2400/2458  36.3s
+  [verify glorys025d before publish] check: check glorys025d 2458/2458  36.3s
+  hub: chfrank/earth-tensors with the token from $HF_TOKEN
+  [publish glorys025d] start (4919 items)  0/4919  0.0s
+Upload 0 LFS files: 0it [00:00, ?it/s]Upload 0 LFS files: 0it [00:00, ?it/s]
+No files have been modified since last commit. Skipping to prevent empty commit.
+Upload 0 LFS files: 0it [00:00, ?it/s]Upload 0 LFS files: 0it [00:00, ?it/s]
+No files have been modified since last commit. Skipping to prevent empty commit.
+Upload 0 LFS files: 0it [00:00, ?it/s]Upload 0 LFS files: 0it [00:00, ?it/s]
+No files have been modified since last commit. Skipping to prevent empty commit.
+Upload 0 LFS files: 0it [00:00, ?it/s]Upload 0 LFS files: 0it [00:00, ?it/s]
+No files have been modified since last commit. Skipping to prevent empty commit.
+Upload 0 LFS files: 0it [00:00, ?it/s]Upload 0 LFS files: 0it [00:00, ?it/s]
+No files have been modified since last commit. Skipping to prevent empty commit.
+Upload 0 LFS files: 0it [00:00, ?it/s]Upload 0 LFS files: 0it [00:00, ?it/s]
+No files have been modified since last commit. Skipping to prevent empty commit.
+Upload 0 LFS files: 0it [00:00, ?it/s]Upload 0 LFS files: 0it [00:00, ?it/s]
+No files have been modified since last commit. Skipping to prevent empty commit.
+Upload 0 LFS files: 0it [00:00, ?it/s]Upload 0 LFS files: 0it [00:00, ?it/s]
+No files have been modified since last commit. Skipping to prevent empty commit.
+Upload 0 LFS files: 0it [00:00, ?it/s]Upload 0 LFS files: 0it [00:00, ?it/s]
+No files have been modified since last commit. Skipping to prevent empty commit.
+shard_index.npy:   0%|          | 0.00/1.01M [00:00<?, ?B/s]shard_index.npy:  20%|█▉        | 197k/1.01M [00:00<00:00, 1.80MB/s]shard_index.npy:  78%|███████▊  | 786k/1.01M [00:00<00:00, 3.79MB/s]shard_index.npy: 100%|██████████| 1.01M/1.01M [00:00<00:00, 2.28MB/s]
+  [publish glorys025d] glorys025d  2/4919  79.6s
+  [publish glorys025d] glorys025d/1992  4/4919  80.8s
+  [publish glorys025d] glorys025d/1993  150/4919  95.3s
+  [publish glorys025d] glorys025d/1994  296/4919  109.6s
+  [publish glorys025d] glorys025d/1995  442/4919  125.0s
+  [publish glorys025d] glorys025d/1996  588/4919  141.9s
+  [publish glorys025d] glorys025d/1997  734/4919  159.5s
+  [publish glorys025d] glorys025d/1998  880/4919  176.5s
+  [publish glorys025d] glorys025d/1999  1026/4919  189.1s
+  [publish glorys025d] glorys025d/2000  1172/4919  201.7s
+  [publish glorys025d] glorys025d/2001  1318/4919  216.4s
+  [publish glorys025d] glorys025d/2002  1464/4919  231.1s
+  [publish glorys025d] glorys025d/2003  1610/4919  245.3s
+  [publish glorys025d] glorys025d/2004  1758/4919  259.6s
+  [publish glorys025d] glorys025d/2005  1904/4919  274.3s
+  [publish glorys025d] glorys025d/2006  2050/4919  290.9s
+  [publish glorys025d] glorys025d/2007  2196/4919  304.0s
+  [publish glorys025d] glorys025d/2008  2342/4919  316.8s
+  [publish glorys025d] glorys025d/2009  2488/4919  330.2s
+  [publish glorys025d] glorys025d/2010  2634/4919  350.5s
+  [publish glorys025d] glorys025d/2011  2780/4919  368.3s
+  [publish glorys025d] glorys025d/2012  2926/4919  382.5s
+  [publish glorys025d] glorys025d/2013  3072/4919  397.2s
+  [publish glorys025d] glorys025d/2014  3218/4919  412.3s
+  [publish glorys025d] glorys025d/2015  3364/4919  430.0s
+  [publish glorys025d] glorys025d/2016  3510/4919  448.7s
+  [publish glorys025d] glorys025d/2017  3656/4919  469.3s
+  [publish glorys025d] glorys025d/2018  3802/4919  484.9s
+  [publish glorys025d] glorys025d/2019  3948/4919  504.1s
+  [publish glorys025d] glorys025d/2020  4094/4919  518.0s
+  [publish glorys025d] glorys025d/2021  4240/4919  536.4s
+  [publish glorys025d] glorys025d/2022  4386/4919  552.4s
+  [publish glorys025d] glorys025d/2023  4532/4919  567.1s
+  [publish glorys025d] glorys025d/2024  4680/4919  580.2s
+  [publish glorys025d] glorys025d/2025  4826/4919  597.2s
+  [publish glorys025d] glorys025d/2026  4918/4919  607.0s
+  [publish glorys025d] store.json  4919/4919  607.2s
+  publish: 4919 file(s) verified by restore, 50 tile(s) decompressed, HTTP range {'checked': 5} -> https://huggingface.co/datasets/chfrank/earth-tensors/tree/main/tensors/family7_2d/glorys025d
+=== stage publish done in 657.2s ===

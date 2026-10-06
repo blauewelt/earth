@@ -1,0 +1,154 @@
+{
+ "bins": [
+  803,
+  3260
+ ],
+ "builder_git_sha": "d75e9406daa2e675a5969fadbebc156c1141c19b",
+ "built_at": "2026-10-06T17:26:53+00:00",
+ "channels": [
+  {
+   "max": 5.0,
+   "min": 0.0,
+   "name": "cur_speed",
+   "unit": "m/s"
+  },
+  {
+   "max": 4.0,
+   "min": -2.0,
+   "name": "log_mld",
+   "unit": "log10(m)"
+  },
+  {
+   "max": 4.0,
+   "min": -4.0,
+   "name": "ssh",
+   "unit": "m"
+  },
+  {
+   "max": 5.0,
+   "min": -5.0,
+   "name": "cur_u",
+   "unit": "m/s"
+  },
+  {
+   "max": 5.0,
+   "min": -5.0,
+   "name": "cur_v",
+   "unit": "m/s"
+  }
+ ],
+ "dataset": "GLORYS12 ocean reanalysis surface currents, sea-surface height and mixed-layer depth, DAILY, 0.25 degrees \u2014 family 7.2d",
+ "date_range": [
+  "1992-12-29",
+  "2026-08-18"
+ ],
+ "footprint": {
+  "log2_dt": -2.321928094887362,
+  "log2_fp": 0.0
+ },
+ "grid": {
+  "H": 721,
+  "W": 1440,
+  "align": "point \u2014 row r is latitude -90 + 0.25 r, column c is longitude -180 + 0.25 c (family 7's g025 grid)",
+  "crs": "EPSG:4326",
+  "dx": 0.25,
+  "dy": 0.25,
+  "row_order": "south_first",
+  "x0": -180.0,
+  "y0": -90.0
+ },
+ "lanes_expected": {
+  "1992": [
+   "d19921229-19961231"
+  ],
+  "1993": [
+   "d19921229-19961231"
+  ],
+  "1994": [
+   "d19921229-19961231"
+  ],
+  "1995": [
+   "d19921229-19961231"
+  ],
+  "1996": [
+   "d19921229-19961231"
+  ]
+ },
+ "pentad_check": true,
+ "pentad_check_through": "2024-12-31",
+ "pentad_reference": "https://huggingface.co/datasets/chfrank/earth-tensors/resolve/main/tensors/family7_global025_pentad_l2/family7_global025_pentad_l2_X_g025.npy",
+ "per_year_resume": true,
+ "plan": "ml/plans/E087_family7_daily.md",
+ "qc_policy": "GLORYS12 publishes no per-value flag. NaN over land, under ice shelves and south of 80 S (rows 0..39, outside the reanalysis). `log_mld` is log10 of a positive depth, NaN otherwise. A value outside its sanity bounds becomes NaN and is counted, never clipped; the January-2015 probe counted none.",
+ "record": [
+  "1993-01-01",
+  "2026-08-18"
+ ],
+ "source_segments": [
+  {
+   "falsifier": "pentad",
+   "from": "1993-01-01",
+   "kind": "GLORYS12V1 reanalysis (before the catalogue's field_date)",
+   "source": "cmems_mod_glo_phy_my_0.083deg_P1D-m version 202311",
+   "to": "2021-06-30"
+  },
+  {
+   "falsifier": "pentad",
+   "from": "2021-07-01",
+   "kind": "GLORYS12V1, the same dataset id, after the catalogue's field_date 2021-06-30 (historically the near-real-time 'interim' continuation of the same system); already in family 7.2",
+   "source": "cmems_mod_glo_phy_my_0.083deg_P1D-m version 202311",
+   "to": "2024-12-31"
+  },
+  {
+   "falsifier": "source-readback",
+   "from": "2025-01-01",
+   "kind": "GLORYS12V1, the same dataset id, fetched 2026-10-06 in the lane",
+   "source": "cmems_mod_glo_phy_my_0.083deg_P1D-m version 202311",
+   "to": "2026-08-18"
+  }
+ ],
+ "sources": [
+  "https://huggingface.co/datasets/chfrank/earth-tensors/resolve/main/daily025_global/glorys025_global_<YYYYMM>.nc (GLORYS12 cmems_mod_glo_phy_my_0.083deg_P1D-m version 202311, daily, binned to 0.25 deg at fetch by ml/fetch_glorys_daily.py; 2025-01 on fetched in the lane by the same code and parked beside the others)",
+  "https://huggingface.co/datasets/chfrank/earth-tensors/resolve/main/daily025_global_tail/glorys025_global_<YYYYMM>.nc (the month the record ends inside, partial)"
+ ],
+ "store": "glorys025d",
+ "title": "GLORYS12 ocean reanalysis surface currents, sea-surface height and mixed-layer depth, DAILY, 0.25 degrees \u2014 family 7.2d",
+ "verified": "2026-10-06: 384 of 384 chunks listed on the Hub (1993-01 .. 2024-12, 96,800,818,463 bytes); 2015-01 and 2015-02 opened (681 x 1440, -80..90, one value a day, uo vo mlotst zos)",
+ "years": [
+  1992,
+  1993,
+  1994,
+  1995,
+  1996,
+  1997,
+  1998,
+  1999,
+  2000,
+  2001,
+  2002,
+  2003,
+  2004,
+  2005,
+  2006,
+  2007,
+  2008,
+  2009,
+  2010,
+  2011,
+  2012,
+  2013,
+  2014,
+  2015,
+  2016,
+  2017,
+  2018,
+  2019,
+  2020,
+  2021,
+  2022,
+  2023,
+  2024,
+  2025,
+  2026
+ ]
+}
