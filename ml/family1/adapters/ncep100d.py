@@ -7,7 +7,9 @@ pressure, rain, snow, soil moisture and temperature, the two turbulent heat
 fluxes and the skin temperature — are five-day means of them; this store
 keeps each DAY: the mean of the day's four 6-hourly samples on the model's
 own grid, then family 7.2's bilinear to the 1° point grid and its unit
-transforms, 1982-01-01 to 2024-12-31.
+transforms, 1982-01-01 to 2026-03-17 — the last day NOAA PSL's yearly files
+hold (measured 2026-10-06: all thirteen 2026 files stop at 2026-03-17 18Z and
+were last modified 2026-03-19; PSL has not updated them since).
 
 `tau_x_std` / `tau_y_std` ARE NOT A ONE-DAY VALUE: they are the population
 standard deviation of the 6-hourly wind stress over the FIVE DAYS CENTRED on
@@ -34,6 +36,7 @@ class NCEP100DAdapter(_f7d.F7DailyBase):
              "7.2's g100), DAILY means, 1 degree — family 7.2d")
     first_year = 1982
     record_start = dt.date(1982, 1, 1)
+    record_end = dt.date(2026, 3, 17)          # NOAA PSL, measured 2026-10-06
     log2_fp = 2.0            # a 1-degree point from a T62 (~1.9 deg) model
     qc_policy = (
         "The reanalysis has no per-value flag. The day is the NaN-aware "
@@ -61,9 +64,9 @@ class NCEP100DAdapter(_f7d.F7DailyBase):
         if not days:
             return
         lo = min(days) - dt.timedelta(days=2)
-        hi = min(max(days) + dt.timedelta(days=2), _f7d.RECORD_END)
+        hi = min(max(days) + dt.timedelta(days=2), self.record_end)
         years = [y for y in range(lo.year, hi.year + 1)
-                 if self.record_start.year <= y <= _f7d.RECORD_END.year]
+                 if self.record_start.year <= y <= self.record_end.year]
         if not ctx.source_dir:          # keep only what this year can use
             for p in glob.glob(os.path.join(ctx.scratch, "ncep",
                                             "*.gauss.*.nc")):
@@ -96,12 +99,34 @@ class NCEP100DAdapter(_f7d.F7DailyBase):
         dl.close()
         self._neg = {}
         fr = fd.ncep_daily(paths, land, days, negmin=self._neg)
+        if self.check_on_flag:
+            from family1 import f7d_hub_check as hc
+            for d in days:
+                if not (self.wants_reference(d) and d in fr):
+                    continue
+                try:
+                    yp = {v: [p for p in paths[v]
+                              if p.endswith(f".{d.year}.nc")][0]
+                          for v in fd.NCEP_ORDER}
+                    self.stash_reference(d, hc.ref_ncep_from(yp, land_p, d))
+                except Exception as e:                       # noqa: BLE001
+                    self.stash_reference(d, e)
         for d in days:
             if d in fr:
                 yield d, fr.pop(d), None
             else:
                 yield d, None, "absent_upstream"
 
+
+    def source_segments(self):
+        return [{"from": "1982-01-01", "to": "2024-12-31",
+                 "source": "NCEP/NCAR Reanalysis 1 (PSL surface_gauss yearly "
+                           "files)", "falsifier": "pentad"},
+                {"from": "2025-01-01", "to": str(self.record_end),
+                 "source": "NCEP/NCAR Reanalysis 1 (PSL surface_gauss yearly "
+                           "files)", "falsifier": "source-readback",
+                 "note": "PSL's 2026 files end 2026-03-17 18Z (last modified "
+                         "2026-03-19)"}]
 
     def check_allow(self, b):
         """The per-day clamp at zero in `log1p_channel` (ncep_daily

@@ -35,10 +35,24 @@ counts (`max_pentad_absdiff_<ch>`, `max_pentad_excess_<ch>`; an excess is
 synthetic `--source-dir` build (the smoke) does that by default — it has no
 published tensor to compare with.
 
-RECORD. Each store from its source's first day to 2024-12-31, family 7.2's
-end (decision Q4); frames outside are `before_record` / `after_record`. A
-source file that cannot be read is an ABSENCE (the year is refused); a day a
-readable file does not hold is `absent_upstream` (counted).
+RECORD. Each store from its source's first day to the LAST DAY ITS PRODUCER
+SERVES (`record_end`, measured per source on 2026-10-06 — decision Q4
+reversed by the owner: "Let's include _all_ data (not prematurely end in
+2024)"); frames outside are `before_record` / `after_record`. A source file
+that cannot be read is an ABSENCE (the year is refused); a day a readable
+file does not hold is `absent_upstream` (counted).
+
+TWO FALSIFIERS, AND THE SECOND IS WEAKER. Family 7.2 ends 2024-12-31
+(`PENTAD_END`), so only a bin whose days fall on or before it can be checked
+against the pentad tensor; a frame after it is masked out of that check. For
+every day AFTER `PENTAD_END` the lane instead compares the frame, rounded to
+float16 as stored, with an INDEPENDENT read of the same source file
+(`f7d_hub_check.ref_*_from`: different code, same bytes) and refuses the bin
+on any difference beyond rounding or any NaN-pattern difference. That proves
+the derivation code ran on the right bytes the same way the checked years
+did; it does not prove agreement with a second, independently built product
+the way the pentad comparison does. Counted per year as
+`source_readback_days` and `max_readback_absdiff_<ch>`.
 """
 import datetime as dt
 import json
@@ -57,7 +71,9 @@ import family7_daily as fd
 HUB = "https://huggingface.co/datasets/chfrank/earth-tensors/resolve/main"
 PSL = "https://downloads.psl.noaa.gov/Datasets"
 EPOCH = dt.date(1982, 1, 1)
-RECORD_END = dt.date(2024, 12, 31)
+RECORD_END = dt.date(2024, 12, 31)      # the default; each store sets its own
+PENTAD_END = dt.date(2024, 12, 31)      # family 7.2's last day: the pentad
+#                                         check reaches no further
 FAMILY = "72d"
 PLAN = "ml/plans/E087_family7_daily.md"
 DISK_MARGIN = 1.2
@@ -146,6 +162,8 @@ class F7DailyBase(sh.GridAdapter):
     zstd_level = sh.DEFAULT_LEVEL
     log2_dt = float(np.log2(1.0 / 5.0))          # one day
     record_start = None                          # dt.date
+    record_end = RECORD_END                      # measured per source
+    check_on_flag = False
     smoke_window = ("2009-12-28", "2010-02-08")
     smoke_probe_month = "2010-01"
     plan = PLAN
@@ -191,12 +209,17 @@ class F7DailyBase(sh.GridAdapter):
             "(ml/family7_daily.py :: pentad_from_daily) reproduces "
             "family7_global025_pentad_l2 to float16 rounding, NaN exactly "
             "where it is NaN; every lane checks every bin (ml/family7_daily."
-            "py :: check_bin) and refuses a year that does not")
+            "py :: check_bin) and refuses a year that does not — through "
+            f"{PENTAD_END}, family 7.2's end; after it each day is checked "
+            "against an independent read of its source file instead (the "
+            "weaker guarantee; source_segments)")
+        sp["record"] = [str(self.record_start), str(self.record_end)]
+        sp["source_segments"] = self.source_segments()
         return out
 
     # ------------------------------------------------------------- record --
     def record_days(self):
-        return (RECORD_END - self.record_start).days + 1
+        return (self.record_end - self.record_start).days + 1
 
     def record_frames(self, ctx, group):
         return self.record_days()
@@ -204,7 +227,7 @@ class F7DailyBase(sh.GridAdapter):
     def in_record(self, d):
         if d < self.record_start:
             return "before_record"
-        if d > RECORD_END:
+        if d > self.record_end:
             return "after_record"
         return None
 
@@ -262,7 +285,9 @@ class F7DailyBase(sh.GridAdapter):
 
     def index(self, ctx):
         return {"dataset": self.title, "plan": PLAN,
-                "record": [str(self.record_start), str(RECORD_END)],
+                "record": [str(self.record_start), str(self.record_end)],
+                "pentad_check_through": str(PENTAD_END),
+                "source_segments": self.source_segments(),
                 "sources": list(self.sources),
                 "pentad_reference": fd.load_index()["groups"][
                     self.cfg["group"]]["url"],
@@ -276,6 +301,51 @@ class F7DailyBase(sh.GridAdapter):
     def check_extra(self, b):
         """Further check_bin keywords for this bin (glorys: mld_nonpos)."""
         return {}
+
+    def source_segments(self):
+        """[{from, to, source, falsifier, note}] — which product each span of
+        the record comes from and how its frames were checked. Written into
+        tile_grid.json (specs) and the index; the registry carries it."""
+        return [{"from": str(self.record_start), "to": str(PENTAD_END),
+                 "source": self.sources[0], "falsifier": "pentad"},
+                {"from": str(PENTAD_END + dt.timedelta(days=1)),
+                 "to": str(self.record_end), "source": self.sources[0],
+                 "falsifier": "source-readback"}]
+
+    def stash_reference(self, d, ref):
+        """Called by days_frames, while the source file is still on disk, with
+        an INDEPENDENT read of day `d` (f7d_hub_check.ref_*_from) — or with
+        the exception that stopped it, which refuses the day."""
+        if not hasattr(self, "_refs") or self._refs is None:
+            self._refs = {}
+        self._refs[d] = ref
+
+    def day_counts(self, d):
+        """Per-day counts for a day after PENTAD_END (oisst: preliminary)."""
+        return {}
+
+    def wants_reference(self, d):
+        return d > PENTAD_END and self.check_on_flag
+
+    def year_summary(self, counts):
+        """store.json counts_by_year: which falsifier each year's frames
+        passed — so nobody reads a source-readback year as pentad-checked."""
+        out = {"pentad_bins_checked": int(counts.get("pentad_bins_checked",
+                                                     0) or 0),
+               "source_readback_days": int(counts.get("source_readback_days",
+                                                      0) or 0)}
+        for k, v in counts.items():
+            if k.startswith(("max_readback_absdiff_", "preliminary_")):
+                out[k] = v
+        return out
+
+    year_summary_note = (
+        "pentad_bins_checked: bins whose five frames reproduced family 7.2's "
+        "pentad (the strong falsifier, through 2024-12-31). "
+        "source_readback_days: days after 2024-12-31 whose stored frame "
+        "agreed with an independent read of the same source file (the "
+        "weaker falsifier: right bytes, same derivation as the checked "
+        "years, but no second product to agree with).")
 
     # ------------------------------------------------------------ frames ---
     def days_frames(self, ctx, days):
@@ -296,8 +366,10 @@ class F7DailyBase(sh.GridAdapter):
                 if (b, f) in want]
         need = [d for d in days if self.in_record(d) is None]
         got = {}
-        it = self.days_frames(ctx, need)
         check = self.check_on(ctx)
+        self.check_on_flag = check
+        self._refs = {}
+        it = self.days_frames(ctx, need)
         H, W, C = self.cfg["grid"]["H"], self.cfg["grid"]["W"], \
             len(self.channels)
         for b in bins:
@@ -342,10 +414,13 @@ class F7DailyBase(sh.GridAdapter):
                 rr = self.ref().bin(b)
                 if rr is not None:
                     P, z, norm = rr
+                    # a day after family 7.2's end is not in its pentad:
+                    # the comparison masks it (bin 3141 holds 2024-12-31
+                    # and four days of 2025)
                     stored = [np.full((H, W, C), np.nan, np.float32)
-                              if a is None else
-                              a.astype(np.float16).astype(np.float32)
-                              for a in frames]
+                              if a is None or frame_day(b, f) > PENTAD_END
+                              else a.astype(np.float16).astype(np.float32)
+                              for f, a in enumerate(frames)]
                     allow = self.check_allow(b)
                     extra = self.check_extra(b)
                     res = fd.check_bin(self.store, stored, P, z, norm,
@@ -372,6 +447,12 @@ class F7DailyBase(sh.GridAdapter):
                             f"reproduce family7_global025_pentad_l2 within "
                             f"float16 rounding: {json.dumps(bad)[:600]}")
                         continue
+            # THE WEAKER FALSIFIER for days after family 7.2's end
+            if check:
+                rb = self.readback_bin(b, frames, counts)
+                if rb:
+                    ctx.note_absent(f"{frame_day(b, 0).year} bin {b}", rb)
+                    continue
             first = True
             for f in range(F):
                 if (b, f) not in want:
@@ -384,6 +465,45 @@ class F7DailyBase(sh.GridAdapter):
                 else:
                     yield self.store, b, f, frames[f], c
         it.close()
+
+    def readback_bin(self, b, frames, counts):
+        """Each frame of bin `b` dated after PENTAD_END against its stashed
+        independent reference. Returns a refusal string, or "" (counts
+        merged)."""
+        from family1 import f7d_hub_check as hc
+        c2 = {}
+        for f, a in enumerate(frames):
+            d = frame_day(b, f)
+            if a is None or d <= PENTAD_END:
+                continue
+            ref = (self._refs or {}).pop(d, None)
+            if ref is None:
+                return (f"SOURCE READ-BACK REFUSED: day {d} (bin {b}) has no "
+                        f"independent reference read — the weaker falsifier "
+                        f"cannot pass a frame it never compared")
+            if isinstance(ref, BaseException):
+                return (f"SOURCE READ-BACK REFUSED: the independent read of "
+                        f"{d} failed ({type(ref).__name__}: "
+                        f"{str(ref)[:200]})")
+            stored = a.astype(np.float16).astype(np.float32)
+            ch, ok = hc.compare_frame(self.store, stored, ref)
+            if not ok:
+                bad = {n: v for n, v in ch.items()
+                       if v["beyond_half_f16_step"]
+                       or v["finite_in_reference_only"]
+                       or v["finite_on_hub_only"]}
+                return (f"SOURCE READ-BACK REFUSED: day {d} (bin {b}) does "
+                        f"not agree with an independent read of its source "
+                        f"file: {json.dumps(bad)[:600]}")
+            c2["source_readback_days"] = c2.get("source_readback_days", 0) + 1
+            for k, v in self.day_counts(d).items():
+                c2[k] = c2.get(k, []) + list(v)
+            for n, v in ch.items():
+                k = f"max_readback_absdiff_{n}"
+                c2[k] = max(c2.get(k, 0.0), v["max_abs_diff"])
+        if c2:
+            f10b._merge_counts(counts, c2)
+        return ""
 
     # ------------------------------------------------------------- smoke ---
     def smoke_sources(self, root, d_lo, d_hi):

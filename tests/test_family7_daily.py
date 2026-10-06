@@ -380,3 +380,83 @@ def test_family7s_float32_z_score_is_in_the_tolerance():
                                        .astype(np.float32)), P, z, norm)
     assert r["ok"], r["channels"]["log_chl"]
     assert r["channels"]["log_chl"]["max_excess"] < 0
+
+
+# ============================== after family 7.2's end: the weaker check ===
+def _tail_lane(b, mode):
+    """oisst025d's fetch_frames over one bin with synthetic frames; days after
+    2024-12-31 carry a stashed 'independent' reference — equal, perturbed,
+    missing, or an exception — and days on or before it a pentad."""
+    from family1.adapters import REGISTRY, _f7d
+    ad = REGISTRY["oisst025d"]()
+    rng = np.random.default_rng(5)
+    days = fd.bin_days(b)
+    frames = {d: np.stack([rng.uniform(0, 30, (721, 1440)),
+                           np.full((721, 1440), np.nan)], -1)
+              .astype(np.float32) for d in days}
+
+    def df(ctx, ds):
+        for d in ds:
+            if ad.wants_reference(d):
+                r = frames[d].astype(np.float16).astype(np.float64)
+                if mode == "perturb":
+                    r = r.copy()
+                    r[300, 600, 0] += 0.5
+                if mode == "missing":
+                    pass
+                elif mode == "error":
+                    ad.stash_reference(d, IOError("no file"))
+                else:
+                    ad.stash_reference(d, r)
+            yield d, frames[d], None
+    ad.days_frames = df
+    ad.day_counts = lambda d: {}
+    st = [np.full((721, 1440, 2), np.nan, np.float32)
+          if d > _f7d.PENTAD_END else
+          frames[d].astype(np.float16).astype(np.float32) for d in days]
+    P = fd.pentad_from_daily("oisst025d", np.stack(st))
+    norm = np.tile([0.0, 1.0], (2, 1))
+
+    class _Ref:
+        def bin(self, bb):
+            return (P, P.copy(), norm) if bb <= 3141 else None
+    ad._ref = _Ref()
+    os.environ["F7D_PENTAD_CHECK"] = "on"
+    try:
+        ctx = _Ctx()
+        out = list(ad.fetch_frames(ctx, [("oisst025d", b, f)
+                                         for f in range(5)]))
+    finally:
+        del os.environ["F7D_PENTAD_CHECK"]
+    return ctx, out
+
+
+def test_the_bin_that_straddles_family7s_end_checks_both_ways():
+    """Bin 3141 is 2024-12-31 + four days of 2025: its 2024 day is held to
+    the pentad (with the 2025 days masked out of it), its 2025 days to the
+    independent source read."""
+    ctx, out = _tail_lane(3141, "equal")
+    assert not ctx.absent and len(out) == 5
+    c = out[0][4]
+    assert c["pentad_bins_checked"] == 1
+    assert c["source_readback_days"] == 4
+
+
+def test_a_day_after_2024_that_disagrees_with_its_source_is_refused():
+    ctx, out = _tail_lane(3200, "perturb")
+    assert out == [] and len(ctx.absent) == 1
+    assert "SOURCE READ-BACK REFUSED" in ctx.absent[0][1]
+
+
+@pytest.mark.parametrize("mode", ["missing", "error"])
+def test_a_day_after_2024_with_no_reference_is_refused(mode):
+    ctx, out = _tail_lane(3200, mode)
+    assert out == [] and "SOURCE READ-BACK REFUSED" in ctx.absent[0][1]
+
+
+def test_glorys_declares_its_first_named_lane():
+    from family1.adapters import REGISTRY
+    ad = REGISTRY["glorys025d"]()
+    got = ad.declared_lanes([1992, 1993, 1996, 1997, 2025])
+    assert got == {1992: ["d19921229-19961231"], 1993: ["d19921229-19961231"],
+                   1996: ["d19921229-19961231"]}

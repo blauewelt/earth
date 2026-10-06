@@ -164,11 +164,16 @@ DESCRIPTION = {
         "height, mixed-layer depth, 1993 ->), oisst025d (NOAA OISST "
         "sea-surface temperature and sea ice, 1982 ->), ncep100d (NCEP/NCAR "
         "Reanalysis 1: the 15 atmosphere and land channels, 1982 ->) and "
-        "occci025d (ESA OC-CCI ocean colour, 1997-09-04 ->); every record "
-        "ends 2024-12-31 with family 7.2's. Physical units, float16. The "
-        "five-day mean of a bin's frames by each channel's rule reproduces "
-        "family 7.2 to float16 rounding, NaN exactly where it is NaN, and "
-        "every fetch lane checked that for every bin it wrote. tau_x_std and "
+        "occci025d (ESA OC-CCI ocean colour, 1997-09-04 ->); each record "
+        "runs to the last day its producer serves (record_span; measured "
+        "2026-10-06), past family 7.2's own 2024-12-31 end. Physical units, "
+        "float16. Through 2024-12-31 the five-day mean of a bin's frames by "
+        "each channel's rule reproduces family 7.2 to float16 rounding, NaN "
+        "exactly where it is NaN, and every fetch lane checked that for every "
+        "bin it wrote; after it there is no pentad to compare with, and each "
+        "day was checked instead against an independent read of its own "
+        "source file — a WEAKER guarantee (each store's source_segments and "
+        "counts_by_year say which falsifier every year passed). tau_x_std and "
         "tau_y_std are a CENTRED FIVE-DAY standard deviation of the 6-hourly "
         "wind stress, not a one-day value. The Argo depth group (rg100) is "
         "monthly and has no daily form. Dispatch on `tier`."),
@@ -455,6 +460,11 @@ def entry(store, ad, repo, use_hub=True, work=None, probe_dir=PROBE_DIR):
         return out
 
     out["built"] = True
+    seg = getattr(ad, "source_segments", None)
+    if callable(seg):
+        # which product each span comes from and which falsifier it passed
+        # (E-087 §14: a frame after family 7.2's end is source-readback only)
+        out["source_segments"] = seg()
     out["N"] = meta.get("N")
     out["bin_first"] = meta.get("bin_first")
     out["bin_last"] = meta.get("bin_last")

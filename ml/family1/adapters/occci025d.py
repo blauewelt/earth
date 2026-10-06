@@ -7,9 +7,10 @@ grid; this store keeps each DAY: `log_chl`, the mean of log10(chlorophyll)
 over the clear 4 km cells of the 0.25° block (the very term family 7.2 adds
 to its accumulator), and `chl_cov`, the fraction of the block's 4 km cells
 that were clear. Both are NaN where no cell was clear that day (cloud, night,
-ice, land). 1997-09-04 to 2024-12-31: CEDA's per-file archive to 2022, PML's
-per-day NetcdfSubset of the aggregate for 2023-2024 — the files family 7.2
-used. About 790 GB of producer transfer for ~7 GB of store (E-087 §6), so it
+ice, land). 1997-09-04 to 2026-06-30, the last day PML's v6.0 aggregate
+serves (measured 2026-10-06: 10,501 days): CEDA's per-file archive to 2022,
+PML's per-day NetcdfSubset of the aggregate from 2023 — the files family 7.2
+used, and their continuation. About 790 GB of producer transfer for ~7 GB of store (E-087 §6), so it
 is built LAST (planning session, 2026-10-06).
 """
 import datetime as dt
@@ -42,6 +43,7 @@ class OCCCI025DAdapter(_f7d.F7DailyBase):
              "DAILY, 0.25-degree block means of the 4 km field — family 7.2d")
     first_year = 1997
     record_start = dt.date(1997, 9, 4)
+    record_end = dt.date(2026, 6, 30)          # PML v6.0, measured 2026-10-06
     log2_fp = 0.0
     smoke_window = ("2010-01-16", "2010-02-08")
     smoke_probe_month = "2010-01"
@@ -65,6 +67,14 @@ class OCCCI025DAdapter(_f7d.F7DailyBase):
         super().__init__()
         self._listing = {}
         self._axis = None
+
+    def source_segments(self):
+        return [{"from": "1997-09-04", "to": "2024-12-31",
+                 "source": "ESA OC-CCI v6.0 (CEDA to 2022, PML from 2023)",
+                 "falsifier": "pentad"},
+                {"from": "2025-01-01", "to": str(self.record_end),
+                 "source": "ESA OC-CCI v6.0 (PML's per-day NetcdfSubset)",
+                 "falsifier": "source-readback"}]
 
     # ------------------------------------------------------------ listing --
     def listing(self, ctx, year):
@@ -143,6 +153,12 @@ class OCCCI025DAdapter(_f7d.F7DailyBase):
                     if ctx.source_dir:
                         ctx.count_bytes(os.path.getsize(p))
                     arr, _g = fd.occci_daily(p)
+                    if self.wants_reference(d):
+                        from family1 import f7d_hub_check as hc
+                        try:
+                            self.stash_reference(d, hc.ref_occci_from(p))
+                        except Exception as e:               # noqa: BLE001
+                            self.stash_reference(d, e)
                 except SystemExit:
                     raise
                 except Exception as e:                       # noqa: BLE001

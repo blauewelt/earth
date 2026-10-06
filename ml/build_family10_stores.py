@@ -4160,6 +4160,14 @@ def declare_lanes(ctx):
     names, because a part-range lane writes every year of its window.
     """
     spec = str(getattr(ctx.a, "lanes", "") or "").strip()
+    if not spec:
+        # an adapter whose record is laned by its OWN shape declares those
+        # lanes itself (E-087: glorys025d's first lane starts on the bin
+        # boundary 1992-12-29, not on 1 January, so it is a named lane)
+        fn = getattr(ctx.adapter, "declared_lanes", None)
+        if callable(fn):
+            got = fn(ctx.years) or {}
+            return {str(y): list(v) for y, v in got.items()}
     if not spec.startswith("parts:"):
         return parse_lanes(spec, ctx.years)
     ad = ctx.adapter
