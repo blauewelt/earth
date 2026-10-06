@@ -1772,4 +1772,73 @@ bits) — all equal. Published by
 (republish families 1.gf, 1.0.tf, 0.9.tf and family 10.2 with `guard: spans`):
 the guard allowed span fields only, in 12, 27, 0 and 6 groups, and every
 registry was downloaded back and its sha256 matched. Family 1.2's registry
-follows in the next entry with the rebuilt `era5_q`.
+followed once `era5_q` was rebuilt:
+[`family1-registry.yml` #4](https://github.com/blauewelt/earth/actions/runs/37431331866)
+(republish family 1.2 with `guard: spans`, `allow_group: era5_q`) — span
+fields only for `era5_t`/`era5_u`/`era5_v`, the whole entry for the rebuilt
+`era5_q` (its 6,504 file sha256s now equal the new store.json's, channel
+minimum −1.0, `store_counts_by_year` for 45 years); every store's
+`record_span` is 1982-01-01 → 2026-06-30 (instants 00 UTC → 18 UTC), its
+`requested_window` 1982-01-01 → 2026-12-31.
+
+| registry | store | record span before (the requested window) | record span now (the data) |
+|---|---|---|---|
+| 1.gf | bgcargo | 2002-01-01 → 2026-12-31 | 2002-09-08 → 2026-09-17 |
+| 1.gf | glodap | 1972-01-01 → 2026-12-31 | 1972-07-24 → 2023-09-10 |
+| 1.gf | icoads | 1662-01-01 → 2026-12-31 | 1662-12-01 → 2026-08-31 |
+| 1.gf | irtb | 1998-01-01 → 2026-09-15 | 1998-01-02 → 2026-09-16 |
+| 1.gf | oc4k | 1997-09-04 → 2022-12-31 | unchanged |
+| 1.gf | oceansites | 1950-01-01 → 2026-12-31 | 1980-10-17 → 2026-09-16 |
+| 1.gf | pace4k | 2024-03-05 → 2026-09-30 | 2024-03-05 → 2026-07-31 |
+| 1.gf | sst_acspo02 | 2000-02-24 → 2026-09-15 | 2000-02-26 → 2026-09-16 |
+| 1.gf | swh | 1991-01-01 → 2023-12-31 | 1991-08-03 → 2023-12-31 |
+| 1.gf | swot | 2023-07-25 → 2026-09-15 | 2023-07-26 → 2026-09-15 |
+| 1.gf | wod | 1772-01-01 → 2026-12-31 | 1772-12-15 → 2026-02-12 |
+| 1.gf | xco2 | 2009-01-01 → 2026-09-30 | 2009-04-18 → 2026-07-31 |
+| 1.0.tf | burned500 | 2000-11-01 → 2026-09-15 | 2000-11-12 → 2026-07-18 |
+| 1.0.tf | canopy30 | 2020-01-01 → 2020-12-31 | 2020-06-30 → 2020-07-04 |
+| 1.0.tf | cat_ecostress | 2018-01-01 → 2026-09-30 | 2018-07-09 → 2026-09-17 |
+| 1.0.tf | cat_hls | 2013-01-01 → 2026-09-30 | 2013-04-11 → 2026-09-17 |
+| 1.0.tf | cat_landsat | 1982-08-01 → 2026-09-30 | 1982-08-22 → 2026-09-16 |
+| 1.0.tf | cat_nisar | 2025-10-01 → 2026-09-30 | 2025-10-12 → 2026-09-17 |
+| 1.0.tf | cat_olci | 2016-04-01 → 2026-09-30 | 2016-04-25 → 2026-09-18 |
+| 1.0.tf | cat_s1 | 2014-10-01 → 2026-09-30 | 2014-10-03 → 2026-09-18 |
+| 1.0.tf | cat_s2 | 2015-01-01 → 2026-09-15 | 2015-07-04 → 2026-09-15 |
+| 1.0.tf | cat_viirs | 2012-01-01 → 2026-09-30 | 2012-01-19 → 2026-09-17 |
+| 1.0.tf | chirps05 | 1981-01-01 → 2027-01-04 | 1981-01-03 → 2026-08-30 |
+| 1.0.tf | fire | 2000-01-01 → 2026-09-30 | 2000-11-01 → 2026-09-20 |
+| 1.0.tf | flux | 1991-01-01 → 2026-09-30 | 1991-01-01 → 2026-01-01 |
+| 1.0.tf | gbif | 1600-01-01 → 2026-12-31 | 1600-01-11 → 2026-08-28 |
+| 1.0.tf | gedi | 2022-01-01 → 2022-12-31 | 2022-06-01 → 2022-06-30 |
+| 1.0.tf | ghcnd | 1763-01-01 → 2026-12-31 | 1763-01-01 → 2026-09-14 |
+| 1.0.tf | gliders | 2003-01-01 → 2026-12-31 | 2003-10-28 → 2026-09-16 |
+| 1.0.tf | icesat2 | 2022-01-01 → 2022-12-31 | unchanged |
+| 1.0.tf | igra | 1905-01-01 → 2026-12-31 | 1905-04-04 → 2026-09-16 |
+| 1.0.tf | lai500 | 2020-01-02 → 2020-12-31 | unchanged (read from the shard index: some groups' first index row holds no frame) |
+| 1.0.tf | lossyear | 2026-01-05 → 2026-01-09 | unchanged |
+| 1.0.tf | lst05 | 1999-01-01 → 2026-09-30 | 2000-02-27 → 2026-09-16 |
+| 1.0.tf | ndbc | 1970-01-01 → 2025-12-31 | 1970-02-26 → 2025-12-31 |
+| 1.0.tf | pheno500 | 2001-01-01 → 2025-12-31 | 2001-06-30 → 2025-07-03 |
+| 1.0.tf | sif | 2018-05-01 → 2026-09-15 | unchanged |
+| 1.0.tf | snow05 | 1999-01-01 → 2026-09-30 | 2000-02-24 → 2026-09-16 |
+| 1.0.tf | tide | 1800-01-01 → 2026-12-31 | 1800-01-01 → 2026-07-15 |
+| 1.2 | era5_t, era5_q, era5_u, era5_v | 1982-01-01 → 2026-12-31 | 1982-01-01 → 2026-06-30 |
+| 10.2 (`date_range`) | argo | 2004-01-01 → 2024-12-31 | unchanged |
+| 10.2 | gdp | 1979-01-01 → 2024-12-31 | 1979-02-15 → 2024-12-31 |
+| 10.2 | gtmba | 1977-01-01 → 2024-12-31 | 1977-11-03 → 2024-12-31 |
+| 10.2 | socat | 1957-01-01 → 2024-12-31 | 1957-10-22 → 2024-12-31 |
+| 10.2 | slatrack, fishing | 1993 / 2012 → 2024-12-31 | unchanged |
+
+Family 0.9.tf has no stores of its own (it inherits 1.0.tf); its registry
+gained only the `span_rule` line. Family 10.2's tier-G groups (family 7.1's
+tensors) carried no requested window and are unchanged.
+
+**The Data tab's reader (`src/f1data.js`, read, not edited) is unaffected.**
+For family-1 stores it takes the span from the bins (`store_groups`
+bin_first/bin_last for tier G, `bin_first`/`bin_last` for tier P, line 764)
+and tightens a sharded store to its last present frame (`exactSpan`, 1089);
+`record_span` is only its fallback when no bins exist (line 765), and it is
+still a two-date array. For family 10.2 it copies `date_range` directly as
+the span (line 826), so that line now shows where the data is — e.g. the
+drifters from 1979-02-15 rather than 1979-01-01 — with no code change; the
+array shape is unchanged.
