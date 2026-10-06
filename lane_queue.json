@@ -1,5 +1,126 @@
 {
- "pending": [],
+ "pending": [
+  {
+   "store": "glorys025d",
+   "stage": "index,fetch",
+   "start": "2026-01-01",
+   "end": "2026-12-31",
+   "runner": "ubuntu-latest",
+   "extra_args": "--push-parts",
+   "adapter_env": "",
+   "retries": 2
+  },
+  {
+   "store": "glorys025d",
+   "stage": "index,fetch",
+   "start": "2025-01-01",
+   "end": "2025-12-31",
+   "runner": "ubuntu-latest",
+   "extra_args": "--push-parts",
+   "adapter_env": "",
+   "retries": 2
+  },
+  {
+   "store": "glorys025d",
+   "stage": "index,fetch",
+   "start": "2024-01-01",
+   "end": "2024-12-31",
+   "runner": "ubuntu-latest",
+   "extra_args": "--push-parts",
+   "adapter_env": "",
+   "retries": 2
+  },
+  {
+   "store": "oisst025d",
+   "stage": "index,fetch",
+   "start": "2026-01-01",
+   "end": "2026-12-31",
+   "runner": "ubuntu-latest",
+   "extra_args": "--push-parts",
+   "adapter_env": "",
+   "retries": 2
+  },
+  {
+   "store": "oisst025d",
+   "stage": "index,fetch",
+   "start": "2025-01-01",
+   "end": "2025-12-31",
+   "runner": "ubuntu-latest",
+   "extra_args": "--push-parts",
+   "adapter_env": "",
+   "retries": 2
+  },
+  {
+   "store": "oisst025d",
+   "stage": "index,fetch",
+   "start": "2024-01-01",
+   "end": "2024-12-31",
+   "runner": "ubuntu-latest",
+   "extra_args": "--push-parts",
+   "adapter_env": "",
+   "retries": 2
+  },
+  {
+   "store": "ncep100d",
+   "stage": "index,fetch",
+   "start": "2026-01-01",
+   "end": "2026-12-31",
+   "runner": "ubuntu-latest",
+   "extra_args": "--push-parts",
+   "adapter_env": "",
+   "retries": 2
+  },
+  {
+   "store": "ncep100d",
+   "stage": "index,fetch",
+   "start": "2025-01-01",
+   "end": "2025-12-31",
+   "runner": "ubuntu-latest",
+   "extra_args": "--push-parts",
+   "adapter_env": "",
+   "retries": 2
+  },
+  {
+   "store": "ncep100d",
+   "stage": "index,fetch",
+   "start": "2024-01-01",
+   "end": "2024-12-31",
+   "runner": "ubuntu-latest",
+   "extra_args": "--push-parts",
+   "adapter_env": "",
+   "retries": 2
+  },
+  {
+   "store": "occci025d",
+   "stage": "index,fetch",
+   "start": "2026-01-01",
+   "end": "2026-12-31",
+   "runner": "ubuntu-latest",
+   "extra_args": "--push-parts",
+   "adapter_env": "",
+   "retries": 2
+  },
+  {
+   "store": "occci025d",
+   "stage": "index,fetch",
+   "start": "2025-01-01",
+   "end": "2025-12-31",
+   "runner": "ubuntu-latest",
+   "extra_args": "--push-parts",
+   "adapter_env": "",
+   "retries": 2
+  },
+  {
+   "store": "occci025d",
+   "stage": "index,fetch",
+   "start": "2024-01-01",
+   "end": "2024-12-31",
+   "runner": "ubuntu-latest",
+   "extra_args": "--push-parts",
+   "adapter_env": "",
+   "retries": 2
+  }
+ ],
  "dispatched": [],
  "done": [
   {
