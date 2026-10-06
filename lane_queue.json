@@ -3,46 +3,6 @@
   {
    "store": "glorys025d",
    "stage": "index,fetch",
-   "start": "2001-01-01",
-   "end": "2004-12-31",
-   "runner": "ubuntu-latest",
-   "extra_args": "--push-parts",
-   "adapter_env": "",
-   "retries": 2
-  },
-  {
-   "store": "glorys025d",
-   "stage": "index,fetch",
-   "start": "2005-01-01",
-   "end": "2008-12-31",
-   "runner": "ubuntu-latest",
-   "extra_args": "--push-parts",
-   "adapter_env": "",
-   "retries": 2
-  },
-  {
-   "store": "glorys025d",
-   "stage": "index,fetch",
-   "start": "2009-01-01",
-   "end": "2012-12-31",
-   "runner": "ubuntu-latest",
-   "extra_args": "--push-parts",
-   "adapter_env": "",
-   "retries": 2
-  },
-  {
-   "store": "glorys025d",
-   "stage": "index,fetch",
-   "start": "2017-01-01",
-   "end": "2020-12-31",
-   "runner": "ubuntu-latest",
-   "extra_args": "--push-parts",
-   "adapter_env": "",
-   "retries": 2
-  },
-  {
-   "store": "glorys025d",
-   "stage": "index,fetch",
    "start": "2021-01-01",
    "end": "2024-12-31",
    "runner": "ubuntu-latest",
@@ -52,50 +12,6 @@
   }
  ],
  "dispatched": [
-  {
-   "store": "oisst025d",
-   "stage": "index,fetch",
-   "start": "1992-01-01",
-   "end": "1996-12-31",
-   "runner": "ubuntu-latest",
-   "extra_args": "--push-parts",
-   "adapter_env": "",
-   "retries": 2,
-   "at": "2026-10-06T09:46:36.961Z"
-  },
-  {
-   "store": "oisst025d",
-   "stage": "index,fetch",
-   "start": "2017-01-01",
-   "end": "2021-12-31",
-   "runner": "ubuntu-latest",
-   "extra_args": "--push-parts",
-   "adapter_env": "",
-   "retries": 2,
-   "at": "2026-10-06T09:46:51.503Z"
-  },
-  {
-   "store": "ncep100d",
-   "stage": "index,fetch",
-   "start": "1982-01-01",
-   "end": "1986-12-31",
-   "runner": "ubuntu-latest",
-   "extra_args": "--push-parts",
-   "adapter_env": "",
-   "retries": 2,
-   "at": "2026-10-06T10:11:29.881Z"
-  },
-  {
-   "store": "ncep100d",
-   "stage": "index,fetch",
-   "start": "1987-01-01",
-   "end": "1991-12-31",
-   "runner": "ubuntu-latest",
-   "extra_args": "--push-parts",
-   "adapter_env": "",
-   "retries": 2,
-   "at": "2026-10-06T10:11:33.726Z"
-  },
   {
    "store": "ncep100d",
    "stage": "index,fetch",
@@ -183,6 +99,50 @@
    "adapter_env": "",
    "retries": 2,
    "at": "2026-10-06T10:30:28.245Z"
+  },
+  {
+   "store": "glorys025d",
+   "stage": "index,fetch",
+   "start": "2001-01-01",
+   "end": "2004-12-31",
+   "runner": "ubuntu-latest",
+   "extra_args": "--push-parts",
+   "adapter_env": "",
+   "retries": 2,
+   "at": "2026-10-06T10:39:44.414Z"
+  },
+  {
+   "store": "glorys025d",
+   "stage": "index,fetch",
+   "start": "2005-01-01",
+   "end": "2008-12-31",
+   "runner": "ubuntu-latest",
+   "extra_args": "--push-parts",
+   "adapter_env": "",
+   "retries": 2,
+   "at": "2026-10-06T10:39:48.252Z"
+  },
+  {
+   "store": "glorys025d",
+   "stage": "index,fetch",
+   "start": "2009-01-01",
+   "end": "2012-12-31",
+   "runner": "ubuntu-latest",
+   "extra_args": "--push-parts",
+   "adapter_env": "",
+   "retries": 2,
+   "at": "2026-10-06T10:39:52.102Z"
+  },
+  {
+   "store": "glorys025d",
+   "stage": "index,fetch",
+   "start": "2017-01-01",
+   "end": "2020-12-31",
+   "runner": "ubuntu-latest",
+   "extra_args": "--push-parts",
+   "adapter_env": "",
+   "retries": 2,
+   "at": "2026-10-06T10:39:55.915Z"
   }
  ],
  "done": [
@@ -4080,6 +4040,58 @@
    "at": "2026-10-06T09:46:33.321Z",
    "run_number": 987,
    "finished": "2026-10-06T10:25:33Z"
+  },
+  {
+   "store": "oisst025d",
+   "stage": "index,fetch",
+   "start": "1992-01-01",
+   "end": "1996-12-31",
+   "runner": "ubuntu-latest",
+   "extra_args": "--push-parts",
+   "adapter_env": "",
+   "retries": 2,
+   "at": "2026-10-06T09:46:36.961Z",
+   "run_number": 988,
+   "finished": "2026-10-06T10:37:43Z"
+  },
+  {
+   "store": "oisst025d",
+   "stage": "index,fetch",
+   "start": "2017-01-01",
+   "end": "2021-12-31",
+   "runner": "ubuntu-latest",
+   "extra_args": "--push-parts",
+   "adapter_env": "",
+   "retries": 2,
+   "at": "2026-10-06T09:46:51.503Z",
+   "run_number": 992,
+   "finished": "2026-10-06T10:38:00Z"
+  },
+  {
+   "store": "ncep100d",
+   "stage": "index,fetch",
+   "start": "1982-01-01",
+   "end": "1986-12-31",
+   "runner": "ubuntu-latest",
+   "extra_args": "--push-parts",
+   "adapter_env": "",
+   "retries": 2,
+   "at": "2026-10-06T10:11:29.881Z",
+   "run_number": 994,
+   "finished": "2026-10-06T10:37:40Z"
+  },
+  {
+   "store": "ncep100d",
+   "stage": "index,fetch",
+   "start": "1987-01-01",
+   "end": "1991-12-31",
+   "runner": "ubuntu-latest",
+   "extra_args": "--push-parts",
+   "adapter_env": "",
+   "retries": 2,
+   "at": "2026-10-06T10:11:33.726Z",
+   "run_number": 995,
+   "finished": "2026-10-06T10:37:48Z"
   }
  ],
  "failed": [
