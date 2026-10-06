@@ -11,17 +11,6 @@
    "adapter_env": "ERA5_Q_BOUND=D6",
    "retries": 2,
    "at": "2026-10-06T05:46:45.124Z"
-  },
-  {
-   "store": "era5_q",
-   "stage": "index,fetch",
-   "start": "1992-01-01",
-   "end": "1996-12-31",
-   "runner": "ubuntu-latest",
-   "extra_args": "--push-parts",
-   "adapter_env": "ERA5_Q_BOUND=D6",
-   "retries": 2,
-   "at": "2026-10-06T05:46:55.588Z"
   }
  ],
  "done": [
@@ -3815,6 +3804,19 @@
    "at": "2026-10-06T05:46:52.090Z",
    "run_number": 969,
    "finished": "2026-10-06T06:18:12Z"
+  },
+  {
+   "store": "era5_q",
+   "stage": "index,fetch",
+   "start": "1992-01-01",
+   "end": "1996-12-31",
+   "runner": "ubuntu-latest",
+   "extra_args": "--push-parts",
+   "adapter_env": "ERA5_Q_BOUND=D6",
+   "retries": 2,
+   "at": "2026-10-06T05:46:55.588Z",
+   "run_number": 970,
+   "finished": "2026-10-06T06:21:20Z"
   }
  ],
  "failed": [
