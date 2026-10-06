@@ -356,3 +356,27 @@ def test_a_nonpositive_depth_is_counted_like_family7_counts_it():
                                            .astype(np.float32)), P, z, norm,
                         mld_nonpos=nz)
     assert good["ok"], good["channels"]["log_mld"]
+
+
+def test_family7s_float32_z_score_is_in_the_tolerance():
+    """Family 7 z-scores in FLOAT32 ((X32 - mu32) / sd32, then float16), so a
+    value whose exact z sits just past a float16 midpoint is stored as the FAR
+    neighbour. The real case: OC-CCI 2013 bin 2324, one cell, one clear day —
+    refused by 7.0e-9 before the tolerance carried the two float32 roundings."""
+    v = np.float32(0.011219031)                     # the day's block mean
+    mu, sd = np.float32(-0.77646887), np.float32(0.45660481)
+    z16 = np.float16((v - mu) / sd)                 # family 7's arithmetic
+    exact = np.float16((np.float64(v) - np.float64(mu)) / np.float64(sd))
+    assert z16 != exact                             # the double rounding is real
+    H, W = 721, 1440
+    st = np.full((5, H, W, 2), np.nan, np.float32)
+    st[1, 130, 511] = [v, 0.5]
+    z = np.full((H, W, 2), np.nan)
+    z[130, 511] = [float(z16), 0.0]
+    norm = np.array([[mu, sd], [0.1, 1.0]], np.float64)
+    P = z * norm[:, 1] + norm[:, 0]
+    P[130, 511, 1] = 0.1
+    r = fd.check_bin("occci025d", list(st.astype(np.float16)
+                                       .astype(np.float32)), P, z, norm)
+    assert r["ok"], r["channels"]["log_chl"]
+    assert r["channels"]["log_chl"]["max_excess"] < 0

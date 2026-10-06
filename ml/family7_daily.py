@@ -508,6 +508,13 @@ def check_bin(store, frames, P, z, norm, allow=None, mld_nonpos=None):
         mism = int((fp != fr).sum())
         d = np.abs(Rc - Pc)[both]
         tol = f16_half_step(zc[both]) * norm[c, 1]
+        # family 7 z-scores in FLOAT32 (build_family7 norm stage: mu, sd cast
+        # to float32, (X32 - mu) / sd, then float16), so the stored z is
+        # rounded twice: two float32 half-ulps of |z| before the float16
+        # cast, which can move a value sitting on a float16 midpoint to the
+        # far neighbour (OC-CCI 2013 bin 2324, one cell: z 1.7250977 stored
+        # as 1.7246094, 7.0e-9 past the old tolerance)
+        tol = tol + 2.0 ** -23 * np.abs(zc[both]) * norm[c, 1]
         off = 273.15 if name in ("t2m", "tsoil", "skt") else 0.0
         tol = tol + 2.0 ** -21 * (np.maximum(np.abs(Pc[both]),
                                              mag[..., c][both]) + off)
@@ -573,6 +580,7 @@ def compare(store, recon, pentad, z, norm, stored_recon=None, stored_hs=None,
         P = pentad[..., pc]
         sd = norm[pc, 1]
         tol_p = f16_half_step(z[..., pc]) * sd          # the pentad's own f16
+        tol_p = tol_p + 2.0 ** -23 * np.abs(z[..., pc]) * sd  # its f32 z-score
         r = {"unit": unit}
         for label, R in (("derivation", recon[..., c]),
                          ("stored", None if stored_recon is None
