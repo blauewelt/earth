@@ -4,17 +4,6 @@
   {
    "store": "ncep100d",
    "stage": "index,fetch",
-   "start": "2007-01-01",
-   "end": "2011-12-31",
-   "runner": "ubuntu-latest",
-   "extra_args": "--push-parts",
-   "adapter_env": "",
-   "retries": 2,
-   "at": "2026-10-06T10:24:03.713Z"
-  },
-  {
-   "store": "ncep100d",
-   "stage": "index,fetch",
    "start": "2017-01-01",
    "end": "2021-12-31",
    "runner": "ubuntu-latest",
@@ -4100,6 +4089,19 @@
    "at": "2026-10-06T10:17:52.558Z",
    "run_number": 998,
    "finished": "2026-10-06T10:48:11Z"
+  },
+  {
+   "store": "ncep100d",
+   "stage": "index,fetch",
+   "start": "2007-01-01",
+   "end": "2011-12-31",
+   "runner": "ubuntu-latest",
+   "extra_args": "--push-parts",
+   "adapter_env": "",
+   "retries": 2,
+   "at": "2026-10-06T10:24:03.713Z",
+   "run_number": 999,
+   "finished": "2026-10-06T10:51:19Z"
   }
  ],
  "failed": [
