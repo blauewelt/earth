@@ -1,0 +1,50 @@
+store     oisst025d — NOAA OISST v2.1 sea-surface temperature and sea-ice concentration, DAILY, 0.25 degrees — family 7.2d
+family    family7_2d (7.2d) · public -> chfrank/earth-tensors:tensors/family7_2d/oisst025d
+axis      2024-01-01 .. 2024-12-31  bins 3068..3141 · time_s int32 (schema 2)
+lane      (unnamed) — whole calendar year(s), no group subset: the year folder's own files, as every store on the Hub holds them
+channels  C=2: sst, sea_ice
+tier G    sharded, groups ['oisst025d'], F=5 x 86400 s, float16, years (by bin start) 2024..2024
+work      /home/runner/work/earth/earth/ml/cache/family7_2d
+
+=== stage index (oisst025d) ===
+  [index oisst025d] start (1 items)  0/1  0.0s
+  [index oisst025d] plan.json  1/1  0.0s
+  index: oisst025d — 1 year(s), C=2 (sst, sea_ice), bins 3068..3141
+=== stage index done in 0.0s ===
+
+=== stage fetch (oisst025d) ===
+  disk: 91.0 GB free at /home/runner/work/earth/earth/ml/cache/family7_2d/oisst025d/parts; 370 frames project to 0.3 GB of parts, 4.4 GB with margin and the source in flight
+  pentad consistency check: ON
+  [fetch oisst025d (tier G)] start (1 items)  0/1  0.0s
+  [fetch oisst025d (tier G)] oisst025d 2024 oisst025d bin 3072  35.3s
+  [fetch oisst025d (tier G)] oisst025d 2024 oisst025d bin 3077  53.3s
+  [fetch oisst025d (tier G)] oisst025d 2024 oisst025d bin 3082  73.3s
+  [fetch oisst025d (tier G)] oisst025d 2024 oisst025d bin 3087  91.5s
+  [fetch oisst025d (tier G)] oisst025d 2024 oisst025d bin 3092  110.6s
+  [fetch oisst025d (tier G)] oisst025d 2024 oisst025d bin 3097  129.5s
+  [fetch oisst025d (tier G)] oisst025d 2024 oisst025d bin 3102  148.8s
+  [fetch oisst025d (tier G)] oisst025d 2024 oisst025d bin 3107  167.3s
+  [fetch oisst025d (tier G)] oisst025d 2024 oisst025d bin 3112  188.1s
+  [fetch oisst025d (tier G)] oisst025d 2024 oisst025d bin 3117  207.1s
+  [fetch oisst025d (tier G)] oisst025d 2024 oisst025d bin 3122  227.5s
+  [fetch oisst025d (tier G)] oisst025d 2024 oisst025d bin 3127  246.9s
+  [fetch oisst025d (tier G)] oisst025d 2024 oisst025d bin 3132  268.1s
+  [fetch oisst025d (tier G)] oisst025d 2024 oisst025d bin 3137  287.9s
+/home/runner/work/earth/earth/ml/family1/f7d_hub_check.py:127: RuntimeWarning: Mean of empty slice
+  m = np.nanmean(st, axis=0)
+  2024: oisst025d 74 bin(s) 370 frame(s) 325.1 MB (312.3s)
+  hub: chfrank/earth-tensors with the token from $HF_TOKEN
+  oisst025d: uploading 150 file(s) of 1 year(s), 325.3 MB -> chfrank/earth-tensors:partials/family7_2d/oisst025d/
+Upload 3 LFS files:   0%|          | 0/3 [00:00<?, ?it/s]
+oisst025d__bin_3141.zst:   0%|          | 0.00/4.47M [00:00<?, ?B/s][A
+
+
+oisst025d__shard_index.npy:   0%|          | 0.00/28.1k [00:00<?, ?B/s][A[A[A
+
+oisst025d__bin_3141.idx.npy:   0%|          | 0.00/1.57k [00:00<?, ?B/s][A[Aoisst025d__shard_index.npy: 100%|██████████| 28.1k/28.1k [00:00<00:00, 407kB/s]
+oisst025d__bin_3141.idx.npy: 100%|██████████| 1.57k/1.57k [00:00<00:00, 20.7kB/s]
+Upload 3 LFS files:  33%|███▎      | 1/3 [00:00<00:00,  8.84it/s]oisst025d__bin_3141.zst: 100%|██████████| 4.47M/4.47M [00:00<00:00, 35.0MB/s]
+Upload 3 LFS files: 100%|██████████| 3/3 [00:00<00:00, 17.28it/s]
+  oisst025d: 1 year(s) pushed and verified in 1 part commit(s), done.json written last (0 already present)
+  push-parts: 1 year(s) on the Hub under partials/family7_2d/oisst025d/
+=== stage fetch done in 959.6s ===
