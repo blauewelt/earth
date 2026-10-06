@@ -193,4 +193,42 @@ Box: verified host, any GPU, ≥ 150 GB disk (61 GB tensor + 27.4 GB output +
 
 - 2026-10-06: plan, exporter, publisher, workflow, 40 toy checks and the
   fixture written; the fixture path ran end to end (export → falsifier
-  against the committed E-083 fixture → index).
+  against the committed E-083 fixture → index). Commit `4a481b4`.
+- 2026-10-06: **BUILT AND PUBLISHED** — family7-monthly run 1 (the export of
+  the per-year monthly sums and counts of all four groups, with the
+  falsifier and a hosted restore). Box: Vast instance 54452966 (offer
+  47927849, Quebec, verified, 129 GB RAM, 24 CPUs, 3.2 Gbps up/down,
+  $0.116/h), rented 08:01 UTC, job 08:05–08:46, destroyed 08:47 — ≈ 46 min,
+  ≈ $0.09. Pull 61.16 GB in 10.4 min (98 MB/s); sha256 of every group ✓;
+  export 15.3 min (g025 516 year-months; max count 7 in every pentad group,
+  1 in `rg100`); falsifier 10.7 min; upload 4.3 min (one commit per group).
+  The restore on a GitHub-hosted runner streamed all 27.39 GB back in 71 s
+  (the 15 GB `g025` sum at 389 MB/s) and every sha256 matched; CORS from
+  `https://blauewelt.org`: 206, `access-control-allow-origin: *`, on
+  `g025/sum.npy` and `g025/count.npy`.
+- **The falsifier on the real data** — Σsum/Σcount over each published
+  version's training years against that version's `clim.npy`, every cell of
+  every month and channel: NaN pattern identical everywhere, Σ bins per month
+  = `n_train_bins` exactly (3142/2923/2703 for `g025` and `g100`,
+  1997/1778/1558 for `oc025`, 252/216/180 for `rg100`), and max |Δ|/bound
+  ≤ **0.73** (all twelve version × group pairs). In absolute terms max |Δ| is
+  4.8e-7 z for `g025` (6.9e-7 in the channel's unit), 2.4e-7 z for `g100`
+  (2.3e-5 in its largest-unit channel), 2.4e-7 z for `oc025`, 4.5e-7 z for
+  `rg100` (1.1e-6). Measured in float32 ulps OF THE MEAN the worst cells read
+  up to 65,536 ulps — every one of them a cell whose mean is close to 0 in
+  z-units, where an ulp of the mean is tiny while the rounding error scales
+  with the yearly sums being added; that is why the tolerance is the bound
+  and not a ulp count. On a channel whose mean is away from zero it is a few
+  ulps or less: February SST (below) is ≤ 0.50 ulp everywhere.
+- **Live, from the sandbox against the Hub** (§4's third falsifier):
+  (1) the 2015-02 SST plane of `g025` sum + count (5.2 MB) against the mean of
+  the six bins opening in February 2015 (2015-02-02 … 02-27) range-read
+  straight out of the tensor `.npy` (87 MB): counts identical, NaN pattern
+  identical over 703,902 cells, **max |Δ| = 0 °C** (global mean 13.7885 °C
+  both ways; 23.9484 °C at 26.5° N 70° W, n = 6). (2) The `all` February SST
+  climatology rebuilt from its 43 planes (223 MB, two byte ranges) against
+  `clim/all/g025/clim.npy`'s plane: NaN pattern identical, **max |Δ| =
+  6.9e-7 °C = 0.50 float32 ulp** (median 0.25 ulp); 23.3677 °C at the RAPID
+  line both ways.
+- `data/family7_monthly_index.json` written by the restore job
+  (`restore_verified: true`) and committed. Nothing in flight.

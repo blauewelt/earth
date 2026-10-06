@@ -545,5 +545,46 @@ def test_g_committed_fixture_agrees_with_its_own_files():
     assert total < 1e6, f"the fixture is {total / 1e6:.2f} MB"
 
 
+def test_g_committed_real_index_is_consistent():
+    """data/family7_monthly_index.json (written by the hosted restore job of
+    family7-monthly run 1, never by hand) against data/family7_index.json."""
+    path = os.path.join(ROOT, "data", "family7_monthly_index.json")
+    if not os.path.exists(path):
+        pytest.skip("the real index is not committed yet")
+    ix = json.load(open(path))
+    f7 = json.load(open(os.path.join(ROOT, "data", "family7_index.json")))
+    assert ix["stem"] == f7["stem"] and ix["fixture"] is False
+    assert ix["restore_verified"] is True
+    assert ix["reproduction"]["ok"] is True
+    assert ix["axes"] == M.AXES
+    for role in ("sum", "count"):
+        assert ix["cors_measured"][role]["status"] == 206
+        assert ix["cors_measured"][role]["origin"] == "https://blauewelt.org"
+        assert ix["cors_measured"][role]["access_control_allow_origin"]
+    assert set(ix["groups"]) == set(f7["groups"])
+    for g, blk in ix["groups"].items():
+        src = f7["groups"][g]
+        for k in P.COPY_KEYS:
+            assert blk[k] == src[k], (g, k)
+        assert blk["tensor_sha256"] == src["sha256"]
+        C, ny, nx = len(src["chans"]), src["grid"]["ny"], src["grid"]["nx"]
+        Y = blk["n_years"]
+        assert blk["years"] == list(range(blk["year_first"],
+                                          blk["year_last"] + 1))
+        assert len(blk["bins_per_month"]) == Y
+        assert sum(map(sum, blk["bins_per_month"])) == blk["n_rows_summed"] \
+            == src["n_bins"]
+        assert max(map(max, blk["bins_per_month"])) == blk["max_count"] <= 7
+        for role, item in (("sum", 4), ("count", 1)):
+            r = blk[role]
+            assert r["shape"] == [12, C, Y, ny, nx]
+            assert r["plane_bytes"] == ny * nx * item
+            assert r["bytes"] == r["header_len"] + 12 * C * Y * ny * nx * item
+            assert r["url"] == ix["base"] + f"{g}/{role}.npy"
+        for v in ("all", "dev", "paper"):
+            rep = ix["reproduction"]["groups"][g][v]
+            assert rep["max_over_bound"] <= 1.0 and rep["n_cells"] > 0
+
+
 if __name__ == "__main__":                                  # pragma: no cover
     sys.exit(pytest.main([__file__, "-q"]))
