@@ -1,0 +1,65 @@
+{
+ "bins": [
+  1096,
+  1460
+ ],
+ "builder_git_sha": "fb8c0c1ee6959999806695dec8a0581a9089c5a8",
+ "built_at": "2026-10-06T09:47:22+00:00",
+ "channels": [
+  {
+   "max": 40.0,
+   "min": -3.0,
+   "name": "sst",
+   "unit": "degC"
+  },
+  {
+   "max": 1.0,
+   "min": 0.0,
+   "name": "sea_ice",
+   "unit": "fraction (NaN below 0.15)"
+  }
+ ],
+ "dataset": "NOAA OISST v2.1 sea-surface temperature and sea-ice concentration, DAILY, 0.25 degrees \u2014 family 7.2d",
+ "date_range": [
+  "1997-01-01",
+  "2001-12-31"
+ ],
+ "footprint": {
+  "log2_dt": -2.321928094887362,
+  "log2_fp": 0.0
+ },
+ "grid": {
+  "H": 721,
+  "W": 1440,
+  "align": "point \u2014 row r is latitude -90 + 0.25 r, column c is longitude -180 + 0.25 c (family 7's g025 grid)",
+  "crs": "EPSG:4326",
+  "dx": 0.25,
+  "dy": 0.25,
+  "row_order": "south_first",
+  "x0": -180.0,
+  "y0": -90.0
+ },
+ "pentad_check": true,
+ "pentad_reference": "https://huggingface.co/datasets/chfrank/earth-tensors/resolve/main/tensors/family7_global025_pentad_l2/family7_global025_pentad_l2_X_g025.npy",
+ "per_year_resume": true,
+ "plan": "ml/plans/E087_family7_daily.md",
+ "qc_policy": "OISST publishes no per-value flag in these files. PSL's missing value (-9.97e36) is dropped as a sentinel; land is NaN; the `icec` file's 0..1 valid range is trusted over its 'percent' units string (build_family7.ice_divisor), and below 0.15 OISST itself reports no ice (NaN). Bilinear from the cell centres with the seam wrapped; an all-NaN neighbourhood stays NaN. Out-of-bounds values become NaN and are counted, never clipped.",
+ "record": [
+  "1982-01-01",
+  "2024-12-31"
+ ],
+ "sources": [
+  "https://huggingface.co/datasets/chfrank/earth-tensors/resolve/main/mirrors/psl/Datasets/noaa.oisst.v2.highres/{sst,icec}.day.mean.<YYYY>.nc (the Hub's round-trip-verified mirror of NOAA PSL)",
+  "https://downloads.psl.noaa.gov/Datasets/noaa.oisst.v2.highres/{sst,icec}.day.mean.<YYYY>.nc (fallback)"
+ ],
+ "store": "oisst025d",
+ "title": "NOAA OISST v2.1 sea-surface temperature and sea-ice concentration, DAILY, 0.25 degrees \u2014 family 7.2d",
+ "verified": "2026-10-06: 43 + 43 yearly files 1982-2024 on the Hub mirror (23.5 GB); 2015's opened (720 x 1440, 365 days)",
+ "years": [
+  1997,
+  1998,
+  1999,
+  2000,
+  2001
+ ]
+}
