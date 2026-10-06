@@ -1,0 +1,155 @@
+{
+ "bins": [
+  3215,
+  3287
+ ],
+ "builder_git_sha": "f36951b0777d307f69df00c94a59356b6e7345d7",
+ "built_at": "2026-10-06T14:25:38+00:00",
+ "channels": [
+  {
+   "max": 10.0,
+   "min": -10.0,
+   "name": "tau_x",
+   "unit": "N/m2"
+  },
+  {
+   "max": 10.0,
+   "min": -10.0,
+   "name": "tau_y",
+   "unit": "N/m2"
+  },
+  {
+   "max": 10.0,
+   "min": 0.0,
+   "name": "tau_x_std",
+   "unit": "N/m2 (centred 5-day sigma)"
+  },
+  {
+   "max": 10.0,
+   "min": 0.0,
+   "name": "tau_y_std",
+   "unit": "N/m2 (centred 5-day sigma)"
+  },
+  {
+   "max": 70.0,
+   "min": -150.0,
+   "name": "t2m",
+   "unit": "degC"
+  },
+  {
+   "max": 100.0,
+   "min": -100.0,
+   "name": "u10",
+   "unit": "m/s"
+  },
+  {
+   "max": 100.0,
+   "min": -100.0,
+   "name": "v10",
+   "unit": "m/s"
+  },
+  {
+   "max": 1100.0,
+   "min": 400.0,
+   "name": "sp",
+   "unit": "hPa"
+  },
+  {
+   "max": 10.0,
+   "min": 0.0,
+   "name": "log_prate",
+   "unit": "log1p(mm/day)"
+  },
+  {
+   "max": 15.0,
+   "min": 0.0,
+   "name": "log_swe",
+   "unit": "log1p(mm w.e.)"
+  },
+  {
+   "max": 1.0,
+   "min": 0.0,
+   "name": "soilw",
+   "unit": "fraction"
+  },
+  {
+   "max": 80.0,
+   "min": -150.0,
+   "name": "tsoil",
+   "unit": "degC"
+  },
+  {
+   "max": 3000.0,
+   "min": -2000.0,
+   "name": "lhtfl",
+   "unit": "W/m2"
+  },
+  {
+   "max": 3000.0,
+   "min": -2000.0,
+   "name": "shtfl",
+   "unit": "W/m2"
+  },
+  {
+   "max": 90.0,
+   "min": -150.0,
+   "name": "skt",
+   "unit": "degC"
+  }
+ ],
+ "dataset": "NCEP/NCAR Reanalysis 1 surface and land channels (family 7.2's g100), DAILY means, 1 degree \u2014 family 7.2d",
+ "date_range": [
+  "2026-01-01",
+  "2026-12-31"
+ ],
+ "footprint": {
+  "log2_dt": -2.321928094887362,
+  "log2_fp": 2.0
+ },
+ "grid": {
+  "H": 181,
+  "W": 360,
+  "align": "point \u2014 family 7's g100 grid",
+  "crs": "EPSG:4326",
+  "dx": 1.0,
+  "dy": 1.0,
+  "row_order": "south_first",
+  "x0": -180.0,
+  "y0": -90.0
+ },
+ "pentad_check": true,
+ "pentad_check_through": "2024-12-31",
+ "pentad_reference": "https://huggingface.co/datasets/chfrank/earth-tensors/resolve/main/tensors/family7_global025_pentad_l2/family7_global025_pentad_l2_X_g100.npy",
+ "per_year_resume": true,
+ "plan": "ml/plans/E087_family7_daily.md",
+ "qc_policy": "The reanalysis has no per-value flag. The day is the NaN-aware mean of its 6-hourly samples on the T62 gaussian grid; soilw and tsoil are NaN over sea (land.sfc.gauss applied before the bilinear). uflx/vflx are sign-flipped to the stress ON the surface. Out-of-bounds values become NaN and are counted, never clipped.",
+ "record": [
+  "1982-01-01",
+  "2026-03-17"
+ ],
+ "source_segments": [
+  {
+   "falsifier": "pentad",
+   "from": "1982-01-01",
+   "source": "NCEP/NCAR Reanalysis 1 (PSL surface_gauss yearly files)",
+   "to": "2024-12-31"
+  },
+  {
+   "falsifier": "source-readback",
+   "from": "2025-01-01",
+   "note": "PSL's 2026 files end 2026-03-17 18Z (last modified 2026-03-19)",
+   "source": "NCEP/NCAR Reanalysis 1 (PSL surface_gauss yearly files)",
+   "to": "2026-03-17"
+  }
+ ],
+ "sources": [
+  "https://huggingface.co/datasets/chfrank/earth-tensors/resolve/main/mirrors/psl/Datasets/ncep.reanalysis/surface_gauss/<var>.gauss.<YYYY>.nc + land.sfc.gauss.nc (the Hub's round-trip-verified mirror of NOAA PSL)",
+  "https://downloads.psl.noaa.gov/Datasets/ncep.reanalysis/surface_gauss/<var>.gauss.<YYYY>.nc (fallback)"
+ ],
+ "store": "ncep100d",
+ "title": "NCEP/NCAR Reanalysis 1 surface and land channels (family 7.2's g100), DAILY means, 1 degree \u2014 family 7.2d",
+ "verified": "2026-10-06: 13 variables x 43 years + the land mask (560 files, 21.4 GB) on the Hub mirror; 2015's opened (94 x 192, 1,460 six-hourly steps)",
+ "years": [
+  2026
+ ]
+}
