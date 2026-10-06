@@ -1,5 +1,6 @@
 {
- "pending": [
+ "pending": [],
+ "dispatched": [
   {
    "store": "oisst025d",
    "stage": "index,fetch",
@@ -8,7 +9,8 @@
    "runner": "ubuntu-latest",
    "extra_args": "--push-parts",
    "adapter_env": "",
-   "retries": 2
+   "retries": 2,
+   "at": "2026-10-06T09:46:29.515Z"
   },
   {
    "store": "oisst025d",
@@ -18,7 +20,8 @@
    "runner": "ubuntu-latest",
    "extra_args": "--push-parts",
    "adapter_env": "",
-   "retries": 2
+   "retries": 2,
+   "at": "2026-10-06T09:46:33.321Z"
   },
   {
    "store": "oisst025d",
@@ -28,7 +31,8 @@
    "runner": "ubuntu-latest",
    "extra_args": "--push-parts",
    "adapter_env": "",
-   "retries": 2
+   "retries": 2,
+   "at": "2026-10-06T09:46:36.961Z"
   },
   {
    "store": "oisst025d",
@@ -38,7 +42,8 @@
    "runner": "ubuntu-latest",
    "extra_args": "--push-parts",
    "adapter_env": "",
-   "retries": 2
+   "retries": 2,
+   "at": "2026-10-06T09:46:40.627Z"
   },
   {
    "store": "oisst025d",
@@ -48,7 +53,8 @@
    "runner": "ubuntu-latest",
    "extra_args": "--push-parts",
    "adapter_env": "",
-   "retries": 2
+   "retries": 2,
+   "at": "2026-10-06T09:46:44.280Z"
   },
   {
    "store": "oisst025d",
@@ -58,7 +64,8 @@
    "runner": "ubuntu-latest",
    "extra_args": "--push-parts",
    "adapter_env": "",
-   "retries": 2
+   "retries": 2,
+   "at": "2026-10-06T09:46:47.891Z"
   },
   {
    "store": "oisst025d",
@@ -68,7 +75,8 @@
    "runner": "ubuntu-latest",
    "extra_args": "--push-parts",
    "adapter_env": "",
-   "retries": 2
+   "retries": 2,
+   "at": "2026-10-06T09:46:51.503Z"
   },
   {
    "store": "oisst025d",
@@ -78,10 +86,10 @@
    "runner": "ubuntu-latest",
    "extra_args": "--push-parts",
    "adapter_env": "",
-   "retries": 2
+   "retries": 2,
+   "at": "2026-10-06T09:46:55.207Z"
   }
  ],
- "dispatched": [],
  "done": [
   {
    "store": "sst_acspo02",
