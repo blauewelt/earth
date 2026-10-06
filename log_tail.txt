@@ -1,0 +1,80 @@
+  oisst025d 1996: 148 file(s), 365 row(s) -> /opt/runner/_work/earth/earth/ml/cache/family7_2d/oisst025d/parts/1996
+  oisst025d 1997: 148 file(s), 365 row(s) -> /opt/runner/_work/earth/earth/ml/cache/family7_2d/oisst025d/parts/1997
+  oisst025d 1998: 148 file(s), 365 row(s) -> /opt/runner/_work/earth/earth/ml/cache/family7_2d/oisst025d/parts/1998
+  oisst025d 1999: 148 file(s), 365 row(s) -> /opt/runner/_work/earth/earth/ml/cache/family7_2d/oisst025d/parts/1999
+  oisst025d 2000: 148 file(s), 365 row(s) -> /opt/runner/_work/earth/earth/ml/cache/family7_2d/oisst025d/parts/2000
+  oisst025d 2001: 148 file(s), 365 row(s) -> /opt/runner/_work/earth/earth/ml/cache/family7_2d/oisst025d/parts/2001
+  oisst025d 2002: 148 file(s), 365 row(s) -> /opt/runner/_work/earth/earth/ml/cache/family7_2d/oisst025d/parts/2002
+  oisst025d 2003: 148 file(s), 365 row(s) -> /opt/runner/_work/earth/earth/ml/cache/family7_2d/oisst025d/parts/2003
+  oisst025d 2004: 150 file(s), 370 row(s) -> /opt/runner/_work/earth/earth/ml/cache/family7_2d/oisst025d/parts/2004
+  oisst025d 2005: 148 file(s), 365 row(s) -> /opt/runner/_work/earth/earth/ml/cache/family7_2d/oisst025d/parts/2005
+  oisst025d 2006: 148 file(s), 365 row(s) -> /opt/runner/_work/earth/earth/ml/cache/family7_2d/oisst025d/parts/2006
+  oisst025d 2007: 148 file(s), 365 row(s) -> /opt/runner/_work/earth/earth/ml/cache/family7_2d/oisst025d/parts/2007
+  oisst025d 2008: 148 file(s), 365 row(s) -> /opt/runner/_work/earth/earth/ml/cache/family7_2d/oisst025d/parts/2008
+  oisst025d 2009: 148 file(s), 365 row(s) -> /opt/runner/_work/earth/earth/ml/cache/family7_2d/oisst025d/parts/2009
+  oisst025d 2010: 148 file(s), 365 row(s) -> /opt/runner/_work/earth/earth/ml/cache/family7_2d/oisst025d/parts/2010
+  oisst025d 2011: 148 file(s), 365 row(s) -> /opt/runner/_work/earth/earth/ml/cache/family7_2d/oisst025d/parts/2011
+  oisst025d 2012: 148 file(s), 365 row(s) -> /opt/runner/_work/earth/earth/ml/cache/family7_2d/oisst025d/parts/2012
+  oisst025d 2013: 148 file(s), 365 row(s) -> /opt/runner/_work/earth/earth/ml/cache/family7_2d/oisst025d/parts/2013
+  oisst025d 2014: 148 file(s), 365 row(s) -> /opt/runner/_work/earth/earth/ml/cache/family7_2d/oisst025d/parts/2014
+  oisst025d 2015: 148 file(s), 365 row(s) -> /opt/runner/_work/earth/earth/ml/cache/family7_2d/oisst025d/parts/2015
+  oisst025d 2016: 148 file(s), 365 row(s) -> /opt/runner/_work/earth/earth/ml/cache/family7_2d/oisst025d/parts/2016
+  oisst025d 2017: 148 file(s), 365 row(s) -> /opt/runner/_work/earth/earth/ml/cache/family7_2d/oisst025d/parts/2017
+  oisst025d 2018: 148 file(s), 365 row(s) -> /opt/runner/_work/earth/earth/ml/cache/family7_2d/oisst025d/parts/2018
+  oisst025d 2019: 148 file(s), 365 row(s) -> /opt/runner/_work/earth/earth/ml/cache/family7_2d/oisst025d/parts/2019
+  oisst025d 2020: 148 file(s), 365 row(s) -> /opt/runner/_work/earth/earth/ml/cache/family7_2d/oisst025d/parts/2020
+  oisst025d 2021: 148 file(s), 365 row(s) -> /opt/runner/_work/earth/earth/ml/cache/family7_2d/oisst025d/parts/2021
+  oisst025d 2022: 148 file(s), 365 row(s) -> /opt/runner/_work/earth/earth/ml/cache/family7_2d/oisst025d/parts/2022
+  oisst025d 2023: 148 file(s), 365 row(s) -> /opt/runner/_work/earth/earth/ml/cache/family7_2d/oisst025d/parts/2023
+  oisst025d 2024: 150 file(s), 370 row(s) -> /opt/runner/_work/earth/earth/ml/cache/family7_2d/oisst025d/parts/2024
+  oisst025d 2025: 148 file(s), 365 row(s) -> /opt/runner/_work/earth/earth/ml/cache/family7_2d/oisst025d/parts/2025
+  oisst025d 2026: 112 file(s), 273 row(s) -> /opt/runner/_work/earth/earth/ml/cache/family7_2d/oisst025d/parts/2026
+  pull: 45 year(s) present in 45 lane(s) (0 already local), 16,348 row(s), 0 missing
+=== stage fetch done in 939.1s ===
+
+=== stage assemble (oisst025d) ===
+  [oisst025d store (tier G)] start (1 items)  0/1  0.0s
+REFUSING to assemble oisst025d:
+  1982: the parts were written for a different grid declaration than this adapter's — a lane and a box running different code (group(s) ['oisst025d'] were written for a different grid)
+  1983: the parts were written for a different grid declaration than this adapter's — a lane and a box running different code (group(s) ['oisst025d'] were written for a different grid)
+  1984: the parts were written for a different grid declaration than this adapter's — a lane and a box running different code (group(s) ['oisst025d'] were written for a different grid)
+  1985: the parts were written for a different grid declaration than this adapter's — a lane and a box running different code (group(s) ['oisst025d'] were written for a different grid)
+  1986: the parts were written for a different grid declaration than this adapter's — a lane and a box running different code (group(s) ['oisst025d'] were written for a different grid)
+  1987: the parts were written for a different grid declaration than this adapter's — a lane and a box running different code (group(s) ['oisst025d'] were written for a different grid)
+  1988: the parts were written for a different grid declaration than this adapter's — a lane and a box running different code (group(s) ['oisst025d'] were written for a different grid)
+  1989: the parts were written for a different grid declaration than this adapter's — a lane and a box running different code (group(s) ['oisst025d'] were written for a different grid)
+  1990: the parts were written for a different grid declaration than this adapter's — a lane and a box running different code (group(s) ['oisst025d'] were written for a different grid)
+  1991: the parts were written for a different grid declaration than this adapter's — a lane and a box running different code (group(s) ['oisst025d'] were written for a different grid)
+  1992: the parts were written for a different grid declaration than this adapter's — a lane and a box running different code (group(s) ['oisst025d'] were written for a different grid)
+  1993: the parts were written for a different grid declaration than this adapter's — a lane and a box running different code (group(s) ['oisst025d'] were written for a different grid)
+  1994: the parts were written for a different grid declaration than this adapter's — a lane and a box running different code (group(s) ['oisst025d'] were written for a different grid)
+  1995: the parts were written for a different grid declaration than this adapter's — a lane and a box running different code (group(s) ['oisst025d'] were written for a different grid)
+  1996: the parts were written for a different grid declaration than this adapter's — a lane and a box running different code (group(s) ['oisst025d'] were written for a different grid)
+  1997: the parts were written for a different grid declaration than this adapter's — a lane and a box running different code (group(s) ['oisst025d'] were written for a different grid)
+  1998: the parts were written for a different grid declaration than this adapter's — a lane and a box running different code (group(s) ['oisst025d'] were written for a different grid)
+  1999: the parts were written for a different grid declaration than this adapter's — a lane and a box running different code (group(s) ['oisst025d'] were written for a different grid)
+  2000: the parts were written for a different grid declaration than this adapter's — a lane and a box running different code (group(s) ['oisst025d'] were written for a different grid)
+  2001: the parts were written for a different grid declaration than this adapter's — a lane and a box running different code (group(s) ['oisst025d'] were written for a different grid)
+  2002: the parts were written for a different grid declaration than this adapter's — a lane and a box running different code (group(s) ['oisst025d'] were written for a different grid)
+  2003: the parts were written for a different grid declaration than this adapter's — a lane and a box running different code (group(s) ['oisst025d'] were written for a different grid)
+  2004: the parts were written for a different grid declaration than this adapter's — a lane and a box running different code (group(s) ['oisst025d'] were written for a different grid)
+  2005: the parts were written for a different grid declaration than this adapter's — a lane and a box running different code (group(s) ['oisst025d'] were written for a different grid)
+  2006: the parts were written for a different grid declaration than this adapter's — a lane and a box running different code (group(s) ['oisst025d'] were written for a different grid)
+  2007: the parts were written for a different grid declaration than this adapter's — a lane and a box running different code (group(s) ['oisst025d'] were written for a different grid)
+  2008: the parts were written for a different grid declaration than this adapter's — a lane and a box running different code (group(s) ['oisst025d'] were written for a different grid)
+  2009: the parts were written for a different grid declaration than this adapter's — a lane and a box running different code (group(s) ['oisst025d'] were written for a different grid)
+  2010: the parts were written for a different grid declaration than this adapter's — a lane and a box running different code (group(s) ['oisst025d'] were written for a different grid)
+  2011: the parts were written for a different grid declaration than this adapter's — a lane and a box running different code (group(s) ['oisst025d'] were written for a different grid)
+  2012: the parts were written for a different grid declaration than this adapter's — a lane and a box running different code (group(s) ['oisst025d'] were written for a different grid)
+  2013: the parts were written for a different grid declaration than this adapter's — a lane and a box running different code (group(s) ['oisst025d'] were written for a different grid)
+  2014: the parts were written for a different grid declaration than this adapter's — a lane and a box running different code (group(s) ['oisst025d'] were written for a different grid)
+  2015: the parts were written for a different grid declaration than this adapter's — a lane and a box running different code (group(s) ['oisst025d'] were written for a different grid)
+  2016: the parts were written for a different grid declaration than this adapter's — a lane and a box running different code (group(s) ['oisst025d'] were written for a different grid)
+  2017: the parts were written for a different grid declaration than this adapter's — a lane and a box running different code (group(s) ['oisst025d'] were written for a different grid)
+  2018: the parts were written for a different grid declaration than this adapter's — a lane and a box running different code (group(s) ['oisst025d'] were written for a different grid)
+  2019: the parts were written for a different grid declaration than this adapter's — a lane and a box running different code (group(s) ['oisst025d'] were written for a different grid)
+  2020: the parts were written for a different grid declaration than this adapter's — a lane and a box running different code (group(s) ['oisst025d'] were written for a different grid)
+  2021: the parts were written for a different grid declaration than this adapter's — a lane and a box running different code (group(s) ['oisst025d'] were written for a different grid)
+  2022: the parts were written for a different grid declaration than this adapter's — a lane and a box running different code (group(s) ['oisst025d'] were written for a different grid)
+  2023: the parts were written for a different grid declaration than this adapter's — a lane and a box running different code (group(s) ['oisst025d'] were written for a different grid)
+Re-run the fetch stage with the same --work value, or pass --allow-missing-years for a deliberately short store.
