@@ -55,39 +55,6 @@
    "adapter_env": "ERA5_Q_BOUND=D6",
    "retries": 2,
    "at": "2026-10-06T05:47:02.876Z"
-  },
-  {
-   "store": "era5_q",
-   "stage": "index,fetch",
-   "start": "2007-01-01",
-   "end": "2011-12-31",
-   "runner": "ubuntu-latest",
-   "extra_args": "--push-parts",
-   "adapter_env": "ERA5_Q_BOUND=D6",
-   "retries": 2,
-   "at": "2026-10-06T05:47:06.457Z"
-  },
-  {
-   "store": "era5_q",
-   "stage": "index,fetch",
-   "start": "2012-01-01",
-   "end": "2016-12-31",
-   "runner": "ubuntu-latest",
-   "extra_args": "--push-parts",
-   "adapter_env": "ERA5_Q_BOUND=D6",
-   "retries": 2,
-   "at": "2026-10-06T05:47:09.997Z"
-  },
-  {
-   "store": "era5_q",
-   "stage": "index,fetch",
-   "start": "2017-01-01",
-   "end": "2021-12-31",
-   "runner": "ubuntu-latest",
-   "extra_args": "--push-parts",
-   "adapter_env": "ERA5_Q_BOUND=D6",
-   "retries": 2,
-   "at": "2026-10-06T05:47:13.491Z"
   }
  ],
  "done": [
@@ -3803,6 +3770,45 @@
    "at": "2026-10-06T05:46:59.245Z",
    "run_number": 971,
    "finished": "2026-10-06T06:11:16Z"
+  },
+  {
+   "store": "era5_q",
+   "stage": "index,fetch",
+   "start": "2007-01-01",
+   "end": "2011-12-31",
+   "runner": "ubuntu-latest",
+   "extra_args": "--push-parts",
+   "adapter_env": "ERA5_Q_BOUND=D6",
+   "retries": 2,
+   "at": "2026-10-06T05:47:06.457Z",
+   "run_number": 973,
+   "finished": "2026-10-06T06:12:20Z"
+  },
+  {
+   "store": "era5_q",
+   "stage": "index,fetch",
+   "start": "2012-01-01",
+   "end": "2016-12-31",
+   "runner": "ubuntu-latest",
+   "extra_args": "--push-parts",
+   "adapter_env": "ERA5_Q_BOUND=D6",
+   "retries": 2,
+   "at": "2026-10-06T05:47:09.997Z",
+   "run_number": 974,
+   "finished": "2026-10-06T06:13:00Z"
+  },
+  {
+   "store": "era5_q",
+   "stage": "index,fetch",
+   "start": "2017-01-01",
+   "end": "2021-12-31",
+   "runner": "ubuntu-latest",
+   "extra_args": "--push-parts",
+   "adapter_env": "ERA5_Q_BOUND=D6",
+   "retries": 2,
+   "at": "2026-10-06T05:47:13.491Z",
+   "run_number": 975,
+   "finished": "2026-10-06T06:11:56Z"
   }
  ],
  "failed": [
