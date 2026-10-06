@@ -1677,3 +1677,99 @@ instance is absent from the account's instance list; its runner
 was idle**: the last job finished at 00:26Z and the box waited 1 h 44 min for
 the follow-up session. The fetch lanes cost $0 (hosted runners). **Family 1.2
 cost ≈ $1.76 in all.**
+
+### E-085 · `era5_q` rebuilt under decision D6 (ERA5's negative humidities kept); every registry's record span now says where the data ends (decision D7) (2026-10-06 05:46–07:45Z)
+
+**Why.** Two owner decisions (Chris, 2026-10-06). **D6:** humidity's lower
+bound moves from D5's −0.01 g/kg to a −1.0 g/kg sanity bound, because −0.01
+stored 1,883 genuine ERA5 values as missing. **D7:** a registry's
+`record_span` is the first and last instant that actually holds data, not the
+window the build was asked for.
+
+**The fetch — nine hosted lanes, each five whole years of `era5_q` (specific
+humidity on the 13 levels, six-hourly), parked on the Hub under
+`partials/family1_2/era5_q/<year>/` with the D6 adapter (`adapter_env
+ERA5_Q_BOUND=D6`, so the queue keeper could not mistake them for the D5 lanes):**
+
+| lane | run | wall clock |
+|---|---|---|
+| 1982–1986 | [#968](https://github.com/blauewelt/earth/actions/runs/37420239299) (re-fetch humidity under D6 and park it) | 05:46:52 → 06:17:37Z |
+| 1987–1991 | [#969](https://github.com/blauewelt/earth/actions/runs/37420244208) (the same) | 05:46:56 → 06:18:11Z |
+| 1992–1996 | [#970](https://github.com/blauewelt/earth/actions/runs/37420249127) (the same) | 05:46:59 → 06:21:19Z |
+| 1997–2001 | [#971](https://github.com/blauewelt/earth/actions/runs/37420254266) (the same) | 05:47:03 → 06:11:15Z |
+| 2002–2006 | [#972](https://github.com/blauewelt/earth/actions/runs/37420259386) (the same) | 05:47:07 → 06:17:30Z |
+| 2007–2011 | [#973](https://github.com/blauewelt/earth/actions/runs/37420264117) (the same) | 05:47:10 → 06:12:19Z |
+| 2012–2016 | [#974](https://github.com/blauewelt/earth/actions/runs/37420268917) (the same) | 05:47:14 → 06:12:59Z |
+| 2017–2021 | [#975](https://github.com/blauewelt/earth/actions/runs/37420274005) (the same) | 05:47:17 → 06:11:55Z |
+| 2022–2026 | [#967](https://github.com/blauewelt/earth/actions/runs/37420234552) (the same, across the 2022 archive seam) | 05:46:49 → 06:27:39Z |
+
+All nine green, first time. Verified on the Hub before any box was rented:
+all 45 years have `done.json`, every year's spec carries `min −1.0` and the D6
+`bounds_rule`, 65,008 frames in all, **zero out-of-bounds values**, every
+`done.json` written after 05:40Z, and every file in each year folder is one its
+`done.json` lists at the listed size (6,592 listed files + 45 `done.json`;
+94.757 GB parked). The D5 parts no longer exist: a re-push writes the same
+file names, so they were overwritten in place and there is nothing to delete.
+
+**Negatives kept (from the parts and from the published store.json, which
+agree):** **23,257** values over the whole record — `q_100` 1,977, `q_150`
+6,266, `q_200` 2,819, `q_250` 1,332, `q_300` 3,536, `q_400` 6,556, `q_500`
+771 — the **lowest −0.13594 g/kg** (in 2021). Per year they rise from
+51–142 a year before 2001 to 887–1,949 a full year from 2017 on (2022 the
+most; the half year of 2026 holds 408);
+store.json now carries them per year as `counts_by_year` (count, count by
+level, lowest value), a new optional adapter hook (`year_summary`) that only
+humidity uses.
+
+**The box — one verified Vast host, instance 54443701 (offer 50422428, Utah,
+RTX 3070, 16 cores, 109 GB RAM, 1,941 Mbps up / 2,278 down, 250 GB disk,
+$0.140/h):**
+
+| run | what it did | wall clock | stages |
+|---|---|---|---|
+| [#976](https://github.com/blauewelt/earth/actions/runs/37424252485) (assemble humidity from its D6 parts and publish it, replacing the D5 store) | pull 94.8 GB of parts from the Hub, assemble, publish | 06:31:57 → 07:02:54Z | pull 876 s · assemble 108 s · publish 820 s |
+| [#977](https://github.com/blauewelt/earth/actions/runs/37427758956) (full-decode check) | **cancelled by me after 90 s** to add the per-year record first | 07:07:49 → 07:09:21Z | — |
+| [#978](https://github.com/blauewelt/earth/actions/runs/37428048605) (re-assemble with the per-year record) | did nothing: both stages already marked done (`--force` missing) | 07:10:39 → 07:11:26Z | — |
+| [#979](https://github.com/blauewelt/earth/actions/runs/37428323667) (re-assemble with the per-year record, forced, and publish) | assemble, publish | 07:13:25 → 07:28:16Z | assemble 99 s · publish 768 s |
+| [#980](https://github.com/blauewelt/earth/actions/runs/37429984907) (decode every tile and compare the Hub manifest) | full check | 07:29:35 → 07:39:54Z | 597 s: 6,504 files verified, 1,170,144 tiles decompressed, "Hub chfrank/earth-tensors agrees" |
+
+Each publish downloaded all 6,505 files back and matched their sha256. The
+Hub now holds exactly 6,506 files under `tensors/family1_2/era5_q/` — the
+6,504 store.json lists, `store.json` and `manifest.json`; no stale file, and
+every LFS sha256 equals store.json's. **Published: 94,757,424,087 bytes**
+(D5: 94,734,893,283). 898 of the 6,504 files changed bytes — the bins that
+held a value in [−1.0, −0.01) g/kg and their indexes; every other bin is
+byte-identical to the D5 store.
+
+**Destroyed within a minute of the last job:** #980 finished 07:39:54Z,
+`destroy` answered `{"success": true}` at 07:40:08Z, `list` no longer shows
+the instance, and runner `gpu-box-50422428` is deregistered. Box life
+06:28:58 → 07:40:08Z = **1 h 11 min, ≈ $0.17**; idle at the end **14
+seconds**; idle between jobs ≈ 9.5 min in all (the longest 5 min, while this
+session read the first publish's store.json before deciding to re-assemble).
+
+**Read back from the Hub by this session.** `ml/family1/era5_hub_check.py`
+(whole frames through `sharded.ShardedGroup` on the Hub URL against xarray +
+zarr reads of the source; report `ml/family1/probes/era5_q_hubcheck.json`):
+both instants within half a float16 step at every one of 847,080 values,
+max abs diff 0.0078 g/kg at 2015-01-15 12 UTC and at 2023-07-15 06 UTC,
+**no NaN stored and none masked**. The cell D5 had masked — 2023-07-15 06 UTC,
+150 hPa, 46° N 67° W (row 136, column 113) — now reads **−0.0133896 g/kg**
+against the source's −0.0133881 (difference 1.5 × 10⁻⁶, half a float16 step
+there is 3.8 × 10⁻⁶). **A full year from the Hub:** every shard and index of
+2023 (73 bins, 2.13 GB, each file's sha256 checked against store.json)
+decoded frame by frame — 1,460 frames, 1,236,736,800 values, **0 NaN**, 1,211
+negative (store.json's count for 2023: 1,211), lowest −0.0824 g/kg
+(store.json: −0.08239).
+
+**D7 — record spans.** `ml/registry_spans.py` computes each store's span from
+its own files (tier P: first and last row of the time column; tier G: first
+and last present frame); `requested_window` keeps the old window.
+Cross-checked against independent full reads — 7 tier-P stores (whole time
+column min and max) and 12 tier-G stores (every group's shard-index frame
+bits) — all equal. Published by
+[`family1-registry.yml` #3](https://github.com/blauewelt/earth/actions/runs/37421928477)
+(republish families 1.gf, 1.0.tf, 0.9.tf and family 10.2 with `guard: spans`):
+the guard allowed span fields only, in 12, 27, 0 and 6 groups, and every
+registry was downloaded back and its sha256 matched. Family 1.2's registry
+follows in the next entry with the rebuilt `era5_q`.

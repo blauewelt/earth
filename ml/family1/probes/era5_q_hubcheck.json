@@ -11,8 +11,8 @@
   "frames_missing_by_reason": {
    "after_record": 752
   },
-  "builder_git_sha": "be000eb4653649383097b328a66fb31f3bd7aa5a",
-  "built_at": "2026-10-05T21:40:24+00:00"
+  "builder_git_sha": "3172f6bca9e334f6c368e2b8490a2eb69e965e73",
+  "built_at": "2026-10-06T07:13:30+00:00"
  },
  "group": {
   "bins": 3251,
@@ -21,7 +21,7 @@
   "frames_present": 65008,
   "frames_missing": 12,
   "tiles_stored": 1170144,
-  "bytes": 94734893283
+  "bytes": 94734894545
  },
  "files_in_sha256_block": 6504,
  "tile_grid": {
@@ -58,7 +58,7 @@
    "source_of_store": "before seam",
    "reference": "1959-2022-1h-360x181_equiangular_with_poles_conservative.zarr (reindexed)",
    "hub_range_reads": 36,
-   "hub_read_seconds": 18.34,
+   "hub_read_seconds": 18.42,
    "max_abs_diff": {
     "q_50": 9.536688594380394e-07,
     "q_100": 1.9009130483027548e-06,
@@ -88,7 +88,7 @@
    "source_of_store": "after seam",
    "reference": "full_37-1h-0p25deg-chunk-1.zarr-v3 (dense matrix regrid, this script)",
    "hub_range_reads": 36,
-   "hub_read_seconds": 15.61,
+   "hub_read_seconds": 16.26,
    "max_abs_diff": {
     "q_50": 9.53649519960971e-07,
     "q_100": 1.9070045057349716e-06,
@@ -107,14 +107,7 @@
    "max_abs_diff_all": 0.0078123620606440625,
    "values": 847080,
    "within_half_float16_step": true,
-   "masked_out_of_bounds": [
-    {
-     "lat": 46.0,
-     "lon": -67.0,
-     "channel": "q_150",
-     "source_value": -0.013388122160551488
-    }
-   ],
+   "masked_out_of_bounds": [],
    "source_out_of_bounds_not_masked": 0,
    "n_outside": 0
   }
@@ -130,5 +123,5 @@
   "frame 2023-07-15 06:00:00 every out-of-bounds source value masked": true
  },
  "ok": true,
- "seconds": 39.0
+ "seconds": 50.8
 }

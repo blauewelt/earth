@@ -451,7 +451,7 @@ def entry(store, ad, repo, use_hub=True, work=None, probe_dir=PROBE_DIR):
     out["store_schema_version"] = meta.get("schema_version")
     out["counts"] = meta.get("counts")
     for k in ("groups", "frames_missing_by_reason", "per_year", "assets",
-              "platforms", "degraded", "tier_t_catalogue"):
+              "platforms", "degraded", "tier_t_catalogue", "counts_by_year"):
         if meta.get(k) is not None:
             out[f"store_{k}"] = meta[k]
     out["files"] = [{"name": n, "sha256": h}

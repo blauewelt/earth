@@ -73,7 +73,24 @@ Links:
 - **D5 — specific humidity's lower bound is −0.01 g/kg, not 0.** ERA5's own
   small negative humidities (January 2015: 11 values, the lowest −0.0042
   g/kg, at 100–200 hPa in the tropics) are kept as ERA5 gives them;
-  anything below −0.01 g/kg is corrupt (NaN, counted).
+  anything below −0.01 g/kg is corrupt (NaN, counted). **Superseded by D6.**
+- **D6 — humidity's lower bound is −1.0 g/kg, a sanity bound (Chris,
+  2026-10-06; supersedes D5).** D5's −0.01 stored 1,883 genuine ERA5 values
+  as missing (for example −0.0134 g/kg at 150 hPa, 46°N 67°W,
+  2023-07-15 06 UTC). ERA5's small negative humidities are its own numbers
+  and are now kept; only values below −1.0 g/kg would be NaN. Every `era5_q` year was re-fetched and the store re-assembled; the
+  store records per year and in total how many negatives it kept and the
+  lowest value (`counts.negative_values_kept`, `max_negated_min_q_all`), and
+  the spec marker (`bounds_rule`) makes the assembler refuse a part written
+  under the old bound.
+- **D7 — a registry's record span is where the DATA is (Chris, 2026-10-06:
+  "Registry end date: should show where the data ends").** Every registry
+  entry's `record_span` (and `date_range`) is the first and last date that
+  actually holds data, computed by `ml/registry_spans.py` from the store's own
+  files — tier P: the first and last row of its time column; tier G: the
+  first and last present frame (a frame counting to its last second). The
+  window the build was asked for is kept beside it as `requested_window`.
+  ERA5's span is 1982-01-01 → 2026-06-30, not → 2026-12-31.
 
 The table below is the full set of choices, with what each rests on;
 the measurements in §2 and §4 are its evidence.
@@ -92,7 +109,7 @@ the measurements in §2 and §4 are its evidence.
 | layout | **one store per variable**, C = 13, sharded tier G, `tile` 64 | a reader that wants one variable downloads one; the contract makes nothing worse. 64-pixel tiles are 64° on a side — the same footprint in degrees as a 256-pixel tile of the 0.25° phase B — so a cone (the region the model reads around a forecast point) of a few thousand km reads 1–4 tiles; measured 4.6 % SMALLER than 256-pixel tiles too (§4) |
 | dtype | float16 in physical units: K, g/kg, m/s | the decision; measured error is half a float16 step everywhere (§4) |
 | humidity transform | **store q in g/kg** (archive kg/kg × 1000) | float16's smallest normal number is 6.1 × 10⁻⁵; ERA5's q runs from ~2 × 10⁻⁶ kg/kg (stratosphere) to 0.024 kg/kg. In kg/kg every stratospheric value is a subnormal with ≥ 0.5 % error (test: up to 1.5 %); in g/kg every value from 10⁻⁷ kg/kg up is normal and the relative error is ≤ 2⁻¹¹ = 0.049 % (measured: 4.88 × 10⁻⁴). A unit change, not a nonlinear transform, so a reader needs one division to get kg/kg |
-| q's lower bound | −0.01 g/kg, not 0 | ERA5 itself carries a few slightly negative humidities (January 2015: 11 values in 10.1 M, the lowest −0.0042 g/kg, all at 100–200 hPa in the tropics). They are ERA5's numbers, so they are kept; below −0.01 g/kg is treated as corrupt (NaN, counted). Reversible: one constant |
+| q's lower bound | −1.0 g/kg (D6; was −0.01 under D5) | ERA5 itself carries a few slightly negative humidities (January 2015: 11 values in 10.1 M, the lowest −0.0042 g/kg, all at 100–200 hPa in the tropics; over the whole record D5's −0.01 cut 1,883 of them). They are ERA5's numbers, so they are kept, counted and their minimum recorded; −1.0 g/kg is only a sanity bound against corrupt bytes |
 | other bounds | t 150–350 K; u, v ±200 m/s | physical envelopes; outside → NaN and counted, never clipped (contract rule 3) |
 | below-ground levels | kept as ERA5 gives them | ERA5 extrapolates pressure levels under the terrain (1000 hPa over Tibet); the store keeps them and says so; a consumer masks with surface pressure |
 | footprint | `log2_fp` 2.0 (a 111 km box); `log2_dt` −4.32 (six hours) | the cell IS a 1° box mean; an instantaneous analysis has no averaging time of its own, so the time field is the frame spacing (the store.json definition, "log2(frame_days / 5)"); the registry therefore reads "6-hourly" |
@@ -377,27 +394,28 @@ Step 1 is running (§8); steps 2–4 have not been dispatched.
 
 ## 8 · Status
 
-**BUILT — 2026-10-06 02:20Z.** All four stores are published, fully checked
-and read back; the registry lists them; the box is destroyed; nothing is in
-flight.
+**BUILT — 2026-10-06 02:20Z; `era5_q` REBUILT under D6 at 07:40Z.** All four
+stores are published, fully checked and read back; the registry lists them
+with record spans that end where the data ends (D7); the box is destroyed;
+nothing is in flight.
 
 | store | published bytes | frames | Hub read-back vs source (max, both instants) |
 |---|---|---|---|
 | `era5_t` | 53,830,272,913 | 65,008 | 0.125 K |
-| `era5_q` | 94,734,893,283 | 65,008 | 0.0078 g/kg (1 masked out-of-bounds value) |
+| `era5_q` | 94,757,424,087 | 65,008 | 0.0078 g/kg, no NaN (D6: 23,257 negative values kept, lowest −0.136 g/kg) |
 | `era5_u` | 98,966,059,454 | 65,008 | 0.031 m/s |
 | `era5_v` | 101,233,217,977 | 65,008 | 0.031 m/s |
 
+- **Record span (D7):** every store 1982-01-01 00 UTC → 2026-06-30 18 UTC
+  (`record_span` 1982-01-01 → 2026-06-30; `requested_window` 1982-01-01 →
+  2026-12-31).
 - **Registry:** [`tensors/family1_2/family12.json`](https://huggingface.co/datasets/chfrank/earth-tensors/blob/main/tensors/family1_2/family12.json)
   (four stores built, inherits family 1.gf, exception E4); family 10.2's
   `siblings` line names it.
-- **Cost:** fetch $0 (hosted lanes); one verified Vast box for 5.84 h ≈ $1.76,
-  of which ≈ $0.52 was idle waiting for the follow-up session.
-- **Open for the planning session:** 1,883 humidity values (3.4 × 10⁻⁸ of the
-  store) fall below D5's −0.01 g/kg bound and are NaN; lowering the bound
-  means re-fetching and re-assembling `era5_q` (~1 h of hosted lanes, ~1 h of
-  a box). The Data tab's family 1.2 registry line in `src/f1data.js` is still
-  commented out (site work). Phase B (0.25°) is not started.
+- **Cost:** fetch $0 (hosted lanes, twice); first build one verified Vast box
+  5.84 h ≈ $1.76 (≈ $0.52 of it idle); the D6 rebuild one verified box 1 h 11
+  min ≈ $0.17 (14 s idle at the end). **≈ $1.93 in all.**
+- **Open:** phase B (0.25°) is not started.
 - Run-by-run timings, the read-back numbers and the box's own numbers are in
   the E-085 entries at the end of
   [the family-1 build log](https://blauewelt.github.io/earth/docs.html?f=ml/family1/BUILD_LOG.md).
