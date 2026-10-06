@@ -212,3 +212,11 @@ native bytes.
   frames (2015-01-15 12 UTC, 2023-07-15 06 UTC) equal `ml/family1/sharded.py`'s
   float16 values exactly; a January-2015 mean equals numpy's nanmean of the
   124 frames, counts 124.
+- **All four ERA5 stores live, 2026-10-06.** The registry flipped `era5_q`,
+  `era5_u` and `era5_v` to built and the live site listed them with no code
+  change; the "Coming" line disappeared. Each opens on a downloadable first
+  look (June 2026, 500 hPa, the Gulf Stream box: t 11.3 MB, q 20.5 MB,
+  u 21.3 MB, v 21.6 MB to read). One 500 hPa frame of each (2015-01-15 12 UTC,
+  and humidity again on 2023-07-15 06 UTC) downloaded through the tab equals
+  `ml/family1/sharded.py`'s float16 values exactly; the humidity NetCDF's
+  units are `g/kg`. `scripts/f1data_live_check.mjs` checks all four.

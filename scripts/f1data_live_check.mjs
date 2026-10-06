@@ -180,8 +180,12 @@ const SELS10 = {
   gdp: { family: "10", store: "gdp", channels: ["sst"], yearStart: 1980, yearEnd: 1980, months: [3], hours: null, bbox: null, step: "native", res: "native" },
   fishing_grid: { family: "derived", store: "fishing_grid", channels: ["fishing_hours", "hours"], yearStart: 2020, yearEnd: 2020, months: [3], hours: null, bbox: { w: 0, s: 50, e: 10, n: 60 }, step: "native", res: "native" },
   clim_g025: { family: "derived", store: "clim_g025", channels: ["sst"], yearStart: 2000, yearEnd: 2000, months: [1, 7], hours: null, bbox: NA, step: "native", res: "native" },
-  // family 1.2: ERA5 temperature at 500 hPa, 2015-01-15, 12 UTC only
-  era5_t: { family: "1.2", store: "era5_t", channels: ["t_500"], yearStart: 2015, yearEnd: 2015, months: [1], days: [15, 15], hours: [12, 18], bbox: { w: -60, s: 30, e: -10, n: 60 }, step: "native", res: "native" },
+  // family 1.2: the four ERA5 stores at 500 hPa, 2015-01-15, 12 UTC only
+  // (and humidity once more after the 2022 seam, 2023-07-15 06 UTC)
+  ...Object.fromEntries(["t", "q", "u", "v"].map((v) => [`era5_${v}`, { family: "1.2", store: `era5_${v}`, channels: [`${v}_500`],
+    yearStart: 2015, yearEnd: 2015, months: [1], days: [15, 15], hours: [12, 18], bbox: { w: -60, s: 30, e: -10, n: 60 }, step: "native", res: "native" }])),
+  era5_q_2023: { family: "1.2", store: "era5_q", channels: ["q_500"], yearStart: 2023, yearEnd: 2023, months: [7], days: [15, 15], hours: [6, 12],
+    bbox: { w: -60, s: 30, e: -10, n: 60 }, step: "native", res: "native" },
 };
 const results10 = {};
 for (const [name, sel] of Object.entries(SELS10)) {
@@ -274,8 +278,10 @@ print(json.dumps({"n": int(k.sum()), "t": sorted((sec[k] + 378691200).tolist())}
   console.log(`argo June 2015 in a box: ${at.length} rows by f1data, ${ao.n} by ml/family10_store.py; times identical: ${at.join() === ao.t.join()}`);
   if (at.length !== ao.n || at.join() !== ao.t.join()) fail("argo disagrees with ml/family10_store.py");
   // ERA5 (family 1.2) against ml/family1/sharded.py: the same float16 values
-  const er = results10.era5_t;
-  const eo = JSON.parse(py(`
+  for (const key of ["era5_t", "era5_q", "era5_u", "era5_v", "era5_q_2023"]) {
+    const er = results10[key], store = SELS10[key].store;
+    const t82 = er.time[0] - 378691200;
+    const eo = JSON.parse(py(`
 import json, sys
 import numpy as np
 from family1 import sharded as sh
@@ -287,10 +293,12 @@ for ty in (1, 2):
         t = g.read_tile(b, f, ty, tx, raw=True, crop=True)
         r0, r1 = sp["row_extents"][ty]; c0, c1 = sp["col_extents"][tx]
         out[r0:r1, c0:c1] = t[..., k].astype(np.float32)
-print(json.dumps([float(x) for x in out[120:151, 120:171].ravel()]))
-`, HUB.replace("family1_gf/", "family1_2/") + "era5_t/era5_t", Math.floor((er.time[0] - 378691200) / 432000), ((er.time[0] - 378691200) % 432000) / 21600));
-  console.log(`era5_t 500 hPa ${new Date(er.time[0] * 1000).toISOString().slice(0, 16)} against ml/family1/sharded.py (raw float16):`);
-  cmp(Array.from(er.data), eo, 0, "  era5_t");
+print(json.dumps([None if not np.isfinite(x) else float(x) for x in out[120:151, 120:171].ravel()]))
+`, HUB.replace("family1_gf/", "family1_2/") + store + "/" + store, Math.floor(t82 / 432000), (t82 % 432000) / 21600));
+    console.log(`${store} 500 hPa ${new Date(er.time[0] * 1000).toISOString().slice(0, 16)} (${er.units[0]}) against ml/family1/sharded.py (raw float16):`);
+    cmp(Array.from(er.data), eo, 0, `  ${key}`);
+    if (store === "era5_q" && er.units[0] !== "g/kg") fail(`era5_q units are ${er.units[0]}, not g/kg`);
+  }
 }
 
 // ---------------------------------------------------------------- 4a. oc4k tile vs ShardedGroup

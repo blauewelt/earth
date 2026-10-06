@@ -75,18 +75,25 @@ are coarser than the store itself.
 
 ### Atmosphere on pressure levels (family 1.2 — ERA5 reanalysis)
 
-| store | what it measures | kind | native space | native time | levels | record |
-|---|---|---|---|---|---|---|
-| `era5_t` | air temperature, K | map | 1° (from ERA5's ~31 km) | six-hourly instants, 00/06/12/18 UTC | 13 | 1982-01-01 → 2026-06-30 |
-| `era5_q` | specific humidity, **g/kg** (grams of water vapour per kilogram of air — 1000 × ERA5's kg/kg) | map | 1° | six-hourly instants | 13 | coming |
-| `era5_u` | eastward wind, m/s (positive toward the east) | map | 1° | six-hourly instants | 13 | coming |
-| `era5_v` | northward wind, m/s (positive toward the north) | map | 1° | six-hourly instants | 13 | coming |
+| store | what it measures | kind | native space | native time | levels | record | size on the data store |
+|---|---|---|---|---|---|---|---|
+| `era5_t` | air temperature, K | map | 1° (from ERA5's ~31 km) | six-hourly instants, 00/06/12/18 UTC | 13 | 1982-01-01 → 2026-06-30 18 UTC | 53.8 GB |
+| `era5_q` | specific humidity, **g/kg** (grams of water vapour per kilogram of air — 1000 × ERA5's kg/kg) | map | 1° | six-hourly instants | 13 | 1982-01-01 → 2026-06-30 18 UTC | 94.7 GB |
+| `era5_u` | eastward wind, m/s (positive toward the east) | map | 1° | six-hourly instants | 13 | 1982-01-01 → 2026-06-30 18 UTC | 99.0 GB |
+| `era5_v` | northward wind, m/s (positive toward the north) | map | 1° | six-hourly instants | 13 | 1982-01-01 → 2026-06-30 18 UTC | 101.2 GB |
 
 The 13 levels are pressures: 50, 100, 150, 200, 250, 300, 400, 500, 600, 700,
 850, 925 and 1000 hPa — from about 20 km up down to the surface. The tab shows
 them as a level picker beside the variable and starts on **500 hPa**, the
-middle of the troposphere. "Coming" means the registry lists the store and
-marks it not built yet; it is not selectable until it is.
+middle of the troposphere. Each store opens on its most recent month at 500 hPa
+in the first preset box: about 11 MB to read for temperature and 20–22 MB for
+humidity and the winds (their tiles compress less well).
+
+**Humidity has a few holes by construction.** The reanalysis can produce
+slightly negative specific humidity (a numerical artefact, not a measurement);
+the store keeps values down to −0.01 g/kg and stores the 1,883 values in the
+whole record below that as missing, so a file can show a rare empty cell
+there.
 
 **This is a reanalysis, not an observation.** ERA5 is ECMWF's best estimate of
 the atmosphere: a weather model run forward and pulled toward every available

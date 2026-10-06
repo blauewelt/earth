@@ -2185,7 +2185,9 @@ tab's "Atmosphere on pressure levels (family 1.2 — ERA5 reanalysis)" group hol
 only what 1.2 adds. **A not-built store is never selectable**: the reader reads
 `built` at every load, puts a public not-built store in `registry.coming` (one
 whose licence is still pending is not named at all), and the tab prints a quiet
-"Coming: …" line — q/u/v appear by themselves the day the registry flips them.
+"Coming: …" line — q/u/v appear by themselves the day the registry flips them
+(they did, the next day, with no code change: verified on the live site, all four
+open on a first look of 11–22 MB and match `sharded.py` exactly).
 **It is a reanalysis and says so** — in the gist, the store line, the
 explainer, and a `comment` note in every file — and the registry's licence
 (CC BY 4.0, Copernicus Climate Change Service) travels as `license` and
