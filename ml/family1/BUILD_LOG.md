@@ -1946,3 +1946,39 @@ restore-verified: 4 stores, built `glorys025d`, `ncep100d`, `oisst025d`,
 not built `occci025d`; record spans 1993-01-01 / 1982-01-01 → 2024-12-31,
 `requested_window` separate (GLORYS's starts 1992-12-29, the bin
 boundary), licence and attribution per store, distribution public.
+
+**OC-CCI (`occci025d`) — every year parked and checked, not yet
+assembled.** Canary
+[#1015](https://github.com/blauewelt/earth/actions/runs/37463215901)
+(2015, 12 download workers): 365 days in 560 s, 73/73 bins checked, worst
+`log_chl` |Δ| 0.0014. Eight lanes #1016–#1023 through the queue keeper
+(12:48–13:49Z, 38–60 min each; 2023–24 from PML's per-day subset service
+at about 19 min a year, CEDA years at 8–11 min).
+
+One refusal, [#1020](https://github.com/blauewelt/earth/actions/runs/37466036016)
+(2013–14): 2013 bin 2324, `log_chl`, 7.0 × 10⁻⁹ past the tolerance in ONE
+cell (57.5° S, 52.25° W, a single clear day). Reproduced from the five
+CEDA files. Family 7's norm stage z-scores in float32 (`mu`, `sd` cast to
+float32, `(X32 − mu) / sd`, then float16). This cell's exact z,
+1.7250976981, is 4.2 × 10⁻⁸ past a float16 midpoint, and the float32 path
+lands it on the far neighbour (1.7246094 instead of 1.7255859). The
+tolerance now carries the z-score's two float32 half-ulps, 2⁻²³·|z|·sd,
+for every store (`32b76c7`, with a test on this cell's numbers that fails
+on the previous code). The lane exits before pushing, so its clean 2014
+was not uploaded either. Both years were re-run on the fixed code: #1024
+(2013) and #1025 (2014), both green.
+
+| | |
+|---|---|
+| years parked | 1997–2024, all 28 |
+| frames | 9,955 = the 9,981 days 1997-09-04…2024-12-31 less 26 `absent_upstream` (1997: 15, 1998: 6, 1999: 3, 2000: 1, 2001: 1) |
+| bins checked | 1,996 / 1,997 (the unchecked one is the 1997 bin holding the record start, which is not a whole bin) |
+| parked bytes | 6,182,168,285 |
+| worst margins | `log_chl` \|Δ\| 0.0018, excess −1 × 10⁻⁷; `chl_cov` \|Δ\| 0.00041, excess −1.0 × 10⁻⁵ |
+
+**Remaining for OC-CCI:** one `BOX_PROFILE=assembly` run (stages
+`assemble,publish` then `check`, about 6 GB to pull), the Hub read-back
+(`f7d_hub_check.py` has no OC-CCI reference read yet), and a registry
+re-publish to flip `occci025d` to built. Not started: the session reached
+its time budget, and the coordinator's rule is never to leave a box up
+past the session.

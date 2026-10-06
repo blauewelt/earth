@@ -392,3 +392,11 @@ Registry:
 [family72d.json](https://huggingface.co/datasets/chfrank/earth-tensors/blob/main/tensors/family7_2d/family72d.json)
 (4 stores, 3 built, `occci025d` listed as not built). Every timing, margin
 and box number: `ml/family1/BUILD_LOG.md`, E-087.
+
+**OC-CCI (`occci025d`): all 28 years parked and checked (13:49Z), not yet
+assembled.** 9,955 days (1997-09-04…2024-12-31 less 26 absent upstream),
+6.18 GB of parts, 1,996 of 1,997 bins checked against f7l2. One refusal
+(2013, one cell, 7 × 10⁻⁹) was family 7's float32 z-score, double-rounded
+to the far float16 neighbour. The tolerance now carries it (`32b76c7`),
+and 2013 and 2014 were re-run green. Next: one assembly box, the Hub
+read-back, and the registry re-publish.
