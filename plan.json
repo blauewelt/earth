@@ -1,0 +1,81 @@
+{
+ "bins": [
+  1388,
+  1680
+ ],
+ "builder_git_sha": "fb8c0c1ee6959999806695dec8a0581a9089c5a8",
+ "built_at": "2026-10-06T10:40:15+00:00",
+ "channels": [
+  {
+   "max": 5.0,
+   "min": 0.0,
+   "name": "cur_speed",
+   "unit": "m/s"
+  },
+  {
+   "max": 4.0,
+   "min": -2.0,
+   "name": "log_mld",
+   "unit": "log10(m)"
+  },
+  {
+   "max": 4.0,
+   "min": -4.0,
+   "name": "ssh",
+   "unit": "m"
+  },
+  {
+   "max": 5.0,
+   "min": -5.0,
+   "name": "cur_u",
+   "unit": "m/s"
+  },
+  {
+   "max": 5.0,
+   "min": -5.0,
+   "name": "cur_v",
+   "unit": "m/s"
+  }
+ ],
+ "dataset": "GLORYS12 ocean reanalysis surface currents, sea-surface height and mixed-layer depth, DAILY, 0.25 degrees \u2014 family 7.2d",
+ "date_range": [
+  "2001-01-01",
+  "2004-12-31"
+ ],
+ "footprint": {
+  "log2_dt": -2.321928094887362,
+  "log2_fp": 0.0
+ },
+ "grid": {
+  "H": 721,
+  "W": 1440,
+  "align": "point \u2014 row r is latitude -90 + 0.25 r, column c is longitude -180 + 0.25 c (family 7's g025 grid)",
+  "crs": "EPSG:4326",
+  "dx": 0.25,
+  "dy": 0.25,
+  "row_order": "south_first",
+  "x0": -180.0,
+  "y0": -90.0
+ },
+ "pentad_check": true,
+ "pentad_reference": "https://huggingface.co/datasets/chfrank/earth-tensors/resolve/main/tensors/family7_global025_pentad_l2/family7_global025_pentad_l2_X_g025.npy",
+ "per_year_resume": true,
+ "plan": "ml/plans/E087_family7_daily.md",
+ "qc_policy": "GLORYS12 publishes no per-value flag. NaN over land, under ice shelves and south of 80 S (rows 0..39, outside the reanalysis). `log_mld` is log10 of a positive depth, NaN otherwise. A value outside its sanity bounds becomes NaN and is counted, never clipped; the January-2015 probe counted none.",
+ "record": [
+  "1993-01-01",
+  "2024-12-31"
+ ],
+ "sources": [
+  "https://huggingface.co/datasets/chfrank/earth-tensors/resolve/main/daily025_global/glorys025_global_<YYYYMM>.nc (GLORYS12 cmems_mod_glo_phy_my_0.083deg_P1D-m, daily, binned to 0.25 deg at fetch by ml/fetch_glorys_daily.py)"
+ ],
+ "store": "glorys025d",
+ "title": "GLORYS12 ocean reanalysis surface currents, sea-surface height and mixed-layer depth, DAILY, 0.25 degrees \u2014 family 7.2d",
+ "verified": "2026-10-06: 384 of 384 chunks listed on the Hub (1993-01 .. 2024-12, 96,800,818,463 bytes); 2015-01 and 2015-02 opened (681 x 1440, -80..90, one value a day, uo vo mlotst zos)",
+ "years": [
+  2001,
+  2002,
+  2003,
+  2004
+ ]
+}
