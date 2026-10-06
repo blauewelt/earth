@@ -48,17 +48,6 @@
   {
    "store": "occci025d",
    "stage": "index,fetch",
-   "start": "2013-01-01",
-   "end": "2014-12-31",
-   "runner": "ubuntu-latest",
-   "extra_args": "--push-parts",
-   "adapter_env": "",
-   "retries": 2,
-   "at": "2026-10-06T12:49:05.491Z"
-  },
-  {
-   "store": "occci025d",
-   "stage": "index,fetch",
    "start": "2016-01-01",
    "end": "2019-12-31",
    "runner": "ubuntu-latest",
@@ -4255,6 +4244,21 @@
    "url": "https://github.com/blauewelt/earth/actions/runs/37366672809",
    "reason": "retries exhausted",
    "finished": "2026-10-05T20:11:59Z"
+  },
+  {
+   "store": "occci025d",
+   "stage": "index,fetch",
+   "start": "2013-01-01",
+   "end": "2014-12-31",
+   "runner": "ubuntu-latest",
+   "extra_args": "--push-parts",
+   "adapter_env": "",
+   "retries": 2,
+   "at": "2026-10-06T12:49:05.491Z",
+   "run_number": 1020,
+   "url": "https://github.com/blauewelt/earth/actions/runs/37466036016",
+   "reason": "failed after 21 min — read the log",
+   "finished": "2026-10-06T13:10:20Z"
   }
  ]
 }
