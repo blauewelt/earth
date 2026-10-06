@@ -330,16 +330,22 @@ class F7DailyBase(sh.GridAdapter):
     def wants_reference(self, d):
         return d > PENTAD_END and self.check_on_flag
 
-    def year_summary(self, counts):
+    def year_summary(self, counts_list):
         """store.json counts_by_year: which falsifier each year's frames
-        passed — so nobody reads a source-readback year as pentad-checked."""
-        out = {"pentad_bins_checked": int(counts.get("pentad_bins_checked",
-                                                     0) or 0),
-               "source_readback_days": int(counts.get("source_readback_days",
-                                                      0) or 0)}
-        for k, v in counts.items():
-            if k.startswith(("max_readback_absdiff_", "preliminary_")):
-                out[k] = v
+        passed — so nobody reads a source-readback year as pentad-checked.
+        `counts_list` is the year's parts' counts, one per lane."""
+        if isinstance(counts_list, dict):
+            counts_list = [counts_list]
+        out = {"pentad_bins_checked": 0, "source_readback_days": 0}
+        for c in counts_list or []:
+            c = c or {}
+            for k in ("pentad_bins_checked", "source_readback_days"):
+                out[k] += int(c.get(k, 0) or 0)
+            for k, v in c.items():
+                if k.startswith("max_readback_absdiff_"):
+                    out[k] = max(out.get(k, v), v)
+                elif k.startswith("preliminary_") and isinstance(v, list):
+                    out[k] = sorted(set(out.get(k, [])) | set(v))
         return out
 
     year_summary_note = (

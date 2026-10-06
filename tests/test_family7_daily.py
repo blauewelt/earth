@@ -475,3 +475,18 @@ def test_a_record_end_change_touches_only_documentary_spec_keys():
         assert {k for k in set(sa) | set(sb) if sa.get(k) != sb.get(k)} <= keys
         assert {k: v for k, v in sa.items() if k not in keys} == \
             {k: v for k, v in sb.items() if k not in keys}
+
+
+def test_year_summary_takes_the_years_lane_counts_as_a_list():
+    """stage_assemble_grid hands year_summary ONE ENTRY PER LANE (#1039
+    died on a dict-only version)."""
+    from family1.adapters import REGISTRY
+    ad = REGISTRY["oisst025d"]()
+    got = ad.year_summary([
+        {"pentad_bins_checked": 3, "max_readback_absdiff_sst": 0.01,
+         "preliminary_days": ["2026-09-22"]},
+        {"source_readback_days": 4, "max_readback_absdiff_sst": 0.02,
+         "preliminary_days": ["2026-09-21"]}])
+    assert got == {"pentad_bins_checked": 3, "source_readback_days": 4,
+                   "max_readback_absdiff_sst": 0.02,
+                   "preliminary_days": ["2026-09-21", "2026-09-22"]}
