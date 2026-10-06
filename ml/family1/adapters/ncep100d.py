@@ -94,12 +94,28 @@ class NCEP100DAdapter(_f7d.F7DailyBase):
         land = f7.squeeze_level(np.ma.filled(
             np.asarray(f7.pick_var(dl, "land")[:]), 0.0)) >= 0.5
         dl.close()
-        fr = fd.ncep_daily(paths, land, days)
+        self._neg = {}
+        fr = fd.ncep_daily(paths, land, days, negmin=self._neg)
         for d in days:
             if d in fr:
                 yield d, fr.pop(d), None
             else:
                 yield d, None, "absent_upstream"
+
+
+    def check_allow(self, b):
+        """The per-day clamp at zero in `log1p_channel` (ncep_daily
+        `negmin`): a day whose prate/weasd samples dip below zero by x can
+        differ from the pentad's single clamp by at most |x| times the unit
+        scale (86400 for prate, 1 for weasd) — d log1p <= d at zero."""
+        neg = getattr(self, "_neg", {}) or {}
+        out = {}
+        for f in range(self.frames_per_bin):
+            for v, x in neg.get(_f7d.frame_day(b, f), {}).items():
+                ch, sc = (("log_prate", 86400.0) if v == "prate"
+                          else ("log_swe", 1.0))
+                out[ch] = max(out.get(ch, 0.0), -x * sc)
+        return out
 
 
 ADAPTER = NCEP100DAdapter

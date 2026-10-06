@@ -103,17 +103,17 @@ STORES = {
                      ("tau_y", "N/m2", -10.0, 10.0),
                      ("tau_x_std", "N/m2 (centred 5-day sigma)", 0.0, 10.0),
                      ("tau_y_std", "N/m2 (centred 5-day sigma)", 0.0, 10.0),
-                     ("t2m", "degC", -100.0, 70.0),
+                     ("t2m", "degC", -150.0, 70.0),
                      ("u10", "m/s", -100.0, 100.0),
                      ("v10", "m/s", -100.0, 100.0),
                      ("sp", "hPa", 400.0, 1100.0),
                      ("log_prate", "log1p(mm/day)", 0.0, 10.0),
                      ("log_swe", "log1p(mm w.e.)", 0.0, 15.0),
                      ("soilw", "fraction", 0.0, 1.0),
-                     ("tsoil", "degC", -100.0, 80.0),
+                     ("tsoil", "degC", -150.0, 80.0),
                      ("lhtfl", "W/m2", -2000.0, 3000.0),
                      ("shtfl", "W/m2", -2000.0, 3000.0),
-                     ("skt", "degC", -100.0, 90.0)],
+                     ("skt", "degC", -150.0, 90.0)],
         "pentad_index": list(range(15))},
     "occci025d": {
         "group": "oc025", "grid": G025, "tile": 256, "first_day": "1997-09-04",
@@ -143,12 +143,12 @@ def mask_bounds(arr, channels):
 
 
 # =========================================================== derivation ===
-def glorys_chunk(path, days):
+def glorys_chunk(path, days, nonpos=None):
     """One GLORYS monthly chunk -> {day: frame} for the wanted days in it."""
-    return glorys_daily([path], days)
+    return glorys_daily([path], days, nonpos=nonpos)
 
 
-def glorys_daily(paths, days):
+def glorys_daily(paths, days, nonpos=None):
     """GLORYS12 0.25° daily chunks -> {day: [721, 1440, 5] float32}.
 
     The chunk IS the daily field (one value a day per variable on the
@@ -180,6 +180,14 @@ def glorys_daily(paths, days):
             a[sl, :, 3] = uo
             a[sl, :, 4] = vo
             out[day] = a
+            if nonpos is not None:
+                # a FINITE non-positive depth: NaN in log_mld (family 7's
+                # rule for a value) but COUNTED in family 7's pentad mean
+                # (its count is of finite values) — the check needs it
+                full = np.zeros((721, 1440), bool)
+                with np.errstate(invalid="ignore"):
+                    full[sl] = np.isfinite(ml) & (ml <= 0)
+                nonpos[day] = full
         d.close()
     return out
 
@@ -220,11 +228,29 @@ NCEP_ORDER = ("uflx", "vflx", "air", "uwnd", "vwnd", "pres", "prate",
               "weasd", "soilw", "tmp", "lhtfl", "shtfl", "skt")
 
 
-def ncep_daily(paths, land, days, sigma_half=2):
+# the g100 channels each NCEP variable feeds
+NCEP_CHANNELS = {"uflx": ("tau_x", "tau_x_std"), "vflx": ("tau_y", "tau_y_std"),
+                 "air": ("t2m",), "uwnd": ("u10",), "vwnd": ("v10",),
+                 "pres": ("sp",), "prate": ("log_prate",),
+                 "weasd": ("log_swe",), "soilw": ("soilw",),
+                 "tmp": ("tsoil",), "lhtfl": ("lhtfl",), "shtfl": ("shtfl",),
+                 "skt": ("skt",)}
+
+
+def ncep_daily(paths, land, days, sigma_half=2, negmin=None):
     """NCEP R1 4x-daily gaussian files -> {day: [181, 360, 15] float32}.
 
     `paths` maps variable -> list of files (the year, plus the neighbours a
-    centred window needs). The day's value is the NaN-aware mean of that
+    centred window needs). `negmin`, if a dict, receives {day: {var: x}}
+    for `prate` and `weasd`: the most negative native value of that day's
+    samples. Some years' files store a dry cell as -2.3e-10 (2**-32, the
+    packing quantum; `np.asarray` drops netCDF4's valid_range mask exactly
+    as `stage_ncep` does, so the value is read, not masked), and
+    `log1p_channel` clamps at zero PER DAY here and PER PENTAD in family
+    7.2, so the two can differ by up to |x| times the unit scale; the lanes'
+    check allows exactly that (check_bin `allow`).
+
+    The day's value is the NaN-aware mean of that
     day's 6-hourly samples ON THE NATIVE GRID, then the same bilinear and the
     same transform `stage_ncep.flush` applies to a pentad mean. tau_x_std /
     tau_y_std are the population sigma of the 6-hourly samples of the five
@@ -261,6 +287,12 @@ def ncep_daily(paths, land, days, sigma_half=2):
                 if v in f7.NCEP_FLIP:
                     f = -f
                 samples[v].setdefault(day, []).append(f)
+                if negmin is not None and v in ("prate", "weasd"):
+                    lo_v = float(np.nanmin(f)) if np.isfinite(f).any() \
+                        else 0.0
+                    if lo_v < 0:
+                        mv = negmin.setdefault(day, {})
+                        mv[v] = min(mv.get(v, 0.0), lo_v)
             d.close()
 
     def to1(x):
@@ -430,20 +462,38 @@ def f16_half_step(x):
     return 0.5 * 2.0 ** (e - 10)
 
 
-def check_bin(store, frames, P, z, norm):
+def check_bin(store, frames, P, z, norm, allow=None, mld_nonpos=None):
     """THE FALSIFIER FOR ONE BIN, as a lane runs it before a year is marked.
 
     `frames` are the five frames AS STORED (float16, decoded to float32; an
     absent frame is all-NaN), `P` the published pentad value un-z-scored to
     physical units, `z` the stored z-score, `norm` the group's (mean, sd) —
     all three already restricted to this store's channels (`pentad_index`).
-    The tolerance is `compare()`'s "stored" one (plan §4). Returns a dict with
+    The tolerance is `compare()`'s "stored" one (plan §4), plus
+    `allow[channel]` (absolute, physical units) where the caller knows of a
+    mechanism by which the daily and pentad paths may differ — today only
+    NCEP's per-day clamp of tiny negative rates (ncep_daily `negmin`) —
+    reported per channel as `allowed`. `mld_nonpos` (glorys025d) is the
+    per-cell count of days in the bin whose mixed-layer depth was FINITE
+    and <= 0: stored NaN in `log_mld` (no logarithm), yet counted as a
+    zero in family 7.2's pentad mean — so log_mld is rebuilt with those
+    days counted (exactly family 7's arithmetic), and the count is
+    reported. Returns a dict with
     `ok` and, per channel, the cells compared, NaN-pattern mismatches, the
     largest |difference| and the largest excess over the tolerance.
     """
     cfg = STORES[store]
     st = np.stack([np.asarray(f, np.float32) for f in frames])
     R = pentad_from_daily(store, st)
+    if mld_nonpos is not None and store == "glorys025d":
+        x = st[..., 1].astype(np.float64)
+        ok = np.isfinite(x)
+        ssum = np.where(ok, 10.0 ** np.where(ok, x, 0.0), 0.0).sum(0)
+        cnt = ok.sum(0) + np.asarray(mld_nonpos)
+        with np.errstate(invalid="ignore", divide="ignore"):
+            mu = np.where(cnt >= MIN_DAYS, ssum / np.maximum(cnt, 1), np.nan)
+            R[..., 1] = np.where(mu > 0, np.log10(np.maximum(mu, 1e-300)),
+                                 np.nan)
     fin = np.isfinite(st)
     hs = f16_half_step(st)
     hs[~fin] = 0.0
@@ -465,11 +515,13 @@ def check_bin(store, frames, P, z, norm):
             tol = tol + f16_half_step(np.maximum(np.abs(Pc[both]),
                                                  np.abs(Rc[both])))
         tol = tol + (1.5 if name == "cur_speed" else 1.0) * hs[..., c][both]
+        extra = float((allow or {}).get(name, 0.0))
+        tol = tol + extra
         tol = tol * (1 + 1e-6) + 1e-12
         exc = float((d - tol).max()) if d.size else 0.0
         r = {"cells": int(both.sum()), "nan_mismatch": mism,
              "max_abs_diff": float(d.max()) if d.size else 0.0,
-             "max_excess": exc}
+             "max_excess": exc, "allowed": extra}
         if mism or exc > 0:
             out["ok"] = False
         out["channels"][name] = r

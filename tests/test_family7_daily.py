@@ -333,3 +333,26 @@ def test_a_bin_that_does_not_is_refused_and_its_year_left_unmarked():
     unit, why = ctx.absent[0]
     assert unit.startswith("2015 bin 2411") and "PENTAD CONSISTENCY" in why
     assert "t2m" in why
+
+
+def test_a_nonpositive_depth_is_counted_like_family7_counts_it():
+    """GLORYS sometimes reports a FINITE depth <= 0: log_mld is NaN that day,
+    but family 7's pentad mean counted it as a zero. check_bin rebuilds
+    log_mld with those days counted when told how many there were."""
+    H, W = 721, 1440
+    st = np.full((5, H, W, 5), np.nan, np.float32)
+    st[:, 500, 700, :] = [0.2, 1.0, 0.1, 0.1, 0.1]       # depth 10 m
+    st[4, 500, 700, 1] = np.nan                           # day 5: depth 0
+    P = np.full((H, W, 5), np.nan)
+    P[500, 700] = [np.hypot(0.1, 0.1), np.log10(40.0 / 5), 0.1, 0.1, 0.1]
+    z = np.where(np.isfinite(P), 0.0, np.nan)
+    norm = np.tile([0.0, 1.0], (5, 1))
+    bad = fd.check_bin("glorys025d", list(st.astype(np.float16)
+                                          .astype(np.float32)), P, z, norm)
+    assert not bad["ok"]                                  # log10(10) != log10(8)
+    nz = np.zeros((H, W), np.int64)
+    nz[500, 700] = 1
+    good = fd.check_bin("glorys025d", list(st.astype(np.float16)
+                                           .astype(np.float32)), P, z, norm,
+                        mld_nonpos=nz)
+    assert good["ok"], good["channels"]["log_mld"]

@@ -44,7 +44,17 @@ class GLORYS025DAdapter(_f7d.F7DailyBase):
              "hypot of the MEAN u and v, log10 of the MEAN depth "
              "(ml/family7_daily.py :: pentad_from_daily).")
 
+    def check_extra(self, b):
+        days = [_f7d.frame_day(b, f) for f in range(self.frames_per_bin)]
+        m = [self._nonpos.pop(d) for d in days if d in self._nonpos]
+        if not m:
+            return {}
+        cnt = np.sum(m, axis=0).astype(np.int64)
+        self._last_nonpos = int(cnt.sum())
+        return {"mld_nonpos": cnt}
+
     def days_frames(self, ctx, days):
+        self._nonpos = {}
         months = []
         for d in days:
             if (d.year, d.month) not in months:
@@ -59,7 +69,7 @@ class GLORYS025DAdapter(_f7d.F7DailyBase):
                 for d in mdays:
                     yield d, None, f"ABSENT:{name} could not be read"
                 continue
-            fr = fd.glorys_chunk(p, mdays)
+            fr = fd.glorys_chunk(p, mdays, nonpos=self._nonpos)
             for d in mdays:
                 if d in fr:
                     yield d, fr.pop(d), None

@@ -269,6 +269,14 @@ class F7DailyBase(sh.GridAdapter):
                 "pentad_check": self.check_on(ctx),
                 "grid": self.grid}
 
+    def check_allow(self, b):
+        """{channel: absolute allowance} for this bin (check_bin `allow`)."""
+        return {}
+
+    def check_extra(self, b):
+        """Further check_bin keywords for this bin (glorys: mld_nonpos)."""
+        return {}
+
     # ------------------------------------------------------------ frames ---
     def days_frames(self, ctx, days):
         """Yield (day, frame | None, why | None) for `days`, chronological.
@@ -338,8 +346,15 @@ class F7DailyBase(sh.GridAdapter):
                               if a is None else
                               a.astype(np.float16).astype(np.float32)
                               for a in frames]
-                    res = fd.check_bin(self.store, stored, P, z, norm)
+                    allow = self.check_allow(b)
+                    extra = self.check_extra(b)
+                    res = fd.check_bin(self.store, stored, P, z, norm,
+                                       allow=allow, **extra)
                     c2 = {"pentad_bins_checked": 1}
+                    for k, v in extra.items():
+                        c2[f"pentad_{k}_cell_days"] = int(np.sum(v))
+                    for nm, x in allow.items():
+                        c2[f"max_pentad_allow_{nm}"] = float(x)
                     for nm, v in res["channels"].items():
                         c2[f"max_pentad_absdiff_{nm}"] = v["max_abs_diff"]
                         c2[f"max_pentad_excess_{nm}"] = v["max_excess"]
