@@ -1,29 +1,6 @@
 {
  "pending": [],
- "dispatched": [
-  {
-   "store": "glorys025d",
-   "stage": "index,fetch",
-   "start": "2025-01-01",
-   "end": "2025-12-31",
-   "runner": "ubuntu-latest",
-   "extra_args": "--push-parts",
-   "adapter_env": "",
-   "retries": 2,
-   "at": "2026-10-06T14:24:46.900Z"
-  },
-  {
-   "store": "glorys025d",
-   "stage": "index,fetch",
-   "start": "2026-01-01",
-   "end": "2026-12-31",
-   "runner": "ubuntu-latest",
-   "extra_args": "--push-parts",
-   "adapter_env": "",
-   "retries": 2,
-   "at": "2026-10-06T15:11:53.140Z"
-  }
- ],
+ "dispatched": [],
  "done": [
   {
    "store": "sst_acspo02",
@@ -4387,6 +4364,30 @@
    "at": "2026-10-06T14:25:23.001Z",
    "run_number": 1036,
    "finished": "2026-10-06T15:05:56Z"
+  },
+  {
+   "store": "glorys025d",
+   "stage": "index,fetch",
+   "start": "2026-01-01",
+   "end": "2026-12-31",
+   "runner": "ubuntu-latest",
+   "extra_args": "--push-parts",
+   "adapter_env": "",
+   "retries": 2,
+   "at": "2026-10-06T15:11:53.140Z",
+   "note": "settled by hand: #1026 green; duplicate #1040 cancelled"
+  },
+  {
+   "store": "glorys025d",
+   "stage": "index,fetch",
+   "start": "2025-01-01",
+   "end": "2025-12-31",
+   "runner": "ubuntu-latest",
+   "extra_args": "--push-parts",
+   "adapter_env": "",
+   "retries": 2,
+   "at": "2026-10-06T14:24:46.900Z",
+   "note": "settled by hand: running as #1027, monitored by the E-087 session (the keeper did not match it to its run)"
   }
  ],
  "failed": [
