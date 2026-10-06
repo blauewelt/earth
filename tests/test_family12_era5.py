@@ -494,6 +494,15 @@ def test_negative_humidities_are_kept_counted_and_their_minimum_measured(
     lowest = -c["max_negated_min_q_all"]
     assert lowest < -0.01                               # D5 would have masked
     assert lowest > -1.0
+    # ... and PER YEAR in store.json, summing to the store's totals
+    by = sm["counts_by_year"]
+    assert by and sm["counts_by_year_note"]
+    assert sum(v["negative_values_kept"] for v in by.values()) == \
+        sum(c["negative_values_kept"].values())
+    assert min(v["lowest_value_g_per_kg"] for v in by.values()
+               if v["lowest_value_g_per_kg"] is not None) == lowest
+    assert all(set(v["negative_values_kept_by_level"]) <= {"q_50"}
+               for v in by.values())
     grp = sh.ShardedGroup(os.path.join(res["work"], "era5_q", "era5_q",
                                        "era5_q"))
     fr = grp.read_frame(2920, 8)
@@ -526,3 +535,12 @@ def test_the_assembler_refuses_parts_written_under_the_old_bound(
         json.dump(led, open(p, "w"))
     with pytest.raises(SystemExit, match="different grid declaration"):
         b1.stage_assemble_grid(ctx)
+
+
+def test_only_humidity_writes_a_per_year_record(tmp_path):
+    import json
+    res = b1.run_smoke("era5_t", root=str(tmp_path / "t"), keep=True,
+                       probe=False)
+    sm = json.load(open(os.path.join(res["work"], "era5_t", "era5_t",
+                                     "store.json")))
+    assert "counts_by_year" not in sm

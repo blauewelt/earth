@@ -982,6 +982,30 @@ class ERA5Base(sh.GridAdapter):
                 "2026-10-06; D5's -0.01 masked 1,883 genuine ERA5 values)")
         return out
 
+    # ----------------------------------------------- per-year store record --
+    year_summary_note = (
+        "per year (the bins whose first day falls in it): how many of ERA5's "
+        "own negative humidities the store keeps (decision D6), by level and "
+        "in all, and the lowest stored-source value in g/kg (before the "
+        "float16 rounding). Absent for t, u and v, which carry no such count")
+
+    def year_summary(self, counts_list):
+        """store.json `counts_by_year[<year>]` from that year's parts'
+        counts (one entry per lane); None for t, u, v."""
+        if self.var != "q":
+            return None
+        neg, worst = {}, None
+        for c in counts_list:
+            for k, v in (c.get("negative_values_kept") or {}).items():
+                neg[k] = neg.get(k, 0) + int(v)
+            m = c.get("max_negated_min_q_all")
+            if m is not None:
+                worst = float(m) if worst is None else max(worst, float(m))
+        return {"negative_values_kept": int(sum(neg.values())),
+                "negative_values_kept_by_level": dict(sorted(neg.items())),
+                "lowest_value_g_per_kg": (None if worst is None
+                                          else -worst)}
+
     # ------------------------------------------------------------- sources --
     def sources_for(self, ctx):
         if self._src is None:

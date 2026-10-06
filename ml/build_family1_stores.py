@@ -885,6 +885,7 @@ def stage_assemble_grid(ctx):
     ctx.prog.stage_start(f"{ad.store} store (tier G)", 1)
     dest = ctx.store
     shutil.rmtree(dest, ignore_errors=True)
+    year_counts = {}     # year -> [counts of each lane's parts]
     os.makedirs(dest)
     entries = {g: [] for g in specs}
     counts_all, bad, degraded = {}, [], []
@@ -964,6 +965,7 @@ def stage_assemble_grid(ctx):
                         _link(src, os.path.join(dest, g, rel))
                     entries[g].append(e)
             f10b._merge_counts(counts_all, c.get("counts") or {})
+            year_counts.setdefault(str(y), []).append(c.get("counts") or {})
     if bad:
         sys.exit(f"REFUSING to assemble {ad.store}:\n  " + "\n  ".join(bad)
                  + "\nRe-run the fetch stage with the same --work value, or "
@@ -1048,6 +1050,16 @@ def stage_assemble_grid(ctx):
     if lanes is not None:
         meta["lanes_by_year"] = lanes
         meta["lanes_note"] = f10b.LANES_NOTE
+    # A PER-YEAR SUMMARY the adapter asks for (E-085 D6: era5_q keeps
+    # ERA5's negative humidities and records, per year, how many and the
+    # lowest) — absent, and store.json unchanged, for every other adapter.
+    ysum = getattr(ad, "year_summary", None)
+    if ysum is not None:
+        by_year = {y: ysum(cs) for y, cs in sorted(year_counts.items())}
+        by_year = {y: v for y, v in by_year.items() if v is not None}
+        if by_year:
+            meta["counts_by_year"] = by_year
+            meta["counts_by_year_note"] = getattr(ad, "year_summary_note", "")
     if ad.notes:
         meta["notes"] = ad.notes
     if getattr(ad, "distribution_override", None):
