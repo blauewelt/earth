@@ -460,3 +460,18 @@ def test_glorys_declares_its_first_named_lane():
     got = ad.declared_lanes([1992, 1993, 1996, 1997, 2025])
     assert got == {1992: ["d19921229-19961231"], 1993: ["d19921229-19961231"],
                    1996: ["d19921229-19961231"]}
+
+
+def test_a_record_end_change_touches_only_documentary_spec_keys():
+    """The assembler compares lane specs WITHOUT `spec_doc_keys`, so moving a
+    store's record end (E-087 §14) must change nothing else in its spec."""
+    import datetime as _dt
+    from family1.adapters import REGISTRY
+    for store in ("glorys025d", "oisst025d", "ncep100d", "occci025d"):
+        a, b = REGISTRY[store](), REGISTRY[store]()
+        b.record_end = _dt.date(2024, 12, 31)
+        sa, sb = a.specs()[store], b.specs()[store]
+        keys = set(a.spec_doc_keys)
+        assert {k for k in set(sa) | set(sb) if sa.get(k) != sb.get(k)} <= keys
+        assert {k: v for k, v in sa.items() if k not in keys} == \
+            {k: v for k, v in sb.items() if k not in keys}

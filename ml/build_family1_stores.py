@@ -880,7 +880,18 @@ def stage_assemble_grid(ctx):
     ad = ctx.adapter
     lay = ctx.layout
     specs = ctx.grid_specs
-    want_specs = json.loads(json.dumps(specs))
+    # DOCUMENTARY spec keys an adapter names (`spec_doc_keys`) are prose
+    # about the store, not its grid: they are compared WITHOUT, so a lane
+    # that wrote its parts before a sentence changed still assembles, while
+    # every key that decides a byte (shape, tile, channels, dtype, rules the
+    # adapter did not name) is still held to exact equality. Empty for every
+    # adapter that names none, which is all of them before E-087 §14.
+    doc_keys = tuple(getattr(ad, "spec_doc_keys", ()) or ())
+
+    def _strip(sp):
+        return {g: {k: v for k, v in (d or {}).items() if k not in doc_keys}
+                for g, d in (sp or {}).items()}
+    want_specs = _strip(json.loads(json.dumps(specs)))
     allow = bool(getattr(ctx.a, "allow_missing_years", False))
     ctx.prog.stage_start(f"{ad.store} store (tier G)", 1)
     dest = ctx.store
@@ -915,7 +926,7 @@ def stage_assemble_grid(ctx):
             # tile-subset lane IS — but every group it holds must have been
             # written for the identical grid, or a lane and a box are running
             # different code.
-            got_specs = c.get("grids") or {}
+            got_specs = _strip(c.get("grids") or {})
             unknown = sorted(set(got_specs) - set(want_specs))
             differ = sorted(g for g in got_specs
                             if g in want_specs

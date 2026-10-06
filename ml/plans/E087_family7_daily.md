@@ -400,3 +400,47 @@ assembled.** 9,955 days (1997-09-04…2024-12-31 less 26 absent upstream),
 to the far float16 neighbour. The tolerance now carries it (`32b76c7`),
 and 2013 and 2014 were re-run green. Next: one assembly box, the Hub
 read-back, and the registry re-publish.
+
+## 14 · Decision Q4 reversed: every store to its producer's last day (2026-10-06)
+
+**The owner's words** (Chris, 2026-10-06 16:06 local, overruling the planning
+session's Q4 pick): *"Let's include _all_ data (not prematurely end in
+2024)."* Each store now runs from its first day to the last day its producer
+serves, measured that day rather than assumed:
+
+| store | old end | new end | what limits it |
+|---|---|---|---|
+| `oisst025d` | 2024-12-31 | **2026-10-04** | NOAA PSL's `sst.day.mean.2026.nc` holds 277 days. NCEI calls 2026-09-21…10-04 **preliminary** (final through 09-20); each lane lists those days by date in `counts_by_year.preliminary_days`. They are kept, as the producer publishes them, and are replaced by final values only by a later rebuild |
+| `ncep100d` | 2024-12-31 | **2026-03-17** | all thirteen 2026 surface_gauss files stop at 2026-03-17 18Z (304 six-hourly steps) and were last modified 2026-03-19. PSL has not updated them since |
+| `glorys025d` | 2024-12-31 | **2026-08-18** | the end of Copernicus Marine's `cmems_mod_glo_phy_my_0.083deg_P1D-m` (STAC `end_datetime`). The 2026-08 chunk is partial and sits in `daily025_global_tail/` |
+| `occci025d` | 2024-12-31 | **2026-06-30** | PML's v6.0 daily aggregate holds 10,501 days, 1997-09-04…2026-06-30 |
+
+**GLORYS: the product, and the seam.** The extension is the SAME dataset id
+and version family 7.2's chunks came from: `cmems_mod_glo_phy_my_0.083deg_
+P1D-m`, version 202311, part "default" (`copernicusmarine.describe`). The
+catalogue lists no separate interim (`myint`) id today, and the native files
+are one family (`mercatorglorys12v1_gl12_mean_<day>_R<run>.nc`) from 1993 to
+2026. The catalogue's `field_date` is 2021-06-30, the boundary at which
+GLORYS12 was historically continued as a near-real-time interim run of the
+same system. Those 2021-07…2024-12 days are already in family 7.2, so the
+store's `source_segments` names three spans (1993…2021-06, 2021-07…2024-12,
+2025-01…2026-08-18) rather than one. The months after 2024 are fetched inside
+the hosted lane by `ml/fetch_glorys_daily.py`'s own request-and-bin code with
+the Actions secrets. They are parked on the Hub beside the others and
+restore-verified before use. No credential is on a box.
+
+**The falsifier after 2024 is weaker, and says so.** Family 7.2 ends
+2024-12-31, so there is no pentad to reproduce after it. For every day after
+2024-12-31 the lane compares the frame, rounded to float16 as stored, with an
+INDEPENDENT read of the same source file: `ml/family1/f7d_hub_check.py`'s
+`ref_*_from`, which is different code reading the same bytes, done while the
+file is still on the runner. A difference beyond rounding, a NaN-pattern
+difference, or a missing or failed reference refuses the bin. This proves the
+right bytes went through the same derivation code as the checked years. It
+does not prove agreement with a second, independently built product, which is
+what the pentad comparison gives. Bin 3141 (2024-12-31 plus four 2025 days)
+is checked both ways: its 2024 day against the pentad with the 2025 days
+masked out, and its 2025 days against the source. Each store's `source_
+segments` (tile_grid.json and the registry) and `counts_by_year`
+(`pentad_bins_checked`, `source_readback_days`) record which guarantee every
+span carries.

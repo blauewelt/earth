@@ -163,6 +163,9 @@ class F7DailyBase(sh.GridAdapter):
     log2_dt = float(np.log2(1.0 / 5.0))          # one day
     record_start = None                          # dt.date
     record_end = RECORD_END                      # measured per source
+    # prose in the spec, not grid: compared without by the assembler, so the
+    # 1982-2023 parts written before E-087 §14 assemble beside the new ones
+    spec_doc_keys = ("pentad_rule", "record", "source_segments")
     check_on_flag = False
     smoke_window = ("2009-12-28", "2010-02-08")
     smoke_probe_month = "2010-01"
