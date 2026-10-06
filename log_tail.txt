@@ -1,0 +1,80 @@
+  [verify ncep100d before publish] check: check ncep100d 3000/3230  13.2s
+  [verify ncep100d before publish] check: check ncep100d 3100/3230  13.2s
+  [verify ncep100d before publish] check: check ncep100d 3200/3230  13.3s
+  [verify ncep100d before publish] check: check ncep100d 3230/3230  13.3s
+  hub: chfrank/earth-tensors with the token from $HF_TOKEN
+  [publish ncep100d] start (6463 items)  0/6463  0.0s
+Upload 0 LFS files: 0it [00:00, ?it/s]Upload 0 LFS files: 0it [00:00, ?it/s]
+No files have been modified since last commit. Skipping to prevent empty commit.
+Upload 0 LFS files: 0it [00:00, ?it/s]Upload 0 LFS files: 0it [00:00, ?it/s]
+No files have been modified since last commit. Skipping to prevent empty commit.
+Upload 0 LFS files: 0it [00:00, ?it/s]Upload 0 LFS files: 0it [00:00, ?it/s]
+No files have been modified since last commit. Skipping to prevent empty commit.
+Upload 0 LFS files: 0it [00:00, ?it/s]Upload 0 LFS files: 0it [00:00, ?it/s]
+No files have been modified since last commit. Skipping to prevent empty commit.
+Upload 0 LFS files: 0it [00:00, ?it/s]Upload 0 LFS files: 0it [00:00, ?it/s]
+No files have been modified since last commit. Skipping to prevent empty commit.
+Upload 0 LFS files: 0it [00:00, ?it/s]Upload 0 LFS files: 0it [00:00, ?it/s]
+No files have been modified since last commit. Skipping to prevent empty commit.
+Upload 0 LFS files: 0it [00:00, ?it/s]Upload 0 LFS files: 0it [00:00, ?it/s]
+No files have been modified since last commit. Skipping to prevent empty commit.
+Upload 0 LFS files: 0it [00:00, ?it/s]Upload 0 LFS files: 0it [00:00, ?it/s]
+No files have been modified since last commit. Skipping to prevent empty commit.
+Upload 0 LFS files: 0it [00:00, ?it/s]Upload 0 LFS files: 0it [00:00, ?it/s]
+No files have been modified since last commit. Skipping to prevent empty commit.
+Upload 0 LFS files: 0it [00:00, ?it/s]Upload 0 LFS files: 0it [00:00, ?it/s]
+No files have been modified since last commit. Skipping to prevent empty commit.
+Upload 0 LFS files: 0it [00:00, ?it/s]Upload 0 LFS files: 0it [00:00, ?it/s]
+No files have been modified since last commit. Skipping to prevent empty commit.
+Upload 0 LFS files: 0it [00:00, ?it/s]Upload 0 LFS files: 0it [00:00, ?it/s]
+No files have been modified since last commit. Skipping to prevent empty commit.
+shard_index.npy:   0%|          | 0.00/1.71M [00:00<?, ?B/s]shard_index.npy: 100%|██████████| 1.71M/1.71M [00:00<00:00, 8.97MB/s]
+  [publish ncep100d] ncep100d  2/6463  34.8s
+  [publish ncep100d] ncep100d/1982  148/6463  44.1s
+  [publish ncep100d] ncep100d/1983  294/6463  54.5s
+  [publish ncep100d] ncep100d/1984  442/6463  63.2s
+  [publish ncep100d] ncep100d/1985  588/6463  72.7s
+  [publish ncep100d] ncep100d/1986  734/6463  82.3s
+  [publish ncep100d] ncep100d/1987  880/6463  91.7s
+  [publish ncep100d] ncep100d/1988  1026/6463  101.5s
+  [publish ncep100d] ncep100d/1989  1172/6463  110.5s
+  [publish ncep100d] ncep100d/1990  1318/6463  121.2s
+  [publish ncep100d] ncep100d/1991  1464/6463  131.0s
+  [publish ncep100d] ncep100d/1992  1610/6463  140.3s
+  [publish ncep100d] ncep100d/1993  1756/6463  149.5s
+  [publish ncep100d] ncep100d/1994  1902/6463  160.2s
+  [publish ncep100d] ncep100d/1995  2048/6463  172.1s
+  [publish ncep100d] ncep100d/1996  2194/6463  182.9s
+  [publish ncep100d] ncep100d/1997  2340/6463  194.2s
+  [publish ncep100d] ncep100d/1998  2486/6463  203.9s
+  [publish ncep100d] ncep100d/1999  2632/6463  213.8s
+  [publish ncep100d] ncep100d/2000  2778/6463  223.9s
+  [publish ncep100d] ncep100d/2001  2924/6463  233.2s
+  [publish ncep100d] ncep100d/2002  3070/6463  245.6s
+  [publish ncep100d] ncep100d/2003  3216/6463  258.6s
+  [publish ncep100d] ncep100d/2004  3364/6463  270.9s
+  [publish ncep100d] ncep100d/2005  3510/6463  282.0s
+  [publish ncep100d] ncep100d/2006  3656/6463  291.5s
+  [publish ncep100d] ncep100d/2007  3802/6463  301.2s
+  [publish ncep100d] ncep100d/2008  3948/6463  311.3s
+  [publish ncep100d] ncep100d/2009  4094/6463  320.5s
+  [publish ncep100d] ncep100d/2010  4240/6463  330.3s
+  [publish ncep100d] ncep100d/2011  4386/6463  340.0s
+  [publish ncep100d] ncep100d/2012  4532/6463  350.2s
+  [publish ncep100d] ncep100d/2013  4678/6463  359.6s
+  [publish ncep100d] ncep100d/2014  4824/6463  368.9s
+  [publish ncep100d] ncep100d/2015  4970/6463  379.2s
+  [publish ncep100d] ncep100d/2016  5116/6463  388.6s
+  [publish ncep100d] ncep100d/2017  5262/6463  398.0s
+  [publish ncep100d] ncep100d/2018  5408/6463  407.1s
+  [publish ncep100d] ncep100d/2019  5554/6463  417.0s
+  [publish ncep100d] ncep100d/2020  5700/6463  428.5s
+  [publish ncep100d] ncep100d/2021  5846/6463  438.7s
+  [publish ncep100d] ncep100d/2022  5992/6463  448.6s
+  [publish ncep100d] ncep100d/2023  6138/6463  459.3s
+  [publish ncep100d] ncep100d/2024  6286/6463  471.5s
+  [publish ncep100d] ncep100d/2025  6432/6463  480.4s
+  [publish ncep100d] ncep100d/2026  6462/6463  482.4s
+  [publish ncep100d] store.json  6463/6463  482.6s
+  publish: 6463 file(s) verified by restore, 50 tile(s) decompressed, HTTP range {'checked': 5} -> https://huggingface.co/datasets/chfrank/earth-tensors/tree/main/tensors/family7_2d/ncep100d
+=== stage publish done in 503.7s ===
