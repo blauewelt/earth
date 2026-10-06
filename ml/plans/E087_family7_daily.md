@@ -444,3 +444,13 @@ masked out, and its 2025 days against the source. Each store's `source_
 segments` (tile_grid.json and the registry) and `counts_by_year`
 (`pentad_bins_checked`, `source_readback_days`) record which guarantee every
 span carries.
+
+**Status, 2026-10-06 evening.** Extension lanes #1026–#1037 (the 2024, 2025
+and 2026 years of all four stores) are all green with no refusals.
+`oisst025d`, `ncep100d` and `occci025d` are re-assembled and published
+through their new ends (#1044–#1046); occci025d is published for the first
+time. The OISST full check passed (#1047). The first box (Vast 54497187)
+filled its 250 GB disk when the GLORYS pull came after three assembled
+stores. The workflow's `free_cache` step accepts only `family1_*` work
+directories, so it could not free `family7_2d` ones. That box was destroyed,
+and one fresh 400 GB box (54516511) took over GLORYS and the remaining checks.

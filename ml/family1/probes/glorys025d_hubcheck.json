@@ -51,40 +51,40 @@
       "cells": 693203,
       "nan_mismatch": 0,
       "max_abs_diff": 0.0016187539336565138,
-      "max_excess": -2.6564387110407923e-06,
+      "max_excess": -2.6751797786682204e-06,
       "allowed": 0.0
      },
      "log_mld": {
       "cells": 693250,
       "nan_mismatch": 0,
       "max_abs_diff": 0.0019741640543720074,
-      "max_excess": -8.27361661734497e-05,
+      "max_excess": -8.273651622569666e-05,
       "allowed": 0.0
      },
      "ssh": {
       "cells": 691213,
       "nan_mismatch": 0,
       "max_abs_diff": 0.0014763495884835276,
-      "max_excess": -1.4130193663601203e-06,
+      "max_excess": -1.4328855801332553e-06,
       "allowed": 0.0
      },
      "cur_u": {
       "cells": 693203,
       "nan_mismatch": 0,
       "max_abs_diff": 0.0017626047017982316,
-      "max_excess": -2.0072359112703246e-07,
+      "max_excess": -2.0083033504057667e-07,
       "allowed": 0.0
      },
      "cur_v": {
       "cells": 693205,
       "nan_mismatch": 0,
       "max_abs_diff": 0.001104196975938887,
-      "max_excess": -3.535587505167536e-07,
+      "max_excess": -3.5427108718688764e-07,
       "allowed": 0.0
      }
     }
    },
-   "seconds": 118.8
+   "seconds": 10.2
   },
   {
    "day": "2023-01-15",
@@ -135,41 +135,138 @@
       "cells": 693205,
       "nan_mismatch": 0,
       "max_abs_diff": 0.0011762925922613743,
-      "max_excess": -1.1386161555004294e-06,
+      "max_excess": -1.1573479453716142e-06,
       "allowed": 0.0
      },
      "log_mld": {
       "cells": 693310,
       "nan_mismatch": 0,
       "max_abs_diff": 0.0019704273789975524,
-      "max_excess": -1.1039078991316974e-05,
+      "max_excess": -1.1045013893905232e-05,
       "allowed": 0.0
      },
      "ssh": {
       "cells": 693310,
       "nan_mismatch": 0,
       "max_abs_diff": 0.00147161777131255,
-      "max_excess": -1.3298475313491725e-06,
+      "max_excess": -1.3497137451223075e-06,
       "allowed": 0.0
      },
      "cur_u": {
       "cells": 693205,
       "nan_mismatch": 0,
       "max_abs_diff": 0.00107038355199629,
-      "max_excess": -9.35701213958848e-08,
+      "max_excess": -9.365476630211773e-08,
       "allowed": 0.0
      },
      "cur_v": {
       "cells": 693205,
       "nan_mismatch": 0,
       "max_abs_diff": 0.0010971787618472284,
-      "max_excess": -1.7445354193756606e-07,
+      "max_excess": -1.751658786077001e-07,
       "allowed": 0.0
      }
     }
    },
-   "seconds": 120.6
+   "seconds": 30.4
+  },
+  {
+   "day": "2025-07-15",
+   "bin": 3180,
+   "frame": 1,
+   "hub_range_reads": 468,
+   "channels": {
+    "cur_speed": {
+     "values": 693205,
+     "max_abs_diff": 0.0009609321236543344,
+     "beyond_half_f16_step": 0,
+     "finite_on_hub_only": 0,
+     "finite_in_reference_only": 0
+    },
+    "log_mld": {
+     "values": 693308,
+     "max_abs_diff": 0.0009766601939227293,
+     "beyond_half_f16_step": 0,
+     "finite_on_hub_only": 0,
+     "finite_in_reference_only": 0
+    },
+    "ssh": {
+     "values": 693224,
+     "max_abs_diff": 0.00048828125,
+     "beyond_half_f16_step": 0,
+     "finite_on_hub_only": 0,
+     "finite_in_reference_only": 0
+    },
+    "cur_u": {
+     "values": 693205,
+     "max_abs_diff": 0.000957489013671875,
+     "beyond_half_f16_step": 0,
+     "finite_on_hub_only": 0,
+     "finite_in_reference_only": 0
+    },
+    "cur_v": {
+     "values": 693205,
+     "max_abs_diff": 0.0008511543273925781,
+     "beyond_half_f16_step": 0,
+     "finite_on_hub_only": 0,
+     "finite_in_reference_only": 0
+    }
+   },
+   "pentad": {
+    "ok": null,
+    "why": "after family 7.2's 2024-12-31 end: no pentad to compare with"
+   },
+   "seconds": 6.8
+  },
+  {
+   "day": "2026-08-15",
+   "bin": 3259,
+   "frame": 2,
+   "hub_range_reads": 504,
+   "channels": {
+    "cur_speed": {
+     "values": 693205,
+     "max_abs_diff": 0.0009624952192077707,
+     "beyond_half_f16_step": 0,
+     "finite_on_hub_only": 0,
+     "finite_in_reference_only": 0
+    },
+    "log_mld": {
+     "values": 693284,
+     "max_abs_diff": 0.0009766601939227293,
+     "beyond_half_f16_step": 0,
+     "finite_on_hub_only": 0,
+     "finite_in_reference_only": 0
+    },
+    "ssh": {
+     "values": 690495,
+     "max_abs_diff": 0.00048828125,
+     "beyond_half_f16_step": 0,
+     "finite_on_hub_only": 0,
+     "finite_in_reference_only": 0
+    },
+    "cur_u": {
+     "values": 693205,
+     "max_abs_diff": 0.0009732246398925781,
+     "beyond_half_f16_step": 0,
+     "finite_on_hub_only": 0,
+     "finite_in_reference_only": 0
+    },
+    "cur_v": {
+     "values": 693205,
+     "max_abs_diff": 0.0009558200836181641,
+     "beyond_half_f16_step": 0,
+     "finite_on_hub_only": 0,
+     "finite_in_reference_only": 0
+    }
+   },
+   "pentad": {
+    "ok": null,
+    "why": "after family 7.2's 2024-12-31 end: no pentad to compare with"
+   },
+   "seconds": 65.0
   }
  ],
- "ok": true
+ "ok": true,
+ "bytes_from": "the published files for each instant downloaded whole from the Hub and checked equal to the published store.json sha256 (the Hub answered HTTP 429 to per-tile range reads from this sandbox); the reference is the parked 0.25-degree chunk (daily025_global/, daily025_global_tail/ for 2026-08), which for 2025-2026 is the chunk the lane fetched from Copernicus and binned \u2014 not a second read of Copernicus, whose credentials live only on hosted runners"
 }
