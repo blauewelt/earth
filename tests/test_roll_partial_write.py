@@ -184,7 +184,13 @@ def main():
             "the roll would write incrementally to a disk nobody can read")
         assert re.search(r'^R=ml/runs/actions/rollout_spatial\.json$', pub,
                          re.M), pub
-        assert re.search(r'\[ -s "\$R" \] \|\| exit 0', pub), (
+        # The guard is an OR chain ending in `|| exit 0`; $R must be ONE of
+        # its terms. Not "the last term": 40d80f3 appended `[ -s "$S" ]`
+        # after it and the guard still considered $R.
+        guard = [ln for ln in pub.splitlines()
+                 if re.search(r"\|\|\s*exit 0\s*$", ln)
+                 and ln.lstrip().startswith("[ -s")]
+        assert any('[ -s "$R" ]' in ln for ln in guard), (
             "the early-exit guard does not consider $R, so a roll with no "
             "metrics.jsonl yet would publish nothing")
         assert re.search(r'\[ -s "\$R" \] && cp "\$R" '

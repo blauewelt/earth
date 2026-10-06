@@ -52,6 +52,7 @@ sys.path.insert(0, HERE)
 sys.path.insert(0, ML)
 from test_rollout_spatial import build_fixture, K                # noqa: E402
 from test_roll_monthly_identity import WALL                      # noqa: E402
+FIT_WALL = re.compile(r'^\s*"fit_wall_s":.*\n', re.M)
 
 HORIZON, STARTS, N_LONG, N_FUT = 3, 3, 12, 4
 HOLD_Y = "1991"                       # the pentad fixture's holdout year
@@ -107,7 +108,12 @@ def main():
         ddir = os.path.join(tmp, "roll_dump")
         with_dump, log = run(f, os.path.join(tmp, "b.json"),
                              os.path.join(tmp, "cb"), ("--dump-roll", ddir))
-        a_s, b_s = WALL.sub("", no_dump), WALL.sub("", with_dump)
+        # Wall clocks are not part of the result. 16cb1db (E-055) added a
+        # second one, the unpooled read-out's `fit_wall_s`, which the shared
+        # WALL pattern (whole-key "wall_s") does not match; strip it too,
+        # identically on both sides, and compare everything else exactly.
+        a_s, b_s = (FIT_WALL.sub("", WALL.sub("", no_dump)),
+                    FIT_WALL.sub("", WALL.sub("", with_dump)))
         n_wall = len(WALL.findall(no_dump))
         assert n_wall and n_wall == len(WALL.findall(with_dump))
         assert a_s == b_s, "the roll JSON MOVED under --dump-roll"

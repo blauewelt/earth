@@ -257,8 +257,12 @@ def head_fixture(tmp, T=72, H=12, W=20, C=6, seed=5):
     rapid = np.stack([np.arange(T, dtype=np.float32),
                       (17 + rng.normal(size=T)).astype(np.float32)], 1)
     data = os.path.join(tmp, "head.npz")
+    # Row 4 sits ON 26.5N. bfbda00 made probe_head REFUSE a target whose
+    # section is more than 1 deg from the nearest row (it used to probe the
+    # clamped edge row and report a number); linspace(0, 70, 12) put the
+    # nearest row at 25.45N, so every run of this fixture was refused.
     np.savez(data, X=X, months=months,
-             lats=np.linspace(0.0, 70.0, H), lons=np.linspace(-100.0, 20.0, W),
+             lats=np.arange(H) * 6.625, lons=np.linspace(-100.0, 20.0, W),
              chan=np.array(["c%d" % c for c in range(C)]), rapid=rapid)
     for patch in (1, 3):
         write_ckpt(tmp, "p%d" % patch, C, patch)

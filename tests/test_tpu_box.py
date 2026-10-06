@@ -150,10 +150,14 @@ def case2_shapes(m):
         raise SystemExit(f"case 2 FAILED: create method is {method!r}, not POST")
     if url != want:
         raise SystemExit(f"case 2 FAILED: create URL\n  got  {url}\n  want {want}")
-    if body.get("acceleratorType") != "v5litepod-8":
+    # v5e (TPU_ACCESS.md §3), sized to the 4-core per-zone grant: f58d944
+    # moved the default from -8 to -4 after a -8 against "Limit: 4" cost ~2 h
+    # of retries (scripts/tpu_box.py, the comment on DEFAULT_ACCEL)
+    if body.get("acceleratorType") != "v5litepod-4":
         raise SystemExit(f"case 2 FAILED: default acceleratorType is "
-                         f"{body.get('acceleratorType')!r}, not 'v5litepod-8' "
-                         f"(TPU_ACCESS.md §3 asks for v5e, not v6e)")
+                         f"{body.get('acceleratorType')!r}, not 'v5litepod-4' "
+                         f"(v5e, not v6e — TPU_ACCESS.md §3 — and no larger "
+                         f"than the 4-core per-zone quota grant)")
     if body.get("runtimeVersion") != "v2-alpha-tpuv5-lite":
         raise SystemExit(f"case 2 FAILED: default runtimeVersion is "
                          f"{body.get('runtimeVersion')!r}")

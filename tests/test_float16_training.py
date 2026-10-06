@@ -73,6 +73,10 @@ def train(data, out, *extra):
     p = subprocess.run([sys.executable, "-u", TRAIN, "--data", data,
                         "--out", out, "--steps", "40", "--batch", "64",
                         "--d-model", "32", "--n-layers", "2", "--d-dec", "32",
+                        # d_z/n_heads: the 0.92M pilot's old defaults, which
+                        # train.py stopped supplying in 86c012b (no silent
+                        # architecture). --patch comes in via *extra, at every call.
+                        "--d-z", "32", "--n-heads", "4",
                         "--anomaly", *extra],
                        capture_output=True, text=True)
     if p.returncode:
@@ -116,7 +120,7 @@ def main():
     data = os.path.join(tmp, "f32.npz")
     out = os.path.join(tmp, "run32")
     toy(data, np.float32)
-    train(data, out)
+    train(data, out, "--patch", "1")   # was the implicit default before 86c012b
     assert os.path.exists(os.path.join(out, "pixelmae.pt")), "float32 broke"
     first, last = losses(out)
     assert np.isfinite(first) and np.isfinite(last) and last != first

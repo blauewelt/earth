@@ -275,7 +275,10 @@ def main():
         print("7. refuses a scope aggregate with no split: %s" % msg)
 
         # -- 8. old artefacts stay READABLE (the code must not demand it) --
-        legacy = [os.path.join(ML, "paper", n)
+        # a17b189 moved these, unchanged, into the archived v7 paper; they
+        # are used here only as pre-change FORMAT samples
+        legacy = [os.path.join(ML, "paper", "archive",
+                               "v7-2026-08-27-contaminated", n)
                   for n in ("roll_355.json", "roll_356.json")]
         legacy = [p for p in legacy if os.path.exists(p)]
         assert legacy, "no archived roll_*.json found to check for regressions"

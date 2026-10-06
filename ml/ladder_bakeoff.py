@@ -721,8 +721,13 @@ def run(args):
 
     if smoke:
         idx = json.load(open(os.path.join(args.fixture, "family7_index.json")))
+        # The fixture names its own files: 707a34d re-cut it as family 7.1
+        # (stem ..._l1, plus an oc025 group this bake-off does not read), so
+        # the Hub's l0 STEM no longer matches it. The production path below
+        # still reads l0 from the Hub, unchanged.
+        fstem = idx.get("stem", STEM)
         readers = {g: LocalReader(g, os.path.join(args.fixture,
-                                                  f"{STEM}_X_{g}.npy"))
+                                                  f"{fstem}_X_{g}.npy"))
                    for g in GROUPS}
         chans = {g: list(idx["groups"][g]["chans"]) for g in GROUPS}
         units = {g: idx["groups"][g]["units"] for g in GROUPS}

@@ -287,6 +287,9 @@ def main():
                 "RECIPE_CODEC_D_DEC": "768", "RECIPE_ANOMALY": "true",
                 "RECIPE_BATCH": "512", "RECIPE_STEPS": "60000",
                 "RECIPE_HOLDOUT_LON": "0,0",
+                # bfbda00 (2026-08-21): every recipe states head_probe=true,
+                # pinned by tests/test_unpooled_verdict.py case 3
+                "RECIPE_HEAD_PROBE": "true",
                 "RECIPE_NAME": "f3-anchor-41M-nolonhold"},
             "xl144-nolonhold": {
                 "RECIPE_TENSOR": "family3_na025", "RECIPE_D_Z": "64",
@@ -298,6 +301,7 @@ def main():
                 "RECIPE_TEMPORAL_D_MODEL": "1024",
                 "RECIPE_TEMPORAL_LAYERS": "16",
                 "RECIPE_TRAIN_LON_HOLD": "none",
+                "RECIPE_HEAD_PROBE": "true",
                 "RECIPE_NAME": "xl144-nolonhold"},
         }
         tail = ("stencil:145,ring:spiral:111-4444-0.71-0.5,seed:0,"

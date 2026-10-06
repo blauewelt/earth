@@ -57,7 +57,11 @@ def toy(path, seed=0):
 def run_train(data, out, steps, resume=None):
     cmd = [sys.executable, "-u", TRAIN, "--data", data, "--out", out,
            "--steps", str(steps), "--batch", "32", "--d-model", "32",
-           "--n-layers", "2", "--d-dec", "32", "--anomaly"]
+           "--n-layers", "2", "--d-dec", "32", "--anomaly",
+           # the 0.92M pilot's old defaults, which train.py stopped
+           # supplying in 86c012b (no silent architecture); identical on
+           # every call, so a resume never contradicts its checkpoint
+           "--d-z", "32", "--patch", "1", "--n-heads", "4"]
     if resume:
         cmd += ["--resume", resume]
     return subprocess.run(cmd, capture_output=True, text=True)

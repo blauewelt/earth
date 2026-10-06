@@ -115,7 +115,10 @@ def main():
                         os.path.join(HERE, "..", "ml", "train.py"),
                         "--data", data, "--out", out, "--steps", "300",
                         "--batch", "32", "--d-model", "32", "--n-layers", "2",
-                        "--d-dec", "32", "--anomaly", "--max-minutes", "30"],
+                        "--d-dec", "32", "--anomaly", "--max-minutes", "30",
+                        # the 0.92M pilot's old defaults, which train.py
+                        # stopped supplying in 86c012b (no silent architecture)
+                        "--d-z", "32", "--patch", "1", "--n-heads", "4"],
                        capture_output=True, text=True)
     if p.returncode:
         print(p.stdout[-1500:], p.stderr[-1500:], file=sys.stderr)
