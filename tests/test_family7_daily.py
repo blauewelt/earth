@@ -269,3 +269,67 @@ def test_frames_round_trip_through_the_sharded_writer(tmp_path):
 
 if __name__ == "__main__":
     sys.exit(pytest.main([__file__, "-q"]))
+
+
+# ======================================== the lane's consistency refusal ===
+class _Ctx:
+    source_dir = ""
+    scratch = "/nonexistent"
+
+    def __init__(self):
+        self.absent = []
+
+    def note_absent(self, unit, why):
+        self.absent.append((unit, why))
+
+
+def _lane(perturb):
+    """ncep100d's fetch_frames over one bin of synthetic frames, against a
+    'published' pentad computed from those same frames (optionally nudged)."""
+    from family1.adapters import REGISTRY
+    ad = REGISTRY["ncep100d"]()
+    rng = np.random.default_rng(11)
+    b = 2411
+    days = fd.bin_days(b)
+    frames = {d: (rng.standard_normal((181, 360, 15)) * 0.5 + 2.0)
+              .astype(np.float32) for d in days}
+    for a in frames.values():
+        a[..., 10:12] = np.abs(a[..., 10:12]) * 0.1        # soil in bounds
+        a[..., 7] = 1000.0 + a[..., 7]                      # sp in hPa
+        a[..., 2:4] = np.abs(a[..., 2:4])                   # sigma >= 0
+        a[..., 8:10] = np.abs(a[..., 8:10])                 # log1p >= 0
+    ad.days_frames = lambda ctx, ds: ((d, frames[d], None) for d in ds)
+    st = [frames[d].astype(np.float16).astype(np.float32) for d in days]
+    P = fd.pentad_from_daily("ncep100d", np.stack(st))
+    if perturb:
+        P[90, 180, 4] += 0.05                               # one t2m cell
+    norm = np.tile([0.0, 1.0], (15, 1))
+
+    class _Ref:
+        def bin(self, bb):
+            return P, P.copy(), norm
+    ad._ref = _Ref()
+    os.environ["F7D_PENTAD_CHECK"] = "on"
+    try:
+        ctx = _Ctx()
+        out = list(ad.fetch_frames(ctx, [("ncep100d", b, f)
+                                         for f in range(5)]))
+    finally:
+        del os.environ["F7D_PENTAD_CHECK"]
+    return ctx, out
+
+
+def test_a_bin_that_reproduces_the_pentad_is_yielded():
+    ctx, out = _lane(False)
+    assert not ctx.absent and len(out) == 5
+    c = out[0][4]
+    assert c["pentad_bins_checked"] == 1 and c["max_pentad_excess_t2m"] <= 0
+
+
+def test_a_bin_that_does_not_is_refused_and_its_year_left_unmarked():
+    ctx, out = _lane(True)
+    assert out == []
+    assert len(ctx.absent) == 1
+    unit, why = ctx.absent[0]
+    assert unit.startswith("2015 bin 2411") and "PENTAD CONSISTENCY" in why
+    assert "t2m" in why

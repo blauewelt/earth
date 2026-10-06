@@ -117,12 +117,15 @@ REGISTRY_DIR = os.path.join(HERE, "cache", f10.CACHE_DIRNAME)
 REGISTRY_NAME = {"1gf": "family1gf.json",
                  "1tf": "family1tf.json",
                  "09tf": "family09tf.json",
-                 "12": "family12.json"}
+                 "12": "family12.json",
+                 "72d": "family72d.json"}
 PLAN_E085 = "ml/plans/E085_family12_atmosphere.md"
+PLAN_E087 = "ml/plans/E087_family7_daily.md"
 NOTE = {"1gf": "ml/paper/notes/family1gf.tex",
         "1tf": "ml/paper/notes/family1tf.tex",
         "09tf": "ml/paper/notes/family09tf.tex",
-        "12": PLAN_E085}
+        "12": PLAN_E085,
+        "72d": PLAN_E087}
 #: 0.9.tf is 1.0.tf with the imagery replaced; 1.2 is 1.gf with ERA5's
 #: upper air added. In both, every parent store is the same bytes under the
 #: same path, so it is inherited by reference.
@@ -150,6 +153,25 @@ DESCRIPTION_1 = (
     "burned-area map from a half-hourly flux tower at the same place. "
     "Dispatch on `tier`.")
 DESCRIPTION = {
+    "72d": (
+        "Family 7.2d is family 7.2 — the programme's global input tensor "
+        "(family7_global025_pentad_l2: 0.25-degree and 1-degree grids pole "
+        "to pole, every value a five-day mean) — at DAILY resolution: the "
+        "same channels, names, units and derivation, one frame per calendar "
+        "day instead of the mean of the days in a five-day bin, in the "
+        "sharded tier-G layout (five daily frames per bin). One store per "
+        "source: glorys025d (GLORYS12 ocean reanalysis: currents, sea-surface "
+        "height, mixed-layer depth, 1993 ->), oisst025d (NOAA OISST "
+        "sea-surface temperature and sea ice, 1982 ->), ncep100d (NCEP/NCAR "
+        "Reanalysis 1: the 15 atmosphere and land channels, 1982 ->) and "
+        "occci025d (ESA OC-CCI ocean colour, 1997-09-04 ->); every record "
+        "ends 2024-12-31 with family 7.2's. Physical units, float16. The "
+        "five-day mean of a bin's frames by each channel's rule reproduces "
+        "family 7.2 to float16 rounding, NaN exactly where it is NaN, and "
+        "every fetch lane checked that for every bin it wrote. tau_x_std and "
+        "tau_y_std are a CENTRED FIVE-DAY standard deviation of the 6-hourly "
+        "wind stress, not a one-day value. The Argo depth group (rg100) is "
+        "monthly and has no daily form. Dispatch on `tier`."),
     "12": (
         "Family 1.2 is family 1.gf — the global fine observation stores, "
         "inherited by reference and unchanged — plus the upper air the "
@@ -486,7 +508,7 @@ def build_one(code, repo=PUBLIC_REPO, use_hub=True, work=None,
             "rows and have no time column at all — their bin axis is the "
             "shard index."),
         "description": DESCRIPTION.get(code, DESCRIPTION_1),
-        "plan": PLAN_E085 if code == "12" else PLAN,
+        "plan": {"12": PLAN_E085, "72d": PLAN_E087}.get(code, PLAN),
         "design": DESIGN, "wave6": WAVE6, "contract": CONTRACT,
         "note": NOTE[code],
         "epoch": str(sh.EPOCH), "pentad_days": f10.PENTAD_DAYS,

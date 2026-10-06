@@ -143,6 +143,11 @@ def mask_bounds(arr, channels):
 
 
 # =========================================================== derivation ===
+def glorys_chunk(path, days):
+    """One GLORYS monthly chunk -> {day: frame} for the wanted days in it."""
+    return glorys_daily([path], days)
+
+
 def glorys_daily(paths, days):
     """GLORYS12 0.25° daily chunks -> {day: [721, 1440, 5] float32}.
 
@@ -249,7 +254,10 @@ def ncep_daily(paths, land, days, sigma_half=2):
                 if day < lo or day > hi:
                     continue
                 f = f7.squeeze_level(np.ma.filled(np.asarray(var[k]), np.nan))
-                f = np.asarray(f, np.float64)
+                # float32 is the source's own dtype, so holding it in float32
+                # loses nothing (the sign flip is exact) and halves a year's
+                # memory; every sum below is float64, as in stage_ncep
+                f = np.asarray(f, np.float32)
                 if v in f7.NCEP_FLIP:
                     f = -f
                 samples[v].setdefault(day, []).append(f)
@@ -262,6 +270,7 @@ def ncep_daily(paths, land, days, sigma_half=2):
         acc = np.zeros(fields[0].shape, np.float64)
         cnt = np.zeros(fields[0].shape, np.int32)
         for f in fields:
+            f = np.asarray(f, np.float64)
             ok = np.isfinite(f)
             acc[ok] += f[ok]
             cnt += ok
@@ -278,6 +287,7 @@ def ncep_daily(paths, land, days, sigma_half=2):
         cnt = None
         for w in have:
             for f in samples[v][w]:
+                f = np.asarray(f, np.float64)
                 if acc is None:
                     acc = np.zeros(f.shape, np.float64)
                     acc2 = np.zeros(f.shape, np.float64)
@@ -418,6 +428,52 @@ def f16_half_step(x):
     with np.errstate(divide="ignore", invalid="ignore"):
         e = np.floor(np.log2(np.maximum(x, 2.0 ** -14)))
     return 0.5 * 2.0 ** (e - 10)
+
+
+def check_bin(store, frames, P, z, norm):
+    """THE FALSIFIER FOR ONE BIN, as a lane runs it before a year is marked.
+
+    `frames` are the five frames AS STORED (float16, decoded to float32; an
+    absent frame is all-NaN), `P` the published pentad value un-z-scored to
+    physical units, `z` the stored z-score, `norm` the group's (mean, sd) —
+    all three already restricted to this store's channels (`pentad_index`).
+    The tolerance is `compare()`'s "stored" one (plan §4). Returns a dict with
+    `ok` and, per channel, the cells compared, NaN-pattern mismatches, the
+    largest |difference| and the largest excess over the tolerance.
+    """
+    cfg = STORES[store]
+    st = np.stack([np.asarray(f, np.float32) for f in frames])
+    R = pentad_from_daily(store, st)
+    fin = np.isfinite(st)
+    hs = f16_half_step(st)
+    hs[~fin] = 0.0
+    hs = hs.max(0)
+    mag = np.abs(np.where(fin, st, 0.0)).max(0)
+    double = cfg["group"] == "g025"
+    out = {"ok": True, "channels": {}}
+    for c, (name, _u, _lo, _hi) in enumerate(cfg["channels"]):
+        Pc, Rc, zc = P[..., c], R[..., c], z[..., c]
+        fp, fr = np.isfinite(Pc), np.isfinite(Rc)
+        both = fp & fr
+        mism = int((fp != fr).sum())
+        d = np.abs(Rc - Pc)[both]
+        tol = f16_half_step(zc[both]) * norm[c, 1]
+        off = 273.15 if name in ("t2m", "tsoil", "skt") else 0.0
+        tol = tol + 2.0 ** -21 * (np.maximum(np.abs(Pc[both]),
+                                             mag[..., c][both]) + off)
+        if double:
+            tol = tol + f16_half_step(np.maximum(np.abs(Pc[both]),
+                                                 np.abs(Rc[both])))
+        tol = tol + (1.5 if name == "cur_speed" else 1.0) * hs[..., c][both]
+        tol = tol * (1 + 1e-6) + 1e-12
+        exc = float((d - tol).max()) if d.size else 0.0
+        r = {"cells": int(both.sum()), "nan_mismatch": mism,
+             "max_abs_diff": float(d.max()) if d.size else 0.0,
+             "max_excess": exc}
+        if mism or exc > 0:
+            out["ok"] = False
+        out["channels"][name] = r
+    return out
 
 
 # ================================================================ probe ===
