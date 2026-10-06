@@ -167,7 +167,7 @@ on:
         type: boolean
         default: false
       free_cache:
-        description: "self-hosted box only: comma-separated <family1_x>/<store> work directories under the box's persistent cache (/opt/earth-cache) to DELETE before the build, e.g. family1_gf/oc4k,family1_gf/swh. Each is deleted only if it carries publish.done AND check.done -- the store is on the Hub and verified -- and the step refuses otherwise. This is how a box with a 420 GB disk assembles a fourth 150 GB store after three published ones (lst05 #292 died on ENOSPC behind oc4k and swh, 2026-09-20)"
+        description: "self-hosted box only: comma-separated <family>/<store> work directories (family1_gf/oc4k, family7_2d/ncep100d) under the box's persistent cache (/opt/earth-cache) to DELETE before the build, e.g. family1_gf/oc4k,family1_gf/swh. Each is deleted only if it carries publish.done -- every file restored from the Hub and hashed -- and the step refuses otherwise (check.done is reported, not required; ml/free_cache.py). This is how a box with a 420 GB disk assembles a fourth 150 GB store after three published ones (lst05 #292 died on ENOSPC behind oc4k and swh, 2026-09-20)"
         default: ""
 
 permissions:
@@ -220,25 +220,11 @@ jobs:
           # the on-demand full-decode `check` stage (2026-09-23: `stage=all`
           # stops at publish for a tier-G store; the full decode is hours on a
           # box rented by the hour) and is reported when present, not required.
-          IFS=',' read -ra items <<< "${FREE_CACHE}"
-          for it in "${items[@]}"; do
-            it="${it// /}"
-            [ -z "${it}" ] && continue
-            case "${it}" in
-              family1_*/[a-z0-9_]*) ;;
-              *) echo "::error::free_cache: '${it}' is not <family1_x>/<store>"; exit 1 ;;
-            esac
-            d="/opt/earth-cache/${it}"
-            if [ ! -d "${d}" ]; then echo "free_cache: ${d} is not there -- nothing to free"; continue; fi
-            if [ ! -f "${d}/publish.done" ]; then
-              echo "::error::free_cache: ${d} has no publish.done -- not a published-and-restored store; refusing to delete it"
-              exit 1
-            fi
-            echo "free_cache: ${it} published $(cat "${d}/publish.done") checked $(cat "${d}/check.done" 2>/dev/null || echo '(check stage not run)')"
-            du -sh "${d}" || true
-            rm -rf "${d}"
-            echo "freed ${d}"
-          done
+          # The path rule and the deletion live in ml/free_cache.py (tested by
+          # tests/test_free_cache.py): <family>/<store>, family7_2d included,
+          # one slash, no dots. The shell `case family1_*/...` it replaces
+          # refused every family-7.2d directory and let `..` through.
+          python3 ml/free_cache.py --root /opt/earth-cache "${FREE_CACHE}"
           df -h /opt/earth-cache
 
       - name: Install
