@@ -1,5 +1,6 @@
 {
- "pending": [
+ "pending": [],
+ "dispatched": [
   {
    "store": "era5_q",
    "stage": "index,fetch",
@@ -8,7 +9,8 @@
    "runner": "ubuntu-latest",
    "extra_args": "--push-parts",
    "adapter_env": "ERA5_Q_BOUND=D6",
-   "retries": 2
+   "retries": 2,
+   "at": "2026-10-06T05:46:45.124Z"
   },
   {
    "store": "era5_q",
@@ -18,7 +20,8 @@
    "runner": "ubuntu-latest",
    "extra_args": "--push-parts",
    "adapter_env": "ERA5_Q_BOUND=D6",
-   "retries": 2
+   "retries": 2,
+   "at": "2026-10-06T05:46:48.635Z"
   },
   {
    "store": "era5_q",
@@ -28,7 +31,8 @@
    "runner": "ubuntu-latest",
    "extra_args": "--push-parts",
    "adapter_env": "ERA5_Q_BOUND=D6",
-   "retries": 2
+   "retries": 2,
+   "at": "2026-10-06T05:46:52.090Z"
   },
   {
    "store": "era5_q",
@@ -38,7 +42,8 @@
    "runner": "ubuntu-latest",
    "extra_args": "--push-parts",
    "adapter_env": "ERA5_Q_BOUND=D6",
-   "retries": 2
+   "retries": 2,
+   "at": "2026-10-06T05:46:55.588Z"
   },
   {
    "store": "era5_q",
@@ -48,7 +53,8 @@
    "runner": "ubuntu-latest",
    "extra_args": "--push-parts",
    "adapter_env": "ERA5_Q_BOUND=D6",
-   "retries": 2
+   "retries": 2,
+   "at": "2026-10-06T05:46:59.245Z"
   },
   {
    "store": "era5_q",
@@ -58,7 +64,8 @@
    "runner": "ubuntu-latest",
    "extra_args": "--push-parts",
    "adapter_env": "ERA5_Q_BOUND=D6",
-   "retries": 2
+   "retries": 2,
+   "at": "2026-10-06T05:47:02.876Z"
   },
   {
    "store": "era5_q",
@@ -68,7 +75,8 @@
    "runner": "ubuntu-latest",
    "extra_args": "--push-parts",
    "adapter_env": "ERA5_Q_BOUND=D6",
-   "retries": 2
+   "retries": 2,
+   "at": "2026-10-06T05:47:06.457Z"
   },
   {
    "store": "era5_q",
@@ -78,7 +86,8 @@
    "runner": "ubuntu-latest",
    "extra_args": "--push-parts",
    "adapter_env": "ERA5_Q_BOUND=D6",
-   "retries": 2
+   "retries": 2,
+   "at": "2026-10-06T05:47:09.997Z"
   },
   {
    "store": "era5_q",
@@ -88,10 +97,10 @@
    "runner": "ubuntu-latest",
    "extra_args": "--push-parts",
    "adapter_env": "ERA5_Q_BOUND=D6",
-   "retries": 2
+   "retries": 2,
+   "at": "2026-10-06T05:47:13.491Z"
   }
  ],
- "dispatched": [],
  "done": [
   {
    "store": "sst_acspo02",
