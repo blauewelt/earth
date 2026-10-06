@@ -377,34 +377,27 @@ Step 1 is running (§8); steps 2–4 have not been dispatched.
 
 ## 8 · Status
 
-**2026-10-05 21:35Z — fetch complete; `era5_t` published and verified; `q`,
-`v`, `u` assembling on one rented box; registry published.**
+**BUILT — 2026-10-06 02:20Z.** All four stores are published, fully checked
+and read back; the registry lists them; the box is destroyed; nothing is in
+flight.
 
-- **Fetch:** every year 1982–2026 of all four stores has its `done.json` on
-  the Hub with the expected frame count — 65,008 frames per store; 53.83 /
-  94.73 / 98.97 / 101.23 GB for t / q / u / v, against the probe's 54.1 /
-  94.0 / 99.2 / 101.3 GB. One lane (`era5_u` 2017–2021) had to be
-  re-dispatched after two hosted-runner acquisition failures during a GitHub
-  Actions incident.
-- **`era5_q` out-of-bounds:** a few to ~200 values a year fall below D5's
-  −0.01 g/kg bound and were stored as NaN and counted. Negligible in number,
-  but D5's bound is tighter than ERA5's own negatives; reopening it means
-  re-fetching `era5_q` (BUILD_LOG, E-085 assembly entry).
-- **The box:** Vast 54376323 (offer 41247428, runner `gpu-box-41247428`),
-  verified, Texas, 64 vCPU, 251 GiB, 450 GB disk, 6.6/6.8 Gbps up/down,
-  $0.302/h, rented 20:19:45Z.
-- **`era5_t`:** assembled and published by #959 in 26 min (pull 792 s,
-  assemble 64 s, publish 628 s with every file restore-verified),
-  full-decode checked by #960 (1,170,144 tiles, the Hub agrees), 53.83 GB at
-  `tensors/family1_2/era5_t`. Read back from the Hub through `ShardedGroup`
-  at 2015-01-15 12 UTC and 2023-07-15 06 UTC (either side of the seam) and
-  compared with independent xarray reads of the source: every value within
-  half a float16 step (max 0.125 K) (`ml/family1/era5_hub_check.py`).
-- **Registry:** `tensors/family1_2/family12.json` published by
-  `family1-registry.yml` #1 (4 stores, `era5_t` built, the other three not
-  yet, inherits 1.gf, E4); family 10.2's `siblings` line now names it,
-  rebuilt by its own builder behind `ml/registry_guard.py`.
-- **Queued on the box:** #961 `era5_q`, #962 `era5_v`, #963 `era5_u`
-  (assemble + publish), then #964–#966 their full-decode checks.
-- **Remaining:** those six jobs; the Hub read-back for q, u, v; the registry
-  run once more (`families: 12`) so all four read built; destroy the box.
+| store | published bytes | frames | Hub read-back vs source (max, both instants) |
+|---|---|---|---|
+| `era5_t` | 53,830,272,913 | 65,008 | 0.125 K |
+| `era5_q` | 94,734,893,283 | 65,008 | 0.0078 g/kg (1 masked out-of-bounds value) |
+| `era5_u` | 98,966,059,454 | 65,008 | 0.031 m/s |
+| `era5_v` | 101,233,217,977 | 65,008 | 0.031 m/s |
+
+- **Registry:** [`tensors/family1_2/family12.json`](https://huggingface.co/datasets/chfrank/earth-tensors/blob/main/tensors/family1_2/family12.json)
+  (four stores built, inherits family 1.gf, exception E4); family 10.2's
+  `siblings` line names it.
+- **Cost:** fetch $0 (hosted lanes); one verified Vast box for 5.84 h ≈ $1.76,
+  of which ≈ $0.52 was idle waiting for the follow-up session.
+- **Open for the planning session:** 1,883 humidity values (3.4 × 10⁻⁸ of the
+  store) fall below D5's −0.01 g/kg bound and are NaN; lowering the bound
+  means re-fetching and re-assembling `era5_q` (~1 h of hosted lanes, ~1 h of
+  a box). The Data tab's family 1.2 registry line in `src/f1data.js` is still
+  commented out (site work). Phase B (0.25°) is not started.
+- Run-by-run timings, the read-back numbers and the box's own numbers are in
+  the E-085 entries at the end of
+  [the family-1 build log](https://blauewelt.github.io/earth/docs.html?f=ml/family1/BUILD_LOG.md).

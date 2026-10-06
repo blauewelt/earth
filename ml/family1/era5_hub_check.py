@@ -20,7 +20,10 @@ nothing with the adapter:
 
 and requires every value to lie within half a float16 step of the
 reference (the only error the store is allowed), reporting the largest
-difference per level. It also checks store.json, tile_grid.json and
+difference per level. A stored NaN passes only where the source value is
+outside the channel's bounds (the adapter masks and counts those); it is
+listed under `masked_out_of_bounds`, and an out-of-bounds source value that
+was NOT masked fails. It also checks store.json, tile_grid.json and
 shard_index.npy against the record (bins, frames, the declared levels).
 
   python3 ml/family1/era5_hub_check.py --store era5_t \\
@@ -156,6 +159,14 @@ def main():
         ref, how = reference(ad, when, seam)
         d = np.abs(got.astype(np.float64) - ref)
         ok = d <= half_step(ref) * (1 + 1e-6) + 1e-12
+        # A STORED NaN IS CORRECT EXACTLY WHERE THE SOURCE VALUE IS OUTSIDE
+        # THE CHANNEL'S BOUNDS: the adapter masks those to NaN and counts them
+        # (contract rule 3). Anywhere else a NaN is a defect.
+        lo, hi = ad.bounds()
+        oob = (ref < lo[None, None, :]) | (ref > hi[None, None, :])
+        masked = np.isnan(got) & oob
+        ok = ok | masked
+        d = np.where(masked, 0.0, d)
         out["frames"].append({
             "instant": str(when), "bin": b, "frame": f,
             "source_of_store": "before seam" if when < seam else "after seam",
@@ -167,8 +178,17 @@ def main():
             "max_abs_diff_all": float(d.max()),
             "values": int(d.size),
             "within_half_float16_step": bool(ok.all()),
+            "masked_out_of_bounds": [
+                {"lat": float(-90 + i), "lon": float(-180 + j),
+                 "channel": ad.channel_names[k],
+                 "source_value": float(ref[i, j, k])}
+                for i, j, k in np.argwhere(masked)][:20],
+            "source_out_of_bounds_not_masked": int((oob & ~np.isnan(got))
+                                                   .sum()),
             "n_outside": int((~ok).sum())})
         checks[f"frame {when} within half a float16 step"] = bool(ok.all())
+        checks[f"frame {when} every out-of-bounds source value masked"] = \
+            out["frames"][-1]["source_out_of_bounds_not_masked"] == 0
     out["checks"] = checks
     out["ok"] = all(checks.values())
     out["seconds"] = round(time.time() - t0, 1)

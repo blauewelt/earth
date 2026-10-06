@@ -1611,3 +1611,69 @@ filled from the stores' manifests, and the restore verified.
 `era5_v` all, #963 `era5_u` all, then #964/#965/#966 the three checks. #961
 carries `free_cache: family1_2/era5_t`, which deletes the box's copy of the
 published-and-checked `era5_t` before the pull.
+
+### E-085 · family 1.2 is BUILT: all four ERA5 stores published, checked and read back; the box is destroyed (2026-10-06 02:20Z)
+
+**What family 1.2 is.** Family 1.gf (the global fine observation stores,
+inherited by reference) plus four stores of ERA5, ECMWF's reanalysis of the
+atmosphere: air temperature, specific humidity (g/kg) and the eastward and
+northward wind, each on the 13 pressure levels 50–1000 hPa, one frame per
+six-hourly analysis instant from 1982-01-01 00 UTC to 2026-06-30 18 UTC, on a
+1° grid. Registry:
+[`tensors/family1_2/family12.json`](https://huggingface.co/datasets/chfrank/earth-tensors/blob/main/tensors/family1_2/family12.json).
+
+| store | assemble + publish run | pull · assemble · publish | full-decode check run | check | published bytes |
+|---|---|---|---|---|---|
+| `era5_t` | [#959](https://github.com/blauewelt/earth/actions/runs/37370155327) (assemble ERA5 temperature from its parked parts and publish it) | 792 s · 64 s · 628 s | [#960](https://github.com/blauewelt/earth/actions/runs/37373168645) (decode every tile and compare the Hub manifest) | 1,547 s | 53,830,272,913 |
+| `era5_q` | [#961](https://github.com/blauewelt/earth/actions/runs/37373295357) (the same for specific humidity) | 811 s · 125 s · 771 s | [#964](https://github.com/blauewelt/earth/actions/runs/37373911377) | 1,646 s | 94,734,893,283 |
+| `era5_v` | [#962](https://github.com/blauewelt/earth/actions/runs/37373307454) (the same for the northward wind) | 925 s · 151 s · 801 s | [#965](https://github.com/blauewelt/earth/actions/runs/37373922498) | 1,535 s | 101,233,217,977 |
+| `era5_u` | [#963](https://github.com/blauewelt/earth/actions/runs/37373867892) (the same for the eastward wind) | 984 s · 210 s · 831 s | [#966](https://github.com/blauewelt/earth/actions/runs/37373932950) | 1,755 s | 98,966,059,454 |
+
+Every store: 3,251 bins, 65,008 frames, 1,170,144 tiles, 6,504 files plus
+`store.json`; every publish downloaded all 6,505 files back and matched their
+sha256; every check decoded every tile and reported "Hub chfrank/earth-tensors
+agrees". **Total published: 348.76 GB.** The box ran the eight jobs back to
+back from 20:30Z to 00:26Z (3 h 56 min of work).
+
+**Read back from the Hub by this session** (`ml/family1/era5_hub_check.py`:
+whole frames through `sharded.ShardedGroup` on the Hub URL, against xarray +
+zarr reads of the source with no adapter code; reports in
+`ml/family1/probes/era5_<v>_hubcheck.json`). Every value is within half a
+float16 step of the source at both instants, before the 2022 seam
+(2015-01-15 12 UTC, from the 1° archive) and after it (2023-07-15 06 UTC,
+the 0.25° archive regridded independently):
+
+| store | max abs diff, 2015-01-15 12 UTC | max abs diff, 2023-07-15 06 UTC |
+|---|---|---|
+| `era5_t` | 0.125 K | 0.125 K |
+| `era5_q` | 0.0078 g/kg | 0.0078 g/kg, plus 1 value stored as NaN where the source holds −0.0134 g/kg at 150 hPa, 46° N 67° W — below the −0.01 g/kg bound, masked and counted as designed |
+| `era5_v` | 0.031 m/s | 0.016 m/s |
+| `era5_u` | 0.031 m/s | 0.031 m/s |
+
+The check first reported that NaN as a failure. It now accepts a stored NaN
+only where the source value is outside the channel's bounds, and fails on any
+out-of-bounds source value that was not masked.
+
+**Humidity below the −0.01 g/kg bound (decision D5), from `era5_q`'s
+store.json:** 1,883 values over the whole record — `q_100` 216, `q_150` 881,
+`q_200` 347, `q_250` 106, `q_300` 80, `q_400` 221, `q_500` 32 — out of
+5.5 × 10¹⁰ stored values (3.4 × 10⁻⁸). They are NaN in the store. The other
+three stores have none.
+
+**The registry**, `family1-registry.yml`
+[#2](https://github.com/blauewelt/earth/actions/runs/37403316619) (publish
+family 1.2's registry; hosted): all four stores `built`, each with 3,251
+bins, 65,008 frames, its bytes and 6,504 file sha256s. Its `record_span` reads
+1982-01-01 .. 2026-12-31 — that is the requested window in store.json's
+`date_range`; the data itself ends 2026-06-30 18 UTC (752 `after_record`
+frames per store say so).
+
+**The box is destroyed.** Vast instance 54376323 (offer 41247428, verified,
+Texas, $0.3017/h: $0.16 machine + $0.227 storage for 450 GB) ran from
+2026-10-05 20:19:46Z (Vast's `start_date`) to its destroy at 2026-10-06
+02:09:57Z: **5.84 h, ≈ $1.76**. `destroy` answered `{"success": true}` and the
+instance is absent from the account's instance list; its runner
+`gpu-box-41247428` was deregistered from the repository. **About $0.52 of that
+was idle**: the last job finished at 00:26Z and the box waited 1 h 44 min for
+the follow-up session. The fetch lanes cost $0 (hosted runners). **Family 1.2
+cost ≈ $1.76 in all.**
