@@ -1,0 +1,80 @@
+Upload 30 LFS files:  33%|███▎      | 10/30 [00:01<00:02,  8.66it/s]
+glorys025d__bin_1380.zst:   0%|          | 0.00/31.1M [00:00<?, ?B/s][A
+
+glorys025d__bin_1381.idx.npy:   0%|          | 0.00/1.57k [00:00<?, ?B/s][A[AUpload 30 LFS files:  40%|████      | 12/30 [00:01<00:01, 10.41it/s]
+
+
+glorys025d__bin_1381.zst:   0%|          | 0.00/31.0M [00:00<?, ?B/s][A[A[Aglorys025d__bin_1381.idx.npy: 100%|██████████| 1.57k/1.57k [00:00<00:00, 14.7kB/s]
+
+
+glorys025d__bin_1382.idx.npy:   0%|          | 0.00/1.57k [00:00<?, ?B/s][A[Aglorys025d__bin_1379.zst: 100%|██████████| 31.2M/31.2M [00:00<00:00, 61.1MB/s]
+
+glorys025d__bin_1380.zst:  52%|█████▏    | 16.1M/31.1M [00:00<00:00, 56.7MB/s][Aglorys025d__bin_1382.idx.npy: 100%|██████████| 1.57k/1.57k [00:00<00:00, 15.7kB/s]
+
+
+
+glorys025d__bin_1381.zst:  52%|█████▏    | 16.1M/31.0M [00:00<00:00, 61.2MB/s][A[A[AUpload 30 LFS files:  47%|████▋     | 14/30 [00:01<00:01,  9.06it/s]
+
+glorys025d__bin_1382.zst:   0%|          | 0.00/31.0M [00:00<?, ?B/s][A[A
+
+
+
+glorys025d__bin_1383.idx.npy:   0%|          | 0.00/1.57k [00:00<?, ?B/s][A[A[A[Aglorys025d__bin_1383.idx.npy: 100%|██████████| 1.57k/1.57k [00:00<00:00, 16.1kB/s]
+glorys025d__bin_1380.zst: 100%|██████████| 31.1M/31.1M [00:00<00:00, 61.0MB/s]
+Upload 30 LFS files:  53%|█████▎    | 16/30 [00:01<00:01, 10.52it/s]
+glorys025d__bin_1383.zst:   0%|          | 0.00/31.0M [00:00<?, ?B/s][Aglorys025d__bin_1381.zst: 100%|██████████| 31.0M/31.0M [00:00<00:00, 57.7MB/s]
+
+
+
+glorys025d__bin_1384.idx.npy:   0%|          | 0.00/1.57k [00:00<?, ?B/s][A[A[A
+
+glorys025d__bin_1382.zst:  52%|█████▏    | 16.1M/31.0M [00:00<00:00, 53.1MB/s][A[AUpload 30 LFS files:  60%|██████    | 18/30 [00:02<00:01, 10.30it/s]
+
+
+
+glorys025d__bin_1384.zst:   0%|          | 0.00/30.9M [00:00<?, ?B/s][A[A[A[A
+glorys025d__bin_1383.zst:  52%|█████▏    | 16.1M/31.0M [00:00<00:00, 68.2MB/s][Aglorys025d__bin_1384.idx.npy: 100%|██████████| 1.57k/1.57k [00:00<00:00, 14.6kB/s]
+
+
+
+glorys025d__bin_1385.idx.npy:   0%|          | 0.00/1.57k [00:00<?, ?B/s][A[A[A
+
+
+
+glorys025d__bin_1384.zst:  52%|█████▏    | 16.1M/30.9M [00:00<00:00, 64.6MB/s][A[A[A[Aglorys025d__bin_1385.idx.npy: 100%|██████████| 1.57k/1.57k [00:00<00:00, 13.0kB/s]
+glorys025d__bin_1382.zst: 100%|██████████| 31.0M/31.0M [00:00<00:00, 52.3MB/s]
+glorys025d__bin_1383.zst: 100%|██████████| 31.0M/31.0M [00:00<00:00, 64.7MB/s]
+Upload 30 LFS files:  67%|██████▋   | 20/30 [00:02<00:01,  9.01it/s]
+glorys025d__bin_1385.zst:   0%|          | 0.00/31.0M [00:00<?, ?B/s][A
+
+glorys025d__bin_1386.idx.npy:   0%|          | 0.00/1.57k [00:00<?, ?B/s][A[AUpload 30 LFS files:  73%|███████▎  | 22/30 [00:02<00:00,  9.59it/s]
+
+
+glorys025d__bin_1386.zst:   0%|          | 0.00/31.0M [00:00<?, ?B/s][A[A[A
+
+
+
+
+glorys025d__bin_1387.idx.npy:   0%|          | 0.00/1.57k [00:00<?, ?B/s][A[A[A[A[Aglorys025d__bin_1384.zst: 100%|██████████| 30.9M/30.9M [00:00<00:00, 57.2MB/s]
+glorys025d__bin_1386.idx.npy: 100%|██████████| 1.57k/1.57k [00:00<00:00, 14.9kB/s]
+
+glorys025d__bin_1385.zst:  52%|█████▏    | 16.1M/31.0M [00:00<00:00, 61.4MB/s][Aglorys025d__bin_1387.idx.npy: 100%|██████████| 1.57k/1.57k [00:00<00:00, 15.4kB/s]
+Upload 30 LFS files:  80%|████████  | 24/30 [00:02<00:00,  9.11it/s]
+
+glorys025d__bin_1387.zst:   0%|          | 0.00/31.0M [00:00<?, ?B/s][A[A
+
+
+
+glorys025d__shard_index.npy:   0%|          | 0.00/30.3k [00:00<?, ?B/s][A[A[A[A
+
+
+glorys025d__bin_1386.zst:  52%|█████▏    | 16.1M/31.0M [00:00<00:00, 48.2MB/s][A[A[Aglorys025d__bin_1385.zst: 100%|██████████| 31.0M/31.0M [00:00<00:00, 60.5MB/s]
+glorys025d__shard_index.npy: 100%|██████████| 30.3k/30.3k [00:00<00:00, 287kB/s]
+Upload 30 LFS files:  90%|█████████ | 27/30 [00:03<00:00,  9.83it/s]
+
+glorys025d__bin_1387.zst:  52%|█████▏    | 16.1M/31.0M [00:00<00:00, 56.7MB/s][A[Aglorys025d__bin_1386.zst: 100%|██████████| 31.0M/31.0M [00:00<00:00, 49.5MB/s]
+glorys025d__bin_1387.zst: 100%|██████████| 31.0M/31.0M [00:00<00:00, 60.8MB/s]
+Upload 30 LFS files:  97%|█████████▋| 29/30 [00:03<00:00,  8.83it/s]Upload 30 LFS files: 100%|██████████| 30/30 [00:03<00:00,  8.66it/s]Upload 30 LFS files: 100%|██████████| 30/30 [00:03<00:00,  8.73it/s]
+  glorys025d: 4 year(s) pushed and verified in 3 part commit(s), done.json written last (0 already present)
+  push-parts: 4 year(s) on the Hub under partials/family7_2d/glorys025d/
+=== stage fetch done in 2445.2s ===
