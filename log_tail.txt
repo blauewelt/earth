@@ -1,0 +1,80 @@
+  [verify glorys025d before publish] check: sha256 3600/4680  112.3s
+  [verify glorys025d before publish] check: sha256 3800/4680  113.9s
+  [verify glorys025d before publish] check: sha256 4000/4680  115.6s
+  [verify glorys025d before publish] check: sha256 4200/4680  117.3s
+  [verify glorys025d before publish] check: sha256 4400/4680  119.0s
+  [verify glorys025d before publish] check: sha256 4600/4680  120.5s
+  [verify glorys025d before publish] check: sha256 4680/4680  120.7s
+  [verify glorys025d before publish] check: check glorys025d 100/2339  120.7s
+  [verify glorys025d before publish] check: check glorys025d 200/2339  120.8s
+  [verify glorys025d before publish] check: check glorys025d 300/2339  120.9s
+  [verify glorys025d before publish] check: check glorys025d 400/2339  120.9s
+  [verify glorys025d before publish] check: check glorys025d 500/2339  121.0s
+  [verify glorys025d before publish] check: check glorys025d 600/2339  121.1s
+  [verify glorys025d before publish] check: check glorys025d 700/2339  121.2s
+  [verify glorys025d before publish] check: check glorys025d 800/2339  121.2s
+  [verify glorys025d before publish] check: check glorys025d 900/2339  121.2s
+  [verify glorys025d before publish] check: check glorys025d 1000/2339  121.2s
+  [verify glorys025d before publish] check: check glorys025d 1100/2339  121.2s
+  [verify glorys025d before publish] check: check glorys025d 1200/2339  121.2s
+  [verify glorys025d before publish] check: check glorys025d 1300/2339  121.3s
+  [verify glorys025d before publish] check: check glorys025d 1400/2339  121.3s
+  [verify glorys025d before publish] check: check glorys025d 1500/2339  121.3s
+  [verify glorys025d before publish] check: check glorys025d 1600/2339  121.3s
+  [verify glorys025d before publish] check: check glorys025d 1700/2339  121.3s
+  [verify glorys025d before publish] check: check glorys025d 1800/2339  121.3s
+  [verify glorys025d before publish] check: check glorys025d 1900/2339  121.4s
+  [verify glorys025d before publish] check: check glorys025d 2000/2339  121.4s
+  [verify glorys025d before publish] check: check glorys025d 2100/2339  121.4s
+  [verify glorys025d before publish] check: check glorys025d 2200/2339  121.4s
+  [verify glorys025d before publish] check: check glorys025d 2300/2339  121.4s
+  [verify glorys025d before publish] check: check glorys025d 2339/2339  121.4s
+  hub: chfrank/earth-tensors with the token from $HF_TOKEN
+  [publish glorys025d] start (4681 items)  0/4681  0.0s
+Upload 0 LFS files: 0it [00:00, ?it/s]Upload 0 LFS files: 0it [00:00, ?it/s]
+Upload 0 LFS files: 0it [00:00, ?it/s]Upload 0 LFS files: 0it [00:00, ?it/s]
+Upload 0 LFS files: 0it [00:00, ?it/s]Upload 0 LFS files: 0it [00:00, ?it/s]
+Upload 0 LFS files: 0it [00:00, ?it/s]Upload 0 LFS files: 0it [00:00, ?it/s]
+Upload 0 LFS files: 0it [00:00, ?it/s]Upload 0 LFS files: 0it [00:00, ?it/s]
+Upload 0 LFS files: 0it [00:00, ?it/s]Upload 0 LFS files: 0it [00:00, ?it/s]
+Upload 0 LFS files: 0it [00:00, ?it/s]Upload 0 LFS files: 0it [00:00, ?it/s]
+Upload 0 LFS files: 0it [00:00, ?it/s]Upload 0 LFS files: 0it [00:00, ?it/s]
+Upload 0 LFS files: 0it [00:00, ?it/s]Upload 0 LFS files: 0it [00:00, ?it/s]
+shard_index.npy:   0%|          | 0.00/959k [00:00<?, ?B/s]shard_index.npy:   7%|▋         | 65.5k/959k [00:00<00:01, 543kB/s]shard_index.npy:  41%|████      | 393k/959k [00:00<00:00, 1.70MB/s]shard_index.npy: 100%|██████████| 959k/959k [00:00<00:00, 1.63MB/s]
+  [publish glorys025d] glorys025d  2/4681  307.2s
+  [publish glorys025d] glorys025d/1992  4/4681  308.5s
+  [publish glorys025d] glorys025d/1993  150/4681  324.3s
+  [publish glorys025d] glorys025d/1994  296/4681  340.8s
+  [publish glorys025d] glorys025d/1995  442/4681  355.2s
+  [publish glorys025d] glorys025d/1996  588/4681  368.5s
+  [publish glorys025d] glorys025d/1997  734/4681  382.9s
+  [publish glorys025d] glorys025d/1998  880/4681  398.6s
+  [publish glorys025d] glorys025d/1999  1026/4681  413.6s
+  [publish glorys025d] glorys025d/2000  1172/4681  427.1s
+  [publish glorys025d] glorys025d/2001  1318/4681  440.3s
+  [publish glorys025d] glorys025d/2002  1464/4681  454.3s
+  [publish glorys025d] glorys025d/2003  1610/4681  469.2s
+  [publish glorys025d] glorys025d/2004  1758/4681  483.0s
+  [publish glorys025d] glorys025d/2005  1904/4681  497.0s
+  [publish glorys025d] glorys025d/2006  2050/4681  511.1s
+  [publish glorys025d] glorys025d/2007  2196/4681  526.0s
+  [publish glorys025d] glorys025d/2008  2342/4681  539.9s
+  [publish glorys025d] glorys025d/2009  2488/4681  553.0s
+  [publish glorys025d] glorys025d/2010  2634/4681  572.1s
+  [publish glorys025d] glorys025d/2011  2780/4681  588.2s
+  [publish glorys025d] glorys025d/2012  2926/4681  601.4s
+  [publish glorys025d] glorys025d/2013  3072/4681  614.6s
+  [publish glorys025d] glorys025d/2014  3218/4681  627.3s
+  [publish glorys025d] glorys025d/2015  3364/4681  641.2s
+  [publish glorys025d] glorys025d/2016  3510/4681  654.6s
+  [publish glorys025d] glorys025d/2017  3656/4681  671.7s
+  [publish glorys025d] glorys025d/2018  3802/4681  689.4s
+  [publish glorys025d] glorys025d/2019  3948/4681  707.8s
+  [publish glorys025d] glorys025d/2020  4094/4681  722.8s
+  [publish glorys025d] glorys025d/2021  4240/4681  738.1s
+  [publish glorys025d] glorys025d/2022  4386/4681  753.4s
+  [publish glorys025d] glorys025d/2023  4532/4681  767.4s
+  [publish glorys025d] glorys025d/2024  4680/4681  781.4s
+  [publish glorys025d] store.json  4681/4681  781.7s
+  publish: 4681 file(s) verified by restore, 50 tile(s) decompressed, HTTP range {'checked': 5} -> https://huggingface.co/datasets/chfrank/earth-tensors/tree/main/tensors/family7_2d/glorys025d
+=== stage publish done in 913.9s ===
