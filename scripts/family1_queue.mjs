@@ -83,21 +83,37 @@ export function reconcile(queue, runs, nowIso) {
     const at = ms(d.at);
     const needle = titleNeedle(d);
     const seen = new Set(d.seen_runs || []);
-    const run = runs
+    // A LANE WHOSE RUN WAS ONCE SEEN IS NEVER "LOST" (2026-10-06, #1040):
+    // the keeper lists in-progress runs, then completed ones, and a run that
+    // finishes between the two calls -- or before GitHub's completed index
+    // catches up -- is in neither. The 30-minute lost rule then re-dispatched
+    // glorys025d 2026 while its #1026 was finishing green. So the run's id is
+    // remembered on the entry the first time it matches; an entry with a
+    // remembered run is matched by that id alone (tick() fetches it by id
+    // when the listings miss it) and, if it is still not there, stays in
+    // flight.
+    if (d.run_id !== undefined) {
+      const known = runs.find((r) => r.id === d.run_id);
+      if (!known) { keep.push(d); unseen++; continue; }
+    }
+    const run = d.run_id !== undefined ? runs.find((r) => r.id === d.run_id) : runs
       .filter((r) => squash(r.display_title).includes(squash(needle))
         && ms(r.created_at) >= at - MATCH_SLACK_MIN * 60e3
         && !seen.has(r.id) && !claimed.has(r.id))
       .sort((a, b) => ms(a.created_at) - ms(b.created_at))[0];
     if (!run) {
       if (now - at > LOST_AFTER_MIN * 60e3) {
-        const { at: _a, ...lane } = d;
+        const { at: _a, run_id: _r, ...lane } = d;
         toHead.push(lane);
         events.lost.push(lane);
       } else { keep.push(d); unseen++; }
       continue;
     }
     if (run.id !== undefined) claimed.add(run.id);
-    if (run.status !== "completed") { keep.push(d); continue; }
+    if (run.status !== "completed") {
+      keep.push(run.id !== undefined ? { ...d, run_id: run.id } : d);
+      continue;
+    }
     if (run.conclusion === "success") {
       const e = { ...d, run_number: run.run_number, finished: run.updated_at };
       q.done.push(e);
@@ -111,7 +127,7 @@ export function reconcile(queue, runs, nowIso) {
     const mins = Math.round((ms(run.updated_at) - t0) / 60e3);
     if (mins < FAST_FAIL_MIN) {
       const retries = (d.retries || 0) + 1;
-      const { at: _a, ...lane } = d;
+      const { at: _a, run_id: _r, ...lane } = d;
       if (retries > MAX_RETRIES) {
         const e = { ...d, run_number: run.run_number, url: run.html_url,
           reason: "retries exhausted", finished: run.updated_at };
@@ -262,6 +278,13 @@ async function tick() {
   const withCarry = applySent(q0, carry);
   const needFrom = Math.min(Infinity, ...withCarry.dispatched.map((d) => ms(d.at) - MATCH_SLACK_MIN * 60e3));
   const runs = await listRuns(needFrom);
+  // a remembered run the listings missed (it changed state between the two
+  // calls, or the completed index lags) is fetched by id
+  for (const d of withCarry.dispatched) {
+    if (d.run_id === undefined || runs.some((r) => r.id === d.run_id)) continue;
+    const res = await gh("GET", `/repos/${REPO}/actions/runs/${d.run_id}`);
+    if (res.status === 200) runs.push(res.json);
+  }
   let { queue, events, unseen } = reconcile(withCarry, runs, nowIso);
 
   const rx = inflightRegex(queue);
@@ -474,6 +497,28 @@ function selftest() {
     check("adapter_env pairs a lane with its own run", ev.retried.length === 1 && ev.retried[0].run_number === 1021
       && !!has(q4.pending, P2) && !!has(q4.dispatched, P1) && !has(q4.pending, P1));
     check("inflight regex matches a part lane's title", inflightRegex({ pending: [P1] }).test(title(P1)));
+  }
+
+  // #1040 (2026-10-06): a lane whose run was seen in progress must not be
+  // declared lost when a later tick's listings miss that run, however old.
+  {
+    const L = lane("glorys025d", "2026-01-01", "2026-12-31");
+    const t1 = reconcile({ pending: [], dispatched: [{ ...L, at: ago(40) }] },
+      [run(31, L, "in_progress", null, 39)], now);
+    const e1 = has(t1.queue.dispatched, L);
+    check("a matched in-progress run is remembered (run_id)", e1 && e1.run_id === 31);
+    const t2 = reconcile(t1.queue, [], now);
+    check("...and a tick whose listings miss it keeps the lane in flight, not lost",
+      !!has(t2.queue.dispatched, L) && t2.events.lost.length === 0 && t2.unseen === 1 && t2.queue.pending.length === 0);
+    const t3 = reconcile(t2.queue, [run(31, L, "completed", "success", 39, 47)], now);
+    check("...and the remembered run, fetched by id, settles it as done",
+      !!has(t3.queue.done, L) && t3.queue.done[0].run_number === 1031 && t3.queue.dispatched.length === 0);
+    const t4 = reconcile(t1.queue, [run(31, L, "completed", "failure", 39, 3), run(32, L, "in_progress", null, 1)], now);
+    const back = has(t4.queue.pending, L);
+    check("a fast-failed remembered run re-queues WITHOUT its run_id", back && back.run_id === undefined && back.retries === 1);
+    check("an entry with a remembered run never matches another run of its window",
+      reconcile({ pending: [], dispatched: [{ ...L, at: ago(40), run_id: 31 }] },
+        [run(33, L, "completed", "failure", 38, 2)], now).queue.dispatched.length === 1);
   }
 
   console.log(fails ? `selftest: ${fails} FAILED` : "selftest: all passed");
