@@ -1,0 +1,80 @@
+  [occci025d store (tier G)] check: sha256 3400/4214  5.9s
+  [occci025d store (tier G)] check: sha256 3600/4214  6.0s
+  [occci025d store (tier G)] check: sha256 3800/4214  6.2s
+  [occci025d store (tier G)] check: sha256 4000/4214  6.3s
+  [occci025d store (tier G)] check: sha256 4200/4214  6.5s
+  [occci025d store (tier G)] check: sha256 4214/4214  6.5s
+  [occci025d store (tier G)] check: check occci025d 100/2106  6.6s
+  [occci025d store (tier G)] check: check occci025d 200/2106  6.6s
+  [occci025d store (tier G)] check: check occci025d 300/2106  6.6s
+  [occci025d store (tier G)] check: check occci025d 400/2106  6.7s
+  [occci025d store (tier G)] check: check occci025d 500/2106  6.7s
+  [occci025d store (tier G)] check: check occci025d 600/2106  6.8s
+  [occci025d store (tier G)] check: check occci025d 700/2106  6.8s
+  [occci025d store (tier G)] check: check occci025d 800/2106  6.8s
+  [occci025d store (tier G)] check: check occci025d 900/2106  6.9s
+  [occci025d store (tier G)] check: check occci025d 1000/2106  6.9s
+  [occci025d store (tier G)] check: check occci025d 1100/2106  6.9s
+  [occci025d store (tier G)] check: check occci025d 1200/2106  7.0s
+  [occci025d store (tier G)] check: check occci025d 1300/2106  7.0s
+  [occci025d store (tier G)] check: check occci025d 1400/2106  7.0s
+  [occci025d store (tier G)] check: check occci025d 1500/2106  7.1s
+  [occci025d store (tier G)] check: check occci025d 1600/2106  7.1s
+  [occci025d store (tier G)] check: check occci025d 1700/2106  7.2s
+  [occci025d store (tier G)] check: check occci025d 1800/2106  7.2s
+  [occci025d store (tier G)] check: check occci025d 1900/2106  7.2s
+  [occci025d store (tier G)] check: check occci025d 2000/2106  7.3s
+  [occci025d store (tier G)] check: check occci025d 2100/2106  7.3s
+  [occci025d store (tier G)] check: check occci025d 2106/2106  7.3s
+  [occci025d store (tier G)] store  1/1  14.5s
+  store: occci025d — occci025d 2106 bin(s), 10501 frame(s), 188724 tile(s), 6568.5 MB -> /opt/runner/_work/earth/earth/ml/cache/family7_2d/occci025d/occci025d
+=== stage assemble done in 14.5s ===
+
+=== stage check (occci025d) ===
+  [check occci025d (tier G)] start  0/0  0.0s
+  [check occci025d (tier G)] check: sha256 200/4214  0.2s
+  [check occci025d (tier G)] check: sha256 400/4214  0.3s
+  [check occci025d (tier G)] check: sha256 600/4214  0.4s
+  [check occci025d (tier G)] check: sha256 800/4214  0.5s
+  [check occci025d (tier G)] check: sha256 1000/4214  0.7s
+  [check occci025d (tier G)] check: sha256 1200/4214  0.8s
+  [check occci025d (tier G)] check: sha256 1400/4214  0.9s
+  [check occci025d (tier G)] check: sha256 1600/4214  1.1s
+  [check occci025d (tier G)] check: sha256 1800/4214  1.2s
+  [check occci025d (tier G)] check: sha256 2000/4214  1.4s
+  [check occci025d (tier G)] check: sha256 2200/4214  1.5s
+  [check occci025d (tier G)] check: sha256 2400/4214  1.6s
+  [check occci025d (tier G)] check: sha256 2600/4214  1.7s
+  [check occci025d (tier G)] check: sha256 2800/4214  1.9s
+  [check occci025d (tier G)] check: sha256 3000/4214  2.0s
+  [check occci025d (tier G)] check: sha256 3200/4214  2.2s
+  [check occci025d (tier G)] check: sha256 3400/4214  2.4s
+  [check occci025d (tier G)] check: sha256 3600/4214  2.5s
+  [check occci025d (tier G)] check: sha256 3800/4214  2.7s
+  [check occci025d (tier G)] check: sha256 4000/4214  2.8s
+  [check occci025d (tier G)] check: sha256 4200/4214  3.0s
+  [check occci025d (tier G)] check: sha256 4214/4214  3.0s
+  [check occci025d (tier G)] check: check occci025d 100/2106  32.5s
+  [check occci025d (tier G)] check: check occci025d 200/2106  62.1s
+  [check occci025d (tier G)] check: check occci025d 300/2106  94.8s
+  [check occci025d (tier G)] check: check occci025d 400/2106  132.2s
+  [check occci025d (tier G)] check: check occci025d 500/2106  172.8s
+  [check occci025d (tier G)] check: check occci025d 600/2106  213.5s
+  [check occci025d (tier G)] check: check occci025d 700/2106  254.2s
+  [check occci025d (tier G)] check: check occci025d 800/2106  294.8s
+  [check occci025d (tier G)] check: check occci025d 900/2106  335.4s
+  [check occci025d (tier G)] check: check occci025d 1000/2106  375.9s
+  [check occci025d (tier G)] check: check occci025d 1100/2106  416.3s
+  [check occci025d (tier G)] check: check occci025d 1200/2106  456.7s
+  [check occci025d (tier G)] check: check occci025d 1300/2106  497.1s
+  [check occci025d (tier G)] check: check occci025d 1400/2106  537.7s
+  [check occci025d (tier G)] check: check occci025d 1500/2106  578.6s
+  [check occci025d (tier G)] check: check occci025d 1600/2106  619.6s
+  [check occci025d (tier G)] check: check occci025d 1700/2106  660.4s
+  [check occci025d (tier G)] check: check occci025d 1800/2106  701.4s
+  [check occci025d (tier G)] check: check occci025d 1900/2106  742.3s
+  [check occci025d (tier G)] check: check occci025d 2000/2106  783.2s
+  [check occci025d (tier G)] check: check occci025d 2100/2106  824.1s
+  [check occci025d (tier G)] check: check occci025d 2106/2106  826.3s
+  check: occci025d — 4214 file(s) verified, occci025d: 188724 tile(s) decompressed (not published yet)
+=== stage check done in 826.3s ===
