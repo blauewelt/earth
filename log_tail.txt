@@ -1,0 +1,63 @@
+store     glorys025d — GLORYS12 ocean reanalysis surface currents, sea-surface height and mixed-layer depth, DAILY, 0.25 degrees — family 7.2d
+family    family7_2d (7.2d) · public -> chfrank/earth-tensors:tensors/family7_2d/glorys025d
+axis      1992-12-29 .. 2026-08-18  bins 803..3260 · time_s int32 (schema 2)
+lane      d19921229-20260818 — this fetch writes parts/<year>/d19921229-20260818/ and pushes only that folder
+channels  C=5: cur_speed, log_mld, ssh, cur_u, cur_v
+tier G    sharded, groups ['glorys025d'], F=5 x 86400 s, float16, years (by bin start) 1992..2026
+work      /opt/runner/_work/earth/earth/ml/cache/family7_2d
+
+=== stage check (glorys025d) ===
+  [check glorys025d (tier G)] start  0/0  0.0s
+  [check glorys025d (tier G)] check: sha256 200/4918  1.4s
+  [check glorys025d (tier G)] check: sha256 400/4918  2.7s
+  [check glorys025d (tier G)] check: sha256 600/4918  4.1s
+  [check glorys025d (tier G)] check: sha256 800/4918  5.4s
+  [check glorys025d (tier G)] check: sha256 1000/4918  6.7s
+  [check glorys025d (tier G)] check: sha256 1200/4918  8.1s
+  [check glorys025d (tier G)] check: sha256 1400/4918  9.4s
+  [check glorys025d (tier G)] check: sha256 1600/4918  10.7s
+  [check glorys025d (tier G)] check: sha256 1800/4918  12.1s
+  [check glorys025d (tier G)] check: sha256 2000/4918  13.4s
+  [check glorys025d (tier G)] check: sha256 2200/4918  14.7s
+  [check glorys025d (tier G)] check: sha256 2400/4918  15.9s
+  [check glorys025d (tier G)] check: sha256 2600/4918  17.2s
+  [check glorys025d (tier G)] check: sha256 2800/4918  18.5s
+  [check glorys025d (tier G)] check: sha256 3000/4918  19.8s
+  [check glorys025d (tier G)] check: sha256 3200/4918  21.0s
+  [check glorys025d (tier G)] check: sha256 3400/4918  22.3s
+  [check glorys025d (tier G)] check: sha256 3600/4918  23.7s
+  [check glorys025d (tier G)] check: sha256 3800/4918  25.1s
+  [check glorys025d (tier G)] check: sha256 4000/4918  26.5s
+  [check glorys025d (tier G)] check: sha256 4200/4918  27.8s
+  [check glorys025d (tier G)] check: sha256 4400/4918  29.2s
+  [check glorys025d (tier G)] check: sha256 4600/4918  30.6s
+  [check glorys025d (tier G)] check: sha256 4800/4918  32.0s
+  [check glorys025d (tier G)] check: sha256 4918/4918  32.9s
+  [check glorys025d (tier G)] check: check glorys025d 100/2458  89.1s
+  [check glorys025d (tier G)] check: check glorys025d 200/2458  150.4s
+  [check glorys025d (tier G)] check: check glorys025d 300/2458  211.8s
+  [check glorys025d (tier G)] check: check glorys025d 400/2458  272.8s
+  [check glorys025d (tier G)] check: check glorys025d 500/2458  334.0s
+  [check glorys025d (tier G)] check: check glorys025d 600/2458  395.2s
+  [check glorys025d (tier G)] check: check glorys025d 700/2458  456.4s
+  [check glorys025d (tier G)] check: check glorys025d 800/2458  517.6s
+  [check glorys025d (tier G)] check: check glorys025d 900/2458  578.8s
+  [check glorys025d (tier G)] check: check glorys025d 1000/2458  640.2s
+  [check glorys025d (tier G)] check: check glorys025d 1100/2458  700.7s
+  [check glorys025d (tier G)] check: check glorys025d 1200/2458  762.0s
+  [check glorys025d (tier G)] check: check glorys025d 1300/2458  823.5s
+  [check glorys025d (tier G)] check: check glorys025d 1400/2458  884.6s
+  [check glorys025d (tier G)] check: check glorys025d 1500/2458  945.8s
+  [check glorys025d (tier G)] check: check glorys025d 1600/2458  1007.0s
+  [check glorys025d (tier G)] check: check glorys025d 1700/2458  1068.1s
+  [check glorys025d (tier G)] check: check glorys025d 1800/2458  1129.6s
+  [check glorys025d (tier G)] check: check glorys025d 1900/2458  1190.7s
+  [check glorys025d (tier G)] check: check glorys025d 2000/2458  1251.9s
+  [check glorys025d (tier G)] check: check glorys025d 2100/2458  1313.1s
+  [check glorys025d (tier G)] check: check glorys025d 2200/2458  1374.1s
+  [check glorys025d (tier G)] check: check glorys025d 2300/2458  1435.4s
+  [check glorys025d (tier G)] check: check glorys025d 2400/2458  1497.5s
+  [check glorys025d (tier G)] check: check glorys025d 2458/2458  1532.8s
+  hub: chfrank/earth-tensors with the token from $HF_TOKEN
+  check: glorys025d — 4918 file(s) verified, glorys025d: 221094 tile(s) decompressed, Hub chfrank/earth-tensors agrees
+=== stage check done in 1533.5s ===
