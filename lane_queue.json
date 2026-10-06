@@ -4,17 +4,6 @@
   {
    "store": "occci025d",
    "stage": "index,fetch",
-   "start": "1997-01-01",
-   "end": "2000-12-31",
-   "runner": "ubuntu-latest",
-   "extra_args": "--push-parts",
-   "adapter_env": "",
-   "retries": 2,
-   "at": "2026-10-06T12:48:49.693Z"
-  },
-  {
-   "store": "occci025d",
-   "stage": "index,fetch",
    "start": "2001-01-01",
    "end": "2004-12-31",
    "runner": "ubuntu-latest",
@@ -59,17 +48,6 @@
   {
    "store": "occci025d",
    "stage": "index,fetch",
-   "start": "2020-01-01",
-   "end": "2022-12-31",
-   "runner": "ubuntu-latest",
-   "extra_args": "--push-parts",
-   "adapter_env": "",
-   "retries": 2,
-   "at": "2026-10-06T12:49:13.284Z"
-  },
-  {
-   "store": "occci025d",
-   "stage": "index,fetch",
    "start": "2023-01-01",
    "end": "2024-12-31",
    "runner": "ubuntu-latest",
@@ -77,17 +55,6 @@
    "adapter_env": "",
    "retries": 2,
    "at": "2026-10-06T12:49:17.109Z"
-  },
-  {
-   "store": "occci025d",
-   "stage": "index,fetch",
-   "start": "2013-01-01",
-   "end": "2013-12-31",
-   "runner": "ubuntu-latest",
-   "extra_args": "--push-parts",
-   "adapter_env": "",
-   "retries": 2,
-   "at": "2026-10-06T13:07:46.411Z"
   },
   {
    "store": "occci025d",
@@ -4217,6 +4184,45 @@
    "at": "2026-10-06T10:39:55.915Z",
    "run_number": 1007,
    "finished": "2026-10-06T11:33:03Z"
+  },
+  {
+   "store": "occci025d",
+   "stage": "index,fetch",
+   "start": "1997-01-01",
+   "end": "2000-12-31",
+   "runner": "ubuntu-latest",
+   "extra_args": "--push-parts",
+   "adapter_env": "",
+   "retries": 2,
+   "at": "2026-10-06T12:48:49.693Z",
+   "run_number": 1016,
+   "finished": "2026-10-06T13:27:48Z"
+  },
+  {
+   "store": "occci025d",
+   "stage": "index,fetch",
+   "start": "2020-01-01",
+   "end": "2022-12-31",
+   "runner": "ubuntu-latest",
+   "extra_args": "--push-parts",
+   "adapter_env": "",
+   "retries": 2,
+   "at": "2026-10-06T12:49:13.284Z",
+   "run_number": 1022,
+   "finished": "2026-10-06T13:27:41Z"
+  },
+  {
+   "store": "occci025d",
+   "stage": "index,fetch",
+   "start": "2013-01-01",
+   "end": "2013-12-31",
+   "runner": "ubuntu-latest",
+   "extra_args": "--push-parts",
+   "adapter_env": "",
+   "retries": 2,
+   "at": "2026-10-06T13:07:46.411Z",
+   "run_number": 1024,
+   "finished": "2026-10-06T13:26:39Z"
   }
  ],
  "failed": [
