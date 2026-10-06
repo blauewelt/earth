@@ -1,0 +1,212 @@
+# E-086: per-year monthly SUMS and COUNTS of family 7 (the global 0.25° /
+# 1° five-day tensor), so a climatology over ANY set of years — "just setting
+# a period" — composes exactly in the browser as Σsum / Σcount, replacing the
+# three fixed holdout versions of E-083. Plan: ml/plans/E086_monthly_by_year.md.
+#
+# WHAT IT DOES. Job `export` (a rented box): pulls the 61 GB tensor with
+# parallel range reads, sha256-verified against data/family7_index.json;
+# streams every group once through ml/export_family7_monthly.py (read-only
+# memmap, one month of rows in memory at a time) into sum.npy / count.npy /
+# stats.json per group; then THE FALSIFIER — `verify` pulls the published
+# E-083 climatology (all / dev / paper) and requires Σsum/Σcount over each
+# version's training years to reproduce clim.npy for every group, NaN for NaN
+# and within the rigorous float32 bound, and refuses the job otherwise; then
+# uploads (one commit per group) and leaves a manifest (every file's sha256)
+# as an artifact. Job `restore` (a GitHub-hosted runner, E-083's lesson: the
+# box's own download-back from Japan never finished) streams every file back
+# from the Hub, requires the sha256s to match the manifest, measures CORS
+# from https://blauewelt.org, and writes data/family7_monthly_index.json as
+# an artifact. The box cannot push (contents: read, ml/CLAUDE.md §6); the main
+# session commits the index.
+#
+# SECURITY. `workflow_dispatch` ONLY (ml/CLAUDE.md §6): never add
+# pull_request, issue_comment, workflow_run or schedule. HF_TOKEN reaches the
+# scripts as an ENV VAR for the life of the job and never as an argument.
+name: Family 7 monthly sums
+run-name: family7 monthly ${{ github.event.inputs.groups || 'all groups' }} on ${{ github.event.inputs.runner }}
+
+on:
+  workflow_dispatch:
+    inputs:
+      runner:
+        description: "runner label — a Vast box's runner NAME (gpu-box-NNNNNNNN). Needs >= 100 GB free disk (61 GB tensor + 27.4 GB of sums/counts + 1.8 GB of published climatology); RAM is not a constraint (streaming)"
+        required: true
+      groups:
+        description: "comma list of groups (empty = every group in the tensor)"
+        default: ""
+      work:
+        description: "cache directory for the tensor, kept across jobs on the same box"
+        default: "ml/cache/family7_l2"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: family7-monthly
+  cancel-in-progress: false
+
+jobs:
+  export:
+    runs-on: ${{ github.event.inputs.runner }}
+    timeout-minutes: 600
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Persistent data cache (self-hosted box)
+        run: |
+          mkdir -p /opt/earth-cache
+          rm -rf ml/cache
+          ln -s /opt/earth-cache ml/cache
+
+      # Definite answers only (ml/CLAUDE.md §5.17): no token, no room.
+      - name: Preflight
+        id: preflight
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+        run: |
+          if [ -z "${HF_TOKEN}" ]; then
+            echo "::error::HF_TOKEN secret is not set (claude/huggingface-access.md)."
+            exit 1
+          fi
+          df -h ml/cache
+          line=$(df -P ml/cache | tail -1)
+          free_gb=$(printf '%s\n' "${line}" | awk '{print int($4 / 1048576)}')
+          if [ "${free_gb}" -lt 100 ]; then
+            echo "::error::only ${free_gb} GB free on the cache mount; this job needs 100 GB (61 GB tensor + 27.4 GB output + 1.8 GB climatology)."
+            exit 1
+          fi
+          mem_gb=$(awk '/MemTotal/ {print int($2 / 1048576)}' /proc/meminfo)
+          echo "RAM ${mem_gb} GB · free disk ${free_gb} GB · $(nproc) cpu"
+          python3 --version
+
+      - name: Install
+        run: pip install --quiet numpy huggingface_hub requests
+
+      - name: Pull the tensor from the Hub
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+          WORK: ${{ github.event.inputs.work }}
+        run: |
+          set -o pipefail
+          mkdir -p "${WORK}"
+          python3 -u ml/pull_family7_tensor.py \
+              --dest "${WORK}" --index data/family7_index.json --workers 16 \
+              2>&1 | tee "${RUNNER_TEMP}/pull.log"
+          ls -la "${WORK}"
+          df -h ml/cache
+
+      - name: Export the per-year monthly sums and counts
+        env:
+          WORK: ${{ github.event.inputs.work }}
+          GROUPS: ${{ github.event.inputs.groups }}
+        run: |
+          set -o pipefail
+          mkdir -p ml/cache/family7_monthly_out
+          args=(export --tensor "${WORK}/family7_global025_pentad_l2.npz"
+                --index data/family7_index.json
+                --clim-index data/family7_clim_index.json
+                --out ml/cache/family7_monthly_out)
+          [ -n "${GROUPS}" ] && args+=(--groups "${GROUPS}")
+          python3 -u ml/export_family7_monthly.py "${args[@]}" \
+              2>&1 | tee "${RUNNER_TEMP}/export.log"
+          du -sh ml/cache/family7_monthly_out/* || true
+
+      # The falsifier: refuses the job (no upload) unless every published
+      # climatology version is reproduced from the sums.
+      - name: Verify against the published climatology (all / dev / paper)
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+          GROUPS: ${{ github.event.inputs.groups }}
+        run: |
+          set -o pipefail
+          args=(verify --out ml/cache/family7_monthly_out
+                --clim-index data/family7_clim_index.json
+                --clim-dir ml/cache/family7_clim_published --fetch
+                --report ml/cache/family7_monthly_out/verify.json)
+          [ -n "${GROUPS}" ] && args+=(--groups "${GROUPS}")
+          python3 -u ml/export_family7_monthly.py "${args[@]}" \
+              2>&1 | tee "${RUNNER_TEMP}/verify.log"
+
+      - name: Upload to the Hub
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+        run: |
+          set -o pipefail
+          python3 -u ml/publish_family7_monthly_index.py upload \
+              --out ml/cache/family7_monthly_out \
+              --f7-index data/family7_index.json \
+              2>&1 | tee "${RUNNER_TEMP}/upload.log"
+
+      - name: Collect the manifest, the verify report and the logs
+        if: always() && steps.preflight.outcome == 'success'
+        run: |
+          out="${RUNNER_TEMP}/family7-monthly"
+          rm -rf "${out}"; mkdir -p "${out}"
+          src=ml/cache/family7_monthly_out
+          for f in manifest.json verify.json; do
+            [ -f "${src}/${f}" ] && cp "${src}/${f}" "${out}/" \
+              || echo "::warning::no ${f} — that step did not finish"
+          done
+          for g in "${src}"/*/; do
+            [ -f "${g}stats.json" ] && cp "${g}stats.json" "${out}/stats_$(basename "${g}").json"
+          done
+          for f in pull export verify upload; do
+            [ -f "${RUNNER_TEMP}/${f}.log" ] && tail -n 300 "${RUNNER_TEMP}/${f}.log" > "${out}/${f}.log.tail"
+          done
+          ls -la "${out}"
+
+      - name: Upload the manifest
+        if: always() && steps.preflight.outcome == 'success'
+        uses: actions/upload-artifact@v4
+        with:
+          name: family7-monthly-${{ github.run_number }}
+          path: ${{ runner.temp }}/family7-monthly
+          if-no-files-found: warn
+          retention-days: 30
+
+      - name: Drop the scratch
+        if: always()
+        env:
+          WORK: ${{ github.event.inputs.work }}
+        run: |
+          rm -f "${WORK}"/*.part "${WORK}"/*.part.done "${WORK}"/*.part.json 2>/dev/null || true
+          df -h ml/cache || true
+
+  restore:
+    needs: export
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: family7-monthly-${{ github.run_number }}
+          path: ${{ runner.temp }}/family7-monthly
+
+      - name: Install
+        run: pip install --quiet numpy requests
+
+      - name: Stream every file back from the Hub and write the index
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+        run: |
+          set -o pipefail
+          in="${RUNNER_TEMP}/family7-monthly"
+          python3 -u ml/publish_family7_monthly_index.py index \
+              --manifest "${in}/manifest.json" --verify "${in}/verify.json" \
+              --f7-index data/family7_index.json \
+              --index data/family7_monthly_index.json \
+              --restore-where "GitHub-hosted runner (family7-monthly run ${GITHUB_RUN_NUMBER})" \
+              --workers 8 2>&1 | tee "${RUNNER_TEMP}/restore.log"
+          mkdir -p "${RUNNER_TEMP}/family7-monthly-index"
+          cp data/family7_monthly_index.json "${RUNNER_TEMP}/restore.log" "${RUNNER_TEMP}/family7-monthly-index/"
+
+      - name: Upload the index
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: family7-monthly-index-${{ github.run_number }}
+          path: ${{ runner.temp }}/family7-monthly-index
+          if-no-files-found: warn
+          retention-days: 30

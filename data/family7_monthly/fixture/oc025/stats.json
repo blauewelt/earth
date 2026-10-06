@@ -1,0 +1,86 @@
+{
+ "_source": "ml/export_family7_monthly.py \u2014 do not hand-edit",
+ "axes": [
+  "month",
+  "channel",
+  "year",
+  "lat",
+  "lon"
+ ],
+ "bins_per_month": [
+  [
+   4,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0
+  ]
+ ],
+ "chans": [
+  "log_chl",
+  "chl_cov"
+ ],
+ "count_dtype": "uint8",
+ "generated_utc": "2026-10-06T07:54:39Z",
+ "git_sha": "d76953dca8d4f22fcb9c963db16f392008e0e095",
+ "group": "oc025",
+ "lats": [
+  -90.0,
+  90.0
+ ],
+ "layout": "sum.npy is [month, channel, year, lat, lon] float32 in z-units (physical mean = z * norm[c][1] + norm[c][0]); count.npy the same shape, uint8. Plane (m, c, y) starts at header_len + ((m * C + c) * Y + (y - year_first)) * H * W * itemsize; a run of years for one (m, c) is one contiguous range. Mean over a set of years = sum of sums / sum of counts; NaN where the summed count is 0 (sum is 0.0 wherever count is 0).",
+ "lons": [
+  -180.0,
+  175.0
+ ],
+ "max_bins_per_month": 7,
+ "max_count": 4,
+ "month_rule": "a bin belongs to the calendar month and year its five-day window OPENS in (the npz's `months` key, through export_family7_clim.master_calendar and cone_sampler.group_time \u2014 the derivation anomaly_transform's callers use); rg100 on its own monthly rows, oc025 from its own first bin",
+ "n_rows": 4,
+ "n_rows_summed": 4,
+ "n_years": 1,
+ "norm": [
+  [
+   -0.4005306363105774,
+   0.1584557294845581
+  ],
+  [
+   0.7864680290222168,
+   0.3457113206386566
+  ]
+ ],
+ "plan": "https://blauewelt.github.io/earth/docs.html?f=ml/plans/E086_monthly_by_year.md",
+ "row_kind": "pentad",
+ "shape": [
+  12,
+  2,
+  1,
+  37,
+  72
+ ],
+ "static_chans": [],
+ "static_chans_source": "data/family7_clim_index.json \u2014 the channels anomaly_transform subtracts nothing on (its climatology is 0.0 there); independent of the year set",
+ "sum_dtype": "float32",
+ "tensor_sha256": "55d1ee4af152828032403e4b204b8f7e0f2f58c13a9bb9cd750e8dbaf7fdc4c0",
+ "tensor_sha256_by_group": {
+  "g025": "a6ff94dfaa6bd8f2f141945fd32ccbf2530736f5048353801b276830e775c9bf",
+  "g100": "d1519e858d9641dcc1e721d6c31510036e93c5cd0ba4fed666e084d6ce31a227",
+  "oc025": "55d1ee4af152828032403e4b204b8f7e0f2f58c13a9bb9cd750e8dbaf7fdc4c0",
+  "rg100": "158a20aada98ebbfa92922670a92f2144fbdae064cc96d511c6269b0b7974ab8"
+ },
+ "tensor_sha256_verified": true,
+ "tensor_stem": "family7_global025_pentad_l1",
+ "units": "z-units",
+ "year_first": 2010,
+ "year_last": 2010,
+ "years": [
+  2010
+ ]
+}
