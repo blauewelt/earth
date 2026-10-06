@@ -32,6 +32,10 @@ const EXP10 = JSON.parse(fs.readFileSync(path.join(FIX10, "expected.json"), "utf
 // six-hourly frames), served as /ok12/
 const FIX12 = path.join(ROOT, "data", "family12_fixture");
 const EXP12 = JSON.parse(fs.readFileSync(path.join(FIX12, "expected.json"), "utf8"));
+// the multi-year normals fixture (tests/make_family7_monthly_fixture.py): E-086's
+// per-year monthly sums and counts over two small grids, served as /okm/
+const FIXM = path.join(ROOT, "data", "family7_monthly", "fixture_multi");
+const EXPM = JSON.parse(fs.readFileSync(path.join(FIXM, "expected.json"), "utf8"));
 const require = createRequire(import.meta.url);
 const F1 = require("../src/f1data.js");
 const EXP = JSON.parse(fs.readFileSync(path.join(FIX, "expected.json"), "utf8"));
@@ -46,11 +50,44 @@ let server, port;
 const log = [];
 let inflight = 0, maxInflight = 0;
 
+function send206(res, body, mode, rel) {
+  log.push({ mode, rel, range: "bytes=0-", bytes: body.length });
+  res.writeHead(206, { "content-range": `bytes 0-${body.length - 1}/${body.length}`, "content-length": body.length, "accept-ranges": "bytes" });
+  res.end(body);
+}
+
 function serve(req, res) {
   const url = new URL(req.url, "http://x");
-  const m = /^\/(ok|bad200|nozst|ok10|ok12)\/(.*)$/.exec(url.pathname);
+  const m = /^\/(ok|bad200|nozst|ok10|ok12|okm|ok72)\/(.*)$/.exec(url.pathname);
   const rel = m ? decodeURIComponent(m[2]) : "";
-  const root = m && m[1] === "ok10" ? FIX10 : m && m[1] === "ok12" ? FIX12 : FIX;
+  const root = m && m[1] === "ok10" ? FIX10 : m && m[1] === "ok12" ? FIX12 : m && m[1] === "okm" ? FIXM : FIX;
+  // /ok72/: the family 1.gf fixture with its registry dressed as family 7.2d's
+  // (source_segments, preliminary days, a record_span, a centred-sigma unit)
+  if (m && m[1] === "ok72" && rel === "family1gf.json") {
+    const reg = JSON.parse(fs.readFileSync(path.join(FIX, rel), "utf8"));
+    for (const g of reg.groups) {
+      if (g.name !== "fxgrid") continue;
+      g.record_span = ["2009-12-27", "2010-01-06"];
+      g.requested_window = ["2009-12-01", "2010-01-31"];
+      g.source_segments = [
+        { falsifier: "pentad", from: "2009-12-25", to: "2009-12-31", source: "FX source v1" },
+        { falsifier: "source-readback", from: "2010-01-01", to: "2010-01-08", source: "FX source v1", note: "the producer's files end 2010-01-08" }];
+      g.counts = Object.assign({}, g.counts || {}, { preliminary_days: ["2010-01-07", "2010-01-06", "2010-01-08"] });
+      g.channels[0].unit = g.channels[0].unit + " (centred 5-day sigma)";
+    }
+    return send206(res, Buffer.from(JSON.stringify(reg)), m[1], rel);
+  }
+  if (m && m[1] === "ok72" && /^fxgrid\/.*tile_grid\.json$/.test(rel)) {
+    const tg = JSON.parse(fs.readFileSync(path.join(FIX, rel), "utf8"));
+    tg.channels[0].unit = tg.channels[0].unit + " (centred 5-day sigma)";
+    // family 7.2d states its grid POINT-aligned: x0/y0 are the first CENTRE
+    const g = tg.grid;
+    g.x0 += g.dx / 2; g.y0 += g.dy / 2;
+    // (worded like ncep100d's, with no number to parse: the shift must still
+    // happen exactly once however often the cached JSON is handed back)
+    g.align = "point — family 7's own grid";
+    return send206(res, Buffer.from(JSON.stringify(tg)), m[1], rel);
+  }
   const file = path.join(root, rel);
   if (!m || !file.startsWith(root) || !fs.existsSync(file) || fs.statSync(file).isDirectory() ||
       (m[1] === "nozst" && rel.endsWith(".zst"))) {
@@ -688,6 +725,215 @@ print(json.dumps({"p": p, "q": q}))
       } finally { F1.configure({ base: base("ok") }); }
     });
   }
+
+  // ---- the monthly normals over a free period (E-086 sums and counts) ------
+  function multiM(extra) {
+    F1.configure(Object.assign({ siteBase: base("okm"), registries: [
+      { family: "derived", title: "Derived maps", kind: "derived", monthly: "family7_monthly_index.json" }] }, extra || {}));
+  }
+  const caseM = (name) => { const c = EXPM.cases.find((x) => x.name === name); assert.ok(c, name); return JSON.parse(JSON.stringify(c)); };
+  const IDXM = JSON.parse(fs.readFileSync(path.join(FIXM, "family7_monthly_index.json"), "utf8"));
+
+  test("normals: one store per group, the years from the index, steps normal / by-year, levelled channels", async () => {
+    multiM();
+    try {
+      const reg = await F1.loadRegistry();
+      assert.deepEqual(reg.stores.map((d) => d.id), ["derived/normals_fx025", "derived/normals_fxrg"]);
+      assert.deepEqual(reg.errors, []);
+      const d = reg.stores[0];
+      assert.equal(d.normals, true);
+      assert.deepEqual(d.years, [2000, 2004]);
+      assert.deepEqual(d.span, ["2000-01-01", "2004-12-31"]);
+      assert.deepEqual(d.steps, ["normal", "by-year"]);
+      assert.equal(d.defaultChannel, "sst");
+      assert.equal(d.grid.step, 0.25);
+      const rg = reg.stores[1];
+      assert.deepEqual(rg.levels, [10, 30, 50]);
+      assert.equal(rg.levelUnit, "dbar");
+      assert.deepEqual(rg.vars.map((v) => v.var), ["rg_t", "rg_s"]);
+      // the old calendar stores are gone from the default list; the normals replace them
+      const def = F1.DEFAULT_REGISTRIES.find((f) => f.family === "derived");
+      assert.equal(def.monthly, "data/family7_monthly_index.json");
+      assert.equal(def.clim, undefined);
+    } finally { F1.configure({ base: base("ok") }); }
+  });
+
+  for (const c of EXPM.cases) {
+    test(`normals: ${c.name} — Σ sums ÷ Σ counts over the chosen years equals numpy, counts identical`, async () => {
+      multiM();
+      try {
+        const r = await F1.run(c.sel);
+        assert.deepEqual([r.time.length, r.channels.length, r.lat.length, r.lon.length], c.shape);
+        assert.deepEqual(Array.from(r.lat), c.lat);
+        assert.deepEqual(Array.from(r.lon), c.lon);
+        closeArr(r.data, c.data, { rel: 1e-6, label: c.name });
+        assert.deepEqual(Array.from(r.count), c.count, "counts");
+        if (c.sel.step === "normal") {
+          assert.deepEqual(r.climatology.yearsUsed, c.years);
+          assert.deepEqual(r.climatology.excluded, c.sel.excludeYears);
+          assert.equal(r.climatology.bounds.length, 2 * r.time.length);
+          // the time of a normal is its month in the first year; the bounds span the period
+          const t0 = new Date(r.time[0] * 1000);
+          assert.equal(t0.getUTCFullYear(), c.years[0]);
+          assert.equal(t0.getUTCMonth() + 1, Math.min(...c.sel.months));
+          assert.equal(new Date(r.climatology.bounds[1] * 1000).getUTCFullYear(), c.years[c.years.length - 1] + (Math.min(...c.sel.months) === 12 ? 1 : 0));
+        } else {
+          // by-year: each year's own monthly mean, years × months in time order
+          assert.equal(r.time.length, c.years.length * c.sel.months.length);
+          assert.deepEqual(Array.from(r.time, (t) => new Date(t * 1000).getUTCFullYear()),
+            c.years.flatMap((y) => c.sel.months.map(() => y)));
+        }
+        if (c.sel.res !== "native") assert.ok(r.notes.some((n) => /POOLS the sums and the counts/.test(n)));
+      } finally { F1.configure({ base: base("ok") }); }
+    });
+  }
+
+  test("normals: an excluded year is never read; both read strategies give identical numbers; the estimate is exact", async () => {
+    const c = caseM("normal_excl");
+    const g = IDXM.groups.fx025;
+    const planeOf = (f, m, ch, y) => f.header_len + (((m - 1) * g.chans.length + ch) * g.n_years + (y - g.year_first)) * f.plane_bytes;
+    let byGap = {};
+    for (const gap of [0, 1e12]) {
+      multiM({ normalsMergeGap: gap });
+      try {
+        const e = await F1.estimate(c.sel);
+        log.length = 0;
+        const r = await F1.run(c.sel);
+        const reads = log.filter((x) => x.mode === "okm" && /\/(sum|count)\.npy$/.test(x.rel) && x.range && !/bytes=0-1023$/.test(x.range));
+        assert.equal(reads.length, e.requests, `gap ${gap}: requests`);
+        assert.equal(reads.reduce((a, x) => a + x.bytes, 0), e.readBytes, `gap ${gap}: bytes`);
+        assert.equal(e.strategy, gap === 0 ? "band" : "run");
+        assert.match(e.why, gap === 0 ? /one range per year/ : /one contiguous stretch/);
+        if (gap === 0) {
+          // per-year bands: none of them touches 2002's plane, in either file
+          for (const x of reads) {
+            const [a, z] = /bytes=(\d+)-(\d+)/.exec(x.range).slice(1).map(Number);
+            const f = /sum\.npy$/.test(x.rel) ? g.sum : g.count;
+            for (const m of c.sel.months) for (let ch = 0; ch < 2; ch++) {
+              const p0 = planeOf(f, m, ch, 2002);
+              assert.ok(z < p0 || a >= p0 + f.plane_bytes, `a read ${x.range} covers the excluded year 2002`);
+            }
+          }
+          // 2 files × 2 months × 2 channels × 4 years, one band each
+          assert.equal(e.requests, 2 * 2 * 2 * 4);
+          assert.equal(e.readBytes, e.bandBytes);
+        } else {
+          // one stretch per run of years (here the whole block: every gap is
+          // smaller than a request) — more bytes, a handful of requests;
+          // 2002's plane may lie inside a stretch, and is never added
+          assert.ok(e.requests < 2 * 2 * 2 * 4);
+          assert.ok(e.readBytes > e.bandBytes);
+        }
+        byGap[gap] = r;
+      } finally { F1.configure({ base: base("ok") }); }
+    }
+    assert.deepEqual(Array.from(byGap[0].data), Array.from(byGap[1e12].data));
+    assert.deepEqual(Array.from(byGap[0].count), Array.from(byGap[1e12].count));
+  });
+
+  test("normals: the NetCDF is a CF climatology with period_start, period_end, excluded_years and the counts", async () => {
+    multiM();
+    try {
+      const c = caseM("normal_excl");
+      const r = await F1.run(c.sel);
+      const tmp = path.join(os.tmpdir(), `f1-normals-${process.pid}.nc`);
+      fs.writeFileSync(tmp, Buffer.from(await F1.toNetCDF(r).arrayBuffer()));
+      const out = JSON.parse(python(`
+import json, sys
+import numpy as np
+from scipy.io import netcdf_file
+f = netcdf_file(sys.argv[1], "r", mmap=False)
+a = {k: (v.decode() if isinstance(v, bytes) else (v.tolist() if hasattr(v, "tolist") else v)) for k, v in f._attributes.items()}
+t = f.variables["time"]
+print(json.dumps({"attrs": a, "time_attrs": {k: (v.decode() if isinstance(v, bytes) else v) for k, v in t._attributes.items()},
+  "vars": sorted(f.variables), "bounds": f.variables["climatology_bounds"][:].tolist(),
+  "sst": [None if not np.isfinite(x) else float(x) for x in f.variables["sst"][:].astype(np.float64).ravel()],
+  "count": f.variables["sst_count"][:].ravel().tolist(),
+  "cell_methods": f.variables["sst"]._attributes["cell_methods"].decode()}))
+`, tmp));
+      fs.unlinkSync(tmp);
+      assert.equal(out.attrs.period_start, 2000);
+      assert.equal(out.attrs.period_end, 2004);
+      assert.equal(out.attrs.excluded_years, "2002");
+      assert.equal(out.attrs.years_used, "2000, 2001, 2003, 2004");
+      assert.match(out.attrs.climatology, /monthly normals/);
+      assert.equal(out.time_attrs.climatology, "climatology_bounds");
+      assert.ok(out.vars.includes("climatology_bounds") && out.vars.includes("ssh_count"));
+      assert.equal(out.bounds.length, r.time.length);
+      assert.match(out.cell_methods, /mean over years/);
+      // the file holds the composed numbers, and sst's counts
+      const HW = r.lat.length * r.lon.length, T = r.time.length;
+      const wantSst = [], wantCnt = [];
+      for (let t = 0; t < T; t++) for (let i = 0; i < HW; i++) { wantSst.push(c.data[(t * 2 + 0) * HW + i]); wantCnt.push(c.count[(t * 2 + 0) * HW + i]); }
+      closeArr(Float64Array.from(out.sst, (v) => (v === null ? NaN : v)), wantSst, { rel: 1e-6, label: "sst in the file" });
+      assert.deepEqual(out.count, wantCnt);
+      // and the by-year stack says its period too
+      const b = await F1.run(caseM("byyear").sel);
+      const nc = Buffer.from(await F1.toNetCDF(b).arrayBuffer()).toString("latin1");
+      assert.ok(nc.includes("period_start") && !nc.includes("climatology_bounds"));
+    } finally { F1.configure({ base: base("ok") }); }
+  });
+
+  test("normals: the preview is the first chosen month's normal (or, by year, the first year's field)", async () => {
+    multiM();
+    try {
+      const c = caseM("normal_excl");
+      const p = await F1.preview(c.sel);
+      assert.equal(p.time.length, 1);
+      const HW = c.lat.length * c.lon.length;
+      // the run's first time step, channels as asked
+      closeArr(p.data, c.data.slice(0, 2 * HW), { rel: 1e-6, label: "preview = first month's normal" });
+      const b = caseM("byyear");
+      const pb = await F1.preview(b.sel);
+      assert.equal(new Date(pb.time[0] * 1000).getUTCFullYear(), b.years[0]);
+      closeArr(pb.data, b.data.slice(0, b.lat.length * b.lon.length), { rel: 1e-6, label: "preview = first year" });
+      // a box is required, and the estimate says so instead of reading
+      const e = await F1.estimate(Object.assign({}, c.sel, { bbox: null }));
+      assert.equal(e.overCap, true);
+      assert.match(e.why, /box/);
+    } finally { F1.configure({ base: base("ok") }); }
+  });
+
+  // ---- family 7.2d's registry fields, on the 1.gf fixture ------------------
+  test("a daily-tensor registry: record_span is the record, source_segments and preliminary days become caveats, a centred five-day sigma is said so", async () => {
+    F1.configure({ registries: [{ family: "7.2d", title: "Global tensor, daily (family 7.2d)", kind: "family1", url: base("ok72") + "family1gf.json" }] });
+    try {
+      const reg = await F1.loadRegistry();
+      const d = reg.stores.find((x) => x.name === "fxgrid");
+      assert.deepEqual(d.span, ["2009-12-27", "2010-01-06"], "record_span, not the bins' 2009-12-25 → 2010-01-08");
+      // a point-aligned grid's x0/y0 are centres: the same pixels as the edge form
+      assert.equal(d.grid.lat0, 89.75);
+      assert.equal(d.grid.lon0, -179.75);
+      assert.equal(d.caveats.length, 2);
+      assert.match(d.caveats[0].text, /^From 2010-01-01 to 2010-01-08 each day was checked only against an independent read of its own source file — it is the same source \(FX source v1\)/);
+      assert.match(d.caveats[0].text, /ends 2009-12-31/);
+      assert.match(d.caveats[1].text, /The last 3 days \(2010-01-06 → 2010-01-08\) are the producer's PRELIMINARY values/);
+      assert.ok(!/centred/.test(d.channels[0].unit));
+      assert.match(d.channels[0].note, /five days centred on each day/);
+      const r = await F1.run({ family: "7.2d", store: "fxgrid", channels: [d.channels[0].name], yearStart: 2010, yearEnd: 2010, months: [1],
+        bbox: { w: -30, s: -20, e: 10, n: 20 }, step: "native", res: "native" });
+      assert.ok(r.notes.some((n) => /independent read of its own source file/.test(n)));
+      assert.ok(r.notes.some((n) => /PRELIMINARY/.test(n)));
+      assert.ok(r.notes.some((n) => /five days centred on each day/.test(n)));
+      // the point-aligned grid reads the same pixels at the same coordinates as
+      // the edge form, after several reads of its (cached) tile_grid.json
+      await F1.estimate({ family: "7.2d", store: "fxgrid", channels: [d.channels[0].name], yearStart: 2010, yearEnd: 2010, months: [1],
+        bbox: { w: -30, s: -20, e: 10, n: 20 }, step: "native", res: "native" });
+      const again = await F1.run({ family: "7.2d", store: "fxgrid", channels: [d.channels[0].name], yearStart: 2010, yearEnd: 2010, months: [1],
+        bbox: { w: -30, s: -20, e: 10, n: 20 }, step: "native", res: "native" });
+      F1.configure({ base: base("ok") });
+      const plain = await F1.run({ store: "fxgrid", channels: [d.channels[0].name], yearStart: 2010, yearEnd: 2010, months: [1],
+        bbox: { w: -30, s: -20, e: 10, n: 20 }, step: "native", res: "native" });
+      assert.deepEqual(Array.from(again.lat), Array.from(plain.lat));
+      assert.deepEqual(Array.from(again.lon), Array.from(plain.lon));
+      assert.deepEqual(Array.from(again.data), Array.from(plain.data));
+      F1.configure({ registries: [{ family: "7.2d", title: "Global tensor, daily (family 7.2d)", kind: "family1", url: base("ok72") + "family1gf.json" }] });
+      // a selection before the read-back span carries no such caveat
+      const r9 = await F1.run({ family: "7.2d", store: "fxgrid", channels: [d.channels[0].name], yearStart: 2009, yearEnd: 2009, months: [12],
+        bbox: { w: -30, s: -20, e: 10, n: 20 }, step: "native", res: "native" });
+      assert.ok(!r9.notes.some((n) => /PRELIMINARY|independent read/.test(n)));
+    } finally { F1.configure({ base: base("ok") }); }
+  });
 
   test("internals: float16 table and the calendar", () => {
     const { F16, civil, daysFromCivil, isoOfUnix } = F1._internal;

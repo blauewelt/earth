@@ -6,7 +6,7 @@ resolution you want, see what that will cost before anything is read, preview it
 on the globe, and save it as a NetCDF or CSV file. The file is built **in your
 browser** from the store's own files: no server computes anything.
 
-The store list is the union of four groups, each read from its own registry:
+The store list is the union of five groups, each read from its own registry:
 
 - **Fine observations (family 1.gf)** — the global set of observation stores
   at 10 km / 5 days or finer, each kept at its own native resolution rather
@@ -22,10 +22,15 @@ The store list is the union of four groups, each read from its own registry:
   depths, and the point stores beside them (Argo profiles, drifters, moored
   buoys, ship CO₂, altimeter tracks, fishing vessels); registry
   `tensors/family10_2/family10.json`.
+- **Global tensor, daily (family 7.2d)** — the global tensor's channels (the
+  0.25° and 1° grids above) as one frame per DAY instead of a five-day mean,
+  one store per source, each running to the last day its producer serves;
+  registry `tensors/family7_2d/family72d.json`.
 - **Derived maps** — maps the project computes from those: the 0.25° monthly
-  fishing-effort map and the model climatology (what the forecaster calls
-  "normal", one map per calendar month). Their indexes are the site's own
-  `data/fishing_index.json` and `data/family7_clim_index.json`.
+  fishing-effort map and the **monthly normals** of the global tensor over any
+  period you choose (what the forecaster calls "normal", from per-year monthly
+  sums and counts). Their indexes are the site's own `data/fishing_index.json`
+  and `data/family7_monthly_index.json`.
 
 All the data live on the project's public data store, the Hugging Face dataset
 [chfrank/earth-tensors](https://huggingface.co/datasets/chfrank/earth-tensors).
@@ -44,13 +49,14 @@ the stores themselves are described in the
 
 The tab reads the list of stores from the registries at run time, so a store
 appears in the tab the day it is published; these tables are the set as of
-2026-10-06 (28 stores). Three kinds:
+2026-10-06 evening (35 stores). Three kinds:
 
 - a **map store** (a gridded product): one value per pixel per frame;
 - a **point store**: every report at its own position and time — a ship's
   observation, a float's profile, a bottle sample, a satellite sounding;
-- a **calendar store** (the climatology): twelve maps, one per calendar month,
-  with no years at all.
+- a **normals store**: one sum and one count per year, calendar month,
+  channel and cell, from which the tab composes the mean over the years you
+  choose (§1, *Monthly normals*).
 
 Every store is offered at its native space and time and nothing coarser is
 pretended: the 0.25° and 1° choices under *Resolution* appear only where they
@@ -89,11 +95,13 @@ middle of the troposphere. Each store opens on its most recent month at 500 hPa
 in the first preset box: about 11 MB to read for temperature and 20–22 MB for
 humidity and the winds (their tiles compress less well).
 
-**Humidity has a few holes by construction.** The reanalysis can produce
-slightly negative specific humidity (a numerical artefact, not a measurement);
-the store keeps values down to −0.01 g/kg and stores the 1,883 values in the
-whole record below that as missing, so a file can show a rare empty cell
-there.
+**Humidity can be slightly negative.** The reanalysis can produce slightly
+negative specific humidity (a numerical artefact of the model, not a
+measurement). Since the store was republished on 2026-10-06 it keeps those
+values as ERA5 gives them — the smallest in the whole record is −0.136 g/kg —
+and only a value outside the registry's channel range (−1 to 40 g/kg) would be
+stored as missing. The preview's colour scale uses that registry range, so a
+slightly negative cell is not singled out.
 
 **This is a reanalysis, not an observation.** ERA5 is ECMWF's best estimate of
 the atmosphere: a weather model run forward and pulled toward every available
@@ -130,19 +138,123 @@ and so on, not z-scores. A grid stores all its channels side by side, so the
 read always covers every channel of the store whichever you tick — the
 estimate says so.
 
+### Global tensor, daily (family 7.2d)
+
+Family 7.2d is the global tensor (the `g025`, `g100` and `oc025` grids above)
+with one frame per calendar DAY instead of the mean of the five days in a bin
+— the same channels, names, units and derivation, in physical units, stored
+like the family-1.gf maps (compressed tiles per five-day bin, five daily
+frames each). The Argo depth grid is monthly and has no daily form. Each
+record runs to the last day its producer served when the store was built
+(2026-10-06), past family 7.2's own end of 2024-12-31; the tab reads every
+record from the registry (`record_span`, where the data actually is), never
+from this table.
+
+| store | plain-English name | what it measures | native space | native time | record |
+|---|---|---|---|---|---|
+| `glorys025d` | Ocean currents, sea-surface height and mixed layer (GLORYS reanalysis) | surface current east, north and speed (m/s), sea-surface height (m), mixed-layer depth (log₁₀ m) — Copernicus Marine's GLORYS12 ocean reanalysis | 0.25° | daily means | 1993-01-01 → 2026-08-18 |
+| `oisst025d` | Sea-surface temperature and sea ice (NOAA OISST) | sea-surface temperature (°C) and sea-ice concentration (0–1, none below 0.15) — NOAA's daily optimum-interpolation analysis | 0.25° | daily means | 1982-01-01 → 2026-10-04 |
+| `ncep100d` | Atmosphere and land (NCEP/NCAR reanalysis) | the 15 surface channels: wind stress and its variability, 2 m air and skin temperature, 10 m wind, pressure, rain and snow (log1p), soil moisture and temperature, latent and sensible heat flux | 1° | daily means | 1982-01-01 → 2026-03-17 |
+| `occci025d` | Ocean colour (ESA OC-CCI) | chlorophyll-a (log₁₀ mg m⁻³) and the fraction of 4 km cells seen clear | 0.25° | daily means | 1997-09-04 → 2026-06-30 |
+
+What is worth knowing before using them — the tab prints it under the store
+and writes it into every file's `comment`:
+
+- **Two of the four are reanalyses**, not measurements: GLORYS (ocean) and
+  NCEP/NCAR (atmosphere) are models constrained by observations.
+- **The two wind-stress variability channels (`tau_x_std`, `tau_y_std`) are
+  a five-day spread centred on each day** — the standard deviation of the
+  six-hourly stress over the five days around it — not a one-day value. The
+  stored unit says "centred 5-day sigma"; the tab reads it as N/m² with that
+  note.
+- **Through 2024-12-31 each store reproduces the five-day tensor**: the mean
+  of a bin's days by each channel's rule equals family 7.2 to float16
+  rounding, NaN exactly where it is NaN, and every bin was checked. **From
+  2025-01-01 there is no five-day tensor to check against**, so each day was
+  checked instead against an independent read of its own source file — a
+  weaker guarantee (it proves the right bytes went through the same code, not
+  agreement with a second product). For GLORYS this matters most: the days
+  after 2024 come from the same Copernicus dataset id
+  (`cmems_mod_glo_phy_my_0.083deg_P1D-m`, version 202311) as the checked
+  years, fetched later, with nothing independent to compare them with.
+- **OISST's newest days are preliminary**: 2026-09-21 → 10-04 are NCEI's
+  preliminary values, kept as published; a later rebuild replaces them.
+- **NCEP's record ends 2026-03-17** because NOAA PSL has not updated its 2026
+  files since 2026-03-19.
+- **Licences**: GLORYS — Copernicus Marine Service data licence (free, with
+  attribution); OISST and NCEP — NOAA public domain; OC-CCI — the ESA CCI data
+  policy (free and open, cite). The attribution each producer asks for is
+  printed under the store and written as the `license` and `attribution`
+  global attributes of every NetCDF, as for the ERA5 stores.
+- **A five-day mean the tab computes** (time step *five-day mean*) is the plain
+  mean of the finite days. Family 7.2's pentad needs three finite days for
+  OISST, and uses its own rule for current speed (the speed of the mean
+  current) and mixed-layer depth (the log of the mean depth), so those can
+  differ from the tensor where those rules bite.
+
 ### Derived maps
 
-| store | what it is | kind | native space | native time | record |
+| store | plain-English name | kind | native space | native time | record |
 |---|---|---|---|---|---|
-| `fishing_grid` | fishing hours and hours present, summed over each 0.25° cell and month | map | 0.25° | monthly sums | 2012-01 → 2024-12 |
-| `clim_g025` | the model climatology of the `g025` channels | calendar | 0.25° | 12 calendar months | no years; the average over 1982–2024 |
-| `clim_g100` | the model climatology of the `g100` channels | calendar | 1° | 12 calendar months | no years; the average over 1982–2024 |
-| `clim_oc025` | the model climatology of the `oc025` channels | calendar | 0.25° | 12 calendar months | no years; the average over the record |
-| `clim_rg100` | the model climatology of `rg100`, 16 pressures | calendar | 1° | 12 calendar months | no years; the average over the record |
+| `fishing_grid` | Fishing effort map (AIS) — fishing hours and hours present, summed over each 0.25° cell and month | map | 0.25° | monthly sums | 2012-01 → 2024-12 |
+| `normals_g025` | Monthly normals of the global tensor — sea-surface temperature, currents, sea-surface height, mixed layer and sea ice | normals | 0.25° | one sum and count per year and calendar month | 1982 → 2024 |
+| `normals_g100` | Monthly normals of the global tensor — air–sea fluxes, weather and land | normals | 1° | per year and calendar month | 1982 → 2024 |
+| `normals_oc025` | Monthly normals of the global tensor — ocean colour | normals | 0.25° | per year and calendar month | 1997 → 2024 (from September 1997) |
+| `normals_rg100` | Monthly normals of the global tensor — ocean temperature and salinity at 16 depths | normals | 1° | per year and calendar month | 2004 → 2024 |
 
-The climatology is in z-units: 0 means "the long-term mean of that channel",
-1 means one spread above it. It is what the forecaster is trained and scored
-against, so it is the reference for its anomalies.
+#### Monthly normals over a period you choose
+
+These replaced, on 2026-10-06, the four fixed "all years" climatology stores
+(`clim_g025` …), and with them the three fixed versions of the *Model
+climatology* layer: *"No 'paper holdout' or similar anymore, just setting a
+period is enough"* (Chris). The model climatology — what the forecaster calls
+*normal* — is, per calendar month, channel and cell, the mean of the stored
+value over the five-day bins of the chosen years that open in that month. A
+mean is a sum divided by a count, and sums and counts add across years, so the
+project published once, for every year, month, channel and cell, the **sum**
+of that year's bins and **how many** had a value
+([E-086](https://blauewelt.github.io/earth/docs.html?f=ml/plans/E086_monthly_by_year.md)).
+The tab composes the mean over ANY set of years,
+
+    mean = (Σ of the chosen years' sums) ÷ (Σ of their counts),   NaN where the counts sum to 0,
+
+then turns it into the channel's unit (value = z × sd + mean, with the
+tensor's own constants), so a file carries °C, m/s, PSU and so on.
+
+- **Period**: a first and a last year, and **leave out** — whole years to
+  drop ("2009, 2017"; "2009-2011" for a range). The paper's split is *1982 to
+  2020, leave out 2009, 2017*; the period 1982–2024 reproduces the Model
+  climatology layer's all-years normal.
+- **Months**: the twelve chips; one normal per chosen month.
+- **Time step**: *normal* — one mean per calendar month over the period (the
+  file is marked a CF climatology: a `climatology_bounds` variable and the
+  global attributes `period_start`, `period_end`, `excluded_years`,
+  `years_used`); or *by year* — each year's own monthly mean side by side, so
+  "the 23 Februaries 1982–2004" is 23 fields.
+- **Counts are always written**: `<channel>_count` is the number of five-day
+  bins behind each value (for `rg100`, the number of monthly rows — years).
+- **Resolution**: native, plus 1° for the 0.25° groups. A 1° cell **pools**
+  the sums and the counts of the sixteen 0.25° cells and every year in it
+  (Σ sums ÷ Σ counts) — not a mean of the sixteen means, which would give a
+  cell with one sample the same weight as a cell with forty.
+- **Depths**: `normals_rg100` shows the variables × levels picker (dbar).
+- **What a read costs.** A run of years for one month and channel is one
+  contiguous range in each file (axes `[month, channel, year, lat, lon]`) —
+  the whole globe at 0.25° is 178.6 MB of sums and 44.6 MB of counts for 43
+  years. A box's latitude band is contiguous only *within* one year's map.
+  The reader works out both ways and picks per selection: **year by year**
+  (the box's band of each year's map) when the rows between two years' bands
+  cost more than a request (about 0.5 MB), else **one stretch per month and
+  channel** — which is every 1° group, whose whole map is 0.26 MB. Measured
+  from the sandbox, February SST 1982–2024 over 35–45° N, 60–40° W at 0.25°:
+  year by year 86 requests, 12.7 MB; one stretch 28 requests, 131.2 MB. Over
+  0–60° N, 80° W–0°: 74.6 MB against 158.3 MB. The same small box at 1°
+  (`g100`): 3 requests and 13.5 MB as one stretch, against 86 requests of
+  0.85 MB year by year. The estimate line says which way it reads and what
+  the other would cost. A stretch can pass over an excluded year's map; its
+  values are never added.
+- **First look**: the whole record, this calendar month, the Gulf Stream box
+  — 12.7 MB for 0.25° SST, under 15 MB for every group.
 
 Not offered: the 6.25 km sea-ice store from the University of Bremen stays
 private until Bremen answers on redistribution — a browser has no access token
@@ -160,8 +272,8 @@ and must not have one.
    *none*; the channels are every variable at every level that is on. ERA5
    opens on one level, 500 hPa.
 2. **Years.** A start and an end year, clamped to the store's record. A
-   calendar store has no years: the year and day rows are hidden and only the
-   months are offered.
+   normals store adds **leave out** (whole years to drop from the average) and
+   has no days.
 3. **Months.** Twelve chips with *all* / *none*. "Every February from 1998 to
    2004" is: years 1998 to 2004, only *Feb* on.
    **Days.** A day-of-month range applied inside every chosen month (*1 to 31*
@@ -270,8 +382,12 @@ and must not have one.
   coarser cell or a longer time step *averages* those sums (a mean per 0.25°
   cell and month); it does not add them up. Zero means no vessel broadcast
   there, which is not the same as no fishing.
-- **The climatology** is in z-units (0 is normal), and the year in its file's
-  time axis is a nominal 2000 that means nothing.
+- **The monthly normals** are in the channel's unit (composed in z-units and
+  converted once). A *normal* file's time is each month in the first year of
+  the period, with `climatology_bounds` spanning the period; a *by-year*
+  file's time is the first of each month.
+- **Family 7.2d** values are daily, physical, float16 as stored; each frame is
+  dated to its day at 00:00 UTC.
 - Every file states its units and carries, in its global attributes, the store
   and the full selection that produced it.
 
@@ -283,13 +399,15 @@ and must not have one.
 | the zstd decoder the reader uses for the compressed tiles | `lib/fzstd.js` |
 | the tab: controls, box on the globe, estimate line, preview, save | `src/app.js` (the block headed "data tab"), `index.html` (`#panel-data`), `src/style.css` |
 | tests of the tab | `tests/app.spec.js` ("Data tab: …") |
-| tests of the reader, and the small fixtures they read | `tests/f1data.test.mjs`; `data/family1_fixture/`, `data/family12_fixture/` (an ERA5-shaped store with levels and six-hourly frames) and `data/family10_fixture/`, written by `tests/make_family1_fixture.py`, `tests/make_family12_fixture.py` and `tests/make_family10_fixture.py` through the project's own store writers |
+| tests of the reader, and the small fixtures they read | `tests/f1data.test.mjs`; `data/family1_fixture/`, `data/family12_fixture/` (an ERA5-shaped store with levels and six-hourly frames), `data/family10_fixture/` and `data/family7_monthly/fixture_multi/` (per-year monthly sums and counts, five years, two small grids), written by `tests/make_family1_fixture.py`, `tests/make_family12_fixture.py`, `tests/make_family10_fixture.py` and `tests/make_family7_monthly_fixture.py` |
 | a check against the live data store, with independent Python reads | `scripts/f1data_live_check.mjs` |
 
-The reader keeps one handler per layout — the zstd-tiled family-1.gf grids,
-the five-day-binned point stores (both schemas, including bins before 1982),
-the bin-major family-10 grids, the month-major fishing map and the
-calendar-month climatology — behind the same interface. The tab talks to the
+The reader keeps one handler per layout — the zstd-tiled family-1.gf grids
+(also family 1.2's and family 7.2d's), the five-day-binned point stores (both
+schemas, including bins before 1982), the bin-major family-10 grids, the
+month-major fishing map, the per-year monthly sums and counts of the normals,
+and the calendar-month climatology (still readable, no longer listed) — behind
+the same interface. The tab talks to the
 reader only through the six functions in the plan's
 §4 (`loadRegistry`, `estimate`, `run`, `preview`, `toNetCDF`, `toCSV`), so the
 reader can change how it reads without the tab noticing.

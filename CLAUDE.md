@@ -504,8 +504,10 @@ Since then the same family-7 path also serves the Model climatology layer
 read), and — added 2026-10-05 for E-084 — the **Data tab** reads the family
 1.gf observation stores under `tensors/family1_gf/`, family 1.2's ERA5 stores
 under `tensors/family1_2/`, the family-10 stores
-under `tensors/family10_2/` (plus the fishing map and the climatology through
-their site indexes): index and tile ranges of the gridded stores, row-band
+under `tensors/family10_2/`, family 7.2d's daily stores under
+`tensors/family7_2d/` (added 2026-10-06), and the monthly normals' per-year
+sums and counts under `tensors/family7_global025_pentad_l2/monthly/` (plus the
+fishing map through its site index): index and tile ranges of the gridded stores, row-band
 ranges of the bin-major grids, column ranges of the point stores, every one a `Range:`
 request answered 206, at most six in flight, issued only by an explicit
 Estimate / Preview / Download and bounded by the tab's cap (600 MB read,
@@ -2070,8 +2072,8 @@ index.
   second family-7 layer, **"Model climatology — what the forecaster calls
   normal (family 7), 0.25° / 1°"** (`clim7`): the per-calendar-month
   climatology `ml/trainprobe.py::anomaly_transform` subtracts before training
-  and `msss_clim` scores against, in three versions (all years · the
-  development holdout · the paper's split). Keyed by the CALENDAR MONTH of the
+  and `msss_clim` scores against — since 2026-10-06 the ALL-YEARS normal only
+  (below). Keyed by the CALENDAR MONTH of the
   date — the year never counts, and the toast says so. One (version, group,
   month, channel) plane of `clim.npy` (`[12, C, H, W]` float32) is one `Range:`
   read at `header_len + (month·C + c)·plane_bytes`, through the same
@@ -2090,6 +2092,17 @@ index.
   index is absent until the export publishes — the layer then paints nothing
   and a toast names the chain; `data/family7_clim/fixture/` is what the tests
   serve. `docs/FAMILY7_CLIM.md` explains it and says how to regenerate.
+  **The version selector is gone (2026-10-06, E-086).** Chris: *"No 'paper
+  holdout' or similar anymore, just setting a period is enough."* The row has
+  the channel picker only; the layer paints the `all` file (`CLIM_LAYER_VERSION`)
+  whatever the index lists, and the `dev`/`paper` files stay on the Hub,
+  unlinked. Any other period is the Data tab's "Monthly normals" stores: the
+  downloads fold says so (the paper's split is the period 1982–2020 leaving out
+  2009 and 2017) and its button opens the tab ON that group's store
+  (`dtOpenStore`, `data-dtstore`). The hover card says the versions were
+  retired and how to reproduce them. The tests that covered the selector were
+  replaced: no `select[data-climver]`, `grid.version` is `all`, and the
+  single-plane path is now exercised on a month not yet read.
 
 **The Data tab — every public store of family 1.gf, family 10 and the derived
 maps, filtered and downloaded in the browser (2026-10-05, E-084).** Chris, on the Model climatology download:
@@ -2140,8 +2153,10 @@ all granularities are fine for this, also derived channels"*. The reader now
 loads a LIST of registries (`F1Data.DEFAULT_REGISTRIES`, replaceable through
 `configure({registries})`): family 1.gf, family 10
 (`tensors/family10_2/family10.json`) and "derived" (the site's
-`data/fishing_index.json` and `data/family7_clim_index.json`), and — switched on
-2026-10-06 — family 1.2 (`tensors/family1_2/family12.json`). Stores are keyed
+`data/fishing_index.json` and — until 2026-10-06 `data/family7_clim_index.json`,
+since then `data/family7_monthly_index.json`, below), and — switched on
+2026-10-06 — family 1.2 (`tensors/family1_2/family12.json`) and family 7.2d
+(`tensors/family7_2d/family72d.json`). Stores are keyed
 `family/name` (`sel.family`; a bare `sel.store` still resolves when it is
 unambiguous) and the tab groups them in three optgroups. **A registry or store
 that fails does not take the others down**: it lands in `registry.errors[]`
@@ -2170,6 +2185,52 @@ Argo rows equal to `ml/family10_store.py`'s with identical times, a 1980
 drifter month from the negative bins, a fishing-grid month exactly equal).
 Fixture `data/family10_fixture/` (written by `tests/make_family10_fixture.py`
 through `ml/tensor_io.py`, the family-8 writer and the family-10 assembler).
+
+*Monthly normals over a free period (2026-10-06, E-086).* The four calendar
+stores (`clim_g025` …) left the default list; the derived registry now carries
+`monthly: "data/family7_monthly_index.json"` and the reader's **monthly**
+handler offers one store per group, `derived/normals_<group>` ("Monthly
+normals of the global tensor — …"). Each reads E-086's `sum.npy` (float32,
+z-units) and `count.npy` (uint8), axes `[month, channel, year, lat, lon]`, and
+composes Σsum/Σcount over the chosen years (NaN where Σcount = 0), then z·sd +
+mean. The selection adds `excludeYears` and the steps `normal` (one mean per
+calendar month; the NetCDF is a CF climatology with `climatology_bounds` and
+`period_start`/`period_end`/`excluded_years`/`years_used`) and `by-year` (each
+year's monthly mean); counts are always written; 1° cells of a 0.25° group
+POOL sums and counts (never a mean of means); `rg100` gets the depth picker.
+**Two ways to read a run of years, chosen per selection by one rule**: the
+spans are the box's band of each year's plane, coalesced when the gap between
+two years' bands (a plane minus the band) is ≤ `NORMALS_MERGE_GAP` = 512 kB —
+so a narrow 0.25° band is read year by year and every 1° group as one stretch.
+Measured from the sandbox (Feb SST 1982–2024, 35–45° N × 60–40° W): 86
+requests / 12.7 MB year by year against 28 / 131.2 MB as stretches; at 1° 3
+requests / 13.5 MB against 86 / 0.85 MB. The estimate returns `strategy`,
+`bandBytes`, `runBytes` and the tab says which it chose and what the other
+costs. First look: the whole record, this month, the default box (12.7 MB
+for 0.25° SST). Fixture `data/family7_monthly/fixture_multi/`
+(`tests/make_family7_monthly_fixture.py`, numpy's answers in `expected.json`).
+
+*Family 7.2d — the global tensor DAILY (2026-10-06, E-087).* Registry
+`tensors/family7_2d/family72d.json`, family-1 schema, sharded tier-G, physical
+units, group "Global tensor, daily (family 7.2d)": `glorys025d`, `oisst025d`,
+`ncep100d`, `occci025d`, each to its producer's last day. Three things the
+reader learnt from it. **A point-aligned grid**: its `tile_grid.json` says
+`align: "point — row r is latitude -90 + 0.25 r …"`, i.e. x0/y0 are the first
+pixel's CENTRE, where every other tier-G group gives edges; `tileGrid` shifts
+such a grid by half a cell once, so the pixels land on family 7's own grid
+(without it every 7.2d file was half a cell off). **`record_span` is the
+record** (since 2026-10-06 it means where the data is; `requested_window` is
+what the build asked for) when it lies inside the bins. **Caveats from the
+registry, in words** (`sourceCaveats`): a `source_segments` span checked only
+by `source-readback` is said to be the weaker guarantee (for GLORYS: the same
+Copernicus dataset id after 2024 with no five-day tensor to check it against),
+and `counts.preliminary_days` (OISST's newest two weeks) are named; both are
+printed under the store and written into the `comment` of every file whose
+years reach them. The wind-stress spread's unit `N/m2 (centred 5-day sigma)`
+becomes `N/m2` with a note that it is a five-day spread centred on each day.
+Licence and attribution travel as for ERA5. The ERA5 humidity store was
+republished the same day keeping small negative values (registry channel
+range −1 … 40 g/kg; real minimum −0.136); nothing in the reader clips them.
 
 *Family 1.2 — the atmosphere on pressure levels (2026-10-06, E-085).* Family
 1.2 is family 1.gf plus ECMWF's ERA5 reanalysis — temperature (K), specific
@@ -2274,7 +2335,7 @@ climatetrace, argo, rapid, sealevel, glaciers (RGI7 tars + Hugonnet parquet
 join), gistemp, gpcp, eobs, oisst, meteoswiss. Grid snapshots share
 `_bin_to_grid`/`_write_grid` (nearest scatter-binning onto regular grids).
 
-**Testing** (147 Playwright specs): app behaviour (`tests/app.spec.js`) + data
+**Testing** (321 Playwright specs, plus 58 node tests of the Data tab reader): app behaviour (`tests/app.spec.js`) + data
 integrity (`tests/data.spec.js`), the ML status page (`tests/status.spec.js` —
 every GitHub endpoint stubbed by `page.route`, so it needs no network and no
 MIRROR), sandbox MIRROR mode, in-repo proxies, CI on real network.

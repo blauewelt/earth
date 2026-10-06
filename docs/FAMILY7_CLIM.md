@@ -7,9 +7,28 @@ against, for every channel of family 7, on the globe and as files you can
 download.
 
 Switch it on in the layer list ("Model climatology — what the forecaster calls
-normal (family 7), 0.25° / 1°"), pick a **channel** and a **version** in the
-row underneath, and move the date by months. Each frame is **one HTTP range
-read** of a file on the Hugging Face Hub.
+normal (family 7), 0.25° / 1°"), pick a **channel** in the row underneath, and
+move the date by months. The layer paints the **all-years normal**
+(1982–2024). Each frame is **one HTTP range read** of a file on the Hugging
+Face Hub.
+
+**For any other period, use the Data tab.** The layer used to offer three
+fixed versions (all years, a development holdout, the paper's split); they
+were retired on 2026-10-06 in favour of a free period (Chris: *"No 'paper
+holdout' or similar anymore, just setting a period is enough"*). The Data
+tab's **Monthly normals** stores (under *Derived maps*, one per channel group)
+average over any years you choose, from per-year monthly sums and counts
+([E-086](https://blauewelt.github.io/earth/docs.html?f=ml/plans/E086_monthly_by_year.md)):
+
+- **the paper's split** — period **1982 to 2020**, *leave out* **2009, 2017**;
+- the development holdout — 1982 to 2024, leave out 2009, 2017, 2023;
+- a WMO-style normal — 1991 to 2020; or a single year, which gives that
+  year's own monthly mean.
+
+Those reproduce the retired versions' files: E-086's falsifier rebuilt every
+one of them from the sums and counts, every cell, within a rigorous float32
+rounding bound (max 4.8 × 10⁻⁷ in z-units). The row's **⤓ downloads** fold
+has a button that opens the tab on the group of the channel on screen.
 
 The plan behind it is
 [E-083](https://blauewelt.github.io/earth/docs.html?f=ml/plans/E083_model_climatology.md);
@@ -43,8 +62,7 @@ the tensor it is computed from is described in
   and legend range as the Global tensor layer, so one channel looks identical
   on the two layers.
 - **A blank cell means "no training sample"** for that month at that cell
-  (NaN in the file) — for example ocean-only channels over land, or a group
-  whose record starts after the version's training years.
+  (NaN in the file) — for example ocean-only channels over land.
 
 ### The departure from normal
 
@@ -52,7 +70,7 @@ With the **Global tensor** layer also on (so that pentad's bytes are already
 in the page), the probe and the pixel card add a second row: **departure from
 normal** — the tensor's value minus the normal, in the unit, and as the
 trainer's own z-score `(value − normal − mu) / den`, with `mu` and `den` read
-from that version's `stats.json`. This is the number the model is actually
+from the all-years `stats.json`. This is the number the model is actually
 handed. The trainer charges a pentad to the calendar month it *opens* in, so
 the departure uses that month's normal even when the selected date is in the
 next month.
@@ -63,21 +81,21 @@ hint instead of fetching 14.5 MB.
 
 ---
 
-## The three versions
+## The three versions (retired 2026-10-06)
 
-Which years count as "training" decides the climatology. The three versions
-are three answers to that question, computed by the same function with a
-different hold-out mask:
+Which years count as "training" decides the climatology. Until 2026-10-06 the
+row offered three versions, three answers to that question computed by the
+same function with a different hold-out mask:
 
-| version | name on the page | training years | held out |
-|---|---|---|---|
-| `all` | **All years (1982–2024)** — the default | every year | nothing |
-| `dev` | **Development holdout — 2009, 2017 and 2023 held out** | every year except 2009, 2017, 2023 | those three years (the E-059 regime) |
-| `paper` | **The paper's split — trained on 1982–2020 less 2009 and 2017** | 1982–2020 except 2009 and 2017 | 2009, 2017, and all of 2021–2024 (the retrospective evaluation period) |
+| version | training years | the same normal in the Data tab |
+|---|---|---|
+| `all` — **All years (1982–2024)**, what the layer paints | every year | period 1982–2024 |
+| `dev` — development holdout | every year except 2009, 2017, 2023 | 1982–2024, leave out 2009, 2017, 2023 |
+| `paper` — the paper's split | 1982–2020 except 2009 and 2017 | 1982–2020, leave out 2009, 2017 |
 
-The names, rules and spans on the page are read from the index, not typed into
-the app. Flipping between `all` and `paper` at one cell is a direct view of the
-last four years' trend: `paper`'s normal is fitted to 37 years, `all`'s to 43.
+The selector is gone; the `dev` and `paper` files stay on the Hub and in the
+index (the downloads fold links only `all`'s), and anything else is a period
+in the Data tab. The layer's numbers are the `all` file's, unchanged.
 
 ---
 
@@ -103,15 +121,15 @@ Because the C planes of one month sit side by side, a whole month of a group is
 `C × plane_bytes` long). When that is small — every 1° group, well under
 16 MB — the page reads the month whole, so switching channel within it costs
 no request. A 0.25° month (7 × 4.15 MB = 29 MB) is not read whole: there a
-channel switch is one more 4 MB plane. Either way a change of channel, version
-or month is a decode or **one** read, never more.
+channel switch is one more 4 MB plane. Either way a change of channel or month
+is a decode or **one** read, never more.
 
 Every number in this arithmetic — `header_len`, `shape`, `dtype`,
 `plane_bytes`, the grid, the channel names, labels, units, colour ramps and
 (mean, sd) — comes from **`data/family7_clim_index.json`**, which is why the
 app contains no 721, no 1440, no 12 and no channel name. Decoded planes are
 kept in a 24-plane cache keyed by (version, group, month, channel), so stepping
-back to a month or version already seen is free; a held date key is coalesced
+back to a month already seen is free; a held date key is coalesced
 through `scrubApply` into one read per *settled* date.
 
 The index's channel metadata and `norm` are **copied** from
@@ -123,7 +141,9 @@ publisher refuses to write one against a different tensor.
 ## Downloads
 
 The layer's row has a **⤓ downloads** fold (the hover card lists the same
-links), for the selected version and the selected channel's group:
+links), for the all-years normal of the selected channel's group, and a button
+that opens the Data tab on that group's **Monthly normals** store for any
+other period:
 
 - **`clim.nc`** — the same field as CF-conventional NetCDF, one variable per
   channel **in physical units**, dimensions (month, lat, lon). Where it was

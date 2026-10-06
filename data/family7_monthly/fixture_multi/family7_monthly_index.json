@@ -1,0 +1,226 @@
+{
+ "_source": "tests/make_family7_monthly_fixture.py — do not hand-edit",
+ "fixture": true,
+ "stem": "fixture_multi",
+ "axes": [
+  "month",
+  "channel",
+  "year",
+  "lat",
+  "lon"
+ ],
+ "combine": "mean_z = Σ sum / Σ count over the chosen years, NaN where Σ count = 0; physical = mean_z * norm[c][1] + norm[c][0]",
+ "month_rule": "a bin belongs to the calendar month and year its five-day window OPENS in",
+ "groups": {
+  "fx025": {
+   "chans": [
+    "sst",
+    "ssh"
+   ],
+   "units": {
+    "sst": "°C",
+    "ssh": "m"
+   },
+   "labels": {
+    "sst": "Sea-surface temperature",
+    "ssh": "Sea-surface height"
+   },
+   "norm": [
+    [
+     18.5,
+     6.25
+    ],
+    [
+     -0.1,
+     0.5
+    ]
+   ],
+   "grid": {
+    "lat0": 30.0,
+    "lon0": -80.0,
+    "ny": 21,
+    "nx": 29,
+    "step": 0.25,
+    "south_first": true,
+    "wrap": false
+   },
+   "n_years": 5,
+   "year_first": 2000,
+   "year_last": 2004,
+   "years": [
+    2000,
+    2001,
+    2002,
+    2003,
+    2004
+   ],
+   "max_count": 7,
+   "row_kind": "pentad",
+   "static_chans": [],
+   "sum": {
+    "url": "fx025/sum.npy",
+    "header_len": 128,
+    "itemsize": 4,
+    "plane_bytes": 2436,
+    "shape": [
+     12,
+     2,
+     5,
+     21,
+     29
+    ],
+    "dtype": "<f4",
+    "bytes": 292448,
+    "fortran_order": false,
+    "axes": [
+     "month",
+     "channel",
+     "year",
+     "lat",
+     "lon"
+    ]
+   },
+   "count": {
+    "url": "fx025/count.npy",
+    "header_len": 128,
+    "itemsize": 1,
+    "plane_bytes": 609,
+    "shape": [
+     12,
+     2,
+     5,
+     21,
+     29
+    ],
+    "dtype": "|u1",
+    "bytes": 73208,
+    "fortran_order": false,
+    "axes": [
+     "month",
+     "channel",
+     "year",
+     "lat",
+     "lon"
+    ]
+   }
+  },
+  "fxrg": {
+   "chans": [
+    "rg_t10",
+    "rg_t30",
+    "rg_t50",
+    "rg_s10",
+    "rg_s30",
+    "rg_s50"
+   ],
+   "units": {
+    "rg_t10": "°C",
+    "rg_t30": "°C",
+    "rg_t50": "°C",
+    "rg_s10": "PSU",
+    "rg_s30": "PSU",
+    "rg_s50": "PSU"
+   },
+   "labels": {
+    "rg_t10": "Ocean temperature at 10 dbar",
+    "rg_t30": "Ocean temperature at 30 dbar",
+    "rg_t50": "Ocean temperature at 50 dbar",
+    "rg_s10": "Ocean salinity at 10 dbar",
+    "rg_s30": "Ocean salinity at 30 dbar",
+    "rg_s50": "Ocean salinity at 50 dbar"
+   },
+   "norm": [
+    [
+     17.0,
+     9.0
+    ],
+    [
+     16.5,
+     8.8
+    ],
+    [
+     15.9,
+     8.4
+    ],
+    [
+     34.9,
+     0.6
+    ],
+    [
+     34.95,
+     0.55
+    ],
+    [
+     35.0,
+     0.5
+    ]
+   ],
+   "grid": {
+    "lat0": 30.0,
+    "lon0": -80.0,
+    "ny": 11,
+    "nx": 21,
+    "step": 1.0,
+    "south_first": true,
+    "wrap": false
+   },
+   "n_years": 3,
+   "year_first": 2004,
+   "year_last": 2006,
+   "years": [
+    2004,
+    2005,
+    2006
+   ],
+   "max_count": 1,
+   "row_kind": "monthly",
+   "static_chans": [],
+   "sum": {
+    "url": "fxrg/sum.npy",
+    "header_len": 128,
+    "itemsize": 4,
+    "plane_bytes": 924,
+    "shape": [
+     12,
+     6,
+     3,
+     11,
+     21
+    ],
+    "dtype": "<f4",
+    "bytes": 199712,
+    "fortran_order": false,
+    "axes": [
+     "month",
+     "channel",
+     "year",
+     "lat",
+     "lon"
+    ]
+   },
+   "count": {
+    "url": "fxrg/count.npy",
+    "header_len": 128,
+    "itemsize": 1,
+    "plane_bytes": 231,
+    "shape": [
+     12,
+     6,
+     3,
+     11,
+     21
+    ],
+    "dtype": "|u1",
+    "bytes": 50024,
+    "fortran_order": false,
+    "axes": [
+     "month",
+     "channel",
+     "year",
+     "lat",
+     "lon"
+    ]
+   }
+  }
+ }
+}

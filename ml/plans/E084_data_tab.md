@@ -156,14 +156,16 @@ per-year files are **phase 2** (§7), not this build.
   and box; over-cap disables the button; a fixture download has the right
   shape.
 
-## 7. Phase 2 (not this build)
+## 7. Phase 2
 
 The family-7 channels (the 56-channel 0.25° / 1° tensor the forecaster reads)
-join the same tab: native five-day frames straight from the tensor, and one
-mean per year and calendar month (with counts) computed on a rented box so a
-free period is two reads instead of hundreds — which is what replaces the
-three holdout versions. Precomputed monthly means and 0.25° / 1° pyramids for
-the 1.gf grids go with it, so a long period at coarse resolution stops costing
+join the same tab: native five-day frames straight from the tensor (**done**
+2026-10-05, the family-10 grids), daily frames (**done** 2026-10-06, family
+7.2d, E-087), and one sum and count per year and calendar month computed on a
+rented box (E-086) so a free period is a handful of range reads instead of
+hundreds of bins — which is what replaced the three holdout versions (**done**
+2026-10-06, §8). Still open: precomputed monthly means and 0.25° / 1° pyramids
+for the 1.gf grids, so a long period at coarse resolution stops costing
 native bytes.
 
 ## 8. Status
@@ -220,3 +222,23 @@ native bytes.
   and humidity again on 2023-07-15 06 UTC) downloaded through the tab equals
   `ml/family1/sharded.py`'s float16 values exactly; the humidity NetCDF's
   units are `g/kg`. `scripts/f1data_live_check.mjs` checks all four.
+- **Monthly normals over a free period, and family 7.2d daily, 2026-10-06.**
+  Chris: *"No 'paper holdout' or similar anymore, just setting a period is
+  enough."* The four fixed `clim_*` calendar stores left the derived group;
+  in their place one **Monthly normals** store per tensor group
+  (`derived/normals_g025`, `_g100`, `_oc025`, `_rg100`) composes Σsum/Σcount
+  of E-086's per-year monthly sums and counts over the period and the years
+  left out, as one normal per calendar month (a CF climatology NetCDF with
+  `period_start`, `period_end`, `excluded_years`) or each year's monthly mean
+  side by side, counts always written, natively or pooled onto 1° (Σsum/Σcount
+  over the block). A run of years is read year by year (the box's band of each
+  year's map) or as one stretch, whichever the gap rule says is cheaper for
+  the selection; the estimate says which and what the other costs. The Model
+  climatology layer lost its three-version selector and paints the all-years
+  normal; its downloads open the Data tab on that group's normals store. A
+  fifth group, **Global tensor, daily (family 7.2d)**, lists the four daily
+  stores (GLORYS, OISST, NCEP/NCAR, OC-CCI) with their registry records,
+  licences, and the registry's caveats in words (the weaker source read-back
+  check after 2024, OISST's preliminary days, the centred five-day wind-stress
+  spread); the reader now honours their point-aligned grids. Verification
+  numbers: the commit message and `docs/DATA_TAB.md`.

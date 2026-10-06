@@ -6985,7 +6985,7 @@ test("model climatology: one range read paints a calendar month, and the probe r
   expect(page.__errors, `page errors: ${page.__errors.join(" | ")}`).toHaveLength(0);
 });
 
-test("model climatology: the MONTH is the key — same month free, another month one read, a version one read",
+test("model climatology: the MONTH is the key — same month free, another month one read; no version picker, the all-years normal only",
      async ({ page }) => {
   test.setTimeout(120000);
   const index = await serveClim(page);
@@ -7032,44 +7032,41 @@ test("model climatology: the MONTH is the key — same month free, another month
                     { timeout: 30000 }).toBe(0);
   expect(page.__climAll.length).toBe(2);
 
-  // a VERSION switch: one read, of the other version's file
-  const toasts = await recordToasts(page);
-  await climSelect(page, "data-climver", "dev");
-  await expect.poll(() => page.evaluate(() => window.__earth.climLayerState().grid?.version),
-                    { timeout: 30000 }).toBe("dev");
-  expect(page.__climAll.length).toBe(3);
-  expect(page.__climReads[2][0]).toBe("dev/g100");
-  const dev = index.versions.find((v) => v.key === "dev");
-  expect(await page.evaluate(() => window.__earth.climLayerState().grid.period)).toBe(dev.train_span);
-  await expect.poll(toasts).toContain(dev.name);
-  // the version option carries its rule as a tooltip
-  expect(await page.locator('select[data-climver="clim7"] option[value="dev"]').getAttribute("title"))
-    .toBe(dev.rule);
+  // NO version picker any more (E-086): the row offers the channel only, and
+  // the layer paints the all-years normal whatever the index lists — the
+  // other periods are the Data tab's "Monthly normals" stores
+  await expect(page.locator('select[data-climver="clim7"]')).toHaveCount(0);
+  await expect(page.locator('select[data-climchan="clim7"]')).toHaveCount(1);
+  const allV = index.versions.find((v) => v.key === "all");
+  expect(await page.evaluate(() => window.__earth.climLayerState().grid.version)).toBe("all");
+  expect(await page.evaluate(() => window.__earth.climLayerState().grid.period)).toBe(allV.train_span);
+  expect(page.__climReads.every(([k]) => k.startsWith("all/"))).toBe(true);
 
   // THE SINGLE-PLANE PATH (what a 0.25° month takes: 7 × 4 MB is too much to
-  // read for one channel): with the block budget at zero, a channel switch is
-  // one read of plane_bytes at header_len + (month·C + c)·plane_bytes.
-  // (A version not read yet, so none of its planes is in the LRU.)
+  // read for one channel): with the block budget at zero, a month not read
+  // yet is ONE read of plane_bytes at header_len + (month·C + c)·plane_bytes,
+  // and a channel switch in it is one more
   await page.evaluate(() => { window.__earth.climState.blockBytes = 0; });
-  await climSelect(page, "data-climver", "paper");
-  await expect.poll(() => page.evaluate(() => window.__earth.climLayerState().grid?.version),
-                    { timeout: 30000 }).toBe("paper");
-  expect(page.__climAll.length).toBe(4);
+  await setAppDate(page, "2010-05-12");
+  await expect.poll(() => page.evaluate(() => window.__earth.climLayerState().grid?.month),
+                    { timeout: 30000 }).toBe(4);
+  expect(page.__climAll.length).toBe(3);
   await climSelect(page, "data-climchan", "g100:sp");
   await expect.poll(() => page.evaluate(() => window.__earth.climLayerState().grid?.chan),
                     { timeout: 30000 }).toBe("sp");
-  expect(page.__climAll.length).toBe(5);
-  for (const [k, chan] of [[3, "t2m"], [4, "sp"]]) {
+  expect(page.__climAll.length).toBe(4);
+  for (const [k, chan] of [[2, "t2m"], [3, "sp"]]) {
     const c = index.groups.g100.chans.indexOf(chan);
     const r = page.__climReads[k];
-    expect(r[0]).toBe("paper/g100");
-    expect(r[1]).toBe(f.header_len + (0 * C + c) * f.plane_bytes);
+    expect(r[0]).toBe("all/g100");
+    expect(r[1]).toBe(f.header_len + (4 * C + c) * f.plane_bytes);
     expect(r[2] - r[1] + 1).toBe(f.plane_bytes);
   }
-  // and the single plane decodes to the same number the block did
-  const cell = climCell(index, "paper", "g100", 0, "sp", 10, 20);
+  // and the single plane decodes to the file's own number
+  const cell = climCell(index, "all", "g100", 4, "sp", 10, 20);
   const got = await page.evaluate(() => window.__earth.climSampleAt(20, 10));
-  expect(Math.abs(got - cell.raw)).toBeLessThan(1e-3);
+  if (Number.isFinite(cell.raw)) expect(Math.abs(got - cell.raw)).toBeLessThan(1e-3);
+  else expect(got).toBeNull();
 
   expect(page.__errors, `page errors: ${page.__errors.join(" | ")}`).toHaveLength(0);
 });
@@ -8336,20 +8333,75 @@ test("Data tab: says so when the data reader failed to load", async ({ page }) =
   expect(page.__errors, `page errors: ${page.__errors.join(" | ")}`).toHaveLength(0);
 });
 
-test("model climatology: its downloads point at the Data tab", async ({ page }) => {
-  test.setTimeout(120000);
+/* The Model climatology row hands over to the Data tab: its three fixed
+ * versions were retired in favour of a free period (E-086), so the downloads
+ * block says how to get any other period — the paper's split is 1982–2020
+ * leaving out 2009 and 2017 — and its button opens the tab ON that group's
+ * monthly-normals store. Served: the clim fixture for the layer, the E-086
+ * fixture (data/family7_monthly/fixture/, the same g100 and oc025 groups)
+ * for the tab, both with genuine 206s. */
+async function serveMonthlyFixture(page, dir, reads) {
+  const fs = require("fs"), path = require("path");
+  const idx = JSON.parse(fs.readFileSync(path.join(dir, "family7_monthly_index.json"), "utf8"));
+  await page.route(/\/data\/family7_monthly_index\.json(\?.*)?$/, (route) =>
+    route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(idx) }));
+  await page.route(/\/monthly\/([^/]+)\/(sum|count)\.npy$/, (route) => {
+    const [, group, which] = /\/monthly\/([^/]+)\/(sum|count)\.npy$/.exec(route.request().url());
+    const file = path.join(dir, group, `${which}.npy`);
+    if (!fs.existsSync(file)) return route.fulfill({ status: 404, body: "" });
+    const buf = fs.readFileSync(file);
+    const m = /bytes=(\d+)-(\d*)/.exec(route.request().headers()["range"] || "");
+    if (!m) return route.fulfill({ status: 200, body: buf });
+    const a = Number(m[1]), b = Math.min(buf.length - 1, m[2] === "" ? buf.length - 1 : Number(m[2]));
+    if (reads) reads.push([group, which, a, b]);
+    return route.fulfill({ status: 206, body: buf.subarray(a, b + 1),
+      headers: { "content-range": `bytes ${a}-${b}/${buf.length}`, "accept-ranges": "bytes", "content-type": "application/octet-stream" } });
+  });
+  return idx;
+}
+
+test("model climatology: no version picker; its downloads open that group's monthly normals in the Data tab",
+     async ({ page }) => {
+  test.setTimeout(150000);
+  const path = require("path");
   await serveClim(page);
+  await serveMonthlyFixture(page, path.join(__dirname, "..", "data", "family7_monthly", "fixture"));
+  // the tab's other families are not under test here: the derived maps only
+  await page.evaluate(() => {
+    window.F1Data.configure({ registries: [{ family: "derived", title: "Derived maps", kind: "derived",
+      monthly: "data/family7_monthly_index.json" }] });
+    try { localStorage.removeItem("dataTabSel"); } catch {}
+  });
+  await setAppDate(page, "2010-01-20");
   await enableClim(page);
+  await climSelect(page, "data-climchan", "g100:t2m");
+  await expect.poll(() => page.evaluate(() => window.__earth.climLayerState().chan)).toBe("g100:t2m");
+  // the row: the channel picker and the downloads, no version selector
+  await expect(page.locator('select[data-climver="clim7"]')).toHaveCount(0);
+  await expect(page.locator('#layer-list label[for="climver-clim7"]')).toHaveCount(0);
   const body = page.locator('[data-climdlbody="clim7"]');
+  await expect(body).toContainText("any other period");
+  await expect(body).toContainText("1982–2020 leaving out 2009 and 2017");
   await expect(body).toContainText("More stores, any period, month, box and resolution: the Data tab");
+  // the hover card says the versions were retired, and how to get the paper's split
   const tip = page.locator('#layer-list input[data-id="clim7"]')
     .locator("xpath=ancestor::div[contains(@class,'layer-item')]").locator(".layer-tip");
-  await expect(tip.locator('[data-tip="dl"]')).toContainText("the Data tab");
+  await expect(tip.locator(".tip-sum")).toContainText("retired in favour of a free period");
+  await expect(tip.locator(".tip-sum")).toContainText("1982–2020 leaving out 2009 and 2017");
+  await expect(tip.locator('[data-tip="dl"]')).toContainText("Monthly normals");
+  // the button opens the Data tab ON this group's normals store
+  await expect(body.locator('button[data-opentab="data"]')).toHaveAttribute("data-dtstore", "derived/normals_g100");
   await page.evaluate(() =>
     document.querySelector('[data-climdlbody="clim7"] button[data-opentab="data"]').click());
   await expect(page.locator("#panel-data")).toBeVisible();
   await expect(page.locator("#tab-data")).toHaveClass(/active/);
   await expect(page.locator("#panel-layers")).toBeHidden();
+  await expect(page.locator("#dt-store")).toHaveValue("derived/normals_g100", { timeout: 30000 });
+  await expect(page.locator("#dt-exclude-row")).toBeVisible();
+  await expect(page.locator("#dt-normals-note")).toBeVisible();
+  await expect(page.locator("#dt-d0")).toBeHidden();
+  expect(await page.locator("#dt-step option").evaluateAll((os) => os.map((o) => o.value))).toEqual(["normal", "by-year"]);
+  await expect.poll(async () => (await dtState(page)).estimateCurrent, { timeout: 30000 }).toBe(true);
   expect(page.__errors, `page errors: ${page.__errors.join(" | ")}`).toHaveLength(0);
 });
 
@@ -8645,5 +8697,171 @@ test("Data tab: the store list is grouped by family, a missing registry is a nam
   expect(nc.subarray(0, 3).toString("latin1")).toBe("CDF");
   expect(nc.length).toBeGreaterThan(500);
   expect(reads.some(([p, rel]) => p === "f10fixture" && /fx7_X_fxg\.npy$/.test(rel))).toBe(true);
+  expect(page.__errors, `page errors: ${page.__errors.join(" | ")}`).toHaveLength(0);
+});
+
+/* The monthly normals (E-086) through the REAL reader over the multi-year
+ * fixture (tests/make_family7_monthly_fixture.py: per-year monthly sums and
+ * counts of a 0.25° two-channel group, 2000–2004, and a 1° levelled group),
+ * served with genuine 206s. The numbers themselves are pinned against numpy in
+ * tests/f1data.test.mjs; this is the tab: its controls, its words, its file. */
+test("Data tab: the monthly normals — a free period, years left out, normal or by year, 1° pooled, a depth picker, and a climatology file",
+     async ({ page }) => {
+  test.setTimeout(240000);
+  const real = await page.evaluate(() =>
+    !!window.F1Data && !window.F1Data.__stub && typeof window.F1Data.configure === "function");
+  test.skip(!real, "src/f1data.js is not in this tree");
+  const path = require("path"), fs = require("fs");
+  const reads = [];
+  await serveFixtureDir(page, "f7mfixture", path.join(__dirname, "..", "data", "family7_monthly", "fixture_multi"), reads);
+  await page.evaluate(() => {
+    window.F1Data.configure({ registries: [{ family: "derived", title: "Derived maps", kind: "derived",
+      monthly: "/f7mfixture/family7_monthly_index.json" }] });
+    try { localStorage.removeItem("dataTabSel"); } catch {}
+  });
+  // the page's own list: the normals replace the four fixed climatology stores,
+  // and the daily tensor is a family of its own
+  const defs = await page.evaluate(() => window.F1Data.DEFAULT_REGISTRIES.map((f) => ({ family: f.family, title: f.title,
+    url: f.url || null, monthly: f.monthly || null, clim: f.clim || null })));
+  expect(defs.find((f) => f.family === "derived")).toMatchObject({ monthly: "data/family7_monthly_index.json", clim: null });
+  expect(defs.find((f) => f.family === "7.2d")).toMatchObject({ title: "Global tensor, daily (family 7.2d)" });
+  expect(defs.find((f) => f.family === "7.2d").url).toMatch(/tensors\/family7_2d\/family72d\.json$/);
+
+  await dtTap(page, "#tab-data");
+  await expect(page.locator("#dt-store option")).toHaveCount(2, { timeout: 30000 });
+  expect(await page.locator("#dt-store option").evaluateAll((os) => os.map((o) => o.value)))
+    .toEqual(["derived/normals_fx025", "derived/normals_fxrg"]);
+  const settled = () => expect.poll(async () => (await dtState(page)).estimateCurrent, { timeout: 30000 }).toBe(true);
+  await settled();
+  // the first look: the whole record, one calendar month, the normal, a box
+  let st = await dtState(page);
+  expect(st.sel).toMatchObject({ family: "derived", store: "normals_fx025", yearStart: 2000, yearEnd: 2004, excludeYears: [],
+    step: "normal", res: "native", channels: ["sst"] });
+  expect(st.sel.months.length).toBe(1);
+  expect(st.lastEstimate.readBytes).toBeLessThanOrEqual(40e6);
+  // (the fixture is a small regional grid, so the first box — at its middle
+  // latitude — may miss its longitudes; a real store is global)
+  // the controls a normal has, and the ones it has not
+  await expect(page.locator("#dt-exclude-row")).toBeVisible();
+  await expect(page.locator("#dt-normals-note")).toBeVisible();
+  await expect(page.locator("#dt-d0")).toBeHidden();
+  await expect(page.locator("#dt-hours-row")).toBeHidden();
+  expect(await page.locator("#dt-step option").evaluateAll((os) => os.map((o) => o.value))).toEqual(["normal", "by-year"]);
+  expect(await page.locator("#dt-res option").evaluateAll((os) => os.map((o) => o.value))).toEqual(["native", "1"]);
+  await expect(page.locator('#dt-res option[value="1"]')).toContainText("pooled");
+  await expect(page.locator("#dt-store-about")).toContainText("2000 → 2004");
+
+  // a period with a year left out, two months, two channels, a box
+  await page.evaluate(() => {
+    for (const i of document.querySelectorAll("#dt-channels input")) { i.checked = true; i.dispatchEvent(new Event("change", { bubbles: true })); }
+  });
+  await dtTap(page, "#dt-months-none");
+  await dtTap(page, '#dt-months button[data-month="2"]');
+  await dtTap(page, '#dt-months button[data-month="7"]');
+  await dtSet(page, { "dt-y0": "2000", "dt-y1": "2004", "dt-exclude": "2002, 1990", "dt-w": "-79", "dt-s": "31", "dt-e": "-74.5", "dt-n": "34" });
+  await settled();
+  st = await dtState(page);
+  // a year outside the record is no year at all
+  expect(st.sel).toMatchObject({ yearStart: 2000, yearEnd: 2004, excludeYears: [2002], months: [2, 7], channels: ["sst", "ssh"] });
+  expect(st.touched).toBe(true);
+  const est = page.locator("#dt-estimate");
+  await expect(est).toContainText("Averaged over 2000–2004, leaving out 2002: 4 years");
+  await expect(est).toContainText("normals (one per calendar month)");
+  await expect(est).toContainText("one stretch per month and channel");   // a tiny grid: every gap is cheaper than a request
+  await expect(page.locator("#dt-download")).toBeEnabled();
+  reads.length = 0;
+  const [dl] = await Promise.all([page.waitForEvent("download", { timeout: 60000 }), dtTap(page, "#dt-download")]);
+  expect(dl.suggestedFilename()).toBe("fderived_normals_fx025_sst+ssh_2000-2004_ex2002_m02-07_native_normal.nc");
+  const nc = fs.readFileSync(await dl.path()).toString("latin1");
+  expect(nc.slice(0, 3)).toBe("CDF");
+  for (const w of ["climatology_bounds", "period_start", "period_end", "excluded_years", "monthly normals", "sst_count"]) expect(nc).toContain(w);
+  expect(reads.length).toBeGreaterThan(0);
+  expect(reads.every(([p, rel]) => p === "f7mfixture" && /^fx025\//.test(rel) || /index/.test(rel))).toBe(true);
+
+  // the preview is the first month's normal, said so in the legend
+  await dtTap(page, "#dt-preview");
+  await expect.poll(async () => (await dtState(page)).previewShown, { timeout: 30000 }).toBe(true);
+  await expect(page.locator("#dt-legend")).toContainText("February normal over 2000–2004 (leaving out 2002)");
+
+  // by year: each year's own monthly mean, side by side
+  await dtSet(page, { "dt-step": "by-year" });
+  await settled();
+  await expect(est).toContainText("monthly means (one per year and month)");
+  await expect(est).toContainText("Each year's own monthly mean 2000–2004, leaving out 2002: 4 years side by side");
+  expect((await dtState(page)).lastEstimate.shape[0]).toBe(8);
+  // 1° cells pool the sums and the counts
+  await dtSet(page, { "dt-res": "1" });
+  await settled();
+  expect((await dtState(page)).sel).toMatchObject({ res: 1, step: "by-year" });
+
+  // the levelled group: variables × levels in dbar, one level to start on
+  await dtSet(page, { "dt-store": "derived/normals_fxrg" });
+  await settled();
+  await expect(page.locator("#dt-channels")).toContainText("levels (dbar)");
+  await expect(page.locator("#dt-channels button[data-level]")).toHaveCount(3);
+  await expect(page.locator("#dt-chan-note")).toContainText("6 channels as 2 variables × 3 levels");
+  expect((await dtState(page)).sel.channels).toEqual(["rg_t10"]);
+  await dtTap(page, '#dt-channels button[data-level="10"]');
+  await dtTap(page, '#dt-channels button[data-level="30"]');
+  await settled();
+  expect((await dtState(page)).sel.channels).toEqual(["rg_t30"]);
+  // a period the visitor chose carried over, clamped to this group's record
+  expect((await dtState(page)).sel).toMatchObject({ yearStart: 2004, yearEnd: 2004 });
+  expect(page.__errors, `page errors: ${page.__errors.join(" | ")}`).toHaveLength(0);
+});
+
+/* Family 7.2d (the global tensor's channels one frame per DAY, E-087) reads
+ * through the family-1 handler; what is new is in its registry: the record is
+ * `record_span` (where the data is), each store's `source_segments` say which
+ * falsifier every span passed, and the newest OISST days are preliminary.
+ * Served: the 1.gf fixture with its registry dressed that way. */
+test("Data tab: family 7.2d — its own group, the record from the registry, its caveats and attribution in the panel and in the file",
+     async ({ page }) => {
+  test.setTimeout(240000);
+  const real = await page.evaluate(() =>
+    !!window.F1Data && !window.F1Data.__stub && typeof window.F1Data.configure === "function");
+  test.skip(!real, "src/f1data.js is not in this tree");
+  const path = require("path"), fs = require("fs");
+  const FX = path.join(__dirname, "..", "data", "family1_fixture");
+  await serveFixtureDir(page, "f72fixture", FX, null);
+  const reg = JSON.parse(fs.readFileSync(path.join(FX, "family1gf.json"), "utf8"));
+  for (const g of reg.groups) {
+    if (g.name !== "fxgrid") continue;
+    g.record_span = ["2009-12-27", "2010-01-06"];
+    g.requested_window = ["2009-12-01", "2010-01-31"];
+    g.source_segments = [
+      { falsifier: "pentad", from: "2009-12-25", to: "2009-12-31", source: "FX source v1" },
+      { falsifier: "source-readback", from: "2010-01-01", to: "2010-01-08", source: "FX source v1" }];
+    g.counts = Object.assign({}, g.counts || {}, { preliminary_days: ["2010-01-06", "2010-01-07", "2010-01-08"] });
+    g.licence = { name: "FX open licence", attribution: "FX data provided by the FX producer" };
+  }
+  const body = Buffer.from(JSON.stringify(reg));
+  await page.route(/\/f72fixture\/family1gf\.json(\?.*)?$/, (route) => route.fulfill({ status: 206, body,
+    headers: { "content-range": `bytes 0-${body.length - 1}/${body.length}`, "accept-ranges": "bytes", "content-type": "application/json" } }));
+  await page.evaluate(() => {
+    window.F1Data.configure({ registries: [{ family: "7.2d", title: "Global tensor, daily (family 7.2d)", kind: "family1",
+      url: `${location.origin}/f72fixture/family1gf.json` }] });
+    try { localStorage.removeItem("dataTabSel"); } catch {}
+  });
+  await dtTap(page, "#tab-data");
+  await expect(page.locator("#dt-store optgroup")).toHaveCount(1, { timeout: 30000 });
+  await expect(page.locator("#dt-store optgroup")).toHaveAttribute("label", "Global tensor, daily (family 7.2d)");
+  await dtSet(page, { "dt-store": "7.2d/fxgrid" });
+  await expect.poll(async () => (await dtState(page)).estimateCurrent, { timeout: 30000 }).toBe(true);
+  const about = page.locator("#dt-store-about");
+  await expect(about).toContainText("2009-12-27 → 2010-01-06");
+  await expect(about).toContainText("each day was checked only against an independent read of its own source file");
+  await expect(about).toContainText("PRELIMINARY");
+  await expect(about).toContainText("FX data provided by the FX producer");
+  await dtSet(page, { "dt-y0": "2010", "dt-y1": "2010", "dt-w": "-30", "dt-s": "-20", "dt-e": "10", "dt-n": "20" });
+  await dtTap(page, "#dt-months-none");
+  await dtTap(page, '#dt-months button[data-month="1"]');
+  await expect.poll(async () => (await dtState(page)).estimateCurrent, { timeout: 30000 }).toBe(true);
+  const [dl] = await Promise.all([page.waitForEvent("download", { timeout: 60000 }), dtTap(page, "#dt-download")]);
+  const nc = fs.readFileSync(await dl.path()).toString("latin1");
+  expect(nc.slice(0, 3)).toBe("CDF");
+  expect(nc).toContain("FX data provided by the FX producer");
+  expect(nc).toContain("independent read of its own source file");
+  expect(nc).toContain("PRELIMINARY");
   expect(page.__errors, `page errors: ${page.__errors.join(" | ")}`).toHaveLength(0);
 });

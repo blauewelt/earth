@@ -110,6 +110,8 @@
 
   // ------------------------------------------------------------ constants --
   var HUB_ROOT = "https://huggingface.co/datasets/chfrank/earth-tensors/resolve/main/";
+  // ml/build_family1_registry.py names family 7.2d's registry family72d.json
+  var F72D_REGISTRY_URL = HUB_ROOT + "tensors/family7_2d/family72d.json";
   var DEFAULT_BASE = HUB_ROOT + "tensors/family1_gf/";
   // The families the Data tab offers, in the order its store list shows them.
   // `url` is a registry JSON on the Hub; `norms` / `fishing` / `clim` are the
@@ -127,8 +129,17 @@
       optional: true, url: HUB_ROOT + "tensors/family1_2/family12.json" },
     { family: "10", title: "Global tensor and point observations (family 10)", kind: "family10",
       url: HUB_ROOT + "tensors/family10_2/family10.json", norms: "data/family7_index.json" },
+    // family 7.2d: the global tensor's channels as DAILY frames, in the
+    // family-1 registry schema (sharded tier-G groups, physical units).
+    // Optional: while the file answers 404 the group is silently absent.
+    { family: "7.2d", title: "Global tensor, daily (family 7.2d)", kind: "family1",
+      optional: true, url: F72D_REGISTRY_URL },
+    // the derived maps: the fishing-effort grid, and the monthly normals of
+    // the global tensor composed over any period from its per-year monthly
+    // sums and counts (E-086) — which replaced the four fixed "all years"
+    // climatology stores (`clim:` still loads for a caller that asks)
     { family: "derived", title: "Derived maps", kind: "derived",
-      fishing: "data/fishing_index.json", clim: "data/family7_clim_index.json", climVersion: "all" }
+      fishing: "data/fishing_index.json", monthly: "data/family7_monthly_index.json" }
   ];
   var EPOCH_UNIX = 378691200;            // 1982-01-01T00:00:00Z
   var EPOCH_DAYS = 4383;                 // days 1970-01-01 → 1982-01-01
@@ -185,6 +196,8 @@
     if (o.concurrency != null) {
       cfg.concurrency = Math.max(1, Math.min(MAX_CONCURRENCY, o.concurrency | 0));
     }
+    // the normals' merge gap (bytes): for measuring the two read strategies
+    if (o.normalsMergeGap !== undefined) cfg.normalsMergeGap = o.normalsMergeGap == null ? null : Number(o.normalsMergeGap);
     cache.clear();
     idxCache.clear();
     idxCacheBytes = 0;
@@ -344,8 +357,10 @@
     if (len === 0) return new Uint8Array(0);
     var whole = len == null;
     var hdr = whole ? "bytes=" + off + "-" : "bytes=" + off + "-" + (off + len - 1);
-    var lastErr = null;
-    for (var attempt = 0; attempt < 3; attempt++) {
+    var lastErr = null, wait = 0;
+    // three attempts; a rate limit (HTTP 429) earns up to five, with the
+    // host's Retry-After or a doubling pause — a 429 is never data
+    for (var attempt = 0; attempt < (lastErr && lastErr.rateLimited ? 5 : 3); attempt++) {
       checkAbort(signal);
       await acquire(signal);
       var res = null;
@@ -380,6 +395,11 @@
         }
         var e2 = new Error("HTTP " + res.status + " for " + url + " (" + hdr + ")");
         e2.url = url;
+        if (res.status === 429) {
+          e2.rateLimited = true;
+          var ra = Number(res.headers.get("retry-after"));
+          e2.retryAfterMs = Number.isFinite(ra) && ra > 0 ? Math.min(30, ra) * 1000 : 0;
+        }
         if (!(res.status === 429 || res.status >= 500)) e2.noRetry = true;
         throw e2;
       } catch (e) {
@@ -390,10 +410,13 @@
       } finally {
         release();
       }
-      await new Promise(function (r) { setTimeout(r, 400 * (attempt + 1)); });
+      wait = lastErr && lastErr.rateLimited
+        ? (lastErr.retryAfterMs || Math.min(16000, 1000 * Math.pow(2, attempt)))
+        : 400 * (attempt + 1);
+      await new Promise(function (r) { setTimeout(r, wait); });
     }
     var msg = lastErr && lastErr.message ? lastErr.message : String(lastErr);
-    var fin = new Error((msg.indexOf(url) >= 0 ? msg : msg + " — " + url) + " (after 3 attempts)");
+    var fin = new Error((msg.indexOf(url) >= 0 ? msg : msg + " — " + url) + " (after " + attempt + " attempts)");
     fin.url = url;
     throw fin;
   }
@@ -574,6 +597,32 @@
     "1.2/era5_v": ["Northward wind on 13 pressure levels (ERA5), 1° six-hourly",
       "ECMWF's ERA5 reanalysis — model-filled, ~31 km natively and averaged onto 1°, not a measurement — giving the northward wind in m/s (positive toward the north) at 13 pressure levels, every six hours since 1982.",
       "six-hourly instants"],
+    // family 7.2d — the global tensor's channels one frame per DAY (E-087)
+    "7.2d/glorys025d": ["Ocean currents, sea-surface height and mixed layer, 0.25° daily (GLORYS reanalysis)",
+      "Copernicus Marine's GLORYS12 ocean reanalysis — a model constrained by observations, not a measurement — giving the daily surface current (eastward, northward and its speed), sea-surface height and mixed-layer depth (as a base-10 logarithm) on the global tensor's 0.25° grid, one frame per day since 1993.",
+      "daily"],
+    "7.2d/oisst025d": ["Sea-surface temperature and sea ice, 0.25° daily (NOAA OISST)",
+      "NOAA's daily optimum-interpolation analysis of sea-surface temperature (°C) and sea-ice concentration — the global tensor's two OISST channels — one frame per day on its 0.25° grid since 1982; the newest two weeks or so are the producer's preliminary values.",
+      "daily"],
+    "7.2d/ncep100d": ["Atmosphere and land, 1° daily (NCEP/NCAR reanalysis)",
+      "The NCEP/NCAR Reanalysis 1 — a weather model constrained by observations, not a measurement — giving the global tensor's 15 surface channels (wind stress, 2 m air and skin temperature, 10 m wind, pressure, rain, snow, soil moisture and temperature, heat fluxes) as daily means on a 1° grid since 1982; the two wind-stress variability channels are a five-day spread centred on each day, not a one-day value.",
+      "daily"],
+    "7.2d/occci025d": ["Ocean colour, 0.25° daily (ESA OC-CCI)",
+      "ESA's Ocean Colour CCI chlorophyll (as its base-10 logarithm) and the fraction of the 4 km cells that were seen clear, averaged onto the global tensor's 0.25° grid, one frame per day since 4 September 1997.",
+      "daily"],
+    // the monthly normals over a period you choose (E-086)
+    "derived/normals_g025": ["Monthly normals of the global tensor — sea-surface temperature, currents, sea-surface height, mixed layer and sea ice (0.25°)",
+      "The forecaster's own 0.25° ocean channels averaged per calendar month over the years you choose — a climatology for any period (say 1991–2020), or each year's monthly mean side by side — composed from the tensor's per-year monthly sums and counts.",
+      "monthly means over the years you choose"],
+    "derived/normals_g100": ["Monthly normals of the global tensor — air–sea fluxes, weather and land (1°)",
+      "The global tensor's 1° atmosphere-and-land channels (wind stress, 2 m air and skin temperature, wind, pressure, rain, snow, soil, heat fluxes) averaged per calendar month over the years you choose.",
+      "monthly means over the years you choose"],
+    "derived/normals_oc025": ["Monthly normals of the global tensor — ocean colour (0.25°)",
+      "Satellite chlorophyll (as its base-10 logarithm) and its clear-sky coverage, averaged per calendar month over the years you choose, from September 1997.",
+      "monthly means over the years you choose"],
+    "derived/normals_rg100": ["Monthly normals of the global tensor — ocean temperature and salinity at 16 depths (1°)",
+      "The Argo gridded temperature and salinity at 16 pressures from 10 to 1,900 dbar, averaged per calendar month over the years you choose, from 2004.",
+      "monthly means over the years you choose"],
     // derived maps
     "derived/fishing_grid": ["Fishing effort map, 0.25° monthly (AIS)",
       "Global Fishing Watch's apparent fishing hours and AIS broadcasting hours summed per 0.25° cell and month since 2012 — CC BY-NC 4.0; zero means no vessel broadcast there, not that nobody fished.", "monthly sums"],
@@ -603,6 +652,12 @@
     }
     if (/nm above 400/i.test(u) || /add 400 to get nanometres/i.test(u)) {
       return { unit: "nm", offset: 400, note: "stored as nanometres − 400; 400 added back, so the values are nanometres" };
+    }
+    // family 7.2d's wind-stress variability: a CENTRED FIVE-DAY standard
+    // deviation of the 6-hourly stress, named so in the stored unit
+    var ms = /^(.*?)\s*\(centred 5-day sigma\)\s*$/i.exec(u);
+    if (ms) {
+      return { unit: ms[1], offset: 0, note: "a five-day spread: the standard deviation of the 6-hourly wind stress over the five days centred on each day, not a one-day value" };
     }
     if (/log10/i.test(u) && /LOGARITHM/i.test(u)) {
       return { unit: u, offset: 0, note: "kept as stored: the base-10 logarithm, not the concentration (10^value gives mg m-3)" };
@@ -733,6 +788,10 @@
         d.licence = { name: g.licence.name || null, attribution: g.licence.attribution || null };
       }
       if (/reanalysis/i.test(String(g.notes || ""))) d.reanalysis = true;
+      // what each span of the record was checked against, and which days the
+      // producer still calls preliminary — in words, from the registry
+      var cav = sourceCaveats(g);
+      if (cav.length) d.caveats = cav;
       // levels the registry names in hPa (ERA5): the picker's unit, and one
       // mid-troposphere level to start on rather than the stratosphere
       if (Array.isArray(g.levels_hpa) && g.levels_hpa.length) {
@@ -761,11 +820,47 @@
         d.binLast = g.bin_last;
         jobs.push(Promise.resolve(d));
       }
-      if (d.binFirst != null && d.binLast != null) d.span = [binStartIso(d.binFirst), binEndIso(d.binLast)];
-      else if (g.record_span) d.span = g.record_span.slice();
+      // `record_span` is where the data IS (since 2026-10-06; `requested_window`
+      // is what the build was asked for), so it is the record when the
+      // registry gives one inside the store's bins; else the bins' own span
+      var bspan = d.binFirst != null && d.binLast != null ? [binStartIso(d.binFirst), binEndIso(d.binLast)] : null;
+      var rs = Array.isArray(g.record_span) && g.record_span.length === 2 &&
+        /^\d{4}-\d\d-\d\d$/.test(String(g.record_span[0])) && /^\d{4}-\d\d-\d\d$/.test(String(g.record_span[1])) ? g.record_span : null;
+      if (rs && (!bspan || (rs[0] >= bspan[0] && rs[1] <= bspan[1] && rs[0] <= rs[1]))) {
+        d.span = rs.slice();
+        d.spanExact = true;              // the registry measured it from the frames: nothing to tighten
+      } else if (bspan) d.span = bspan;
     });
     await settleStores(fam, jobs, out);
     return reg;
+  }
+
+  // A store's `source_segments` (which falsifier each span of the record
+  // passed) and its preliminary days, as plain sentences. A span checked only
+  // against an independent read of its own source file is the WEAKER
+  // guarantee and is said so; so is a span from the same source as the one
+  // before it that has nothing left to be compared with.
+  function sourceCaveats(g) {
+    var out = [];
+    var segs = Array.isArray(g.source_segments) ? g.source_segments : [];
+    segs.forEach(function (s, i) {
+      if (!s || s.falsifier !== "source-readback") return;
+      var prev = i > 0 ? segs[i - 1] : null;
+      var same = prev && prev.source && prev.source === s.source;
+      out.push({ from: s.from || null, to: s.to || null,
+        text: "From " + s.from + " to " + s.to + " each day was checked only against an independent read of its own source file" +
+          (same ? " — it is the same source (" + s.source + ") as the days before, but" : ", because") +
+          " the five-day global tensor (family 7.2) that the earlier days reproduce to rounding ends " +
+          (prev && prev.to ? prev.to : "before it") + ", so there is nothing built independently to check it against" +
+          (s.note ? " (" + s.note + ")" : "") });
+    });
+    var pre = (g.counts && Array.isArray(g.counts.preliminary_days)) ? g.counts.preliminary_days.slice().sort() : [];
+    if (pre.length) {
+      out.push({ from: pre[0], to: pre[pre.length - 1], preliminary: pre.length,
+        text: "The last " + pre.length + " day" + (pre.length === 1 ? "" : "s") + " (" + pre[0] + " → " + pre[pre.length - 1] +
+          ") are the producer's PRELIMINARY values, kept as published; a later rebuild replaces them with the final ones" });
+    }
+    return out;
   }
 
   // one failing store is a named error line, never the whole family's
@@ -915,6 +1010,57 @@
       setDenseMeta(d);
       return d;
     })().catch(function (e) { if (!e.store) e.store = "fishing_grid"; throw e; }));
+    if (fam.monthly) {
+      // E-086: per group, sum.npy (float32 z-units) and count.npy (uint8),
+      // both [month, channel, year, lat, lon] — the normal over ANY set of
+      // years is Σ sums / Σ counts, composed here
+      var mx = null, mxErr = null, mxUrl = null;
+      try { mxUrl = siteUrl(fam.monthly); mx = await readSiteJSON(mxUrl, ctx); } catch (e) { mxErr = e; }
+      if (!mx) {
+        out.errors.push({ family: fam.family, title: fam.title, store: "normals",
+          message: "the monthly-normals index (" + fam.monthly + ") could not be read: " + (mxErr && mxErr.message) });
+      } else {
+        Object.keys(mx.groups || {}).forEach(function (gname) {
+          jobs.push((async function () {
+            var G = mx.groups[gname], gr = G.grid;
+            var file = function (f) {
+              if (!f || !f.url) { var e0 = new Error(gname + ": no " + (f ? f.url : "file") + " in the index"); throw e0; }
+              return { url: new URL(f.url, mxUrl).href, hdr: Number(f.header_len), isz: Number(f.itemsize),
+                plane: Number(f.plane_bytes), shape: f.shape, dtype: String(f.dtype).replace(/^[<|=]/, "") };
+            };
+            var sum = file(G.sum), cnt = file(G.count);
+            var C = G.chans.length, Y = Number(G.n_years), H = gr.ny, W = gr.nx;
+            var want = [12, C, Y, H, W];
+            [sum, cnt].forEach(function (f) {
+              if (!Array.isArray(f.shape) || f.shape.join() !== want.join()) throw new Error(gname + ": shape [" + f.shape + "], expected [" + want + "] — " + f.url);
+              if (f.plane !== H * W * f.isz) throw new Error(gname + ": plane_bytes " + f.plane + " ≠ H·W·itemsize — " + f.url);
+            });
+            if (sum.dtype !== "f4" || cnt.dtype !== "u1") throw new Error(gname + ": sum must be float32 and count uint8 (" + sum.dtype + ", " + cnt.dtype + ")");
+            if (!Array.isArray(G.norm) || G.norm.length !== C) throw new Error(gname + ": no (mean, sd) for every channel");
+            var d = baseDesc(fam, "normals_" + gname, {
+              kind: "grid", layout: "monthly", normals: true, folderUrl: treeUrl(dirOf(sum.url)),
+              channels: G.chans.map(function (c, k) {
+                var mu = Number(G.norm[k][0]), sd = Number(G.norm[k][1]);
+                return { name: c, unit: (G.units || {})[c] || "", label: (G.labels || {})[c] || null,
+                  norm: [mu, sd], min: mu - 2.5 * sd, max: mu + 2.5 * sd, rangeFromNorm: true };
+              })
+            });
+            if (!d.cadenceLabel) d.cadenceLabel = "monthly means over the years you choose";
+            d.years = [Number(G.year_first), Number(G.year_last)];
+            d.steps = ["normal", "by-year"];
+            d.defaultChannel = G.chans.indexOf("sst") >= 0 ? "sst" : G.chans[0];
+            d.maxBinsPerMonth = Number(G.max_count) || 7;
+            hide(d, "_monthly", { sum: sum, count: cnt, C: C, Y: Y, H: H, W: W, year0: d.years[0],
+              lat0: gr.lat0, lon0: gr.lon0, step: Number(gr.step), southFirst: gr.south_first !== false,
+              rowKind: G.row_kind || "pentad", index: mxUrl, combine: mx.combine || null, monthRule: mx.month_rule || null });
+            var step = Number(gr.step), dlat = gr.south_first !== false ? step : -step;
+            d.grid = { H: H, W: W, lat0: gr.lat0, lon0: gr.lon0, dlat: dlat, dlon: step, step: step };
+            d.span = [d.years[0] + "-01-01", d.years[1] + "-12-31"];
+            return d;
+          })().catch(function (e) { if (!e.store) e.store = "normals_" + gname; throw e; }));
+        });
+      }
+    }
     if (fam.clim) {
       var cx = null, cxErr = null, cxUrl = null;
       try { cxUrl = siteUrl(fam.clim); cx = await readSiteJSON(cxUrl, ctx); } catch (e) { cxErr = e; }
@@ -1041,6 +1187,20 @@
         throw new Error("tile_grid.json format " + JSON.stringify(tg.format) + " is not family1-sharded/1: " + url);
       }
       if (!(tg.dtype === "float16" || tg.dtype === "uint8")) throw new Error("tile dtype " + tg.dtype + " unsupported: " + url);
+      // Every tier-G group states x0/y0 as the WEST and SOUTH EDGES (pixel
+      // centre = x0 + (col + 0.5)·dx) — except family 7.2d's, whose grid says
+      // `align: "point — row r is latitude -90 + 0.25 r …"`: there x0/y0 are
+      // the first pixel's CENTRE, family 7's own grid. Shift those to edges
+      // once, here, so every coordinate downstream follows the one rule.
+      var gg = tg.grid || {};
+      // (the JSON is cached and handed back on every call: shift it ONCE)
+      if (!gg.centresAt && /^point\b/i.test(String(gg.align || "")) && Number.isFinite(gg.x0) && Number.isFinite(gg.y0)) {
+        var am = /latitude\s*(-?[\d.]+)\s*\+/.exec(String(gg.align));
+        var centreY = am ? Number(am[1]) : gg.y0;
+        if (Math.abs(centreY - gg.y0) < 1e-9) {
+          tg.grid = Object.assign({}, gg, { x0: gg.x0 - gg.dx / 2, y0: gg.y0 - gg.dy / 2, centresAt: [gg.x0, gg.y0] });
+        }
+      }
       return tg;
     });
   }
@@ -1130,7 +1290,17 @@
       throw new Error("hours must be two numbers 0..24");
     }
     s.step = sel.step || "native";
-    if (["native", "pentad", "month", "all"].indexOf(s.step) < 0) throw new Error("step must be native, pentad, month or all");
+    if (d.normals) {
+      // a normals store composes over YEARS: one mean per calendar month over
+      // the period (the climatology) or one per year and month (the stack)
+      if (s.step === "native" || s.step === "month") s.step = "by-year";
+      if (s.step === "all") s.step = "normal";
+      if (["normal", "by-year"].indexOf(s.step) < 0) throw new Error("step must be normal or by-year for the normals store " + d.name);
+    } else if (["native", "pentad", "month", "all"].indexOf(s.step) < 0) throw new Error("step must be native, pentad, month or all");
+    // + excludeYears: whole calendar years left out of the composition
+    // (the paper's split is 1982–2020 excluding 2009 and 2017)
+    s.excludeYears = (sel.excludeYears || []).map(Number);
+    s.excludeYears.forEach(function (y) { if (!Number.isInteger(y)) throw new Error("excludeYears must be whole years: " + y); });
     s.res = sel.res == null ? "native" : sel.res;
     if (s.res === "0.25") s.res = 0.25;
     if (s.res === "1") s.res = 1;
@@ -1537,9 +1707,18 @@
     var n = [];
     if (plan.d.reanalysis) n.push("a REANALYSIS — a weather model's analysis constrained by observations (ERA5 at ~31 km, averaged here onto a 1° grid), not an observation; each frame is an instant (00, 06, 12 or 18 UTC), not a six-hour mean");
     plan.conv.forEach(function (c, k) { if (c.note) n.push(plan.s.channels[k] + ": " + c.note); });
+    caveatsFor(plan.d, plan.s).forEach(function (t) { n.push(t); });
     if (plan.s.bbox && plan.s.bbox.w > plan.s.bbox.e) n.push("the box crosses the dateline: longitudes run past 180° (subtract 360 for −180..180)");
     if (plan.mean) n.push("each value is the mean of the finite observations in its cell and time step; the count arrays say how many");
     return n;
+  }
+
+  // the store's caveats whose dates the selection's years reach
+  function caveatsFor(d, s) {
+    return (d.caveats || []).filter(function (c) {
+      var a = Number(String(c.from || "0").slice(0, 4)), b = Number(String(c.to || "9999").slice(0, 4));
+      return !(s.yearEnd < a || s.yearStart > b);
+    }).map(function (c) { return c.text; });
   }
 
   // ======================================================== DENSE GRIDS ===
@@ -1761,6 +1940,214 @@
       data: g.data, count: g.count, sel: plan.s, notes: denseNotes(plan), frames: empty ? 0 : plan.frames.length,
       group: plan.d.name, source: plan.G.url, title: plan.d.title,
       levels: plan.d.levels ? plan.s.channels.map(function (c) { var x = plan.d.channels.find(function (y) { return y.name === c; }); return x && x.level != null ? x.level : null; }) : null,
+      stats: { requests: ctx.stats.requests, bytes: ctx.stats.bytes, ms: Date.now() - t0 }
+    };
+  }
+
+  // ============================================================ NORMALS ===
+  // E-086's per-year monthly sums and counts: sum.npy (float32, z-units) and
+  // count.npy (uint8), [month, channel, year, lat, lon]. A plane is one
+  // (month, channel, year); the planes of a run of years for one (month,
+  // channel) are contiguous, and a latitude band is contiguous within a
+  // plane. The read is one byte span per (file, month, channel, year) over
+  // the box's rows, coalesced when the gap between two spans is at most
+  // NORMALS_MERGE_GAP: on a 0.25° grid the gap between two years' bands is
+  // most of a 4 MB plane and every year is its own range; on a 1° grid the
+  // whole 260 kB plane is cheaper than a request and a run of years becomes
+  // one range (measured: a range request costs ~0.4–0.7 s of latency at
+  // ~10 MB/s per stream, six streams in flight — ≈ 0.5 MB of transfer).
+  var NORMALS_MERGE_GAP = 512 * 1024;
+
+  function normalsYears(d, s) {
+    var ex = {};
+    (s.excludeYears || []).forEach(function (y) { ex[y] = true; });
+    var out = [];
+    for (var y = Math.max(s.yearStart, d.years[0]); y <= Math.min(s.yearEnd, d.years[1]); y++) if (!ex[y]) out.push(y);
+    return out;
+  }
+
+  async function normalsSpec(d, ctx) {
+    var M = d._monthly;
+    return cached("normalsspec:" + M.sum.url, async function () {
+      var hs = await npyHeaderAt(M.sum.url, ctx), hc = await npyHeaderAt(M.count.url, ctx);
+      [[hs, M.sum, "f4"], [hc, M.count, "u1"]].forEach(function (x) {
+        var h = x[0], f = x[1];
+        if (h.descr !== x[2]) throw new Error(d.name + ": the .npy is " + h.descr + ", expected " + x[2] + " — " + f.url);
+        if (h.shape.join() !== f.shape.join()) throw new Error(d.name + ": the .npy shape is [" + h.shape + "], the index says [" + f.shape + "] — " + f.url);
+        if (h.dataOffset !== f.hdr) throw new Error(d.name + ": the .npy header is " + h.dataOffset + " bytes, the index says " + f.hdr + " — " + f.url);
+      });
+      return true;
+    });
+  }
+
+  async function normalsPlan(d, sel, ctx, opts) {
+    opts = opts || {};
+    var M = d._monthly;
+    var s = normSel(sel, d);
+    if (!s.bbox) { var e = new Error("a box (bbox) is required for the gridded store " + d.name); e.needBox = true; throw e; }
+    if (s.res !== "native" && !(s.res > M.step)) throw new Error(d.name + " is " + M.step + "°: no coarser resolution than " + s.res + "° is offered");
+    await normalsSpec(d, ctx);
+    var tg = denseTg({ H: M.H, W: M.W, lat0: M.lat0, lon0: M.lon0, step: M.step, southFirst: M.southFirst });
+    var geo = boxGeometry(tg, s.bbox, s.res);
+    var rowsT = geo.byTy.get(0) || [], rowOut = new Int32Array(M.H).fill(-1), rmin = Infinity, rmax = -1;
+    for (var a = 0; a < rowsT.length; a += 2) {
+      rowOut[rowsT[a]] = rowsT[a + 1];
+      if (rowsT[a] < rmin) rmin = rowsT[a];
+      if (rowsT[a] > rmax) rmax = rowsT[a];
+    }
+    var colsT = geo.byTx.get(0) || [];
+    var allC = d.channels.map(function (c) { return c.name; });
+    var chIdx = s.channels.map(function (c) { return allC.indexOf(c); });
+    var years = normalsYears(d, s);
+    var months = s.months.slice().sort(function (x, y) { return x - y; });
+    if (opts.onlyMonth) months = [opts.onlyMonth];
+    // steps: normal → one per month; by-year → one per (year, month), in time order
+    var keys = [], keyOf = {};
+    if (s.step === "normal") months.forEach(function (m, i) { keyOf["*:" + m] = i; keys.push({ m: m }); });
+    else years.forEach(function (y) { months.forEach(function (m) { keyOf[y + ":" + m] = keys.length; keys.push({ y: y, m: m }); }); });
+    var stepOf = function (y, m) { return s.step === "normal" ? keyOf["*:" + m] : keyOf[y + ":" + m]; };
+    var times = new Float64Array(keys.length), bounds = null;
+    if (s.step === "normal" && years.length) {
+      bounds = new Float64Array(2 * keys.length);
+      keys.forEach(function (k, i) {
+        var y0 = years[0], y1 = years[years.length - 1];
+        times[i] = daysFromCivil(y0, k.m, 1) * 86400;
+        bounds[2 * i] = times[i];
+        bounds[2 * i + 1] = (k.m === 12 ? daysFromCivil(y1 + 1, 1, 1) : daysFromCivil(y1, k.m + 1, 1)) * 86400;
+      });
+    } else keys.forEach(function (k, i) { times[i] = daysFromCivil(k.y, k.m, 1) * 86400; });
+    // the byte spans: (file, month, channel, year) over rows rmin..rmax
+    var reqs = [];
+    if (rmax >= 0 && geo.nCols > 0 && years.length) {
+      [["sum", M.sum], ["count", M.count]].forEach(function (ff) {
+        var f = ff[1], rowB = M.W * f.isz, spans = [];
+        months.forEach(function (m) {
+          chIdx.forEach(function (c, k) {
+            years.forEach(function (y) {
+              var base = f.hdr + (((m - 1) * M.C + c) * M.Y + (y - M.year0)) * f.plane;
+              var sp = [base + rmin * rowB, base + (rmax + 1) * rowB];
+              sp.seg = { file: ff[0], k: k, si: stepOf(y, m), a: sp[0] };
+              spans.push(sp);
+            });
+          });
+        });
+        coalesce(spans, cfg.normalsMergeGap != null ? cfg.normalsMergeGap : NORMALS_MERGE_GAP, MAX_RANGE).forEach(function (r) {
+          reqs.push({ file: ff[0], url: f.url, isz: f.isz, a: r[0], z: r[1], segs: r.items.map(function (x) { return x.seg; }) });
+        });
+      });
+    }
+    var readBytes = reqs.reduce(function (t, q) { return t + (q.z - q.a); }, 0);
+    // what each of the two strategies reads: per year (the box's band of each
+    // year's plane) or the run of years (one contiguous stretch per month and
+    // channel, from the first year's band to the last's — an excluded year in
+    // between is read and never added)
+    var bandBytes = 0, runBytes = 0;
+    if (rmax >= 0 && years.length) {
+      [M.sum, M.count].forEach(function (f) {
+        var band = (rmax + 1 - rmin) * M.W * f.isz;
+        bandBytes += months.length * chIdx.length * years.length * band;
+        runBytes += months.length * chIdx.length * ((years[years.length - 1] - years[0]) * f.plane + band);
+      });
+    }
+    // the rule that chose (coalesce's): two years' spans merge when the rows
+    // between them — a plane less the band — cost less than a request
+    var G = cfg.normalsMergeGap != null ? cfg.normalsMergeGap : NORMALS_MERGE_GAP;
+    var bandRows = rmax + 1 - rmin;
+    var merges = [M.sum, M.count].map(function (f) { return f.plane - bandRows * M.W * f.isz <= G; });
+    var strategy = !reqs.length ? null : years.length < 2 ? "band" : merges[0] && merges[1] ? "run" : !merges[0] && !merges[1] ? "band" : "mixed";
+    var Cs = s.channels.length;
+    var perStep = s.step === "normal" ? years.length : 1;
+    var maxCount = d.maxBinsPerMonth * perStep * geo.maxPerCell;
+    var countBytes = maxCount > 65535 ? 4 : 2;
+    var outBytes = keys.length * Cs * geo.Ho * geo.Wo * (4 + countBytes) + 8 * (keys.length + geo.Ho + geo.Wo) + (bounds ? bounds.length * 8 : 0);
+    var conv = chIdx.map(function (ci) { return { unit: d.channels[ci].unit, offset: 0, note: null }; });
+    return {
+      normals: true, d: d, s: s, M: M, geo: geo, rowOut: rowOut, colsT: colsT, rmin: rmin, rmax: rmax,
+      years: years, months: months, keys: keys, times: times, bounds: bounds, T: keys.length, Cs: Cs, chIdx: chIdx,
+      conv: conv, countBytes: countBytes, outBytes: outBytes, maxCount: maxCount, reqs: reqs, readBytes: readBytes,
+      strategy: strategy, bandBytes: bandBytes, runBytes: runBytes,
+      planes: years.length * months.length * Cs, mean: true, group: d.name, source: M.sum.url
+    };
+  }
+
+  async function normalsRun(plan, ctx, onProgress) {
+    var M = plan.M, geo = plan.geo, Cs = plan.Cs, HW = geo.Ho * geo.Wo, nOut = plan.T * Cs * HW;
+    var S = new Float64Array(nOut), N = new Uint32Array(nOut);
+    var colsT = plan.colsT, rowOut = plan.rowOut, W = M.W, rmin = plan.rmin, rmax = plan.rmax;
+    var progress = { done: 0, total: plan.reqs.length, bytes: 0 };
+    var tell = function () { if (onProgress) { try { onProgress({ done: progress.done, total: progress.total, bytes: progress.bytes }); } catch (e) { /* the caller's */ } } };
+    var rctx = Object.assign({}, ctx, { onRead: function (n) { progress.done++; progress.bytes += n; tell(); } });
+    tell();
+    await pool(plan.reqs, async function (q) {
+      var buf = await rangeRead(q.url, q.a, q.z - q.a, rctx);
+      var dv = q.isz === 4 ? new DataView(buf.buffer, buf.byteOffset, buf.byteLength) : null;
+      q.segs.forEach(function (sg) {
+        var off0 = sg.a - q.a;
+        for (var r = rmin; r <= rmax; r++) {
+          var orow = rowOut[r];
+          if (orow < 0) continue;
+          var rb = off0 + (r - rmin) * W * q.isz;
+          var base = (sg.si * Cs + sg.k) * HW + orow * geo.Wo;
+          for (var cc = 0; cc < colsT.length; cc += 2) {
+            var oi = base + colsT[cc + 1];
+            if (dv) { var v = dv.getFloat32(rb + 4 * colsT[cc], true); if (v === v) S[oi] += v; }
+            else N[oi] += buf[rb + colsT[cc]];
+          }
+        }
+      });
+    }, ctx);
+    var data = new Float32Array(nOut);
+    var count = plan.countBytes === 4 ? new Uint32Array(nOut) : new Uint16Array(nOut);
+    var norm = plan.chIdx.map(function (ci) { return plan.d.channels[ci].norm; });
+    for (var i = 0; i < nOut; i++) {
+      var k = Math.floor(i / HW) % Cs;
+      count[i] = N[i];
+      data[i] = N[i] ? (S[i] / N[i]) * norm[k][1] + norm[k][0] : NaN;
+    }
+    return { data: data, count: count };
+  }
+
+  function normalsNotes(plan) {
+    var n = [], s = plan.s, y = plan.years;
+    n.push("composed from the global tensor's per-year monthly sums and counts (E-086): mean = Σ sums ÷ Σ counts over the chosen years, then value = z × sd + mean in the channel's unit; NaN where no year had a value");
+    if (s.step === "normal") n.push("a CLIMATOLOGY: each time step is one calendar month averaged over " + (y.length ? y[0] + "–" + y[y.length - 1] : "no year") + " (" + y.length + " year" + (y.length === 1 ? "" : "s") + ")" + (s.excludeYears.length ? ", excluding " + s.excludeYears.join(", ") : "") + "; the time value is that month in the first year, and climatology_bounds gives the span");
+    else n.push("one monthly mean per year and calendar month (the stack of the chosen months across the chosen years)");
+    n.push("count = the number of " + (plan.M.rowKind === "monthly" ? "monthly rows (one per year)" : "five-day bins") + " that contributed; a bin belongs to the calendar month its five-day window OPENS in");
+    if (s.res !== "native") n.push("each " + s.res + "° cell POOLS the sums and the counts of every native cell and year in it (Σ sums ÷ Σ counts) — not a mean of means");
+    if (plan.d.levels) n.push("levelled channels are written one variable per channel and level; the name carries the level (" + plan.d.levelUnit + ")");
+    if (s.bbox && s.bbox.w > s.bbox.e) n.push("the box crosses the dateline: longitudes run past 180° (subtract 360 for −180..180)");
+    return n;
+  }
+
+  function normalsEstimate(plan) {
+    var y = plan.years, s = plan.s;
+    var wh = plan.planes + " monthly plane" + (plan.planes === 1 ? "" : "s") + " (" + y.length + " year" + (y.length === 1 ? "" : "s") + " × " +
+      plan.months.length + " month" + (plan.months.length === 1 ? "" : "s") + " × " + plan.Cs + " channel" + (plan.Cs === 1 ? "" : "s") + "), sums and counts: " +
+      plan.reqs.length + " requests, " + fmtMB(plan.readBytes) + " to read (exact; " + (plan.strategy === "band"
+        ? "the box's band of rows in each year's plane, one range per year — the rows between two years' bands are most of a plane, more than a request costs"
+        : plan.strategy === "run" ? "each run of years read as one contiguous stretch — the rows between two years' bands cost less than a request"
+        : "the sums one range per year, the four-times-smaller counts as one stretch per run of years") + "); the result is " +
+      plan.T + " × " + plan.Cs + " × " + plan.geo.Ho + " × " + plan.geo.Wo + " (" + fmtMB(plan.outBytes) + ").";
+    return { requests: plan.reqs.length, readBytes: plan.readBytes, outBytes: plan.outBytes, frames: plan.planes, exact: true,
+      strategy: plan.strategy, bandBytes: plan.bandBytes, runBytes: plan.runBytes,
+      shape: [plan.T, plan.Cs, plan.geo.Ho, plan.geo.Wo], why: wh, years: y.length, yearsUsed: y.slice(),
+      channelsRead: plan.Cs, channelsKept: plan.Cs, channelWord: plan.d.levels ? "levels" : "channels",
+      shrink: "Shorten the period, pick fewer months or channels, shrink the box (a narrower band of LATITUDES is what saves bytes), or take 1° cells." };
+  }
+
+  function normalsResult(plan, g, ctx, t0, empty) {
+    var y = plan.years;
+    return {
+      kind: "grid", store: plan.d.name, family: plan.d.family, channels: plan.s.channels.slice(),
+      units: plan.conv.map(function (c) { return c.unit; }),
+      lat: plan.geo.outLat, lon: plan.geo.outLon, time: empty ? new Float64Array(0) : plan.times,
+      data: g.data, count: g.count, sel: plan.s, notes: normalsNotes(plan), frames: empty ? 0 : plan.planes,
+      group: plan.d.name, source: plan.M.sum.url, title: plan.d.title,
+      countMeaning: plan.M.rowKind === "monthly" ? "number of monthly rows (years) averaged" : "number of five-day bins averaged",
+      climatology: plan.s.step === "normal" && !empty ? { bounds: plan.bounds, period: y.length ? [y[0], y[y.length - 1]] : null,
+        excluded: plan.s.excludeYears.slice(), yearsUsed: y.slice() } : null,
+      byYear: plan.s.step === "by-year" && !empty && y.length ? { period: [y[0], y[y.length - 1]], excluded: plan.s.excludeYears.slice() } : null,
+      levels: plan.d.levels ? plan.s.channels.map(function (c) { var x = plan.d.channels.find(function (z) { return z.name === c; }); return x && x.level != null ? x.level : null; }) : null,
       stats: { requests: ctx.stats.requests, bytes: ctx.stats.bytes, ms: Date.now() - t0 }
     };
   }
@@ -2346,6 +2733,18 @@
       delete o.shrink;
       return o;
     };
+    if (d._monthly) {
+      var np;
+      try { np = await normalsPlan(d, sel, ctx); }
+      catch (e) {
+        if (e.needBox) {
+          return { requests: 0, readBytes: 0, outBytes: 0, frames: 0, overCap: true, exact: true, shape: null,
+            why: "Draw or type a box first: the normals are read row band by row band, so a box is required." };
+        }
+        throw e;
+      }
+      return cap(normalsEstimate(np));
+    }
     if (d._dense) {
       var dp;
       try { dp = await densePlan(d, sel, ctx); }
@@ -2406,6 +2805,12 @@
     var t0 = Date.now();
     try {
       var d = await storeDesc(sel, ctx);
+      if (d._monthly) {
+        var np = await normalsPlan(d, sel, ctx);
+        if (np.readBytes > CAP_READ) throw new Error("over the cap: this selection reads " + fmtMB(np.readBytes) + " (limit " + fmtMB(CAP_READ) + ")");
+        if (np.outBytes > CAP_OUT) throw new Error("over the cap: the result would be " + fmtMB(np.outBytes) + " of arrays (limit " + fmtMB(CAP_OUT) + ")");
+        return normalsResult(np, await normalsRun(np, ctx, opts.onProgress), ctx, t0);
+      }
       if (d._dense) {
         var dp = await densePlan(d, sel, ctx);
         if (dp.readBytes > CAP_READ) throw new Error("over the cap: this selection reads " + fmtMB(dp.readBytes) + " (limit " + fmtMB(CAP_READ) + ")");
@@ -2435,6 +2840,17 @@
     var t0 = Date.now();
     try {
       var d = await storeDesc(sel, ctx);
+      if (d._monthly) {
+        // the first selected calendar month: its normal over the period (or,
+        // for the stack, every year of it — then the first year's field)
+        var p0 = await normalsPlan(d, sel, ctx);
+        var p1 = await normalsPlan(d, Object.assign({}, sel), ctx, { onlyMonth: p0.months[0] });
+        if (p1.s.step === "by-year" && p1.years.length) {
+          p1 = await normalsPlan(d, Object.assign({}, sel, { yearStart: p1.years[0], yearEnd: p1.years[0] }), ctx, { onlyMonth: p0.months[0] });
+        }
+        if (!p1.reqs.length) return normalsResult(p1, { data: new Float32Array(0), count: null }, ctx, t0, true);
+        return normalsResult(p1, await normalsRun(p1, ctx, null), ctx, t0);
+      }
       if (d._dense) {
         // the first selected frame with a finite value in the box, at most
         // PREVIEW_GRID_TRIES frames read
@@ -2669,6 +3085,18 @@
           fill: function (dv, s, k) { for (var i = 0; i < k; i++) dv.setFloat64(8 * i, result.lon[s + i], false); } }
       ];
       var used = { time: 1, lat: 1, lon: 1 };
+      var clim = result.climatology && result.climatology.bounds && result.climatology.bounds.length === 2 * T ? result.climatology : null;
+      if (clim) {
+        // CF §7.4: a climatological time axis — each value is a calendar
+        // month, averaged over the years its bounds span
+        dims.push(["nv", 2]);
+        vars[0].attrs.push(["climatology", "climatology_bounds"]);
+        vars[0].attrs[1] = ["long_name", "calendar month of the climatology (its value is that month in the first year of the period)"];
+        vars.push({ name: "climatology_bounds", dims: [0, 3], type: NC.DOUBLE, n: 2 * T,
+          attrs: [["long_name", "first and last instant of the years each climatological month averages"], ["units", "seconds since 1970-01-01 00:00:00"]],
+          fill: function (dv, s, k) { for (var i = 0; i < k; i++) dv.setFloat64(8 * i, clim.bounds[s + i], false); } });
+        used.climatology_bounds = 1; used.nv = 1;
+      }
       var names = result.channels.map(function (c) {
         var n = ncName(c);
         while (used[n]) n += "_";
@@ -2678,7 +3106,8 @@
       result.channels.forEach(function (c, k) {
         var map = function (j) { var t = Math.floor(j / HW); return (t * C + k) * HW + (j - t * HW); };
         var at = [["long_name", c], ["units", result.units[k] || ""], ["_FillValue", NaN, NC.FLOAT]];
-        if (result.count) at.push(["cell_methods", "time: mean (of finite observations) area: mean"]);
+        if (clim) at.push(["cell_methods", "time: mean within years time: mean over years"]);
+        else if (result.count) at.push(["cell_methods", "time: mean (of finite observations) area: mean"]);
         vars.push({ name: names[k], dims: [0, 1, 2], type: NC.FLOAT, n: T * HW, attrs: at, fill: f32Filler(result.data, map) });
       });
       if (result.count) {
@@ -2688,11 +3117,23 @@
           used[nm] = 1;
           var map = function (j) { var t = Math.floor(j / HW); return (t * C + k) * HW + (j - t * HW); };
           vars.push({ name: nm, dims: [0, 1, 2], type: NC.INT, n: T * HW,
-            attrs: [["long_name", "number of finite observations averaged into " + c], ["units", "1"]],
+            attrs: [["long_name", (result.countMeaning || "number of finite observations averaged") + " into " + c], ["units", "1"]],
             fill: function (dv, s, kk) { for (var i = 0; i < kk; i++) dv.setInt32(4 * i, result.count[map(s + i)], false); } });
         });
       }
-      return writeNetCDF(dims, globalAttrs(result), vars);
+      var extra = [];
+      if (result.climatology && result.climatology.period) {
+        extra.push(["climatology", "monthly normals: each time step is one calendar month averaged over the years period_start to period_end, leaving out excluded_years (Σ sums ÷ Σ counts)"],
+          ["period_start", result.climatology.period[0], NC.INT],
+          ["period_end", result.climatology.period[1], NC.INT],
+          ["excluded_years", result.climatology.excluded.length ? result.climatology.excluded.join(", ") : "none"],
+          ["years_used", result.climatology.yearsUsed.join(", ")],
+          ["n_years_used", result.climatology.yearsUsed.length, NC.INT]);
+      } else if (result.byYear) {
+        extra.push(["period_start", result.byYear.period[0], NC.INT], ["period_end", result.byYear.period[1], NC.INT],
+          ["excluded_years", result.byYear.excluded.length ? result.byYear.excluded.join(", ") : "none"]);
+      }
+      return writeNetCDF(dims, globalAttrs(result, extra), vars);
     }
     if (result.kind === "points") {
       var N = result.time.length, Cp = result.channels.length, SL = 20;

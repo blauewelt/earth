@@ -25,7 +25,12 @@
 //   6. compares those with independent numpy range reads of the same bytes
 //      (de-z-scored through data/family7_index.json), the Argo month with
 //      ml/family10_store.py, and the ERA5 frame with ml/family1/sharded.py
-//      (raw float16, exact).
+//      (raw float16, exact);
+//   7. the monthly normals (E-086): a normal over a period with years left
+//      out, a by-year stack, a 1° pooled normal and a depth level, each
+//      against numpy's Σsum/Σcount of independent range reads; both read
+//      strategies giving identical numbers; and one daily frame of each
+//      family 7.2d store against ml/family1/sharded.py (raw float16, exact).
 // It exits non-zero on the first disagreement or failed read.
 import { createRequire } from "node:module";
 import { execFileSync } from "node:child_process";
@@ -179,7 +184,16 @@ const SELS10 = {
   argo: { family: "10", store: "argo", channels: ["temp_10", "psal_10"], yearStart: 2015, yearEnd: 2015, months: [6], hours: null, bbox: { w: -60, s: 20, e: -10, n: 60 }, step: "native", res: "native" },
   gdp: { family: "10", store: "gdp", channels: ["sst"], yearStart: 1980, yearEnd: 1980, months: [3], hours: null, bbox: null, step: "native", res: "native" },
   fishing_grid: { family: "derived", store: "fishing_grid", channels: ["fishing_hours", "hours"], yearStart: 2020, yearEnd: 2020, months: [3], hours: null, bbox: { w: 0, s: 50, e: 10, n: 60 }, step: "native", res: "native" },
-  clim_g025: { family: "derived", store: "clim_g025", channels: ["sst"], yearStart: 2000, yearEnd: 2000, months: [1, 7], hours: null, bbox: NA, step: "native", res: "native" },
+  // the monthly normals (E-086), which replaced the calendar clim_* stores
+  normals_g025: { family: "derived", store: "normals_g025", channels: ["sst"], yearStart: 1991, yearEnd: 2020, excludeYears: [2009, 2017], months: [2], hours: null, bbox: NA, step: "normal", res: "native" },
+  normals_g025_byyear: { family: "derived", store: "normals_g025", channels: ["sst"], yearStart: 2014, yearEnd: 2016, months: [8], hours: null, bbox: NA, step: "by-year", res: "native" },
+  normals_g025_1deg: { family: "derived", store: "normals_g025", channels: ["sst"], yearStart: 1991, yearEnd: 2020, excludeYears: [2009, 2017], months: [2], hours: null, bbox: NA, step: "normal", res: 1 },
+  normals_rg100: { family: "derived", store: "normals_rg100", channels: ["rg_t500"], yearStart: 2004, yearEnd: 2024, months: [1], hours: null, bbox: NA, step: "normal", res: "native" },
+  // family 7.2d: one day of each daily store (two after family 7.2's end)
+  d_glorys: { family: "7.2d", store: "glorys025d", channels: ["ssh", "cur_u"], yearStart: 2026, yearEnd: 2026, months: [3], days: [10, 10], hours: null, bbox: NA, step: "native", res: "native" },
+  d_oisst: { family: "7.2d", store: "oisst025d", channels: ["sst", "sea_ice"], yearStart: 2026, yearEnd: 2026, months: [9], days: [25, 25], hours: null, bbox: NA, step: "native", res: "native" },
+  d_ncep: { family: "7.2d", store: "ncep100d", channels: ["t2m", "tau_x_std"], yearStart: 2015, yearEnd: 2015, months: [6], days: [1, 1], hours: null, bbox: NA, step: "native", res: "native" },
+  d_occci: { family: "7.2d", store: "occci025d", channels: ["log_chl"], yearStart: 2015, yearEnd: 2015, months: [6], days: [14, 14], hours: null, bbox: NA, step: "native", res: "native" },
   // family 1.2: the four ERA5 stores at 500 hPa, 2015-01-15, 12 UTC only
   // (and humidity once more after the 2022 seam, 2023-07-15 06 UTC)
   ...Object.fromEntries(["t", "q", "u", "v"].map((v) => [`era5_${v}`, { family: "1.2", store: `era5_${v}`, channels: [`${v}_500`],
@@ -196,13 +210,14 @@ for (const [name, sel] of Object.entries(SELS10)) {
   const f = finite(r.kind === "grid" ? r.data : r.values);
   console.log(`\n${sel.family}/${name}: estimate ${e.r.requests} requests / ${mb(e.r.readBytes)} · run ${m.requests} requests, ${mb(m.bytes)}, ${(m.ms / 1000).toFixed(2)} s · statuses ${[...new Set(m.log.map((x) => x.status))].join(",")} · every request ranged: ${m.log.every((x) => /^bytes=\d+-\d*$/.test(x.range || ""))}`);
   console.log(`  result: ${r.kind === "grid" ? `${r.time.length} × ${r.channels.length} × ${r.lat.length} × ${r.lon.length}` : r.time.length.toLocaleString("en-US") + " rows"}; first ${new Date(r.time[0] * 1000).toISOString().slice(0, 16)}; finite ${f.n}, range ${f.lo} .. ${f.hi} ${r.units.join(" | ")}`);
-  if (r.kind === "grid" && sel.store !== "argo" && !/^1\./.test(sel.family) && e.r.exact && m.log.filter((x) => /\.npy$/.test(x.url) && !/bytes=0-1023$/.test(x.range || "")).reduce((a, x) => a + x.bytes, 0) !== e.r.readBytes) {
+  if (r.kind === "grid" && sel.store !== "argo" && !/^1\./.test(sel.family) && sel.family !== "7.2d" && e.r.exact && m.log.filter((x) => /\.npy$/.test(x.url) && !/bytes=0-1023$/.test(x.range || "")).reduce((a, x) => a + x.bytes, 0) !== e.r.readBytes) {
     fail(`${name}: exact estimate bytes differ from the run's`);
   }
 }
 console.log("\npreview of every family-1.2, family-10 and derived store once:");
 for (const s of regAll.stores.filter((x) => x.family !== "1.gf")) {
   const last = s.calendar ? 2000 : Number(s.span[1].slice(0, 4));
+  if (s.family === "7.2d" || s.normals) { /* read and compared in section 7 */ }
   const yy = s.calendar ? 2000 : Math.min(last, 2015);
   const sel = { family: s.family, store: s.name, channels: s.channels.slice(0, 2).map((c) => c.name), yearStart: yy, yearEnd: yy,
     months: [6], days: s.kind === "points" ? [1, 2] : null, hours: null, bbox: s.kind === "grid" ? { w: -40, s: 40, e: -35, n: 45 } : null, step: "native", res: "native" };
@@ -298,6 +313,101 @@ print(json.dumps([None if not np.isfinite(x) else float(x) for x in out[120:151,
     console.log(`${store} 500 hPa ${new Date(er.time[0] * 1000).toISOString().slice(0, 16)} (${er.units[0]}) against ml/family1/sharded.py (raw float16):`);
     cmp(Array.from(er.data), eo, 0, `  ${key}`);
     if (store === "era5_q" && er.units[0] !== "g/kg") fail(`era5_q units are ${er.units[0]}, not g/kg`);
+  }
+}
+
+// ---------------------------------------------------------------- 7. normals and family 7.2d
+{
+  const nx = JSON.parse(fs.readFileSync(path.join(ROOT, "data", "family7_monthly_index.json"), "utf8"));
+  const want = JSON.parse(py(`
+import json, sys
+import numpy as np
+mx = json.load(open(sys.argv[1])); sels = json.loads(sys.argv[2])
+import urllib.request, time
+def rng(url, a, n):
+    for k in range(6):
+        try:
+            with urllib.request.urlopen(urllib.request.Request(url, headers={"Range": f"bytes={a}-{a+n-1}"})) as r:
+                assert r.status == 206; b = r.read(); assert len(b) == n; return b
+        except urllib.error.HTTPError as e:
+            if e.code != 429: raise
+            time.sleep(2 * (k + 1))
+out = {}
+for key, s in sels.items():
+    G = mx["groups"][s["store"].replace("normals_", "")]; g = G["grid"]
+    la = g["lat0"] + np.arange(g["ny"]) * g["step"]; lo = g["lon0"] + np.arange(g["nx"]) * g["step"]
+    b = s["bbox"]; r = np.where((la >= b["s"]) & (la <= b["n"]))[0]; c = np.where((lo >= b["w"]) & (lo <= b["e"]))[0]
+    C, Y, W = len(G["chans"]), int(G["n_years"]), g["nx"]; ci = G["chans"].index(s["channels"][0]); mu, sd = G["norm"][ci]
+    years = [y for y in range(s["yearStart"], s["yearEnd"] + 1) if y not in s.get("excludeYears", [])]
+    per = []
+    for y in years:
+        pr = []
+        for k, dt_ in (("sum", "<f4"), ("count", "u1")):
+            f = G[k]; isz = int(f["itemsize"])
+            off = int(f["header_len"]) + (((s["months"][0] - 1) * C + ci) * Y + (y - int(G["year_first"]))) * int(f["plane_bytes"]) + int(r[0]) * W * isz
+            pr.append(np.frombuffer(rng(f["url"], off, len(r) * W * isz), dt_).reshape(len(r), W)[:, c].astype(np.float64))
+        per.append(pr)
+    def phys(S, N):
+        with np.errstate(invalid="ignore", divide="ignore"): return np.where(N > 0, S / N * sd + mu, np.nan)
+    if s["step"] == "by-year":
+        d = [phys(p[0], p[1]) for p in per]; n = [p[1] for p in per]
+    else:
+        S = sum(p[0] for p in per); N = sum(p[1] for p in per)
+        if s["res"] == 1:
+            kr, kc = np.floor(la[r]).astype(int), np.floor(lo[c]).astype(int); ur, uc = np.unique(kr), np.unique(kc)
+            SS = np.zeros((len(ur), len(uc))); NN = np.zeros_like(SS)
+            np.add.at(SS, (np.searchsorted(ur, kr)[:, None], np.searchsorted(uc, kc)[None, :]), S)
+            np.add.at(NN, (np.searchsorted(ur, kr)[:, None], np.searchsorted(uc, kc)[None, :]), N)
+            S, N = SS, NN
+        d = [phys(S, N)]; n = [N]
+    out[key] = {"data": [None if not np.isfinite(v) else float(v) for v in np.ravel(d)], "count": [int(v) for v in np.ravel(n)]}
+print(json.dumps(out))
+`, path.join(ROOT, "data", "family7_monthly_index.json"), JSON.stringify(Object.fromEntries(Object.entries(SELS10).filter(([k]) => /^normals_/.test(k))))));
+  const cmpN = (got, w, tol, label) => {
+    let bad = 0, maxd = 0, n = 0;
+    w.forEach((x, k) => { const g = got[k]; if (x === null) { if (!Number.isNaN(g)) bad++; return; } n++; const d = Math.abs(g - x); maxd = Math.max(maxd, d); if (d > tol) bad++; });
+    console.log(`${label}: ${w.length} values (${n} finite), max |difference| ${maxd.toExponential(2)}, ${bad} differ`);
+    if (bad || got.length !== w.length) fail(label + " disagrees with numpy");
+  };
+  console.log("");
+  for (const k of Object.keys(want)) {
+    const r = results10[k];
+    cmpN(Array.from(r.data), want[k].data, 1e-5, `${k} (${SELS10[k].step}${SELS10[k].res === 1 ? ", 1° pooled" : ""}) against numpy Σsum/Σcount of independent range reads`);
+    if (Array.from(r.count).join() !== want[k].count.join()) fail(`${k}: counts differ`); else console.log("  counts identical");
+  }
+  // the two read strategies: year by year and one stretch give the same numbers
+  for (const gap of [0, 1e12]) {
+    F1.configure({ registries: F1.DEFAULT_REGISTRIES, siteBase: "file://" + ROOT + "/", fetch: siteFetch, normalsMergeGap: gap });
+    const m = await measure(F1.run)(SELS10.normals_g025);
+    const e = await F1.estimate(SELS10.normals_g025);
+    console.log(`normals_g025 with merge gap ${gap}: strategy ${e.strategy}, ${m.requests} requests, ${mb(m.bytes)}, ${(m.ms / 1000).toFixed(2)} s`);
+    cmpN(Array.from(m.r.data), want.normals_g025.data, 1e-5, `  same numbers as numpy`);
+  }
+  F1.configure({ registries: F1.DEFAULT_REGISTRIES, siteBase: "file://" + ROOT + "/", fetch: siteFetch });
+  // family 7.2d frames against ml/family1/sharded.py
+  for (const key of ["d_glorys", "d_oisst", "d_ncep", "d_occci"]) {
+    const r = results10[key], sel = SELS10[key];
+    const t82 = r.time[0] - 378691200;
+    const eo = JSON.parse(py(`
+import json, sys
+import numpy as np
+from family1 import sharded as sh
+g = sh.ShardedGroup(sys.argv[1]); sp = g.spec
+b, f = int(sys.argv[2]), int(sys.argv[3]); lat = json.loads(sys.argv[4]); lon = json.loads(sys.argv[5]); chans = json.loads(sys.argv[6])
+step = sp["grid"]["dy"]
+rr = np.rint((np.array(lat) + 90) / step).astype(int); cc = np.rint((np.array(lon) + 180) / step).astype(int)
+fr = g.read_frame(b, f, raw=True)
+names = [c["name"] for c in sp["channels"]]
+out = []
+for ch in chans:
+    out += [None if not np.isfinite(x) else float(x) for x in fr[np.ix_(rr, cc)][:, :, names.index(ch)].astype(np.float32).ravel()]
+print(json.dumps(out))
+`, `https://huggingface.co/datasets/chfrank/earth-tensors/resolve/main/tensors/family7_2d/${sel.store}/${sel.store}`,
+      Math.floor(t82 / 432000), Math.floor((t82 % 432000) / 86400), JSON.stringify(Array.from(r.lat)), JSON.stringify(Array.from(r.lon)), JSON.stringify(sel.channels)));
+    console.log(`${sel.store} ${new Date(r.time[0] * 1000).toISOString().slice(0, 10)} (${r.units.join(", ")}) against ml/family1/sharded.py read_frame (raw float16):`);
+    cmpN(Array.from(r.data), eo, 0, `  ${key}`);
+    const lic = (await F1.loadRegistry()).stores.find((x) => x.id === "7.2d/" + sel.store).licence;
+    if (!lic || !lic.attribution) fail(`${sel.store}: no licence attribution`);
   }
 }
 
