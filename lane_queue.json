@@ -4,17 +4,6 @@
   {
    "store": "glorys025d",
    "stage": "index,fetch",
-   "start": "2005-01-01",
-   "end": "2008-12-31",
-   "runner": "ubuntu-latest",
-   "extra_args": "--push-parts",
-   "adapter_env": "",
-   "retries": 2,
-   "at": "2026-10-06T10:39:48.252Z"
-  },
-  {
-   "store": "glorys025d",
-   "stage": "index,fetch",
    "start": "2017-01-01",
    "end": "2020-12-31",
    "runner": "ubuntu-latest",
@@ -4112,6 +4101,19 @@
    "at": "2026-10-06T10:39:44.414Z",
    "run_number": 1004,
    "finished": "2026-10-06T11:20:12Z"
+  },
+  {
+   "store": "glorys025d",
+   "stage": "index,fetch",
+   "start": "2005-01-01",
+   "end": "2008-12-31",
+   "runner": "ubuntu-latest",
+   "extra_args": "--push-parts",
+   "adapter_env": "",
+   "retries": 2,
+   "at": "2026-10-06T10:39:48.252Z",
+   "run_number": 1005,
+   "finished": "2026-10-06T11:26:22Z"
   }
  ],
  "failed": [
