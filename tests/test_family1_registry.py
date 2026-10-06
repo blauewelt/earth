@@ -66,6 +66,9 @@ def stub(monkeypatch):
     """Install a stubbed Hub and hand the test the object to load."""
     def install(hub):
         monkeypatch.setattr(r1, "http_json", hub)
+        # the span reader's range reads go to the Hub too; a stubbed Hub has
+        # no time columns, so spans fall back to the store's own bins
+        monkeypatch.setattr(r1.spans, "hub_source", lambda repo, prefix: None)
         return hub
     return install
 
@@ -249,7 +252,13 @@ def test_a_published_store_contributes_its_checksums_span_and_commit(stub):
     g = [x for x in r["groups"] if x["name"] == "ghcnd"][0]
     assert g["built"] is True
     assert g["N"] == 1234
-    assert g["record_span"] == ["2019-01-01", "2020-12-31"]
+    # D7: the span is where the DATA is (here, with no time column to read,
+    # the store's own first and last non-empty bin), and the requested
+    # window is kept beside it under its own name
+    assert g["record_span"] == ["1982-02-20", "1982-04-15"]
+    assert g["record_span_basis"] == "bins"
+    assert g["date_range"] == g["record_span"]
+    assert g["requested_window"] == ["2019-01-01", "2020-12-31"]
     assert g["builder_git_sha"] == "abc1234"
     assert g["store_schema_version"] == 2
     assert sorted(f["name"] for f in g["files"]) == ["store.json",

@@ -98,6 +98,7 @@ from build_family7 import (atomic_json, git_sha, hub_repo,      # noqa: E402
                            read_json, sha256, utcnow)
 from family1 import sharded as sh                               # noqa: E402
 from family1.adapters import FAMILIES, REGISTRY                 # noqa: E402
+import registry_spans as spans                                  # noqa: E402
 
 PUBLIC_REPO = b1.PUBLIC_REPO
 PRIVATE_REPO = b1.PRIVATE_REPO
@@ -408,11 +409,13 @@ def entry(store, ad, repo, use_hub=True, work=None, probe_dir=PROBE_DIR):
     out["probe"] = probe_summary(pp) if pp else None
 
     meta = None
+    local = None
     if work:
         for cand in (os.path.join(work, store, store, "store.json"),
                      os.path.join(work, store, "store.json")):
             if os.path.exists(cand):
                 meta = read_json(cand, None)
+                local = os.path.dirname(cand)
                 break
     if meta is None and use_hub and not private:
         meta = hub_json(PUBLIC_REPO, f"{prefix}/store.json")
@@ -434,8 +437,15 @@ def entry(store, ad, repo, use_hub=True, work=None, probe_dir=PROBE_DIR):
     out["bin_first"] = meta.get("bin_first")
     out["bin_last"] = meta.get("bin_last")
     out["n_bins"] = meta.get("n_bins")
-    out["date_range"] = meta.get("date_range")
-    out["record_span"] = meta.get("date_range")
+    # Where the data REALLY starts and ends (decision D7, 2026-10-06): from
+    # the store's own files, never its requested window, which moves to
+    # `requested_window` unchanged. ml/registry_spans.py says how.
+    src = None
+    if local:
+        src = spans.local_source(local)
+    elif use_hub and not private:
+        src = spans.hub_source(PUBLIC_REPO, prefix)
+    out.update(spans.span_fields(meta, tier_of(ad), src))
     out["built_at"] = meta.get("built_at")
     out["builder_git_sha"] = meta.get("builder_git_sha")
     out["store_schema_version"] = meta.get("schema_version")
@@ -485,6 +495,7 @@ def build_one(code, repo=PUBLIC_REPO, use_hub=True, work=None,
                      "same axis, and frame f of bin b covers "
                      "[b * 432000 + f * frame_seconds, + frame_seconds)"),
         "tiers": dict(TIERS),
+        "span_rule": spans.SPAN_RULE,
         "numbers_note": (
             "three numbers, kept apart on purpose: `note_estimate` is what "
             "the design row GUESSED, `probe` is one real month put through "

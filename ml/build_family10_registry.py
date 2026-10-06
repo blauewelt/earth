@@ -67,6 +67,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 
 import family10_store as f10                                    # noqa: E402
+import registry_spans as spans                                  # noqa: E402
 from build_family7 import (atomic_json, git_sha, hub_repo,       # noqa: E402
                            read_json, sha256, utcnow)
 
@@ -334,7 +335,8 @@ def hub_sizes(repo, prefix, meta):
     return out
 
 
-def _store_entry(name, meta, repo, prefix, local=None, sizes=None):
+def _store_entry(name, meta, repo, prefix, local=None, sizes=None,
+                 use_hub=True):
     """One tier-P group, out of a store.json that already says everything."""
     ch = meta.get("channels")
     if ch and isinstance(ch[0], dict):
@@ -393,7 +395,13 @@ def _store_entry(name, meta, repo, prefix, local=None, sizes=None):
         "bin_last": meta.get("bin_last"),
         "n_bins": meta.get("n_bins"),
         "n_live_bins": meta.get("n_live_bins"),
-        "date_range": meta.get("date_range"),
+        # where the data REALLY starts and ends (E-085 D7): the store's own
+        # time column, never its requested window — that moves, unchanged,
+        # to `requested_window` (ml/registry_spans.py).
+        **spans.span_fields(
+            meta, "P",
+            spans.local_source(local) if local else
+            (spans.hub_source(repo, prefix) if use_hub else None)),
         "normalisation": meta.get("normalisation"),
         "qc_policy": meta.get("qc_policy"),
         "qc_keep_max": meta.get("qc_keep_max"),
@@ -442,7 +450,8 @@ def tier_p_groups(repo, work=None, stores=F10_STORES, use_hub=True,
             out.append(_store_entry(
                 F8_NAME, meta, repo, F8_PREFIX, local,
                 sizes=(hub_sizes(repo, F8_PREFIX, meta)
-                       if local is None and use_hub else None)))
+                       if local is None and use_hub else None),
+                use_hub=use_hub))
     for s in stores:
         meta, local = None, None
         root = store_root(s)
@@ -468,7 +477,8 @@ def tier_p_groups(repo, work=None, stores=F10_STORES, use_hub=True,
         out.append(_store_entry(
             s, meta, repo, f"{root}/{s}", local,
             sizes=(hub_sizes(repo, f"{root}/{s}", meta)
-                   if local is None and use_hub else None)))
+                   if local is None and use_hub else None),
+            use_hub=use_hub))
     return out, missing
 
 
@@ -559,6 +569,10 @@ def build_registry(repo=HUB_REPO_DEFAULT, work=None, stores=F10_STORES,
             "registries": [dict(s) for s in SIBLING_REGISTRIES],
         },
         "tier_g": g_meta,
+        "span_rule": (spans.SPAN_RULE + " Here it applies to the tier-P "
+                      "groups; the tier-G groups (family 7.1's tensors) state "
+                      "their bins as `bin_first` / `n_bins` and claim no "
+                      "requested window."),
         "readers": {
             "G": "ml/cone_sampler.py (and src/app.js for the globe layer)",
             "P": "ml/family10_store.py :: Store — which also opens family 8's "

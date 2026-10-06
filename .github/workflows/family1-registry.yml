@@ -19,11 +19,21 @@
 #      the Hub; the guard is what stops that from quietly rewriting
 #      anything else in a registry a box wrote.
 #
+# THE GUARD, ON EVERY REGISTRY (E-085 D7). Before a family-1 registry is
+# uploaded, the published copy is downloaded and `ml/registry_guard.py`
+# compares the two; anything beyond what the dispatch names refuses the
+# whole publish. `guard: strict` allows only timestamps, the siblings line
+# and null sizes filled; `guard: spans` also allows the span fields
+# (ml/registry_spans.py), provided each group's requested window is kept;
+# `allow_group: <store>` lets one REBUILT store's entry change (era5_q under
+# D6). A registry not yet on the Hub has nothing to compare and is published
+# with a notice.
+#
 # workflow_dispatch ONLY, on ubuntu-latest ONLY (ml/CLAUDE.md §6). It holds
 # HF_TOKEN; a pull_request / schedule / workflow_run trigger would hand it to
 # anyone who opens a PR.
 name: Family 1 registry publish (E-085)
-run-name: family1-registry ${{ inputs.families }} siblings10=${{ inputs.siblings10 }}
+run-name: family1-registry ${{ inputs.families }} siblings10=${{ inputs.siblings10 }} guard=${{ inputs.guard }} ${{ inputs.allow_group }}
 
 on:
   workflow_dispatch:
@@ -32,9 +42,17 @@ on:
         description: "family codes to publish, comma list (1gf,1tf,09tf,12). Every registry is built and checked; only these are uploaded"
         default: "12"
       siblings10:
-        description: "also rebuild family 10.2's registry with its own builder and publish it if only its siblings line (and null sizes) changed"
+        description: "also rebuild family 10.2's registry with its own builder and publish it if the guard passes"
         type: boolean
         default: false
+      guard:
+        description: "what a republish may change: strict (timestamps, siblings, null sizes) or spans (also the record-span fields, D7)"
+        type: choice
+        options: [strict, spans]
+        default: strict
+      allow_group:
+        description: "one rebuilt store whose whole entry may change (e.g. era5_q), or empty"
+        default: ""
 
 permissions:
   contents: read
@@ -62,12 +80,39 @@ jobs:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
           HF_HUB_DISABLE_XET: "1"
           FAMILIES: ${{ inputs.families }}
+          GUARD: ${{ inputs.guard }}
+          ALLOW_GROUP: ${{ inputs.allow_group }}
         run: |
           set -euo pipefail
           [ -n "${HF_TOKEN}" ] || { echo "::error::HF_TOKEN is not set"; exit 1; }
+          [[ "${ALLOW_GROUP}" =~ ^[a-z0-9_]*$ ]] || { echo "::error::allow_group must match ^[a-z0-9_]*$"; exit 1; }
+          gargs=()
+          [ "${GUARD}" = "spans" ] && gargs+=(--spans)
+          [ -n "${ALLOW_GROUP}" ] && gargs+=(--allow-group "${ALLOW_GROUP}")
           out="${RUNNER_TEMP}/registries"
-          python3 -u ml/build_family1_registry.py --out-dir "${out}" \
-              --check --publish --only "${FAMILIES}"
+          pub="${RUNNER_TEMP}/published"
+          mkdir -p "${pub}"
+          python3 -u ml/build_family1_registry.py --out-dir "${out}" --check
+          # guard every named registry BEFORE anything is uploaded
+          for f in $(echo "${FAMILIES}" | tr ',' ' '); do
+            rel=$(python3 -c "import sys; sys.path.insert(0,'ml'); from family1.adapters import FAMILIES as F; import build_family1_registry as r; c=sys.argv[1]; print(f'tensors/{F[c][2]}/{r.REGISTRY_NAME[c]}')" "$f")
+            name=$(basename "${rel}")
+            if curl -fsSL -o "${pub}/${name}" "https://huggingface.co/datasets/chfrank/earth-tensors/resolve/main/${rel}"; then
+              echo "== guard ${rel} (${GUARD}${ALLOW_GROUP:+, allow ${ALLOW_GROUP}})"
+              python3 ml/registry_guard.py "${pub}/${name}" "${out}/${name}" "${gargs[@]}"
+            else
+              echo "::notice::${rel} is not on the Hub yet — nothing to guard against"
+            fi
+          done
+          for f in $(echo "${FAMILIES}" | tr ',' ' '); do
+            python3 - "$f" "${out}" <<'PY'
+          import os, sys
+          sys.path.insert(0, "ml")
+          import build_family1_registry as r
+          code, out = sys.argv[1], sys.argv[2]
+          r.publish_one(os.path.join(out, r.REGISTRY_NAME[code]), code)
+          PY
+          done
           for f in $(echo "${FAMILIES}" | tr ',' ' '); do
             python3 - "$f" <<'PY'
           import json, sys, urllib.request
@@ -90,6 +135,7 @@ jobs:
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
           HF_HUB_DISABLE_XET: "1"
+          GUARD: ${{ inputs.guard }}
         run: |
           set -euo pipefail
           d="${RUNNER_TEMP}/reg10"
@@ -98,7 +144,9 @@ jobs:
             https://huggingface.co/datasets/chfrank/earth-tensors/resolve/main/tensors/family10_2/family10.json
           python3 -u ml/build_family10_registry.py --work "${d}/work" \
               --out "${d}/family10.json"
-          python3 ml/registry_guard.py "${d}/published.json" "${d}/family10.json"
+          gargs=()
+          [ "${GUARD}" = "spans" ] && gargs+=(--spans)
+          python3 ml/registry_guard.py "${d}/published.json" "${d}/family10.json" "${gargs[@]}"
           python3 - "${d}/family10.json" <<'PY'
           import sys
           sys.path.insert(0, "ml")
