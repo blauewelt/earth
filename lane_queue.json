@@ -1,5 +1,76 @@
 {
- "pending": [],
+ "pending": [
+  {
+   "store": "glorys025d",
+   "stage": "index,fetch",
+   "start": "1992-12-29",
+   "end": "1996-12-31",
+   "runner": "ubuntu-latest",
+   "extra_args": "--push-parts",
+   "adapter_env": "",
+   "retries": 2
+  },
+  {
+   "store": "glorys025d",
+   "stage": "index,fetch",
+   "start": "1997-01-01",
+   "end": "2000-12-31",
+   "runner": "ubuntu-latest",
+   "extra_args": "--push-parts",
+   "adapter_env": "",
+   "retries": 2
+  },
+  {
+   "store": "glorys025d",
+   "stage": "index,fetch",
+   "start": "2001-01-01",
+   "end": "2004-12-31",
+   "runner": "ubuntu-latest",
+   "extra_args": "--push-parts",
+   "adapter_env": "",
+   "retries": 2
+  },
+  {
+   "store": "glorys025d",
+   "stage": "index,fetch",
+   "start": "2005-01-01",
+   "end": "2008-12-31",
+   "runner": "ubuntu-latest",
+   "extra_args": "--push-parts",
+   "adapter_env": "",
+   "retries": 2
+  },
+  {
+   "store": "glorys025d",
+   "stage": "index,fetch",
+   "start": "2009-01-01",
+   "end": "2012-12-31",
+   "runner": "ubuntu-latest",
+   "extra_args": "--push-parts",
+   "adapter_env": "",
+   "retries": 2
+  },
+  {
+   "store": "glorys025d",
+   "stage": "index,fetch",
+   "start": "2017-01-01",
+   "end": "2020-12-31",
+   "runner": "ubuntu-latest",
+   "extra_args": "--push-parts",
+   "adapter_env": "",
+   "retries": 2
+  },
+  {
+   "store": "glorys025d",
+   "stage": "index,fetch",
+   "start": "2021-01-01",
+   "end": "2024-12-31",
+   "runner": "ubuntu-latest",
+   "extra_args": "--push-parts",
+   "adapter_env": "",
+   "retries": 2
+  }
+ ],
  "dispatched": [
   {
    "store": "oisst025d",
