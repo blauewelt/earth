@@ -1,0 +1,80 @@
+  ::warning::glorys025d: 2014 bin 2356 — PENTAD CONSISTENCY REFUSED: the five daily frames of bin 2356 (2014-04-03) do not reproduce family7_global025_pentad_l2 within float16 rounding: {"log_mld": {"cells": 692732, "nan_mismatch": 1, "max_abs_diff": 0.09796329964267114, "max_excess": 0.09565855967706377}}
+  [fetch glorys025d (tier G)] glorys025d 2014 glorys025d bin 2357  501.4s
+  ::warning::glorys025d: 2014 bin 2359 — PENTAD CONSISTENCY REFUSED: the five daily frames of bin 2359 (2014-04-18) do not reproduce family7_global025_pentad_l2 within float16 rounding: {"log_mld": {"cells": 692829, "nan_mismatch": 1, "max_abs_diff": 0.0972701986498481, "max_excess": 0.09496542701924152}}
+  ::warning::glorys025d: 2014 bin 2363 — PENTAD CONSISTENCY REFUSED: the five daily frames of bin 2363 (2014-05-08) do not reproduce family7_global025_pentad_l2 within float16 rounding: {"log_mld": {"cells": 693198, "nan_mismatch": 0, "max_abs_diff": 0.09826012097000536, "max_excess": 0.09595545271630794}}
+  ::warning::glorys025d: 2014 bin 2364 — PENTAD CONSISTENCY REFUSED: the five daily frames of bin 2364 (2014-05-13) do not reproduce family7_global025_pentad_l2 within float16 rounding: {"log_mld": {"cells": 693185, "nan_mismatch": 0, "max_abs_diff": 0.0962903072140735, "max_excess": 0.09398561753993545}}
+  [fetch glorys025d (tier G)] glorys025d 2014 glorys025d bin 2365  538.4s
+  ::warning::glorys025d: 2014 bin 2367 — PENTAD CONSISTENCY REFUSED: the five daily frames of bin 2367 (2014-05-28) do not reproduce family7_global025_pentad_l2 within float16 rounding: {"log_mld": {"cells": 693236, "nan_mismatch": 1, "max_abs_diff": 0.22255003451784505, "max_excess": 0.22028589641028098}}
+  [fetch glorys025d (tier G)] glorys025d 2014 glorys025d bin 2371  570.4s
+  [fetch glorys025d (tier G)] glorys025d 2014 glorys025d bin 2376  597.1s
+  ::warning::glorys025d: 2014 bin 2379 — PENTAD CONSISTENCY REFUSED: the five daily frames of bin 2379 (2014-07-27) do not reproduce family7_global025_pentad_l2 within float16 rounding: {"log_mld": {"cells": 693308, "nan_mismatch": 0, "max_abs_diff": 0.22198564719225544, "max_excess": 0.22113234537023507}}
+  ::warning::glorys025d: 2014 bin 2380 — PENTAD CONSISTENCY REFUSED: the five daily frames of bin 2380 (2014-08-01) do not reproduce family7_global025_pentad_l2 within float16 rounding: {"log_mld": {"cells": 693304, "nan_mismatch": 0, "max_abs_diff": 0.09691897714321919, "max_excess": 0.09594348428023448}}
+  ::warning::glorys025d: 2014 bin 2381 — PENTAD CONSISTENCY REFUSED: the five daily frames of bin 2381 (2014-08-06) do not reproduce family7_global025_pentad_l2 within float16 rounding: {"log_mld": {"cells": 693290, "nan_mismatch": 0, "max_abs_diff": 0.09707751818627633, "max_excess": 0.09607136429082913}}
+  [fetch glorys025d (tier G)] glorys025d 2014 glorys025d bin 2384  631.1s
+  ::warning::glorys025d: 2014 bin 2385 — PENTAD CONSISTENCY REFUSED: the five daily frames of bin 2385 (2014-08-26) do not reproduce family7_global025_pentad_l2 within float16 rounding: {"log_mld": {"cells": 693283, "nan_mismatch": 1, "max_abs_diff": 0.002043950553822782, "max_excess": -9.937331323605064e-05}}
+  [fetch glorys025d (tier G)] glorys025d 2014 glorys025d bin 2390  662.0s
+  [fetch glorys025d (tier G)] glorys025d 2014 glorys025d bin 2395  690.9s
+  [fetch glorys025d (tier G)] glorys025d 2014 glorys025d bin 2400  722.2s
+  [fetch glorys025d (tier G)] glorys025d 2014 glorys025d bin 2405  749.7s
+  [fetch glorys025d (tier G)] glorys025d 2014 glorys025d bin 2410  776.5s
+  ::warning::2014: NOT MARKED — 18 input(s) could not be read (2014 bin 2339; 2014 bin 2340; 2014 bin 2341; 2014 bin 2345 …); the retry clears the year and fetches it whole
+  [fetch glorys025d (tier G)] glorys025d 2015 glorys025d bin 2415  798.2s
+  [fetch glorys025d (tier G)] glorys025d 2015 glorys025d bin 2420  826.5s
+  ::warning::glorys025d: 2015 bin 2421 — PENTAD CONSISTENCY REFUSED: the five daily frames of bin 2421 (2015-02-22) do not reproduce family7_global025_pentad_l2 within float16 rounding: {"log_mld": {"cells": 691904, "nan_mismatch": 0, "max_abs_diff": 0.09648968065894659, "max_excess": 0.0941849723583384}}
+  ::warning::glorys025d: 2015 bin 2422 — PENTAD CONSISTENCY REFUSED: the five daily frames of bin 2422 (2015-02-27) do not reproduce family7_global025_pentad_l2 within float16 rounding: {"log_mld": {"cells": 691753, "nan_mismatch": 0, "max_abs_diff": 0.22075580063629863, "max_excess": 0.21845115194039483}}
+  ::warning::glorys025d: 2015 bin 2423 — PENTAD CONSISTENCY REFUSED: the five daily frames of bin 2423 (2015-03-04) do not reproduce family7_global025_pentad_l2 within float16 rounding: {"log_mld": {"cells": 691606, "nan_mismatch": 1, "max_abs_diff": 0.0019160242254057103, "max_excess": -9.05796985445509e-05}}
+  ::warning::glorys025d: 2015 bin 2425 — PENTAD CONSISTENCY REFUSED: the five daily frames of bin 2425 (2015-03-14) do not reproduce family7_global025_pentad_l2 within float16 rounding: {"log_mld": {"cells": 691587, "nan_mismatch": 0, "max_abs_diff": 0.22218580703086088, "max_excess": 0.22005623002645208}}
+  ::warning::glorys025d: 2015 bin 2427 — PENTAD CONSISTENCY REFUSED: the five daily frames of bin 2427 (2015-03-24) do not reproduce family7_global025_pentad_l2 within float16 rounding: {"log_mld": {"cells": 692218, "nan_mismatch": 1, "max_abs_diff": 0.22172942484593072, "max_excess": 0.2194246597345887}}
+  [fetch glorys025d (tier G)] glorys025d 2015 glorys025d bin 2430  877.6s
+  ::warning::glorys025d: 2015 bin 2431 — PENTAD CONSISTENCY REFUSED: the five daily frames of bin 2431 (2015-04-13) do not reproduce family7_global025_pentad_l2 within float16 rounding: {"log_mld": {"cells": 692592, "nan_mismatch": 0, "max_abs_diff": 0.09618620267801026, "max_excess": 0.09388143104740368}}
+  ::warning::glorys025d: 2015 bin 2432 — PENTAD CONSISTENCY REFUSED: the five daily frames of bin 2432 (2015-04-18) do not reproduce family7_global025_pentad_l2 within float16 rounding: {"log_mld": {"cells": 692778, "nan_mismatch": 1, "max_abs_diff": 0.09835786570489402, "max_excess": 0.09622843491827567}}
+  ::warning::glorys025d: 2015 bin 2434 — PENTAD CONSISTENCY REFUSED: the five daily frames of bin 2434 (2015-04-28) do not reproduce family7_global025_pentad_l2 within float16 rounding: {"log_mld": {"cells": 693197, "nan_mismatch": 0, "max_abs_diff": 0.09723338101416656, "max_excess": 0.09623400073826055}}
+  [fetch glorys025d (tier G)] glorys025d 2015 glorys025d bin 2438  925.0s
+  ::warning::glorys025d: 2015 bin 2439 — PENTAD CONSISTENCY REFUSED: the five daily frames of bin 2439 (2015-05-23) do not reproduce family7_global025_pentad_l2 within float16 rounding: {"log_mld": {"cells": 693300, "nan_mismatch": 0, "max_abs_diff": 0.22163852355699287, "max_excess": 0.2195090415475817}}
+  [fetch glorys025d (tier G)] glorys025d 2015 glorys025d bin 2444  955.9s
+  [fetch glorys025d (tier G)] glorys025d 2015 glorys025d bin 2449  987.6s
+  ::warning::glorys025d: 2015 bin 2452 — PENTAD CONSISTENCY REFUSED: the five daily frames of bin 2452 (2015-07-27) do not reproduce family7_global025_pentad_l2 within float16 rounding: {"log_mld": {"cells": 693271, "nan_mismatch": 0, "max_abs_diff": 0.09717052358767012, "max_excess": 0.0965148073734408}}
+  [fetch glorys025d (tier G)] glorys025d 2015 glorys025d bin 2455  1020.4s
+  [fetch glorys025d (tier G)] glorys025d 2015 glorys025d bin 2460  1051.0s
+  ::warning::glorys025d: 2015 bin 2461 — PENTAD CONSISTENCY REFUSED: the five daily frames of bin 2461 (2015-09-10) do not reproduce family7_global025_pentad_l2 within float16 rounding: {"log_mld": {"cells": 693126, "nan_mismatch": 0, "max_abs_diff": 0.22212663974579466, "max_excess": 0.22140986526402343}}
+  ::warning::glorys025d: 2015 bin 2462 — PENTAD CONSISTENCY REFUSED: the five daily frames of bin 2462 (2015-09-15) do not reproduce family7_global025_pentad_l2 within float16 rounding: {"log_mld": {"cells": 693004, "nan_mismatch": 1, "max_abs_diff": 0.001992924358102055, "max_excess": -8.257742596927083e-05}}
+  ::warning::glorys025d: 2015 bin 2467 — PENTAD CONSISTENCY REFUSED: the five daily frames of bin 2467 (2015-10-10) do not reproduce family7_global025_pentad_l2 within float16 rounding: {"log_mld": {"cells": 693199, "nan_mismatch": 1, "max_abs_diff": 0.001909658056288066, "max_excess": -8.399227372832383e-05}}
+  ::warning::glorys025d: 2015 bin 2468 — PENTAD CONSISTENCY REFUSED: the five daily frames of bin 2468 (2015-10-15) do not reproduce family7_global025_pentad_l2 within float16 rounding: {"log_mld": {"cells": 693246, "nan_mismatch": 0, "max_abs_diff": 0.09681129850852166, "max_excess": 0.09597230178644864}}
+  [fetch glorys025d (tier G)] glorys025d 2015 glorys025d bin 2469  1094.1s
+  ::warning::glorys025d: 2015 bin 2470 — PENTAD CONSISTENCY REFUSED: the five daily frames of bin 2470 (2015-10-25) do not reproduce family7_global025_pentad_l2 within float16 rounding: {"log_mld": {"cells": 693205, "nan_mismatch": 0, "max_abs_diff": 0.1258838238757054, "max_excess": 0.12375443779261533}}
+  [fetch glorys025d (tier G)] glorys025d 2015 glorys025d bin 2475  1124.2s
+  [fetch glorys025d (tier G)] glorys025d 2015 glorys025d bin 2480  1152.1s
+  ::warning::2015: NOT MARKED — 15 input(s) could not be read (2015 bin 2421; 2015 bin 2422; 2015 bin 2423; 2015 bin 2425 …); the retry clears the year and fetches it whole
+  [fetch glorys025d (tier G)] glorys025d 2016 glorys025d bin 2488  1192.5s
+  [fetch glorys025d (tier G)] glorys025d 2016 glorys025d bin 2493  1220.4s
+  ::warning::glorys025d: 2016 bin 2496 — PENTAD CONSISTENCY REFUSED: the five daily frames of bin 2496 (2016-03-03) do not reproduce family7_global025_pentad_l2 within float16 rounding: {"log_mld": {"cells": 692036, "nan_mismatch": 1, "max_abs_diff": 0.0020735577157857676, "max_excess": -6.875184607953904e-05}}
+  ::warning::glorys025d: 2016 bin 2497 — PENTAD CONSISTENCY REFUSED: the five daily frames of bin 2497 (2016-03-08) do not reproduce family7_global025_pentad_l2 within float16 rounding: {"log_mld": {"cells": 691902, "nan_mismatch": 0, "max_abs_diff": 0.09841058690083448, "max_excess": 0.09610581806419842}}
+  ::warning::glorys025d: 2016 bin 2498 — PENTAD CONSISTENCY REFUSED: the five daily frames of bin 2498 (2016-03-13) do not reproduce family7_global025_pentad_l2 within float16 rounding: {"log_mld": {"cells": 691853, "nan_mismatch": 0, "max_abs_diff": 0.0966282452284477, "max_excess": 0.09432350433151683}}
+  ::warning::glorys025d: 2016 bin 2501 — PENTAD CONSISTENCY REFUSED: the five daily frames of bin 2501 (2016-03-28) do not reproduce family7_global025_pentad_l2 within float16 rounding: {"log_mld": {"cells": 692103, "nan_mismatch": 0, "max_abs_diff": 0.09786458878898108, "max_excess": 0.09573518128545036}}
+  ::warning::glorys025d: 2016 bin 2502 — PENTAD CONSISTENCY REFUSED: the five daily frames of bin 2502 (2016-04-02) do not reproduce family7_global025_pentad_l2 within float16 rounding: {"log_mld": {"cells": 692355, "nan_mismatch": 1, "max_abs_diff": 0.09769649363828581, "max_excess": 0.09539182910988242}}
+  ::warning::glorys025d: 2016 bin 2503 — PENTAD CONSISTENCY REFUSED: the five daily frames of bin 2503 (2016-04-07) do not reproduce family7_global025_pentad_l2 within float16 rounding: {"log_mld": {"cells": 692444, "nan_mismatch": 1, "max_abs_diff": 0.002079187387890702, "max_excess": -5.9211790948725555e-05}}
+  [fetch glorys025d (tier G)] glorys025d 2016 glorys025d bin 2504  1272.5s
+  [fetch glorys025d (tier G)] glorys025d 2016 glorys025d bin 2509  1299.4s
+  [fetch glorys025d (tier G)] glorys025d 2016 glorys025d bin 2514  1324.6s
+  ::warning::glorys025d: 2016 bin 2516 — PENTAD CONSISTENCY REFUSED: the five daily frames of bin 2516 (2016-06-11) do not reproduce family7_global025_pentad_l2 within float16 rounding: {"log_mld": {"cells": 693310, "nan_mismatch": 0, "max_abs_diff": 0.09644784129798678, "max_excess": 0.09493818298146474}}
+  [fetch glorys025d (tier G)] glorys025d 2016 glorys025d bin 2520  1353.8s
+  [fetch glorys025d (tier G)] glorys025d 2016 glorys025d bin 2525  1370.3s
+  ::warning::glorys025d: 2016 bin 2526 — PENTAD CONSISTENCY REFUSED: the five daily frames of bin 2526 (2016-07-31) do not reproduce family7_global025_pentad_l2 within float16 rounding: {"log_mld": {"cells": 693195, "nan_mismatch": 0, "max_abs_diff": 0.09701074762878914, "max_excess": 0.0958585494746723}}
+  [fetch glorys025d (tier G)] glorys025d 2016 glorys025d bin 2531  1400.0s
+  [fetch glorys025d (tier G)] glorys025d 2016 glorys025d bin 2536  1426.8s
+  [fetch glorys025d (tier G)] glorys025d 2016 glorys025d bin 2541  1454.9s
+  [fetch glorys025d (tier G)] glorys025d 2016 glorys025d bin 2546  1483.5s
+  [fetch glorys025d (tier G)] glorys025d 2016 glorys025d bin 2551  1511.8s
+  [fetch glorys025d (tier G)] glorys025d 2016 glorys025d bin 2556  1539.0s
+  ::warning::2016: NOT MARKED — 8 input(s) could not be read (2016 bin 2496; 2016 bin 2497; 2016 bin 2498; 2016 bin 2501 …); the retry clears the year and fetches it whole
+stage fetch (glorys025d): 49 input(s) could not be read, and every one of them is a hole nothing downstream can see — a store of point observations has no empty cell to look at, so a month, a dataset-year or a mission-year that did not arrive is indistinguishable from an ocean nobody sampled. REFUSING to mark the stage.
+  2013 bin 2273: PENTAD CONSISTENCY REFUSED: the five daily frames of bin 2273 (2013-02-12) do not reproduce family7_global025_pentad_l2 within float16 rounding: {"log_mld": {"cells": 693069, "nan_mismatch": 0, "max_abs_diff": 0.2229552940697448, "max_excess": 0.22065062022810633}}
+  2013 bin 2276: PENTAD CONSISTENCY REFUSED: the five daily frames of bin 2276 (2013-02-27) do not reproduce family7_global025_pentad_l2 within float16 rounding: {"log_mld": {"cells": 692889, "nan_mismatch": 1, "max_abs_diff": 0.12554742466435975, "max_excess": 0.12324270053125198}}
+  2013 bin 2279: PENTAD CONSISTENCY REFUSED: the five daily frames of bin 2279 (2013-03-14) do not reproduce family7_global025_pentad_l2 within float16 rounding: {"log_mld": {"cells": 692695, "nan_mismatch": 1, "max_abs_diff": 0.09653511776436519, "max_excess": 0.0942305323984598}}
+  2013 bin 2285: PENTAD CONSISTENCY REFUSED: the five daily frames of bin 2285 (2013-04-13) do not reproduce family7_global025_pentad_l2 within float16 rounding: {"log_mld": {"cells": 692534, "nan_mismatch": 0, "max_abs_diff": 0.09748818786144398, "max_excess": 0.09535866673644554}}
+  2013 bin 2286: PENTAD CONSISTENCY REFUSED: the five daily frames of bin 2286 (2013-04-18) do not reproduce family7_global025_pentad_l2 within float16 rounding: {"log_mld": {"cells": 692553, "nan_mismatch": 1, "max_abs_diff": 0.002048945845618544, "max_excess": -9.413872463310917e-05}}
+  2013 bin 2287: PENTAD CONSISTENCY REFUSED: the five daily frames of bin 2287 (2013-04-23) do not reproduce family7_global025_pentad_l2 within float16 rounding: {"log_mld": {"cells": 692607, "nan_mismatch": 1, "max_abs_diff": 0.0019615182378309726, "max_excess": -7.303568550872286e-05}}
+  2013 bin 2288: PENTAD CONSISTENCY REFUSED: the five daily frames of bin 2288 (2013-04-28) do not reproduce family7_global025_pentad_l2 within float16 rounding: {"log_mld": {"cells": 692586, "nan_mismatch": 0, "max_abs_diff": 0.0970729794193228, "max_excess": 0.094943713476965}}
+  2013 bin 2289: PENTAD CONSISTENCY REFUSED: the five daily frames of bin 2289 (2013-05-03) do not reproduce family7_global025_pentad_l2 within float16 rounding: {"log_mld": {"cells": 692679, "nan_mismatch": 0, "max_abs_diff": 0.12468208817688264, "max_excess": 0.12312854156392371}}
+  … and 41 more
+The year(s) [2013, 2014, 2015, 2016] carry no `parts/<year>.done` marker and no counts.json, so nothing will assemble or publish them and a re-run with the SAME --work value retries exactly those — the years that DID land are marked and skipped. Two ways on: (1) fix the source (a moved ERDDAP dataset id, a short mirror, a filter that does not match the remote layout) and re-run; or (2) pass --allow-missing-years if a store with those inputs missing is genuinely what you want.
