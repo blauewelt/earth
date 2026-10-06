@@ -1,5 +1,6 @@
 {
- "pending": [
+ "pending": [],
+ "dispatched": [
   {
    "store": "glorys025d",
    "stage": "index,fetch",
@@ -8,7 +9,8 @@
    "runner": "ubuntu-latest",
    "extra_args": "--push-parts",
    "adapter_env": "",
-   "retries": 2
+   "retries": 2,
+   "at": "2026-10-06T14:24:42.962Z"
   },
   {
    "store": "glorys025d",
@@ -18,7 +20,8 @@
    "runner": "ubuntu-latest",
    "extra_args": "--push-parts",
    "adapter_env": "",
-   "retries": 2
+   "retries": 2,
+   "at": "2026-10-06T14:24:46.900Z"
   },
   {
    "store": "glorys025d",
@@ -28,7 +31,8 @@
    "runner": "ubuntu-latest",
    "extra_args": "--push-parts",
    "adapter_env": "",
-   "retries": 2
+   "retries": 2,
+   "at": "2026-10-06T14:24:51.042Z"
   },
   {
    "store": "oisst025d",
@@ -38,7 +42,8 @@
    "runner": "ubuntu-latest",
    "extra_args": "--push-parts",
    "adapter_env": "",
-   "retries": 2
+   "retries": 2,
+   "at": "2026-10-06T14:24:54.866Z"
   },
   {
    "store": "oisst025d",
@@ -48,7 +53,8 @@
    "runner": "ubuntu-latest",
    "extra_args": "--push-parts",
    "adapter_env": "",
-   "retries": 2
+   "retries": 2,
+   "at": "2026-10-06T14:24:58.825Z"
   },
   {
    "store": "oisst025d",
@@ -58,7 +64,8 @@
    "runner": "ubuntu-latest",
    "extra_args": "--push-parts",
    "adapter_env": "",
-   "retries": 2
+   "retries": 2,
+   "at": "2026-10-06T14:25:02.919Z"
   },
   {
    "store": "ncep100d",
@@ -68,7 +75,8 @@
    "runner": "ubuntu-latest",
    "extra_args": "--push-parts",
    "adapter_env": "",
-   "retries": 2
+   "retries": 2,
+   "at": "2026-10-06T14:25:07.049Z"
   },
   {
    "store": "ncep100d",
@@ -78,7 +86,8 @@
    "runner": "ubuntu-latest",
    "extra_args": "--push-parts",
    "adapter_env": "",
-   "retries": 2
+   "retries": 2,
+   "at": "2026-10-06T14:25:10.951Z"
   },
   {
    "store": "ncep100d",
@@ -88,7 +97,8 @@
    "runner": "ubuntu-latest",
    "extra_args": "--push-parts",
    "adapter_env": "",
-   "retries": 2
+   "retries": 2,
+   "at": "2026-10-06T14:25:15.066Z"
   },
   {
    "store": "occci025d",
@@ -98,7 +108,8 @@
    "runner": "ubuntu-latest",
    "extra_args": "--push-parts",
    "adapter_env": "",
-   "retries": 2
+   "retries": 2,
+   "at": "2026-10-06T14:25:18.979Z"
   },
   {
    "store": "occci025d",
@@ -108,7 +119,8 @@
    "runner": "ubuntu-latest",
    "extra_args": "--push-parts",
    "adapter_env": "",
-   "retries": 2
+   "retries": 2,
+   "at": "2026-10-06T14:25:23.001Z"
   },
   {
    "store": "occci025d",
@@ -118,10 +130,10 @@
    "runner": "ubuntu-latest",
    "extra_args": "--push-parts",
    "adapter_env": "",
-   "retries": 2
+   "retries": 2,
+   "at": "2026-10-06T14:25:27.170Z"
   }
  ],
- "dispatched": [],
  "done": [
   {
    "store": "sst_acspo02",
