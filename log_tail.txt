@@ -1,0 +1,79 @@
+store     oisst025d — NOAA OISST v2.1 sea-surface temperature and sea-ice concentration, DAILY, 0.25 degrees — family 7.2d
+family    family7_2d (7.2d) · public -> chfrank/earth-tensors:tensors/family7_2d/oisst025d
+axis      1982-01-01 .. 2026-10-04  bins 0..3269 · time_s int32 (schema 2)
+lane      (unnamed) — whole calendar year(s), no group subset: the year folder's own files, as every store on the Hub holds them
+channels  C=2: sst, sea_ice
+tier G    sharded, groups ['oisst025d'], F=5 x 86400 s, float16, years (by bin start) 1982..2026
+work      /opt/runner/_work/earth/earth/ml/cache/family7_2d
+
+=== stage check (oisst025d) ===
+  [check oisst025d (tier G)] start  0/0  0.0s
+  [check oisst025d (tier G)] check: sha256 200/6542  0.3s
+  [check oisst025d (tier G)] check: sha256 400/6542  0.5s
+  [check oisst025d (tier G)] check: sha256 600/6542  0.7s
+  [check oisst025d (tier G)] check: sha256 800/6542  1.0s
+  [check oisst025d (tier G)] check: sha256 1000/6542  1.2s
+  [check oisst025d (tier G)] check: sha256 1200/6542  1.4s
+  [check oisst025d (tier G)] check: sha256 1400/6542  1.6s
+  [check oisst025d (tier G)] check: sha256 1600/6542  1.8s
+  [check oisst025d (tier G)] check: sha256 1800/6542  2.0s
+  [check oisst025d (tier G)] check: sha256 2000/6542  2.2s
+  [check oisst025d (tier G)] check: sha256 2200/6542  2.4s
+  [check oisst025d (tier G)] check: sha256 2400/6542  2.6s
+  [check oisst025d (tier G)] check: sha256 2600/6542  2.8s
+  [check oisst025d (tier G)] check: sha256 2800/6542  3.1s
+  [check oisst025d (tier G)] check: sha256 3000/6542  3.3s
+  [check oisst025d (tier G)] check: sha256 3200/6542  3.5s
+  [check oisst025d (tier G)] check: sha256 3400/6542  3.7s
+  [check oisst025d (tier G)] check: sha256 3600/6542  3.9s
+  [check oisst025d (tier G)] check: sha256 3800/6542  4.1s
+  [check oisst025d (tier G)] check: sha256 4000/6542  4.3s
+  [check oisst025d (tier G)] check: sha256 4200/6542  4.5s
+  [check oisst025d (tier G)] check: sha256 4400/6542  4.7s
+  [check oisst025d (tier G)] check: sha256 4600/6542  4.9s
+  [check oisst025d (tier G)] check: sha256 4800/6542  5.1s
+  [check oisst025d (tier G)] check: sha256 5000/6542  5.3s
+  [check oisst025d (tier G)] check: sha256 5200/6542  5.5s
+  [check oisst025d (tier G)] check: sha256 5400/6542  5.7s
+  [check oisst025d (tier G)] check: sha256 5600/6542  5.9s
+  [check oisst025d (tier G)] check: sha256 5800/6542  6.2s
+  [check oisst025d (tier G)] check: sha256 6000/6542  6.4s
+  [check oisst025d (tier G)] check: sha256 6200/6542  6.6s
+  [check oisst025d (tier G)] check: sha256 6400/6542  6.8s
+  [check oisst025d (tier G)] check: sha256 6542/6542  6.9s
+  [check oisst025d (tier G)] check: check oisst025d 100/3270  42.5s
+  [check oisst025d (tier G)] check: check oisst025d 200/3270  77.8s
+  [check oisst025d (tier G)] check: check oisst025d 300/3270  113.2s
+  [check oisst025d (tier G)] check: check oisst025d 400/3270  149.1s
+  [check oisst025d (tier G)] check: check oisst025d 500/3270  184.3s
+  [check oisst025d (tier G)] check: check oisst025d 600/3270  219.7s
+  [check oisst025d (tier G)] check: check oisst025d 700/3270  255.1s
+  [check oisst025d (tier G)] check: check oisst025d 800/3270  290.5s
+  [check oisst025d (tier G)] check: check oisst025d 900/3270  326.0s
+  [check oisst025d (tier G)] check: check oisst025d 1000/3270  361.2s
+  [check oisst025d (tier G)] check: check oisst025d 1100/3270  396.6s
+  [check oisst025d (tier G)] check: check oisst025d 1200/3270  432.1s
+  [check oisst025d (tier G)] check: check oisst025d 1300/3270  467.4s
+  [check oisst025d (tier G)] check: check oisst025d 1400/3270  502.5s
+  [check oisst025d (tier G)] check: check oisst025d 1500/3270  537.9s
+  [check oisst025d (tier G)] check: check oisst025d 1600/3270  573.4s
+  [check oisst025d (tier G)] check: check oisst025d 1700/3270  608.7s
+  [check oisst025d (tier G)] check: check oisst025d 1800/3270  646.0s
+  [check oisst025d (tier G)] check: check oisst025d 1900/3270  682.7s
+  [check oisst025d (tier G)] check: check oisst025d 2000/3270  720.2s
+  [check oisst025d (tier G)] check: check oisst025d 2100/3270  756.0s
+  [check oisst025d (tier G)] check: check oisst025d 2200/3270  791.8s
+  [check oisst025d (tier G)] check: check oisst025d 2300/3270  827.5s
+  [check oisst025d (tier G)] check: check oisst025d 2400/3270  863.2s
+  [check oisst025d (tier G)] check: check oisst025d 2500/3270  898.8s
+  [check oisst025d (tier G)] check: check oisst025d 2600/3270  935.0s
+  [check oisst025d (tier G)] check: check oisst025d 2700/3270  971.1s
+  [check oisst025d (tier G)] check: check oisst025d 2800/3270  1007.3s
+  [check oisst025d (tier G)] check: check oisst025d 2900/3270  1043.7s
+  [check oisst025d (tier G)] check: check oisst025d 3000/3270  1079.6s
+  [check oisst025d (tier G)] check: check oisst025d 3100/3270  1115.6s
+  [check oisst025d (tier G)] check: check oisst025d 3200/3270  1151.8s
+  [check oisst025d (tier G)] check: check oisst025d 3270/3270  1177.2s
+  hub: chfrank/earth-tensors with the token from $HF_TOKEN
+  check: oisst025d — 6542 file(s) verified, oisst025d: 294264 tile(s) decompressed, Hub chfrank/earth-tensors agrees
+=== stage check done in 1178.1s ===
