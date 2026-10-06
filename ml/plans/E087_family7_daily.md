@@ -470,3 +470,10 @@ decoded on a fresh box, and its sha256 map equals the published one for all
 4,214 files. ncep100d's full decode of the extended store is outstanding,
 blocked by box disk (BUILD_LOG). The Hub read-back passes at two pentad-era
 and two post-2024 instants per store. Both boxes are destroyed (≈ $0.64).
+
+**Closed, 2026-10-06 22:30Z.** ncep100d's full decode of the extended
+store passed on a hosted runner (#1056): 290,646 tiles decompressed, and
+the re-assembly's sha256 map equals the published store's for all 6,462
+files. All four stores are now fully checked. Two infrastructure fixes:
+`free_cache` frees `family7_2d/<store>` (`ml/free_cache.py`), and the
+queue keeper keeps a lane whose run it has seen out of the lost rule.

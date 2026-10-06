@@ -2110,3 +2110,33 @@ not run. What it does have:
 The full decode needs a box whose cache holds no other family-7.2d store. A
 `free_cache` that accepts `family7_2d/<store>` is the workflow fix that would
 have let one box do all four.
+
+**The three leftovers, closed (2026-10-06, late evening).**
+
+1. **ncep100d's full decode ran on a HOSTED runner, with no box.** #1055 had
+   died of ENOSPC on box 54516511. #1056 (index, fetch, assemble and check
+   from Hub parts on `ubuntu-latest`) pulled 45 years of parts in 532 s,
+   assembled them, and in 261 s decompressed every one of the 290,646 tiles
+   of 6,462 files (16,147 frames, 24.62 GB). The step does not compare with
+   the Hub when the work directory carries no publish marker, so the
+   comparison was made from the run's artifact: its store.json sha256 map
+   equals the published store.json's, all 6,462 files identical. That makes
+   the published store the one that was decoded in full. 17 minutes, no
+   cost. A tier-G store of this size fits a hosted runner (parts plus store
+   ≈ 49 GB against ~85 GB free), so a full check need not rent a box at all.
+2. **`free_cache` frees `family7_2d/<store>`** (`117a0f6`). The path rule
+   and the deletion moved from a shell `case family1_*/[a-z0-9_]*` to
+   `ml/free_cache.py`: `family[a-z0-9_]+/[a-z0-9_]+`, one slash, no dots,
+   resolved under the root, deleted only with publish.done. The old `*`
+   also matched `/` and `.`, so `family1_x/../..`-shaped items passed it.
+   `tests/test_free_cache.py` has 18 cases.
+3. **The stale runner `gpu-box-53879546` is deregistered** (204, after #1055
+   settled as cancelled). 12 offline registrations remain, all older ones
+   that this session did not create; no box is up except the owner's
+   stopped 47913006. **The queue keeper's #1040 duplicate is fixed**
+   (`e5327a3`). The tick at 15:11:48Z found #1026 in neither the
+   in-progress nor the completed listing as it finished, and the 30-minute
+   lost rule fired. A dispatched entry now remembers its run's id when the
+   run is first seen. It is matched by that id alone, fetched by id when the
+   listings miss it, and never declared lost. Five selftest checks were
+   added, and `tests/test_family1_queue.py` runs the selftest in the suite.
