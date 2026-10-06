@@ -1,5 +1,86 @@
 {
- "pending": [],
+ "pending": [
+  {
+   "store": "occci025d",
+   "stage": "index,fetch",
+   "start": "1997-01-01",
+   "end": "2000-12-31",
+   "runner": "ubuntu-latest",
+   "extra_args": "--push-parts",
+   "adapter_env": "",
+   "retries": 2
+  },
+  {
+   "store": "occci025d",
+   "stage": "index,fetch",
+   "start": "2001-01-01",
+   "end": "2004-12-31",
+   "runner": "ubuntu-latest",
+   "extra_args": "--push-parts",
+   "adapter_env": "",
+   "retries": 2
+  },
+  {
+   "store": "occci025d",
+   "stage": "index,fetch",
+   "start": "2005-01-01",
+   "end": "2008-12-31",
+   "runner": "ubuntu-latest",
+   "extra_args": "--push-parts",
+   "adapter_env": "",
+   "retries": 2
+  },
+  {
+   "store": "occci025d",
+   "stage": "index,fetch",
+   "start": "2009-01-01",
+   "end": "2012-12-31",
+   "runner": "ubuntu-latest",
+   "extra_args": "--push-parts",
+   "adapter_env": "",
+   "retries": 2
+  },
+  {
+   "store": "occci025d",
+   "stage": "index,fetch",
+   "start": "2013-01-01",
+   "end": "2014-12-31",
+   "runner": "ubuntu-latest",
+   "extra_args": "--push-parts",
+   "adapter_env": "",
+   "retries": 2
+  },
+  {
+   "store": "occci025d",
+   "stage": "index,fetch",
+   "start": "2016-01-01",
+   "end": "2019-12-31",
+   "runner": "ubuntu-latest",
+   "extra_args": "--push-parts",
+   "adapter_env": "",
+   "retries": 2
+  },
+  {
+   "store": "occci025d",
+   "stage": "index,fetch",
+   "start": "2020-01-01",
+   "end": "2022-12-31",
+   "runner": "ubuntu-latest",
+   "extra_args": "--push-parts",
+   "adapter_env": "",
+   "retries": 2
+  },
+  {
+   "store": "occci025d",
+   "stage": "index,fetch",
+   "start": "2023-01-01",
+   "end": "2024-12-31",
+   "runner": "ubuntu-latest",
+   "extra_args": "--push-parts",
+   "adapter_env": "",
+   "retries": 2
+  }
+ ],
  "dispatched": [],
  "done": [
   {
