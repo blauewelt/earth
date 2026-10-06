@@ -33,17 +33,6 @@
    "adapter_env": "",
    "retries": 2,
    "at": "2026-10-06T14:25:23.001Z"
-  },
-  {
-   "store": "occci025d",
-   "stage": "index,fetch",
-   "start": "2024-01-01",
-   "end": "2024-12-31",
-   "runner": "ubuntu-latest",
-   "extra_args": "--push-parts",
-   "adapter_env": "",
-   "retries": 2,
-   "at": "2026-10-06T14:25:27.170Z"
   }
  ],
  "done": [
@@ -4383,6 +4372,19 @@
    "at": "2026-10-06T14:24:51.042Z",
    "run_number": 1028,
    "finished": "2026-10-06T14:49:48Z"
+  },
+  {
+   "store": "occci025d",
+   "stage": "index,fetch",
+   "start": "2024-01-01",
+   "end": "2024-12-31",
+   "runner": "ubuntu-latest",
+   "extra_args": "--push-parts",
+   "adapter_env": "",
+   "retries": 2,
+   "at": "2026-10-06T14:25:27.170Z",
+   "run_number": 1037,
+   "finished": "2026-10-06T14:51:50Z"
   }
  ],
  "failed": [
