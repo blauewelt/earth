@@ -79,10 +79,12 @@ declaration, or a block table that is not increasing is a REFUSAL (the
 frame's input is noted absent and its year is not marked), never a skip.
 
 ERA5's OWN SMALL NEGATIVE HUMIDITIES ARE KEPT. The analysis carries a few
-slightly negative values in the tropical upper troposphere (January 2015:
-11 of 10.1 million, the lowest -0.0042 g/kg, at 100-200 hPa). They are
-ERA5's numbers, not corruption, so `q`'s lower bound is -0.01 g/kg rather
-than 0; a consumer that needs q >= 0 clips them itself.
+slightly negative values, mostly at 100-500 hPa (January 2015: 11 of 10.1
+million, the lowest -0.0042 g/kg; the first full build found 1,883 below
+-0.01 g/kg, the lowest seen -0.0134). They are ERA5's numbers, not
+corruption, so `q`'s lower bound is a sanity bound of -1.0 g/kg (decision
+D6, superseding D5's -0.01), every negative kept is counted, and a consumer
+that needs q >= 0 clips them itself.
 
 SPECIFIC HUMIDITY IS STORED IN g/kg. The archive's kg/kg runs from ~1e-6 in
 the stratosphere to ~0.02 at the surface, and float16's smallest NORMAL
@@ -144,12 +146,16 @@ F16_TINY = float(np.finfo(np.float16).tiny)  # 6.1035e-05, smallest normal
 #: (lo, hi) bounds IN THE STORED UNIT, plain-English name)
 VARIABLES = {
     "t": ("temperature", "K", 1.0, (150.0, 350.0), "air temperature"),
-    # the lower bound admits ERA5's OWN small negative humidities — measured
-    # in January 2015: 11 values, the lowest -0.0042 g/kg, all at 100-200 hPa
-    # in the tropics (a known numerical artefact of the analysis). They are
-    # kept as given; anything below -0.01 g/kg is treated as corrupt
+    # DECISION D6 (Chris, 2026-10-06; supersedes D5's -0.01): the lower bound
+    # is a pure SANITY bound, -1.0 g/kg. ERA5 carries small negative
+    # humidities of its own (a known numerical artefact of the analysis), and
+    # the first build under -0.01 g/kg stored 1,883 of them as missing — the
+    # lowest -0.0134 g/kg at 150 hPa — although they are genuine source
+    # values. Every negative value kept is counted per channel, and the
+    # record's minimum is measured (`negative_values_kept`,
+    # `max_negated_min_q_all`), so the true extent is a number, not a guess
     "q": ("specific_humidity", "g/kg (1000 x the archive's kg/kg)", 1000.0,
-          (-0.01, 40.0), "specific humidity"),
+          (-1.0, 40.0), "specific humidity"),
     "u": ("u_component_of_wind", "m/s (eastward)", 1.0, (-200.0, 200.0),
           "eastward wind"),
     "v": ("v_component_of_wind", "m/s (northward)", 1.0, (-200.0, 200.0),
@@ -968,6 +974,12 @@ class ERA5Base(sh.GridAdapter):
             "end": "the 0.25-degree archive's root attribute "
                    "`valid_time_stop`; ERA5T after it is not admitted"}
         sp["exception"] = self.exception
+        if self.var == "q":
+            # in the spec, so parts written under another bound are refused
+            # by the assembler ("written for a different grid declaration")
+            sp["bounds_rule"] = (
+                "q lower bound -1.0 g/kg, a sanity bound (decision D6, "
+                "2026-10-06; D5's -0.01 masked 1,883 genuine ERA5 values)")
         return out
 
     # ------------------------------------------------------------- sources --
@@ -1169,6 +1181,16 @@ class ERA5Base(sh.GridAdapter):
                            & (mag[:, k] > 0)).sum())
                 if sub:
                     counts.setdefault("f16_subnormal_values", {})[nm] = sub
+                if self.var == "q":
+                    neg = int((ok & (col < 0)).sum())
+                    if neg:
+                        counts.setdefault("negative_values_kept", {})[nm] = neg
+            if self.var == "q":
+                fin = np.isfinite(v)
+                if fin.any():
+                    # `max_` merges as a maximum, so over a year (and the
+                    # store) this is minus the lowest humidity kept
+                    counts["max_negated_min_q_all"] = float(-v[fin].min())
             yield g, b, f, v.reshape(arr.shape), counts
 
     # ---------------------------------------------------------------- smoke --

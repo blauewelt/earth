@@ -457,3 +457,72 @@ def test_the_two_sources_agree_at_the_seam_to_the_fields_own_scale(archive):
     # the point value by < 0.5 K; the levels are exact copies of each other
     assert d[2:-2].max() < 1.0
     assert np.isfinite(b).all()
+
+
+# ======================================== D6: negative humidity is KEPT ====
+def test_q_bound_is_the_d6_sanity_bound():
+    ad = fam.REGISTRY["era5_q"]()
+    assert all(c[2] == -1.0 and c[3] == 40.0 for c in ad.channels)
+    assert "D6" in ad.specs()["era5_q"]["bounds_rule"]
+    # the other three stores' specs carry no bounds rule (unchanged)
+    assert "bounds_rule" not in fam.REGISTRY["era5_t"]().specs()["era5_t"]
+
+
+def _negative_q(monkeypatch):
+    real = e5.smoke_value
+
+    def value(var, level, lat, lon, hours):
+        v = real(var, level, lat, lon, hours)
+        # pull 50 hPa below zero at high latitudes: -0.01 .. -0.3 g/kg, the
+        # range D5 masked and D6 keeps
+        return v - 4.5e-4 * (level == 50) if var == "q" else v
+    monkeypatch.setattr(e5, "smoke_value", value)
+
+
+def test_negative_humidities_are_kept_counted_and_their_minimum_measured(
+        tmp_path, monkeypatch):
+    import json
+    _negative_q(monkeypatch)
+    res = b1.run_smoke("era5_q", root=str(tmp_path / "s"), keep=True,
+                       probe=False)
+    sm = json.load(open(os.path.join(res["work"], "era5_q", "era5_q",
+                                     "store.json")))
+    c = sm["counts"]
+    assert "out_of_bounds" not in c                     # nothing masked
+    assert c["negative_values_kept"]["q_50"] > 0
+    assert set(c["negative_values_kept"]) == {"q_50"}
+    lowest = -c["max_negated_min_q_all"]
+    assert lowest < -0.01                               # D5 would have masked
+    assert lowest > -1.0
+    grp = sh.ShardedGroup(os.path.join(res["work"], "era5_q", "era5_q",
+                                       "era5_q"))
+    fr = grp.read_frame(2920, 8)
+    assert not np.isnan(fr).any()
+    k = list(e5.LEVELS_HPA).index(50)
+    assert fr[:, :, k].min() < -0.01
+    # the stored minimum is the measured one, to float16 precision
+    allmin = min(float(np.nanmin(grp.read_frame(int(b), f)))
+                 for b in grp.shard_index["bin"] for f in range(20)
+                 if grp.read_frame(int(b), f) is not None)
+    assert abs(allmin - lowest) <= abs(lowest) * 2 ** -11 + 1e-9
+
+
+def test_the_assembler_refuses_parts_written_under_the_old_bound(
+        tmp_path, monkeypatch):
+    """A part fetched under D5 (-0.01 g/kg) carries that bound in its ledger's
+    grid declaration; assembling it into a D6 store must REFUSE, so an old
+    parked year can never be mistaken for a new one."""
+    import json
+    res = b1.run_smoke("era5_q", root=str(tmp_path / "s"), keep=True,
+                       probe=False)
+    ctx = res["ctx"]
+    for y in ctx.years:
+        p = os.path.join(ctx.year_dir(y), "counts.json")
+        led = json.load(open(p))
+        g = led["grids"]["era5_q"]
+        for ch in g["channels"]:
+            ch["min"] = -0.01
+        g.pop("bounds_rule", None)
+        json.dump(led, open(p, "w"))
+    with pytest.raises(SystemExit, match="different grid declaration"):
+        b1.stage_assemble_grid(ctx)
