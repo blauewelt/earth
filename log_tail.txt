@@ -1,0 +1,41 @@
+  stage all (tier G): index, fetch, assemble, publish — the full-decode `check` stage runs only when named
+store     oisst025d — NOAA OISST v2.1 sea-surface temperature and sea-ice concentration, DAILY, 0.25 degrees — family 7.2d
+family    family7_2d (7.2d) · public -> chfrank/earth-tensors:tensors/family7_2d/oisst025d
+axis      1982-01-01 .. 2026-10-04  bins 0..3269 · time_s int32 (schema 2)
+lane      (unnamed) — whole calendar year(s), no group subset: the year folder's own files, as every store on the Hub holds them
+channels  C=2: sst, sea_ice
+tier G    sharded, groups ['oisst025d'], F=5 x 86400 s, float16, years (by bin start) 1982..2026
+work      /opt/runner/_work/earth/earth/ml/cache/family7_2d
+
+=== stage index (oisst025d) ===
+  [index oisst025d] start (1 items)  0/1  0.0s
+  [index oisst025d] plan.json  1/1  0.0s
+  index: oisst025d — 45 year(s), C=2 (sst, sea_ice), bins 0..3269
+=== stage index done in 0.0s ===
+
+=== stage fetch (oisst025d) ===
+  [pull oisst025d parts] start (45 items)  0/45  0.0s
+  hub: chfrank/earth-tensors with the token from $HF_TOKEN
+  pull: 45 year(s) present in 45 lane(s) (45 already local), 16,348 row(s), 0 missing
+=== stage fetch done in 624.0s ===
+
+=== stage assemble (oisst025d) ===
+  [oisst025d store (tier G)] start (1 items)  0/1  0.0s
+Traceback (most recent call last):
+  File "/opt/runner/_work/earth/earth/ml/build_family1_stores.py", line 2002, in <module>
+    sys.exit(main())
+             ^^^^^^
+  File "/opt/runner/_work/earth/earth/ml/build_family1_stores.py", line 1997, in main
+    f10b.run_stages(ctx, stages, stage_fn=stage_fns(ad), deps=deps)
+  File "/opt/runner/_work/earth/earth/ml/build_family10_stores.py", line 6007, in run_stages
+    stage_fn[s](ctx)
+  File "/opt/runner/_work/earth/earth/ml/build_family1_stores.py", line 1069, in stage_assemble_grid
+    by_year = {y: ysum(cs) for y, cs in sorted(year_counts.items())}
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/runner/_work/earth/earth/ml/build_family1_stores.py", line 1069, in <dictcomp>
+    by_year = {y: ysum(cs) for y, cs in sorted(year_counts.items())}
+                  ^^^^^^^^
+  File "/opt/runner/_work/earth/earth/ml/family1/adapters/_f7d.py", line 336, in year_summary
+    out = {"pentad_bins_checked": int(counts.get("pentad_bins_checked",
+                                      ^^^^^^^^^^
+AttributeError: 'list' object has no attribute 'get'
