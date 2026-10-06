@@ -21,7 +21,7 @@
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/cesium/1.133.1/Widgets/widgets.min.css" />
-  <link rel="stylesheet" href="src/style.css?v=e7733eba" />
+  <link rel="stylesheet" href="src/style.css?v=58c5312f" />
   <script>window.CESIUM_BASE_URL = "https://cdnjs.cloudflare.com/ajax/libs/cesium/1.133.1/";</script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/cesium/1.133.1/Cesium.js"></script>
 </head>
@@ -1060,6 +1060,13 @@
           <input type="number" id="dt-y1" class="dt-num" inputmode="numeric" />
           <span class="hint dt-inline" id="dt-span"></span>
         </div>
+        <!-- Only for the monthly normals (E-086): whole years left out of the
+             composition — the paper's split is 1982–2020 excluding 2009, 2017. -->
+        <div class="control-row dt-wrap hidden" id="dt-exclude-row">
+          <label for="dt-exclude">leave out</label>
+          <input type="text" id="dt-exclude" class="dt-text" placeholder="e.g. 2009, 2017" inputmode="numeric" />
+          <span class="hint dt-inline">years left out of the average</span>
+        </div>
         <!-- Days of each chosen month: the finest period control. It narrows
              the READ (unlike the box and the hours of a point store), so it is
              what makes the dense swath stores downloadable at all. -->
@@ -1071,6 +1078,11 @@
           <span class="hint dt-inline">of each chosen month; 1 to 31 is the whole month</span>
         </div>
 
+        <p class="hint dt-note hidden" id="dt-normals-note">These are the global tensor's monthly
+          normals, composed here from its per-year monthly sums and counts: pick the YEARS the
+          average runs over (and any to leave out), the calendar months, and either one
+          <em>normal</em> per month over the period or the <em>by-year</em> stack — each year's
+          monthly mean side by side. Every value comes with the number of five-day bins behind it.</p>
         <p class="hint dt-note hidden" id="dt-cal-note">This store is a climatology: one map per
           calendar month, averaged over all the years 1982–2024, so it has no years and no days —
           the months below pick which calendar months.</p>
@@ -1374,7 +1386,7 @@
            not obvious from the page, and "I reloaded and see no change" is
            indistinguishable from "the change isn't there". This is the sha256
            prefix of src/app.js, the same string as its ?v= stamp. -->
-      <p class="build-line">Build <code id="build-id">8d361eb2</code></p>
+      <p class="build-line">Build <code id="build-id">428732f5</code></p>
     </section>
 
     <footer>
@@ -1439,7 +1451,7 @@
        family-1.gf reader that publishes window.F1Data. Both load BEFORE the
        app, and the app copes when they did not (the tab says so). -->
   <script src="lib/fzstd.js?v=207dc305"></script>
-  <script src="src/f1data.js?v=155efe7f"></script>
-  <script src="src/app.js?v=8d361eb2"></script>
+  <script src="src/f1data.js?v=09bb6dfb"></script>
+  <script src="src/app.js?v=428732f5"></script>
 </body>
 </html>

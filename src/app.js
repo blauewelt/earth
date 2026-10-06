@@ -4626,9 +4626,15 @@ function monthName(m) {
 function climMonthOf(dateStr = state.date) {
   return Number(String(dateStr).slice(5, 7)) - 1;
 }
+/* The layer paints the ALL-YEARS normal and nothing else (E-086): the three
+ * fixed versions were retired in favour of a free period, which the Data
+ * tab's "Monthly normals" stores compose from the per-year monthly sums —
+ * the paper's split is the period 1982–2020 leaving out 2009 and 2017. The
+ * dev/paper files stay on the Hub; this layer no longer offers them. */
+const CLIM_LAYER_VERSION = "all";
 function climVersionOf(idx, cfg) {
   const vs = (idx && idx.versions) || [];
-  return vs.find((v) => v.key === cfg.climVersion)
+  return vs.find((v) => v.key === CLIM_LAYER_VERSION)
     || vs.find((v) => v.key === idx.default_version) || vs[0] || null;
 }
 /* Every channel of every group the index carries, in the index's order. */
@@ -4901,37 +4907,32 @@ async function climEnsureForLayer(cfg) {
   return g;
 }
 
-/* The channel or the version picker moved. Same layer, same chip, same opacity
- * — only the plane changes (a decode, or one read). */
-async function climSwitch(cfg, { version = false } = {}) {
+/* The channel picker moved. Same layer, same chip, same opacity — only the
+ * plane changes (a decode, or one read). */
+async function climSwitch(cfg) {
   await ensureClimGrid(cfg, { toast: true });
   climRefreshUi(cfg);
   const entry = state.layers[cfg.id];
   if (entry && entry.layer) { removeLayer(cfg.id); addLayer(cfg); }
   updateLegends();
-  if (version) maybeClimToast(cfg, { replace: true });
 }
 
-/* Both pickers, from the INDEX: channels grouped by tensor group (one
- * <optgroup> each, the labels the builder published), versions in the index's
- * order with their rule as the tooltip. */
+/* The channel picker, from the INDEX: channels grouped by tensor group (one
+ * <optgroup> each, the labels the builder published). */
 function climFillSelects(cfg) {
   const idx = climState.index;
   const chSel = document.querySelector(`select[data-climchan="${cfg.id}"]`);
-  const vSel = document.querySelector(`select[data-climver="${cfg.id}"]`);
-  if (!chSel || !vSel) return;
+  if (!chSel) return;
   const none = `<option value="">— the index has not landed —</option>`;
   const set = (sel, html) => { if (sel.dataset.sig !== html) { sel.innerHTML = html; sel.dataset.sig = html; } };
-  if (!idx) { set(chSel, none); set(vSel, none); return; }
+  if (!idx) { set(chSel, none); return; }
   set(chSel, Object.entries(idx.groups).map(([group, grp]) =>
     `<optgroup label="${esc(group)} · ${grp.grid.step}°">` +
     grp.chans.map((c) => `<option value="${esc(`${group}:${c}`)}">` +
       `${esc((grp.labels && grp.labels[c]) || c)}</option>`).join("") +
     `</optgroup>`).join(""));
-  set(vSel, (idx.versions || []).map((v) =>
-    `<option value="${esc(v.key)}" title="${esc(v.rule || "")}">${esc(v.name)}</option>`).join(""));
   const at = climKeyFor(idx, cfg);
-  if (at) { chSel.value = at.spec.key; vSel.value = at.ver.key; }
+  if (at) chSel.value = at.spec.key;
 }
 
 /* The Downloads block, for the selected version and group: the NetCDF (when
@@ -4943,9 +4944,14 @@ function climDownloadsHtml(cfg, { inTip = false } = {}) {
   // the tab is where a period, a month, a box and a resolution are chosen.
   // A button in the row (it switches tabs); plain words in the hover card,
   // which takes no pointer events.
-  const toData = `<div class="clim-to-data">More stores, any period, month, box and ` +
-    `resolution: ${inTip ? "the Data tab"
-      : `<button type="button" class="tag-link" data-opentab="data">the Data tab</button>`}</div>`;
+  const grpOf = idx && climKeyFor(idx, cfg);
+  const store = grpOf ? `derived/normals_${grpOf.spec.group}` : "";
+  const toData = `<div class="clim-to-data">The normal over <strong>any other period</strong> — ` +
+    `say 1991–2020, or the paper's split, 1982–2020 leaving out 2009 and 2017 — with months, ` +
+    `a box and a resolution: ${inTip ? "the Data tab's “Monthly normals” store for this group"
+      : `<button type="button" class="tag-link" data-opentab="data"${store ? ` data-dtstore="${esc(store)}"` : ""}>` +
+        `this group's monthly normals in the Data tab</button>`}. ` +
+    `More stores, any period, month, box and resolution: the Data tab.</div>`;
   if (!idx) {
     return `nothing yet — the index <code>data/family7_clim_index.json</code> has not ` +
       `been published (made by <code>ml/export_family7_clim.py</code> → ` +
@@ -7510,8 +7516,8 @@ const LAYER_FACTS = {
          "it is trained against — is the “Model climatology” layer just below.",
   },
   "clim7": {
-    rec: "average of the selected version's training years (the per-calendar-month " +
-         "mean over them, not one date) — the span is filled in from the index",
+    rec: "average of all the years 1982–2024 (the per-calendar-month mean over them, " +
+         "not one date) — the span is filled in from the index",
     int: "one calendar month; the year does not matter — twelve frames, one per " +
          "month, and the date selector's month picks which",
     sp: "0.25° or 1° — each channel group keeps the tensor's own grid (0.25° for " +
@@ -7521,14 +7527,16 @@ const LAYER_FACTS = {
          "departures from a per-calendar-month climatology — the mean of each " +
          "channel, at each cell, over every training-year five-day frame that " +
          "opens in that month — and every forecast skill number is scored against " +
-         "the same field. This layer paints it, from the family-7 global tensor, in " +
-         "three versions that differ only in which years count as training: all of " +
-         "them, the development holdout (2009, 2017 and 2023 left out), and the " +
-         "paper's split (trained on 1982–2020 less 2009 and 2017). Values are in " +
+         "the same field. This layer paints it, from the family-7 global tensor, " +
+         "averaged over all the years 1982–2024. The three fixed versions it used " +
+         "to offer were retired in favour of a free period: the Data tab's " +
+         "“Monthly normals” stores average over any years you choose, so the " +
+         "paper's split is simply 1982–2020 leaving out 2009 and 2017, and the " +
+         "development holdout 1982–2024 leaving out 2009, 2017 and 2023. Values are in " +
          "the channel's own unit, with the stored z beside them; with the Global " +
          "tensor on, the probe also prints today's departure from normal — the " +
          "number the model is actually handed.",
-    dl: "for the selected version and group: clim.nc (NetCDF, physical units), " +
+    dl: "for this group's all-years normal: clim.nc (NetCDF, physical units), " +
         "clim.npy ([12, C, H, W] float32, z-scored — see stats.json), stats.json, " +
         "the index, and this channel and month as CSV — listed here once the " +
         "index has landed",
@@ -7601,11 +7609,6 @@ function buildLayerPanel() {
           <select id="climchan-${cfg.id}" data-climchan="${cfg.id}"
                   title="Which channel's normal to paint"></select>
         </div>
-        <div class="chan-row">
-          <label class="alpha-label" for="climver-${cfg.id}">version</label>
-          <select id="climver-${cfg.id}" data-climver="${cfg.id}"
-                  title="Which training years the normal averages over"></select>
-        </div>
         <details class="clim-dl" data-climdl="${cfg.id}">
           <summary>⤓ downloads</summary>
           <div class="clim-dl-body" data-climdlbody="${cfg.id}"></div>
@@ -7638,13 +7641,11 @@ function buildLayerPanel() {
       return;
     }
     // The model climatology's two pickers, likewise in its own row.
-    const climId = e.target.getAttribute("data-climchan") || e.target.getAttribute("data-climver");
+    const climId = e.target.getAttribute("data-climchan");
     if (climId) {
       const ccfg = GIBS_LAYERS.find((l) => l.id === climId);
-      const isVer = e.target.hasAttribute("data-climver");
-      if (isVer) ccfg.climVersion = e.target.value;
-      else ccfg.climChan = e.target.value;
-      climSwitch(ccfg, { version: isVer });
+      ccfg.climChan = e.target.value;
+      climSwitch(ccfg);
       return;
     }
     const id = e.target.getAttribute("data-id");
@@ -7700,7 +7701,13 @@ function buildLayerPanel() {
     if (csv) { climDownloadCsv(GIBS_LAYERS.find((l) => l.id === csv)); return; }
     // "…: the Data tab" in the climatology's downloads — switch to that tab
     const toTab = e.target.getAttribute?.("data-opentab");
-    if (toTab) { document.getElementById(`tab-${toTab}`)?.click(); return; }
+    if (toTab) {
+      // and, from the climatology, straight onto that group's normals store
+      const want = e.target.getAttribute("data-dtstore");
+      if (want) dtOpenStore(want);
+      document.getElementById(`tab-${toTab}`)?.click();
+      return;
+    }
     const id = e.target.getAttribute?.("data-alphahalf");
     if (!id) return;
     const slider = list.querySelector(`input[data-alpha="${id}"]`);
@@ -15968,6 +15975,14 @@ function dtReadSel() {
   const group = Array.isArray(st.groups) && st.groups.length > 1 ? dtEl("dt-group").value : null;
   const res = resV === "native" ? "native" : Number(resV);
   const rows = !dtIsGrid(st) && res === "native";
+  if (st.normals) {
+    return {
+      family: st.family, store: st.name, channels, yearStart, yearEnd, months,
+      excludeYears: dtExcludeYears(), days: null, hours: null,
+      bbox: box && !box.error ? { w: box.w, s: box.s, e: box.e, n: box.n } : null,
+      step: dtEl("dt-step").value === "by-year" ? "by-year" : "normal", res,
+    };
+  }
   return {
     ...(st.family ? { family: st.family } : {}),
     store: st.name,
@@ -15985,6 +16000,21 @@ function dtReadSel() {
     res,
     ...(group ? { group } : {}),
   };
+}
+
+/* The years left out of a normal, from the free-text field ("2009, 2017";
+ * ranges "2009-2011" too): whole years inside the store's record only. */
+function dtExcludeYears() {
+  const st = dt.store, el = dtEl("dt-exclude");
+  if (!st || !st.normals || !el) return [];
+  const [a, b] = dtSpanYears(st), out = new Set();
+  for (const part of String(el.value).split(/[,;\s]+/)) {
+    const m = /^(\d{4})(?:\s*[-–]\s*(\d{4}))?$/.exec(part.trim());
+    if (!m) continue;
+    const y0 = Number(m[1]), y1 = Number(m[2] || m[1]);
+    for (let y = Math.min(y0, y1); y <= Math.max(y0, y1); y++) if (y >= a && y <= b) out.add(y);
+  }
+  return [...out].sort((x, y) => x - y);
 }
 
 /* What stops a selection before the reader is even asked. */
@@ -16018,6 +16048,18 @@ function dtLoadSaved() {
 }
 
 /* ---- building the controls for a store ---------------------------------- */
+
+/* Open the tab ON a given store (the climatology's downloads hand over this
+ * way): applied now if the list is loaded, else when it lands. */
+function dtOpenStore(key) {
+  dt.pendingStore = key;
+  if (!dt.reg) return;
+  const st = dtFindStore(key);
+  dt.pendingStore = null;
+  if (!st || st === dt.store) return;
+  dtEl("dt-store").value = dtStoreKey(st);
+  dtEl("dt-store").dispatchEvent(new Event("change", { bubbles: true }));
+}
 
 /* A store's key in the select: `family/name` when the reader gives it one
  * (the same name can exist in two families), the bare name otherwise. */
@@ -16070,6 +16112,8 @@ function dtStoreAbout(st) {
     ? `a map store at ${esc(dtFmtDeg(dtNativeDeg(st)))} (≈ ${dtKm(dtNativeDeg(st))} km), ${esc(dtCadence(st))}`
     : "a point store: every report at its own position and time";
   const rec = st.calendar ? "twelve calendar months — no years"
+    : st.normals ? `${esc(String((st.years || [])[0]))} → ${esc(String((st.years || [])[1]))}, one sum and count per year and month — ` +
+      "the normal is averaged over the years you choose"
     : `${esc(String(y0 || "?").slice(0, 10))} → ${esc(String(y1 || "?").slice(0, 10))}`;
   const lic = st.licence
     ? `<br><span class="dt-k">licence</span> ${esc(st.licence.name || "")}` +
@@ -16120,7 +16164,9 @@ function dtFillChannels(st, keep) {
     dtEl("dt-chan-note").textContent = `${chans.length} channels as ${st.vars.length} variables × ${st.levels.length} levels`;
     return;
   }
-  if (![...want].some((n) => chans.some((c) => c.name === n)) && chans.length) want.add(chans[0].name);
+  if (![...want].some((n) => chans.some((c) => c.name === n)) && chans.length) {
+    want.add(chans.some((c) => c.name === st.defaultChannel) ? st.defaultChannel : chans[0].name);
+  }
   dtEl("dt-channels").innerHTML = chans.map((c) =>
     `<label class="dt-chip" title="${esc([c.label, c.unit].filter(Boolean).join(" · "))}"><input type="checkbox" value="${esc(c.name)}"` +
     `${want.has(c.name) ? " checked" : ""} /> ${esc(c.name)}</label>`).join("");
@@ -16133,7 +16179,12 @@ function dtFillRes(st, keep) {
   if (dtIsGrid(st)) {
     const nat = dtNativeDeg(st);
     opts.push(["native", `native (${dtFmtDeg(nat)}, ≈ ${dtKm(nat)} km)`]);
-    for (const d of [0.25, 1]) if (!nat || d > nat + 1e-9) opts.push([String(d), `${d}° — box average with count`]);
+    for (const d of [0.25, 1]) {
+      if (!nat || d > nat + 1e-9) {
+        opts.push([String(d), st.normals ? `${d}° — pooled: the sums and counts of every cell in it`
+          : `${d}° — box average with count`]);
+      }
+    }
   } else {
     opts.push(["native", "rows — every report as it is"]);
     opts.push(["0.25", "0.25° cells — mean with count"]);
@@ -16150,10 +16201,34 @@ function dtFillRes(st, keep) {
  * so binning needs one of the three means. Enforced here (the option is
  * disabled, and a native choice moves to the five-day mean) and said in words
  * under the control, because a silently changed select reads as a bug. */
+/* The time-step choices: the store's own for the monthly normals (one normal
+ * per calendar month over the period, or the by-year stack), else the usual
+ * four. Rebuilt only when the KIND changes, so a choice survives a redraw. */
+const DT_STEP_OPTS = [["native", "native"], ["pentad", "five-day mean"], ["month", "monthly mean"],
+  ["all", "one mean over the whole selection"]];
+const DT_NORMALS_STEP_OPTS = [["normal", "normal — one mean per calendar month over the period"],
+  ["by-year", "by year — each year's monthly mean, side by side"]];
+function dtFillStep(st) {
+  const sel = dtEl("dt-step");
+  const kind = st && st.normals ? "normals" : "plain";
+  if (sel.dataset.kind === kind) return;
+  const keep = sel.value;
+  sel.innerHTML = (kind === "normals" ? DT_NORMALS_STEP_OPTS : DT_STEP_OPTS)
+    .map(([v, t]) => `<option value="${v}">${esc(t)}</option>`).join("");
+  sel.dataset.kind = kind;
+  if ([...sel.options].some((o) => o.value === keep)) sel.value = keep;
+}
+
 function dtSyncStepRes() {
   const st = dt.store;
   const step = dtEl("dt-step");
   const note = dtEl("dt-step-note");
+  dtFillStep(st);
+  if (st && st.normals) {
+    step.disabled = false;
+    if (note) { note.textContent = ""; note.classList.add("hidden"); }
+    return;
+  }
   const points = !dtIsGrid(st);
   const rows = points && dtEl("dt-res").value === "native";
   const binned = points && !rows;
@@ -16182,8 +16257,12 @@ function dtApplyStore(st, saved) {
   // a calendar-month climatology has no years and no days: its rows are
   // hidden and a sentence says why, rather than leaving controls that do nothing
   dtEl("dt-y0").closest(".control-row").classList.toggle("hidden", !!st.calendar);
-  dtEl("dt-d0").closest(".control-row").classList.toggle("hidden", !!st.calendar);
+  dtEl("dt-d0").closest(".control-row").classList.toggle("hidden", !!st.calendar || !!st.normals);
   dtEl("dt-cal-note").classList.toggle("hidden", !st.calendar);
+  dtEl("dt-normals-note").classList.toggle("hidden", !st.normals);
+  dtEl("dt-exclude-row").classList.toggle("hidden", !st.normals);
+  if (!st.normals) dtEl("dt-exclude").value = "";
+  else if (saved && Array.isArray(saved.excludeYears)) dtEl("dt-exclude").value = saved.excludeYears.join(", ");
   const parts = Array.isArray(st.groups) ? st.groups : [];
   dtEl("dt-group-row").classList.toggle("hidden", parts.length < 2);
   dtEl("dt-group").innerHTML = parts.length > 1
@@ -16258,6 +16337,39 @@ function dtDefaultBoxFor(st) {
 const DT_FIRST_LOOK_MB = 40;
 async function dtFirstLook(st) {
   const R = dtReader();
+  if (st.normals) {
+    // the normal over the WHOLE record for this calendar month, in the
+    // default box; measured: 0.25° SST over the Gulf Stream box is 12.7 MB.
+    // Should a store ever be heavier, 1° cells, then later starts, until it
+    // fits the first-look size.
+    const seq = ++dt.lookSeq;
+    dt.looking = true;
+    dtWriteBox(dtDefaultBoxFor(st));
+    dtEl("dt-exclude").value = "";
+    dtEl("dt-step").value = "normal";
+    const [a, b] = dtSpanYears(st);
+    const m = new Date().getUTCMonth() + 1;
+    const target = DT_FIRST_LOOK_MB * 1e6;
+    try {
+      for (const y0 of [a, Math.max(a, b - 29), Math.max(a, b - 9), b]) {
+        dtSetPeriod(y0, b, [m], null);
+        let est = await R.estimate(dtReadSel()).catch(() => null);
+        if (seq !== dt.lookSeq) return;
+        if (est && est.readBytes > target && [...dtEl("dt-res").options].some((o) => o.value === "1")) {
+          dtEl("dt-res").value = "1";
+          est = await R.estimate(dtReadSel()).catch(() => null);
+          if (seq !== dt.lookSeq) return;
+        }
+        if (est && est.readBytes <= target && est.outBytes <= target) break;
+      }
+    } finally {
+      if (seq === dt.lookSeq) dt.looking = false;
+    }
+    if (seq !== dt.lookSeq) return;
+    dt.touched = false;
+    dtChanged();
+    return;
+  }
   if (st.calendar) {
     // twelve maps and no years: this month's normal, in the default box
     dt.lookSeq++;
@@ -16526,6 +16638,13 @@ function dtCountHtml(sel, est) {
       `<strong>${dtFmtInt(T)}</strong> ${plural(T, words[0], words[1])} on ${sel.res}° cells`;
   }
   const n = est.frames;
+  if (st.normals) {
+    const years = Number(est.years) || 0;
+    const what = sel.step === "by-year" ? plural(T, "monthly mean", "monthly means (one per year and month)")
+      : plural(T, "normal", "normals (one per calendar month)");
+    return `<strong>${dtFmtInt(n)}</strong> yearly ${plural(n, "plane", "planes")} of sums and counts ` +
+      `(${dtFmtInt(years)} ${plural(years, "year", "years")}) read → <strong>${dtFmtInt(T)}</strong> ${what}`;
+  }
   const maps = `${dtFrameAdj(st)} ${plural(n, "map", "maps")}`;
   if (sel.step === "native" || T === null || !words) {
     return `<strong>${dtFmtInt(n)}</strong> ${maps}`;
@@ -16745,7 +16864,14 @@ function dtShowLegend(info, res, ci) {
   const lg = dtEl("dt-legend");
   const name = (res.channels || [])[ci] || "";
   const fmt = (v) => (Number.isFinite(v) ? (+v.toPrecision(4)).toString() : "–");
-  const what = res.kind === "grid"
+  const cl = res.climatology;
+  const mon = (t) => new Date(t * 1000).toLocaleString("en-US", { month: "long", timeZone: "UTC" });
+  const what = cl && cl.period
+    ? `the ${esc(mon(info.when))} normal over ${cl.period[0]}–${cl.period[1]}` +
+      `${cl.excluded.length ? ` (leaving out ${esc(cl.excluded.join(", "))})` : ""}`
+    : res.kind === "grid" && dt.store && dt.store.normals
+    ? `the ${esc(mon(info.when))} mean of ${esc(dtIso(info.when).slice(0, 4))}`
+    : res.kind === "grid"
     ? `first frame with data, ${esc(dtIso(info.when))} UTC`
     : `${dtFmtInt(info.n)} reports from the first five-day bin with data, from ${esc(dtIso(info.when))} UTC`;
   lg.innerHTML = `<div class="dt-lg-name">${esc(name)} <span class="dt-k">— ${what}</span></div>` +
@@ -16844,7 +16970,8 @@ function dtFileName(sel, ext) {
   // and a later family's g025 cannot save under the same name
   const fam = sel.family && sel.family !== "1.gf" ? `f${clean(sel.family)}_` : "";
   const when = dt.store && dt.store.calendar ? "clim" : yrs;
-  return `${fam}${clean(sel.store)}_${ch}_${when}${mo}${dy}${hr}_${res}${step}.${ext}`;
+  const ex = sel.excludeYears && sel.excludeYears.length ? `_ex${sel.excludeYears.join("-")}` : "";
+  return `${fam}${clean(sel.store)}_${ch}_${when}${ex}${mo}${dy}${hr}_${res}${step}.${ext}`;
 }
 
 /* `onProgress` is the reader's; its argument may be a fraction, a percentage
@@ -17084,10 +17211,13 @@ async function loadDataTab() {
     dtFillPresets();
     const saved = dtLoadSaved();
     // the flagship store first: four-kilometre ocean colour, if published
-    const savedKey = saved ? (saved.family ? `${saved.family}/${saved.store}` : saved.store) : null;
+    let savedKey = saved ? (saved.family ? `${saved.family}/${saved.store}` : saved.store) : null;
+    if (dt.pendingStore && dtFindStore(dt.pendingStore)) { savedKey = dt.pendingStore; }
+    const pending = dt.pendingStore && dtFindStore(dt.pendingStore);
+    dt.pendingStore = null;
     const st = (savedKey && dtFindStore(savedKey)) ||
       reg.stores.find((s) => s.name === DT_FIRST_STORE) || reg.stores[0];
-    const ok = saved && saved.store === st.name && (!saved.family || saved.family === st.family);
+    const ok = !pending && saved && saved.store === st.name && (!saved.family || saved.family === st.family);
     dtApplyStore(st, ok ? saved : null);
     if (!ok) { dtFirstLook(st); return; }
     dtSetMonths(Array.isArray(saved.months) ? saved.months : [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]);
