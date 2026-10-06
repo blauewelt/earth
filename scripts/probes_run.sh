@@ -44,6 +44,14 @@ set -e
 # resolved there. A recipe naming family4 must reach THIS phase too, or the
 # probes would read a different tensor than the training did.
 T="${RECIPE_TENSOR:-$IN_TENSOR}"
+# FAMILY 6 gate, moved out of the step's `if:` for the same reason as the
+# anomaly gate below: family 6 is an unlabelled pretraining corpus (no truth
+# series, every probe would die on KeyError:'rapid'), and the skip must follow
+# the tensor the recipe chose, not just the dispatch input. Train skips too.
+if [ "$T" = "family6_na025_cmip6" ]; then
+  echo "probes: family 6 is a pretraining corpus with no truth series — skipping"
+  exit 0
+fi
 [ "$T" = "family2" ] && T=na_pixels
 export TENSOR="ml/cache/${T}.npz"   # exported: heredocs read os.environ["TENSOR"]
 

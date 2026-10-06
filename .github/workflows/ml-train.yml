@@ -1438,8 +1438,8 @@ jobs:
         # family 6 is a pretraining CORPUS, not a training run: it carries no
         # truth series, so every probe below would die on KeyError:'rapid' and
         # the trainer has nothing to be trained against. The build step IS the
-        # whole job.
-        if: inputs.tensor != 'family6_na025_cmip6'
+        # whole job. That gate is in the run: block, NOT an `if:` — an `if:`
+        # reads inputs.tensor only, where $RECIPE_TENSOR cannot reach.
         env:
           GITHUB_TOKEN: ${{ github.token }}
           # Every N-step checkpoint is mirrored to /opt/earth-cache/ckpt
@@ -1455,6 +1455,9 @@ jobs:
           # python heredocs below read os.environ["TENSOR"] — a plain shell
           # assignment is invisible to them, which is how #403 died.
           T="${RECIPE_TENSOR:-$IN_TENSOR}"
+          if [ "$T" = "family6_na025_cmip6" ]; then
+            echo "family 6 is a pretraining corpus — nothing to train"; exit 0
+          fi
           [ "$T" = "family2" ] && T=na_pixels
           export TENSOR="ml/cache/${T}.npz"
           # E-069 · THE CONE TRAINER. `window: recipe:<name>,cone[,seed:N]`
@@ -1756,8 +1759,8 @@ jobs:
         # expression context, so a recipe setting `anomaly` could never have
         # reached it — it would have governed the trainer and not whether this
         # phase ran, which is precisely the half-applied setting that recipes
-        # exist to abolish.
-        if: always() && inputs.tensor != 'family6_na025_cmip6'
+        # exist to abolish. The family-6 skip moved in with it, same reason.
+        if: always()
         continue-on-error: true
         env:
           GITHUB_TOKEN: ${{ github.token }}
