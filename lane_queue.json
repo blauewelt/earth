@@ -3,46 +3,6 @@
   {
    "store": "ncep100d",
    "stage": "index,fetch",
-   "start": "1982-01-01",
-   "end": "1986-12-31",
-   "runner": "ubuntu-latest",
-   "extra_args": "--push-parts",
-   "adapter_env": "",
-   "retries": 2
-  },
-  {
-   "store": "ncep100d",
-   "stage": "index,fetch",
-   "start": "1987-01-01",
-   "end": "1991-12-31",
-   "runner": "ubuntu-latest",
-   "extra_args": "--push-parts",
-   "adapter_env": "",
-   "retries": 2
-  },
-  {
-   "store": "ncep100d",
-   "stage": "index,fetch",
-   "start": "1992-01-01",
-   "end": "1996-12-31",
-   "runner": "ubuntu-latest",
-   "extra_args": "--push-parts",
-   "adapter_env": "",
-   "retries": 2
-  },
-  {
-   "store": "ncep100d",
-   "stage": "index,fetch",
-   "start": "1997-01-01",
-   "end": "2001-12-31",
-   "runner": "ubuntu-latest",
-   "extra_args": "--push-parts",
-   "adapter_env": "",
-   "retries": 2
-  },
-  {
-   "store": "ncep100d",
-   "stage": "index,fetch",
    "start": "2002-01-01",
    "end": "2006-12-31",
    "runner": "ubuntu-latest",
@@ -169,6 +129,50 @@
    "adapter_env": "",
    "retries": 2,
    "at": "2026-10-06T09:46:55.207Z"
+  },
+  {
+   "store": "ncep100d",
+   "stage": "index,fetch",
+   "start": "1982-01-01",
+   "end": "1986-12-31",
+   "runner": "ubuntu-latest",
+   "extra_args": "--push-parts",
+   "adapter_env": "",
+   "retries": 2,
+   "at": "2026-10-06T10:11:29.881Z"
+  },
+  {
+   "store": "ncep100d",
+   "stage": "index,fetch",
+   "start": "1987-01-01",
+   "end": "1991-12-31",
+   "runner": "ubuntu-latest",
+   "extra_args": "--push-parts",
+   "adapter_env": "",
+   "retries": 2,
+   "at": "2026-10-06T10:11:33.726Z"
+  },
+  {
+   "store": "ncep100d",
+   "stage": "index,fetch",
+   "start": "1992-01-01",
+   "end": "1996-12-31",
+   "runner": "ubuntu-latest",
+   "extra_args": "--push-parts",
+   "adapter_env": "",
+   "retries": 2,
+   "at": "2026-10-06T10:11:37.572Z"
+  },
+  {
+   "store": "ncep100d",
+   "stage": "index,fetch",
+   "start": "1997-01-01",
+   "end": "2001-12-31",
+   "runner": "ubuntu-latest",
+   "extra_args": "--push-parts",
+   "adapter_env": "",
+   "retries": 2,
+   "at": "2026-10-06T10:11:41.366Z"
   }
  ],
  "done": [
