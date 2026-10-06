@@ -1,0 +1,9 @@
+store     era5_q — ERA5 specific humidity on 13 pressure levels (50-1000 hPa), six-hourly instants on a 1-degree grid (conservative box means) — family 1.2, exception E4
+family    family1_2 (1.2) · public -> chfrank/earth-tensors:tensors/family1_2/era5_q
+axis      1982-01-01 .. 2026-12-31  bins 0..3287 · time_s int32 (schema 2)
+lane      (unnamed) — whole calendar year(s), no group subset: the year folder's own files, as every store on the Hub holds them
+channels  C=13: q_50, q_100, q_150, q_200, q_250, q_300, q_400, q_500, q_600, q_700, q_850, q_925, q_1000
+tier G    sharded, groups ['era5_q'], F=20 x 21600 s, float16, years (by bin start) 1982..2026
+work      /opt/runner/_work/earth/earth/ml/cache/family1_2
+stage assemble: already done — skipping (--force to redo)
+stage publish: already done — skipping (--force to redo)
