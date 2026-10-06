@@ -1,0 +1,80 @@
+
+
+glorys025d__bin_3254.idx.npy:   0%|          | 0.00/1.57k [00:00<?, ?B/s][A[A[Aglorys025d__bin_3254.idx.npy: 100%|██████████| 1.57k/1.57k [00:00<00:00, 25.4kB/s]
+glorys025d__bin_3251.zst: 100%|██████████| 30.6M/30.6M [00:00<00:00, 74.4MB/s]
+Upload 93 LFS files:  81%|████████  | 75/93 [00:06<00:01, 11.36it/s]
+
+glorys025d__bin_3254.zst:   0%|          | 0.00/30.7M [00:00<?, ?B/s][A[A
+
+
+
+glorys025d__bin_3253.zst:  52%|█████▏    | 16.1M/30.6M [00:00<00:00, 71.2MB/s][A[A[A[Aglorys025d__bin_3252.zst: 100%|██████████| 30.6M/30.6M [00:00<00:00, 72.9MB/s]
+
+glorys025d__bin_3255.idx.npy:   0%|          | 0.00/1.57k [00:00<?, ?B/s][A
+
+
+glorys025d__bin_3255.zst:   0%|          | 0.00/30.7M [00:00<?, ?B/s][A[A[Aglorys025d__bin_3255.idx.npy: 100%|██████████| 1.57k/1.57k [00:00<00:00, 19.0kB/s]
+Upload 93 LFS files:  84%|████████▍ | 78/93 [00:06<00:01, 12.76it/s]
+glorys025d__bin_3256.idx.npy:   0%|          | 0.00/1.57k [00:00<?, ?B/s][Aglorys025d__bin_3253.zst: 100%|██████████| 30.6M/30.6M [00:00<00:00, 74.1MB/s]
+
+
+glorys025d__bin_3254.zst:  52%|█████▏    | 16.1M/30.7M [00:00<00:00, 74.6MB/s][A[Aglorys025d__bin_3256.idx.npy: 100%|██████████| 1.57k/1.57k [00:00<00:00, 32.1kB/s]
+
+
+
+glorys025d__bin_3255.zst:  52%|█████▏    | 16.1M/30.7M [00:00<00:00, 84.0MB/s][A[A[A
+glorys025d__bin_3256.zst:   0%|          | 0.00/30.7M [00:00<?, ?B/s][AUpload 93 LFS files:  86%|████████▌ | 80/93 [00:07<00:01, 12.87it/s]
+
+
+
+glorys025d__bin_3257.idx.npy:   0%|          | 0.00/1.57k [00:00<?, ?B/s][A[A[A[A
+
+
+
+
+glorys025d__bin_3257.zst:   0%|          | 0.00/30.7M [00:00<?, ?B/s][A[A[A[A[Aglorys025d__bin_3257.idx.npy: 100%|██████████| 1.57k/1.57k [00:00<00:00, 29.1kB/s]
+glorys025d__bin_3254.zst: 100%|██████████| 30.7M/30.7M [00:00<00:00, 69.3MB/s]
+glorys025d__bin_3255.zst: 100%|██████████| 30.7M/30.7M [00:00<00:00, 77.1MB/s]
+Upload 93 LFS files:  88%|████████▊ | 82/93 [00:07<00:00, 12.12it/s]
+
+glorys025d__bin_3258.idx.npy:   0%|          | 0.00/1.57k [00:00<?, ?B/s][A[A
+
+
+
+
+glorys025d__bin_3257.zst:  52%|█████▏    | 16.1M/30.7M [00:00<00:00, 75.4MB/s][A[A[A[A[Aglorys025d__bin_3258.idx.npy: 100%|██████████| 1.57k/1.57k [00:00<00:00, 25.9kB/s]
+
+glorys025d__bin_3256.zst:  52%|█████▏    | 16.1M/30.7M [00:00<00:00, 61.7MB/s][A
+
+glorys025d__bin_3258.zst:   0%|          | 0.00/30.7M [00:00<?, ?B/s][A[A
+
+
+glorys025d__bin_3259.idx.npy:   0%|          | 0.00/1.57k [00:00<?, ?B/s][A[A[Aglorys025d__bin_3259.idx.npy: 100%|██████████| 1.57k/1.57k [00:00<00:00, 31.0kB/s]
+Upload 93 LFS files:  91%|█████████▏| 85/93 [00:07<00:00, 13.07it/s]
+
+
+glorys025d__bin_3259.zst:   0%|          | 0.00/30.7M [00:00<?, ?B/s][A[A[A
+
+
+
+glorys025d__bin_3260.idx.npy:   0%|          | 0.00/1.57k [00:00<?, ?B/s][A[A[A[Aglorys025d__bin_3256.zst: 100%|██████████| 30.7M/30.7M [00:00<00:00, 65.2MB/s]
+glorys025d__bin_3257.zst: 100%|██████████| 30.7M/30.7M [00:00<00:00, 67.0MB/s]
+
+
+glorys025d__bin_3258.zst:  52%|█████▏    | 16.1M/30.7M [00:00<00:00, 67.2MB/s][A[Aglorys025d__bin_3260.idx.npy: 100%|██████████| 1.57k/1.57k [00:00<00:00, 23.5kB/s]
+Upload 93 LFS files:  94%|█████████▎| 87/93 [00:07<00:00, 12.26it/s]
+glorys025d__bin_3260.zst:   0%|          | 0.00/6.16M [00:00<?, ?B/s][A
+
+
+
+glorys025d__shard_index.npy:   0%|          | 0.00/19.2k [00:00<?, ?B/s][A[A[A[A
+
+
+glorys025d__bin_3259.zst:  52%|█████▏    | 16.1M/30.7M [00:00<00:00, 67.2MB/s][A[A[Aglorys025d__shard_index.npy: 100%|██████████| 19.2k/19.2k [00:00<00:00, 259kB/s]
+glorys025d__bin_3260.zst: 100%|██████████| 6.16M/6.16M [00:00<00:00, 59.3MB/s]
+glorys025d__bin_3259.zst: 100%|██████████| 30.7M/30.7M [00:00<00:00, 71.6MB/s]
+glorys025d__bin_3258.zst: 100%|██████████| 30.7M/30.7M [00:00<00:00, 56.1MB/s]
+Upload 93 LFS files:  97%|█████████▋| 90/93 [00:07<00:00, 11.44it/s]Upload 93 LFS files: 100%|██████████| 93/93 [00:08<00:00, 13.26it/s]Upload 93 LFS files: 100%|██████████| 93/93 [00:08<00:00, 11.57it/s]
+  glorys025d: 1 year(s) pushed and verified in 1 part commit(s), done.json written last (0 already present)
+  push-parts: 1 year(s) on the Hub under partials/family7_2d/glorys025d/
+=== stage fetch done in 2755.2s ===
