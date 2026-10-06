@@ -1,0 +1,80 @@
+  [verify oisst025d before publish] check: check oisst025d 3100/3270  8.4s
+  [verify oisst025d before publish] check: check oisst025d 3200/3270  8.5s
+  [verify oisst025d before publish] check: check oisst025d 3270/3270  8.5s
+  hub: chfrank/earth-tensors with the token from $HF_TOKEN
+  [publish oisst025d] start (6543 items)  0/6543  0.0s
+Upload 0 LFS files: 0it [00:00, ?it/s]Upload 0 LFS files: 0it [00:00, ?it/s]
+No files have been modified since last commit. Skipping to prevent empty commit.
+Upload 0 LFS files: 0it [00:00, ?it/s]Upload 0 LFS files: 0it [00:00, ?it/s]
+No files have been modified since last commit. Skipping to prevent empty commit.
+Upload 0 LFS files: 0it [00:00, ?it/s]Upload 0 LFS files: 0it [00:00, ?it/s]
+No files have been modified since last commit. Skipping to prevent empty commit.
+Upload 0 LFS files: 0it [00:00, ?it/s]Upload 0 LFS files: 0it [00:00, ?it/s]
+No files have been modified since last commit. Skipping to prevent empty commit.
+Upload 0 LFS files: 0it [00:00, ?it/s]Upload 0 LFS files: 0it [00:00, ?it/s]
+No files have been modified since last commit. Skipping to prevent empty commit.
+Upload 0 LFS files: 0it [00:00, ?it/s]Upload 0 LFS files: 0it [00:00, ?it/s]
+No files have been modified since last commit. Skipping to prevent empty commit.
+Upload 0 LFS files: 0it [00:00, ?it/s]Upload 0 LFS files: 0it [00:00, ?it/s]
+No files have been modified since last commit. Skipping to prevent empty commit.
+Upload 0 LFS files: 0it [00:00, ?it/s]Upload 0 LFS files: 0it [00:00, ?it/s]
+No files have been modified since last commit. Skipping to prevent empty commit.
+Upload 0 LFS files: 0it [00:00, ?it/s]Upload 0 LFS files: 0it [00:00, ?it/s]
+No files have been modified since last commit. Skipping to prevent empty commit.
+Upload 0 LFS files: 0it [00:00, ?it/s]Upload 0 LFS files: 0it [00:00, ?it/s]
+No files have been modified since last commit. Skipping to prevent empty commit.
+Upload 0 LFS files: 0it [00:00, ?it/s]Upload 0 LFS files: 0it [00:00, ?it/s]
+No files have been modified since last commit. Skipping to prevent empty commit.
+Upload 0 LFS files: 0it [00:00, ?it/s]Upload 0 LFS files: 0it [00:00, ?it/s]
+No files have been modified since last commit. Skipping to prevent empty commit.
+Upload 0 LFS files: 0it [00:00, ?it/s]Upload 0 LFS files: 0it [00:00, ?it/s]
+shard_index.npy:   0%|          | 0.00/1.22M [00:00<?, ?B/s]shard_index.npy: 100%|██████████| 1.22M/1.22M [00:00<00:00, 5.61MB/s]
+  [publish oisst025d] oisst025d  2/6543  29.4s
+  [publish oisst025d] oisst025d/1982  148/6543  39.2s
+  [publish oisst025d] oisst025d/1983  294/6543  48.6s
+  [publish oisst025d] oisst025d/1984  442/6543  58.7s
+  [publish oisst025d] oisst025d/1985  588/6543  68.3s
+  [publish oisst025d] oisst025d/1986  734/6543  77.1s
+  [publish oisst025d] oisst025d/1987  880/6543  86.4s
+  [publish oisst025d] oisst025d/1988  1026/6543  95.6s
+  [publish oisst025d] oisst025d/1989  1172/6543  105.1s
+  [publish oisst025d] oisst025d/1990  1318/6543  113.6s
+  [publish oisst025d] oisst025d/1991  1464/6543  122.3s
+  [publish oisst025d] oisst025d/1992  1610/6543  131.3s
+  [publish oisst025d] oisst025d/1993  1756/6543  140.8s
+  [publish oisst025d] oisst025d/1994  1902/6543  150.0s
+  [publish oisst025d] oisst025d/1995  2048/6543  158.6s
+  [publish oisst025d] oisst025d/1996  2194/6543  168.4s
+  [publish oisst025d] oisst025d/1997  2340/6543  177.8s
+  [publish oisst025d] oisst025d/1998  2486/6543  187.8s
+  [publish oisst025d] oisst025d/1999  2632/6543  198.5s
+  [publish oisst025d] oisst025d/2000  2778/6543  208.5s
+  [publish oisst025d] oisst025d/2001  2924/6543  217.6s
+  [publish oisst025d] oisst025d/2002  3070/6543  227.5s
+  [publish oisst025d] oisst025d/2003  3216/6543  237.9s
+  [publish oisst025d] oisst025d/2004  3364/6543  247.7s
+  [publish oisst025d] oisst025d/2005  3510/6543  256.4s
+  [publish oisst025d] oisst025d/2006  3656/6543  266.2s
+  [publish oisst025d] oisst025d/2007  3802/6543  276.2s
+  [publish oisst025d] oisst025d/2008  3948/6543  285.2s
+  [publish oisst025d] oisst025d/2009  4094/6543  294.5s
+  [publish oisst025d] oisst025d/2010  4240/6543  303.7s
+  [publish oisst025d] oisst025d/2011  4386/6543  313.8s
+  [publish oisst025d] oisst025d/2012  4532/6543  322.7s
+  [publish oisst025d] oisst025d/2013  4678/6543  331.3s
+  [publish oisst025d] oisst025d/2014  4824/6543  340.0s
+  [publish oisst025d] oisst025d/2015  4970/6543  350.5s
+  [publish oisst025d] oisst025d/2016  5116/6543  360.2s
+  [publish oisst025d] oisst025d/2017  5262/6543  370.3s
+  [publish oisst025d] oisst025d/2018  5408/6543  379.1s
+  [publish oisst025d] oisst025d/2019  5554/6543  388.9s
+  [publish oisst025d] oisst025d/2020  5700/6543  398.3s
+  [publish oisst025d] oisst025d/2021  5846/6543  408.2s
+  [publish oisst025d] oisst025d/2022  5992/6543  417.6s
+  [publish oisst025d] oisst025d/2023  6138/6543  426.7s
+  [publish oisst025d] oisst025d/2024  6286/6543  435.6s
+  [publish oisst025d] oisst025d/2025  6432/6543  444.9s
+  [publish oisst025d] oisst025d/2026  6542/6543  451.4s
+  [publish oisst025d] store.json  6543/6543  451.6s
+  publish: 6543 file(s) verified by restore, 50 tile(s) decompressed, HTTP range {'checked': 5} -> https://huggingface.co/datasets/chfrank/earth-tensors/tree/main/tensors/family7_2d/oisst025d
+=== stage publish done in 467.5s ===

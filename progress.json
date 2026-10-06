@@ -1,0 +1,10 @@
+{
+ "at": "2026-10-06T15:46:12+00:00",
+ "done": 6543,
+ "elapsed_s": 451.6,
+ "eta_s": 0.0,
+ "files": 6543,
+ "item": "store.json",
+ "stage": "publish oisst025d",
+ "total": 6543
+}
