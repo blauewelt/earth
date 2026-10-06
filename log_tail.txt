@@ -1,0 +1,80 @@
+  [ncep100d store (tier G)] check: check ncep100d 2800/3230  119.6s
+  [ncep100d store (tier G)] check: check ncep100d 2900/3230  119.7s
+  [ncep100d store (tier G)] check: check ncep100d 3000/3230  119.7s
+  [ncep100d store (tier G)] check: check ncep100d 3100/3230  119.7s
+  [ncep100d store (tier G)] check: check ncep100d 3200/3230  119.7s
+  [ncep100d store (tier G)] check: check ncep100d 3230/3230  119.7s
+  [ncep100d store (tier G)] store  1/1  121.7s
+  store: ncep100d — ncep100d 3230 bin(s), 16147 frame(s), 290646 tile(s), 24624.0 MB -> /home/runner/work/earth/earth/ml/cache/family7_2d/ncep100d/ncep100d
+=== stage assemble done in 121.7s ===
+
+=== stage check (ncep100d) ===
+  [check ncep100d (tier G)] start  0/0  0.0s
+  [check ncep100d (tier G)] check: sha256 200/6462  1.5s
+  [check ncep100d (tier G)] check: sha256 400/6462  3.4s
+  [check ncep100d (tier G)] check: sha256 600/6462  5.2s
+  [check ncep100d (tier G)] check: sha256 800/6462  7.0s
+  [check ncep100d (tier G)] check: sha256 1000/6462  8.9s
+  [check ncep100d (tier G)] check: sha256 1200/6462  10.7s
+  [check ncep100d (tier G)] check: sha256 1400/6462  12.5s
+  [check ncep100d (tier G)] check: sha256 1600/6462  14.4s
+  [check ncep100d (tier G)] check: sha256 1800/6462  16.2s
+  [check ncep100d (tier G)] check: sha256 2000/6462  18.0s
+  [check ncep100d (tier G)] check: sha256 2200/6462  19.9s
+  [check ncep100d (tier G)] check: sha256 2400/6462  21.7s
+  [check ncep100d (tier G)] check: sha256 2600/6462  23.5s
+  [check ncep100d (tier G)] check: sha256 2800/6462  24.0s
+  [check ncep100d (tier G)] check: sha256 3000/6462  25.2s
+  [check ncep100d (tier G)] check: sha256 3200/6462  27.0s
+  [check ncep100d (tier G)] check: sha256 3400/6462  28.8s
+  [check ncep100d (tier G)] check: sha256 3600/6462  30.7s
+  [check ncep100d (tier G)] check: sha256 3800/6462  32.5s
+  [check ncep100d (tier G)] check: sha256 4000/6462  34.3s
+  [check ncep100d (tier G)] check: sha256 4200/6462  36.2s
+  [check ncep100d (tier G)] check: sha256 4400/6462  38.0s
+  [check ncep100d (tier G)] check: sha256 4600/6462  39.8s
+  [check ncep100d (tier G)] check: sha256 4800/6462  41.7s
+  [check ncep100d (tier G)] check: sha256 5000/6462  43.5s
+  [check ncep100d (tier G)] check: sha256 5200/6462  45.4s
+  [check ncep100d (tier G)] check: sha256 5400/6462  47.2s
+  [check ncep100d (tier G)] check: sha256 5600/6462  49.1s
+  [check ncep100d (tier G)] check: sha256 5800/6462  50.9s
+  [check ncep100d (tier G)] check: sha256 6000/6462  52.8s
+  [check ncep100d (tier G)] check: sha256 6200/6462  54.6s
+  [check ncep100d (tier G)] check: sha256 6400/6462  56.5s
+  [check ncep100d (tier G)] check: sha256 6462/6462  57.1s
+  [check ncep100d (tier G)] check: check ncep100d 100/3230  63.4s
+  [check ncep100d (tier G)] check: check ncep100d 200/3230  69.7s
+  [check ncep100d (tier G)] check: check ncep100d 300/3230  76.0s
+  [check ncep100d (tier G)] check: check ncep100d 400/3230  82.4s
+  [check ncep100d (tier G)] check: check ncep100d 500/3230  88.7s
+  [check ncep100d (tier G)] check: check ncep100d 600/3230  95.1s
+  [check ncep100d (tier G)] check: check ncep100d 700/3230  101.4s
+  [check ncep100d (tier G)] check: check ncep100d 800/3230  107.7s
+  [check ncep100d (tier G)] check: check ncep100d 900/3230  114.0s
+  [check ncep100d (tier G)] check: check ncep100d 1000/3230  120.3s
+  [check ncep100d (tier G)] check: check ncep100d 1100/3230  126.6s
+  [check ncep100d (tier G)] check: check ncep100d 1200/3230  132.9s
+  [check ncep100d (tier G)] check: check ncep100d 1300/3230  139.3s
+  [check ncep100d (tier G)] check: check ncep100d 1400/3230  145.5s
+  [check ncep100d (tier G)] check: check ncep100d 1500/3230  151.8s
+  [check ncep100d (tier G)] check: check ncep100d 1600/3230  158.1s
+  [check ncep100d (tier G)] check: check ncep100d 1700/3230  164.4s
+  [check ncep100d (tier G)] check: check ncep100d 1800/3230  170.7s
+  [check ncep100d (tier G)] check: check ncep100d 1900/3230  177.0s
+  [check ncep100d (tier G)] check: check ncep100d 2000/3230  183.3s
+  [check ncep100d (tier G)] check: check ncep100d 2100/3230  189.6s
+  [check ncep100d (tier G)] check: check ncep100d 2200/3230  195.9s
+  [check ncep100d (tier G)] check: check ncep100d 2300/3230  202.3s
+  [check ncep100d (tier G)] check: check ncep100d 2400/3230  208.6s
+  [check ncep100d (tier G)] check: check ncep100d 2500/3230  214.9s
+  [check ncep100d (tier G)] check: check ncep100d 2600/3230  221.2s
+  [check ncep100d (tier G)] check: check ncep100d 2700/3230  227.6s
+  [check ncep100d (tier G)] check: check ncep100d 2800/3230  233.9s
+  [check ncep100d (tier G)] check: check ncep100d 2900/3230  240.2s
+  [check ncep100d (tier G)] check: check ncep100d 3000/3230  246.5s
+  [check ncep100d (tier G)] check: check ncep100d 3100/3230  252.9s
+  [check ncep100d (tier G)] check: check ncep100d 3200/3230  259.2s
+  [check ncep100d (tier G)] check: check ncep100d 3230/3230  261.1s
+  check: ncep100d — 6462 file(s) verified, ncep100d: 290646 tile(s) decompressed (not published yet)
+=== stage check done in 261.1s ===
