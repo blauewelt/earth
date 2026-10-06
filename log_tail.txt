@@ -1,0 +1,80 @@
+WARNING - 2026-10-06T14:34:58Z - Some of your subset selection [0.0, 1.0] for the depth dimension exceed the dataset coordinates [0.49402499198913574, 5727.9169921875]
+INFO - 2026-10-06T14:35:06Z - Total size of the download: 67.37 MB.
+INFO - 2026-10-06T14:35:10Z - Selected dataset version: "202311"
+INFO - 2026-10-06T14:35:10Z - Selected dataset part: "default"
+WARNING - 2026-10-06T14:35:10Z - Some of your subset selection [0.0, 1.0] for the depth dimension exceed the dataset coordinates [0.49402499198913574, 5727.9169921875]
+INFO - 2026-10-06T14:35:17Z - Total size of the download: 67.37 MB.
+INFO - 2026-10-06T14:35:20Z - Selected dataset version: "202311"
+INFO - 2026-10-06T14:35:20Z - Selected dataset part: "default"
+WARNING - 2026-10-06T14:35:20Z - Some of your subset selection [0.0, 1.0] for the depth dimension exceed the dataset coordinates [0.49402499198913574, 5727.9169921875]
+INFO - 2026-10-06T14:35:28Z - Total size of the download: 67.37 MB.
+INFO - 2026-10-06T14:35:31Z - Selected dataset version: "202311"
+INFO - 2026-10-06T14:35:31Z - Selected dataset part: "default"
+WARNING - 2026-10-06T14:35:31Z - Some of your subset selection [0.0, 1.0] for the depth dimension exceed the dataset coordinates [0.49402499198913574, 5727.9169921875]
+INFO - 2026-10-06T14:35:39Z - Total size of the download: 67.37 MB.
+INFO - 2026-10-06T14:35:42Z - Selected dataset version: "202311"
+INFO - 2026-10-06T14:35:42Z - Selected dataset part: "default"
+WARNING - 2026-10-06T14:35:42Z - Some of your subset selection [0.0, 1.0] for the depth dimension exceed the dataset coordinates [0.49402499198913574, 5727.9169921875]
+INFO - 2026-10-06T14:35:50Z - Total size of the download: 67.37 MB.
+INFO - 2026-10-06T14:35:53Z - Selected dataset version: "202311"
+INFO - 2026-10-06T14:35:53Z - Selected dataset part: "default"
+WARNING - 2026-10-06T14:35:53Z - Some of your subset selection [0.0, 1.0] for the depth dimension exceed the dataset coordinates [0.49402499198913574, 5727.9169921875]
+INFO - 2026-10-06T14:36:01Z - Total size of the download: 67.37 MB.
+INFO - 2026-10-06T14:36:05Z - Selected dataset version: "202311"
+INFO - 2026-10-06T14:36:05Z - Selected dataset part: "default"
+WARNING - 2026-10-06T14:36:05Z - Some of your subset selection [0.0, 1.0] for the depth dimension exceed the dataset coordinates [0.49402499198913574, 5727.9169921875]
+INFO - 2026-10-06T14:36:13Z - Total size of the download: 67.37 MB.
+INFO - 2026-10-06T14:36:16Z - Selected dataset version: "202311"
+INFO - 2026-10-06T14:36:16Z - Selected dataset part: "default"
+WARNING - 2026-10-06T14:36:16Z - Some of your subset selection [0.0, 1.0] for the depth dimension exceed the dataset coordinates [0.49402499198913574, 5727.9169921875]
+INFO - 2026-10-06T14:36:24Z - Total size of the download: 67.37 MB.
+INFO - 2026-10-06T14:36:28Z - Selected dataset version: "202311"
+INFO - 2026-10-06T14:36:28Z - Selected dataset part: "default"
+WARNING - 2026-10-06T14:36:28Z - Some of your subset selection [0.0, 1.0] for the depth dimension exceed the dataset coordinates [0.49402499198913574, 5727.9169921875]
+INFO - 2026-10-06T14:36:36Z - Total size of the download: 67.37 MB.
+INFO - 2026-10-06T14:36:39Z - Selected dataset version: "202311"
+INFO - 2026-10-06T14:36:39Z - Selected dataset part: "default"
+WARNING - 2026-10-06T14:36:39Z - Some of your subset selection [0.0, 1.0] for the depth dimension exceed the dataset coordinates [0.49402499198913574, 5727.9169921875]
+INFO - 2026-10-06T14:36:47Z - Total size of the download: 67.37 MB.
+INFO - 2026-10-06T14:36:50Z - Selected dataset version: "202311"
+INFO - 2026-10-06T14:36:50Z - Selected dataset part: "default"
+WARNING - 2026-10-06T14:36:50Z - Some of your subset selection [0.0, 1.0] for the depth dimension exceed the dataset coordinates [0.49402499198913574, 5727.9169921875]
+INFO - 2026-10-06T14:36:58Z - Total size of the download: 67.37 MB.
+INFO - 2026-10-06T14:37:01Z - Selected dataset version: "202311"
+INFO - 2026-10-06T14:37:01Z - Selected dataset part: "default"
+WARNING - 2026-10-06T14:37:01Z - Some of your subset selection [0.0, 1.0] for the depth dimension exceed the dataset coordinates [0.49402499198913574, 5727.9169921875]
+INFO - 2026-10-06T14:37:09Z - Total size of the download: 67.37 MB.
+Upload 0 LFS files: 0it [00:00, ?it/s]Upload 0 LFS files: 0it [00:00, ?it/s]
+No files have been modified since last commit. Skipping to prevent empty commit.
+  glorys tail 2025-01: 31 day(s) fetched from Copernicus Marine, parked at daily025_global/glorys025_global_202501.nc (restore-verified)
+  2024: glorys025d 74 bin(s) 370 frame(s) 2296.2 MB (723.6s)
+  hub: chfrank/earth-tensors with the token from $HF_TOKEN
+  glorys025d: uploading 150 file(s) of 1 year(s), 2296.3 MB -> chfrank/earth-tensors:partials/family7_2d/glorys025d/
+Upload 3 LFS files:   0%|          | 0/3 [00:00<?, ?it/s]
+glorys025d__bin_3141.idx.npy:   0%|          | 0.00/1.57k [00:00<?, ?B/s][A
+
+
+glorys025d__bin_3141.zst:   0%|          | 0.00/31.1M [00:00<?, ?B/s][A[A[A
+
+glorys025d__shard_index.npy:   0%|          | 0.00/30.7k [00:00<?, ?B/s][A[Aglorys025d__shard_index.npy: 100%|██████████| 30.7k/30.7k [00:00<00:00, 217kB/s]
+glorys025d__bin_3141.idx.npy: 100%|██████████| 1.57k/1.57k [00:00<00:00, 8.08kB/s]
+
+
+
+glorys025d__bin_3141.zst:  22%|██▏       | 6.95M/31.1M [00:00<00:01, 22.5MB/s][A[A[AUpload 3 LFS files:  33%|███▎      | 1/3 [00:00<00:00,  2.93it/s]
+
+
+glorys025d__bin_3141.zst:  46%|████▌     | 14.2M/31.1M [00:00<00:00, 35.9MB/s][A[A[A
+
+
+glorys025d__bin_3141.zst:  60%|█████▉    | 18.6M/31.1M [00:00<00:00, 22.4MB/s][A[A[A
+
+
+glorys025d__bin_3141.zst:  74%|███████▎  | 22.9M/31.1M [00:00<00:00, 22.9MB/s][A[A[A
+
+
+glorys025d__bin_3141.zst:  90%|████████▉ | 27.9M/31.1M [00:01<00:00, 24.1MB/s][A[A[Aglorys025d__bin_3141.zst: 100%|██████████| 31.1M/31.1M [00:01<00:00, 20.1MB/s]
+Upload 3 LFS files: 100%|██████████| 3/3 [00:01<00:00,  1.63it/s]Upload 3 LFS files: 100%|██████████| 3/3 [00:01<00:00,  1.70it/s]
+  glorys025d: 1 year(s) pushed and verified in 1 part commit(s), done.json written last (0 already present)
+  push-parts: 1 year(s) on the Hub under partials/family7_2d/glorys025d/
+=== stage fetch done in 1425.7s ===
