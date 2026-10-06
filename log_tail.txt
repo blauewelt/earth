@@ -1,0 +1,79 @@
+store     era5_q — ERA5 specific humidity on 13 pressure levels (50-1000 hPa), six-hourly instants on a 1-degree grid (conservative box means) — family 1.2, exception E4
+family    family1_2 (1.2) · public -> chfrank/earth-tensors:tensors/family1_2/era5_q
+axis      1982-01-01 .. 2026-12-31  bins 0..3287 · time_s int32 (schema 2)
+lane      (unnamed) — whole calendar year(s), no group subset: the year folder's own files, as every store on the Hub holds them
+channels  C=13: q_50, q_100, q_150, q_200, q_250, q_300, q_400, q_500, q_600, q_700, q_850, q_925, q_1000
+tier G    sharded, groups ['era5_q'], F=20 x 21600 s, float16, years (by bin start) 1982..2026
+work      /opt/runner/_work/earth/earth/ml/cache/family1_2
+
+=== stage check (era5_q) ===
+  [check era5_q (tier G)] start  0/0  0.0s
+  [check era5_q (tier G)] check: sha256 200/6504  1.5s
+  [check era5_q (tier G)] check: sha256 400/6504  3.0s
+  [check era5_q (tier G)] check: sha256 600/6504  4.5s
+  [check era5_q (tier G)] check: sha256 800/6504  6.0s
+  [check era5_q (tier G)] check: sha256 1000/6504  7.5s
+  [check era5_q (tier G)] check: sha256 1200/6504  9.0s
+  [check era5_q (tier G)] check: sha256 1400/6504  10.0s
+  [check era5_q (tier G)] check: sha256 1600/6504  11.5s
+  [check era5_q (tier G)] check: sha256 1800/6504  13.0s
+  [check era5_q (tier G)] check: sha256 2000/6504  14.5s
+  [check era5_q (tier G)] check: sha256 2200/6504  16.0s
+  [check era5_q (tier G)] check: sha256 2400/6504  17.6s
+  [check era5_q (tier G)] check: sha256 2600/6504  19.1s
+  [check era5_q (tier G)] check: sha256 2800/6504  20.6s
+  [check era5_q (tier G)] check: sha256 3000/6504  22.1s
+  [check era5_q (tier G)] check: sha256 3200/6504  23.6s
+  [check era5_q (tier G)] check: sha256 3400/6504  25.1s
+  [check era5_q (tier G)] check: sha256 3600/6504  26.7s
+  [check era5_q (tier G)] check: sha256 3800/6504  28.2s
+  [check era5_q (tier G)] check: sha256 4000/6504  29.8s
+  [check era5_q (tier G)] check: sha256 4200/6504  31.3s
+  [check era5_q (tier G)] check: sha256 4400/6504  32.8s
+  [check era5_q (tier G)] check: sha256 4600/6504  34.4s
+  [check era5_q (tier G)] check: sha256 4800/6504  35.9s
+  [check era5_q (tier G)] check: sha256 5000/6504  37.4s
+  [check era5_q (tier G)] check: sha256 5200/6504  38.8s
+  [check era5_q (tier G)] check: sha256 5400/6504  40.2s
+  [check era5_q (tier G)] check: sha256 5600/6504  41.7s
+  [check era5_q (tier G)] check: sha256 5800/6504  43.2s
+  [check era5_q (tier G)] check: sha256 6000/6504  44.8s
+  [check era5_q (tier G)] check: sha256 6200/6504  46.3s
+  [check era5_q (tier G)] check: sha256 6400/6504  47.8s
+  [check era5_q (tier G)] check: sha256 6504/6504  48.6s
+  [check era5_q (tier G)] check: check era5_q 100/3251  65.5s
+  [check era5_q (tier G)] check: check era5_q 200/3251  82.2s
+  [check era5_q (tier G)] check: check era5_q 300/3251  98.9s
+  [check era5_q (tier G)] check: check era5_q 400/3251  115.5s
+  [check era5_q (tier G)] check: check era5_q 500/3251  132.0s
+  [check era5_q (tier G)] check: check era5_q 600/3251  149.0s
+  [check era5_q (tier G)] check: check era5_q 700/3251  164.9s
+  [check era5_q (tier G)] check: check era5_q 800/3251  181.8s
+  [check era5_q (tier G)] check: check era5_q 900/3251  198.8s
+  [check era5_q (tier G)] check: check era5_q 1000/3251  215.8s
+  [check era5_q (tier G)] check: check era5_q 1100/3251  232.6s
+  [check era5_q (tier G)] check: check era5_q 1200/3251  249.2s
+  [check era5_q (tier G)] check: check era5_q 1300/3251  265.5s
+  [check era5_q (tier G)] check: check era5_q 1400/3251  281.8s
+  [check era5_q (tier G)] check: check era5_q 1500/3251  298.2s
+  [check era5_q (tier G)] check: check era5_q 1600/3251  314.3s
+  [check era5_q (tier G)] check: check era5_q 1700/3251  330.6s
+  [check era5_q (tier G)] check: check era5_q 1800/3251  348.0s
+  [check era5_q (tier G)] check: check era5_q 1900/3251  365.0s
+  [check era5_q (tier G)] check: check era5_q 2000/3251  381.9s
+  [check era5_q (tier G)] check: check era5_q 2100/3251  398.6s
+  [check era5_q (tier G)] check: check era5_q 2200/3251  415.8s
+  [check era5_q (tier G)] check: check era5_q 2300/3251  432.7s
+  [check era5_q (tier G)] check: check era5_q 2400/3251  449.7s
+  [check era5_q (tier G)] check: check era5_q 2500/3251  466.7s
+  [check era5_q (tier G)] check: check era5_q 2600/3251  483.7s
+  [check era5_q (tier G)] check: check era5_q 2700/3251  500.5s
+  [check era5_q (tier G)] check: check era5_q 2800/3251  518.2s
+  [check era5_q (tier G)] check: check era5_q 2900/3251  535.2s
+  [check era5_q (tier G)] check: check era5_q 3000/3251  552.1s
+  [check era5_q (tier G)] check: check era5_q 3100/3251  570.3s
+  [check era5_q (tier G)] check: check era5_q 3200/3251  587.4s
+  [check era5_q (tier G)] check: check era5_q 3251/3251  596.0s
+  hub: chfrank/earth-tensors with the token from $HF_TOKEN
+  check: era5_q — 6504 file(s) verified, era5_q: 1170144 tile(s) decompressed, Hub chfrank/earth-tensors agrees
+=== stage check done in 597.3s ===
