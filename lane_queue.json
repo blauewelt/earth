@@ -1,5 +1,16 @@
 {
- "pending": [],
+ "pending": [
+  {
+   "store": "occci025d",
+   "stage": "index,fetch",
+   "start": "2013-01-01",
+   "end": "2013-12-31",
+   "runner": "ubuntu-latest",
+   "extra_args": "--push-parts",
+   "adapter_env": "",
+   "retries": 2
+  }
+ ],
  "dispatched": [
   {
    "store": "occci025d",
