@@ -1,18 +1,6 @@
 {
  "pending": [],
- "dispatched": [
-  {
-   "store": "era5_q",
-   "stage": "index,fetch",
-   "start": "2022-01-01",
-   "end": "2026-12-31",
-   "runner": "ubuntu-latest",
-   "extra_args": "--push-parts",
-   "adapter_env": "ERA5_Q_BOUND=D6",
-   "retries": 2,
-   "at": "2026-10-06T05:46:45.124Z"
-  }
- ],
+ "dispatched": [],
  "done": [
   {
    "store": "sst_acspo02",
@@ -3817,6 +3805,19 @@
    "at": "2026-10-06T05:46:55.588Z",
    "run_number": 970,
    "finished": "2026-10-06T06:21:20Z"
+  },
+  {
+   "store": "era5_q",
+   "stage": "index,fetch",
+   "start": "2022-01-01",
+   "end": "2026-12-31",
+   "runner": "ubuntu-latest",
+   "extra_args": "--push-parts",
+   "adapter_env": "ERA5_Q_BOUND=D6",
+   "retries": 2,
+   "at": "2026-10-06T05:46:45.124Z",
+   "run_number": 967,
+   "finished": "2026-10-06T06:27:40Z"
   }
  ],
  "failed": [
