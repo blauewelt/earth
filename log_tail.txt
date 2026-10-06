@@ -1,0 +1,77 @@
+store     ncep100d — NCEP/NCAR Reanalysis 1 surface and land channels (family 7.2's g100), DAILY means, 1 degree — family 7.2d
+family    family7_2d (7.2d) · public -> chfrank/earth-tensors:tensors/family7_2d/ncep100d
+axis      1982-01-01 .. 2024-12-31  bins 0..3141 · time_s int32 (schema 2)
+lane      (unnamed) — whole calendar year(s), no group subset: the year folder's own files, as every store on the Hub holds them
+channels  C=15: tau_x, tau_y, tau_x_std, tau_y_std, t2m, u10, v10, sp, log_prate, log_swe, soilw, tsoil, lhtfl, shtfl, skt
+tier G    sharded, groups ['ncep100d'], F=5 x 86400 s, float16, years (by bin start) 1982..2024
+work      /opt/runner/_work/earth/earth/ml/cache/family7_2d
+
+=== stage check (ncep100d) ===
+  [check ncep100d (tier G)] start  0/0  0.0s
+  [check ncep100d (tier G)] check: sha256 200/6286  0.4s
+  [check ncep100d (tier G)] check: sha256 400/6286  0.8s
+  [check ncep100d (tier G)] check: sha256 600/6286  1.2s
+  [check ncep100d (tier G)] check: sha256 800/6286  1.5s
+  [check ncep100d (tier G)] check: sha256 1000/6286  1.9s
+  [check ncep100d (tier G)] check: sha256 1200/6286  2.3s
+  [check ncep100d (tier G)] check: sha256 1400/6286  2.7s
+  [check ncep100d (tier G)] check: sha256 1600/6286  2.8s
+  [check ncep100d (tier G)] check: sha256 1800/6286  2.9s
+  [check ncep100d (tier G)] check: sha256 2000/6286  2.9s
+  [check ncep100d (tier G)] check: sha256 2200/6286  3.0s
+  [check ncep100d (tier G)] check: sha256 2400/6286  3.1s
+  [check ncep100d (tier G)] check: sha256 2600/6286  3.2s
+  [check ncep100d (tier G)] check: sha256 2800/6286  3.3s
+  [check ncep100d (tier G)] check: sha256 3000/6286  3.3s
+  [check ncep100d (tier G)] check: sha256 3200/6286  3.4s
+  [check ncep100d (tier G)] check: sha256 3400/6286  3.5s
+  [check ncep100d (tier G)] check: sha256 3600/6286  3.6s
+  [check ncep100d (tier G)] check: sha256 3800/6286  3.7s
+  [check ncep100d (tier G)] check: sha256 4000/6286  3.7s
+  [check ncep100d (tier G)] check: sha256 4200/6286  3.8s
+  [check ncep100d (tier G)] check: sha256 4400/6286  3.9s
+  [check ncep100d (tier G)] check: sha256 4600/6286  4.0s
+  [check ncep100d (tier G)] check: sha256 4800/6286  4.1s
+  [check ncep100d (tier G)] check: sha256 5000/6286  4.2s
+  [check ncep100d (tier G)] check: sha256 5200/6286  4.2s
+  [check ncep100d (tier G)] check: sha256 5400/6286  4.3s
+  [check ncep100d (tier G)] check: sha256 5600/6286  4.4s
+  [check ncep100d (tier G)] check: sha256 5800/6286  4.5s
+  [check ncep100d (tier G)] check: sha256 6000/6286  4.6s
+  [check ncep100d (tier G)] check: sha256 6200/6286  4.6s
+  [check ncep100d (tier G)] check: sha256 6286/6286  4.7s
+  [check ncep100d (tier G)] check: check ncep100d 100/3142  8.4s
+  [check ncep100d (tier G)] check: check ncep100d 200/3142  12.1s
+  [check ncep100d (tier G)] check: check ncep100d 300/3142  15.7s
+  [check ncep100d (tier G)] check: check ncep100d 400/3142  19.4s
+  [check ncep100d (tier G)] check: check ncep100d 500/3142  23.0s
+  [check ncep100d (tier G)] check: check ncep100d 600/3142  26.8s
+  [check ncep100d (tier G)] check: check ncep100d 700/3142  30.4s
+  [check ncep100d (tier G)] check: check ncep100d 800/3142  34.1s
+  [check ncep100d (tier G)] check: check ncep100d 900/3142  37.8s
+  [check ncep100d (tier G)] check: check ncep100d 1000/3142  41.5s
+  [check ncep100d (tier G)] check: check ncep100d 1100/3142  45.2s
+  [check ncep100d (tier G)] check: check ncep100d 1200/3142  48.8s
+  [check ncep100d (tier G)] check: check ncep100d 1300/3142  52.8s
+  [check ncep100d (tier G)] check: check ncep100d 1400/3142  57.1s
+  [check ncep100d (tier G)] check: check ncep100d 1500/3142  61.3s
+  [check ncep100d (tier G)] check: check ncep100d 1600/3142  65.0s
+  [check ncep100d (tier G)] check: check ncep100d 1700/3142  68.7s
+  [check ncep100d (tier G)] check: check ncep100d 1800/3142  72.3s
+  [check ncep100d (tier G)] check: check ncep100d 1900/3142  76.0s
+  [check ncep100d (tier G)] check: check ncep100d 2000/3142  79.6s
+  [check ncep100d (tier G)] check: check ncep100d 2100/3142  83.3s
+  [check ncep100d (tier G)] check: check ncep100d 2200/3142  87.0s
+  [check ncep100d (tier G)] check: check ncep100d 2300/3142  90.6s
+  [check ncep100d (tier G)] check: check ncep100d 2400/3142  94.3s
+  [check ncep100d (tier G)] check: check ncep100d 2500/3142  98.0s
+  [check ncep100d (tier G)] check: check ncep100d 2600/3142  101.6s
+  [check ncep100d (tier G)] check: check ncep100d 2700/3142  105.3s
+  [check ncep100d (tier G)] check: check ncep100d 2800/3142  109.0s
+  [check ncep100d (tier G)] check: check ncep100d 2900/3142  112.6s
+  [check ncep100d (tier G)] check: check ncep100d 3000/3142  116.3s
+  [check ncep100d (tier G)] check: check ncep100d 3100/3142  120.0s
+  [check ncep100d (tier G)] check: check ncep100d 3142/3142  121.5s
+  hub: chfrank/earth-tensors with the token from $HF_TOKEN
+  check: ncep100d — 6286 file(s) verified, ncep100d: 282708 tile(s) decompressed, Hub chfrank/earth-tensors agrees
+=== stage check done in 122.6s ===
