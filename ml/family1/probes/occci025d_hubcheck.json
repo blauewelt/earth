@@ -1,0 +1,146 @@
+{
+ "store": "occci025d",
+ "hub": "https://huggingface.co/datasets/chfrank/earth-tensors/resolve/main/tensors/family7_2d/occci025d/occci025d",
+ "instants": [
+  {
+   "day": "2010-07-15",
+   "bin": 2084,
+   "frame": 2,
+   "hub_range_reads": 36,
+   "channels": {
+    "log_chl": {
+     "values": 210339,
+     "max_abs_diff": 0.0004883166686964202,
+     "beyond_half_f16_step": 0,
+     "finite_on_hub_only": 0,
+     "finite_in_reference_only": 0
+    },
+    "chl_cov": {
+     "values": 210339,
+     "max_abs_diff": 0.00021701388888883955,
+     "beyond_half_f16_step": 0,
+     "finite_on_hub_only": 0,
+     "finite_in_reference_only": 0
+    }
+   },
+   "pentad": {
+    "ok": true,
+    "channels": {
+     "log_chl": {
+      "cells": 404784,
+      "nan_mismatch": 0,
+      "max_abs_diff": 0.0013546508271247149,
+      "max_excess": -8.227142645097748e-07,
+      "allowed": 0.0
+     },
+     "chl_cov": {
+      "cells": 404784,
+      "nan_mismatch": 0,
+      "max_abs_diff": 0.0003592886961996111,
+      "max_excess": -1.7905150860725156e-05,
+      "allowed": 0.0
+     }
+    }
+   },
+   "seconds": 8.9
+  },
+  {
+   "day": "2023-01-15",
+   "bin": 2997,
+   "frame": 4,
+   "hub_range_reads": 252,
+   "channels": {
+    "log_chl": {
+     "values": 246821,
+     "max_abs_diff": 0.0009706011947177018,
+     "beyond_half_f16_step": 0,
+     "finite_on_hub_only": 0,
+     "finite_in_reference_only": 0
+    },
+    "chl_cov": {
+     "values": 246821,
+     "max_abs_diff": 0.00021701388888883955,
+     "beyond_half_f16_step": 0,
+     "finite_on_hub_only": 0,
+     "finite_in_reference_only": 0
+    }
+   },
+   "pentad": {
+    "ok": true,
+    "channels": {
+     "log_chl": {
+      "cells": 478277,
+      "nan_mismatch": 0,
+      "max_abs_diff": 0.0013650119071826339,
+      "max_excess": -1.500150386278445e-07,
+      "allowed": 0.0
+     },
+     "chl_cov": {
+      "cells": 478277,
+      "nan_mismatch": 0,
+      "max_abs_diff": 0.0004005107097327931,
+      "max_excess": -1.026255497243261e-05,
+      "allowed": 0.0
+     }
+    }
+   },
+   "seconds": 10.7
+  },
+  {
+   "day": "2025-07-15",
+   "bin": 3180,
+   "frame": 1,
+   "hub_range_reads": 468,
+   "channels": {
+    "log_chl": {
+     "values": 239121,
+     "max_abs_diff": 0.000488318799714671,
+     "beyond_half_f16_step": 0,
+     "finite_on_hub_only": 0,
+     "finite_in_reference_only": 0
+    },
+    "chl_cov": {
+     "values": 239121,
+     "max_abs_diff": 0.00021701388888883955,
+     "beyond_half_f16_step": 0,
+     "finite_on_hub_only": 0,
+     "finite_in_reference_only": 0
+    }
+   },
+   "pentad": {
+    "ok": null,
+    "why": "after family 7.2's 2024-12-31 end: no pentad to compare with"
+   },
+   "seconds": 7.9
+  },
+  {
+   "day": "2026-06-15",
+   "bin": 3247,
+   "frame": 1,
+   "hub_range_reads": 504,
+   "channels": {
+    "log_chl": {
+     "values": 226032,
+     "max_abs_diff": 0.000488343927604884,
+     "beyond_half_f16_step": 0,
+     "finite_on_hub_only": 0,
+     "finite_in_reference_only": 0
+    },
+    "chl_cov": {
+     "values": 226032,
+     "max_abs_diff": 0.00021701388888883955,
+     "beyond_half_f16_step": 0,
+     "finite_on_hub_only": 0,
+     "finite_in_reference_only": 0
+    }
+   },
+   "pentad": {
+    "ok": null,
+    "why": "after family 7.2's 2024-12-31 end: no pentad to compare with"
+   },
+   "seconds": 8.8
+  }
+ ],
+ "ok": true,
+ "bytes_from": "the published files (tile_grid.json, shard_index.npy and each instant's bin .zst/.idx.npy) downloaded whole from the Hub and checked equal to the published store.json sha256 before the read \u2014 the Hub answered HTTP 429 to the per-tile range reads from this sandbox on 2026-10-06"
+}

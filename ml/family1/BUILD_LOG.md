@@ -1982,3 +1982,50 @@ was not uploaded either. Both years were re-run on the fixed code: #1024
 re-publish to flip `occci025d` to built. Not started: the session reached
 its time budget, and the coordinator's rule is never to leave a box up
 past the session.
+
+## E-087 §14 · family 7.2d extended to each producer's last day (2026-10-06, evening)
+
+*The owner reversed decision Q4 at 16:06 local: "Let's include _all_ data
+(not prematurely end in 2024)." Every store now runs to the last day its
+producer serves, measured that afternoon (plan §14 has the table and the
+reasons). Days after family 7.2's own end, 2024-12-31, have no pentad to be
+checked against, so each lane checks them against an INDEPENDENT read of the
+same source file instead (`f7d_hub_check.ref_*_from`). That is a weaker
+guarantee, and the store says which spans carry it (`source_segments`,
+`counts_by_year`).*
+
+| store | old end → new end | what limits it | product after 2024 |
+|---|---|---|---|
+| `oisst025d` | 2024-12-31 → **2026-10-04** | PSL's 2026 yearly file, 277 days; NCEI-preliminary from 09-21 (14 days, listed by date) | OISST v2.1, the same PSL files |
+| `ncep100d` | 2024-12-31 → **2026-03-17** | PSL's thirteen 2026 files stop at 03-17 18Z, last modified 03-19 | NCEP/NCAR R1, the same PSL files |
+| `glorys025d` | 2024-12-31 → **2026-08-18** | Copernicus Marine's `end_datetime` | `cmems_mod_glo_phy_my_0.083deg_P1D-m` version 202311: the SAME id and version as 1993–2024. No `myint` id exists today; the catalogue `field_date` is 2021-06-30 |
+| `occci025d` | 2024-12-31 → **2026-06-30** | PML's v6.0 daily aggregate, 10,501 days | OC-CCI v6.0, PML per-day subsets as for 2023–24 |
+
+**Lanes** (hosted runners, `index,fetch --push-parts`; 2024 is re-fetched
+because its last bin, 3141, now holds four 2025 days):
+
+| store | lane | minutes | days | falsifier result |
+|---|---|---|---|---|
+| glorys025d | #1028 2024 | 25 | 370 frames | 74/74 bins pentad-checked |
+| glorys025d | #1027 2025 | 84 | 365 | 365 days read back; currents and log_mld ≤ 0.00098, ssh ≤ 0.00049. 2025-01…12 fetched from Copernicus in the lane and parked in `daily025_global/`, restore-verified |
+| glorys025d | #1026 2026 | 47 | 226 (to 08-18) | 226 days read back, same maxima; 2026-01…07 parked in `daily025_global/`, the partial 2026-08 in `daily025_global_tail/` |
+| oisst025d | #1031 / #1030 / #1029 | 17 / 17 / 13 | 370 / 365 / 273 | 74/74 pentad; 365 + 273 read back, sst ≤ 0.0154, sea_ice ≤ 0.00024; preliminary 2026-09-21…10-04 |
+| ncep100d | #1034 / #1033 / #1032 | 13 / 12 / 12 | 370 / 365 / 72 | 74/74 pentad; 365 + 72 read back, t2m ≤ 0.031, sp ≤ 0.50, lhtfl and shtfl ≤ 0.25 |
+| occci025d | #1037 / #1036 / #1035 | 26 / 41 / 18 | 370 / 365 / 177 | 74/74 pentad; 365 + 177 read back, log_chl ≤ 0.00098, chl_cov ≤ 0.00022 |
+
+No lane refused anything. One duplicate: the queue keeper never matched the
+two GLORYS tail lanes to their runs (no run number in `lane_queue.json`),
+counted 2026 "lost" after 30 minutes and dispatched #1040 while #1026 was
+finishing green. #1040 was cancelled and both entries were settled by hand.
+The keeper's run matching for long lanes is a follow-up.
+
+**Two box refusals before the first assembly, both from §14's own code.**
+#1038 refused every year from 1982 to 2023 as "written for a different grid
+declaration": the new prose in the tile spec (`pentad_rule`, `record`,
+`source_segments`) differed from the prose stamped into the old parts. The
+assembler now compares specs without an adapter's `spec_doc_keys`; every
+grid-deciding key is still held to equality, and stripped specs were
+checked equal on real ledgers (`c96caaa`). #1039 then died in
+`year_summary`, which is handed a LIST of lane counts; fixed in `e16dc2e`
+with a test. #1041–#1043 were cancelled before they could hit the same bug,
+and #1042 carried a start date that did not match the OC lanes.

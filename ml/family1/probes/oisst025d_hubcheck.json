@@ -30,19 +30,19 @@
       "cells": 703902,
       "nan_mismatch": 0,
       "max_abs_diff": 0.01817033514380384,
-      "max_excess": -5.008369264395893e-05,
+      "max_excess": -5.1708365313660534e-05,
       "allowed": 0.0
      },
      "sea_ice": {
       "cells": 149550,
       "nan_mismatch": 0,
       "max_abs_diff": 0.00046331593475767985,
-      "max_excess": -9.293157333566647e-06,
+      "max_excess": -9.389292227428021e-06,
       "allowed": 0.0
      }
     }
    },
-   "seconds": 127.8
+   "seconds": 121.9
   },
   {
    "day": "2023-01-15",
@@ -72,19 +72,73 @@
       "cells": 703902,
       "nan_mismatch": 0,
       "max_abs_diff": 0.01817033514380384,
-      "max_excess": -5.0081306127474495e-05,
+      "max_excess": -5.170597879717697e-05,
       "allowed": 0.0
      },
      "sea_ice": {
       "cells": 130855,
       "nan_mismatch": 0,
       "max_abs_diff": 0.0005032349086832033,
-      "max_excess": -3.720949687754699e-05,
+      "max_excess": -3.728508726447399e-05,
       "allowed": 0.0
      }
     }
    },
-   "seconds": 114.0
+   "seconds": 115.3
+  },
+  {
+   "day": "2025-07-15",
+   "bin": 3180,
+   "frame": 1,
+   "hub_range_reads": 468,
+   "channels": {
+    "sst": {
+     "values": 703902,
+     "max_abs_diff": 0.015416463216148202,
+     "beyond_half_f16_step": 0,
+     "finite_on_hub_only": 0,
+     "finite_in_reference_only": 0
+    },
+    "sea_ice": {
+     "values": 134492,
+     "max_abs_diff": 0.0002409219741821289,
+     "beyond_half_f16_step": 0,
+     "finite_on_hub_only": 0,
+     "finite_in_reference_only": 0
+    }
+   },
+   "pentad": {
+    "ok": null,
+    "why": "after family 7.2's 2024-12-31 end: no pentad to compare with"
+   },
+   "seconds": 33.2
+  },
+  {
+   "day": "2026-09-30",
+   "bin": 3268,
+   "frame": 3,
+   "hub_range_reads": 504,
+   "channels": {
+    "sst": {
+     "values": 703902,
+     "max_abs_diff": 0.015417734781898673,
+     "beyond_half_f16_step": 0,
+     "finite_on_hub_only": 0,
+     "finite_in_reference_only": 0
+    },
+    "sea_ice": {
+     "values": 125292,
+     "max_abs_diff": 0.0002409219741821289,
+     "beyond_half_f16_step": 0,
+     "finite_on_hub_only": 0,
+     "finite_in_reference_only": 0
+    }
+   },
+   "pentad": {
+    "ok": null,
+    "why": "after family 7.2's 2024-12-31 end: no pentad to compare with"
+   },
+   "seconds": 29.8
   }
  ],
  "ok": true

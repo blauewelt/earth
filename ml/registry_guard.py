@@ -26,6 +26,19 @@ Two opt-in widenings, each for one named reason:
                  field of the group whose `name` is NAME may change, and only
                  that group.
 
+  --allow-group rebuilt_<code>
+                 EVERY store of the registry whose `family_code` is <code>
+                 was rebuilt (E-087 §14: family 7.2d's four stores extended
+                 to each producer's last day, one of them built for the first
+                 time): every group may change, PROVIDED the set of group
+                 names is the same, and so may the top-level build state
+                 (`built`, `not_built`, `n_built`) and `description`, which
+                 says what the rebuild changed. Every other top-level field
+                 is still held to equality. The token fits the workflow's
+                 `allow_group` input (^[a-z0-9_]*$), and the workflow passes
+                 it through unchanged. The changed groups are printed with
+                 what changed in each, for review.
+
 Anything else — a group gone, a sha256 changed, a size changed, a size LOST
 — exits 1 with the paths that differ, and nothing is published.
 
@@ -38,6 +51,7 @@ import re
 import sys
 
 ALLOWED_TOP = {"siblings", "generated_utc", "builder_git_sha"}
+REBUILT_TOP = {"built", "not_built", "n_built", "description"}
 SPAN_TOP = {"span_rule"}
 SPAN_FIELDS = {"record_span", "record_span_instants", "record_span_basis",
                "requested_window", "date_range"}
@@ -48,7 +62,8 @@ def walk(a, b, path, bad, filled, spans_seen, opts):
     if isinstance(a, dict) and isinstance(b, dict):
         for k in sorted(set(a) | set(b)):
             if not path and (k in ALLOWED_TOP
-                             or (opts["spans"] and k in SPAN_TOP)):
+                             or (opts["spans"] and k in SPAN_TOP)
+                             or (opts["rebuilt"] and k in REBUILT_TOP)):
                 continue
             if opts["spans"] and k in SPAN_FIELDS \
                     and GROUP_PATH.match(path) \
@@ -64,7 +79,8 @@ def walk(a, b, path, bad, filled, spans_seen, opts):
             if path == ".groups" and opts["allow_group"] \
                     and isinstance(x, dict) and isinstance(y, dict) \
                     and x.get("name") == y.get("name") \
-                    and x.get("name") in opts["allow_group"]:
+                    and (x.get("name") in opts["allow_group"]
+                         or opts["rebuilt"]):
                 if x != y:
                     opts["groups_changed"].append(x.get("name"))
                 continue
@@ -101,8 +117,19 @@ def main(argv=None):
     a = ap.parse_args(argv)
     old, new = json.load(open(a.published)), json.load(open(a.rebuilt))
     bad, filled, spans_seen = [], [], []
+    rebuilt = [g[len("rebuilt_"):] for g in a.allow_group
+               if g.startswith("rebuilt_")]
+    if rebuilt and str(old.get("family_code")) not in rebuilt:
+        print(f"REFUSING: --allow-group rebuilt_{rebuilt[0]} names family "
+              f"{rebuilt[0]}, and this registry is family "
+              f"{old.get('family_code')}")
+        return 1
+    if rebuilt and sorted(g.get("name") for g in old.get("groups") or []) \
+            != sorted(g.get("name") for g in new.get("groups") or []):
+        print("REFUSING: the rebuilt registry does not hold the same stores")
+        return 1
     opts = {"spans": a.spans, "allow_group": set(a.allow_group),
-            "groups_changed": []}
+            "groups_changed": [], "rebuilt": bool(rebuilt)}
     walk(old, new, "", bad, filled, spans_seen, opts)
     if a.spans:
         window_kept(old, new, bad)
@@ -130,6 +157,19 @@ def main(argv=None):
     if opts["groups_changed"]:
         print(f"groups rebuilt and allowed to change: "
               f"{sorted(set(opts['groups_changed']))}")
+    if opts["rebuilt"]:
+        og = {g.get("name"): g for g in old.get("groups") or []}
+        for g in new.get("groups") or []:
+            o = og.get(g.get("name"), {})
+            ch = sorted(k for k in set(o) | set(g) if o.get(k) != g.get(k))
+            print(f"  {g.get('name')}: built {o.get('built')} -> "
+                  f"{g.get('built')}; record_span {o.get('record_span')} -> "
+                  f"{g.get('record_span')}; requested_window "
+                  f"{o.get('requested_window')} -> "
+                  f"{g.get('requested_window')}; fields changed {ch}")
+        for k in sorted(REBUILT_TOP):
+            if old.get(k) != new.get(k) and k != "description":
+                print(f"  top-level {k}: {old.get(k)} -> {new.get(k)}")
     if bad:
         print(f"REFUSING: {len(bad)} other difference(s):")
         for m in bad[:40]:
