@@ -1,0 +1,66 @@
+store     ncep100d — NCEP/NCAR Reanalysis 1 surface and land channels (family 7.2's g100), DAILY means, 1 degree — family 7.2d
+family    family7_2d (7.2d) · public -> chfrank/earth-tensors:tensors/family7_2d/ncep100d
+axis      2024-01-01 .. 2024-12-31  bins 3068..3141 · time_s int32 (schema 2)
+lane      (unnamed) — whole calendar year(s), no group subset: the year folder's own files, as every store on the Hub holds them
+channels  C=15: tau_x, tau_y, tau_x_std, tau_y_std, t2m, u10, v10, sp, log_prate, log_swe, soilw, tsoil, lhtfl, shtfl, skt
+tier G    sharded, groups ['ncep100d'], F=5 x 86400 s, float16, years (by bin start) 2024..2024
+work      /home/runner/work/earth/earth/ml/cache/family7_2d
+
+=== stage index (ncep100d) ===
+  [index ncep100d] start (1 items)  0/1  0.0s
+  [index ncep100d] plan.json  1/1  0.0s
+  index: ncep100d — 1 year(s), C=15 (tau_x, tau_y, tau_x_std, tau_y_std, t2m, u10, v10, sp …), bins 3068..3141
+=== stage index done in 0.0s ===
+
+=== stage fetch (ncep100d) ===
+  disk: 91.0 GB free at /home/runner/work/earth/earth/ml/cache/family7_2d/ncep100d/parts; 370 frames project to 0.6 GB of parts, 4.7 GB with margin and the source in flight
+  pentad consistency check: ON
+  [fetch ncep100d (tier G)] start (1 items)  0/1  0.0s
+  [fetch ncep100d (tier G)] ncep100d 2024 ncep100d bin 3072  101.1s
+  [fetch ncep100d (tier G)] ncep100d 2024 ncep100d bin 3077  109.4s
+  [fetch ncep100d (tier G)] ncep100d 2024 ncep100d bin 3082  117.5s
+  [fetch ncep100d (tier G)] ncep100d 2024 ncep100d bin 3087  126.2s
+  [fetch ncep100d (tier G)] ncep100d 2024 ncep100d bin 3092  135.8s
+  [fetch ncep100d (tier G)] ncep100d 2024 ncep100d bin 3097  145.8s
+  [fetch ncep100d (tier G)] ncep100d 2024 ncep100d bin 3102  154.0s
+  [fetch ncep100d (tier G)] ncep100d 2024 ncep100d bin 3107  162.4s
+  [fetch ncep100d (tier G)] ncep100d 2024 ncep100d bin 3112  171.1s
+  [fetch ncep100d (tier G)] ncep100d 2024 ncep100d bin 3117  179.7s
+  [fetch ncep100d (tier G)] ncep100d 2024 ncep100d bin 3122  188.2s
+  [fetch ncep100d (tier G)] ncep100d 2024 ncep100d bin 3127  196.9s
+  [fetch ncep100d (tier G)] ncep100d 2024 ncep100d bin 3132  205.9s
+  [fetch ncep100d (tier G)] ncep100d 2024 ncep100d bin 3137  216.7s
+  2024: ncep100d 74 bin(s) 370 frame(s) 565.1 MB (224.4s)
+  hub: chfrank/earth-tensors with the token from $HF_TOKEN
+  ncep100d: uploading 150 file(s) of 1 year(s), 565.2 MB -> chfrank/earth-tensors:partials/family7_2d/ncep100d/
+Upload 5 LFS files:   0%|          | 0/5 [00:00<?, ?it/s]
+ncep100d__bin_3140.idx.npy:   0%|          | 0.00/1.57k [00:00<?, ?B/s][A
+
+ncep100d__bin_3140.zst:   0%|          | 0.00/7.67M [00:00<?, ?B/s][A[A
+
+
+ncep100d__bin_3141.zst:   0%|          | 0.00/7.66M [00:00<?, ?B/s][A[A[A
+
+
+
+ncep100d__bin_3141.idx.npy:   0%|          | 0.00/1.57k [00:00<?, ?B/s][A[A[A[A
+
+
+
+
+ncep100d__shard_index.npy:   0%|          | 0.00/39.6k [00:00<?, ?B/s][A[A[A[A[A
+
+ncep100d__bin_3140.zst:  21%|██        | 1.57M/7.67M [00:00<00:00, 15.1MB/s][A[A
+
+
+ncep100d__bin_3141.zst:  97%|█████████▋| 7.47M/7.66M [00:00<00:00, 62.3MB/s][A[A[Ancep100d__shard_index.npy: 100%|██████████| 39.6k/39.6k [00:00<00:00, 298kB/s]
+ncep100d__bin_3140.idx.npy: 100%|██████████| 1.57k/1.57k [00:00<00:00, 11.4kB/s]
+
+
+ncep100d__bin_3140.zst:  41%|████      | 3.15M/7.67M [00:00<00:00, 14.9MB/s][A[AUpload 5 LFS files:  20%|██        | 1/5 [00:00<00:00,  4.25it/s]ncep100d__bin_3141.idx.npy: 100%|██████████| 1.57k/1.57k [00:00<00:00, 6.60kB/s]
+ncep100d__bin_3141.zst: 100%|██████████| 7.66M/7.66M [00:00<00:00, 13.8MB/s]
+ncep100d__bin_3140.zst: 100%|██████████| 7.67M/7.67M [00:00<00:00, 13.4MB/s]
+Upload 5 LFS files:  80%|████████  | 4/5 [00:00<00:00,  6.17it/s]Upload 5 LFS files: 100%|██████████| 5/5 [00:00<00:00,  7.22it/s]
+  ncep100d: 1 year(s) pushed and verified in 1 part commit(s), done.json written last (0 already present)
+  push-parts: 1 year(s) on the Hub under partials/family7_2d/ncep100d/
+=== stage fetch done in 725.0s ===
