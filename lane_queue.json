@@ -4,17 +4,6 @@
   {
    "store": "occci025d",
    "stage": "index,fetch",
-   "start": "2001-01-01",
-   "end": "2004-12-31",
-   "runner": "ubuntu-latest",
-   "extra_args": "--push-parts",
-   "adapter_env": "",
-   "retries": 2,
-   "at": "2026-10-06T12:48:53.710Z"
-  },
-  {
-   "store": "occci025d",
-   "stage": "index,fetch",
    "start": "2005-01-01",
    "end": "2008-12-31",
    "runner": "ubuntu-latest",
@@ -26,17 +15,6 @@
   {
    "store": "occci025d",
    "stage": "index,fetch",
-   "start": "2009-01-01",
-   "end": "2012-12-31",
-   "runner": "ubuntu-latest",
-   "extra_args": "--push-parts",
-   "adapter_env": "",
-   "retries": 2,
-   "at": "2026-10-06T12:49:01.582Z"
-  },
-  {
-   "store": "occci025d",
-   "stage": "index,fetch",
    "start": "2016-01-01",
    "end": "2019-12-31",
    "runner": "ubuntu-latest",
@@ -44,17 +22,6 @@
    "adapter_env": "",
    "retries": 2,
    "at": "2026-10-06T12:49:09.323Z"
-  },
-  {
-   "store": "occci025d",
-   "stage": "index,fetch",
-   "start": "2014-01-01",
-   "end": "2014-12-31",
-   "runner": "ubuntu-latest",
-   "extra_args": "--push-parts",
-   "adapter_env": "",
-   "retries": 2,
-   "at": "2026-10-06T13:17:03.999Z"
   }
  ],
  "done": [
@@ -4225,6 +4192,45 @@
    "at": "2026-10-06T12:49:17.109Z",
    "run_number": 1023,
    "finished": "2026-10-06T13:36:48Z"
+  },
+  {
+   "store": "occci025d",
+   "stage": "index,fetch",
+   "start": "2001-01-01",
+   "end": "2004-12-31",
+   "runner": "ubuntu-latest",
+   "extra_args": "--push-parts",
+   "adapter_env": "",
+   "retries": 2,
+   "at": "2026-10-06T12:48:53.710Z",
+   "run_number": 1017,
+   "finished": "2026-10-06T13:41:22Z"
+  },
+  {
+   "store": "occci025d",
+   "stage": "index,fetch",
+   "start": "2009-01-01",
+   "end": "2012-12-31",
+   "runner": "ubuntu-latest",
+   "extra_args": "--push-parts",
+   "adapter_env": "",
+   "retries": 2,
+   "at": "2026-10-06T12:49:01.582Z",
+   "run_number": 1019,
+   "finished": "2026-10-06T13:41:10Z"
+  },
+  {
+   "store": "occci025d",
+   "stage": "index,fetch",
+   "start": "2014-01-01",
+   "end": "2014-12-31",
+   "runner": "ubuntu-latest",
+   "extra_args": "--push-parts",
+   "adapter_env": "",
+   "retries": 2,
+   "at": "2026-10-06T13:17:03.999Z",
+   "run_number": 1025,
+   "finished": "2026-10-06T13:38:58Z"
   }
  ],
  "failed": [
