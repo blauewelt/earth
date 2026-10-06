@@ -35,6 +35,7 @@ Case 7 · the workflow defaults are the ones the arithmetic was done for, and
 
     python3 tests/test_probe_cost.py
 """
+import ast
 import json
 import os
 import re
@@ -121,12 +122,24 @@ def case1():
              f"places; exactly one, the `ocean is None` fallback, is right")
     if "if ocean is None:" not in tp:
         fail("case 1: probe_now does not guard the recompute")
-    sites = len(re.findall(r"dynamic, ocean=ocean, \*\*kw", tr))
-    if sites != 2:
+    # Parsed, not text-matched: a regex on `dynamic, ocean=ocean, **kw` went
+    # red the day 6bd0ca4 slipped `**_blkkw` between the two, with the mask
+    # still wired at both sites. What matters is the CALL, so ask the AST:
+    # every probe_now call in train.py, and an `ocean=ocean` keyword on each.
+    calls = [n for n in ast.walk(ast.parse(tr))
+             if isinstance(n, ast.Call)
+             and ((isinstance(n.func, ast.Attribute)
+                   and n.func.attr == "probe_now")
+                  or (isinstance(n.func, ast.Name)
+                      and n.func.id == "probe_now"))]
+    sites = sum(1 for c in calls
+                if any(k.arg == "ocean" and isinstance(k.value, ast.Name)
+                       and k.value.id == "ocean" for k in c.keywords))
+    if len(calls) != 2 or sites != 2:
         fail(f"case 1: train.py passes ocean=ocean at "
-             f"{sites} of its 2 probe_now call sites — the "
-             f"CUDA-OOM fallback path is a probe too, and it is the one that "
-             f"runs when the box is under pressure")
+             f"{sites} of its {len(calls)} probe_now call sites (expected "
+             f"2 of 2) — the CUDA-OOM fallback path is a probe too, and it "
+             f"is the one that runs when the box is under pressure")
     m = re.search(r"^\s*ocean = (np\.isfinite\(X\[\.\.\., 0\]\)\.any\(axis=0\))",
                   tr, re.M)
     if not m:
