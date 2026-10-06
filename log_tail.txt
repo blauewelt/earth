@@ -1,0 +1,80 @@
+  [verify oisst025d before publish] check: check oisst025d 1500/3142  1.8s
+  [verify oisst025d before publish] check: check oisst025d 1600/3142  1.8s
+  [verify oisst025d before publish] check: check oisst025d 1700/3142  1.8s
+  [verify oisst025d before publish] check: check oisst025d 1800/3142  1.8s
+  [verify oisst025d before publish] check: check oisst025d 1900/3142  1.8s
+  [verify oisst025d before publish] check: check oisst025d 2000/3142  1.8s
+  [verify oisst025d before publish] check: check oisst025d 2100/3142  1.8s
+  [verify oisst025d before publish] check: check oisst025d 2200/3142  1.9s
+  [verify oisst025d before publish] check: check oisst025d 2300/3142  1.9s
+  [verify oisst025d before publish] check: check oisst025d 2400/3142  1.9s
+  [verify oisst025d before publish] check: check oisst025d 2500/3142  1.9s
+  [verify oisst025d before publish] check: check oisst025d 2600/3142  1.9s
+  [verify oisst025d before publish] check: check oisst025d 2700/3142  1.9s
+  [verify oisst025d before publish] check: check oisst025d 2800/3142  1.9s
+  [verify oisst025d before publish] check: check oisst025d 2900/3142  2.0s
+  [verify oisst025d before publish] check: check oisst025d 3000/3142  2.0s
+  [verify oisst025d before publish] check: check oisst025d 3100/3142  2.0s
+  [verify oisst025d before publish] check: check oisst025d 3142/3142  2.0s
+  hub: chfrank/earth-tensors with the token from $HF_TOKEN
+  [publish oisst025d] start (6287 items)  0/6287  0.0s
+Upload 0 LFS files: 0it [00:00, ?it/s]Upload 0 LFS files: 0it [00:00, ?it/s]
+Upload 0 LFS files: 0it [00:00, ?it/s]Upload 0 LFS files: 0it [00:00, ?it/s]
+Upload 0 LFS files: 0it [00:00, ?it/s]Upload 0 LFS files: 0it [00:00, ?it/s]
+Upload 0 LFS files: 0it [00:00, ?it/s]Upload 0 LFS files: 0it [00:00, ?it/s]
+Upload 0 LFS files: 0it [00:00, ?it/s]Upload 0 LFS files: 0it [00:00, ?it/s]
+Upload 0 LFS files: 0it [00:00, ?it/s]Upload 0 LFS files: 0it [00:00, ?it/s]
+Upload 0 LFS files: 0it [00:00, ?it/s]Upload 0 LFS files: 0it [00:00, ?it/s]
+Upload 0 LFS files: 0it [00:00, ?it/s]Upload 0 LFS files: 0it [00:00, ?it/s]
+Upload 0 LFS files: 0it [00:00, ?it/s]Upload 0 LFS files: 0it [00:00, ?it/s]
+Upload 0 LFS files: 0it [00:00, ?it/s]Upload 0 LFS files: 0it [00:00, ?it/s]
+Upload 0 LFS files: 0it [00:00, ?it/s]Upload 0 LFS files: 0it [00:00, ?it/s]
+Upload 0 LFS files: 0it [00:00, ?it/s]Upload 0 LFS files: 0it [00:00, ?it/s]
+shard_index.npy:   0%|          | 0.00/1.18M [00:00<?, ?B/s]shard_index.npy: 100%|██████████| 1.18M/1.18M [00:00<00:00, 5.00MB/s]
+  [publish oisst025d] oisst025d  2/6287  96.9s
+  [publish oisst025d] oisst025d/1982  148/6287  106.0s
+  [publish oisst025d] oisst025d/1983  294/6287  114.7s
+  [publish oisst025d] oisst025d/1984  442/6287  123.7s
+  [publish oisst025d] oisst025d/1985  588/6287  133.2s
+  [publish oisst025d] oisst025d/1986  734/6287  142.2s
+  [publish oisst025d] oisst025d/1987  880/6287  151.2s
+  [publish oisst025d] oisst025d/1988  1026/6287  160.6s
+  [publish oisst025d] oisst025d/1989  1172/6287  169.7s
+  [publish oisst025d] oisst025d/1990  1318/6287  178.8s
+  [publish oisst025d] oisst025d/1991  1464/6287  187.9s
+  [publish oisst025d] oisst025d/1992  1610/6287  197.2s
+  [publish oisst025d] oisst025d/1993  1756/6287  206.3s
+  [publish oisst025d] oisst025d/1994  1902/6287  215.5s
+  [publish oisst025d] oisst025d/1995  2048/6287  224.6s
+  [publish oisst025d] oisst025d/1996  2194/6287  233.8s
+  [publish oisst025d] oisst025d/1997  2340/6287  243.4s
+  [publish oisst025d] oisst025d/1998  2486/6287  252.7s
+  [publish oisst025d] oisst025d/1999  2632/6287  262.0s
+  [publish oisst025d] oisst025d/2000  2778/6287  271.2s
+  [publish oisst025d] oisst025d/2001  2924/6287  280.5s
+  [publish oisst025d] oisst025d/2002  3070/6287  289.9s
+  [publish oisst025d] oisst025d/2003  3216/6287  299.1s
+  [publish oisst025d] oisst025d/2004  3364/6287  309.0s
+  [publish oisst025d] oisst025d/2005  3510/6287  319.1s
+  [publish oisst025d] oisst025d/2006  3656/6287  328.3s
+  [publish oisst025d] oisst025d/2007  3802/6287  337.3s
+  [publish oisst025d] oisst025d/2008  3948/6287  346.4s
+  [publish oisst025d] oisst025d/2009  4094/6287  355.4s
+  [publish oisst025d] oisst025d/2010  4240/6287  364.3s
+  [publish oisst025d] oisst025d/2011  4386/6287  373.4s
+  [publish oisst025d] oisst025d/2012  4532/6287  382.4s
+  [publish oisst025d] oisst025d/2013  4678/6287  391.5s
+  [publish oisst025d] oisst025d/2014  4824/6287  400.2s
+  [publish oisst025d] oisst025d/2015  4970/6287  409.1s
+  [publish oisst025d] oisst025d/2016  5116/6287  418.0s
+  [publish oisst025d] oisst025d/2017  5262/6287  427.1s
+  [publish oisst025d] oisst025d/2018  5408/6287  435.9s
+  [publish oisst025d] oisst025d/2019  5554/6287  444.9s
+  [publish oisst025d] oisst025d/2020  5700/6287  453.9s
+  [publish oisst025d] oisst025d/2021  5846/6287  462.6s
+  [publish oisst025d] oisst025d/2022  5992/6287  471.9s
+  [publish oisst025d] oisst025d/2023  6138/6287  480.7s
+  [publish oisst025d] oisst025d/2024  6286/6287  491.0s
+  [publish oisst025d] store.json  6287/6287  491.5s
+  publish: 6287 file(s) verified by restore, 50 tile(s) decompressed, HTTP range {'checked': 5} -> https://huggingface.co/datasets/chfrank/earth-tensors/tree/main/tensors/family7_2d/oisst025d
+=== stage publish done in 508.2s ===
