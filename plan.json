@@ -1,0 +1,64 @@
+{
+ "bins": [
+  1973,
+  2264
+ ],
+ "builder_git_sha": "a6a373a68101dcf198f1a34d277481af6682b43e",
+ "built_at": "2026-10-06T12:49:36+00:00",
+ "channels": [
+  {
+   "max": 5.0,
+   "min": -10.0,
+   "name": "log_chl",
+   "unit": "log10(mg/m3)"
+  },
+  {
+   "max": 1.0,
+   "min": 0.0,
+   "name": "chl_cov",
+   "unit": "fraction of 4 km cells seen"
+  }
+ ],
+ "dataset": "ESA OC-CCI v6.0 chlorophyll-a (log10) and clear-sky coverage, DAILY, 0.25-degree block means of the 4 km field \u2014 family 7.2d",
+ "date_range": [
+  "2009-01-01",
+  "2012-12-31"
+ ],
+ "footprint": {
+  "log2_dt": -2.321928094887362,
+  "log2_fp": 0.0
+ },
+ "grid": {
+  "H": 721,
+  "W": 1440,
+  "align": "point \u2014 row r is latitude -90 + 0.25 r, column c is longitude -180 + 0.25 c (family 7's g025 grid)",
+  "crs": "EPSG:4326",
+  "dx": 0.25,
+  "dy": 0.25,
+  "row_order": "south_first",
+  "x0": -180.0,
+  "y0": -90.0
+ },
+ "pentad_check": true,
+ "pentad_reference": "https://huggingface.co/datasets/chfrank/earth-tensors/resolve/main/tensors/family7_global025_pentad_l2/family7_global025_pentad_l2_X_oc025.npy",
+ "per_year_resume": true,
+ "plan": "ml/plans/E087_family7_daily.md",
+ "qc_policy": "The product's only per-pixel flag is its fill value: fill, non-positive and sentinel values are not clear (they drop out of both sums and lower chl_cov). log10 is taken per 4 km cell and averaged over the block (never the log of a linear mean). NaN in both channels where no cell of the block was clear.",
+ "record": [
+  "1997-09-04",
+  "2024-12-31"
+ ],
+ "sources": [
+  "https://dap.ceda.ac.uk/neodc/esacci/ocean_colour/data/v6.0-release/geographic/netcdf/chlor_a/daily/v6.0/<YYYY>/ESACCI-OC-L3S-CHLOR_A-MERGED-1D_DAILY_4km_GEO_PML_OCx-<YYYYMMDD>-fv6.0.nc (1997-2022)",
+  "https://www.oceancolour.org/thredds/ncss/grid/CCI_ALL-v6.0-DAILY?var=chlor_a&time=<YYYY-MM-DD>T00:00:00Z&accept=netcdf4 (2023-2024)"
+ ],
+ "store": "occci025d",
+ "title": "ESA OC-CCI v6.0 chlorophyll-a (log10) and clear-sky coverage, DAILY, 0.25-degree block means of the 4 km field \u2014 family 7.2d",
+ "verified": "2026-10-06: CEDA's 2015 listing and 30 days of 2015 fetched and reduced (E-087 probe: identical NaN pattern and within float16 rounding of f7l2's oc025 in every cell)",
+ "years": [
+  2009,
+  2010,
+  2011,
+  2012
+ ]
+}
