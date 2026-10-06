@@ -1,16 +1,5 @@
 {
- "pending": [
-  {
-   "store": "glorys025d",
-   "stage": "index,fetch",
-   "start": "2021-01-01",
-   "end": "2024-12-31",
-   "runner": "ubuntu-latest",
-   "extra_args": "--push-parts",
-   "adapter_env": "",
-   "retries": 2
-  }
- ],
+ "pending": [],
  "dispatched": [
   {
    "store": "ncep100d",
@@ -22,17 +11,6 @@
    "adapter_env": "",
    "retries": 2,
    "at": "2026-10-06T10:11:37.572Z"
-  },
-  {
-   "store": "ncep100d",
-   "stage": "index,fetch",
-   "start": "1997-01-01",
-   "end": "2001-12-31",
-   "runner": "ubuntu-latest",
-   "extra_args": "--push-parts",
-   "adapter_env": "",
-   "retries": 2,
-   "at": "2026-10-06T10:11:41.366Z"
   },
   {
    "store": "ncep100d",
@@ -143,6 +121,17 @@
    "adapter_env": "",
    "retries": 2,
    "at": "2026-10-06T10:39:55.915Z"
+  },
+  {
+   "store": "glorys025d",
+   "stage": "index,fetch",
+   "start": "2021-01-01",
+   "end": "2024-12-31",
+   "runner": "ubuntu-latest",
+   "extra_args": "--push-parts",
+   "adapter_env": "",
+   "retries": 2,
+   "at": "2026-10-06T10:43:01.840Z"
   }
  ],
  "done": [
@@ -4092,6 +4081,19 @@
    "at": "2026-10-06T10:11:33.726Z",
    "run_number": 995,
    "finished": "2026-10-06T10:37:48Z"
+  },
+  {
+   "store": "ncep100d",
+   "stage": "index,fetch",
+   "start": "1997-01-01",
+   "end": "2001-12-31",
+   "runner": "ubuntu-latest",
+   "extra_args": "--push-parts",
+   "adapter_env": "",
+   "retries": 2,
+   "at": "2026-10-06T10:11:41.366Z",
+   "run_number": 997,
+   "finished": "2026-10-06T10:41:31Z"
   }
  ],
  "failed": [
