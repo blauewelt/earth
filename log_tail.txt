@@ -1,0 +1,52 @@
+store     occci025d — ESA OC-CCI v6.0 chlorophyll-a (log10) and clear-sky coverage, DAILY, 0.25-degree block means of the 4 km field — family 7.2d
+family    family7_2d (7.2d) · public -> chfrank/earth-tensors:tensors/family7_2d/occci025d
+axis      2013-01-01 .. 2014-12-31  bins 2265..2410 · time_s int32 (schema 2)
+lane      (unnamed) — whole calendar year(s), no group subset: the year folder's own files, as every store on the Hub holds them
+channels  C=2: log_chl, chl_cov
+tier G    sharded, groups ['occci025d'], F=5 x 86400 s, float16, years (by bin start) 2013..2014
+work      /home/runner/work/earth/earth/ml/cache/family7_2d
+
+=== stage index (occci025d) ===
+  [index occci025d] start (1 items)  0/1  0.0s
+  [index occci025d] plan.json  1/1  0.0s
+  index: occci025d — 2 year(s), C=2 (log_chl, chl_cov), bins 2265..2410
+=== stage index done in 0.0s ===
+
+=== stage fetch (occci025d) ===
+  disk: 91.0 GB free at /home/runner/work/earth/earth/ml/cache/family7_2d/occci025d/parts; 730 frames project to 0.4 GB of parts, 4.5 GB with margin and the source in flight
+  pentad consistency check: ON
+  [fetch occci025d (tier G)] start (2 items)  0/2  0.0s
+  [fetch occci025d (tier G)] occci025d 2013 occci025d bin 2269  51.0s
+  [fetch occci025d (tier G)] occci025d 2013 occci025d bin 2274  93.3s
+  [fetch occci025d (tier G)] occci025d 2013 occci025d bin 2279  134.6s
+  [fetch occci025d (tier G)] occci025d 2013 occci025d bin 2284  176.0s
+  [fetch occci025d (tier G)] occci025d 2013 occci025d bin 2289  217.2s
+  [fetch occci025d (tier G)] occci025d 2013 occci025d bin 2294  257.5s
+  [fetch occci025d (tier G)] occci025d 2013 occci025d bin 2299  297.3s
+  [fetch occci025d (tier G)] occci025d 2013 occci025d bin 2304  337.1s
+  [fetch occci025d (tier G)] occci025d 2013 occci025d bin 2309  378.1s
+  [fetch occci025d (tier G)] occci025d 2013 occci025d bin 2314  418.9s
+  [fetch occci025d (tier G)] occci025d 2013 occci025d bin 2319  459.7s
+  ::warning::occci025d: 2013 bin 2324 — PENTAD CONSISTENCY REFUSED: the five daily frames of bin 2324 (2013-10-25) do not reproduce family7_global025_pentad_l2 within float16 rounding: {"log_chl": {"cells": 426290, "nan_mismatch": 0, "max_abs_diff": 0.0013244996080175042, "max_excess": 7.008168231907542e-09, "allowed": 0.0}}
+  [fetch occci025d (tier G)] occci025d 2013 occci025d bin 2325  507.9s
+  [fetch occci025d (tier G)] occci025d 2013 occci025d bin 2330  547.8s
+  [fetch occci025d (tier G)] occci025d 2013 occci025d bin 2335  587.5s
+  ::warning::2013: NOT MARKED — 1 input(s) could not be read (2013 bin 2324); the retry clears the year and fetches it whole
+  [fetch occci025d (tier G)] occci025d 2014 occci025d bin 2342  650.0s
+  [fetch occci025d (tier G)] occci025d 2014 occci025d bin 2347  691.1s
+  [fetch occci025d (tier G)] occci025d 2014 occci025d bin 2352  733.1s
+  [fetch occci025d (tier G)] occci025d 2014 occci025d bin 2357  774.0s
+  [fetch occci025d (tier G)] occci025d 2014 occci025d bin 2362  815.5s
+  [fetch occci025d (tier G)] occci025d 2014 occci025d bin 2367  856.0s
+  [fetch occci025d (tier G)] occci025d 2014 occci025d bin 2372  897.1s
+  [fetch occci025d (tier G)] occci025d 2014 occci025d bin 2377  937.4s
+  [fetch occci025d (tier G)] occci025d 2014 occci025d bin 2382  978.5s
+  [fetch occci025d (tier G)] occci025d 2014 occci025d bin 2387  1018.4s
+  [fetch occci025d (tier G)] occci025d 2014 occci025d bin 2392  1060.7s
+  [fetch occci025d (tier G)] occci025d 2014 occci025d bin 2397  1101.5s
+  [fetch occci025d (tier G)] occci025d 2014 occci025d bin 2402  1142.4s
+  [fetch occci025d (tier G)] occci025d 2014 occci025d bin 2407  1181.7s
+  2014: occci025d 73 bin(s) 365 frame(s) 218.5 MB (602.3s)
+stage fetch (occci025d): 1 input(s) could not be read, and every one of them is a hole nothing downstream can see — a store of point observations has no empty cell to look at, so a month, a dataset-year or a mission-year that did not arrive is indistinguishable from an ocean nobody sampled. REFUSING to mark the stage.
+  2013 bin 2324: PENTAD CONSISTENCY REFUSED: the five daily frames of bin 2324 (2013-10-25) do not reproduce family7_global025_pentad_l2 within float16 rounding: {"log_chl": {"cells": 426290, "nan_mismatch": 0, "max_abs_diff": 0.0013244996080175042, "max_excess": 7.008168231907542e-09, "allowed": 0.0}}
+The year(s) [2013] carry no `parts/<year>.done` marker and no counts.json, so nothing will assemble or publish them and a re-run with the SAME --work value retries exactly those — the years that DID land are marked and skipped. Two ways on: (1) fix the source (a moved ERDDAP dataset id, a short mirror, a filter that does not match the remote layout) and re-run; or (2) pass --allow-missing-years if a store with those inputs missing is genuinely what you want.
