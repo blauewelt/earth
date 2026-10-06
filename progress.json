@@ -1,0 +1,10 @@
+{
+ "at": "2026-10-06T16:31:10+00:00",
+ "done": 4215,
+ "elapsed_s": 339.4,
+ "eta_s": 0.0,
+ "files": 4215,
+ "item": "store.json",
+ "stage": "publish occci025d",
+ "total": 4215
+}
