@@ -1,5 +1,96 @@
 {
- "pending": [],
+ "pending": [
+  {
+   "store": "era5_q",
+   "stage": "index,fetch",
+   "start": "2022-01-01",
+   "end": "2026-12-31",
+   "runner": "ubuntu-latest",
+   "extra_args": "--push-parts",
+   "adapter_env": "ERA5_Q_BOUND=D6",
+   "retries": 2
+  },
+  {
+   "store": "era5_q",
+   "stage": "index,fetch",
+   "start": "1982-01-01",
+   "end": "1986-12-31",
+   "runner": "ubuntu-latest",
+   "extra_args": "--push-parts",
+   "adapter_env": "ERA5_Q_BOUND=D6",
+   "retries": 2
+  },
+  {
+   "store": "era5_q",
+   "stage": "index,fetch",
+   "start": "1987-01-01",
+   "end": "1991-12-31",
+   "runner": "ubuntu-latest",
+   "extra_args": "--push-parts",
+   "adapter_env": "ERA5_Q_BOUND=D6",
+   "retries": 2
+  },
+  {
+   "store": "era5_q",
+   "stage": "index,fetch",
+   "start": "1992-01-01",
+   "end": "1996-12-31",
+   "runner": "ubuntu-latest",
+   "extra_args": "--push-parts",
+   "adapter_env": "ERA5_Q_BOUND=D6",
+   "retries": 2
+  },
+  {
+   "store": "era5_q",
+   "stage": "index,fetch",
+   "start": "1997-01-01",
+   "end": "2001-12-31",
+   "runner": "ubuntu-latest",
+   "extra_args": "--push-parts",
+   "adapter_env": "ERA5_Q_BOUND=D6",
+   "retries": 2
+  },
+  {
+   "store": "era5_q",
+   "stage": "index,fetch",
+   "start": "2002-01-01",
+   "end": "2006-12-31",
+   "runner": "ubuntu-latest",
+   "extra_args": "--push-parts",
+   "adapter_env": "ERA5_Q_BOUND=D6",
+   "retries": 2
+  },
+  {
+   "store": "era5_q",
+   "stage": "index,fetch",
+   "start": "2007-01-01",
+   "end": "2011-12-31",
+   "runner": "ubuntu-latest",
+   "extra_args": "--push-parts",
+   "adapter_env": "ERA5_Q_BOUND=D6",
+   "retries": 2
+  },
+  {
+   "store": "era5_q",
+   "stage": "index,fetch",
+   "start": "2012-01-01",
+   "end": "2016-12-31",
+   "runner": "ubuntu-latest",
+   "extra_args": "--push-parts",
+   "adapter_env": "ERA5_Q_BOUND=D6",
+   "retries": 2
+  },
+  {
+   "store": "era5_q",
+   "stage": "index,fetch",
+   "start": "2017-01-01",
+   "end": "2021-12-31",
+   "runner": "ubuntu-latest",
+   "extra_args": "--push-parts",
+   "adapter_env": "ERA5_Q_BOUND=D6",
+   "retries": 2
+  }
+ ],
  "dispatched": [],
  "done": [
   {
