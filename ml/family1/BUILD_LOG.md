@@ -1842,3 +1842,107 @@ still a two-date array. For family 10.2 it copies `date_range` directly as
 the span (line 826), so that line now shows where the data is — e.g. the
 drifters from 1979-02-15 rather than 1979-01-01 — with no code change; the
 array shape is unchanged.
+
+## E-087 · family 7.2d — family 7.2 at daily resolution (2026-10-06)
+
+*Family 7.2d is family 7.2 (`family7_global025_pentad_l2`, the global
+five-day input tensor) at DAILY resolution: the same channels, names, units
+and derivation, one frame per day, sharded tier G, one store per source
+under `tensors/family7_2d/`: `glorys025d` (GLORYS12 currents, sea-surface
+height, mixed-layer depth, 0.25°, 1993→), `oisst025d` (OISST sea-surface
+temperature and sea ice, 0.25°, 1982→), `ncep100d` (NCEP/NCAR R1's 15
+atmosphere/land channels, 1°, 1982→) and `occci025d` (OC-CCI ocean colour,
+built last). Plan and decisions:
+[E-087](https://blauewelt.github.io/earth/docs.html?f=ml/plans/E087_family7_daily.md).*
+
+**The lanes check themselves against the pentad tensor.** Every bin's five
+frames are rounded to float16 as stored, averaged by each channel's own rule
+and compared with the published f7l2 slab (one range read per bin); a
+NaN-pattern difference or an excess over the measured rounding tolerance is
+an absence, so the year is not marked and the lane fails
+(`ml/family1/adapters/_f7d.py`, `ml/family7_daily.py :: check_bin`).
+
+**The first canaries were refused by that check, and each refusal was a
+real mechanism** (09:06–09:33Z):
+
+| lane | refusal | mechanism | fix |
+|---|---|---|---|
+| [#981](https://github.com/blauewelt/earth/actions/runs/37440692743) (fetch NCEP daily 2012–2016 and park it) | `skt` off by up to 12.5 °C in austral-winter bins of 2012 and 2013 | NCEP's Antarctic skin temperature reaches 163.3 K (−109.9 °C), below the −100 °C sanity bound: the coldest days were masked and the rebuilt mean dropped them. The mirror's file is byte-identical to PSL's, and the published pentad matches the file to float16 | bounds of `t2m`, `tsoil`, `skt` to −150 °C |
+| #981 | `log_prate` over the tolerance by ≤ 1.5 × 10⁻⁵ in Dec 2013 / Jan 2014 | some years store a dry cell as −2.3 × 10⁻¹⁰ (2⁻³², the packing quantum; `np.asarray` drops netCDF4's `valid_range` mask, in family 7 as here), and `log1p_channel` clamps at zero per DAY here, per PENTAD in family 7 | the lane records each day's most negative native prate/weasd and allows exactly \|x\| × scale (2.0 × 10⁻⁵ for prate) |
+| [#983](https://github.com/blauewelt/earth/actions/runs/37440699019) (fetch GLORYS daily 2013–2016 and park it) | `log_mld` off by exactly log₁₀(5/4) and log₁₀(5/3), and 1–2 NaN-pattern cells, in many bins | GLORYS reports a FINITE mixed-layer depth ≤ 0 on a few cell-days; family 7 stores no logarithm for such a value but COUNTS it as a zero in the pentad mean | the lane passes the per-cell count of those days to `check_bin`, which rebuilds `log_mld` with them counted — family 7's arithmetic exactly; Feb 2013 re-probed: 3 such cell-days, 0 refusals |
+
+Fixed in `fb8c0c1`; the two canaries re-dispatched at 09:38Z as #984
+(NCEP 2012–2016) and #985 (GLORYS 2013–2016). #982 (OISST 2012–2016) runs
+on the first code; OISST's channels were not affected.
+
+**Lanes** (hosted runners, `index,fetch --push-parts`, each bin checked
+against f7l2 before its year is marked; minutes are run start → finish):
+
+| store | lanes | minutes per lane | frames parked | bins checked | parked bytes | refused years |
+|---|---|---|---|---|---|---|
+| `oisst025d` | canary #982 (2012–16) + #986–#993 | 37 · 30–51 | 15,706 | 3,142 / 3,142 | 14,195,094,212 | none |
+| `ncep100d` | canary #984 (2012–16) + #994–#1001 | 27 · 22–37 | 15,706 | 3,142 / 3,142 | 23,949,779,706 | none (after `fb8c0c1`) |
+| `glorys025d` | canary #985 (2013–16) + #1002–#1008 | 48 · 38–53 | 11,688 | 2,339 / 2,339 | 72,356,488,544 | none (after `fb8c0c1`) |
+
+Worst per-channel margins over every checked bin (`max_excess` ≤ 0 is a
+pass; the largest |daily-rebuilt − pentad| in brackets): OISST `sst` 0.031
+°C, `sea_ice` 0.00055; NCEP `shtfl` 0.51 W/m², `lhtfl` 0.41 W/m², `skt`
+0.065 °C, `log_prate` 0.0026 (with the dry-cell allowance at most
+2.01 × 10⁻⁵); GLORYS `cur_speed` 0.0024 m/s, `log_mld` 0.0023, `ssh`
+0.0015 m. Every excess is negative.
+
+**Assembly box** — Vast 54469903 (offer 50422428, verified, Utah,
+RTX 3070, 250 GB disk, $0.140/h), `BOX_PROFILE=assembly`, created
+10:40:43Z, destroyed 12:34:33Z (1 h 54 m, ≈ $0.27; idle ≈ 3 min at boot
+and ≈ 30 s at the end); `list` confirms it gone and runner
+`gpu-box-50422428` deregistered.
+
+| run | store | stages | pull parts | assemble | publish / check |
+|---|---|---|---|---|---|
+| #1009 | `oisst025d` | all | 947 s | 7 s | publish 508 s, 6,287 files restore-verified |
+| #1010 | `oisst025d` | check | — | — | 478 s, 282,708 tiles, the Hub agrees |
+| #1011 | `ncep100d` | all | 1,064 s | 10 s | publish 552 s |
+| #1012 | `ncep100d` | check | — | — | 123 s, 282,708 tiles |
+| #1013 | `glorys025d` | all | 970 s | 105 s | publish 914 s, 4,681 files |
+| #1014 | `glorys025d` | check | — | — | 673 s, 210,384 tiles, the Hub agrees |
+
+Published (Hub tree listing): `glorys025d` 4,682 files, 72,362,337,343 B,
+frames 11,688 = every day 1993-01-01…2024-12-31 (the first bin's 1992-12-29…31 are
+`before_record`, the last bin's four 2025 days `after_record`); `oisst025d` 6,288 files,
+14,202,812,704 B; `ncep100d` 6,288 files, 23,957,980,462 B — both 15,706
+frames, 1982-01-01…2024-12-31.
+
+**Hub read-back** (`ml/family1/f7d_hub_check.py`, two days per store, the
+Hub's tiles against an INDEPENDENT read of the source — the GLORYS chunk
+value, a four-centre mean on PSL's OISST files, a scipy bilinear
+interpolation of PSL's NCEP files — and the whole bin against the f7l2
+pentad; `ml/family1/probes/*_hubcheck.json`): 0 values beyond tolerance,
+0 NaN-pattern differences, pentad ok for every bin.
+
+| store | days | worst \|Hub − source\| |
+|---|---|---|
+| `glorys025d` | 1995-07-15, 2023-01-15 | currents and `log_mld` ≤ 0.00097, `ssh` 0.00049 m |
+| `oisst025d` | 1985-07-15, 2023-01-15 | `sst` 0.0138 / 0.0077 °C, `sea_ice` 0.00024 |
+| `ncep100d` | 1985-07-15, 2023-01-15 | `t2m` 0.031 / 0.016 °C, `sp` 0.50 hPa, `lhtfl` 0.125 / 0.249 W/m² |
+
+Not verified independently: about 6,600 coastal `soilw`/`tsoil` cells per
+NCEP day are finite on the Hub where scipy's interpolator gives NaN (family
+7's bilinear weights renormalise over finite corners; scipy's propagate
+NaN). Those cells are covered only by the pentad comparison, whose NaN
+pattern agrees with f7l2 everywhere.
+
+**Lanes not declared.** The GLORYS 1992-12-29…1996-12-31 lane is a named
+lane (its start is not 1 January), so its parts sit under
+`d19921229-19961231/` and the assembler reports 1993–1996 with
+`declared: false` in `store.json :: lanes_by_year` — it found and used
+them, but the adapter declares no `lanes_expected` to check them against.
+The frame count proves the years complete; declaring the lane is a
+follow-up.
+
+**Registry:** `family1-registry` #5 (families `72d`, guard strict)
+published
+[family72d.json](https://huggingface.co/datasets/chfrank/earth-tensors/blob/main/tensors/family7_2d/family72d.json),
+restore-verified: 4 stores, built `glorys025d`, `ncep100d`, `oisst025d`,
+not built `occci025d`; record spans 1993-01-01 / 1982-01-01 → 2024-12-31,
+`requested_window` separate (GLORYS's starts 1992-12-29, the bin
+boundary), licence and attribution per store, distribution public.

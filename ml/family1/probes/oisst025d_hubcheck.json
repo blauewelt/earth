@@ -1,0 +1,91 @@
+{
+ "store": "oisst025d",
+ "hub": "https://huggingface.co/datasets/chfrank/earth-tensors/resolve/main/tensors/family7_2d/oisst025d/oisst025d",
+ "instants": [
+  {
+   "day": "1985-07-15",
+   "bin": 258,
+   "frame": 1,
+   "hub_range_reads": 36,
+   "channels": {
+    "sst": {
+     "values": 703902,
+     "max_abs_diff": 0.01375134785970289,
+     "beyond_half_f16_step": 0,
+     "finite_on_hub_only": 0,
+     "finite_in_reference_only": 0
+    },
+    "sea_ice": {
+     "values": 148623,
+     "max_abs_diff": 0.0002409219741821289,
+     "beyond_half_f16_step": 0,
+     "finite_on_hub_only": 0,
+     "finite_in_reference_only": 0
+    }
+   },
+   "pentad": {
+    "ok": true,
+    "channels": {
+     "sst": {
+      "cells": 703902,
+      "nan_mismatch": 0,
+      "max_abs_diff": 0.01817033514380384,
+      "max_excess": -5.008369264395893e-05,
+      "allowed": 0.0
+     },
+     "sea_ice": {
+      "cells": 149550,
+      "nan_mismatch": 0,
+      "max_abs_diff": 0.00046331593475767985,
+      "max_excess": -9.293157333566647e-06,
+      "allowed": 0.0
+     }
+    }
+   },
+   "seconds": 127.8
+  },
+  {
+   "day": "2023-01-15",
+   "bin": 2997,
+   "frame": 4,
+   "hub_range_reads": 252,
+   "channels": {
+    "sst": {
+     "values": 703902,
+     "max_abs_diff": 0.007709503173828125,
+     "beyond_half_f16_step": 0,
+     "finite_on_hub_only": 0,
+     "finite_in_reference_only": 0
+    },
+    "sea_ice": {
+     "values": 129662,
+     "max_abs_diff": 0.0002409219741821289,
+     "beyond_half_f16_step": 0,
+     "finite_on_hub_only": 0,
+     "finite_in_reference_only": 0
+    }
+   },
+   "pentad": {
+    "ok": true,
+    "channels": {
+     "sst": {
+      "cells": 703902,
+      "nan_mismatch": 0,
+      "max_abs_diff": 0.01817033514380384,
+      "max_excess": -5.0081306127474495e-05,
+      "allowed": 0.0
+     },
+     "sea_ice": {
+      "cells": 130855,
+      "nan_mismatch": 0,
+      "max_abs_diff": 0.0005032349086832033,
+      "max_excess": -3.720949687754699e-05,
+      "allowed": 0.0
+     }
+    }
+   },
+   "seconds": 114.0
+  }
+ ],
+ "ok": true
+}

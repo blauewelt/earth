@@ -1,0 +1,175 @@
+{
+ "store": "glorys025d",
+ "hub": "https://huggingface.co/datasets/chfrank/earth-tensors/resolve/main/tensors/family7_2d/glorys025d/glorys025d",
+ "instants": [
+  {
+   "day": "1995-07-15",
+   "bin": 988,
+   "frame": 3,
+   "hub_range_reads": 36,
+   "channels": {
+    "cur_speed": {
+     "values": 693201,
+     "max_abs_diff": 0.0009668284360055956,
+     "beyond_half_f16_step": 0,
+     "finite_on_hub_only": 0,
+     "finite_in_reference_only": 0
+    },
+    "log_mld": {
+     "values": 693242,
+     "max_abs_diff": 0.0009766601939227293,
+     "beyond_half_f16_step": 0,
+     "finite_on_hub_only": 0,
+     "finite_in_reference_only": 0
+    },
+    "ssh": {
+     "values": 690491,
+     "max_abs_diff": 0.00048828125,
+     "beyond_half_f16_step": 0,
+     "finite_on_hub_only": 0,
+     "finite_in_reference_only": 0
+    },
+    "cur_u": {
+     "values": 693201,
+     "max_abs_diff": 0.0009696483612060547,
+     "beyond_half_f16_step": 0,
+     "finite_on_hub_only": 0,
+     "finite_in_reference_only": 0
+    },
+    "cur_v": {
+     "values": 693205,
+     "max_abs_diff": 0.00048792362213134766,
+     "beyond_half_f16_step": 0,
+     "finite_on_hub_only": 0,
+     "finite_in_reference_only": 0
+    }
+   },
+   "pentad": {
+    "ok": true,
+    "channels": {
+     "cur_speed": {
+      "cells": 693203,
+      "nan_mismatch": 0,
+      "max_abs_diff": 0.0016187539336565138,
+      "max_excess": -2.6564387110407923e-06,
+      "allowed": 0.0
+     },
+     "log_mld": {
+      "cells": 693250,
+      "nan_mismatch": 0,
+      "max_abs_diff": 0.0019741640543720074,
+      "max_excess": -8.27361661734497e-05,
+      "allowed": 0.0
+     },
+     "ssh": {
+      "cells": 691213,
+      "nan_mismatch": 0,
+      "max_abs_diff": 0.0014763495884835276,
+      "max_excess": -1.4130193663601203e-06,
+      "allowed": 0.0
+     },
+     "cur_u": {
+      "cells": 693203,
+      "nan_mismatch": 0,
+      "max_abs_diff": 0.0017626047017982316,
+      "max_excess": -2.0072359112703246e-07,
+      "allowed": 0.0
+     },
+     "cur_v": {
+      "cells": 693205,
+      "nan_mismatch": 0,
+      "max_abs_diff": 0.001104196975938887,
+      "max_excess": -3.535587505167536e-07,
+      "allowed": 0.0
+     }
+    }
+   },
+   "seconds": 118.8
+  },
+  {
+   "day": "2023-01-15",
+   "bin": 2997,
+   "frame": 4,
+   "hub_range_reads": 252,
+   "channels": {
+    "cur_speed": {
+     "values": 693205,
+     "max_abs_diff": 0.0006200471618544867,
+     "beyond_half_f16_step": 0,
+     "finite_on_hub_only": 0,
+     "finite_in_reference_only": 0
+    },
+    "log_mld": {
+     "values": 693310,
+     "max_abs_diff": 0.0009766601939227293,
+     "beyond_half_f16_step": 0,
+     "finite_on_hub_only": 0,
+     "finite_in_reference_only": 0
+    },
+    "ssh": {
+     "values": 693310,
+     "max_abs_diff": 0.00048828125,
+     "beyond_half_f16_step": 0,
+     "finite_on_hub_only": 0,
+     "finite_in_reference_only": 0
+    },
+    "cur_u": {
+     "values": 693205,
+     "max_abs_diff": 0.00048828125,
+     "beyond_half_f16_step": 0,
+     "finite_on_hub_only": 0,
+     "finite_in_reference_only": 0
+    },
+    "cur_v": {
+     "values": 693205,
+     "max_abs_diff": 0.0004881620407104492,
+     "beyond_half_f16_step": 0,
+     "finite_on_hub_only": 0,
+     "finite_in_reference_only": 0
+    }
+   },
+   "pentad": {
+    "ok": true,
+    "channels": {
+     "cur_speed": {
+      "cells": 693205,
+      "nan_mismatch": 0,
+      "max_abs_diff": 0.0011762925922613743,
+      "max_excess": -1.1386161555004294e-06,
+      "allowed": 0.0
+     },
+     "log_mld": {
+      "cells": 693310,
+      "nan_mismatch": 0,
+      "max_abs_diff": 0.0019704273789975524,
+      "max_excess": -1.1039078991316974e-05,
+      "allowed": 0.0
+     },
+     "ssh": {
+      "cells": 693310,
+      "nan_mismatch": 0,
+      "max_abs_diff": 0.00147161777131255,
+      "max_excess": -1.3298475313491725e-06,
+      "allowed": 0.0
+     },
+     "cur_u": {
+      "cells": 693205,
+      "nan_mismatch": 0,
+      "max_abs_diff": 0.00107038355199629,
+      "max_excess": -9.35701213958848e-08,
+      "allowed": 0.0
+     },
+     "cur_v": {
+      "cells": 693205,
+      "nan_mismatch": 0,
+      "max_abs_diff": 0.0010971787618472284,
+      "max_excess": -1.7445354193756606e-07,
+      "allowed": 0.0
+     }
+    }
+   },
+   "seconds": 120.6
+  }
+ ],
+ "ok": true
+}

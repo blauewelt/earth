@@ -345,3 +345,50 @@ box ~3 h), against E-085's 349 GB for $1.76.
 - `tests/test_family7_daily.py` — the rules, the builder comparison on the
   smoke sources, NCEP's 6-hourly day mean and frame-2 σ, the writer round trip.
 - `ml/plans/E087_probe_2015-01.json` — every number in §4–§5.
+
+## 13 · Status — the build (2026-10-06, live)
+
+**Decided by the planning session the same day:** Q1 "family 7.2d",
+`tensors/family7_2d/`, registry `family72d.json`, listed in the Data tab;
+Q2 physical units; Q3 the centred five-day σ, named as such in the channel
+units; Q4 record to 2024-12-31; Q5 no daily transport series. OC-CCI is
+built LAST and parked if its lanes are slow or flaky.
+
+**Code** (`dc3f277`, `fb8c0c1`): adapters
+`ml/family1/adapters/{_f7d,glorys025d,oisst025d,ncep100d,occci025d}.py`,
+family code `72d`, the registry builder's family 7.2d entry, the Hub
+read-back checker `ml/family1/f7d_hub_check.py`, the queue helper
+`scripts/family1_enqueue.mjs`. Every fetch lane runs §4's falsifier on every
+bin it writes and refuses a year that fails it.
+
+**What the lanes' check found** (the first canaries were refused, and every
+refusal was a real mechanism, now reproduced exactly — details in
+`ml/family1/BUILD_LOG.md` E-087):
+
+- NCEP's Antarctic winter skin temperature goes to −109.9 °C, below the
+  first sanity bound (−100 °C); bounds are now −150 °C.
+- Some NCEP years store a dry cell as −2.3 × 10⁻¹⁰, and `log1p_channel`
+  clamps per day here, per pentad in 7.2: the check allows exactly the
+  measured |x| × 86400 (2.0 × 10⁻⁵ in log1p mm/day).
+- GLORYS reports a finite mixed-layer depth ≤ 0 on a few cell-days, which
+  7.2 counts as a zero in its pentad mean; the check rebuilds `log_mld` the
+  same way. For a reader: **where `log_mld` is NaN on a day inside an ocean
+  bin, 7.2's pentad may have averaged that day in as a zero depth.**
+
+**Built, published, checked, registered (2026-10-06).** Three stores, each
+lane refusing any year whose bins do not rebuild the published pentad
+(none refused after `fb8c0c1`), assembled and published on one verified
+Vast box (54469903, 1 h 54 m, ≈ $0.27, destroyed and confirmed gone), each
+followed by the framework's full `check` stage and by an independent Hub
+read-back (`ml/family1/f7d_hub_check.py`):
+
+| store | days | bytes on the Hub | files | read-back (two days) |
+|---|---|---|---|---|
+| `glorys025d` | 11,688 (1993-01-01…2024-12-31) | 72.36 GB | 4,682 | ≤ 0.00097 against the GLORYS chunks; pentad ok |
+| `oisst025d` | 15,706 (1982-01-01…2024-12-31) | 14.20 GB | 6,288 | `sst` ≤ 0.0138 °C against PSL; pentad ok |
+| `ncep100d` | 15,706 (1982-01-01…2024-12-31) | 23.96 GB | 6,288 | `t2m` ≤ 0.031 °C, `sp` ≤ 0.50 hPa against PSL; pentad ok |
+
+Registry:
+[family72d.json](https://huggingface.co/datasets/chfrank/earth-tensors/blob/main/tensors/family7_2d/family72d.json)
+(4 stores, 3 built, `occci025d` listed as not built). Every timing, margin
+and box number: `ml/family1/BUILD_LOG.md`, E-087.

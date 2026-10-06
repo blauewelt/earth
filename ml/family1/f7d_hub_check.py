@@ -48,10 +48,18 @@ PSL = "https://downloads.psl.noaa.gov/Datasets"
 EPOCH = dt.date(1982, 1, 1)
 
 
-def get(url, path):
-    if not os.path.exists(path):
-        urllib.request.urlretrieve(url, path + ".part")
-        os.replace(path + ".part", path)
+def get(url, path, attempts=4):
+    """Download once, size-checked (urlretrieve raises on a short body)."""
+    for i in range(attempts):
+        if os.path.exists(path):
+            return path
+        try:
+            urllib.request.urlretrieve(url, path + ".part")
+            os.replace(path + ".part", path)
+        except Exception:                                    # noqa: BLE001
+            if i + 1 == attempts:
+                raise
+            time.sleep(10 * (i + 1))
     return path
 
 
@@ -217,8 +225,21 @@ def main(argv=None):
                 # (interp2_nan returns float32; K -> degC in float32), the
                 # same term the lanes' falsifier carries
                 off = 273.15 if name in ("t2m", "tsoil", "skt") else 0.0
-                tol = fd.f16_half_step(R[both]) + 1e-5 * np.abs(R[both]) \
-                    + 2.0 ** -21 * (np.abs(R[both]) + off) + 1e-7
+                # family 7's bilinear weights are float32
+                # (build_family3.lin_weights returns w1 as float32), so its
+                # rounding scales with the CORNERS' magnitude, not the
+                # result's: near a zero crossing (a heat flux, a coast) the
+                # neighbourhood decides
+                from scipy.ndimage import maximum_filter
+                big = maximum_filter(np.where(np.isfinite(R), np.abs(R), 0.0),
+                                     size=3, mode="wrap")
+                # half a float16 step at the LARGER of the two magnitudes:
+                # the store's pre-rounding value and this reference can sit
+                # on either side of a power of two, where the step doubles
+                tol = fd.f16_half_step(np.maximum(np.abs(R[both]),
+                                                  np.abs(H[both]))) \
+                    + 1e-5 * np.abs(R[both]) \
+                    + 2.0 ** -21 * (big[both] + off) + 1e-7
                 bad = int((d > tol).sum())
                 r["channels"][name] = {
                     "values": int(both.sum()), "max_abs_diff": float(d.max()),
