@@ -2029,3 +2029,84 @@ checked equal on real ledgers (`c96caaa`). #1039 then died in
 `year_summary`, which is handed a LIST of lane counts; fixed in `e16dc2e`
 with a test. #1041–#1043 were cancelled before they could hit the same bug,
 and #1042 carried a start date that did not match the OC lanes.
+
+**Boxes.** Two verified hosts were used one after the other, never two at once:
+- **Vast 54497187** (offer 47927849: Quebec, GTX 1660 S, 129 GB RAM, 3.2 Gbps
+  up, 250 GB disk, $0.108/h priced at 100 GB). Up 14:43:47Z to 17:23:27Z,
+  2 h 40 m.
+- **Vast 54516511** (offer 53879546: Quebec, RTX 3060, 3.3 Gbps up, 400 GB
+  disk, $0.126/h at 100 GB). Up 17:24:08Z to 19:10:35Z, 1 h 46 m.
+
+The first filled its disk. The persistent cache held OISST, NCEP and OC-CCI
+(stores and parts, ~93 GB) when GLORYS's 76 GB of parts arrived (#1048,
+ENOSPC, cancelled), and the queued checks #1049 and #1050 then failed in "Set
+up job". The workflow's `free_cache` accepts only `family1_*/<store>` paths,
+so it cannot free a `family7_2d` work directory: a follow-up for the workflow.
+The box was destroyed and replaced.
+
+| run | box | store | stages | pull | assemble | publish / check |
+|---|---|---|---|---|---|---|
+| #1044 | 54497187 | oisst025d | all | 624 s | — | publish 452 s, 6,543 files restore-verified |
+| #1045 | 54497187 | ncep100d | all | — | — | published, 6,463 files |
+| #1046 | 54497187 | occci025d (first build) | all | 794 s | 16 s | publish 350 s, 4,215 files restore-verified |
+| #1047 | 54497187 | oisst025d | check | — | — | 1,178 s, 294,264 tiles decompressed, the Hub agrees |
+| #1051 | 54516511 | glorys025d | all | — | — | 4,919 files restore-verified; 1992–1996 `declared: true` |
+| #1052 | 54516511 | occci025d | index, fetch, assemble, check | — | — | 826 s, 188,724 tiles decompressed. The re-assembly's sha256 map equals the published store.json's for all 4,214 files |
+| #1054 | 54516511 | glorys025d | check | — | — | 1,534 s, 221,094 tiles decompressed, the Hub agrees |
+| #1055 | 54516511 | ncep100d | index, fetch, assemble, check | ENOSPC at 2022 of the pull (the 400 GB disk held GLORYS's store and parts and OC-CCI's) | — | **not run: cancelled 19:10Z, box destroyed** |
+
+**Published** (registry `store_groups`):
+
+| store | days | bytes | files |
+|---|---|---|---|
+| `glorys025d` | 12,283 (1993-01-01…2026-08-18) | 76,052,733,399 | 4,918 + store.json |
+| `oisst025d` | 16,348 (1982-01-01…2026-10-04) | 14,767,950,877 | 6,542 |
+| `ncep100d` | 16,147 (1982-01-01…2026-03-17) | 24,624,028,251 | 6,462 |
+| `occci025d` | 10,501 (1997-09-04…2026-06-30, less 26 absent upstream) | 6,568,528,750 | 4,214 |
+
+**Hub read-back** (`ml/family1/probes/*_hubcheck.json`; two pentad-era and
+two post-2024 instants per store, each against an independent source read,
+0 values beyond tolerance, pentad ok for every pentad-era bin):
+
+| store | days | worst \|Hub − source\| |
+|---|---|---|
+| glorys025d | 1995-07-15, 2023-01-15, 2025-07-15, 2026-08-15 | currents and log_mld ≤ 0.00098, ssh ≤ 0.00049 (post-2024 reference = the lane's own parked chunk) |
+| oisst025d | 1985-07-15, 2023-01-15, 2025-07-15, 2026-09-30 (preliminary) | sst ≤ 0.0154, sea_ice ≤ 0.00024 |
+| ncep100d | 1985-07-15, 2023-01-15, 2025-07-15, 2026-03-15 | t2m ≤ 0.031, sp ≤ 0.50, lhtfl and shtfl ≤ 0.25 |
+| occci025d | 2010-07-15, 2023-01-15, 2025-07-15, 2026-06-15 | log_chl ≤ 0.00097, chl_cov ≤ 0.00022 |
+
+The Hub answered HTTP 429 to this sandbox's per-tile range reads after the
+OISST read-back. The other three stores were read from their files downloaded
+whole and matched to the published store.json sha256 first.
+
+**Registry:** `family1-registry` #6 (guard strict, `allow_group:
+rebuilt_72d`, a new guard mode for a family whose every store was rebuilt).
+The guard printed each group's span change and changed fields before upload;
+the same diff was reviewed locally first. It published
+[family72d.json](https://huggingface.co/datasets/chfrank/earth-tensors/blob/main/tensors/family7_2d/family72d.json),
+restore-verified, with all four stores built and nothing not built. Every
+group carries its `record_span` to the measured end, its `requested_window`,
+`source_segments` (pentad → source-readback at 2025-01-01) and
+`store_counts_by_year`.
+
+**Cost and idle time.**
+
+| box | up | cost | idle | busy but useless |
+|---|---|---|---|---|
+| 54497187 | 2 h 40 m | ≈ $0.35 | ≈ 16 min: boot, then waiting while #1038 and #1039 were fixed | ≈ 25 min stuck in #1048's ENOSPC retries |
+| 54516511 | 1 h 46 m | ≈ $0.29 | ≈ 1 min | ≈ 10 min stuck in #1055's ENOSPC retries |
+
+Both were destroyed, and `list` confirms only the owner's stopped 47913006
+remains. Total ≈ $0.64.
+
+**What is not verified.** `ncep100d`'s full decode of the EXTENDED store was
+not run. What it does have:
+- the publish stage downloaded every one of its 6,463 files back and matched
+  them to store.json, and decoded 50 tiles;
+- the four-instant Hub read-back holds;
+- every 1982–2024 bin passed the pentad check in its lane;
+- the 1982–2024 store passed a full decode this morning (#1012).
+
+The full decode needs a box whose cache holds no other family-7.2d store. A
+`free_cache` that accepts `family7_2d/<store>` is the workflow fix that would
+have let one box do all four.

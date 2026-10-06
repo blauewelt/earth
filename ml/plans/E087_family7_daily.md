@@ -454,3 +454,19 @@ filled its 250 GB disk when the GLORYS pull came after three assembled
 stores. The workflow's `free_cache` step accepts only `family1_*` work
 directories, so it could not free `family7_2d` ones. That box was destroyed,
 and one fresh 400 GB box (54516511) took over GLORYS and the remaining checks.
+
+**Done, 2026-10-06 19:10Z.** All four stores are published through their
+true ends:
+- glorys025d to 2026-08-18;
+- oisst025d to 2026-10-04 (09-21 onward NCEI-preliminary);
+- ncep100d to 2026-03-17;
+- occci025d 1997-09-04 to 2026-06-30, built for the first time.
+
+They are registered in
+[family72d.json](https://huggingface.co/datasets/chfrank/earth-tensors/blob/main/tensors/family7_2d/family72d.json)
+(registry run #6, all four built). Full decode checks passed for oisst025d
+(#1047) and glorys025d (#1054). occci025d (#1052) was re-assembled and
+decoded on a fresh box, and its sha256 map equals the published one for all
+4,214 files. ncep100d's full decode of the extended store is outstanding,
+blocked by box disk (BUILD_LOG). The Hub read-back passes at two pentad-era
+and two post-2024 instants per store. Both boxes are destroyed (≈ $0.64).
