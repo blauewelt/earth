@@ -1,0 +1,18 @@
+  stage all (tier G): index, fetch, assemble, publish — the full-decode `check` stage runs only when named
+store     ncep100d — NCEP/NCAR Reanalysis 1 surface and land channels (family 7.2's g100), DAILY means, 1 degree — family 7.2d
+family    family7_2d (7.2d) · public -> chfrank/earth-tensors:tensors/family7_2d/ncep100d
+axis      1982-01-01 .. 2026-03-17  bins 0..3229 · time_s int32 (schema 2)
+lane      (unnamed) — whole calendar year(s), no group subset: the year folder's own files, as every store on the Hub holds them
+channels  C=15: tau_x, tau_y, tau_x_std, tau_y_std, t2m, u10, v10, sp, log_prate, log_swe, soilw, tsoil, lhtfl, shtfl, skt
+tier G    sharded, groups ['ncep100d'], F=5 x 86400 s, float16, years (by bin start) 1982..2026
+work      /opt/runner/_work/earth/earth/ml/cache/family7_2d
+
+=== stage index (ncep100d) ===
+  [index ncep100d] start (1 items)  0/1  0.0s
+  [index ncep100d] plan.json  1/1  0.0s
+  index: ncep100d — 45 year(s), C=15 (tau_x, tau_y, tau_x_std, tau_y_std, t2m, u10, v10, sp …), bins 0..3229
+=== stage index done in 0.0s ===
+
+=== stage fetch (ncep100d) ===
+  [pull ncep100d parts] start (45 items)  0/45  0.0s
+  hub: chfrank/earth-tensors with the token from $HF_TOKEN
