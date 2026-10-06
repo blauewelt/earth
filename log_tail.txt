@@ -1,0 +1,80 @@
+  [verify era5_q before publish] check: check era5_q 3251/3251  50.0s
+  hub: chfrank/earth-tensors with the token from $HF_TOKEN
+  [publish era5_q] start (6505 items)  0/6505  0.0s
+Upload 0 LFS files: 0it [00:00, ?it/s]Upload 0 LFS files: 0it [00:00, ?it/s]
+No files have been modified since last commit. Skipping to prevent empty commit.
+Upload 0 LFS files: 0it [00:00, ?it/s]Upload 0 LFS files: 0it [00:00, ?it/s]
+No files have been modified since last commit. Skipping to prevent empty commit.
+Upload 0 LFS files: 0it [00:00, ?it/s]Upload 0 LFS files: 0it [00:00, ?it/s]
+No files have been modified since last commit. Skipping to prevent empty commit.
+Upload 0 LFS files: 0it [00:00, ?it/s]Upload 0 LFS files: 0it [00:00, ?it/s]
+No files have been modified since last commit. Skipping to prevent empty commit.
+Upload 0 LFS files: 0it [00:00, ?it/s]Upload 0 LFS files: 0it [00:00, ?it/s]
+No files have been modified since last commit. Skipping to prevent empty commit.
+Upload 0 LFS files: 0it [00:00, ?it/s]Upload 0 LFS files: 0it [00:00, ?it/s]
+No files have been modified since last commit. Skipping to prevent empty commit.
+Upload 0 LFS files: 0it [00:00, ?it/s]Upload 0 LFS files: 0it [00:00, ?it/s]
+No files have been modified since last commit. Skipping to prevent empty commit.
+Upload 0 LFS files: 0it [00:00, ?it/s]Upload 0 LFS files: 0it [00:00, ?it/s]
+No files have been modified since last commit. Skipping to prevent empty commit.
+Upload 0 LFS files: 0it [00:00, ?it/s]Upload 0 LFS files: 0it [00:00, ?it/s]
+No files have been modified since last commit. Skipping to prevent empty commit.
+Upload 0 LFS files: 0it [00:00, ?it/s]Upload 0 LFS files: 0it [00:00, ?it/s]
+No files have been modified since last commit. Skipping to prevent empty commit.
+Upload 0 LFS files: 0it [00:00, ?it/s]Upload 0 LFS files: 0it [00:00, ?it/s]
+No files have been modified since last commit. Skipping to prevent empty commit.
+Upload 0 LFS files: 0it [00:00, ?it/s]Upload 0 LFS files: 0it [00:00, ?it/s]
+No files have been modified since last commit. Skipping to prevent empty commit.
+Upload 0 LFS files: 0it [00:00, ?it/s]Upload 0 LFS files: 0it [00:00, ?it/s]
+No files have been modified since last commit. Skipping to prevent empty commit.
+Upload 0 LFS files: 0it [00:00, ?it/s]Upload 0 LFS files: 0it [00:00, ?it/s]
+No files have been modified since last commit. Skipping to prevent empty commit.
+  [publish era5_q] era5_q  2/6505  70.8s
+  [publish era5_q] era5_q/1982  148/6505  84.8s
+  [publish era5_q] era5_q/1983  294/6505  99.2s
+  [publish era5_q] era5_q/1984  442/6505  112.6s
+  [publish era5_q] era5_q/1985  588/6505  126.6s
+  [publish era5_q] era5_q/1986  734/6505  140.2s
+  [publish era5_q] era5_q/1987  880/6505  156.3s
+  [publish era5_q] era5_q/1988  1026/6505  170.6s
+  [publish era5_q] era5_q/1989  1172/6505  186.0s
+  [publish era5_q] era5_q/1990  1318/6505  198.5s
+  [publish era5_q] era5_q/1991  1464/6505  212.6s
+  [publish era5_q] era5_q/1992  1610/6505  226.3s
+  [publish era5_q] era5_q/1993  1756/6505  239.5s
+  [publish era5_q] era5_q/1994  1902/6505  252.8s
+  [publish era5_q] era5_q/1995  2048/6505  265.9s
+  [publish era5_q] era5_q/1996  2194/6505  281.5s
+  [publish era5_q] era5_q/1997  2340/6505  294.6s
+  [publish era5_q] era5_q/1998  2486/6505  309.1s
+  [publish era5_q] era5_q/1999  2632/6505  321.6s
+  [publish era5_q] era5_q/2000  2778/6505  335.0s
+  [publish era5_q] era5_q/2001  2924/6505  350.4s
+  [publish era5_q] era5_q/2002  3070/6505  364.2s
+  [publish era5_q] era5_q/2003  3216/6505  377.8s
+  [publish era5_q] era5_q/2004  3364/6505  392.1s
+  [publish era5_q] era5_q/2005  3510/6505  405.9s
+  [publish era5_q] era5_q/2006  3656/6505  418.7s
+  [publish era5_q] era5_q/2007  3802/6505  431.4s
+  [publish era5_q] era5_q/2008  3948/6505  444.2s
+  [publish era5_q] era5_q/2009  4094/6505  469.9s
+  [publish era5_q] era5_q/2010  4240/6505  487.6s
+  [publish era5_q] era5_q/2011  4386/6505  500.6s
+  [publish era5_q] era5_q/2012  4532/6505  515.4s
+  [publish era5_q] era5_q/2013  4678/6505  528.4s
+  [publish era5_q] era5_q/2014  4824/6505  547.3s
+  [publish era5_q] era5_q/2015  4970/6505  561.5s
+  [publish era5_q] era5_q/2016  5116/6505  575.0s
+  [publish era5_q] era5_q/2017  5262/6505  590.4s
+  [publish era5_q] era5_q/2018  5408/6505  603.4s
+  [publish era5_q] era5_q/2019  5554/6505  617.8s
+  [publish era5_q] era5_q/2020  5700/6505  631.9s
+  [publish era5_q] era5_q/2021  5846/6505  645.5s
+  [publish era5_q] era5_q/2022  5992/6505  659.5s
+  [publish era5_q] era5_q/2023  6138/6505  672.8s
+  [publish era5_q] era5_q/2024  6286/6505  686.0s
+  [publish era5_q] era5_q/2025  6432/6505  700.2s
+  [publish era5_q] era5_q/2026  6504/6505  707.0s
+  [publish era5_q] store.json  6505/6505  707.5s
+  publish: 6505 file(s) verified by restore, 50 tile(s) decompressed, HTTP range {'checked': 5} -> https://huggingface.co/datasets/chfrank/earth-tensors/tree/main/tensors/family1_2/era5_q
+=== stage publish done in 768.1s ===
