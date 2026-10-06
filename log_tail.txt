@@ -1,0 +1,80 @@
+
+
+
+
+oisst025d__bin_1087.idx.npy:   0%|          | 0.00/1.57k [00:00<?, ?B/s][A[A[A[A[Aoisst025d__bin_1085.idx.npy: 100%|██████████| 1.57k/1.57k [00:00<00:00, 13.3kB/s]
+oisst025d__bin_1086.idx.npy: 100%|██████████| 1.57k/1.57k [00:00<00:00, 13.6kB/s]
+oisst025d__bin_1085.zst: 100%|██████████| 4.60M/4.60M [00:00<00:00, 23.7MB/s]
+oisst025d__bin_1087.idx.npy: 100%|██████████| 1.57k/1.57k [00:00<00:00, 14.1kB/s]
+oisst025d__bin_1086.zst: 100%|██████████| 4.63M/4.63M [00:00<00:00, 27.7MB/s]
+Upload 337 LFS files:  93%|█████████▎| 315/337 [00:17<00:01, 17.91it/s]
+oisst025d__bin_1087.zst:   0%|          | 0.00/4.68M [00:00<?, ?B/s][A
+
+oisst025d__bin_1088.idx.npy:   0%|          | 0.00/1.57k [00:00<?, ?B/s][A[A
+
+
+oisst025d__bin_1088.zst:   0%|          | 0.00/4.64M [00:00<?, ?B/s][A[A[A
+
+
+
+oisst025d__bin_1089.idx.npy:   0%|          | 0.00/1.57k [00:00<?, ?B/s][A[A[A[AUpload 337 LFS files:  95%|█████████▍| 319/337 [00:17<00:00, 21.46it/s]
+
+
+
+
+oisst025d__bin_1089.zst:   0%|          | 0.00/4.56M [00:00<?, ?B/s][A[A[A[A[Aoisst025d__bin_1088.idx.npy: 100%|██████████| 1.57k/1.57k [00:00<00:00, 13.8kB/s]
+oisst025d__bin_1087.zst: 100%|██████████| 4.68M/4.68M [00:00<00:00, 23.3MB/s]
+oisst025d__bin_1089.idx.npy: 100%|██████████| 1.57k/1.57k [00:00<00:00, 14.9kB/s]
+
+oisst025d__bin_1090.idx.npy:   0%|          | 0.00/1.57k [00:00<?, ?B/s][Aoisst025d__bin_1088.zst: 100%|██████████| 4.64M/4.64M [00:00<00:00, 21.2MB/s]
+
+
+oisst025d__bin_1090.zst:   0%|          | 0.00/4.61M [00:00<?, ?B/s][A[AUpload 337 LFS files:  96%|█████████▌| 322/337 [00:17<00:00, 19.82it/s]
+
+
+oisst025d__bin_1091.idx.npy:   0%|          | 0.00/1.57k [00:00<?, ?B/s][A[A[Aoisst025d__bin_1089.zst: 100%|██████████| 4.56M/4.56M [00:00<00:00, 20.4MB/s]
+oisst025d__bin_1090.idx.npy: 100%|██████████| 1.57k/1.57k [00:00<00:00, 12.5kB/s]
+
+oisst025d__bin_1091.zst:   0%|          | 0.00/4.54M [00:00<?, ?B/s][Aoisst025d__bin_1091.idx.npy: 100%|██████████| 1.57k/1.57k [00:00<00:00, 13.4kB/s]
+
+
+
+oisst025d__bin_1092.idx.npy:   0%|          | 0.00/1.57k [00:00<?, ?B/s][A[A[AUpload 337 LFS files:  96%|█████████▋| 325/337 [00:17<00:00, 20.07it/s]
+
+
+
+oisst025d__bin_1092.zst:   0%|          | 0.00/4.48M [00:00<?, ?B/s][A[A[A[Aoisst025d__bin_1090.zst: 100%|██████████| 4.61M/4.61M [00:00<00:00, 20.0MB/s]
+oisst025d__bin_1092.idx.npy: 100%|██████████| 1.57k/1.57k [00:00<00:00, 12.8kB/s]
+
+
+oisst025d__bin_1093.idx.npy:   0%|          | 0.00/1.57k [00:00<?, ?B/s][A[A
+
+
+oisst025d__bin_1093.zst:   0%|          | 0.00/4.47M [00:00<?, ?B/s][A[A[Aoisst025d__bin_1091.zst: 100%|██████████| 4.54M/4.54M [00:00<00:00, 17.1MB/s]
+Upload 337 LFS files:  97%|█████████▋| 328/337 [00:18<00:00, 18.21it/s]
+oisst025d__bin_1094.idx.npy:   0%|          | 0.00/1.57k [00:00<?, ?B/s][Aoisst025d__bin_1093.idx.npy: 100%|██████████| 1.57k/1.57k [00:00<00:00, 13.3kB/s]
+oisst025d__bin_1092.zst: 100%|██████████| 4.48M/4.48M [00:00<00:00, 17.7MB/s]
+oisst025d__bin_1094.idx.npy: 100%|██████████| 1.57k/1.57k [00:00<00:00, 18.3kB/s]
+
+oisst025d__bin_1094.zst:   0%|          | 0.00/4.51M [00:00<?, ?B/s][AUpload 337 LFS files:  98%|█████████▊| 330/337 [00:18<00:00, 17.85it/s]
+
+oisst025d__bin_1095.idx.npy:   0%|          | 0.00/1.57k [00:00<?, ?B/s][A[A
+
+
+
+oisst025d__bin_1095.zst:   0%|          | 0.00/4.53M [00:00<?, ?B/s][A[A[A[A
+
+
+
+
+oisst025d__shard_index.npy:   0%|          | 0.00/27.7k [00:00<?, ?B/s][A[A[A[A[Aoisst025d__bin_1093.zst: 100%|██████████| 4.47M/4.47M [00:00<00:00, 20.5MB/s]
+oisst025d__bin_1095.idx.npy: 100%|██████████| 1.57k/1.57k [00:00<00:00, 11.3kB/s]
+oisst025d__shard_index.npy: 100%|██████████| 27.7k/27.7k [00:00<00:00, 248kB/s]
+Upload 337 LFS files:  99%|█████████▉| 333/337 [00:18<00:00, 17.40it/s]oisst025d__bin_1094.zst: 100%|██████████| 4.51M/4.51M [00:00<00:00, 20.8MB/s]
+oisst025d__bin_1095.zst: 100%|██████████| 4.53M/4.53M [00:00<00:00, 23.7MB/s]
+Upload 337 LFS files: 100%|█████████▉| 336/337 [00:18<00:00, 19.73it/s]Upload 337 LFS files: 100%|██████████| 337/337 [00:18<00:00, 18.07it/s]
+HTTP Error 429 thrown while requesting POST https://huggingface.co/api/datasets/chfrank/earth-tensors/preupload/main
+Rate limited. Waiting 67.0s before retry [Retry 1/5].
+  oisst025d: 5 year(s) pushed and verified in 2 part commit(s), done.json written last (0 already present)
+  push-parts: 5 year(s) on the Hub under partials/family7_2d/oisst025d/
+=== stage fetch done in 3005.7s ===
