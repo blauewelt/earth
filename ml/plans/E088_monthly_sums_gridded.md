@@ -157,7 +157,7 @@ box chosen by transfer price as well as speed.
   4° × 4° box at 38–42° N, 42–38° W — composed from its 36 per-month planes
   must equal the mean and std of ALL native frames in those three years,
   read tile by tile.
-- **In the suite** (`tests/test_export_gridded_monthly.py`, 18 checks): on
+- **In the suite** (`tests/test_export_gridded_monthly.py`, 19 checks): on
   two tiny stores built with the real framework (daily across two year
   boundaries with land, clouds and a day absent upstream; six-hourly across
   month boundaries inside bins) EVERY plane equals numpy; four composed sets
@@ -201,7 +201,73 @@ recommendation.
   then the probe), job `restore` on `ubuntu-latest`.
 - `tests/make_gridded_monthly_fixture.py`, `tests/test_export_gridded_monthly.py`.
 
-## 8. Status
+## 8. Phase 2 measured (2026-10-07) — and the recommendation
+
+One calendar month of each fine store, streamed on the build box (each file
+sha256-checked), summed per cell, its sum (float32) and count (uint8)
+compressed per 256 × 256 tile at zstd level 15, empty tiles not stored:
+
+| store | grid × channels | month probed | frames | read | monthly union coverage | tiles with data | sum + count, one month: tiled (dense) | months in record | whole record: tiled (dense) |
+|---|---|---|---|---|---|---|---|---|---|
+| `irtb` (cloud-top brightness temperature, 3-hourly, ±30°) | 1649 × 9896 × 1 | 2024-07 | 248 | 1.93 GB | 1.000 | 273 / 273 | 27.8 MB (82 MB) | 345 | **9.6 GB** (28 GB) |
+| `oc4k` (ocean colour, 4 km daily) | 4320 × 8640 × 3 | 2020-07 | 31 | 0.77 GB | 0.446 | 446 / 578 | 122.7 MB (560 MB) | 304 | **37.3 GB** (170 GB) |
+| `pace4k` (PACE ocean colour, 4 km daily) | 4320 × 8640 × 7 | 2025-07 | 31 | 0.87 GB | 0.457 (0.108 on 3 ch) | 452 / 578 | 210.1 MB (1,306 MB) | 29 | **6.1 GB** (38 GB) |
+| `sst_acspo02` (ACSPO SST, 2 km daily) | 9000 × 18000 × 2 | 2024-07 | 31 | 1.87 GB | 0.549 | 1942 / 2556 | 241.6 MB (1,620 MB) | 320 | **77.3 GB** (518 GB) |
+
+The sum dominates (float32 of noisy data barely compresses: 26 of the
+27.8 MB for `irtb`); m2 would add about the sum's size again. `irtb`'s
+3-hourly month is 248 frames — inside uint8, with 7 to spare.
+
+**Recommendation (not built).** Two layers per fine store:
+1. **Native-resolution monthly shards in the store's own tiled layout** — one
+   file per (year, month) of independently zstd-compressed 256 × 256 tiles of
+   (sum f32, count u8[, m2 f32]) with a per-file (offset, length) index, empty
+   tiles not stored — i.e. `sharded.py`'s layout with a calendar month in
+   place of a five-day bin. ≈ 130 GB for sum + count over the four stores
+   (≈ 240 GB with m2), against 754 GB dense. A box is a few tiles per
+   year-month, like the Data tab already reads the native stores.
+2. **An exact 0.25° pooled layer in E-086's dense layout**: sums and counts
+   add over blocks, so a 6 × 6 (4 km) or 12 × 12 (2 km) block-sum is EXACTLY
+   the 0.25° cell's sum and count — a global long-period map at the cost of a
+   0.25° store (`oc4k` ≈ 8.7 GB with m2), never a mean of means.
+Build cost on the same kind of box: the four stores are ≈ 1.17 TB of shards
+(`irtb` 518 GB, `sst_acspo02` 453, `oc4k` 176, `pace4k` 21), about 2.5× this
+run's pull — a few hours on one box at the 110 MB/s measured here; the probe
+measured one month's read and compression, not the full CPU cost.
+
+## 9. Status
 
 - 2026-10-07: plan, exporter, publisher, workflow, 18 toy checks, the fixture
-  and a real one-year trial on `ncep100d` written and green.
+  and a real one-year trial on `ncep100d` written and green (`7dd1eb4`).
+- 2026-10-07: **BUILT AND PUBLISHED** — gridded-monthly run 1 (per-year
+  monthly sums, counts and m2 of all eight phase-1 stores, the falsifier per
+  store before its upload, the phase-2 probe, and a hosted restore). Box:
+  Vast instance 54675375 (offer 46119693, Quebec, verified, 6 CPUs, 64 GB
+  RAM, $0.083/h, transfer $0.0026/TB — free in effect), rented 16:42:50 UTC,
+  job 16:53:38–18:12:38, destroyed 18:12:57 (`list` empty) — 90 min, ≈ $0.13.
+  476 GB read at ~110 MB/s; per store (export + falsifier + commit):
+  `glorys025d` 9.9 min (76.8 GB), `oisst025d` 4.5 (14.9), `ncep100d` 3.2
+  (24.9), `occci025d` 1.9 (6.6), `era5_t` 8.0 (54.4), `era5_q` 11.2 (95.7),
+  `era5_u` 11.2 (100.0), `era5_v` 12.1 (102.3); probe 6.4 min. The full job log (32,448 lines) has no 429 and no retry: the Hub's rate limit never bit.
+  The hosted restore streamed all 40 files (57.1 GB) back in under 4 min,
+  every sha256 equal; CORS from `https://blauewelt.org`: 206,
+  `access-control-allow-origin: *`.
+- **The falsifier on the real data** (sampled planes, every channel, plus the
+  2010–2012 box over every native frame of those three years): OK for all
+  eight stores. Planes: `glorys025d` 30, `oisst025d` 14, `ncep100d` 105,
+  `occci025d` 12, each ERA5 store 91. Max |Δmean|: 6.6e-8 (GLORYS), 5.1e-7 °C
+  (OISST), 1.6e-5 (NCEP, in its largest-unit channel), 4.3e-8 (OC-CCI),
+  0 K (ERA5 t), 4.9e-7 g/kg (q), 2.0e-6 / 1.0e-6 m/s (u / v); the ratio to the
+  rigorous bound reaches exactly 1.000 (a float32 rounding tie) and never
+  more. Max |Δstd| / tolerance ≤ **0.030** everywhere (std shipped).
+- **Live, from the sandbox over HTTP through `sharded.py`:** (1) one 2015-07
+  tile per store (3,392–41,193 cells) equals numpy over its 31 or 124 native
+  frames — counts equal, means within the bound, std ≤ 0.027 of the
+  tolerance; (2) ERA5 `t_500` January 2015, whole globe, against its 124
+  native frames: counts equal, max |Δmean| 0, max |Δstd| 1.7e-7 K, mean of
+  means 252.3172 K both ways; (3) the 1991–2020 July SST normal of
+  `oisst025d` at 38–42° N, 42–38° W (289 cells), composed from 30 per-year
+  planes against ALL 930 native July frames (not sampled): counts equal,
+  max |Δmean| 0, max |Δstd| 8.4e-9 °C, mean 22.5337 °C both ways.
+- `data/gridded_monthly_index.json` written by the restore job
+  (`restore_verified: true`) and committed. Nothing in flight.

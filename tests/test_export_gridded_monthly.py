@@ -377,5 +377,41 @@ def test_h_committed_fixture_agrees_with_its_own_files():
     assert total < 1e6, f"the fixture is {total / 1e6:.2f} MB"
 
 
+def test_h_committed_real_index_is_consistent():
+    """data/gridded_monthly_index.json — written by gridded-monthly run 1's
+    hosted restore job, never by hand."""
+    path = os.path.join(ROOT, "data", "gridded_monthly_index.json")
+    if not os.path.exists(path):
+        pytest.skip("the real index is not committed yet")
+    ix = json.load(open(path))
+    assert ix["fixture"] is False and ix["restore_verified"] is True
+    assert set(ix["stores"]) == set(X.PHASE1)
+    for r in ("sum", "count"):
+        c = ix["cors_measured"][r]
+        assert c["status"] == 206 and c["origin"] == "https://blauewelt.org"
+        assert c["access_control_allow_origin"]
+    for s, b in ix["stores"].items():
+        C, Y, H, W = len(b["chans"]), b["n_years"], b["grid"]["H"], \
+            b["grid"]["W"]
+        assert b["years"] == list(range(b["year_first"], b["year_last"] + 1))
+        assert len(b["frames_present"]) == len(b["frames_possible"]) == Y
+        pres, poss = np.array(b["frames_present"]), np.array(
+            b["frames_possible"])
+        assert (pres <= poss).all() and pres.max() == b["max_count"]
+        assert b["max_count"] == (124 if b["frame_seconds"] == 21600 else 31)
+        for role, item in (("sum", 4), ("count", 1), ("m2", 4)):
+            f = b[role]
+            assert f["shape"] == [12, C, Y, H, W]
+            assert f["plane_bytes"] == H * W * item
+            assert f["bytes"] == f["header_len"] + 12 * C * Y * H * W * item
+            assert f["url"] == ix["base"] + s + f"/monthly/{role}.npy"
+        fz = b["falsifier"]
+        assert fz["ok"] and fz["max_mean_over_bound"] <= 1.0 \
+            and fz["max_std_over_tol"] <= 1.0
+        assert b["licence"]["attribution"]
+        if s.startswith("family1_2/"):
+            assert len(b["levels_hpa"]) == 13 == C
+
+
 if __name__ == "__main__":                                  # pragma: no cover
     sys.exit(pytest.main([__file__, "-q"]))
