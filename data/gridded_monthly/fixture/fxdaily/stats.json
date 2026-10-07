@@ -1,0 +1,203 @@
+{
+ "_source": "ml/export_gridded_monthly.py \u2014 do not hand-edit",
+ "axes": [
+  "month",
+  "channel",
+  "year",
+  "lat",
+  "lon"
+ ],
+ "channel_axis": null,
+ "channels": [
+  {
+   "max": 40.0,
+   "min": -5.0,
+   "name": "sst",
+   "unit": "degC"
+  },
+  {
+   "max": 1.0,
+   "min": 0.0,
+   "name": "sea_ice",
+   "unit": "0-1"
+  }
+ ],
+ "chans": [
+  "sst",
+  "sea_ice"
+ ],
+ "combine": "mean over cells K = \u03a3 sum / \u03a3 count (NaN where \u03a3 count = 0); population variance = (\u03a3 m2 + \u03a3 n_k (sum_k / n_k \u2212 mean)\u00b2) / \u03a3 n_k, summing over the (year, month) cells with n_k > 0",
+ "count_dtype": "uint8",
+ "dtype_source": "float16",
+ "export_seconds": 0.3,
+ "falsifier_months": [
+  [
+   2009,
+   12
+  ],
+  [
+   2010,
+   7
+  ],
+  [
+   2011,
+   1
+  ]
+ ],
+ "falsifier_period_box": [
+  38.0,
+  42.0,
+  -42.0,
+  -38.0
+ ],
+ "falsifier_period_years": [
+  2010,
+  2011
+ ],
+ "frame_seconds": 86400,
+ "frames_per_bin": 5,
+ "frames_possible": [
+  [
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   12
+  ],
+  [
+   31,
+   28,
+   31,
+   30,
+   31,
+   30,
+   31,
+   31,
+   30,
+   31,
+   30,
+   31
+  ],
+  [
+   10,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0
+  ]
+ ],
+ "frames_present": [
+  [
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   12
+  ],
+  [
+   31,
+   28,
+   30,
+   30,
+   31,
+   30,
+   31,
+   31,
+   30,
+   31,
+   30,
+   31
+  ],
+  [
+   10,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0
+  ]
+ ],
+ "generated_utc": "2026-10-07T16:30:50Z",
+ "git_sha": "bdc636db8ab75ebaac75e0cfe09521e52ba607a0",
+ "grid": {
+  "H": 19,
+  "W": 36,
+  "coordinates": "pixel positions (lat0 + row * dlat, lon0 + col * dlon)",
+  "crs": "EPSG:4326",
+  "dlat": 10.0,
+  "dlon": 10.0,
+  "lat0": -90.0,
+  "lon0": -180.0,
+  "registration": "point \u2014 row r is latitude -90 + 10 r, column c is longitude -180 + 10 c (fixture)",
+  "south_first": true
+ },
+ "group": "fxdaily",
+ "layout": "sum.npy, m2.npy: [month, channel, year, lat, lon] float32 in the store's physical units; count.npy the same shape, uint8. Plane (m, c, y) starts at header_len + ((m * C + c) * Y + (y - year_first)) * H * W * itemsize; a run of years for one (m, c) is one contiguous range. sum and m2 are 0.0 where count is 0.",
+ "levels_hpa": null,
+ "licence": {
+  "attribution": "fixture: synthetic data",
+  "derived_works": "free",
+  "name": "fixture licence",
+  "redistribution": "attribution",
+  "redistribution_confirmed": true
+ },
+ "m2_dtype": "float32",
+ "max_count": 31,
+ "month_rule": "the CALENDAR month (UTC) of each frame's own start instant (sharded.frame_datetime) \u2014 not E-086's month-of-bin rule",
+ "n_years": 3,
+ "plan": "https://blauewelt.github.io/earth/docs.html?f=ml/plans/E088_monthly_sums_gridded.md",
+ "record_first": "2009-12-20T00:00:00Z",
+ "record_last": "2011-01-10T00:00:00Z",
+ "shape": [
+  12,
+  2,
+  3,
+  19,
+  36
+ ],
+ "source_bytes_read": 1114288,
+ "source_sha256_block_digest": "071bbb4517d17f18b631d1fb610c3feb4cc2ceecc8c598146d63f0176ab32425",
+ "source_shard_index_sha256": "3a5949a1a72a57e834debf03a499c38ee97ce1340fe677dc411d4e2a95f7a7c2",
+ "store": "fixture/fxdaily",
+ "sum_dtype": "float32",
+ "title": "fixture: daily 2-channel ocean field (family 7.2d-shaped)",
+ "units": {
+  "sea_ice": "0-1",
+  "sst": "degC"
+ },
+ "units_note": "physical units as the store stores them",
+ "year_first": 2009,
+ "year_last": 2011,
+ "years": [
+  2009,
+  2010,
+  2011
+ ]
+}

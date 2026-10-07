@@ -1,0 +1,214 @@
+{
+ "failures": [],
+ "generated_utc": "2026-10-07T16:30:50Z",
+ "max_abs_mean": 0.0,
+ "max_abs_std": 4.256551955350574e-08,
+ "max_mean_over_bound": 0.0,
+ "max_std_over_tol": 0.0001857689133169145,
+ "n_planes": 9,
+ "ok": true,
+ "period": [
+  {
+   "box": [
+    38.0,
+    42.0,
+    -42.0,
+    -38.0
+   ],
+   "channel": "t_100",
+   "frames": 138,
+   "max_abs_mean": 0.0,
+   "max_abs_std": 5.433308469804388e-09,
+   "max_mean_over_bound": 0.0,
+   "max_std_over_tol": 2.2756554156858788e-05,
+   "n_cells": 1,
+   "ok": true,
+   "what": "2010\u20132010 box t_100",
+   "why": [],
+   "years": [
+    2010
+   ]
+  },
+  {
+   "box": [
+    38.0,
+    42.0,
+    -42.0,
+    -38.0
+   ],
+   "channel": "t_500",
+   "frames": 138,
+   "max_abs_mean": 0.0,
+   "max_abs_std": 9.352911778393036e-10,
+   "max_mean_over_bound": 0.0,
+   "max_std_over_tol": 3.4550300357536037e-06,
+   "n_cells": 1,
+   "ok": true,
+   "what": "2010\u20132010 box t_500",
+   "why": [],
+   "years": [
+    2010
+   ]
+  },
+  {
+   "box": [
+    38.0,
+    42.0,
+    -42.0,
+    -38.0
+   ],
+   "channel": "t_850",
+   "frames": 138,
+   "max_abs_mean": 0.0,
+   "max_abs_std": 1.4923262625643474e-08,
+   "max_mean_over_bound": 0.0,
+   "max_std_over_tol": 4.99507409482541e-05,
+   "n_cells": 1,
+   "ok": true,
+   "what": "2010\u20132010 box t_850",
+   "why": [],
+   "years": [
+    2010
+   ]
+  }
+ ],
+ "planes": [
+  {
+   "channel": "t_100",
+   "frames": 16,
+   "frames_possible": 16,
+   "max_abs_mean": 0.0,
+   "max_abs_std": 0.0,
+   "max_mean_over_bound": 0.0,
+   "max_std_over_tol": 0.0,
+   "month": 1,
+   "n_cells": 684,
+   "ok": true,
+   "what": "2010-01 t_100",
+   "why": [],
+   "year": 2010
+  },
+  {
+   "channel": "t_500",
+   "frames": 16,
+   "frames_possible": 16,
+   "max_abs_mean": 0.0,
+   "max_abs_std": 0.0,
+   "max_mean_over_bound": 0.0,
+   "max_std_over_tol": 0.0,
+   "month": 1,
+   "n_cells": 684,
+   "ok": true,
+   "what": "2010-01 t_500",
+   "why": [],
+   "year": 2010
+  },
+  {
+   "channel": "t_850",
+   "frames": 16,
+   "frames_possible": 16,
+   "max_abs_mean": 0.0,
+   "max_abs_std": 0.0,
+   "max_mean_over_bound": 0.0,
+   "max_std_over_tol": 0.0,
+   "month": 1,
+   "n_cells": 684,
+   "ok": true,
+   "what": "2010-01 t_850",
+   "why": [],
+   "year": 2010
+  },
+  {
+   "channel": "t_100",
+   "frames": 112,
+   "frames_possible": 112,
+   "max_abs_mean": 0.0,
+   "max_abs_std": 3.8589951678602574e-08,
+   "max_mean_over_bound": 0.0,
+   "max_std_over_tol": 0.00017455560573513746,
+   "month": 2,
+   "n_cells": 684,
+   "ok": true,
+   "what": "2010-02 t_100",
+   "why": [],
+   "year": 2010
+  },
+  {
+   "channel": "t_500",
+   "frames": 112,
+   "frames_possible": 112,
+   "max_abs_mean": 0.0,
+   "max_abs_std": 3.860877906269877e-08,
+   "max_mean_over_bound": 0.0,
+   "max_std_over_tol": 0.00015294516040131843,
+   "month": 2,
+   "n_cells": 684,
+   "ok": true,
+   "what": "2010-02 t_500",
+   "why": [],
+   "year": 2010
+  },
+  {
+   "channel": "t_850",
+   "frames": 112,
+   "frames_possible": 112,
+   "max_abs_mean": 0.0,
+   "max_abs_std": 3.860406816436068e-08,
+   "max_mean_over_bound": 0.0,
+   "max_std_over_tol": 0.00013779971101352123,
+   "month": 2,
+   "n_cells": 684,
+   "ok": true,
+   "what": "2010-02 t_850",
+   "why": [],
+   "year": 2010
+  },
+  {
+   "channel": "t_100",
+   "frames": 10,
+   "frames_possible": 10,
+   "max_abs_mean": 0.0,
+   "max_abs_std": 4.256551955350574e-08,
+   "max_mean_over_bound": 0.0,
+   "max_std_over_tol": 0.0001857689133169145,
+   "month": 3,
+   "n_cells": 684,
+   "ok": true,
+   "what": "2010-03 t_100",
+   "why": [],
+   "year": 2010
+  },
+  {
+   "channel": "t_500",
+   "frames": 10,
+   "frames_possible": 10,
+   "max_abs_mean": 0.0,
+   "max_abs_std": 4.25293371630886e-08,
+   "max_mean_over_bound": 0.0,
+   "max_std_over_tol": 0.0001655556423108233,
+   "month": 3,
+   "n_cells": 684,
+   "ok": true,
+   "what": "2010-03 t_500",
+   "why": [],
+   "year": 2010
+  },
+  {
+   "channel": "t_850",
+   "frames": 10,
+   "frames_possible": 10,
+   "max_abs_mean": 0.0,
+   "max_abs_std": 4.2397795496640356e-08,
+   "max_mean_over_bound": 0.0,
+   "max_std_over_tol": 0.0001459008490206726,
+   "month": 3,
+   "n_cells": 684,
+   "ok": true,
+   "what": "2010-03 t_850",
+   "why": [],
+   "year": 2010
+  }
+ ],
+ "std_rel_tol": 1e-06,
+ "store": "fixture/fx6h"
+}

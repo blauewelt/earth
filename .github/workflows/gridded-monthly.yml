@@ -1,0 +1,174 @@
+# E-088: per-year, per-calendar-month SUM, COUNT and M2 of the sharded gridded
+# stores (family 7.2d's four daily stores, family 1.2's four ERA5 stores), so
+# the Data tab can compose a mean — and a standard deviation — over any
+# period from a few range reads instead of every native frame.
+# Plan: ml/plans/E088_monthly_sums_gridded.md.
+#
+# WHAT IT DOES. Job `export` (a rented box) runs
+# ml/export_gridded_monthly.py `run`: ONE STORE AT A TIME it streams the
+# store's bins year by year (each shard sha256-checked against the store's
+# own store.json, decoded through ml/family1/sharded.py), writes
+# sum/count/m2.npy + stats.json, runs THE FALSIFIER (sampled planes and a
+# period box against numpy over the native frames, refusing the store on any
+# miss), then COMMITS the store's monthly files to the Hub with a manifest
+# and frees the disk — so a lost box redoes at most one store (ml/CLAUDE.md
+# §5.26), and a store already on the Hub from the same source is skipped.
+# Then the phase-2 PROBE measures one month of each fine 1.gf grid (no build).
+# Job `restore` (a GitHub-hosted runner) streams every published file back,
+# requires each sha256 to match its manifest, measures CORS from
+# https://blauewelt.org and writes data/gridded_monthly_index.json as an
+# artifact. The main session commits the index (contents: read here).
+#
+# SECURITY. `workflow_dispatch` ONLY (ml/CLAUDE.md §6). HF_TOKEN reaches the
+# scripts as an ENV VAR for the life of the job and never as an argument.
+name: Gridded monthly sums
+run-name: gridded monthly on ${{ github.event.inputs.runner }}
+
+on:
+  workflow_dispatch:
+    inputs:
+      runner:
+        description: "runner label — a Vast box's runner NAME (gpu-box-NNNNNNNN); >= 150 GB free disk"
+        required: true
+      stores:
+        description: "comma list of store keys (empty = the eight phase-1 stores)"
+        default: ""
+      probe:
+        description: "comma list of store:YYYY-MM for the phase-2 probe (empty = none)"
+        default: "family1_gf/oc4k:2020-07,family1_gf/pace4k:2025-07,family1_gf/sst_acspo02:2024-07,family1_gf/irtb:2024-07"
+      workers:
+        description: "year workers (processes) per store"
+        default: "12"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: gridded-monthly
+  cancel-in-progress: false
+
+jobs:
+  export:
+    runs-on: ${{ github.event.inputs.runner }}
+    timeout-minutes: 720
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Persistent data cache (self-hosted box)
+        run: |
+          mkdir -p /opt/earth-cache
+          rm -rf ml/cache
+          ln -s /opt/earth-cache ml/cache
+
+      - name: Preflight
+        id: preflight
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+        run: |
+          if [ -z "${HF_TOKEN}" ]; then
+            echo "::error::HF_TOKEN secret is not set."
+            exit 1
+          fi
+          line=$(df -P ml/cache | tail -1)
+          free_gb=$(printf '%s\n' "${line}" | awk '{print int($4 / 1048576)}')
+          echo "free disk ${free_gb} GB · RAM $(awk '/MemTotal/ {print int($2 / 1048576)}' /proc/meminfo) GB · $(nproc) cpu"
+          if [ "${free_gb}" -lt 150 ]; then
+            echo "::error::only ${free_gb} GB free; this job needs 150 GB."
+            exit 1
+          fi
+          python3 --version
+
+      - name: Install
+        run: pip install --quiet numpy requests huggingface_hub zstandard
+
+      - name: Export, verify and publish each store
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+          STORES: ${{ github.event.inputs.stores }}
+          WORKERS: ${{ github.event.inputs.workers }}
+        run: |
+          set -o pipefail
+          mkdir -p ml/cache/gridded_monthly
+          args=(run --out ml/cache/gridded_monthly --workers "${WORKERS}" --threads 4)
+          [ -n "${STORES}" ] && args+=(--stores "${STORES}")
+          python3 -u ml/export_gridded_monthly.py "${args[@]}" \
+              2>&1 | tee "${RUNNER_TEMP}/run.log"
+
+      - name: Phase-2 probe of the fine grids (measure only, no build)
+        if: github.event.inputs.probe != ''
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+          PROBE: ${{ github.event.inputs.probe }}
+        run: |
+          set -o pipefail
+          mkdir -p ml/cache/gridded_probe
+          IFS=',' read -ra items <<< "${PROBE}"
+          for it in "${items[@]}"; do
+            store="${it%%:*}"; month="${it##*:}"
+            python3 -u ml/export_gridded_monthly.py probe --store "${store}" \
+                --month "${month}" --out ml/cache/gridded_probe --threads 8 \
+                2>&1 | tee -a "${RUNNER_TEMP}/probe.log" \
+              || echo "::warning::probe of ${store} ${month} failed — see probe.log"
+          done
+
+      - name: Collect the summary, probes and logs
+        if: always() && steps.preflight.outcome == 'success'
+        run: |
+          out="${RUNNER_TEMP}/gridded-monthly"
+          rm -rf "${out}"; mkdir -p "${out}"
+          cp ml/cache/gridded_monthly/run_summary.json "${out}/" 2>/dev/null \
+            || echo "::warning::no run_summary.json"
+          cp ml/cache/gridded_probe/probe_*.json "${out}/" 2>/dev/null \
+            || echo "::warning::no probe results"
+          for f in run probe; do
+            [ -f "${RUNNER_TEMP}/${f}.log" ] && tail -n 600 "${RUNNER_TEMP}/${f}.log" > "${out}/${f}.log.tail"
+          done
+          ls -la "${out}"
+
+      - name: Upload the summary
+        if: always() && steps.preflight.outcome == 'success'
+        uses: actions/upload-artifact@v4
+        with:
+          name: gridded-monthly-${{ github.run_number }}
+          path: ${{ runner.temp }}/gridded-monthly
+          if-no-files-found: warn
+          retention-days: 30
+
+      - name: Drop the scratch
+        if: always()
+        run: |
+          rm -rf ml/cache/gridded_monthly ml/cache/gridded_probe || true
+          df -h ml/cache || true
+
+  restore:
+    needs: export
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install
+        run: pip install --quiet numpy requests
+
+      - name: Stream every file back from the Hub and write the index
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+          STORES: ${{ github.event.inputs.stores }}
+        run: |
+          set -o pipefail
+          args=(index --index data/gridded_monthly_index.json --workers 8
+                --restore-where "GitHub-hosted runner (gridded-monthly run ${GITHUB_RUN_NUMBER})")
+          [ -n "${STORES}" ] && args+=(--stores "${STORES}")
+          python3 -u ml/publish_gridded_monthly_index.py "${args[@]}" \
+              2>&1 | tee "${RUNNER_TEMP}/restore.log"
+          mkdir -p "${RUNNER_TEMP}/gridded-monthly-index"
+          cp data/gridded_monthly_index.json "${RUNNER_TEMP}/restore.log" "${RUNNER_TEMP}/gridded-monthly-index/"
+
+      - name: Upload the index
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gridded-monthly-index-${{ github.run_number }}
+          path: ${{ runner.temp }}/gridded-monthly-index
+          if-no-files-found: warn
+          retention-days: 30

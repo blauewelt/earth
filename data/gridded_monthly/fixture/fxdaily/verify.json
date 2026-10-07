@@ -1,0 +1,150 @@
+{
+ "failures": [],
+ "generated_utc": "2026-10-07T16:30:50Z",
+ "max_abs_mean": 0.0,
+ "max_abs_std": 3.006106452652091e-08,
+ "max_mean_over_bound": 0.0,
+ "max_std_over_tol": 0.017392346160903457,
+ "n_planes": 6,
+ "ok": true,
+ "period": [
+  {
+   "box": [
+    38.0,
+    42.0,
+    -42.0,
+    -38.0
+   ],
+   "channel": "sst",
+   "frames": 374,
+   "max_abs_mean": 0.0,
+   "max_abs_std": 1.3647127872218334e-09,
+   "max_mean_over_bound": 0.0,
+   "max_std_over_tol": 5.169792911699201e-05,
+   "n_cells": 1,
+   "ok": true,
+   "what": "2010\u20132011 box sst",
+   "why": [],
+   "years": [
+    2010,
+    2011
+   ]
+  },
+  {
+   "box": [
+    38.0,
+    42.0,
+    -42.0,
+    -38.0
+   ],
+   "channel": "sea_ice",
+   "frames": 374,
+   "max_abs_mean": 0.0,
+   "max_abs_std": 3.994191435929828e-11,
+   "max_mean_over_bound": 0.0,
+   "max_std_over_tol": 0.004141452579072983,
+   "n_cells": 1,
+   "ok": true,
+   "what": "2010\u20132011 box sea_ice",
+   "why": [],
+   "years": [
+    2010,
+    2011
+   ]
+  }
+ ],
+ "planes": [
+  {
+   "channel": "sst",
+   "frames": 12,
+   "frames_possible": 12,
+   "max_abs_mean": 0.0,
+   "max_abs_std": 2.5726203167764083e-08,
+   "max_mean_over_bound": 0.0,
+   "max_std_over_tol": 0.0015034102853406647,
+   "month": 12,
+   "n_cells": 639,
+   "ok": true,
+   "what": "2009-12 sst",
+   "why": [],
+   "year": 2009
+  },
+  {
+   "channel": "sea_ice",
+   "frames": 12,
+   "frames_possible": 12,
+   "max_abs_mean": 0.0,
+   "max_abs_std": 2.559948850122673e-10,
+   "max_mean_over_bound": 0.0,
+   "max_std_over_tol": 0.014536063084147064,
+   "month": 12,
+   "n_cells": 639,
+   "ok": true,
+   "what": "2009-12 sea_ice",
+   "why": [],
+   "year": 2009
+  },
+  {
+   "channel": "sst",
+   "frames": 31,
+   "frames_possible": 31,
+   "max_abs_mean": 0.0,
+   "max_abs_std": 3.006106452652091e-08,
+   "max_mean_over_bound": 0.0,
+   "max_std_over_tol": 0.0014604674731193165,
+   "month": 7,
+   "n_cells": 639,
+   "ok": true,
+   "what": "2010-07 sst",
+   "why": [],
+   "year": 2010
+  },
+  {
+   "channel": "sea_ice",
+   "frames": 31,
+   "frames_possible": 31,
+   "max_abs_mean": 0.0,
+   "max_abs_std": 3.2363666260804003e-10,
+   "max_mean_over_bound": 0.0,
+   "max_std_over_tol": 0.017392346160903457,
+   "month": 7,
+   "n_cells": 639,
+   "ok": true,
+   "what": "2010-07 sea_ice",
+   "why": [],
+   "year": 2010
+  },
+  {
+   "channel": "sst",
+   "frames": 10,
+   "frames_possible": 10,
+   "max_abs_mean": 0.0,
+   "max_abs_std": 2.7089223753051783e-08,
+   "max_mean_over_bound": 0.0,
+   "max_std_over_tol": 0.001390425479982938,
+   "month": 1,
+   "n_cells": 639,
+   "ok": true,
+   "what": "2011-01 sst",
+   "why": [],
+   "year": 2011
+  },
+  {
+   "channel": "sea_ice",
+   "frames": 10,
+   "frames_possible": 10,
+   "max_abs_mean": 0.0,
+   "max_abs_std": 3.2528310600632437e-10,
+   "max_mean_over_bound": 0.0,
+   "max_std_over_tol": 0.016620985217628493,
+   "month": 1,
+   "n_cells": 639,
+   "ok": true,
+   "what": "2011-01 sea_ice",
+   "why": [],
+   "year": 2011
+  }
+ ],
+ "std_rel_tol": 1e-06,
+ "store": "fixture/fxdaily"
+}
