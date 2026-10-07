@@ -1,0 +1,108 @@
+{
+ "C": 2,
+ "H": 19,
+ "W": 36,
+ "bin_seconds": 432000,
+ "channels": [
+  {
+   "max": 40.0,
+   "min": -5.0,
+   "name": "sst",
+   "unit": "degC"
+  },
+  {
+   "max": 1.0,
+   "min": 0.0,
+   "name": "sea_ice",
+   "unit": "0-1"
+  }
+ ],
+ "col_extents": [
+  [
+   0,
+   8
+  ],
+  [
+   8,
+   16
+  ],
+  [
+   16,
+   24
+  ],
+  [
+   24,
+   32
+  ],
+  [
+   32,
+   36
+  ]
+ ],
+ "compression": {
+  "codec": "zstd",
+  "level": 3,
+  "unit": "one zstd frame per tile"
+ },
+ "dtype": "float16",
+ "epoch": "1982-01-01",
+ "footprint": {
+  "log2_dt": -2.32,
+  "log2_fp": 0.0
+ },
+ "format": "family1-sharded/1",
+ "frame_rule": "frame f of bin b covers [b * bin_seconds + f * frame_seconds, + frame_seconds) seconds since the epoch",
+ "frame_seconds": 86400,
+ "frames_per_bin": 5,
+ "grid": {
+  "H": 19,
+  "W": 36,
+  "align": "point \u2014 row r is latitude -90 + 10 r, column c is longitude -180 + 10 c (fixture)",
+  "coordinates": "lon = x0 + (col + 0.5) * dx, lat = y0 + (row + 0.5) * dy",
+  "crs": "EPSG:4326",
+  "dx": 10.0,
+  "dy": 10.0,
+  "row_order": "south_first",
+  "x0": -180.0,
+  "y0": -90.0
+ },
+ "group": "fxdaily",
+ "index_dtype": "<i8",
+ "index_header_bytes": 128,
+ "index_path": "<yyyy>/bin_<NNNN>.idx.npy",
+ "index_semantics": "(offset, length): offset >= 0 and length > 0 a stored tile; offset >= 0 and length 0 a present frame's tile with no valid pixel (not stored); offset -1 and length 0 the frame is not in the shard",
+ "index_shape": [
+  5,
+  3,
+  5,
+  2
+ ],
+ "missing": "NaN",
+ "n_tiles_x": 5,
+ "n_tiles_y": 3,
+ "pad_cols": 4,
+ "pad_rows": 5,
+ "pad_value": "NaN",
+ "row_extents": [
+  [
+   0,
+   8
+  ],
+  [
+   8,
+   16
+  ],
+  [
+   16,
+   19
+  ]
+ ],
+ "shard_path": "<yyyy>/bin_<NNNN>.zst (yyyy = year of the bin's first day)",
+ "tile": 8,
+ "tile_order": "C order [row, col, channel], little-endian",
+ "tile_shape": [
+  8,
+  8,
+  2
+ ]
+}

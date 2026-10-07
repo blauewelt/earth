@@ -36,6 +36,11 @@ const EXP12 = JSON.parse(fs.readFileSync(path.join(FIX12, "expected.json"), "utf
 // per-year monthly sums and counts over two small grids, served as /okm/
 const FIXM = path.join(ROOT, "data", "family7_monthly", "fixture_multi");
 const EXPM = JSON.parse(fs.readFileSync(path.join(FIXM, "expected.json"), "utf8"));
+// E-088: the committed monthly sums (data/gridded_monthly/fixture/) and the
+// native stores they were made from (tests/make_gridded_paths_fixture.py →
+// fixture_native/), served as /okg/ — and /okgstale/, whose index claims one
+// month holds a frame fewer than the store does
+const FIXG = path.join(ROOT, "data", "gridded_monthly");
 const require = createRequire(import.meta.url);
 const F1 = require("../src/f1data.js");
 const EXP = JSON.parse(fs.readFileSync(path.join(FIX, "expected.json"), "utf8"));
@@ -58,9 +63,17 @@ function send206(res, body, mode, rel) {
 
 function serve(req, res) {
   const url = new URL(req.url, "http://x");
-  const m = /^\/(ok|bad200|nozst|ok10|ok12|okm|ok72)\/(.*)$/.exec(url.pathname);
+  const m = /^\/(ok|bad200|nozst|ok10|ok12|okm|ok72|okg|okgstale)\/(.*)$/.exec(url.pathname);
   const rel = m ? decodeURIComponent(m[2]) : "";
-  const root = m && m[1] === "ok10" ? FIX10 : m && m[1] === "ok12" ? FIX12 : m && m[1] === "okm" ? FIXM : FIX;
+  const root = m && m[1] === "ok10" ? FIX10 : m && m[1] === "ok12" ? FIX12 : m && m[1] === "okm" ? FIXM
+    : m && (m[1] === "okg" || m[1] === "okgstale") ? FIXG : FIX;
+  if (m && m[1] === "okgstale" && rel === "fixture_native/gridded_monthly_index.json") {
+    const ix = JSON.parse(fs.readFileSync(path.join(FIXG, rel), "utf8"));
+    ix.stores["fixture/fxdaily"].frames_present[1][0] -= 1;          // 2010-01: 30 summed, 31 held
+    const body = Buffer.from(JSON.stringify(ix));
+    log.push({ mode: m[1], rel, range: null, bytes: body.length });
+    res.writeHead(200, { "content-length": body.length }); res.end(body); return;
+  }
   // /ok72/: the family 1.gf fixture with its registry dressed as family 7.2d's
   // (source_segments, preliminary days, a record_span, a centred-sigma unit)
   if (m && m[1] === "ok72" && rel === "family1gf.json") {
@@ -984,6 +997,243 @@ print(json.dumps({"attrs": a, "time_attrs": {k: (v.decode() if isinstance(v, byt
       const lastS = st[st.length - 1].steps;
       assert.equal(lastS.done, lastS.total);
       assert.match(lastS.what, /tile index/);
+    } finally { F1.configure({ base: base("ok") }); }
+  });
+
+  // ---- E-088: precomputed monthly sums vs every native frame ---------------
+  // One selection, two paths: the sums (data/gridded_monthly/fixture/) and the
+  // native stores they were made from (fixture_native/, byte-checked by
+  // tests/make_gridded_paths_fixture.py). Means agree within the documented
+  // float32 bound, counts are identical, the std within the index's tolerance.
+  function gmConf(face = "okg", extra) {
+    F1.configure(Object.assign({ registries: [{ family: "fx", title: "Fixture (E-088)", kind: "family1", url: base(face) + "fixture_native/registry.json" }],
+      gridMonthly: base(face) + "fixture_native/gridded_monthly_index.json" }, extra || {}));
+  }
+  const IDXG = JSON.parse(fs.readFileSync(path.join(FIXG, "fixture", "gridded_monthly_index.json"), "utf8"));
+  function npyF32(file) {
+    const b = fs.readFileSync(file);
+    const hl = 10 + b.readUInt16LE(8);
+    return new Float32Array(b.buffer.slice(b.byteOffset + hl, b.byteOffset + b.length));
+  }
+  const ulp32 = (x) => (x === 0 || !Number.isFinite(x) ? 2 ** -149 : 2 ** (Math.floor(Math.log2(Math.abs(x))) - 23));
+  const GMCASES = [
+    { name: "fxdaily normal, both channels, all months, std", sel: { store: "fxdaily", channels: ["sst", "sea_ice"], yearStart: 2009, yearEnd: 2011, months: [], step: "normal", res: "native", bbox: { w: -180, s: -90, e: 180, n: 90 }, std: true } },
+    { name: "fxdaily monthly mean 2010 Jan–Mar, a box", sel: { store: "fxdaily", channels: ["sst"], yearStart: 2010, yearEnd: 2010, months: [1, 2, 3], step: "month", res: "native", bbox: { w: -60, s: -40, e: 60, n: 40 } } },
+    { name: "fxdaily one mean 2009–2011 leaving out 2010, std", sel: { store: "fxdaily", channels: ["sst", "sea_ice"], yearStart: 2009, yearEnd: 2011, months: [1, 12], excludeYears: [2010], step: "all", res: "native", bbox: { w: -180, s: -60, e: 180, n: 60 }, std: true } },
+    { name: "fx6h t_500 (one level) monthly means Jan–Mar, std", sel: { store: "fx6h", channels: ["t_500"], yearStart: 2010, yearEnd: 2010, months: [1, 2, 3], step: "month", res: "native", bbox: { w: -180, s: -90, e: 180, n: 90 }, std: true } },
+    { name: "fx6h three levels, one mean", sel: { store: "fx6h", channels: ["t_100", "t_500", "t_850"], yearStart: 2010, yearEnd: 2010, months: [], step: "all", res: "native", bbox: { w: -30, s: -30, e: 30, n: 30 } } },
+    { name: "fx6h normal across the dateline", sel: { store: "fx6h", channels: ["t_850"], yearStart: 2010, yearEnd: 2010, months: [2, 3], step: "normal", res: "native", bbox: { w: 150, s: -30, e: -150, n: 30 }, std: true } },
+  ];
+  for (const c of GMCASES) {
+    test(`E-088 two paths: ${c.name} — means within the float32 bound, counts identical`, async () => {
+      gmConf();
+      try {
+        const e = await F1.estimate(c.sel);
+        assert.equal(e.path, "monthly", e.why);
+        log.length = 0;
+        const rm = await F1.run(c.sel);
+        const reads = log.filter((x) => x.mode === "okg" && x.range && /\/(sum|count|m2)\.npy$/.test(x.rel) && !/bytes=0-1023$/.test(x.range));
+        assert.equal(reads.length, e.requests, "the estimate's requests are the run's");
+        assert.equal(reads.reduce((a, x) => a + x.bytes, 0), e.readBytes, "the estimate's bytes are the run's");
+        assert.ok(!log.some((x) => /\.zst$/.test(x.rel)), "the precomputed path reads no native tile");
+        assert.equal(rm.path, "monthly");
+        const rn = await F1.run(Object.assign({}, c.sel, { path: "native" }));
+        assert.equal(rn.path, "native");
+        assert.match(rn.pathWhy, /you asked for the native maps/);
+        assert.deepEqual(Array.from(rm.time), Array.from(rn.time), "time axes");
+        assert.deepEqual(Array.from(rm.lat), Array.from(rn.lat));
+        assert.deepEqual(Array.from(rm.lon), Array.from(rn.lon));
+        assert.deepEqual(Array.from(rm.count), Array.from(rn.count), "counts identical");
+        assert.deepEqual(rm.framesPerStep, rn.framesPerStep, "frames present / possible per step");
+        if (c.sel.step === "normal") assert.deepEqual(rm.climatology.yearsUsed, rn.climatology.yearsUsed);
+        // the rigorous bound: Σ ½ulp32(sum_k) ÷ Σ n over the (year, month)
+        // units of each cell, plus one float32 rounding of each written mean
+        const G = IDXG.stores["fixture/" + c.sel.store];
+        const sum = npyF32(path.join(FIXG, "fixture", c.sel.store, "sum.npy"));
+        const cnt = fs.readFileSync(path.join(FIXG, "fixture", c.sel.store, "count.npy")).subarray(128);
+        const [C, Y, H, W] = [G.chans.length, G.n_years, G.grid.H, G.grid.W];
+        const T = rm.time.length, Cs = c.sel.channels.length, Ho = rm.lat.length, Wo = rm.lon.length, HW = Ho * Wo;
+        const ex = new Set(c.sel.excludeYears || []);
+        const mons = c.sel.months.length ? c.sel.months : [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
+        let worst = 0, nCells = 0;
+        for (let t = 0; t < T; t++) {
+          const dt0 = new Date(rm.time[t] * 1000);
+          const units = [];
+          for (let y = c.sel.yearStart; y <= c.sel.yearEnd; y++) for (const m of mons) {
+            if (ex.has(y)) continue;
+            if (c.sel.step === "normal" && m !== dt0.getUTCMonth() + 1) continue;
+            if (c.sel.step === "month" && (y !== dt0.getUTCFullYear() || m !== dt0.getUTCMonth() + 1)) continue;
+            units.push([y, m]);
+          }
+          for (let k = 0; k < Cs; k++) {
+            const ch = G.chans.indexOf(c.sel.channels[k]);
+            for (let i = 0; i < Ho; i++) for (let j = 0; j < Wo; j++) {
+              const oi = (t * Cs + k) * HW + i * Wo + j;
+              const a = rm.data[oi], b = rn.data[oi];
+              assert.equal(Number.isNaN(a), Number.isNaN(b), `NaN at ${oi}`);
+              if (Number.isNaN(a)) continue;
+              const r = Math.round((rm.lat[i] + 90) / 10), col = ((Math.round((rm.lon[j] + 180) / 10) % W) + W) % W;
+              let b0 = 0, n = 0;
+              for (const [y, m] of units) {
+                const q = ((((m - 1) * C + ch) * Y + (y - G.year_first)) * H + r) * W + col;
+                b0 += ulp32(sum[q]) / 2; n += cnt[q];
+              }
+              assert.equal(n, rm.count[oi], "count = Σ count of the units");
+              const bound = b0 / n + ulp32(a) / 2 + ulp32(b) / 2;
+              const dlt = Math.abs(a - b);
+              assert.ok(dlt <= bound, `${c.name}: |Δ| ${dlt} > bound ${bound} at ${oi}`);
+              worst = Math.max(worst, dlt / bound);
+              nCells++;
+              if (c.sel.std) {
+                const sa = rm.std[oi], sb = rn.std[oi];
+                assert.ok(Math.abs(sa - sb) <= IDXG.std_rel_tol * (Math.abs(b) + sb) + 1e-12, `${c.name}: std ${sa} vs ${sb} at ${oi}`);
+              }
+            }
+          }
+        }
+        assert.ok(nCells > 0);
+        if (!c.sel.std) { assert.equal(rm.std, null); assert.equal(rn.std, null); }
+      } finally { F1.configure({ base: base("ok") }); }
+    });
+  }
+
+  test("E-088 path selection: whole months use the sums; days, hours, native and five-day steps read every native map — and the panel's sentence says which", async () => {
+    gmConf();
+    try {
+      const reg = await F1.loadRegistry();
+      assert.deepEqual(reg.errors, []);
+      const d = reg.stores.find((x) => x.name === "fxdaily");
+      assert.deepEqual(d.monthlySums.years, [2009, 2011]);
+      assert.equal(d.monthlySums.std, true);
+      assert.ok(d.steps.includes("normal"));
+      const six = reg.stores.find((x) => x.name === "fx6h");
+      assert.deepEqual(six.levels, [100, 500, 850]);
+      const box = { w: -60, s: -40, e: 60, n: 40 };
+      const e = await F1.estimate({ store: "fxdaily", channels: ["sst"], yearStart: 2010, yearEnd: 2010, months: [7], step: "month", bbox: box });
+      assert.equal(e.path, "monthly");
+      assert.match(e.why, /^read from precomputed monthly sums — \d+ requests, [\d.]+ kB: whole calendar months with no day-of-month or hour filter/);
+      assert.ok(e.native && e.native.frames === 31 && e.native.requests > e.requests, "the native read it replaces is named");
+      assert.equal(e.nativeFrames, 31);
+      assert.equal(e.possibleFrames, 31);
+      const cut = await F1.estimate({ store: "fxdaily", channels: ["sst"], yearStart: 2010, yearEnd: 2010, months: [7], days: [1, 10], step: "month", bbox: box });
+      assert.equal(cut.path, "native");
+      assert.match(cut.why, /^read from the native maps — your selection cuts months \(days 1–10\), so every native map is read/);
+      const hrs = await F1.estimate({ store: "fx6h", channels: ["t_500"], yearStart: 2010, yearEnd: 2010, months: [2], hours: [0, 6], step: "month", bbox: box });
+      assert.match(hrs.pathWhy, /^your selection cuts months \(hours 00–06 UTC\)/);
+      const both = await F1.estimate({ store: "fx6h", channels: ["t_500"], yearStart: 2010, yearEnd: 2010, months: [2], days: [1, 10], hours: [0, 6], step: "all", bbox: box });
+      assert.match(both.pathWhy, /\(days 1–10 \/ hours 00–06 UTC\)/);
+      // a daily store has no hour to cut: an hour filter changes nothing there
+      const dh = await F1.estimate({ store: "fxdaily", channels: ["sst"], yearStart: 2010, yearEnd: 2010, months: [7], hours: [0, 6], step: "month", bbox: box });
+      assert.equal(dh.path, "monthly");
+      for (const [step, re] of [["native", /time step is native/], ["pentad", /five-day means cut across calendar months/]]) {
+        const x = await F1.estimate({ store: "fxdaily", channels: ["sst"], yearStart: 2010, yearEnd: 2010, months: [7], step, res: "native", bbox: box });
+        assert.equal(x.path, "native");
+        assert.match(x.pathWhy, re);
+      }
+      // the preview of a normal is the first month's normal, from the sums
+      const pv = await F1.preview({ store: "fxdaily", channels: ["sst"], yearStart: 2009, yearEnd: 2011, months: [3, 1], step: "normal", bbox: box });
+      assert.equal(pv.path, "monthly");
+      assert.equal(new Date(pv.time[0] * 1000).getUTCMonth(), 0);
+      // a store without sums says nothing about paths
+      F1.configure({ base: base("ok") });
+      const plain = await F1.estimate(selOf(cases(/^grid month mean$/)[0]));
+      assert.equal(plain.path, undefined);
+    } finally { F1.configure({ base: base("ok") }); }
+  });
+
+  test("E-088: a month whose frames changed since the sums were made is read natively, and said so", async () => {
+    gmConf("okgstale");
+    try {
+      const sel = { store: "fxdaily", channels: ["sst"], yearStart: 2010, yearEnd: 2010, months: [1, 2], step: "month", bbox: { w: -60, s: -40, e: 60, n: 40 } };
+      const e = await F1.estimate(sel);
+      assert.equal(e.path, "native");
+      assert.match(e.pathWhy, /frames have changed since its monthly sums were made \(2010-01: 31 frames now, 30 summed\)/);
+      const ok = await F1.estimate(Object.assign({}, sel, { months: [2] }));
+      assert.equal(ok.path, "monthly", "the other months still use the sums");
+    } finally { F1.configure({ base: base("ok") }); }
+  });
+
+  test("E-088: an excluded year's planes are never read; the NetCDF says the path, N of M possible frames and the population std", async () => {
+    // year by year (no merging): a stretch over a run of years may pass an
+    // excluded year's plane, read and never added
+    gmConf("okg", { normalsMergeGap: 0 });
+    try {
+      const sel = { store: "fxdaily", channels: ["sst"], yearStart: 2009, yearEnd: 2011, months: [1, 3, 12], excludeYears: [2010], step: "normal", bbox: { w: -60, s: -40, e: 60, n: 40 }, std: true };
+      log.length = 0;
+      const r = await F1.run(sel);
+      const G = IDXG.stores["fixture/fxdaily"];
+      for (const x of log.filter((q) => q.mode === "okg" && q.range && /\/(sum|count|m2)\.npy$/.test(q.rel) && !/bytes=0-1023$/.test(q.range))) {
+        const [a, z] = /bytes=(\d+)-(\d+)/.exec(x.range).slice(1).map(Number);
+        const f = G[/\/(sum|count|m2)\.npy$/.exec(x.rel)[1]];
+        for (const m of sel.months) {
+          const p0 = f.header_len + (((m - 1) * 2 + 0) * 3 + 1) * f.plane_bytes;
+          assert.ok(z < p0 || a >= p0 + f.plane_bytes, `${x.rel} ${x.range} covers 2010`);
+        }
+      }
+      assert.deepEqual(r.climatology.yearsUsed, [2009, 2011]);
+      // Jan: 2011's 10 days of 31 (the record ends 2011-01-10); Mar: no year
+      // left holds March; Dec: 2009's 12 days (it starts 2009-12-20)
+      assert.deepEqual(r.framesPerStep, { present: [10, 12], possible: [10, 12] });
+      const tmp = path.join(os.tmpdir(), `f1-gm-${process.pid}.nc`);
+      fs.writeFileSync(tmp, Buffer.from(await F1.toNetCDF(r).arrayBuffer()));
+      const out = JSON.parse(python(`
+import json, sys
+import numpy as np
+from scipy.io import netcdf_file
+f = netcdf_file(sys.argv[1], "r", mmap=False)
+a = {k: (v.decode() if isinstance(v, bytes) else (v.tolist() if hasattr(v, "tolist") else v)) for k, v in f._attributes.items()}
+print(json.dumps({"attrs": a, "vars": sorted(f.variables), "fp": f.variables["frames_present"][:].tolist(), "fq": f.variables["frames_possible"][:].tolist(),
+  "std_ln": f.variables["sst_std"]._attributes["long_name"].decode(), "std": [None if not np.isfinite(x) else float(x) for x in f.variables["sst_std"][:].astype(np.float64).ravel()]}))
+`, tmp));
+      fs.unlinkSync(tmp);
+      assert.match(out.attrs.read_path, /precomputed per-year monthly sums, counts and m2 \(E-088\)/);
+      assert.match(out.attrs.read_path_reason, /whole calendar months/);
+      assert.equal(out.attrs.frames, "22 of 22 possible frames");
+      assert.equal(out.attrs.excluded_years, "2010");
+      assert.deepEqual(out.fp, [10, 12]);
+      assert.deepEqual(out.fq, [10, 12]);
+      assert.match(out.std_ln, /population standard deviation/);
+      closeArr(Float64Array.from(out.std, (v) => (v === null ? NaN : v)), Array.from(r.std, (v) => (Number.isNaN(v) ? null : v)), { rel: 0, label: "std in the file" });
+      // the CSV carries the spread too
+      const csv = await F1.toCSV(r).text();
+      assert.match(csv.split("\n")[0], /^time,lat,lon,sst,sst_count,sst_std$/);
+      // a normals store has no m2: asking it for a spread is a plain error
+      await assert.rejects(F1.estimate({ store: "fx6h", channels: ["t_500"], yearStart: 2010, yearEnd: 2010, months: [2], step: "native", res: "native", bbox: { w: 0, s: 0, e: 10, n: 10 }, std: true }), /needs a time mean or coarser cells/);
+    } finally { F1.configure({ base: base("ok") }); }
+  });
+
+  test("E-088: the std is the numpy population std of the native frames (one small case, computed here from the native fixture)", async () => {
+    gmConf();
+    try {
+      const sel = { store: "fx6h", channels: ["t_500"], yearStart: 2010, yearEnd: 2010, months: [2], step: "month", bbox: { w: -10, s: -10, e: 10, n: 10 }, std: true };
+      const r = await F1.run(sel);
+      // every native frame of February in the box, through the Python reader
+      const out = JSON.parse(python(`
+import json, sys
+sys.path.insert(0, sys.argv[4])
+import numpy as np
+import sharded as sh
+g = sh.ShardedGroup(sys.argv[1])
+fs = []
+for b in range(int(sys.argv[2]), int(sys.argv[3]) + 1):
+    for f in range(20):
+        t = b * 432000 + f * 21600
+        import datetime as dt
+        d = dt.datetime(1982, 1, 1) + dt.timedelta(seconds=t)
+        if d.year == 2010 and d.month == 2:
+            a = g.read_frame(b, f)
+            if a is not None: fs.append(a[..., 1].astype(np.float64))
+st = np.stack(fs)
+rows = [8, 9, 10]; cols = [17, 18, 19]
+sub = st[:, rows][:, :, cols]
+print(json.dumps({"n": len(fs), "mean": np.nanmean(sub, 0).ravel().tolist(), "std": np.nanstd(sub, 0).ravel().tolist()}))
+`, path.join(FIXG, "fixture_native", "fx6h", "fx6h"), String(Math.floor((Date.UTC(2010, 1, 1) - Date.UTC(1982, 0, 1)) / 432000000)), String(Math.floor((Date.UTC(2010, 2, 1) - Date.UTC(1982, 0, 1)) / 432000000)), path.join(ROOT, "ml", "family1")));
+      assert.equal(out.n, 112);
+      assert.deepEqual(Array.from(r.count), out.mean.map(() => 112));
+      for (let i = 0; i < out.std.length; i++) {
+        assert.ok(Math.abs(r.std[i] - out.std[i]) <= IDXG.std_rel_tol * (Math.abs(out.mean[i]) + out.std[i]), `std ${r.std[i]} vs numpy ${out.std[i]}`);
+        assert.ok(Math.abs(r.data[i] - out.mean[i]) <= 2 ** -20 * Math.abs(out.mean[i]), `mean ${r.data[i]} vs numpy ${out.mean[i]}`);
+      }
     } finally { F1.configure({ base: base("ok") }); }
   });
 

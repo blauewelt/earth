@@ -1,0 +1,146 @@
+{
+ "family": "fixture",
+ "family_version": "fixture",
+ "hf_root": "tensors/fixture",
+ "repo": "fixture",
+ "epoch": "1982-01-01",
+ "pentad_days": 5,
+ "generated_utc": "fixture",
+ "groups": [
+  {
+   "name": "fxdaily",
+   "title": "fixture: daily 2-channel ocean field (family 7.2d-shaped)",
+   "tier": "G",
+   "channels": [
+    {
+     "name": "sst",
+     "unit": "degC",
+     "min": -5.0,
+     "max": 40.0
+    },
+    {
+     "name": "sea_ice",
+     "unit": "0-1",
+     "min": 0.0,
+     "max": 1.0
+    }
+   ],
+   "C": 2,
+   "built": true,
+   "distribution": "public",
+   "path": "tensors/fixture/fxdaily",
+   "family_version": "fixture",
+   "schema_version": 2,
+   "time_dtype": "int32",
+   "cadence": "daily",
+   "frames_per_bin": 5,
+   "frame_seconds": 86400,
+   "dtype": "float16",
+   "N": null,
+   "bin_first": null,
+   "bin_last": null,
+   "store_groups": {
+    "fxdaily": {
+     "H": 19,
+     "W": 36,
+     "C": 2,
+     "tile": 8,
+     "n_tiles_x": 5,
+     "n_tiles_y": 3,
+     "dtype": "float16",
+     "frames_per_bin": 5,
+     "frame_seconds": 86400,
+     "bin_first": 2043,
+     "bin_last": 2120,
+     "bins": 78,
+     "bytes": 982646,
+     "prefix": "fxdaily",
+     "tile_grid": "fxdaily/tile_grid.json",
+     "shard_index": "fxdaily/shard_index.npy",
+     "valid_fraction": [
+      0.746294379234314,
+      0.9342110753059387
+     ]
+    }
+   },
+   "record_span": [
+    "2009-12-20",
+    "2011-01-13"
+   ]
+  },
+  {
+   "name": "fx6h",
+   "title": "fixture: ERA5-shaped temperature on 3 levels, six-hourly",
+   "tier": "G",
+   "channels": [
+    {
+     "name": "t_100",
+     "unit": "K",
+     "min": 150.0,
+     "max": 350.0
+    },
+    {
+     "name": "t_500",
+     "unit": "K",
+     "min": 150.0,
+     "max": 350.0
+    },
+    {
+     "name": "t_850",
+     "unit": "K",
+     "min": 150.0,
+     "max": 350.0
+    }
+   ],
+   "C": 3,
+   "built": true,
+   "distribution": "public",
+   "path": "tensors/fixture/fx6h",
+   "family_version": "fixture",
+   "schema_version": 2,
+   "time_dtype": "int32",
+   "cadence": "3-hourly",
+   "frames_per_bin": 20,
+   "frame_seconds": 21600,
+   "dtype": "float16",
+   "N": null,
+   "bin_first": null,
+   "bin_last": null,
+   "store_groups": {
+    "fx6h": {
+     "H": 19,
+     "W": 36,
+     "C": 3,
+     "tile": 8,
+     "n_tiles_x": 5,
+     "n_tiles_y": 3,
+     "dtype": "float16",
+     "frames_per_bin": 20,
+     "frame_seconds": 21600,
+     "bin_first": 2050,
+     "bin_last": 2057,
+     "bins": 8,
+     "bytes": 497849,
+     "prefix": "fx6h",
+     "tile_grid": "fx6h/tile_grid.json",
+     "shard_index": "fx6h/shard_index.npy",
+     "valid_fraction": [
+      1.0,
+      1.0,
+      1.0
+     ]
+    }
+   },
+   "record_span": [
+    "2010-01-24",
+    "2010-03-04"
+   ],
+   "levels_hpa": [
+    100,
+    500,
+    850
+   ]
+  }
+ ],
+ "_source": "tests/make_gridded_paths_fixture.py"
+}

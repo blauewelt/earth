@@ -166,8 +166,12 @@
     throw new Error("f1data.js assumes a little-endian host");
   }
 
+  // E-088: the per-year monthly sums, counts and m2 of eight sharded grids
+  // (family 7.2d's four daily stores, family 1.2's four ERA5 stores), matched
+  // to their stores by `source_store` = the registry's `path`
+  var DEFAULT_GRID_MONTHLY = "data/gridded_monthly_index.json";
   var cfg = { base: DEFAULT_BASE, fetch: null, concurrency: MAX_CONCURRENCY,
-    registries: DEFAULT_REGISTRIES.slice(), siteBase: null };
+    registries: DEFAULT_REGISTRIES.slice(), siteBase: null, gridMonthly: DEFAULT_GRID_MONTHLY };
   var cache = new Map();                 // url/key → Promise
   var idxCache = new Map();              // url|off|len → Uint8Array (LRU)
   var idxCacheBytes = 0;
@@ -192,6 +196,9 @@
       cfg.registries = o.registries.map(function (r) { return Object.assign({}, r); });
     }
     if (o.siteBase !== undefined) cfg.siteBase = o.siteBase;
+    // + gridMonthly: the E-088 index (site-relative or absolute); null = none
+    if (o.gridMonthly !== undefined) cfg.gridMonthly = o.gridMonthly;
+    else if (o.base != null || o.registries != null) cfg.gridMonthly = o.registries != null && o.registries === DEFAULT_REGISTRIES ? DEFAULT_GRID_MONTHLY : null;
     if (o.fetch !== undefined) cfg.fetch = o.fetch;
     if (o.concurrency != null) {
       cfg.concurrency = Math.max(1, Math.min(MAX_CONCURRENCY, o.concurrency | 0));
@@ -1136,6 +1143,7 @@
           else out.errors.push({ family: fam.family, title: fam.title, store: null, message: msg });
         }
       }));
+      if (cfg.gridMonthly) await attachGridMonthly(out, ctx);
       // registry order, then each family's own order
       var order = cfg.registries.map(function (f) { return f.family; });
       out.families.sort(function (a, b) { return order.indexOf(a.family) - order.indexOf(b.family); });
@@ -1160,6 +1168,65 @@
         throw new Error("no store could be loaded: " + out.errors.map(function (e) { return e.family + (e.store ? "/" + e.store : "") + ": " + e.message; }).join("; "));
       }
       return out;
+    });
+  }
+
+  // E-088: hand each sharded grid its per-year monthly sums, counts and m2
+  // when the index has them for the store's own path. A store whose files do
+  // not match (shape, grid, channels) keeps its native path and the mismatch
+  // is a named error line — never a silently wrong mean.
+  async function attachGridMonthly(out, ctx) {
+    var url, ix;
+    try { url = siteUrl(cfg.gridMonthly); ix = await readSiteJSON(url, ctx); }
+    catch (e) {
+      if (!/HTTP 404/.test(String(e && e.message))) {
+        out.errors.push({ family: "E-088", title: "Precomputed monthly sums", store: null,
+          message: "the index (" + cfg.gridMonthly + ") could not be read: " + (e && e.message) + " — every store still reads its native maps" });
+      }
+      return;
+    }
+    var stores = ix.stores || {};
+    var byPath = {};
+    Object.keys(stores).forEach(function (k) { if (stores[k] && stores[k].source_store) byPath[stores[k].source_store] = stores[k]; });
+    out.stores.forEach(function (d) {
+      if (d.layout !== "sharded" || !d._raw) return;
+      var G = byPath[String(d._raw.path || "")];
+      if (!G) return;
+      try {
+        var gr = G.grid || {};
+        var C = (G.chans || []).length, Y = Number(G.n_years), H = Number(gr.H), W = Number(gr.W);
+        var want = [12, C, Y, H, W];
+        var file = function (f, dt, what) {
+          if (!f || !f.url) throw new Error("no " + what + " file");
+          var o = { url: new URL(f.url, url).href, hdr: Number(f.header_len), isz: Number(f.itemsize),
+            plane: Number(f.plane_bytes), shape: f.shape, dtype: String(f.dtype).replace(/^[<|=]/, "") };
+          if (!Array.isArray(o.shape) || o.shape.join() !== want.join()) throw new Error(what + " shape [" + o.shape + "], expected [" + want + "]");
+          if (o.dtype !== dt) throw new Error(what + " is " + o.dtype + ", expected " + dt);
+          if (o.plane !== H * W * o.isz) throw new Error(what + " plane_bytes " + o.plane + " ≠ H·W·itemsize");
+          return o;
+        };
+        var sum = file(G.sum, "f4", "sum"), cnt = file(G.count, "u1", "count"), m2 = G.m2 ? file(G.m2, "f4", "m2") : null;
+        var g = d.grid;
+        var step = Number(gr.dlat);
+        if (!g || g.H !== H || g.W !== W || Math.abs(g.lat0 - Number(gr.lat0)) > 1e-9 || Math.abs(g.lon0 - Number(gr.lon0)) > 1e-9 ||
+            Math.abs(Math.abs(g.dlat) - step) > 1e-12 || Number(gr.dlon) !== step || gr.south_first === false) {
+          throw new Error("the sums' grid (" + H + " × " + W + " from " + gr.lat0 + ", " + gr.lon0 + " by " + step + "°) is not the store's");
+        }
+        var fp = G.frames_present, fq = G.frames_possible;
+        if (!Array.isArray(fp) || fp.length !== Y || !Array.isArray(fq) || fq.length !== Y) throw new Error("frames_present / frames_possible are not one row per year");
+        var chanOf = {};
+        G.chans.forEach(function (c, k) { chanOf[c] = k; });
+        hide(d, "_gm", { sum: sum, count: cnt, m2: m2, C: C, Y: Y, H: H, W: W, year0: Number(G.year_first),
+          lat0: Number(gr.lat0), lon0: Number(gr.lon0), step: step, southFirst: true, chans: G.chans.slice(), chanOf: chanOf,
+          framesPresent: fp, framesPossible: fq, maxCount: Number(G.max_count), recordFirst: G.record_first || null,
+          recordLast: G.record_last || null, index: url, monthRule: ix.month_rule || null, combine: ix.combine || null,
+          meanBound: ix.mean_bound || null, stdTolerance: ix.std_tolerance || null, zscored: false, rowKind: "frames" });
+        d.monthlySums = { years: [Number(G.year_first), Number(G.year_first) + Y - 1], std: !!m2, index: url };
+        d.steps = ["native", "pentad", "month", "all", "normal"];
+      } catch (e) {
+        out.errors.push({ family: d.family, title: "Precomputed monthly sums", store: d.name,
+          message: (e && e.message ? e.message : String(e)) + " — the store reads its native maps instead" });
+      }
     });
   }
 
@@ -1294,13 +1361,25 @@
       throw new Error("hours must be two numbers 0..24");
     }
     s.step = sel.step || "native";
+    // + std: the population standard deviation of the native frames behind
+    // each mean, as an extra output (stores with per-year monthly m2 sums
+    // and every sharded grid's native path; never a normals store's)
+    s.std = !!sel.std;
     if (d.normals) {
       // a normals store composes over YEARS: one mean per calendar month over
       // the period (the climatology) or one per year and month (the stack)
       if (s.step === "native" || s.step === "month") s.step = "by-year";
       if (s.step === "all") s.step = "normal";
       if (["normal", "by-year"].indexOf(s.step) < 0) throw new Error("step must be normal or by-year for the normals store " + d.name);
-    } else if (["native", "pentad", "month", "all"].indexOf(s.step) < 0) throw new Error("step must be native, pentad, month or all");
+      if (s.std) throw new Error("the normals store " + d.name + " has no squared deviations: no standard deviation is offered");
+    } else {
+      // + normal: one mean per CALENDAR month over the period (a sharded
+      // grid's climatology); "by-year" is the monthly mean under its other name
+      if (s.step === "by-year") s.step = "month";
+      if (["native", "pentad", "month", "all", "normal"].indexOf(s.step) < 0) throw new Error("step must be native, pentad, month, all or normal");
+      if (s.step === "normal" && d.kind !== "grid") throw new Error("the normal per calendar month is offered for gridded stores only");
+      if (s.std && d.kind !== "grid") throw new Error("the standard deviation is offered for gridded stores only");
+    }
     // + excludeYears: whole calendar years left out of the composition
     // (the paper's split is 1982–2020 excluding 2009 and 2017)
     s.excludeYears = (sel.excludeYears || []).map(Number);
@@ -1309,7 +1388,11 @@
     if (s.res === "0.25") s.res = 0.25;
     if (s.res === "1") s.res = 1;
     if (!(s.res === "native" || s.res === 0.25 || s.res === 1)) throw new Error("res must be 'native', 0.25 or 1");
+    if (s.std && !d.normals && s.step === "native" && s.res === "native") throw new Error("a standard deviation needs a time mean or coarser cells: with the native step and resolution each value is one frame");
     s.bbox = sel.bbox ? normBox(sel.bbox) : null;
+    // + path: "native" reads every native map even where precomputed monthly
+    // sums could answer (to check one against the other); else "auto"
+    s.path = sel.path === "native" ? "native" : "auto";
     return s;
   }
 
@@ -1451,6 +1534,11 @@
     var t0 = sec82OfCivil(s.yearStart, 1, 1), t1 = sec82OfCivil(s.yearEnd + 1, 1, 1) - 1;
     var b0 = Math.floor(t0 / BIN_S), b1 = Math.floor(t1 / BIN_S);
     var bins = [], frames = [];
+    var exYear = {};
+    s.excludeYears.forEach(function (y) { exYear[y] = true; });
+    // every present frame of the chosen years and months, whatever the days
+    // and hours: what a calendar month holds, for the precomputed path's check
+    var ymAll = new Map();
     var bk = Array.from(si.rows.keys()).filter(function (b) { return b >= b0 && b <= b1; }).sort(function (a, b) { return a - b; });
     bk.forEach(function (b) {
       var row = si.rows.get(b), fl = [];
@@ -1458,7 +1546,9 @@
         if (!frameBit(row, f)) continue;
         var t = b * BIN_S + f * fs;
         var q = ymh82(t);
-        if (q.y < s.yearStart || q.y > s.yearEnd || !monthOk[q.m]) continue;
+        if (q.y < s.yearStart || q.y > s.yearEnd || !monthOk[q.m] || exYear[q.y]) continue;
+        var ymk = q.y * 12 + q.m - 1;
+        ymAll.set(ymk, (ymAll.get(ymk) || 0) + 1);
         if (s.days && (q.d < s.days[0] || q.d > s.days[1])) continue;
         if (fs < 86400 && !hourOk(q.h, s.hours)) continue;
         var fr = { b: b, f: f, t: t, y: q.y, m: q.m };
@@ -1473,21 +1563,47 @@
       if (s.step === "native") return fr.b * 64 + fr.f;
       if (s.step === "pentad") return fr.b;
       if (s.step === "month") return fr.y * 12 + fr.m - 1;
+      if (s.step === "normal") return fr.m;
       return 0;
     };
+    // the years a normal averages: those with a selected frame (time order)
+    var yearsUsed = Array.from(new Set(frames.map(function (fr) { return fr.y; }))).sort(function (a, b) { return a - b; });
+    // frames per step (the "N" of "N of M possible"), in key order below
+    var ymSel = new Map();
+    frames.forEach(function (fr) { var k = fr.y * 12 + fr.m - 1; ymSel.set(k, (ymSel.get(k) || 0) + 1); });
     var keys = [], keyIdx = new Map(), perStep = new Map();
+    if (s.step === "normal") {
+      // calendar months in calendar order, whatever year comes first
+      var ms = Array.from(new Set(frames.map(function (fr) { return fr.m; }))).sort(function (a, b) { return a - b; });
+      ms.forEach(function (m) { keyIdx.set(m, keys.length); keys.push(m); });
+    }
     frames.forEach(function (fr) {
       var k = stepKey(fr);
       if (!keyIdx.has(k)) { keyIdx.set(k, keys.length); keys.push(k); }
       perStep.set(k, (perStep.get(k) || 0) + 1);
       fr.si = keyIdx.get(k);
     });
-    var times = new Float64Array(keys.length);
+    var times = new Float64Array(keys.length), bounds = null;
+    if (s.step === "normal" && yearsUsed.length) bounds = new Float64Array(2 * keys.length);
     keys.forEach(function (k, i) {
       if (s.step === "native") times[i] = EPOCH_UNIX + Math.floor(k / 64) * BIN_S + (k % 64) * fs;
       else if (s.step === "pentad") times[i] = EPOCH_UNIX + k * BIN_S;
       else if (s.step === "month") times[i] = (daysFromCivil(Math.floor(k / 12), k % 12 + 1, 1)) * 86400;
-      else times[i] = EPOCH_UNIX + frames[0].t;
+      else if (s.step === "normal") {
+        var ya = yearsUsed[0], yb = yearsUsed[yearsUsed.length - 1];
+        times[i] = daysFromCivil(ya, k, 1) * 86400;
+        bounds[2 * i] = times[i];
+        bounds[2 * i + 1] = (k === 12 ? daysFromCivil(yb + 1, 1, 1) : daysFromCivil(yb, k + 1, 1)) * 86400;
+      } else times[i] = EPOCH_UNIX + frames[0].t;
+    });
+    // the (year, month) cells behind each step: frames read, and — where the
+    // store has precomputed sums — the frames the month could have held
+    var stepCells = keys.map(function () { return []; });
+    ymSel.forEach(function (n, ymk) {
+      var y = Math.floor(ymk / 12), m = ymk % 12 + 1;
+      var k = s.step === "month" ? ymk : s.step === "normal" ? m : s.step === "all" ? 0 : null;
+      if (k == null || !keyIdx.has(k)) return;
+      stepCells[keyIdx.get(k)].push([y, m]);
     });
     var mean = !(s.step === "native" && s.res === "native");
     var maxFrames = Math.max.apply(null, [1].concat(Array.from(perStep.values())));
@@ -1513,11 +1629,70 @@
       bn.zstUrl = gurl + yearFolder(bn.b) + "/" + binName(bn.b) + ".zst";
       bn.idxRanges = coalesce(spans, GAP_IDX, MAX_RANGE);
     });
+    var std = !!s.std && mean;
+    if (std) outBytes += cells * 4;
+    var stepFrames = keys.map(function (k) { return perStep.get(k) || 0; });
     return {
       d: d, s: s, group: group, tg: tg, geo: geo, bins: bins, frames: frames,
       times: times, T: keys.length, Cs: Cs, chIdx: chIdx, conv: conv, mean: mean,
-      countBytes: countBytes, outBytes: outBytes, maxCount: maxCount
+      countBytes: countBytes, outBytes: outBytes, maxCount: maxCount, std: std,
+      bounds: bounds, yearsUsed: yearsUsed, ymAll: ymAll, ymSel: ymSel, stepCells: stepCells, stepFrames: stepFrames,
+      keys: keys
     };
+  }
+
+  // ------------------------------------------------- the two paths (E-088) --
+  // A sharded grid with precomputed monthly sums answers a time mean from
+  // them when the selection is made of WHOLE calendar months: step monthly
+  // mean, one mean, or the normal per calendar month; no day-of-month range;
+  // no hour filter on a sub-daily store; and every chosen month holds exactly
+  // the frames the sums were made from (a store updated since is read
+  // natively until its sums are remade). Otherwise every native map is read.
+  // → {ok, why, cut} — `why` is the sentence the Data tab shows.
+  function hh(h) { return (h < 10 ? "0" : "") + h; }
+  function monthlyPath(plan) {
+    var d = plan.d, M = d._gm, s = plan.s;
+    if (!M) return { ok: false, why: null, none: true };
+    var cut = [];
+    if (s.days) cut.push("days " + s.days[0] + "–" + s.days[1]);
+    if (s.hours && d.frameSeconds < 86400) cut.push("hours " + hh(s.hours[0]) + "–" + hh(s.hours[1]) + " UTC");
+    if (cut.length) return { ok: false, cut: cut, why: "your selection cuts months (" + cut.join(" / ") + "), so every native map is read" };
+    if (s.path === "native") return { ok: false, forced: true, why: "you asked for the native maps, so every native map is read (the precomputed sums give the same means)" };
+    if (s.step === "native") return { ok: false, why: "the time step is native — every map is its own step — so every native map is read" };
+    if (s.step === "pentad") return { ok: false, why: "five-day means cut across calendar months, so every native map is read" };
+    if (plan.conv.some(function (c) { return c.offset; })) return { ok: false, why: "this store's values are converted after reading, so every native map is read" };
+    var miss = s.channels.filter(function (c) { return !(M.chanOf[c] >= 0); });
+    if (miss.length) return { ok: false, why: "the monthly sums do not hold " + miss.join(", ") + ", so every native map is read" };
+    // the frames each chosen (year, month) holds now vs. those summed
+    var stale = null;
+    plan.ymAll.forEach(function (n, ymk) {
+      if (stale) return;
+      var y = Math.floor(ymk / 12), m = ymk % 12 + 1;
+      var got = y >= M.year0 && y < M.year0 + M.Y ? monthCell(M, y, m) : 0;
+      if (got !== n) stale = [y, m, n, got];
+    });
+    if (!stale) {
+      for (var y = Math.max(s.yearStart, M.year0); y <= Math.min(s.yearEnd, M.year0 + M.Y - 1) && !stale; y++) {
+        if (s.excludeYears.indexOf(y) >= 0) continue;
+        for (var i = 0; i < s.months.length; i++) {
+          var m2 = s.months[i], g = monthCell(M, y, m2);
+          if (g > 0 && !plan.ymAll.has(y * 12 + m2 - 1)) { stale = [y, m2, 0, g]; break; }
+        }
+      }
+    }
+    if (stale) {
+      return { ok: false, stale: true, why: "the store's frames have changed since its monthly sums were made (" + stale[0] + "-" + hh(stale[1]) + ": " +
+        stale[2] + " frames now, " + stale[3] + " summed), so every native map is read until the sums are remade" };
+    }
+    return { ok: true, why: "whole calendar months with no day-of-month or hour filter: each (year, month) is one precomputed plane of sums and counts" +
+      (s.std ? " (and squared deviations, for the spread)" : "") + " instead of its native maps" };
+  }
+
+  async function gmPlanFor(plan, ctx, opts) {
+    var mp = await monthlyPlan(plan.d, plan.d._gm, plan.s, ctx, Object.assign({ native: plan }, opts || {}));
+    // the two paths must agree on the steps; a mismatch is a bug, said so
+    if (!opts && mp.T !== plan.T) throw new Error(plan.d.name + ": the precomputed sums give " + mp.T + " time steps, the native frames " + plan.T + " — please report this");
+    return mp;
   }
 
   function coalesce(spans, gap, maxLen) {
@@ -1647,6 +1822,11 @@
     var HW = geo.Ho * geo.Wo, nOut = plan.T * Cs * HW;
     var data = new Float32Array(nOut);
     var count = null;
+    // a mean accumulates in float64 — the sum of float16 values is then exact
+    // — and, with plan.std, so do the squares of each value less the cell's
+    // first value (a shift that keeps the variance clear of cancellation)
+    var acc = plan.mean ? new Float64Array(nOut) : null;
+    var shift = plan.std ? new Float64Array(nOut).fill(NaN) : null, sq = plan.std ? new Float64Array(nOut) : null;
     if (plan.mean) count = plan.countBytes === 4 ? new Uint32Array(nOut) : new Uint16Array(nOut);
     else data.fill(NaN);
     var u8 = tg.dtype === "uint8", isz = u8 ? 1 : 2, want = T * T * C * isz;
@@ -1686,7 +1866,14 @@
             else { v = F16[raw[2 * p] | (raw[2 * p + 1] << 8)] + add; }
             var oi = ob + colsT[c + 1];
             if (!plan.mean) data[oi] = v;
-            else if (v === v) { data[oi] += v; count[oi]++; }
+            else if (v === v) {
+              count[oi]++;
+              if (shift) {
+                if (shift[oi] !== shift[oi]) shift[oi] = v;
+                var dv0 = v - shift[oi];
+                acc[oi] += dv0; sq[oi] += dv0 * dv0;
+              } else acc[oi] += v;
+            }
           }
         }
       }
@@ -1703,10 +1890,20 @@
         put(tile, raw);
       });
     }, ctx);
+    var std = null;
     if (plan.mean) {
-      for (var i = 0; i < nOut; i++) data[i] = count[i] ? data[i] / count[i] : NaN;
+      if (shift) std = new Float32Array(nOut);
+      for (var i = 0; i < nOut; i++) {
+        var n = count[i];
+        if (!n) { data[i] = NaN; if (std) std[i] = NaN; continue; }
+        if (shift) {
+          var mm = acc[i] / n;
+          data[i] = shift[i] + mm;
+          std[i] = Math.sqrt(Math.max(0, sq[i] / n - mm * mm));
+        } else data[i] = acc[i] / n;
+      }
     }
-    return { data: data, count: count };
+    return { data: data, count: count, std: std };
   }
 
   function gridNotes(plan) {
@@ -1716,6 +1913,13 @@
     caveatsFor(plan.d, plan.s).forEach(function (t) { n.push(t); });
     if (plan.s.bbox && plan.s.bbox.w > plan.s.bbox.e) n.push("the box crosses the dateline: longitudes run past 180° (subtract 360 for −180..180)");
     if (plan.mean) n.push("each value is the mean of the finite observations in its cell and time step; the count arrays say how many");
+    if (plan.s.step === "normal") {
+      var y = plan.yearsUsed || [];
+      n.push("a CLIMATOLOGY: each time step is one calendar month averaged over every native frame of " + (y.length ? y[0] + "–" + y[y.length - 1] : "no year") +
+        " (" + y.length + " year" + (y.length === 1 ? "" : "s") + ")" + (plan.s.excludeYears.length ? ", excluding " + plan.s.excludeYears.join(", ") : "") +
+        "; a frame belongs to the calendar month (UTC) of its own start; the time value is that month in the first year, and climatology_bounds gives the span");
+    } else if (plan.s.excludeYears.length) n.push("excluding the years " + plan.s.excludeYears.join(", "));
+    if (plan.std) n.push("std is the POPULATION standard deviation (÷ N, not N − 1) of the finite native values behind each mean");
     return n;
   }
 
@@ -1972,27 +2176,54 @@
     return out;
   }
 
-  async function normalsSpec(d, ctx) {
-    var M = d._monthly;
-    return cached("normalsspec:" + M.sum.url, async function () {
-      var hs = await npyHeaderAt(M.sum.url, ctx), hc = await npyHeaderAt(M.count.url, ctx);
-      [[hs, M.sum, "f4"], [hc, M.count, "u1"]].forEach(function (x) {
-        var h = x[0], f = x[1];
-        if (h.descr !== x[2]) throw new Error(d.name + ": the .npy is " + h.descr + ", expected " + x[2] + " — " + f.url);
+  // ONE composition for every per-year monthly-sums layout: the tensor's
+  // E-086 normals (z-units, five-day bins by the month each bin opens in) and
+  // E-088's sharded grids (physical units, native frames by their own
+  // calendar month, with m2 — the sum of squared deviations about each
+  // month's own mean). M describes the files: sum, count, + m2, C, Y, H, W,
+  // year0, the grid, + framesPresent / framesPossible ([year][month] tables,
+  // E-088), + zscored (the tensor's: value = z × sd + mean).
+  async function monthlySpec(d, M, ctx, withM2) {
+    var files = [[M.sum, "f4"], [M.count, "u1"]];
+    if (withM2 && M.m2) files.push([M.m2, "f4"]);
+    await Promise.all(files.map(function (x) {
+      var f = x[0];
+      return cached("monthlyspec:" + f.url, async function () {
+        var h = await npyHeaderAt(f.url, ctx);
+        if (h.descr !== x[1]) throw new Error(d.name + ": the .npy is " + h.descr + ", expected " + x[1] + " — " + f.url);
         if (h.shape.join() !== f.shape.join()) throw new Error(d.name + ": the .npy shape is [" + h.shape + "], the index says [" + f.shape + "] — " + f.url);
         if (h.dataOffset !== f.hdr) throw new Error(d.name + ": the .npy header is " + h.dataOffset + " bytes, the index says " + f.hdr + " — " + f.url);
+        return true;
       });
-      return true;
-    });
+    }));
+  }
+
+  async function normalsSpec(d, ctx) { return monthlySpec(d, d._monthly, ctx, false); }
+
+  // frames a (year, month) cell holds in the sums (E-088), or null (E-086,
+  // whose every year in range holds every month)
+  function monthCell(M, y, m, table) {
+    var T = M[table || "framesPresent"];
+    if (!T) return null;
+    var row = T[y - M.year0];
+    return row ? Number(row[m - 1]) || 0 : 0;
   }
 
   async function normalsPlan(d, sel, ctx, opts) {
+    return monthlyPlan(d, d._monthly, normSel(sel, d), ctx, opts);
+  }
+
+  // + opts.onlyMonth (a preview: one calendar month), + opts.onlyYM [y, m],
+  //   + opts.native (a sharded grid's native plan for the same selection:
+  //   its time axis is taken as is, so both paths write the same file)
+  async function monthlyPlan(d, M, s, ctx, opts) {
     opts = opts || {};
-    var M = d._monthly;
-    var s = normSel(sel, d);
+    var gm = !!M.framesPresent;
     if (!s.bbox) { var e = new Error("a box (bbox) is required for the gridded store " + d.name); e.needBox = true; throw e; }
-    if (s.res !== "native" && !(s.res > M.step)) throw new Error(d.name + " is " + M.step + "°: no coarser resolution than " + s.res + "° is offered");
-    await normalsSpec(d, ctx);
+    if (!gm && s.res !== "native" && !(s.res > M.step)) throw new Error(d.name + " is " + M.step + "°: no coarser resolution than " + s.res + "° is offered");
+    var std = !!s.std;
+    if (std && !M.m2) throw new Error(d.name + ": no squared deviations (m2) are stored, so no standard deviation is offered");
+    await monthlySpec(d, M, ctx, std);
     var tg = denseTg({ H: M.H, W: M.W, lat0: M.lat0, lon0: M.lon0, step: M.step, southFirst: M.southFirst });
     var geo = boxGeometry(tg, s.bbox, s.res);
     var rowsT = geo.byTy.get(0) || [], rowOut = new Int32Array(M.H).fill(-1), rmin = Infinity, rmax = -1;
@@ -2003,17 +2234,51 @@
     }
     var colsT = geo.byTx.get(0) || [];
     var allC = d.channels.map(function (c) { return c.name; });
-    var chIdx = s.channels.map(function (c) { return allC.indexOf(c); });
-    var years = normalsYears(d, s);
+    var chIdx = s.channels.map(function (c) {
+      var i = gm ? M.chanOf[c] : allC.indexOf(c);
+      if (!(i >= 0)) throw new Error(d.name + ": the monthly sums have no channel " + c);
+      return i;
+    });
     var months = s.months.slice().sort(function (x, y) { return x - y; });
     if (opts.onlyMonth) months = [opts.onlyMonth];
-    // steps: normal → one per month; by-year → one per (year, month), in time order
+    if (opts.onlyYM) months = [opts.onlyYM[1]];
+    var has = function (y, m) { var n = monthCell(M, y, m); return n === null || n > 0; };
+    var years;
+    if (gm) {
+      var ex = {};
+      (s.excludeYears || []).forEach(function (y) { ex[y] = true; });
+      years = [];
+      for (var yy = Math.max(s.yearStart, M.year0); yy <= Math.min(s.yearEnd, M.year0 + M.Y - 1); yy++) {
+        if (!ex[yy] && months.some(function (m) { return has(yy, m); })) years.push(yy);
+      }
+    } else years = normalsYears(d, s);
+    // + opts.years: a preview's years are its whole selection's (its first
+    // month's normal says the same period as the file would)
+    if (opts.years) years = opts.years.slice();
+    if (opts.onlyYM) years = years.filter(function (y) { return y === opts.onlyYM[0]; });
+    // steps: normal → one per calendar month; by-year (= month) → one per
+    // (year, month) in time order; all → one
+    var step = s.step === "month" ? "by-year" : s.step;
     var keys = [], keyOf = {};
-    if (s.step === "normal") months.forEach(function (m, i) { keyOf["*:" + m] = i; keys.push({ m: m }); });
-    else years.forEach(function (y) { months.forEach(function (m) { keyOf[y + ":" + m] = keys.length; keys.push({ y: y, m: m }); }); });
-    var stepOf = function (y, m) { return s.step === "normal" ? keyOf["*:" + m] : keyOf[y + ":" + m]; };
+    if (step === "normal") {
+      months.forEach(function (m) {
+        if (!years.some(function (y) { return has(y, m); })) return;
+        keyOf["*:" + m] = keys.length; keys.push({ m: m, cells: [] });
+      });
+    } else if (step === "all") {
+      keys.push({ all: true, cells: [] });
+    } else {
+      years.forEach(function (y) { months.forEach(function (m) { if (has(y, m)) { keyOf[y + ":" + m] = keys.length; keys.push({ y: y, m: m, cells: [] }); } }); });
+    }
+    var stepOf = function (y, m) { return step === "all" ? 0 : step === "normal" ? keyOf["*:" + m] : keyOf[y + ":" + m]; };
+    years.forEach(function (y) { months.forEach(function (m) { var si = stepOf(y, m); if (si != null && has(y, m)) keys[si].cells.push([y, m]); }); });
+    if (step === "all" && !keys[0].cells.length) keys = [];
     var times = new Float64Array(keys.length), bounds = null;
-    if (s.step === "normal" && years.length) {
+    var nat = opts.native && opts.native.T === keys.length ? opts.native : null;
+    if (nat) {
+      times = nat.times;
+      bounds = nat.bounds;
+    } else if (step === "normal" && years.length) {
       bounds = new Float64Array(2 * keys.length);
       keys.forEach(function (k, i) {
         var y0 = years[0], y1 = years[years.length - 1];
@@ -2021,22 +2286,29 @@
         bounds[2 * i] = times[i];
         bounds[2 * i + 1] = (k.m === 12 ? daysFromCivil(y1 + 1, 1, 1) : daysFromCivil(y1, k.m + 1, 1)) * 86400;
       });
-    } else keys.forEach(function (k, i) { times[i] = daysFromCivil(k.y, k.m, 1) * 86400; });
+    } else keys.forEach(function (k, i) {
+      var c0 = k.all ? k.cells[0] : [k.y, k.m];
+      times[i] = daysFromCivil(c0[0], c0[1], 1) * 86400;
+    });
     // the byte spans: (file, month, channel, year) over rows rmin..rmax
-    var reqs = [];
-    if (rmax >= 0 && geo.nCols > 0 && years.length) {
-      [["sum", M.sum], ["count", M.count]].forEach(function (ff) {
+    var fileList = [["sum", M.sum], ["count", M.count]];
+    if (std) fileList.push(["m2", M.m2]);
+    var reqs = [], units = 0;
+    if (rmax >= 0 && geo.nCols > 0 && keys.length) {
+      fileList.forEach(function (ff) {
         var f = ff[1], rowB = M.W * f.isz, spans = [];
-        months.forEach(function (m) {
-          chIdx.forEach(function (c, k) {
-            years.forEach(function (y) {
+        keys.forEach(function (k, si) {
+          k.cells.forEach(function (ym) {
+            var y = ym[0], m = ym[1];
+            chIdx.forEach(function (c, kk) {
               var base = f.hdr + (((m - 1) * M.C + c) * M.Y + (y - M.year0)) * f.plane;
               var sp = [base + rmin * rowB, base + (rmax + 1) * rowB];
-              sp.seg = { file: ff[0], k: k, si: stepOf(y, m), a: sp[0] };
+              sp.seg = { file: ff[0], k: kk, si: si, a: sp[0], u: (si * 12 + (m - 1)) * M.Y * chIdx.length + (y - M.year0) * chIdx.length + kk };
               spans.push(sp);
             });
           });
         });
+        if (ff[0] === "sum") units = spans.length;
         coalesce(spans, cfg.normalsMergeGap != null ? cfg.normalsMergeGap : NORMALS_MERGE_GAP, MAX_RANGE).forEach(function (r) {
           reqs.push({ file: ff[0], url: f.url, isz: f.isz, a: r[0], z: r[1], segs: r.items.map(function (x) { return x.seg; }) });
         });
@@ -2048,38 +2320,66 @@
     // channel, from the first year's band to the last's — an excluded year in
     // between is read and never added)
     var bandBytes = 0, runBytes = 0;
+    var G = cfg.normalsMergeGap != null ? cfg.normalsMergeGap : NORMALS_MERGE_GAP;
+    var bandRows = rmax + 1 - rmin;
     if (rmax >= 0 && years.length) {
-      [M.sum, M.count].forEach(function (f) {
-        var band = (rmax + 1 - rmin) * M.W * f.isz;
-        bandBytes += months.length * chIdx.length * years.length * band;
+      fileList.forEach(function (ff) {
+        var f = ff[1], band = bandRows * M.W * f.isz;
+        bandBytes += units * band;
         runBytes += months.length * chIdx.length * ((years[years.length - 1] - years[0]) * f.plane + band);
       });
     }
     // the rule that chose (coalesce's): two years' spans merge when the rows
     // between them — a plane less the band — cost less than a request
-    var G = cfg.normalsMergeGap != null ? cfg.normalsMergeGap : NORMALS_MERGE_GAP;
-    var bandRows = rmax + 1 - rmin;
-    var merges = [M.sum, M.count].map(function (f) { return f.plane - bandRows * M.W * f.isz <= G; });
-    var strategy = !reqs.length ? null : years.length < 2 ? "band" : merges[0] && merges[1] ? "run" : !merges[0] && !merges[1] ? "band" : "mixed";
+    var merges = fileList.map(function (ff) { return ff[1].plane - bandRows * M.W * ff[1].isz <= G; });
+    var strategy = !reqs.length ? null : years.length < 2 ? "band" : merges.every(Boolean) ? "run" : !merges.some(Boolean) ? "band" : "mixed";
     var Cs = s.channels.length;
-    var perStep = s.step === "normal" ? years.length : 1;
-    var maxCount = d.maxBinsPerMonth * perStep * geo.maxPerCell;
+    var maxCount;
+    if (gm) {
+      maxCount = 1;
+      keys.forEach(function (k) {
+        var n = k.cells.reduce(function (t, ym) { return t + monthCell(M, ym[0], ym[1]); }, 0);
+        if (n > maxCount) maxCount = n;
+      });
+      maxCount *= geo.maxPerCell;
+    } else {
+      var perStep = step === "normal" ? years.length : 1;
+      maxCount = d.maxBinsPerMonth * perStep * geo.maxPerCell;
+    }
     var countBytes = maxCount > 65535 ? 4 : 2;
-    var outBytes = keys.length * Cs * geo.Ho * geo.Wo * (4 + countBytes) + 8 * (keys.length + geo.Ho + geo.Wo) + (bounds ? bounds.length * 8 : 0);
-    var conv = chIdx.map(function (ci) { return { unit: d.channels[ci].unit, offset: 0, note: null }; });
+    var cells = keys.length * Cs * geo.Ho * geo.Wo;
+    var outBytes = cells * (4 + countBytes) + 8 * (keys.length + geo.Ho + geo.Wo) + (bounds ? bounds.length * 8 : 0);
+    // the spread needs each (year, month)'s own mean beside the period's, so
+    // its sums and counts are kept until the end: that memory is counted
+    var boxPix = 0;
+    for (var r0 = rmin; r0 <= rmax; r0++) if (rowOut[r0] >= 0) boxPix += colsT.length / 2;
+    var workBytes = std ? units * boxPix * 5 + cells * 16 : 0;
+    if (std) outBytes += cells * 4 + workBytes;
+    var conv = chIdx.map(function (ci, k) {
+      var c = d.channels[allC.indexOf(s.channels[k])];
+      return { unit: c.unit, offset: 0, note: c.note || null };
+    });
+    var stepFrames = gm ? keys.map(function (k) { return k.cells.reduce(function (t, ym) { return t + monthCell(M, ym[0], ym[1]); }, 0); }) : null;
+    var stepPossible = gm ? keys.map(function (k) { return k.cells.reduce(function (t, ym) { return t + monthCell(M, ym[0], ym[1], "framesPossible"); }, 0); }) : null;
     return {
-      normals: true, d: d, s: s, M: M, geo: geo, rowOut: rowOut, colsT: colsT, rmin: rmin, rmax: rmax,
-      years: years, months: months, keys: keys, times: times, bounds: bounds, T: keys.length, Cs: Cs, chIdx: chIdx,
+      normals: true, monthly: true, gm: gm, d: d, s: s, M: M, geo: geo, rowOut: rowOut, colsT: colsT, rmin: rmin, rmax: rmax,
+      years: years, months: months, keys: keys, step: step, times: times, bounds: bounds, T: keys.length, Cs: Cs, chIdx: chIdx,
       conv: conv, countBytes: countBytes, outBytes: outBytes, maxCount: maxCount, reqs: reqs, readBytes: readBytes,
-      strategy: strategy, bandBytes: bandBytes, runBytes: runBytes,
-      planes: years.length * months.length * Cs, mean: true, group: d.name, source: M.sum.url
+      strategy: strategy, bandBytes: bandBytes, runBytes: runBytes, std: std, workBytes: workBytes,
+      planes: units, mean: true, group: d.name, source: M.sum.url, stepFrames: stepFrames, stepPossible: stepPossible,
+      files: fileList.map(function (ff) { return ff[0]; })
     };
   }
 
-  async function normalsRun(plan, ctx, onProgress) {
+  async function monthlyRun(plan, ctx, onProgress) {
     var M = plan.M, geo = plan.geo, Cs = plan.Cs, HW = geo.Ho * geo.Wo, nOut = plan.T * Cs * HW;
     var S = new Float64Array(nOut), N = new Uint32Array(nOut);
+    var Q = plan.std ? new Float64Array(nOut) : null;
     var colsT = plan.colsT, rowOut = plan.rowOut, W = M.W, rmin = plan.rmin, rmax = plan.rmax;
+    // the spread: each unit's (year, month, channel) box pixels, kept
+    var nPix = 0;
+    for (var r0 = rmin; r0 <= rmax; r0++) if (rowOut[r0] >= 0) nPix += colsT.length / 2;
+    var keepS = plan.std ? new Map() : null, keepN = plan.std ? new Map() : null, unitMeta = plan.std ? new Map() : null;
     var progress = { done: 0, total: plan.reqs.length, bytes: 0 };
     var tell = function () { if (onProgress) { try { onProgress({ done: progress.done, total: progress.total, bytes: progress.bytes }); } catch (e) { /* the caller's */ } } };
     var rctx = Object.assign({}, ctx, { onRead: function (n) { progress.done++; progress.bytes += n; tell(); } });
@@ -2089,73 +2389,136 @@
       var dv = q.isz === 4 ? new DataView(buf.buffer, buf.byteOffset, buf.byteLength) : null;
       q.segs.forEach(function (sg) {
         var off0 = sg.a - q.a;
+        var kS = null, kN = null, p = 0;
+        if (keepS && sg.file === "sum") { kS = new Float32Array(nPix); keepS.set(sg.u, kS); unitMeta.set(sg.u, sg); }
+        if (keepN && sg.file === "count") { kN = new Uint8Array(nPix); keepN.set(sg.u, kN); }
         for (var r = rmin; r <= rmax; r++) {
           var orow = rowOut[r];
           if (orow < 0) continue;
           var rb = off0 + (r - rmin) * W * q.isz;
           var base = (sg.si * Cs + sg.k) * HW + orow * geo.Wo;
-          for (var cc = 0; cc < colsT.length; cc += 2) {
+          for (var cc = 0; cc < colsT.length; cc += 2, p++) {
             var oi = base + colsT[cc + 1];
-            if (dv) { var v = dv.getFloat32(rb + 4 * colsT[cc], true); if (v === v) S[oi] += v; }
-            else N[oi] += buf[rb + colsT[cc]];
+            if (dv) {
+              var v = dv.getFloat32(rb + 4 * colsT[cc], true);
+              if (v !== v) continue;
+              if (sg.file === "sum") { S[oi] += v; if (kS) kS[p] = v; }
+              else Q[oi] += v;
+            } else {
+              var n = buf[rb + colsT[cc]];
+              N[oi] += n;
+              if (kN) kN[p] = n;
+            }
           }
         }
       });
     }, ctx);
     var data = new Float32Array(nOut);
     var count = plan.countBytes === 4 ? new Uint32Array(nOut) : new Uint16Array(nOut);
-    var norm = plan.chIdx.map(function (ci) { return plan.d.channels[ci].norm; });
+    var norm = plan.chIdx.map(function (ci) { return plan.M.zscored === false || plan.gm ? [0, 1] : plan.d.channels[ci].norm; });
+    var mean64 = plan.std ? new Float64Array(nOut) : null;
     for (var i = 0; i < nOut; i++) {
       var k = Math.floor(i / HW) % Cs;
       count[i] = N[i];
-      data[i] = N[i] ? (S[i] / N[i]) * norm[k][1] + norm[k][0] : NaN;
+      var mu = N[i] ? S[i] / N[i] : NaN;
+      if (mean64) mean64[i] = mu;
+      data[i] = N[i] ? mu * norm[k][1] + norm[k][0] : NaN;
     }
-    return { data: data, count: count };
+    var std = null;
+    if (plan.std) {
+      // population variance = (Σ m2 + Σ n_k (mean_k − mean)²) / Σ n_k over
+      // the (year, month, native cell) units k of each output cell
+      keepS.forEach(function (kS, u) {
+        var kN = keepN.get(u), sg = unitMeta.get(u), p = 0;
+        if (!kN) throw new Error("internal: the counts of a unit were not read");
+        for (var r = rmin; r <= rmax; r++) {
+          var orow = rowOut[r];
+          if (orow < 0) continue;
+          var base = (sg.si * Cs + sg.k) * HW + orow * geo.Wo;
+          for (var cc = 0; cc < colsT.length; cc += 2, p++) {
+            var n = kN[p];
+            if (!n) continue;
+            var oi = base + colsT[cc + 1];
+            var dd = kS[p] / n - mean64[oi];
+            Q[oi] += n * dd * dd;
+          }
+        }
+      });
+      std = new Float32Array(nOut);
+      for (var j = 0; j < nOut; j++) std[j] = N[j] ? Math.sqrt(Math.max(0, Q[j] / N[j])) : NaN;
+    }
+    return { data: data, count: count, std: std };
   }
+  var normalsRun = monthlyRun;
 
   function normalsNotes(plan) {
     var n = [], s = plan.s, y = plan.years;
-    n.push("composed from the global tensor's per-year monthly sums and counts (E-086): mean = Σ sums ÷ Σ counts over the chosen years, then value = z × sd + mean in the channel's unit; NaN where no year had a value");
-    if (s.step === "normal") n.push("a CLIMATOLOGY: each time step is one calendar month averaged over " + (y.length ? y[0] + "–" + y[y.length - 1] : "no year") + " (" + y.length + " year" + (y.length === 1 ? "" : "s") + ")" + (s.excludeYears.length ? ", excluding " + s.excludeYears.join(", ") : "") + "; the time value is that month in the first year, and climatology_bounds gives the span");
-    else n.push("one monthly mean per year and calendar month (the stack of the chosen months across the chosen years)");
-    n.push("count = the number of " + (plan.M.rowKind === "monthly" ? "monthly rows (one per year)" : "five-day bins") + " that contributed; a bin belongs to the calendar month its five-day window OPENS in");
+    if (plan.gm) {
+      n.push("read from the store's precomputed per-year monthly sums and counts (E-088): each value is Σ sums ÷ Σ counts over every (year, calendar month) and native cell behind it — the same mean as averaging every native map, to within float32 rounding of the stored sums (bound: Σ ½ulp32(sum) ÷ Σ count per cell)");
+      n.push("a frame belongs to the CALENDAR month (UTC) of its own start; count = the number of finite native frames averaged");
+      if (plan.std) n.push("std is the POPULATION standard deviation (÷ N, not N − 1) of the native frames behind each mean, from the stored m2: (Σ m2 + Σ n_k (mean_k − mean)²) ÷ Σ n_k");
+    } else {
+      n.push("composed from the global tensor's per-year monthly sums and counts (E-086): mean = Σ sums ÷ Σ counts over the chosen years, then value = z × sd + mean in the channel's unit; NaN where no year had a value");
+    }
+    if (plan.step === "normal") n.push("a CLIMATOLOGY: each time step is one calendar month averaged over " + (y.length ? y[0] + "–" + y[y.length - 1] : "no year") + " (" + y.length + " year" + (y.length === 1 ? "" : "s") + ")" + (s.excludeYears.length ? ", excluding " + s.excludeYears.join(", ") : "") + "; the time value is that month in the first year, and climatology_bounds gives the span");
+    else if (plan.step === "all") n.push("one mean over every chosen (year, month)" + (s.excludeYears.length ? ", excluding " + s.excludeYears.join(", ") : "") + "; the time value is the first frame's start");
+    else n.push("one monthly mean per year and calendar month (the stack of the chosen months across the chosen years)" + (s.excludeYears.length ? ", excluding " + s.excludeYears.join(", ") : ""));
+    if (!plan.gm) n.push("count = the number of " + (plan.M.rowKind === "monthly" ? "monthly rows (one per year)" : "five-day bins") + " that contributed; a bin belongs to the calendar month its five-day window OPENS in");
     if (s.res !== "native") n.push("each " + s.res + "° cell POOLS the sums and the counts of every native cell and year in it (Σ sums ÷ Σ counts) — not a mean of means");
+    if (plan.gm) plan.conv.forEach(function (c, k) { if (c.note) n.push(s.channels[k] + ": " + c.note); });
+    if (plan.d.reanalysis) n.push("a REANALYSIS — a weather model's analysis constrained by observations, not an observation");
     if (plan.d.levels) n.push("levelled channels are written one variable per channel and level; the name carries the level (" + plan.d.levelUnit + ")");
     if (s.bbox && s.bbox.w > s.bbox.e) n.push("the box crosses the dateline: longitudes run past 180° (subtract 360 for −180..180)");
+    if (plan.gm) caveatsFor(plan.d, s).forEach(function (t) { n.push(t); });
     return n;
   }
 
   function normalsEstimate(plan) {
     var y = plan.years, s = plan.s;
-    var wh = plan.planes + " monthly plane" + (plan.planes === 1 ? "" : "s") + " (" + y.length + " year" + (y.length === 1 ? "" : "s") + " × " +
-      plan.months.length + " month" + (plan.months.length === 1 ? "" : "s") + " × " + plan.Cs + " channel" + (plan.Cs === 1 ? "" : "s") + "), sums and counts: " +
+    var fileWords = plan.std ? "sums, counts and squared deviations" : "sums and counts";
+    var wh = plan.planes + " monthly plane" + (plan.planes === 1 ? "" : "s") + " (" + (plan.gm ? "the (year, month) cells that hold frames" : y.length + " year" + (y.length === 1 ? "" : "s") + " × " +
+      plan.months.length + " month" + (plan.months.length === 1 ? "" : "s")) + " × " + plan.Cs + " channel" + (plan.Cs === 1 ? "" : "s") + "), " + fileWords + ": " +
       plan.reqs.length + " requests, " + fmtMB(plan.readBytes) + " to read (exact; " + (plan.strategy === "band"
         ? "the box's band of rows in each year's plane, one range per year — the rows between two years' bands are most of a plane, more than a request costs"
         : plan.strategy === "run" ? "each run of years read as one contiguous stretch — the rows between two years' bands cost less than a request"
-        : "the sums one range per year, the four-times-smaller counts as one stretch per run of years") + "); the result is " +
-      plan.T + " × " + plan.Cs + " × " + plan.geo.Ho + " × " + plan.geo.Wo + " (" + fmtMB(plan.outBytes) + ").";
-    return { requests: plan.reqs.length, readBytes: plan.readBytes, outBytes: plan.outBytes, frames: plan.planes, exact: true,
+        : "the float32 files one range per year, the four-times-smaller counts as one stretch per run of years") + "); the result is " +
+      plan.T + " × " + plan.Cs + " × " + plan.geo.Ho + " × " + plan.geo.Wo + " (" + fmtMB(plan.outBytes) + (plan.std ? ", with the spread and the working memory it needs" : "") + ").";
+    var o = { requests: plan.reqs.length, readBytes: plan.readBytes, outBytes: plan.outBytes, frames: plan.planes, exact: true,
       strategy: plan.strategy, bandBytes: plan.bandBytes, runBytes: plan.runBytes,
       shape: [plan.T, plan.Cs, plan.geo.Ho, plan.geo.Wo], why: wh, years: y.length, yearsUsed: y.slice(),
       channelsRead: plan.Cs, channelsKept: plan.Cs, channelWord: plan.d.levels ? "levels" : "channels",
       shrink: "Shorten the period, pick fewer months or channels, shrink the box (a narrower band of LATITUDES is what saves bytes), or take 1° cells." };
+    if (plan.gm) {
+      o.planes = plan.planes;
+      o.nativeFrames = plan.stepFrames.reduce(function (t, n) { return t + n; }, 0);
+      o.possibleFrames = plan.stepPossible.reduce(function (t, n) { return t + n; }, 0);
+    }
+    return o;
   }
 
   function normalsResult(plan, g, ctx, t0, empty) {
     var y = plan.years;
-    return {
+    var r = {
       kind: "grid", store: plan.d.name, family: plan.d.family, channels: plan.s.channels.slice(),
       units: plan.conv.map(function (c) { return c.unit; }),
       lat: plan.geo.outLat, lon: plan.geo.outLon, time: empty ? new Float64Array(0) : plan.times,
-      data: g.data, count: g.count, sel: plan.s, notes: normalsNotes(plan), frames: empty ? 0 : plan.planes,
-      group: plan.d.name, source: plan.M.sum.url, title: plan.d.title,
-      countMeaning: plan.M.rowKind === "monthly" ? "number of monthly rows (years) averaged" : "number of five-day bins averaged",
-      climatology: plan.s.step === "normal" && !empty ? { bounds: plan.bounds, period: y.length ? [y[0], y[y.length - 1]] : null,
+      data: g.data, count: g.count, std: g.std || null, sel: plan.s, notes: normalsNotes(plan), frames: empty ? 0 : plan.planes,
+      group: plan.d.name, source: plan.M.sum.url, title: plan.d.title, licence: plan.d.licence || null,
+      countMeaning: plan.gm ? "number of finite native frames averaged" : plan.M.rowKind === "monthly" ? "number of monthly rows (years) averaged" : "number of five-day bins averaged",
+      climatology: plan.step === "normal" && !empty && plan.bounds ? { bounds: plan.bounds, period: y.length ? [y[0], y[y.length - 1]] : null,
         excluded: plan.s.excludeYears.slice(), yearsUsed: y.slice() } : null,
-      byYear: plan.s.step === "by-year" && !empty && y.length ? { period: [y[0], y[y.length - 1]], excluded: plan.s.excludeYears.slice() } : null,
+      byYear: plan.step === "by-year" && !plan.gm && !empty && y.length ? { period: [y[0], y[y.length - 1]], excluded: plan.s.excludeYears.slice() } : null,
       levels: plan.d.levels ? plan.s.channels.map(function (c) { var x = plan.d.channels.find(function (z) { return z.name === c; }); return x && x.level != null ? x.level : null; }) : null,
       stats: { requests: ctx.stats.requests, bytes: ctx.stats.bytes, ms: Date.now() - t0 }
     };
+    if (plan.gm) {
+      r.path = "monthly";
+      r.framesPerStep = empty ? null : { present: plan.stepFrames.slice(), possible: plan.stepPossible.slice() };
+      r.excluded = plan.s.excludeYears.slice();
+      r.period = y.length ? [y[0], y[y.length - 1]] : null;
+      r.source = plan.M.sum.url.replace(/[^/]*$/, "");
+    }
+    return r;
   }
 
   // ============================================================== POINTS ===
@@ -2816,6 +3179,22 @@
         }
         throw e;
       }
+      var path = monthlyPath(plan);
+      if (path.ok && plan.frames.length) {
+        var mp = await gmPlanFor(plan, ctx);
+        var mo = normalsEstimate(mp);
+        // what the native read would have been, for the comparison
+        var gn = opts && opts.compareNative === false ? null : await gridEstimate(plan, ctx);
+        mo.path = "monthly";
+        mo.pathWhy = path.why;
+        mo.native = gn ? { requests: gn.requests, readBytes: gn.readBytes, exact: gn.exact, frames: plan.frames.length } : null;
+        mo.why = "read from precomputed monthly sums — " + mo.requests + " requests, " + fmtMB(mo.readBytes) + ": " + path.why +
+          (gn ? " (reading the " + plan.frames.length.toLocaleString("en-US") + " native maps would be " + (gn.exact ? "" : "≈ ") + gn.requests.toLocaleString("en-US") +
+            " requests, " + fmtMB(gn.readBytes) + ")" : "") + ". " + mo.why;
+        mo.std = mp.std;
+        mo.shrink = "Shorten the period, pick fewer months or channels, shrink the box, or take 1° cells.";
+        return cap(mo);
+      }
       var g = await gridEstimate(plan, ctx);
       var o = {
         requests: g.requests, readBytes: g.readBytes, outBytes: plan.outBytes, frames: plan.frames.length,
@@ -2830,6 +3209,13 @@
           " (" + fmtMB(plan.outBytes) + ")." + (plan.mean ? " Coarser steps or cells shrink the file, not the read." : ""),
         shrink: "Shorten the period, pick fewer months or fewer days, or shrink the box."
       };
+      if (!path.none) {
+        o.path = "native";
+        o.pathWhy = path.why;
+        o.why = "read from the native maps — " + path.why + ". " + o.why;
+      }
+      if (plan.s.step === "normal") { o.yearsUsed = plan.yearsUsed.slice(); o.years = plan.yearsUsed.length; }
+      o.std = plan.std;
       return cap(o);
     }
     // + opts.exactDays === false: count days by whole five-day bins (an
@@ -2871,9 +3257,20 @@
       }
       if (d.kind === "grid") {
         var plan = await gridPlan(sel, ctx);
+        var path = monthlyPath(plan);
+        if (path.ok && plan.frames.length) {
+          var mp = await gmPlanFor(plan, ctx);
+          if (mp.readBytes > CAP_READ) throw new Error("over the cap: this selection reads " + fmtMB(mp.readBytes) + " (limit " + fmtMB(CAP_READ) + ")");
+          if (mp.outBytes > CAP_OUT) throw new Error("over the cap: the result would be " + fmtMB(mp.outBytes) + " of arrays (limit " + fmtMB(CAP_OUT) + ")");
+          var mr = normalsResult(mp, await monthlyRun(mp, ctx, runProgress(opts, ctx, mp.readBytes, false)), ctx, t0);
+          mr.pathWhy = path.why;
+          return mr;
+        }
         if (plan.outBytes > CAP_OUT) throw new Error("over the cap: the result would be " + fmtMB(plan.outBytes) + " of arrays (limit " + fmtMB(CAP_OUT) + ")");
         var g = await gridRun(plan, ctx, runProgress(opts, ctx, null, false));
-        return gridResult(plan, g, ctx, t0);
+        var gr = gridResult(plan, g, ctx, t0);
+        if (!path.none) { gr.path = "native"; gr.pathWhy = path.why; }
+        return gr;
       }
       var pp = await pointPlan(sel, ctx);
       var pe = pointEstimateOf(pp);
@@ -2927,8 +3324,23 @@
         return denseResult(all, { data: new Float32Array(0), count: null }, ctx, t0, true);
       }
       if (d.kind === "grid") {
+        if (d._gm) {
+          // whole calendar months: the first step from the precomputed sums
+          // (a normal's first month, else the first year and month)
+          var pa = await gridPlan(sel, ctx);
+          var pth = monthlyPath(pa);
+          if (pth.ok && pa.frames.length) {
+            var m0 = await gmPlanFor(pa, ctx);
+            var k0 = m0.keys[0];
+            var po = k0.y == null && !k0.all ? { onlyMonth: k0.m, years: m0.years } : { onlyYM: k0.all ? k0.cells[0] : [k0.y, k0.m] };
+            var p1g = await monthlyPlan(d, d._gm, pa.s, ctx, po);
+            var rg = normalsResult(p1g, await monthlyRun(p1g, ctx, dataProgress(ctx, p1g.readBytes, false)), ctx, t0);
+            rg.pathWhy = pth.why;
+            return rg;
+          }
+        }
         // the first selected native frame whose box holds a stored tile
-        var s1 = Object.assign({}, sel, { step: "native" });
+        var s1 = Object.assign({}, sel, { step: "native", std: false });
         var plan = await gridPlan(s1, ctx);
         // the first frame with a stored tile in the box AND a finite value
         // inside the box (a stored tile can be all cloud where the box is);
@@ -2986,14 +3398,27 @@
 
   function gridResult(plan, g, ctx, t0, empty) {
     var units = plan.conv.map(function (c) { return c.unit; });
-    return {
+    var r = {
       kind: "grid", store: plan.d.name, family: plan.d.family, channels: plan.s.channels.slice(), units: units,
       lat: plan.geo.outLat, lon: plan.geo.outLon, time: empty ? new Float64Array(0) : plan.times,
-      data: g.data, count: g.count, sel: plan.s,
+      data: g.data, count: g.count, std: g.std || null, sel: plan.s,
       notes: gridNotes(plan), frames: empty ? 0 : plan.frames.length, group: plan.group,
       source: groupUrl(plan.d, plan.group), title: plan.d.title, licence: plan.d.licence || null,
       stats: { requests: ctx.stats.requests, bytes: ctx.stats.bytes, ms: Date.now() - t0 }
     };
+    if (!empty && plan.stepFrames && plan.s.step !== "native" && plan.T === plan.stepFrames.length) {
+      // frames read per step, and — for whole months of a store with
+      // precomputed sums — the frames those months could have held
+      var M = plan.d._gm, whole = !plan.s.days && !(plan.s.hours && plan.d.frameSeconds < 86400) && plan.s.step !== "pentad";
+      r.framesPerStep = { present: plan.stepFrames.slice(), possible: M && whole
+        ? plan.stepCells.map(function (cs) { return cs.reduce(function (t, ym) { return t + monthCell(M, ym[0], ym[1], "framesPossible"); }, 0); }) : null };
+    }
+    if (plan.s.step === "normal" && !empty && plan.bounds) {
+      var y = plan.yearsUsed;
+      r.climatology = { bounds: plan.bounds, period: y.length ? [y[0], y[y.length - 1]] : null, excluded: plan.s.excludeYears.slice(), yearsUsed: y.slice() };
+    }
+    if (plan.s.excludeYears.length) r.excluded = plan.s.excludeYears.slice();
+    return r;
   }
 
   function pointResult(plan, r, ctx, t0) {
@@ -3180,7 +3605,42 @@
             fill: function (dv, s, kk) { for (var i = 0; i < kk; i++) dv.setInt32(4 * i, result.count[map(s + i)], false); } });
         });
       }
+      if (result.std) {
+        result.channels.forEach(function (c, k) {
+          var nm = names[k] + "_std";
+          while (used[nm]) nm += "_";
+          used[nm] = 1;
+          var map = function (j) { var t = Math.floor(j / HW); return (t * C + k) * HW + (j - t * HW); };
+          vars.push({ name: nm, dims: [0, 1, 2], type: NC.FLOAT, n: T * HW,
+            attrs: [["long_name", "population standard deviation (divided by N) of the native frames behind each mean of " + c], ["units", result.units[k] || ""],
+              ["_FillValue", NaN, NC.FLOAT], ["cell_methods", "time: standard_deviation (population form, of every finite native frame in the step) area: pooled"]],
+            fill: f32Filler(result.std, map) });
+        });
+      }
+      var fps = result.framesPerStep && result.framesPerStep.present && result.framesPerStep.present.length === T ? result.framesPerStep : null;
+      if (fps) {
+        vars.push({ name: used.frames_present ? "frames_present_" : "frames_present", dims: [0], type: NC.INT, n: T,
+          attrs: [["long_name", "native frames present in the store for each time step (summed over its years and months)"], ["units", "1"]],
+          fill: function (dv, s, k) { for (var i = 0; i < k; i++) dv.setInt32(4 * i, fps.present[s + i], false); } });
+        if (fps.possible) {
+          vars.push({ name: "frames_possible", dims: [0], type: NC.INT, n: T,
+            attrs: [["long_name", "native frames each time step's calendar months could hold within the store's record (frames_present of frames_possible)"], ["units", "1"]],
+            fill: function (dv, s, k) { for (var i = 0; i < k; i++) dv.setInt32(4 * i, fps.possible[s + i], false); } });
+        }
+      }
       var extra = [];
+      if (result.path) {
+        extra.push(["read_path", result.path === "monthly" ? "precomputed per-year monthly sums, counts" + (result.std ? " and m2" : "") + " (E-088)" : "every native map"]);
+        if (result.pathWhy) extra.push(["read_path_reason", result.pathWhy]);
+      }
+      if (fps) {
+        var tp = fps.present.reduce(function (a, b) { return a + b; }, 0);
+        extra.push(["frames_present_total", tp, NC.INT]);
+        if (fps.possible) {
+          var tq = fps.possible.reduce(function (a, b) { return a + b; }, 0);
+          extra.push(["frames_possible_total", tq, NC.INT], ["frames", tp + " of " + tq + " possible frames"]);
+        }
+      }
       if (result.climatology && result.climatology.period) {
         extra.push(["climatology", "monthly normals: each time step is one calendar month averaged over the years period_start to period_end, leaving out excluded_years (Σ sums ÷ Σ counts)"],
           ["period_start", result.climatology.period[0], NC.INT],
@@ -3191,6 +3651,8 @@
       } else if (result.byYear) {
         extra.push(["period_start", result.byYear.period[0], NC.INT], ["period_end", result.byYear.period[1], NC.INT],
           ["excluded_years", result.byYear.excluded.length ? result.byYear.excluded.join(", ") : "none"]);
+      } else if (result.excluded && result.excluded.length) {
+        extra.push(["excluded_years", result.excluded.join(", ")]);
       }
       return writeNetCDF(dims, globalAttrs(result, extra), vars);
     }
@@ -3264,19 +3726,21 @@
       var Cg = result.channels.length, H = result.lat.length, W = result.lon.length, HW = H * W;
       var head = ["time", "lat", "lon"].concat(result.channels.map(esc));
       if (result.count) head = head.concat(result.channels.map(function (c) { return esc(c + "_count"); }));
+      if (result.std) head = head.concat(result.channels.map(function (c) { return esc(c + "_std"); }));
       line(head.join(","));
       for (var t = 0; t < result.time.length; t++) {
         var ts = isoOfUnix(result.time[t]);
         for (var y = 0; y < H; y++) {
           for (var x = 0; x < W; x++) {
-            var any = false, vals = [], cnts = [];
+            var any = false, vals = [], cnts = [], sds = [];
             for (var c = 0; c < Cg; c++) {
               var j = (t * Cg + c) * HW + y * W + x, v = result.data[j];
               if (v === v) any = true;
               vals.push(f32str(v));
               if (result.count) cnts.push(String(result.count[j]));
+              if (result.std) sds.push(f32str(result.std[j]));
             }
-            if (any) line([ts, f64str(result.lat[y]), f64str(result.lon[x])].concat(vals, cnts).join(","));
+            if (any) line([ts, f64str(result.lat[y]), f64str(result.lon[x])].concat(vals, cnts, sds).join(","));
           }
         }
       }
