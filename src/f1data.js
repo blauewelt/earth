@@ -383,6 +383,7 @@
           }
           if (ctx.stats) { ctx.stats.requests++; ctx.stats.bytes += buf.length; }
           if (ctx.onRead) ctx.onRead(buf.length);
+          tellStats(ctx.stats);
           return buf;
         }
         try { if (res.body && res.body.cancel) res.body.cancel(); } catch (e) { /* ignore */ }
@@ -434,6 +435,7 @@
   function readJSON(url, ctx) {
     return cached("json:" + url, async function () {
       var b = await rangeRead(url, 0, null, { signal: ctx && ctx.signal, stats: ctx && ctx.stats });
+      // (a cached JSON is read once; whoever asked first is the one counted)
       try {
         return JSON.parse(new TextDecoder("utf-8").decode(b));
       } catch (e) {
@@ -682,7 +684,9 @@
   // a store by `family/name`, by sel {family, store}, or by a bare name when
   // exactly one family has it
   async function storeDesc(sel, ctx) {
-    var reg = await loadRegistry(ctx);
+    // the registry is shared (cached) by every caller, so a caller's Cancel
+    // must not abort it — its reads are counted, never cut short
+    var reg = await loadRegistry({ stats: ctx && ctx.stats });
     var fam = sel && typeof sel === "object" ? sel.family : null;
     var name = sel && typeof sel === "object" ? sel.store : sel;
     var key = fam != null && fam !== "" ? fam + "/" + name : String(name);
@@ -1604,7 +1608,8 @@
     if (!plan.bins.length) {
       how = "nothing to read";
     } else if (exact) {
-      var all = await pool(plan.bins, function (bn) { return readBinIndex(plan, bn, ctx); }, ctx);
+      stepsBegin(ctx, plan.bins.length, "five-day files' tile indexes");
+      var all = await pool(plan.bins, function (bn) { return readBinIndex(plan, bn, ctx).then(function (x) { stepDone(ctx); return x; }); }, ctx);
       plan.bins.forEach(function (bn, i) {
         tileRequests(bn, all[i]).forEach(function (q) { tileReq++; tileBytes += q.len; });
       });
@@ -1615,7 +1620,8 @@
       var nS = SAMPLE_IDX_BINS, ratioB = 0, ratioN = 0, reqPerFrame = 0, framesS = 0;
       var sample = [];
       for (var k0 = 0; k0 < nS; k0++) sample.push(plan.bins[Math.floor((k0 + 0.5) * plan.bins.length / nS)]);
-      var sampled = await pool(sample, function (bn) { return readBinIndex(plan, bn, ctx); }, ctx);
+      stepsBegin(ctx, sample.length, "sampled five-day files' tile indexes");
+      var sampled = await pool(sample, function (bn) { return readBinIndex(plan, bn, ctx).then(function (x) { stepDone(ctx); return x; }); }, ctx);
       for (var k = 0; k < nS; k++) {
         var bn = sample[k];
         var qs = tileRequests(bn, sampled[k]);
@@ -2703,13 +2709,56 @@
     return out;
   }
 
-  function makeCtx(signal) {
+  // + onProgress (estimate, preview, run): told after every request with
+  //   {phase, done, total, bytes, bytesTotal, approx, steps, requestsAll, bytesAll}.
+  //   phase "index" — the store's indexes and headers are being read to plan
+  //   the selection: `done`/`bytes` count every request so far, `total` is
+  //   null (nobody knows it) unless `steps` = {done, total, what} says how
+  //   many index files the plan will read (the sampled grid estimate);
+  //   phase "data" — the selection's own reads: `done` of `total` requests,
+  //   `bytes` of `bytesTotal` (exact for the gridded stores, an upper bound
+  //   for a point store — `approx: true`), and the totals of both phases in
+  //   requestsAll / bytesAll. Never a guessed fraction.
+  function makeCtx(signal, onProgress) {
     var ac = new AbortController();
     if (signal) {
       if (signal.aborted) ac.abort();
       else signal.addEventListener("abort", function () { ac.abort(); }, { once: true });
     }
-    return { signal: ac.signal, ac: ac, userSignal: signal || null, stats: { requests: 0, bytes: 0 } };
+    var stats = { requests: 0, bytes: 0, phase: "index", steps: null };
+    if (typeof onProgress === "function") stats.tell = onProgress;
+    return { signal: ac.signal, ac: ac, userSignal: signal || null, stats: stats };
+  }
+
+  function tellStats(st) {
+    if (!st || !st.tell || st.phase !== "index") return;
+    try {
+      st.tell({ phase: "index", done: st.requests, total: null, bytes: st.bytes, bytesTotal: null, approx: false,
+        steps: st.steps ? { done: st.steps.done, total: st.steps.total, what: st.steps.what } : null,
+        requestsAll: st.requests, bytesAll: st.bytes });
+    } catch (e) { /* the caller's */ }
+  }
+
+  // the data phase's progress, from a run handler's {done, total, bytes}
+  function dataProgress(ctx, bytesTotal, approx) {
+    var st = ctx.stats;
+    if (!st || !st.tell) return null;
+    st.phase = "data";
+    var r0 = st.requests, b0 = st.bytes;
+    return function (p) {
+      try {
+        st.tell({ phase: "data", done: p.done, total: p.total, bytes: p.bytes,
+          bytesTotal: bytesTotal == null ? null : bytesTotal, approx: !!approx, steps: null,
+          requestsAll: r0 + p.done, bytesAll: b0 + p.bytes });
+      } catch (e) { /* the caller's */ }
+    };
+  }
+  // a step of the plan whose count is known up front (index files to read)
+  function stepsBegin(ctx, total, what) {
+    if (ctx && ctx.stats) { ctx.stats.steps = { done: 0, total: total, what: what }; tellStats(ctx.stats); }
+  }
+  function stepDone(ctx) {
+    if (ctx && ctx.stats && ctx.stats.steps) { ctx.stats.steps.done++; tellStats(ctx.stats); }
   }
 
   function wrapAbort(ctx, e) {
@@ -2719,7 +2768,7 @@
 
   // ============================================================= public ===
   async function estimate(sel, opts) {
-    var ctx = makeCtx(opts && opts.signal);
+    var ctx = makeCtx(opts && opts.signal, opts && opts.onProgress);
     var d = await storeDesc(sel, ctx);
     var cap = function (o) {
       var over = [];
@@ -2801,7 +2850,10 @@
 
   async function run(sel, opts) {
     opts = opts || {};
-    var ctx = makeCtx(opts.signal);
+    // the old contract — run's onProgress gets the data phase's {done, total,
+    // bytes} — is kept, and the same callback now also hears the index phase
+    // when it asks for it with opts.indexProgress
+    var ctx = makeCtx(opts.signal, opts.indexProgress ? opts.onProgress : null);
     var t0 = Date.now();
     try {
       var d = await storeDesc(sel, ctx);
@@ -2809,34 +2861,41 @@
         var np = await normalsPlan(d, sel, ctx);
         if (np.readBytes > CAP_READ) throw new Error("over the cap: this selection reads " + fmtMB(np.readBytes) + " (limit " + fmtMB(CAP_READ) + ")");
         if (np.outBytes > CAP_OUT) throw new Error("over the cap: the result would be " + fmtMB(np.outBytes) + " of arrays (limit " + fmtMB(CAP_OUT) + ")");
-        return normalsResult(np, await normalsRun(np, ctx, opts.onProgress), ctx, t0);
+        return normalsResult(np, await normalsRun(np, ctx, runProgress(opts, ctx, np.readBytes, false)), ctx, t0);
       }
       if (d._dense) {
         var dp = await densePlan(d, sel, ctx);
         if (dp.readBytes > CAP_READ) throw new Error("over the cap: this selection reads " + fmtMB(dp.readBytes) + " (limit " + fmtMB(CAP_READ) + ")");
         if (dp.outBytes > CAP_OUT) throw new Error("over the cap: the result would be " + fmtMB(dp.outBytes) + " of arrays (limit " + fmtMB(CAP_OUT) + ")");
-        return denseResult(dp, await denseRun(dp, ctx, opts.onProgress), ctx, t0);
+        return denseResult(dp, await denseRun(dp, ctx, runProgress(opts, ctx, dp.readBytes, false)), ctx, t0);
       }
       if (d.kind === "grid") {
         var plan = await gridPlan(sel, ctx);
         if (plan.outBytes > CAP_OUT) throw new Error("over the cap: the result would be " + fmtMB(plan.outBytes) + " of arrays (limit " + fmtMB(CAP_OUT) + ")");
-        var g = await gridRun(plan, ctx, opts.onProgress);
+        var g = await gridRun(plan, ctx, runProgress(opts, ctx, null, false));
         return gridResult(plan, g, ctx, t0);
       }
       var pp = await pointPlan(sel, ctx);
       var pe = pointEstimateOf(pp);
       if (pe.readBytes > CAP_READ) throw new Error("over the cap: the selection reads up to " + fmtMB(pe.readBytes) + " (limit " + fmtMB(CAP_READ) + ")");
       if (pe.outBytes > CAP_OUT) throw new Error("over the cap: the result could be " + fmtMB(pe.outBytes) + " of arrays (limit " + fmtMB(CAP_OUT) + ")");
-      var r = await pointRun(pp, ctx, opts.onProgress);
+      var r = await pointRun(pp, ctx, runProgress(opts, ctx, pe.readBytes, true));
       return pointResult(pp, r, ctx, t0);
     } catch (e) {
       throw wrapAbort(ctx, e);
     }
   }
 
+  // run's data phase: the caller's onProgress as before, or (indexProgress)
+  // the context's, which also carries the byte total
+  function runProgress(opts, ctx, bytesTotal, approx) {
+    if (opts.indexProgress) return dataProgress(ctx, bytesTotal, approx);
+    return opts.onProgress || null;
+  }
+
   async function preview(sel, opts) {
     opts = opts || {};
-    var ctx = makeCtx(opts.signal);
+    var ctx = makeCtx(opts.signal, opts.onProgress);
     var t0 = Date.now();
     try {
       var d = await storeDesc(sel, ctx);
@@ -2849,7 +2908,7 @@
           p1 = await normalsPlan(d, Object.assign({}, sel, { yearStart: p1.years[0], yearEnd: p1.years[0] }), ctx, { onlyMonth: p0.months[0] });
         }
         if (!p1.reqs.length) return normalsResult(p1, { data: new Float32Array(0), count: null }, ctx, t0, true);
-        return normalsResult(p1, await normalsRun(p1, ctx, null), ctx, t0);
+        return normalsResult(p1, await normalsRun(p1, ctx, dataProgress(ctx, p1.readBytes, false)), ctx, t0);
       }
       if (d._dense) {
         // the first selected frame with a finite value in the box, at most

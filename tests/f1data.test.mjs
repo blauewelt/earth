@@ -935,6 +935,58 @@ print(json.dumps({"attrs": a, "time_attrs": {k: (v.decode() if isinstance(v, byt
     } finally { F1.configure({ base: base("ok") }); }
   });
 
+  // ---- progress for the longer reads ---------------------------------------
+  test("progress: estimate and preview tell the index phase request by request; run's data phase reaches its exact total", async () => {
+    multiM();
+    try {
+      const c = caseM("normal_excl");
+      const seen = [];
+      const e = await F1.estimate(c.sel, { onProgress: (p) => seen.push(p) });
+      assert.ok(seen.length > 0, "the estimate said nothing");
+      assert.ok(seen.every((p) => p.phase === "index" && p.total === null), "an estimate never invents a total");
+      for (let i = 1; i < seen.length; i++) assert.ok(seen[i].done >= seen[i - 1].done && seen[i].bytes >= seen[i - 1].bytes);
+      // a run that asks for the index phase too: index, then data done = total, bytes = the exact estimate
+      F1.configure({ siteBase: base("okm"), registries: [{ family: "derived", title: "Derived maps", kind: "derived", monthly: "family7_monthly_index.json" }] });
+      const ps = [];
+      await F1.run(c.sel, { indexProgress: true, onProgress: (p) => ps.push(p) });
+      const data = ps.filter((p) => p.phase === "data");
+      assert.ok(ps.some((p) => p.phase === "index"), "the cold run's index reads were not told");
+      assert.ok(data.length > 0);
+      const last = data[data.length - 1];
+      assert.equal(last.done, last.total);
+      assert.equal(last.bytes, e.readBytes);
+      assert.equal(last.bytesTotal, e.readBytes);
+      assert.equal(last.approx, false);
+      assert.ok(last.requestsAll >= last.done && last.bytesAll >= last.bytes);
+      // the old contract still holds: without indexProgress, {done, total, bytes} of the data phase only
+      const old = [];
+      await F1.run(c.sel, { onProgress: (p) => old.push(p) });
+      assert.ok(old.length && old.every((p) => p.phase === undefined && Number.isFinite(p.done) && Number.isFinite(p.total)));
+      // the preview tells too, and aborting stops it with an AbortError
+      const pv = [];
+      await F1.preview(c.sel, { onProgress: (p) => pv.push(p) });
+      assert.ok(pv.length > 0);
+      const ac = new AbortController();
+      F1.configure({ siteBase: base("okm"), registries: [{ family: "derived", title: "Derived maps", kind: "derived", monthly: "family7_monthly_index.json" }] });
+      const pr = F1.estimate(c.sel, { signal: ac.signal, onProgress: () => ac.abort() });
+      await assert.rejects(pr, (err) => err.name === "AbortError");
+    } finally { F1.configure({ base: base("ok") }); }
+  });
+
+  test("progress: a grid estimate says how many tile-index files it will read, and counts them off", async () => {
+    try {
+      const seen = [];
+      const sel = cases(/native/)[0] ? selOf(cases(/native/)[0]) : null;
+      assert.ok(sel, "a fixture grid case");
+      await F1.estimate(sel, { onProgress: (p) => seen.push(p) });
+      const st = seen.filter((p) => p.steps);
+      assert.ok(st.length > 0, "no steps told");
+      const lastS = st[st.length - 1].steps;
+      assert.equal(lastS.done, lastS.total);
+      assert.match(lastS.what, /tile index/);
+    } finally { F1.configure({ base: base("ok") }); }
+  });
+
   test("internals: float16 table and the calendar", () => {
     const { F16, civil, daysFromCivil, isoOfUnix } = F1._internal;
     assert.equal(F16[0x3c00], 1);

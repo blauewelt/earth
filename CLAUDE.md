@@ -2232,6 +2232,44 @@ Licence and attribution travel as for ERA5. The ERA5 humidity store was
 republished the same day keeping small negative values (registry channel
 range −1 … 40 g/kg; real minimum −0.136); nothing in the reader clips them.
 
+*Progress for the longer reads, and the box drawn on the globe (2026-10-07).*
+Chris: *"Can you add a progress bar for the longer reads?"* and *"When
+selecting the area, can it be selected with clicks as well?"* **Progress**:
+`DtProgress` (src/app.js) is one block for the estimate (rendered INSIDE the
+estimate box), the first-look search, the preview and the download — a bar,
+"N of M requests · X MB of ≈Y MB · elapsed · about T left", a plain-English
+why for a slow read (many small requests vs many megabytes vs still reading
+indexes) and a Cancel; it appears only after 0.4 s, so cached instant
+estimates flash nothing. The reader's `estimate`/`preview` take
+`{onProgress}` and `run` takes `{onProgress, indexProgress: true}` (without it
+run keeps its old data-phase-only contract): phase `index` counts every
+request and byte (no total — nobody knows one; the tiled grid estimate alone
+reports `steps` = the tile-index files it will read), phase `data` gives
+done/total requests and `bytesTotal` (exact for normals and dense grids, an
+upper bound for points, null for tiled grids — the tab falls back on the
+estimate's figure, marked ≈). The time left needs 5 s and a recent rate
+(the last third of the read, ≥ 4 s) within a third of the overall one. Two
+reader rules came with it: **the registry is never aborted by a caller's
+signal** (it is cached and shared — a cancelled estimate during a registry
+load used to fail with "no store could be loaded"), and a superseded estimate
+is left to finish, not aborted, because index reads are shared between
+callers; only the visitor's Cancel aborts. **Drawing**: `dtDraw` arms a mode;
+capture-phase pointer listeners on the canvas's parent see the pointer before
+Cesium and set `screenSpaceCameraController.enableInputs = false` for exactly
+one gesture (a second finger ends it, so a pinch still zooms). Click two
+corners (dashed rubber band in between) or press-drag-release; touch: tap two
+corners or one-finger drag. Corners come from `pickEllipsoid` (labels cannot
+swallow them), rounded to 0.01°, joined the SHORTER way round (a dateline box
+comes out W > E); "the other way round" swaps W/E. Eight handles (corners and
+edge midpoints, a `PointPrimitiveCollection` with `id: CITY_PICK`) drag the
+drawn box. `dtDrawBusy()` (armed, mid-gesture, or 400 ms after one — Cesium
+reports its own LEFT_CLICK on release) gates the pick-card/inspector click,
+the probe click and the hover probe. Esc and the chip's Cancel disarm;
+leaving the tab disarms. Measured live: a 43-year 0.25° normal over 0–60° N
+(74.6 MB, 86 requests) read at 1.2–3 MB/s from the sandbox and said so; the
+SWOT first look took 13 s with "still reading the store's indexes", and a
+Cancel left zero further requests.
+
 *Family 1.2 — the atmosphere on pressure levels (2026-10-06, E-085).* Family
 1.2 is family 1.gf plus ECMWF's ERA5 reanalysis — temperature (K), specific
 humidity (stored and served in **g/kg**, 1000 × ERA5's kg/kg) and the
@@ -2335,7 +2373,7 @@ climatetrace, argo, rapid, sealevel, glaciers (RGI7 tars + Hugonnet parquet
 join), gistemp, gpcp, eobs, oisst, meteoswiss. Grid snapshots share
 `_bin_to_grid`/`_write_grid` (nearest scatter-binning onto regular grids).
 
-**Testing** (321 Playwright specs, plus 58 node tests of the Data tab reader): app behaviour (`tests/app.spec.js`) + data
+**Testing** (323 Playwright specs, plus 60 node tests of the Data tab reader): app behaviour (`tests/app.spec.js`) + data
 integrity (`tests/data.spec.js`), the ML status page (`tests/status.spec.js` —
 every GitHub endpoint stubbed by `page.route`, so it needs no network and no
 MIRROR), sandbox MIRROR mode, in-repo proxies, CI on real network.

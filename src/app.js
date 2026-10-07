@@ -8482,6 +8482,8 @@ function updateGbifLayer() {
 
 // Click-picking: point primitives → info card; bare globe → pixel inspector
 new Cesium.ScreenSpaceEventHandler(viewer.scene.canvas).setInputAction((click) => {
+  // drawing a box on the globe (Data tab): the click is a corner, not a question
+  if (dtDrawBusy()) return;
   const picked = seeThrough(viewer.scene.pick(click.position));
   if (picked?.id?.kind) {
     pickCard.innerHTML = picked.id.html;
@@ -9176,6 +9178,7 @@ async function runProbe(x, y, ensure = false) {
 }
 new Cesium.ScreenSpaceEventHandler(viewer.scene.canvas).setInputAction((m) => {
   hideProbe(pixelInspectorEngaged());        // hide immediately while moving
+  if (dtDrawBusy()) { if (probeDwellTimer) clearTimeout(probeDwellTimer); return; }
   if (probeDwellTimer) clearTimeout(probeDwellTimer);
   const x = m.endPosition.x, y = m.endPosition.y;
   /* A loitering EVENT is a point, not a pixel, so it answers by PICK rather
@@ -9203,6 +9206,7 @@ new Cesium.ScreenSpaceEventHandler(viewer.scene.canvas).setInputAction((m) => {
 // two overlapping read-outs of one click would be noise.
 new Cesium.ScreenSpaceEventHandler(viewer.scene.canvas).setInputAction((c) => {
   if (probeDwellTimer) clearTimeout(probeDwellTimer);
+  if (dtDrawBusy()) return;
   if (pixelInspectorEngaged()) return;
   if ((topColormapLayer() || tideLive.on) &&
       !seeThrough(viewer.scene.pick(c.position))?.id?.kind) {
@@ -15846,6 +15850,10 @@ const dt = {
   dlCtrl: null,          // AbortController of the download in flight
   pvCtrl: null,          // AbortController of the preview in flight
   lastDownload: null,    // {name, type, size} — what the tests read
+  progress: { estimate: null, preview: null, download: null },  // the DtProgress in flight, per kind
+  lastProgress: null,    // its last snapshot — what the tests read
+  progressLog: [],       // every finished or cancelled one, in order
+  estCtrl: null,         // AbortController of the estimate in flight
   lastPreview: null,     // {kind, min, max, unit, n}
   wired: false,
 };
@@ -16340,6 +16348,26 @@ function dtDefaultBoxFor(st) {
  * search asks the reader's own estimate, so it is right by construction and
  * costs a handful of index reads (cached by the reader). */
 const DT_FIRST_LOOK_MB = 40;
+/* The first-look search is several estimates in a row: one progress block in
+ * the estimate box, counting across all of them (indeterminate — the search
+ * stops at the first candidate that fits, so its length is not known), and a
+ * Cancel that stops the search and every read in flight. */
+function dtLookProgress(seq) {
+  const R = dtReader();
+  const ctrl = new AbortController();
+  const pr = dtEstimateBusy("choosing a first selection that fits", ({ quiet }) => {
+    ctrl.abort();
+    if (seq === dt.lookSeq) { dt.lookSeq++; dt.looking = false; }
+    if (!quiet) dtEstimateCancelled("The first-look search was");
+  });
+  const est = async (sel, opts = {}) => {
+    try {
+      return await R.estimate(sel, { ...opts, signal: ctrl.signal, onProgress: (p) => pr.update(p) });
+    } catch { return null; } finally { pr.carry(); }
+  };
+  return { pr, ctrl, est };
+}
+
 async function dtFirstLook(st) {
   const R = dtReader();
   if (st.normals) {
@@ -16355,14 +16383,16 @@ async function dtFirstLook(st) {
     const [a, b] = dtSpanYears(st);
     const m = new Date().getUTCMonth() + 1;
     const target = DT_FIRST_LOOK_MB * 1e6;
+    const { pr, ctrl, est: look } = dtLookProgress(seq);
     try {
       for (const y0 of [a, Math.max(a, b - 29), Math.max(a, b - 9), b]) {
         dtSetPeriod(y0, b, [m], null);
-        let est = await R.estimate(dtReadSel()).catch(() => null);
+        pr.setNote(`choosing a first selection that fits — the ${esc(DT_MONTHS[m - 1])} normal over ${y0}–${b}`);
+        let est = await look(dtReadSel());
         if (seq !== dt.lookSeq) return;
         if (est && est.readBytes > target && [...dtEl("dt-res").options].some((o) => o.value === "1")) {
           dtEl("dt-res").value = "1";
-          est = await R.estimate(dtReadSel()).catch(() => null);
+          est = await look(dtReadSel());
           if (seq !== dt.lookSeq) return;
         }
         if (est && est.readBytes <= target && est.outBytes <= target) break;
@@ -16371,6 +16401,7 @@ async function dtFirstLook(st) {
       if (seq === dt.lookSeq) dt.looking = false;
     }
     if (seq !== dt.lookSeq) return;
+    pr.finish("first selection chosen");
     dt.touched = false;
     dtChanged();
     return;
@@ -16386,9 +16417,8 @@ async function dtFirstLook(st) {
   }
   const seq = ++dt.lookSeq;
   dt.looking = true;
-  const out = dtEl("dt-estimate");
-  out.className = "dt-estimate dt-busy";
-  out.textContent = "choosing a first selection that fits — the most recent month with data…";
+  const { pr, est: look } = dtLookProgress(seq);
+  pr.setNote("choosing a first selection that fits — the most recent month with data");
   dtSetDownloadEnabled(false);
   dtEl("dt-preview").disabled = true;
   dtWriteBox(dtIsGrid(st) ? dtDefaultBoxFor(st) : null);
@@ -16405,9 +16435,11 @@ async function dtFirstLook(st) {
       for (const days of ladder) {
         dtSetPeriod(y, y, [m], days);
         const sel = dtReadSel();
+        pr.setNote(`choosing a first selection that fits — trying ${esc(DT_MONTHS[m - 1])} ${y}` +
+          `${days ? `, days ${days[0]}–${days[1]}` : ""}`);
         // whole-bin counting: an upper bound with no row search, so sizing a
         // dozen candidates costs index reads only (the final estimate is exact)
-        const est = await R.estimate(sel, { exactDays: false }).catch(() => null);
+        const est = await look(sel, { exactDays: false });
         if (seq !== dt.lookSeq) return;
         const n = est ? Number(est.rows ?? est.frames) : 0;
         if (!est || !(n > 0) || dtEmptyShape(est)) {
@@ -16425,6 +16457,7 @@ async function dtFirstLook(st) {
     if (seq === dt.lookSeq) dt.looking = false;
   }
   if (seq !== dt.lookSeq) return;
+  pr.finish("first selection chosen");
   if (pick) dtSetPeriod(pick.y, pick.y, [pick.m], pick.days);
   else { const b = dtSpanYears(st)[1]; dtSetPeriod(b, b, [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12], null); }
   // the reader tightens a sharded store's record to the frames it really
@@ -16502,6 +16535,7 @@ function dtDrawBox() {
   const box = dtBoxFromFields();
   if (!dataTabVisible() || !box || box.error) {
     if (dt.outline) { viewer.entities.remove(dt.outline); dt.outline = null; }
+    dtHandlesSync();
     viewer.scene.requestRender();
     return;
   }
@@ -16516,7 +16550,321 @@ function dtDrawBox() {
   } else {
     dt.outline.polyline.positions = positions;
   }
+  dtHandlesSync();
   viewer.scene.requestRender();
+}
+
+/* ---- drawing the box ON the globe --------------------------------------- *
+ * Chris: "When selecting the area, can it be selected with clicks as well?"
+ * "draw on the globe" ARMS a mode. Armed: click one corner, then the opposite
+ * corner (a rubber-band rectangle follows the pointer in between), or press,
+ * drag and release; on touch, tap two corners or drag with one finger. The
+ * globe's own gestures are suspended for exactly that gesture (pointerdown →
+ * pointerup) and for nothing else: unarmed, a drag rotates the globe as
+ * always, and a second finger joining cancels the draw so a pinch still
+ * zooms. Esc or the Cancel chip disarms. While armed — and for a moment
+ * after the last click, which Cesium reports as a LEFT_CLICK of its own —
+ * the pick card, the pixel inspector and the value probe stand aside
+ * (`dtDrawBusy()` at all three handlers). The corners come from
+ * `pickEllipsoid`, never `scene.pick`, so a place-name label under the
+ * pointer cannot swallow the click.
+ *
+ * The box is the SHORTER way round between the two longitudes (so a box
+ * across the dateline comes out W > E, which the reader already reads), and
+ * "the other way round" swaps W and E. Corners are rounded to 0.01° and shown
+ * in the four fields; nothing is snapped silently — the reader snaps to
+ * cells as it always has. After drawing, the rectangle stays, with eight
+ * handles (corners and edge midpoints) to drag. */
+const dtDraw = {
+  armed: false,
+  first: null,          // {lon, lat} of the first corner, while armed
+  rubber: null,         // the rubber-band entity
+  firstMark: null,      // the first corner's dot
+  gesture: null,        // {mode: "draw"|"handle", id, x0, y0, start, dragging, which}
+  swallowUntil: 0,      // the click Cesium reports after our own gesture
+  handles: null,        // PointPrimitiveCollection of the eight handles
+  handlePos: [],        // [{which, lon, lat}]
+  wired: false,
+};
+const DT_DRAG_PX = 6;
+const DT_HANDLE_PX = { mouse: 12, pen: 14, touch: 24 };
+
+function dtDrawBusy() {
+  return dtDraw.armed || !!dtDraw.gesture || performance.now() < dtDraw.swallowUntil;
+}
+
+/* a canvas position → {lon, lat} in degrees on the globe, or null (sky) */
+function dtPickLonLat(x, y) {
+  const cart = viewer.camera.pickEllipsoid(new Cesium.Cartesian2(x, y), viewer.scene.globe.ellipsoid);
+  if (!cart) return null;
+  const c = Cesium.Cartographic.fromCartesian(cart);
+  return { lon: c.longitude * Cesium.Math.DEGREES_PER_RADIAN, lat: c.latitude * Cesium.Math.DEGREES_PER_RADIAN };
+}
+
+const dtR2 = (v) => Math.round(v * 100) / 100;
+const dtWrapLon = (x) => { let v = ((x + 180) % 360 + 360) % 360 - 180; if (v === -180 && x > 0) v = 180; return v; };
+
+/* Two corners → the box, the shorter way round in longitude. */
+function dtBoxFromCorners(a, b) {
+  const d = ((b.lon - a.lon + 540) % 360) - 180;          // signed shortest step a → b
+  let w = d >= 0 ? a.lon : a.lon + d, e = d >= 0 ? a.lon + d : a.lon;
+  w = dtR2(dtWrapLon(w)); e = dtR2(dtWrapLon(e));
+  if (e === -180 && w > 0) e = 180;
+  return { w, e, s: dtR2(Math.min(a.lat, b.lat)), n: dtR2(Math.max(a.lat, b.lat)) };
+}
+
+function dtDrawSetRubber(b) {
+  if (!b || b.w === b.e || b.s >= b.n) {
+    if (dtDraw.rubber) dtDraw.rubber.show = false;
+    viewer.scene.requestRender();
+    return;
+  }
+  const positions = Cesium.Cartesian3.fromDegreesArray(dtBoxRing(b));
+  if (!dtDraw.rubber) {
+    dtDraw.rubber = viewer.entities.add({
+      polyline: { positions, width: 2, arcType: Cesium.ArcType.RHUMB,
+        material: new Cesium.PolylineDashMaterialProperty({ color: Cesium.Color.fromCssColorString("#f0d861") }) },
+    });
+  } else {
+    dtDraw.rubber.polyline.positions = positions;
+    dtDraw.rubber.show = true;
+  }
+  viewer.scene.requestRender();
+}
+
+function dtDrawSetFirstMark(p) {
+  if (!p) { if (dtDraw.firstMark) { viewer.entities.remove(dtDraw.firstMark); dtDraw.firstMark = null; } return; }
+  const position = Cesium.Cartesian3.fromDegrees(p.lon, p.lat);
+  if (!dtDraw.firstMark) {
+    dtDraw.firstMark = viewer.entities.add({ position,
+      point: { pixelSize: 9, color: Cesium.Color.fromCssColorString("#f0d861"), outlineColor: Cesium.Color.BLACK, outlineWidth: 1 } });
+  } else dtDraw.firstMark.position = position;
+  viewer.scene.requestRender();
+}
+
+function dtDrawChip(text) {
+  let chip = dtEl("dt-draw-chip");
+  if (!chip && text) {
+    // over the globe, top centre: what to do next, and a way out
+    chip = document.createElement("div");
+    chip.id = "dt-draw-chip";
+    chip.className = "dt-draw-chip hidden";
+    chip.setAttribute("role", "status");
+    chip.innerHTML = `<span class="dt-draw-chip-text"></span>` +
+      `<button type="button" class="dt-draw-chip-x" id="dt-draw-cancel">Cancel</button>`;
+    viewer.container.appendChild(chip);
+    chip.querySelector("button").addEventListener("click", () => {
+      dtDrawDisarm(); dtStatus("drawing cancelled — the box is as it was");
+    });
+  }
+  if (!chip) return;
+  if (!text) { chip.classList.add("hidden"); return; }
+  chip.querySelector(".dt-draw-chip-text").textContent = text;
+  chip.classList.remove("hidden");
+}
+
+function dtDrawArm() {
+  if (!dataTabVisible()) return;
+  dtDrawWire();
+  dtDraw.armed = true;
+  dtDraw.first = null;
+  hideProbe();
+  pickCard.classList.add("hidden");
+  const b = dtEl("dt-draw");
+  b.classList.add("active");
+  b.setAttribute("aria-pressed", "true");
+  b.textContent = "drawing… (Esc to stop)";
+  const touch = matchMedia("(pointer: coarse)").matches;
+  dtDrawChip(touch ? "Tap one corner, then the opposite one — or drag with one finger"
+    : "Click one corner, then the opposite one — or press and drag");
+  viewer.scene.canvas.style.cursor = "crosshair";
+}
+
+function dtDrawDisarm() {
+  dtDraw.armed = false;
+  dtDraw.first = null;
+  if (dtDraw.gesture) dtDrawEndGesture();
+  dtDrawSetFirstMark(null);
+  if (dtDraw.rubber) { viewer.entities.remove(dtDraw.rubber); dtDraw.rubber = null; }
+  const b = dtEl("dt-draw");
+  if (b) { b.classList.remove("active"); b.setAttribute("aria-pressed", "false"); b.textContent = "draw on the globe"; }
+  dtDrawChip(null);
+  viewer.scene.canvas.style.cursor = "";
+  viewer.scene.requestRender();
+}
+
+/* the drawn (or dragged) box → the fields, then everything follows them */
+function dtDrawCommit(b, how) {
+  if (!b || b.w === b.e || b.s >= b.n) {
+    dtStatus("that box has no area — pick two different corners");
+    return false;
+  }
+  dtWriteBox(b);
+  dt.touched = true;
+  dt.lookSeq++;
+  dt.looking = false;
+  dtChanged();
+  dtStatus(`box ${how}: W ${b.w}°, S ${b.s}°, E ${b.e}°, N ${b.n}°` +
+    `${b.w > b.e ? " — across the dateline (“the other way round” swaps it)" : ""}; drag a corner or an edge to adjust`);
+  return true;
+}
+
+/* ---- the handles: four corners and four edge midpoints ---- */
+function dtHandlesSync() {
+  const box = dataTabVisible() ? dtBoxFromFields() : null;
+  if (!box || box.error) {
+    if (dtDraw.handles) dtDraw.handles.show = false;
+    dtDraw.handlePos = [];
+    return;
+  }
+  let e = box.e;
+  if (e <= box.w) e += 360;
+  const mid = dtWrapLon((box.w + e) / 2), my = (box.s + box.n) / 2;
+  dtDraw.handlePos = [
+    { which: "sw", lon: box.w, lat: box.s }, { which: "se", lon: box.e, lat: box.s },
+    { which: "nw", lon: box.w, lat: box.n }, { which: "ne", lon: box.e, lat: box.n },
+    { which: "s", lon: mid, lat: box.s }, { which: "n", lon: mid, lat: box.n },
+    { which: "w", lon: box.w, lat: my }, { which: "e", lon: box.e, lat: my },
+  ];
+  if (!dtDraw.handles) {
+    dtDraw.handles = viewer.scene.primitives.add(new Cesium.PointPrimitiveCollection());
+  }
+  const hc = dtDraw.handles;
+  hc.removeAll();
+  for (const h of dtDraw.handlePos) {
+    // CITY_PICK: the handles are scenery to every other click handler
+    hc.add({ id: CITY_PICK, position: Cesium.Cartesian3.fromDegrees(h.lon, h.lat),
+      pixelSize: h.which.length === 2 ? 9 : 7, color: Cesium.Color.WHITE,
+      outlineColor: Cesium.Color.fromCssColorString("#4493f8"), outlineWidth: 2 });
+  }
+  hc.show = true;
+}
+
+/* the handle under a canvas position, within a finger's or a cursor's reach */
+function dtHandleAt(x, y, pointerType) {
+  if (!dtDraw.handlePos.length || !dtDraw.handles || !dtDraw.handles.show) return null;
+  const st = Cesium.SceneTransforms;
+  const toWin = (st.worldToWindowCoordinates || st.wgs84ToWindowCoordinates).bind(st);
+  const occ = new Cesium.EllipsoidalOccluder(Cesium.Ellipsoid.WGS84, viewer.camera.position);
+  const reach = DT_HANDLE_PX[pointerType] || 12;
+  let best = null, bestD = Infinity;
+  for (const h of dtDraw.handlePos) {
+    const pos = Cesium.Cartesian3.fromDegrees(h.lon, h.lat);
+    if (!occ.isPointVisible(pos)) continue;
+    const w = toWin(viewer.scene, pos);
+    if (!w) continue;
+    const d = Math.hypot(w.x - x, w.y - y);
+    if (d <= reach && d < bestD) { best = h; bestD = d; }
+  }
+  return best;
+}
+
+function dtBoxWithHandle(box, which, p) {
+  const b = { ...box };
+  const lon = dtR2(dtWrapLon(p.lon)), lat = dtR2(Math.max(-90, Math.min(90, p.lat)));
+  if (which.includes("s")) b.s = lat;
+  if (which.includes("n")) b.n = lat;
+  if (which.includes("w")) b.w = lon;
+  if (which.includes("e")) b.e = lon;
+  if (b.s > b.n) [b.s, b.n] = [b.n, b.s];
+  return b;
+}
+
+function dtDrawEndGesture() {
+  dtDraw.gesture = null;
+  viewer.scene.screenSpaceCameraController.enableInputs = true;
+  dtDraw.swallowUntil = performance.now() + 400;
+}
+
+function dtCanvasXY(ev) {
+  const r = viewer.scene.canvas.getBoundingClientRect();
+  return { x: ev.clientX - r.left, y: ev.clientY - r.top };
+}
+
+function dtDrawWire() {
+  if (dtDraw.wired) return;
+  dtDraw.wired = true;
+  const canvas = viewer.scene.canvas;
+  const host = canvas.parentElement || canvas;
+  // capture phase on the canvas's parent: we see the pointer before Cesium,
+  // so the camera can be told to sit out this one gesture
+  host.addEventListener("pointerdown", (ev) => {
+    if (ev.target !== canvas || !dataTabVisible()) return;
+    if (dtDraw.gesture) {                     // a second finger: give the globe its pinch back
+      dtDrawEndGesture();
+      if (dtDraw.armed) dtDrawSetRubber(null);
+      return;
+    }
+    if (ev.button !== undefined && ev.button !== 0) return;
+    const { x, y } = dtCanvasXY(ev);
+    if (dtDraw.armed) {
+      const start = dtPickLonLat(x, y);
+      if (!start) return;                     // the sky: let the globe have it
+      dtDraw.gesture = { mode: "draw", id: ev.pointerId, x0: x, y0: y, start, dragging: false };
+      viewer.scene.screenSpaceCameraController.enableInputs = false;
+      return;
+    }
+    const h = dtHandleAt(x, y, ev.pointerType);
+    if (!h) return;
+    const box = dtBoxFromFields();
+    if (!box || box.error) return;
+    dtDraw.gesture = { mode: "handle", id: ev.pointerId, x0: x, y0: y, which: h.which, box, dragging: false };
+    viewer.scene.screenSpaceCameraController.enableInputs = false;
+  }, { capture: true });
+  host.addEventListener("pointermove", (ev) => {
+    if (!dataTabVisible()) return;
+    const { x, y } = dtCanvasXY(ev);
+    const g = dtDraw.gesture;
+    if (g && ev.pointerId === g.id) {
+      if (!g.dragging && Math.hypot(x - g.x0, y - g.y0) > DT_DRAG_PX) g.dragging = true;
+      if (!g.dragging) return;
+      const p = dtPickLonLat(x, y);
+      if (!p) return;
+      if (g.mode === "draw") dtDrawSetRubber(dtBoxFromCorners(g.start, p));
+      else {
+        const b = dtBoxWithHandle(g.box, g.which, p);
+        g.current = b;
+        dtWriteBox(b);
+        dtDrawBox();
+      }
+      return;
+    }
+    // armed, first corner set, a hovering cursor: the rubber band follows it
+    if (dtDraw.armed && dtDraw.first && ev.pointerType === "mouse") {
+      const p = dtPickLonLat(x, y);
+      if (p) dtDrawSetRubber(dtBoxFromCorners(dtDraw.first, p));
+    }
+  }, { capture: true });
+  const up = (ev) => {
+    const g = dtDraw.gesture;
+    if (!g || ev.pointerId !== g.id) return;
+    const { x, y } = dtCanvasXY(ev);
+    const p = dtPickLonLat(x, y) || (g.mode === "draw" ? null : null);
+    dtDrawEndGesture();
+    if (ev.type === "pointercancel") { if (g.mode === "draw") dtDrawSetRubber(null); return; }
+    if (g.mode === "handle") {
+      if (g.dragging && g.current) dtDrawCommit(g.current, "adjusted");
+      return;
+    }
+    if (g.dragging) {                        // press – drag – release
+      if (p && dtDrawCommit(dtBoxFromCorners(g.start, p), "drawn")) dtDrawDisarm();
+      else dtDrawSetRubber(null);
+      return;
+    }
+    if (!dtDraw.first) {                     // a click: the first corner
+      dtDraw.first = g.start;
+      dtDrawSetFirstMark(g.start);
+      dtDrawChip(`First corner ${dtR2(g.start.lat)}°, ${dtR2(dtWrapLon(g.start.lon))}° — now the opposite corner`);
+      return;
+    }
+    const b = dtBoxFromCorners(dtDraw.first, g.start);
+    if (dtDrawCommit(b, "drawn")) dtDrawDisarm();
+  };
+  host.addEventListener("pointerup", up, { capture: true });
+  host.addEventListener("pointercancel", up, { capture: true });
+  document.addEventListener("keydown", (ev) => {
+    if (ev.key === "Escape" && dtDraw.armed) { dtDrawDisarm(); dtStatus("drawing cancelled — the box is as it was"); }
+  });
 }
 
 /* ---- the estimate ------------------------------------------------------- */
@@ -16548,6 +16896,225 @@ function dtSetDownloadEnabled(on) {
   dtEl("dt-download").disabled = !on || !!dt.dlCtrl;
 }
 
+/* ---- progress for the longer reads -------------------------------------- *
+ * Chris: "Can you add a progress bar for the longer reads?" Every wait the tab
+ * can make — the ESTIMATE (and the first-look search, which is several
+ * estimates), the PREVIEW and the DOWNLOAD — gets the same block: a bar, a
+ * line "N of M requests · X MB of ≈Y MB · 12 s · about 20 s left", a line
+ * saying WHY a slow read is slow when the reader's own counts say it, and a
+ * Cancel that aborts every request in flight.
+ *
+ * The numbers are the reader's (F1Data's onProgress), never invented: while a
+ * total is known — the data phase of a run (its requests and its exact byte
+ * count; an upper bound for a point store, shown with ≈), or the index files a
+ * sampled grid estimate will read — the bar is a fraction; while it is not
+ * (the store's indexes being read to plan the selection, a point store's time
+ * search, the first-look search), the bar is indeterminate and the line counts
+ * requests and megabytes so far. The remaining time is shown only after 5 s,
+ * and only while the rate over the last 4 s agrees with the rate over the
+ * whole read to within a third — an unstable rate gets no guess. */
+const DT_PROG_SHOW_AFTER_MS = 400;     // a cached, instant read shows no bar at all
+// the estimate's block takes the estimate box's place, so it waits a little
+// longer: an estimate that is merely busy for a second keeps its old figures
+const DT_PROG_EST_SHOW_AFTER_MS = 1000;
+const DT_PROG_ETA_AFTER_MS = 5000;
+const DT_PROG_WHY_AFTER_MS = 3000;
+const DT_SMALL_REQ_BYTES = 256e3;
+
+class DtProgress {
+  /* host: the element the block renders into; label: what is being waited
+   * for ("estimate", …); onCancel: what Cancel does; expected: a byte total to
+   * fall back on (the estimate's, for a run whose reader cannot know it) */
+  constructor(host, { kind, label, onCancel, expected = null, approxExpected = true, showAfter = 0, mount = null,
+    cancelButton = true } = {}) {
+    this.host = host; this.kind = kind; this.label = label; this.onCancel = onCancel; this.mount = mount;
+    this.cancelButton = cancelButton;
+    this.expected = expected; this.approxExpected = approxExpected;
+    this.t0 = performance.now(); this.samples = []; this.p = null; this.state = "running";
+    this.shown = false; this.note = "";
+    this.base = { requests: 0, bytes: 0 };         // earlier estimates of a first-look search
+    this.timer = setInterval(() => this.render(), 500);
+    this.showTimer = setTimeout(() => { this.shown = true; this.render(); }, showAfter);
+    dt.progress[kind] = this;
+    dt.lastProgress = this.snapshot();
+  }
+  /* a first-look search runs several estimates: carry the counts across */
+  carry() {
+    if (this.p) { this.base.requests += this.p.requestsAll || 0; this.base.bytes += this.p.bytesAll || 0; }
+    this.p = null;
+  }
+  setNote(text) { this.note = text; this.render(); }
+  update(p) {
+    if (this.state !== "running" || !p || typeof p !== "object") return;
+    // run's old contract ({done, total, bytes}) or the full one
+    this.p = { phase: p.phase || "data", done: Number(p.done) || 0, total: p.total == null ? null : Number(p.total),
+      bytes: Number(p.bytes) || 0, bytesTotal: p.bytesTotal == null ? null : Number(p.bytesTotal), approx: !!p.approx,
+      steps: p.steps || null, requestsAll: p.requestsAll == null ? Number(p.done) || 0 : Number(p.requestsAll),
+      bytesAll: p.bytesAll == null ? Number(p.bytes) || 0 : Number(p.bytesAll) };
+    const f = this.fraction();
+    if (f !== null) this.wasDeterminate = true;
+    this.samples.push({ t: performance.now(), f, bytes: this.base.bytes + this.p.bytesAll });
+    if (this.samples.length > 400) this.samples.splice(0, this.samples.length - 400);
+    if (!this.raf) this.raf = requestAnimationFrame(() => { this.raf = 0; this.render(); });
+  }
+  fraction() {
+    const p = this.p;
+    if (!p) return null;
+    if (p.phase === "data") {
+      const bt = p.bytesTotal != null ? p.bytesTotal : this.expected;
+      if (bt > 0 && p.bytesTotal != null) return Math.max(0, Math.min(1, p.bytes / bt));
+      if (p.total > 0) return Math.max(0, Math.min(1, p.done / p.total));
+      return null;
+    }
+    if (p.steps && p.steps.total > 0) return Math.max(0, Math.min(1, p.steps.done / p.steps.total));
+    return null;
+  }
+  elapsed() { return performance.now() - this.t0; }
+  /* seconds left, or null when the rate is too young or too unsteady to say */
+  remaining() {
+    const f = this.fraction();
+    if (f === null || f <= 0 || f >= 1 || this.elapsed() < DT_PROG_ETA_AFTER_MS) return null;
+    // Reads finish in bursts (six in flight), so the recent rate is taken
+    // over the last third of the read, never less than 4 s: from the sample
+    // nearest that point back to the latest one.
+    const now = performance.now(), s = this.samples.filter((x) => x.f !== null);
+    if (s.length < 4) return null;
+    const first = s[0], b = s[s.length - 1];
+    const span = Math.max(4000, (now - this.t0) / 3);
+    let a = s[0];
+    for (const x of s) { if (b.t - x.t >= span) a = x; else break; }
+    if (a === b || b.t - a.t < 2000) return null;
+    const rateAll = (b.f - first.f) / Math.max(1, b.t - first.t);
+    const rateWin = (b.f - a.f) / Math.max(1, b.t - a.t);
+    if (!(rateAll > 0) || !(rateWin > 0) || Math.abs(rateWin - rateAll) / rateAll > 1 / 3) return null;
+    return (1 - f) / rateWin / 1000;
+  }
+  /* why it is slow, in words, from the counts — or nothing */
+  why() {
+    if (this.elapsed() < DT_PROG_WHY_AFTER_MS || !this.p) return "";
+    const n = this.base.requests + this.p.requestsAll, b = this.base.bytes + this.p.bytesAll;
+    const secs = this.elapsed() / 1000;
+    if (this.p.phase === "index" && !(this.p.steps && this.p.steps.total)) {
+      return `Slow because the reader is still reading the store's indexes — where each file, frame or ` +
+        `five-day bin starts — one small request at a time${n ? ` (${dtFmtInt(n)} so far)` : ""}; nothing of the selection itself is read yet.`;
+    }
+    if (n >= 20 && b / n < DT_SMALL_REQ_BYTES) {
+      return `Slow because it is many small requests (${dtFmtInt(n)} so far, about ${dtFmtInt(b / n / 1000)} kB each): ` +
+        `each is a round trip to the data store, at most six at a time, so the count matters more than the megabytes.`;
+    }
+    if (b > 20e6) {
+      return `Slow because it is a lot of data: ${dtFmtMB(b)} so far at about ${(b / 1e6 / secs).toFixed(1)} MB/s.`;
+    }
+    return "";
+  }
+  line() {
+    const p = this.p, secs = Math.round(this.elapsed() / 1000);
+    const t = secs >= 1 ? ` · ${secs} s` : "";
+    if (this.state === "done") return `${this.doneText || "done"}${t}`;
+    if (this.state === "cancelled") return `cancelled${t}`;
+    if (!p) return `starting…${t}`;
+    const n = this.base.requests + p.requestsAll, b = this.base.bytes + p.bytesAll;
+    let head;
+    if (p.phase === "data") {
+      const bt = p.bytesTotal != null ? p.bytesTotal : this.expected;
+      const approx = p.bytesTotal != null ? p.approx : this.approxExpected;
+      head = `${p.total != null ? `${dtFmtInt(p.done)} of ${dtFmtInt(p.total)}` : dtFmtInt(p.done)} requests · ` +
+        `${dtFmtMB(p.bytes)}${bt > 0 ? ` of ${approx ? "≈" : ""}${dtFmtMB(bt)}` : ""}`;
+    } else if (p.steps && p.steps.total) {
+      head = `${dtFmtInt(p.steps.done)} of ${dtFmtInt(p.steps.total)} ${esc(p.steps.what)} · ${dtFmtInt(n)} requests · ${dtFmtMB(b)} so far`;
+    } else {
+      head = `${dtFmtInt(n)} ${n === 1 ? "request" : "requests"} · ${dtFmtMB(b)} so far`;
+    }
+    const rem = this.remaining();
+    return `${head}${t}${rem !== null ? ` · about ${rem < 90 ? `${Math.max(1, Math.round(rem))} s` : `${Math.round(rem / 60)} min`} left` : ""}`;
+  }
+  snapshot() {
+    const p = this.p || {};
+    return { kind: this.kind, label: this.label, note: String(this.note || "").replace(/<[^>]*>/g, ""),
+      determinate: !!this.wasDeterminate, state: this.state, phase: p.phase || null, done: p.done ?? 0, total: p.total ?? null,
+      bytes: p.bytes ?? 0, bytesTotal: p.bytesTotal ?? this.expected ?? null, fraction: this.fraction(),
+      requestsAll: this.base.requests + (p.requestsAll || 0), bytesAll: this.base.bytes + (p.bytesAll || 0),
+      elapsedMs: Math.round(this.elapsed()), remainingS: this.remaining(), why: this.why(), shown: this.shown,
+      text: this.host ? this.host.textContent : "" };
+  }
+  render() {
+    if (!this.host) return;
+    if (!this.shown && this.state === "running") { dt.lastProgress = this.snapshot(); return; }
+    const f = this.state === "done" ? 1 : this.fraction();
+    if (!this.mounted) { this.mounted = true; if (this.mount) this.mount(); }
+    if (!this.host.querySelector(".dt-prog-bar")) {
+      this.host.innerHTML = `<div class="dt-prog-top"><progress class="dt-prog-bar" max="1"></progress>` +
+        `<button type="button" class="td-btn dt-btn dt-prog-cancel${this.cancelButton ? "" : " hidden"}">Cancel</button></div>` +
+        `<div class="dt-prog-label"></div><div class="dt-prog-line"></div><div class="dt-prog-why"></div>`;
+      this.host.querySelector(".dt-prog-cancel").addEventListener("click", () => this.cancel());
+    }
+    this.host.classList.remove("hidden");
+    const bar = this.host.querySelector(".dt-prog-bar");
+    if (f === null) bar.removeAttribute("value"); else bar.value = f;
+    bar.setAttribute("aria-label", `${this.label}: ${f === null ? "in progress" : `${Math.round(f * 100)} %`}`);
+    this.host.querySelector(".dt-prog-label").innerHTML = this.note || esc(this.label);
+    this.host.querySelector(".dt-prog-line").textContent = this.line();
+    this.host.querySelector(".dt-prog-why").textContent = this.state === "running" ? this.why() : "";
+    this.host.querySelector(".dt-prog-cancel").disabled = this.state !== "running";
+    this.host.dataset.state = this.state;
+    dt.lastProgress = this.snapshot();
+  }
+  stop() {
+    clearInterval(this.timer); clearTimeout(this.showTimer);
+    if (this.raf) cancelAnimationFrame(this.raf);
+    this.raf = 0;
+  }
+  finish(text) {
+    if (this.state !== "running") return;
+    this.state = "done"; this.doneText = text || "done"; this.stop();
+    if (this.shown) this.render(); else dt.lastProgress = this.snapshot();
+    dt.progressLog.push(dt.lastProgress);
+    if (dt.progress[this.kind] === this) dt.progress[this.kind] = null;
+  }
+  /* Cancel (the button, or a superseding read): abort, then a clean panel */
+  cancel({ quiet = false } = {}) {
+    if (this.state !== "running") return;
+    this.state = "cancelled"; this.stop();
+    if (this.shown) this.render(); else dt.lastProgress = this.snapshot();
+    dt.progressLog.push(dt.lastProgress);
+    if (dt.progress[this.kind] === this) dt.progress[this.kind] = null;
+    if (this.onCancel) this.onCancel({ quiet });
+  }
+  /* gone without a trace (a newer read replaced it before it was ever seen) */
+  drop() {
+    this.stop();
+    if (this.state === "running") this.state = "dropped";
+    if (dt.progress[this.kind] === this) dt.progress[this.kind] = null;
+  }
+}
+
+/* the progress host of the estimate is the estimate box itself, so the box
+ * does not grow a second block and nothing below it moves twice */
+function dtEstimateBusy(label, onCancel) {
+  const old = dt.progress.estimate;
+  if (old) old.drop();
+  const out = dtEl("dt-estimate");
+  out.className = "dt-estimate dt-busy";
+  const host = document.createElement("div");
+  host.className = "dt-prog";
+  host.id = "dt-est-prog";
+  return new DtProgress(host, { kind: "estimate", label, onCancel, showAfter: DT_PROG_EST_SHOW_AFTER_MS,
+    mount: () => { out.textContent = ""; out.appendChild(host); } });
+}
+
+/* An estimate (or the first-look search) the visitor cancelled: the box says
+ * so and offers to try again; nothing is downloadable meanwhile, since nothing
+ * says what it would cost. */
+function dtEstimateCancelled(what) {
+  dt.lastEstimate = null;
+  const out = dtEl("dt-estimate");
+  out.className = "dt-estimate dt-over";
+  out.innerHTML = `${esc(what)} cancelled — nothing was read for it after that. ` +
+    `<button type="button" class="tag-link" id="dt-est-retry">estimate again</button>`;
+  dtSetDownloadEnabled(false);
+  dtEl("dt-preview").disabled = false;
+}
+
 async function dtRunEstimate() {
   const R = dtReader();
   const out = dtEl("dt-estimate");
@@ -16565,11 +17132,30 @@ async function dtRunEstimate() {
     dtEl("dt-preview").disabled = true;
     return;
   }
-  out.className = "dt-estimate dt-busy";
+  // A newer selection supersedes the estimate in flight; its reads are left
+  // to finish rather than aborted, because the reader shares a store's index
+  // reads between callers and aborting one would fail the other. Only the
+  // visitor's Cancel aborts.
+  const ctrl = new AbortController();
+  dt.estCtrl = ctrl;
+  const pr = dtEstimateBusy("estimating what this selection will read", ({ quiet }) => {
+    ctrl.abort();
+    if (!quiet && seq === dt.estSeq) { dt.estSeq++; dtEstimateCancelled("The estimate was"); }
+  });
   let est;
   try {
-    est = await R.estimate(sel);
+    try {
+      est = await R.estimate(sel, { signal: ctrl.signal, onProgress: (p) => pr.update(p) });
+    } catch (e0) {
+      // an index read shared with a read someone else cancelled: once more
+      if (!(e0 && e0.name === "AbortError") || ctrl.signal.aborted) throw e0;
+      est = await R.estimate(sel, { signal: ctrl.signal, onProgress: (p) => pr.update(p) });
+    }
   } catch (err) {
+    if (dt.estCtrl === ctrl) dt.estCtrl = null;
+    // cancelled (and said so), whatever shape the rejection took
+    if ((err && err.name === "AbortError") || ctrl.signal.aborted) { pr.drop(); return; }
+    pr.drop();
     if (seq !== dt.estSeq) return;
     dt.lastEstimate = null;
     out.className = "dt-estimate dt-over";
@@ -16577,7 +17163,9 @@ async function dtRunEstimate() {
     dtSetDownloadEnabled(false);
     return;
   }
-  if (seq !== dt.estSeq) return;             // a newer selection is already being estimated
+  if (dt.estCtrl === ctrl) dt.estCtrl = null;
+  if (seq !== dt.estSeq) { pr.drop(); return; }   // a newer selection is already being estimated
+  pr.finish(`estimated: ${dtFmtMB(est.readBytes)} to read`);
   dt.lastEstimate = est;
   dt.lastEstimateFor = JSON.stringify(sel);
   dtSyncFormats(sel, est);
@@ -16924,15 +17512,26 @@ async function dtPreview() {
   const ctrl = new AbortController();
   dt.pvCtrl = ctrl;
   dtStatus("reading one frame for the preview…");
+  const host = dtEl("dt-pv-prog");
+  const pr = new DtProgress(host, { kind: "preview", label: "reading one frame for the preview",
+    showAfter: DT_PROG_SHOW_AFTER_MS, mount: () => host.classList.remove("hidden"),
+    onCancel: () => { ctrl.abort(); } });
+  dtEl("dt-preview").disabled = true;
+  const end = () => { dtEl("dt-preview").disabled = false; host.classList.add("hidden"); host.innerHTML = ""; };
   let res;
   try {
-    res = await R.preview(sel, { signal: ctrl.signal });
+    res = await R.preview(sel, { signal: ctrl.signal, onProgress: (p) => pr.update(p) });
   } catch (err) {
+    const aborted = err && err.name === "AbortError";
+    if (aborted) pr.cancel({ quiet: true }); else pr.drop();
+    end();
     if (dt.pvCtrl !== ctrl) return;
     dt.pvCtrl = null;
-    dtStatus(err && err.name === "AbortError" ? "preview cancelled" : `preview failed: ${err && err.message ? err.message : err}`, true);
+    dtStatus(aborted ? "preview cancelled — nothing is painted" : `preview failed: ${err && err.message ? err.message : err}`, !aborted);
     return;
   }
+  pr.finish("read");
+  end();
   if (dt.pvCtrl !== ctrl || !dataTabVisible()) return;
   dt.pvCtrl = null;
   if (!res) { dtStatus("nothing in this selection to preview — no frame has data"); return; }
@@ -17036,12 +17635,19 @@ async function dtDownload() {
   const fmt = dtEl("dt-format").value;
   const ctrl = new AbortController();
   dt.dlCtrl = ctrl;
+  // `#dt-progress` is the plain fraction (kept for whatever reads it); the
+  // block under it is the full read-out, with the row's own Cancel
   const bar = dtEl("dt-progress");
-  bar.classList.remove("hidden");
   bar.value = 0;
   dtEl("dt-download").disabled = true;
   dtEl("dt-cancel").disabled = false;
-  dtStatus("reading…");
+  dtStatus("");                       // the progress block below says what is happening
+  const host = dtEl("dt-dl-prog");
+  const est0 = dt.lastEstimate;
+  const pr = new DtProgress(host, { kind: "download", label: "reading the selection for the file",
+    expected: est0 && Number(est0.readBytes) > 0 ? Number(est0.readBytes) : null, approxExpected: !(est0 && est0.exact),
+    mount: () => host.classList.remove("hidden"), cancelButton: false, onCancel: () => ctrl.abort() });
+  dt.dlProgress = pr;
   const done = () => {
     if (dt.dlCtrl === ctrl) dt.dlCtrl = null;
     dtEl("dt-cancel").disabled = true;
@@ -17050,12 +17656,12 @@ async function dtDownload() {
   try {
     const res = await R.run(sel, {
       signal: ctrl.signal,
+      indexProgress: true,
       onProgress: (p) => {
         if (dt.dlCtrl !== ctrl) return;
-        const f = dtProgressFraction(p);
+        pr.update(p);
+        const f = pr.fraction();
         if (f !== null && Number.isFinite(f)) bar.value = Math.max(0, Math.min(1, f));
-        const got = p && typeof p === "object" ? (Number.isFinite(p.bytes) ? p.bytes : p.readBytes) : NaN;
-        if (Number.isFinite(got)) dtStatus(`reading… ${dtFmtMB(got)}`);
       },
     });
     if (ctrl.signal.aborted) throw new DOMException("cancelled", "AbortError");
@@ -17065,10 +17671,12 @@ async function dtDownload() {
     const name = dtFileName(sel, fmt);
     dtSaveBlob(blob, name);
     bar.value = 1;
+    pr.finish(`saved ${name}`);
     dt.lastDownload = { name, type: blob.type, size: blob.size };
     dtStatus(`saved ${name} (${dtFmtMB(blob.size)})`);
   } catch (err) {
     if (err && err.name === "AbortError") {
+      pr.cancel({ quiet: true });
       dtStatus("cancelled — nothing was saved");
     } else {
       const msg = err && err.message ? err.message : String(err);
@@ -17076,7 +17684,9 @@ async function dtDownload() {
       showToast(`<strong>Data</strong>: the download failed and nothing was saved — ${esc(msg)}`,
         { key: "data-download-failed" });
     }
-    bar.classList.add("hidden");
+    pr.drop();
+    host.classList.add("hidden");
+    host.innerHTML = "";
   } finally {
     done();
   }
@@ -17181,6 +17791,17 @@ function dtWire() {
     });
   });
   dtEl("dt-preview").addEventListener("click", dtPreview);
+  // draw the box on the globe, and the other way round for a drawn box
+  dtEl("dt-draw").addEventListener("click", () => { if (dtDraw.armed) dtDrawDisarm(); else dtDrawArm(); });
+  dtEl("dt-box-swap").addEventListener("click", () => {
+    const b = dtBoxFromFields();
+    if (!b || b.error) { dtStatus("no box to swap — type, draw or pick one first"); return; }
+    dtDrawCommit({ w: b.e, s: b.s, e: b.w, n: b.n }, "swapped to the other way round");
+  });
+  // "estimate again", after a cancelled estimate or first-look search
+  dtEl("dt-estimate").addEventListener("click", (e) => {
+    if (e.target && e.target.id === "dt-est-retry") { dt.touched = true; dtRunEstimate(); }
+  });
   dtEl("dt-pv-chan").addEventListener("change", (e) => dtRepaintPreview(Number(e.target.value)));
   dtEl("dt-preview-clear").addEventListener("click", dtClearPreview);
   // the level chips of a levelled store (variables are checkboxes and arrive
@@ -17274,6 +17895,8 @@ function dataTabHide() {
   if (dt.dlCtrl) dt.dlCtrl.abort();
   if (dt.pvCtrl || dt.pvEnt || dt.pvDots) dtClearPreview();
   if (dt.outline) { viewer.entities.remove(dt.outline); dt.outline = null; }
+  dtDrawDisarm();
+  dtHandlesSync();
   viewer.scene.requestRender();
 }
 
@@ -17302,6 +17925,12 @@ function dataTabState() {
     estimateCurrent: !dt.looking && !!dt.store && !!dt.lastEstimate && dt.lastEstimateFor === JSON.stringify(dtReadSel()),
     lastDownload: dt.lastDownload,
     downloading: !!dt.dlCtrl,
+    progress: dt.lastProgress,
+    drawArmed: dtDraw.armed,
+    drawFirst: dtDraw.first,
+    handles: dtDraw.handles && dtDraw.handles.show ? dtDraw.handlePos.map((h) => h.which) : [],
+    progressLog: dt.progressLog.slice(-20),
+    progressRunning: Object.entries(dt.progress).filter(([, v]) => v).map(([k]) => k),
   };
 }
 

@@ -8138,40 +8138,46 @@ test("Data tab: opens between Cones and Play, lists the reader's stores, and its
 
 test("Data tab: the estimate follows period, months and box, and over the cap Download is off",
      async ({ page }) => {
-  test.setTimeout(120000);
+  test.setTimeout(300000);
   await openDataTab(page);
   await dtTap(page, "#tab-data");
   const est = page.locator("#dt-estimate");
   await expect(est).toContainText("requests", { timeout: 10000 });
-  const text = () => est.textContent();
+  // the estimate box shows a progress block while an estimate is slow (more
+  // than a second — the stub's 5 ms becomes that on a starved render loop),
+  // so its text is read once the estimate on screen is the current one
+  const text = async () => {
+    await expect.poll(async () => (await dtState(page)).estimateCurrent, { timeout: 30000 }).toBe(true);
+    return est.textContent();
+  };
   const t0 = await text();
-  await expect(page.locator("#dt-download")).toBeEnabled();
+  await expect(page.locator("#dt-download")).toBeEnabled({ timeout: 30000 });
 
   // period
   await dtSet(page, { "dt-y0": "2020" });
-  await expect.poll(text).not.toBe(t0);
+  await expect.poll(text, { timeout: 30000 }).not.toBe(t0);
   const t1 = await text();
   // a year outside the record is clamped in the field itself
   await dtSet(page, { "dt-y0": "1900" });
   await expect(page.locator("#dt-y0")).toHaveValue("1997");
   await dtSet(page, { "dt-y0": "2020" });
-  await expect.poll(text).toBe(t1);
+  await expect.poll(text, { timeout: 30000 }).toBe(t1);
 
   // months: none is a problem stated in words, one month is a smaller read
   await dtTap(page, "#dt-months-none");
-  await expect(est).toContainText("pick at least one month");
-  await expect(page.locator("#dt-download")).toBeDisabled();
+  await expect(est).toContainText("pick at least one month", { timeout: 30000 });
+  await expect(page.locator("#dt-download")).toBeDisabled({ timeout: 30000 });
   await dtTap(page, '#dt-months button[data-month="2"]');
   await dtTap(page, '#dt-months button[data-month="3"]');
-  await expect(est).toContainText("requests");
-  await expect.poll(async () => (await dtState(page)).estimateCurrent).toBe(true);
+  await expect(est).toContainText("requests", { timeout: 30000 });
+  await expect.poll(async () => (await dtState(page)).estimateCurrent, { timeout: 30000 }).toBe(true);
   const t2 = await text();
   expect(t2).not.toBe(t1);
   expect((await dtState(page)).sel.months).toEqual([2, 3]);
 
   // days: the finest period control, and the read follows it
   await dtSet(page, { "dt-d0": "1", "dt-d1": "5" });
-  await expect.poll(async () => (await dtState(page)).estimateCurrent).toBe(true);
+  await expect.poll(async () => (await dtState(page)).estimateCurrent, { timeout: 30000 }).toBe(true);
   expect((await dtState(page)).sel.days).toEqual([1, 5]);
   expect(await text()).not.toBe(t2);
   await dtSet(page, { "dt-d0": "9", "dt-d1": "3" });
@@ -8181,39 +8187,39 @@ test("Data tab: the estimate follows period, months and box, and over the cap Do
   await expect.poll(async () => (await dtState(page)).sel.days).toBe(null);
   // a time mean: the line says what is read AND what the file holds
   await dtSet(page, { "dt-step": "month" });
-  await expect(est).toContainText(/daily maps read → \d+ monthly means/);
+  await expect(est).toContainText(/daily maps read → \d+ monthly means/, { timeout: 30000 });
   await dtSet(page, { "dt-step": "native" });
 
   // box
   await dtSet(page, { "dt-n": "55" });
-  await expect.poll(text).not.toBe(t2);
+  await expect.poll(text, { timeout: 30000 }).not.toBe(t2);
   // a map store needs a box
   await dtSet(page, { "dt-w": "", "dt-s": "", "dt-e": "", "dt-n": "" });
-  await expect(est).toContainText("a box is required");
-  await expect(page.locator("#dt-download")).toBeDisabled();
+  await expect(est).toContainText("a box is required", { timeout: 30000 });
+  await expect(page.locator("#dt-download")).toBeDisabled({ timeout: 30000 });
   await dtSet(page, { "dt-w": "-80", "dt-s": "31", "dt-e": "-60", "dt-n": "20" });
-  await expect(est).toContainText("S must be south of N");
+  await expect(est).toContainText("S must be south of N", { timeout: 30000 });
 
   // over the cap: the whole Atlantic, every month, the whole record
   await dtTap(page, "#dt-months-all");
   await dtSet(page, { "dt-w": "-80", "dt-s": "-60", "dt-e": "20", "dt-n": "70",
                       "dt-y0": "1997", "dt-y1": "2022" });
-  await expect.poll(async () => (await dtState(page)).lastEstimate?.overCap).toBe(true);
-  await expect(est).toContainText("Too large for the browser");
-  await expect(est).toContainText("600 MB cap");
+  await expect.poll(async () => (await dtState(page)).lastEstimate?.overCap, { timeout: 30000 }).toBe(true);
+  await expect(est).toContainText("Too large for the browser", { timeout: 30000 });
+  await expect(est).toContainText("600 MB cap", { timeout: 30000 });
   await expect(est.locator("a")).toHaveAttribute("href",
     "https://huggingface.co/datasets/chfrank/earth-tensors/tree/main/oc4k");
-  await expect(page.locator("#dt-download")).toBeDisabled();
+  await expect(page.locator("#dt-download")).toBeDisabled({ timeout: 30000 });
   // and back under it, the button returns
   await dtSet(page, { "dt-y0": "2022", "dt-w": "-77.5", "dt-s": "31", "dt-e": "-62.5", "dt-n": "41" });
-  await expect.poll(async () => (await dtState(page)).lastEstimate?.overCap).toBe(false);
-  await expect(page.locator("#dt-download")).toBeEnabled();
+  await expect.poll(async () => (await dtState(page)).lastEstimate?.overCap, { timeout: 30000 }).toBe(false);
+  await expect(page.locator("#dt-download")).toBeEnabled({ timeout: 30000 });
   expect(page.__errors, `page errors: ${page.__errors.join(" | ")}`).toHaveLength(0);
 });
 
 test("Data tab: the preview paints inside the box, and a download saves the file under its selection's name",
      async ({ page }) => {
-  test.setTimeout(120000);
+  test.setTimeout(300000);
   await openDataTab(page);
   await dtTap(page, "#tab-data");
   await expect(page.locator("#dt-estimate")).toContainText("requests", { timeout: 10000 });
@@ -8221,12 +8227,12 @@ test("Data tab: the preview paints inside the box, and a download saves the file
   await dtTap(page, "#dt-months-none");
   await dtTap(page, '#dt-months button[data-month="2"]');
   await dtSet(page, { "dt-y0": "1998", "dt-y1": "2004" });
-  await expect.poll(async () => (await dtState(page)).lastEstimate?.frames).toBe(215);
+  await expect.poll(async () => (await dtState(page)).lastEstimate?.frames, { timeout: 30000 }).toBe(215);
   // a grid this size is NetCDF only
-  await expect(page.locator('#dt-format option[value="csv"]')).toBeDisabled();
+  await expect(page.locator('#dt-format option[value="csv"]')).toBeDisabled({ timeout: 30000 });
 
   await dtTap(page, "#dt-preview");
-  await expect.poll(async () => (await dtState(page)).previewShown).toBe(true);
+  await expect.poll(async () => (await dtState(page)).previewShown, { timeout: 30000 }).toBe(true);
   const pv = (await dtState(page)).lastPreview;
   expect(pv.kind).toBe("grid");
   expect(pv.max).toBeGreaterThan(pv.min);
@@ -8236,8 +8242,8 @@ test("Data tab: the preview paints inside the box, and a download saves the file
   // the legend says so, with the full range beside it
   expect(pv.scaleFrom).toBe("frame");
   expect([pv.scaleMin, pv.scaleMax]).toEqual([pv.min, pv.max]);
-  await expect(page.locator("#dt-legend")).toContainText("the scale is this preview's own range");
-  await expect(page.locator("#dt-legend")).toContainText("the channel's full range is -4 to 2.5");
+  await expect(page.locator("#dt-legend")).toContainText("the scale is this preview's own range", { timeout: 30000 });
+  await expect(page.locator("#dt-legend")).toContainText("the channel's full range is -4 to 2.5", { timeout: 30000 });
   // two channels ticked: a picker beside the legend repaints the frame
   // already read — it reads nothing
   await page.evaluate(() => {
@@ -8246,13 +8252,13 @@ test("Data tab: the preview paints inside the box, and a download saves the file
   });
   await expect(page.locator("#dt-pv-chan-row")).toBeHidden();      // the change cleared the preview
   await dtTap(page, "#dt-preview");
-  await expect.poll(async () => (await dtState(page)).previewShown).toBe(true);
+  await expect.poll(async () => (await dtState(page)).previewShown, { timeout: 30000 }).toBe(true);
   await expect(page.locator("#dt-pv-chan-row")).toBeVisible();
   await expect(page.locator("#dt-pv-chan option")).toHaveText(["log_chl", "kd_490"]);
   const calls = await page.evaluate(() => window.__f1PreviewCalls);
   await dtSet(page, { "dt-pv-chan": "1" });
-  await expect.poll(async () => (await dtState(page)).lastPreview?.channel).toBe("kd_490");
-  await expect(page.locator("#dt-legend")).toContainText("kd_490");
+  await expect.poll(async () => (await dtState(page)).lastPreview?.channel, { timeout: 30000 }).toBe("kd_490");
+  await expect(page.locator("#dt-legend")).toContainText("kd_490", { timeout: 30000 });
   expect(await page.evaluate(() => window.__f1PreviewCalls)).toBe(calls);
   expect((await dtState(page)).previewShown).toBe(true);
   await page.evaluate(() => {
@@ -8260,32 +8266,32 @@ test("Data tab: the preview paints inside the box, and a download saves the file
     i.checked = false; i.dispatchEvent(new Event("change", { bubbles: true }));
   });
   await dtTap(page, "#dt-preview");
-  await expect.poll(async () => (await dtState(page)).lastPreview?.channel).toBe("log_chl");
+  await expect.poll(async () => (await dtState(page)).lastPreview?.channel, { timeout: 30000 }).toBe("log_chl");
 
   // and a change to the selection takes the preview down: it pictured
   // something no longer asked for
   await dtSet(page, { "dt-n": "42" });
   expect((await dtState(page)).previewShown).toBe(false);
   await dtSet(page, { "dt-n": "41" });
-  await expect.poll(async () => (await dtState(page)).lastEstimate?.frames).toBe(215);
+  await expect.poll(async () => (await dtState(page)).lastEstimate?.frames, { timeout: 30000 }).toBe(215);
   await dtTap(page, "#dt-preview");
-  await expect.poll(async () => (await dtState(page)).previewShown).toBe(true);
+  await expect.poll(async () => (await dtState(page)).previewShown, { timeout: 30000 }).toBe(true);
   await expect(page.locator("#dt-legend")).toContainText("log10(mg m-3)");
-  await expect(page.locator("#dt-legend")).toContainText("log_chl");
+  await expect(page.locator("#dt-legend")).toContainText("log_chl", { timeout: 30000 });
 
   const [dl] = await Promise.all([
-    page.waitForEvent("download"),
+    page.waitForEvent("download", { timeout: 120000 }),
     dtTap(page, "#dt-download"),
   ]);
   expect(dl.suggestedFilename()).toBe("oc4k_log_chl_1998-2004_m02_native.nc");
-  await expect.poll(async () => (await dtState(page)).lastDownload?.type).toBe("application/x-netcdf");
+  await expect.poll(async () => (await dtState(page)).lastDownload?.type, { timeout: 30000 }).toBe("application/x-netcdf");
   expect((await dtState(page)).lastDownload.size).toBeGreaterThan(0);
   const head = require("fs").readFileSync(await dl.path()).subarray(0, 3).toString("latin1");
   expect(head).toBe("CDF");
   expect(await page.locator("#dt-progress").evaluate((p) => p.value)).toBe(1);
-  await expect(page.locator("#dt-status")).toContainText("saved oc4k_log_chl_1998-2004_m02_native.nc");
-  await expect(page.locator("#dt-download")).toBeEnabled();
-  await expect(page.locator("#dt-cancel")).toBeDisabled();
+  await expect(page.locator("#dt-status")).toContainText("saved oc4k_log_chl_1998-2004_m02_native.nc", { timeout: 30000 });
+  await expect(page.locator("#dt-download")).toBeEnabled({ timeout: 30000 });
+  await expect(page.locator("#dt-cancel")).toBeDisabled({ timeout: 30000 });
 
   // Cancel aborts the run through its AbortController, and nothing is saved
   const before = (await dtState(page)).lastDownload;
@@ -8293,7 +8299,7 @@ test("Data tab: the preview paints inside the box, and a download saves the file
     document.getElementById("dt-download").click();
     document.getElementById("dt-cancel").click();
   });
-  await expect(page.locator("#dt-status")).toContainText("cancelled");
+  await expect(page.locator("#dt-status")).toContainText("cancelled", { timeout: 30000 });
   expect((await dtState(page)).lastDownload).toEqual(before);
   expect((await dtState(page)).downloading).toBe(false);
 
@@ -8305,16 +8311,16 @@ test("Data tab: the preview paints inside the box, and a download saves the file
   // a point store's rows are CSV, named "rows"
   await dtSet(page, { "dt-store": "glodap" });
   await expect(page.locator("#dt-format")).toHaveValue("csv");
-  await expect(page.locator("#dt-estimate")).toContainText("rows");
+  await expect(page.locator("#dt-estimate")).toContainText("rows", { timeout: 30000 });
   await dtTap(page, "#dt-preview");
-  await expect.poll(async () => (await dtState(page)).lastPreview?.kind).toBe("points");
+  await expect.poll(async () => (await dtState(page)).lastPreview?.kind, { timeout: 30000 }).toBe("points");
   const [dl2] = await Promise.all([
-    page.waitForEvent("download"),
+    page.waitForEvent("download", { timeout: 120000 }),
     dtTap(page, "#dt-download"),
   ]);
   // the period and the months carry over from the map store
   expect(dl2.suggestedFilename()).toBe("glodap_temperature_1998-2004_m02_rows.csv");
-  await expect.poll(async () => (await dtState(page)).lastDownload?.type).toBe("text/csv");
+  await expect.poll(async () => (await dtState(page)).lastDownload?.type, { timeout: 30000 }).toBe("text/csv");
   expect((await dtState(page)).lastDownload.size).toBeGreaterThan(0);
   const csv = require("fs").readFileSync(await dl2.path(), "utf8");
   expect(csv.split("\n")[0]).toBe("time,lat,lon,temperature");
@@ -8863,5 +8869,273 @@ test("Data tab: family 7.2d — its own group, the record from the registry, its
   expect(nc).toContain("FX data provided by the FX producer");
   expect(nc).toContain("independent read of its own source file");
   expect(nc).toContain("PRELIMINARY");
+  expect(page.__errors, `page errors: ${page.__errors.join(" | ")}`).toHaveLength(0);
+});
+
+/* Progress for the longer reads (Chris: "Can you add a progress bar for the
+ * longer reads?"). The real reader over the normals fixture, every ranged read
+ * answered after a delay the test controls — so the estimate, the first look,
+ * the preview and the download all take long enough to show their block. */
+async function serveSlowFixture(page, prefix, dir, delay) {
+  const fs = require("fs"), path = require("path");
+  const re = new RegExp(`/${prefix}/(.+?)(\\?.*)?$`);
+  await page.route(re, async (route) => {
+    const rel = decodeURIComponent(re.exec(route.request().url())[1]);
+    const file = path.join(dir, rel);
+    if (!file.startsWith(dir) || !fs.existsSync(file)) return route.fulfill({ status: 404, body: "" });
+    const buf = fs.readFileSync(file);
+    const m = /bytes=(\d+)-(\d*)/.exec(route.request().headers()["range"] || "");
+    await new Promise((r) => setTimeout(r, delay.ms));
+    if (!m) return route.fulfill({ status: 200, body: buf }).catch(() => {});
+    const a = Number(m[1]), b = Math.min(buf.length - 1, m[2] === "" ? buf.length - 1 : Number(m[2]));
+    return route.fulfill({ status: 206, body: buf.subarray(a, b + 1),
+      headers: { "content-range": `bytes ${a}-${b}/${buf.length}`, "accept-ranges": "bytes",
+                 "content-type": "application/octet-stream" } }).catch(() => {});
+  });
+}
+
+test("Data tab: progress for the longer reads — estimate, first look, preview and download show a bar, counts and Cancel; a cancelled read leaves a clean panel",
+     async ({ page }) => {
+  test.setTimeout(400000);
+  const real = await page.evaluate(() =>
+    !!window.F1Data && !window.F1Data.__stub && typeof window.F1Data.configure === "function");
+  test.skip(!real, "src/f1data.js is not in this tree");
+  const path = require("path");
+  const delay = { ms: 700 };
+  await serveSlowFixture(page, "f7slow", path.join(__dirname, "..", "data", "family7_monthly", "fixture_multi"), delay);
+  await page.evaluate(() => {
+    window.F1Data.configure({ registries: [{ family: "derived", title: "Derived maps", kind: "derived",
+      monthly: "/f7slow/family7_monthly_index.json" }] });
+    try { localStorage.removeItem("dataTabSel"); } catch {}
+  });
+  await dtTap(page, "#tab-data");
+  // the first look is several estimates: one block, in the estimate box,
+  // indeterminate (nobody knows how many candidates it will try), counting
+  await expect(page.locator("#dt-est-prog")).toBeVisible({ timeout: 30000 });
+  await expect(page.locator("#dt-est-prog .dt-prog-label")).toContainText("choosing a first selection that fits");
+  await expect(page.locator("#dt-est-prog .dt-prog-line")).toContainText(/\d+ requests? · .* so far/);
+  const settled = () => expect.poll(async () => (await dtState(page)).estimateCurrent, { timeout: 60000 }).toBe(true);
+  await settled();
+  // the first look finished, and it never pretended to know how far along it was
+  const look = (await dtState(page)).progressLog.find((p) => p.kind === "estimate" && /first selection/.test(p.note));
+  expect(look).toBeTruthy();
+  expect(look.state).toBe("done");
+  expect(look.determinate).toBe(false);
+  expect(look.requestsAll).toBeGreaterThan(0);
+  // the box the fixture covers, so a download has something in it
+  await dtSet(page, { "dt-w": "-79", "dt-s": "31", "dt-e": "-74.5", "dt-n": "34", "dt-y0": "2000", "dt-y1": "2004" });
+  await settled();
+
+  // DOWNLOAD: a determinate bar — requests of the total and MB of the exact total
+  const est = (await dtState(page)).lastEstimate;
+  const [dl] = await Promise.all([page.waitForEvent("download", { timeout: 60000 }), (async () => {
+    await dtTap(page, "#dt-download");
+    await expect(page.locator("#dt-dl-prog")).toBeVisible({ timeout: 20000 });
+    await expect(page.locator("#dt-dl-prog .dt-prog-line")).toContainText(/\d+ of \d+ requests · .* of /, { timeout: 20000 });
+  })()]);
+  expect(dl.suggestedFilename()).toMatch(/\.nc$/);
+  await expect.poll(async () => (await dtState(page)).progress?.state).toBe("done");
+  let p = (await dtState(page)).progress;
+  expect(p.kind).toBe("download");
+  expect(p.fraction).toBe(1);
+  expect(p.bytes).toBe(est.readBytes);
+  await expect(page.locator("#dt-dl-prog .dt-prog-line")).toContainText("saved");
+  expect(await page.locator("#dt-progress").evaluate((b) => b.value)).toBe(1);
+
+  // CANCEL mid-download: slower reads, Cancel, nothing saved, a clean panel
+  delay.ms = 1500;
+  await dtSet(page, { "dt-y0": "2001" });
+  await settled();
+  await dtTap(page, "#dt-download");
+  await expect.poll(async () => (await dtState(page)).progressRunning).toContain("download");
+  await dtTap(page, "#dt-cancel");
+  await expect(page.locator("#dt-status")).toContainText("cancelled");
+  await expect(page.locator("#dt-dl-prog")).toBeHidden();
+  expect((await dtState(page)).downloading).toBe(false);
+  await expect(page.locator("#dt-download")).toBeEnabled();
+  expect((await dtState(page)).progressLog.some((q) => q.kind === "download" && q.state === "cancelled")).toBe(true);
+
+  // PREVIEW: its own block, and its own Cancel (reads slow enough to catch)
+  delay.ms = 6000;
+  await dtTap(page, "#dt-preview");
+  await expect(page.locator("#dt-pv-prog")).toBeVisible({ timeout: 20000 });
+  await expect(page.locator("#dt-preview")).toBeDisabled();
+  await page.evaluate(() => document.querySelector("#dt-pv-prog .dt-prog-cancel").click());
+  await expect(page.locator("#dt-status")).toContainText("preview cancelled");
+  await expect(page.locator("#dt-pv-prog")).toBeHidden();
+  await expect(page.locator("#dt-preview")).toBeEnabled();
+  expect((await dtState(page)).previewShown).toBe(false);
+
+  // ESTIMATE: a change starts one (on a cold reader, so its header reads are
+  // real); Cancel stops it and offers to try again
+  const cold = () => page.evaluate(() => window.F1Data.configure({ registries: [{ family: "derived", title: "Derived maps",
+    kind: "derived", monthly: "/f7slow/family7_monthly_index.json" }] }));
+  await cold();
+  await dtSet(page, { "dt-y0": "2002" });
+  await expect(page.locator("#dt-est-prog")).toBeVisible({ timeout: 20000 });
+  await page.evaluate(() => document.querySelector("#dt-est-prog .dt-prog-cancel").click());
+  await expect(page.locator("#dt-estimate")).toContainText("The estimate was cancelled");
+  await expect(page.locator("#dt-download")).toBeDisabled();
+  delay.ms = 0;
+  await dtTap(page, "#dt-est-retry");
+  await settled();
+  await expect(page.locator("#dt-estimate")).toContainText("MB to read");
+  await expect(page.locator("#dt-download")).toBeEnabled();
+
+  // no part of any block is wider than a 360 px panel
+  await page.setViewportSize({ width: 360, height: 800 });
+  delay.ms = 1500;
+  await cold();
+  await dtSet(page, { "dt-y0": "2000" });
+  await expect(page.locator("#dt-est-prog")).toBeVisible({ timeout: 20000 });
+  const ov = await page.evaluate(() => document.documentElement.scrollWidth);
+  expect(ov).toBeLessThanOrEqual(360);
+  delay.ms = 0;
+  await settled();
+  expect(page.__errors, `page errors: ${page.__errors.join(" | ")}`).toHaveLength(0);
+});
+
+/* Drawing the box ON the globe (Chris: "When selecting the area, can it be
+ * selected with clicks as well?"): arm, click two corners (or drag), Esc or
+ * the chip's Cancel disarms; a dateline pair goes the short way round; while
+ * armed a click opens neither the pixel inspector nor the probe. The stub
+ * reader: only the box matters here. */
+async function globeXY(page, lon, lat) {
+  return page.evaluate(([lon, lat]) => {
+    const v = window.__earth.viewer, st = Cesium.SceneTransforms;
+    const toWin = (st.worldToWindowCoordinates || st.wgs84ToWindowCoordinates).bind(st);
+    const w = toWin(v.scene, Cesium.Cartesian3.fromDegrees(lon, lat));
+    const r = v.scene.canvas.getBoundingClientRect();
+    return { x: r.left + w.x, y: r.top + w.y };
+  }, [lon, lat]);
+}
+async function lookAt(page, lon, lat, h = 9e6) {
+  await page.evaluate(([lon, lat, h]) => {
+    window.__earth.viewer.camera.setView({ destination: Cesium.Cartesian3.fromDegrees(lon, lat, h) });
+    window.__earth.viewer.scene.requestRender();
+  }, [lon, lat, h]);
+  await page.waitForTimeout(600);
+}
+const boxFields = (page) => page.evaluate(() => ["dt-w", "dt-s", "dt-e", "dt-n"].map((id) => Number(document.getElementById(id).value)));
+
+test("Data tab: the box can be drawn on the globe — two clicks, a drag, the dateline, handles, Esc; the inspector stays out of it while armed",
+     async ({ page }) => {
+  test.setTimeout(480000);
+  await openDataTab(page);
+  await page.setViewportSize({ width: 1280, height: 900 });
+  // the default imagery off, so the software-GL render loop keeps up with the
+  // pointer (each mouse step waits for a frame)
+  await page.evaluate(() => {
+    for (const el of document.querySelectorAll("#layer-list input[data-id]:checked")) {
+      el.checked = false; el.dispatchEvent(new Event("change", { bubbles: true }));
+    }
+  });
+  await dtTap(page, "#tab-data");
+  await expect.poll(async () => (await dtState(page)).estimateCurrent, { timeout: 20000 }).toBe(true);
+  // the pixel inspector ON: an ordinary click on the globe would open its card
+  await page.evaluate(() => {
+    const el = document.getElementById("toggle-pixel");
+    el.checked = true; el.dispatchEvent(new Event("change", { bubbles: true }));
+  });
+  await lookAt(page, -40, 40);
+
+  // TWO CLICKS
+  await dtTap(page, "#dt-draw");
+  expect((await dtState(page)).drawArmed).toBe(true);
+  await expect(page.locator("#dt-draw-chip")).toBeVisible();
+  await expect(page.locator("#dt-draw")).toHaveAttribute("aria-pressed", "true");
+  const a = await globeXY(page, -50, 30), b = await globeXY(page, -30, 50);
+  await page.mouse.click(a.x, a.y);
+  await expect.poll(async () => (await dtState(page)).drawFirst).not.toBeNull();
+  await expect(page.locator("#dt-draw-chip")).toContainText("now the opposite corner");
+  await page.mouse.move((a.x + b.x) / 2, (a.y + b.y) / 2);
+  await page.mouse.click(b.x, b.y);
+  await expect.poll(async () => (await dtState(page)).drawArmed).toBe(false);
+  let f = await boxFields(page);
+  expect(Math.abs(f[0] + 50)).toBeLessThan(0.3);
+  expect(Math.abs(f[1] - 30)).toBeLessThan(0.3);
+  expect(Math.abs(f[2] + 30)).toBeLessThan(0.3);
+  expect(Math.abs(f[3] - 50)).toBeLessThan(0.3);
+  // rounded to 0.01°, never silently snapped further
+  for (const v of f) expect(Math.round(v * 100) / 100).toBe(v);
+  await expect(page.locator("#dt-draw-chip")).toBeHidden();
+  let st = await dtState(page);
+  expect(st.sel.bbox).toEqual({ w: f[0], s: f[1], e: f[2], n: f[3] });
+  expect(st.touched).toBe(true);
+  expect(st.handles).toEqual(["sw", "se", "nw", "ne", "s", "n", "w", "e"]);
+  // armed clicks opened no pixel card
+  await page.waitForTimeout(2600);
+  await expect(page.locator("#pixel-card")).toBeHidden();
+
+  // a HANDLE: drag the north-east corner to 55° N, 25° W
+  const ne = await globeXY(page, f[2], f[3]), to = await globeXY(page, -25, 55);
+  await page.mouse.move(ne.x, ne.y);
+  await page.mouse.down();
+  await page.mouse.move((ne.x + to.x) / 2, (ne.y + to.y) / 2, { steps: 2 });
+  await page.mouse.move(to.x, to.y, { steps: 2 });
+  await page.mouse.up();
+  await expect.poll(async () => (await boxFields(page))[3]).toBeGreaterThan(54.5);
+  f = await boxFields(page);
+  expect(Math.abs(f[2] + 25)).toBeLessThan(0.5);
+  expect(Math.abs(f[0] + 50)).toBeLessThan(0.3);     // the other corner did not move
+  await page.waitForTimeout(2600);
+  await expect(page.locator("#pixel-card")).toBeHidden();
+
+  // PRESS – DRAG – RELEASE
+  await dtTap(page, "#dt-draw");
+  const c = await globeXY(page, -60, 20), d = await globeXY(page, -45, 35);
+  await page.mouse.move(c.x, c.y);
+  await page.mouse.down();
+  await page.mouse.move((c.x + d.x) / 2, (c.y + d.y) / 2, { steps: 2 });
+  await page.mouse.move(d.x, d.y, { steps: 2 });
+  await page.mouse.up();
+  await expect.poll(async () => (await dtState(page)).drawArmed).toBe(false);
+  f = await boxFields(page);
+  expect(Math.abs(f[0] + 60)).toBeLessThan(0.3);
+  expect(Math.abs(f[3] - 35)).toBeLessThan(0.3);
+
+  // THE DATELINE: 170° E and 170° W — the short way round is W > E
+  await lookAt(page, 180, 0);
+  await dtTap(page, "#dt-draw");
+  const e1 = await globeXY(page, 170, -10), e2 = await globeXY(page, -170, 10);
+  await page.mouse.click(e1.x, e1.y);
+  await expect.poll(async () => (await dtState(page)).drawFirst).not.toBeNull();
+  await page.mouse.click(e2.x, e2.y);
+  await expect.poll(async () => (await dtState(page)).drawArmed).toBe(false);
+  f = await boxFields(page);
+  expect(Math.abs(f[0] - 170)).toBeLessThan(0.3);
+  expect(Math.abs(f[2] + 170)).toBeLessThan(0.3);
+  await expect(page.locator("#dt-status")).toContainText("across the dateline");
+  // the outline runs the short way: every point within ~10° of ±180°
+  st = await dtState(page);
+  expect(Math.min(...st.outlineDegrees.map(([lon]) => Math.abs(lon)))).toBeGreaterThan(169.5);
+  // and "the other way round" swaps it
+  await dtTap(page, "#dt-box-swap");
+  const g = await boxFields(page);
+  expect([g[0], g[2]]).toEqual([f[2], f[0]]);
+
+  // ESC disarms; so does the chip's Cancel; the box is left as it was
+  await dtTap(page, "#dt-draw");
+  await page.keyboard.press("Escape");
+  expect((await dtState(page)).drawArmed).toBe(false);
+  await dtTap(page, "#dt-draw");
+  await page.evaluate(() => document.getElementById("dt-draw-cancel").click());
+  expect((await dtState(page)).drawArmed).toBe(false);
+  expect(await boxFields(page)).toEqual(g);
+
+  // DISARMED: a drag rotates the globe, a click opens the inspector again
+  const cam0 = await page.evaluate(() => window.__earth.viewer.camera.positionWC.clone());
+  const m1 = await globeXY(page, 175, 5);
+  await page.mouse.move(m1.x + 40, m1.y + 40);
+  await page.mouse.down();
+  await page.mouse.move(m1.x + 140, m1.y + 60, { steps: 3 });
+  await page.mouse.up();
+  await page.waitForTimeout(500);
+  const moved = await page.evaluate((c0) => Cesium.Cartesian3.distance(window.__earth.viewer.camera.positionWC, c0), cam0);
+  expect(moved).toBeGreaterThan(1000);
+  await page.waitForTimeout(500);
+  const m2 = await globeXY(page, 179, 1);
+  await page.mouse.click(m2.x, m2.y);
+  await expect(page.locator("#pixel-card")).toBeVisible({ timeout: 15000 });
   expect(page.__errors, `page errors: ${page.__errors.join(" | ")}`).toHaveLength(0);
 });

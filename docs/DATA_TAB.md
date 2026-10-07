@@ -305,6 +305,26 @@ and must not have one.
    globe. The cloud-top store covers only 30°S–30°N, so its first box is the
    Niño 3.4 place; a box outside a store's coverage is said in words and the
    download stays off.
+
+   **Drawing the box on the globe.** *draw on the globe* arms a mode (the
+   button turns yellow and a chip over the globe says what to do next).
+   On a computer, click one corner and then the opposite one — a dashed
+   rectangle follows the pointer in between — or press, drag and release. On a
+   touch screen, tap two corners, or drag with one finger. Only that one
+   gesture is taken from the globe: unarmed, dragging rotates it as always,
+   and a second finger joining a drawing gesture hands it back for a pinch.
+   *Esc* or the chip's *Cancel* stops drawing and leaves the box as it was.
+   The corners are rounded to 0.01° and written into the four fields; nothing
+   else is snapped (the reader takes the cells whose centres fall inside, as
+   it always has). Two longitudes are joined the **shorter way round**, so
+   170° E and 170° W make a 20°-wide box across the dateline (W > E);
+   *the other way round* swaps W and E for the 340°-wide one. The drawn box
+   keeps **eight handles** — the four corners and the middles of the four
+   edges — to drag; a handle moves only its own edges. While drawing (and for a
+   moment after the last click) a click is a corner, not a question: the pixel
+   inspector, the value read-out and the pick cards stay closed. Corners come
+   from the globe's surface, not from what is drawn on it, so a place name
+   under the pointer cannot swallow a click.
 6. **Time step.** *Native* keeps every frame (or every report); *five-day mean*,
    *monthly mean* and *one mean over the whole selection* average in time.
 7. **Resolution.** For a map store: *native*, 0.25° or 1°, the coarser two being
@@ -338,6 +358,36 @@ and must not have one.
     and for map selections small enough that a `time,lat,lon,value` text file
     stays something a spreadsheet can open. A progress bar runs while the
     store is read; *Cancel* stops the reads in flight and saves nothing.
+11. **Waiting: the progress block.** Every read that takes more than about
+    0.4 s — the estimate (inside the estimate box), the first look a store
+    opens on, the preview (under its button) and the download (under its row)
+    — shows the same block:
+    - a **bar**: a fraction where the total is known, running without a
+      percentage where it is not;
+    - a **line**: "N of M requests · X MB of Y MB · 12 s · about 20 s left";
+    - a **why**, for a slow read whose cause the counts show — "many small
+      requests (each a round trip, at most six at a time)", "a lot of data
+      (MB at MB/s)", or "still reading the store's indexes";
+    - **Cancel**, which aborts every request in flight and leaves the panel
+      clean (a cancelled estimate says so and offers *estimate again*;
+      nothing is downloadable until an estimate stands).
+
+    Where the totals come from, case by case: a **download**'s data phase knows
+    its requests and its exact bytes (the normals and the global-tensor grids),
+    or an upper bound (a point store's rows, marked ≈); the 4 km tiled grids
+    learn their tile count as their indexes arrive, so the megabytes are shown
+    against the estimate's figure (≈). Before that, every read (estimate,
+    preview or download) first reads the store's indexes to plan, and that
+    phase has no total anyone could know: it counts requests and megabytes so
+    far. The exception is a tiled grid's estimate, which knows how many
+    five-day files' tile indexes it will read (all of them, or a sample of
+    them) and counts them off. The **first look** is a search that stops at the
+    first month (or the first 10, 5, 2 or 1 days) that fits, so it never has a
+    total: it says which candidate it is trying and counts across all of them.
+    The time left appears only after 5 s, and only while the rate over the last
+    4 s agrees with the rate over the whole read to within a third — an
+    unsteady rate gets no guess. The bar's stripes stand still under the
+    system's *reduce motion* setting.
 
 ## 3. Limits — what the estimate is telling you
 

@@ -21,7 +21,7 @@
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/cesium/1.133.1/Widgets/widgets.min.css" />
-  <link rel="stylesheet" href="src/style.css?v=58c5312f" />
+  <link rel="stylesheet" href="src/style.css?v=6aaa1b17" />
   <script>window.CESIUM_BASE_URL = "https://cdnjs.cloudflare.com/ajax/libs/cesium/1.133.1/";</script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/cesium/1.133.1/Cesium.js"></script>
 </head>
@@ -1116,6 +1116,10 @@
         <div class="control-row dt-wrap dt-tight">
           <button type="button" class="td-btn dt-btn" id="dt-view"
                   title="the part of the globe on screen, as a box">use the current view</button>
+          <button type="button" class="td-btn dt-btn" id="dt-draw" aria-pressed="false"
+                  title="click two opposite corners on the globe, or press and drag; Esc stops">draw on the globe</button>
+          <button type="button" class="td-btn dt-btn" id="dt-box-swap"
+                  title="the same latitudes, the longitudes the other way round the planet (across the dateline, or back)">the other way round</button>
           <button type="button" class="td-btn dt-btn" id="dt-box-clear"
                   title="no box: the whole globe (point stores only)">whole globe</button>
         </div>
@@ -1145,6 +1149,9 @@
                   title="read one frame (or one five-day bin of points) and paint it inside the box">Preview on the globe</button>
           <button type="button" class="td-btn dt-btn hidden" id="dt-preview-clear">clear preview</button>
         </div>
+        <!-- The preview's progress (DtProgress in src/app.js): shown only when
+             the read takes longer than ~0.4 s. -->
+        <div id="dt-pv-prog" class="dt-prog hidden" aria-live="polite"></div>
         <!-- With more than one channel ticked, which one the preview shows:
              switching repaints the frame already read, it reads nothing. -->
         <div class="control-row hidden" id="dt-pv-chan-row">
@@ -1163,6 +1170,9 @@
           <button type="button" class="td-btn dt-btn" id="dt-cancel" disabled>Cancel</button>
         </div>
         <progress id="dt-progress" max="1" value="0" class="hidden"></progress>
+        <!-- The download's progress: bar, requests and megabytes of the total,
+             elapsed and remaining time, and why a slow read is slow. -->
+        <div id="dt-dl-prog" class="dt-prog hidden" aria-live="polite"></div>
         <div id="dt-status" class="hint" aria-live="polite"></div>
 
         <details class="hint-details" id="dt-how">
@@ -1192,13 +1202,28 @@
             records where every five-day bin starts. The <em>days</em> fields are how to make a
             period short: a few days of the densest stores (the SWOT swaths, the altimeter
             tracks) is tens of megabytes where a month is gigabytes.</p>
+          <p class="hint"><strong>Drawing the box.</strong> <em>draw on the globe</em>, then click
+            one corner and the opposite one (or press and drag; on a phone, tap two corners or drag
+            with one finger) — a rectangle follows the pointer, the four fields fill in, rounded to
+            0.01°, and the box keeps eight handles (corners and edge middles) to drag. Two
+            longitudes are joined the shorter way round, so a box across the dateline is drawn as
+            one; <em>the other way round</em> swaps it. Esc or the Cancel chip stops drawing.
+            While drawing, a click is a corner: the pixel inspector and the value read-out wait.</p>
+          <p class="hint"><strong>Waiting.</strong> Any read that takes more than a moment — the
+            estimate, the first look a store opens on, the preview, the download — shows a bar,
+            the requests and megabytes done of the total, the time so far and, once the rate is
+            steady, the time left, with a Cancel. Where nobody can know the total yet (the
+            store's indexes are still being read, or the first look is still trying months) the
+            bar runs without a percentage and counts instead. A slow read says why: many small
+            requests, each a round trip, or simply many megabytes.</p>
           <p class="hint"><strong>Three kinds of store.</strong> The fine observation stores keep
             each source at its own resolution. The global tensor (the forecaster's own input,
             0.25° and 1° five-day maps since 1982) is stored as one uncompressed file per group
             with every channel side by side, so a box reads a band of rows across ALL of a group's
             channels whatever you tick — the estimate counts it — and its values are stored as
             standard scores, which the page turns back into physical units with each channel's
-            mean and spread. The model climatology is twelve calendar-month maps with no years.</p>
+            mean and spread. The monthly normals are per-year sums and counts, averaged here
+            over the years you choose.</p>
           <p class="hint"><strong>The atmosphere is a reanalysis, not an observation.</strong> The
             ERA5 stores (family 1.2) hold temperature, humidity and wind at 13 pressure levels, from
             50 hPa (about 20 km up) to 1000 hPa (the surface), every six hours since 1982. ERA5 is
@@ -1386,7 +1411,7 @@
            not obvious from the page, and "I reloaded and see no change" is
            indistinguishable from "the change isn't there". This is the sha256
            prefix of src/app.js, the same string as its ?v= stamp. -->
-      <p class="build-line">Build <code id="build-id">6e2acd06</code></p>
+      <p class="build-line">Build <code id="build-id">f2862dad</code></p>
     </section>
 
     <footer>
@@ -1451,7 +1476,7 @@
        family-1.gf reader that publishes window.F1Data. Both load BEFORE the
        app, and the app copes when they did not (the tab says so). -->
   <script src="lib/fzstd.js?v=207dc305"></script>
-  <script src="src/f1data.js?v=c4a6da73"></script>
-  <script src="src/app.js?v=6e2acd06"></script>
+  <script src="src/f1data.js?v=ac51d8fc"></script>
+  <script src="src/app.js?v=f2862dad"></script>
 </body>
 </html>

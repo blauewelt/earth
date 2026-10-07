@@ -932,6 +932,28 @@ footer a { color: var(--fg-dim); }
 .dt-estimate a { color: var(--accent); }
 #dt-progress { display: block; width: 100%; height: 8px; margin: 4px 0 2px; accent-color: var(--accent); }
 #dt-status { overflow-wrap: anywhere; }
+/* progress for the longer reads (DtProgress): a bar, one line of counts, one
+ * line of why; the bar is a fraction when a total is known and indeterminate
+ * when not. Everything wraps inside the panel — no width of its own. */
+.dt-prog { margin: 4px 0; font-size: 11.5px; color: var(--fg-dim); min-width: 0; }
+.dt-prog-top { display: flex; align-items: center; gap: 6px; }
+.dt-prog-bar { flex: 1 1 auto; min-width: 0; height: 8px; appearance: none; -webkit-appearance: none;
+  border: 0; border-radius: 4px; background: rgba(139, 148, 158, 0.25); overflow: hidden; }
+.dt-prog-bar::-webkit-progress-bar { background: rgba(139, 148, 158, 0.25); border-radius: 4px; }
+.dt-prog-bar::-webkit-progress-value { background: var(--accent); border-radius: 4px; }
+.dt-prog-bar::-moz-progress-bar { background: var(--accent); border-radius: 4px; }
+.dt-prog-bar:indeterminate { background: repeating-linear-gradient(-45deg, rgba(88, 166, 255, 0.55) 0 8px,
+  rgba(139, 148, 158, 0.2) 8px 16px); background-size: 200% 100%; animation: dt-prog-slide 1.2s linear infinite; }
+.dt-prog-bar:indeterminate::-webkit-progress-bar { background: transparent; }
+@keyframes dt-prog-slide { from { background-position: 0 0; } to { background-position: -45px 0; } }
+@media (prefers-reduced-motion: reduce) { .dt-prog-bar:indeterminate { animation: none; } }
+.dt-prog-cancel { flex: 0 0 auto; padding: 2px 8px; }
+.dt-prog-label { margin-top: 2px; color: var(--fg); overflow-wrap: anywhere; }
+.dt-prog-line { font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.dt-prog-why { color: #f0d861; overflow-wrap: anywhere; }
+.dt-prog-why:empty { display: none; }
+.dt-prog[data-state="done"] .dt-prog-cancel, .dt-prog[data-state="cancelled"] .dt-prog-cancel { visibility: hidden; }
+.dt-estimate .dt-prog { margin: 0; }
 #dt-status.dt-error, .dt-missing { color: #ff9a90; }
 #dt-legend { margin: 6px 0; font-size: 11.5px; }
 #dt-legend .dt-lg-name { color: var(--fg); margin-bottom: 3px; overflow-wrap: anywhere; }
@@ -954,3 +976,19 @@ footer a { color: var(--fg-dim); }
 #dt-reg-coming { color: #8b949e; font-size: 11px; overflow-wrap: anywhere; }
 #dt-store-about .dt-attrib { display: block; font-size: 10.5px; color: #8b949e; margin-top: 2px; overflow-wrap: anywhere; }
 #dt-store optgroup { color: var(--fg-dim); font-style: normal; }
+
+/* drawing the Data tab's box on the globe: the armed button, and the chip
+ * over the globe that says what to do next and offers a way out */
+#dt-draw.active { border-color: #f0d861; color: #f0d861; }
+.dt-draw-chip { position: absolute; top: 56px; left: 50%; transform: translateX(-50%); z-index: 30;
+  display: flex; align-items: center; gap: 8px; max-width: calc(100% - 32px);
+  padding: 6px 8px 6px 12px; border-radius: 16px; font-size: 12.5px;
+  background: rgba(13, 17, 23, 0.92); color: #f0d861; border: 1px solid rgba(240, 216, 97, 0.6); }
+.dt-draw-chip-text { overflow-wrap: anywhere; }
+.dt-draw-chip-x { flex: 0 0 auto; background: transparent; color: var(--fg); border: 1px solid var(--border);
+  border-radius: 12px; padding: 2px 10px; font-size: 12px; cursor: pointer; }
+/* on a phone the top of the globe holds the search box and the layer chips:
+ * the drawing chip sits above the scale bar instead */
+@media (max-width: 600px) {
+  .dt-draw-chip { top: auto; bottom: 64px; }
+}
