@@ -1,0 +1,297 @@
+{
+ "C": 3,
+ "bins_requested": [
+  2050,
+  2057
+ ],
+ "builder": "ml/build_family1_stores.py",
+ "builder_git_sha": "5e784dafeb0cf068336626ee08bafbf18b293130",
+ "built_at": "2026-10-07T18:39:23+00:00",
+ "channels": [
+  {
+   "max": 350.0,
+   "min": 150.0,
+   "name": "t_100",
+   "unit": "K"
+  },
+  {
+   "max": 350.0,
+   "min": 150.0,
+   "name": "t_500",
+   "unit": "K"
+  },
+  {
+   "max": 350.0,
+   "min": 150.0,
+   "name": "t_850",
+   "unit": "K"
+  }
+ ],
+ "counts": {
+  "fetch_seconds": 0.1,
+  "files_read": 138,
+  "frames_missing": {
+   "after_record": 6,
+   "before_record": 16
+  },
+  "frames_present": {
+   "fx6h": 138
+  },
+  "frames_wanted": 160
+ },
+ "date_range": [
+  "2010-01-28",
+  "2010-03-03"
+ ],
+ "distribution": "public",
+ "dtype": "float16",
+ "epoch": "1982-01-01",
+ "family": "family1_2",
+ "family_code": "12",
+ "family_version": "1.2",
+ "footprint": {
+  "log2_dt": -4.32,
+  "log2_fp": 2.0,
+  "note": "E-078 \u00a72: log2(pixel_km / 27.83) and log2(frame_days / 5); one token per pixel centre"
+ },
+ "format": "family1-sharded/1",
+ "frame_seconds": 21600,
+ "frames_missing_by_reason": {
+  "after_record": 6,
+  "before_record": 16
+ },
+ "frames_per_bin": 20,
+ "groups": {
+  "fx6h": {
+   "C": 3,
+   "H": 19,
+   "W": 36,
+   "bin_first": 2050,
+   "bin_last": 2057,
+   "bins": 8,
+   "bytes": 497849,
+   "crs": "EPSG:4326",
+   "dtype": "float16",
+   "frame_seconds": 21600,
+   "frames_missing": 22,
+   "frames_per_bin": 20,
+   "frames_present": 138,
+   "n_tiles_x": 5,
+   "n_tiles_y": 3,
+   "prefix": "fx6h",
+   "shard_index": "fx6h/shard_index.npy",
+   "tile": 8,
+   "tile_grid": "fx6h/tile_grid.json",
+   "tiles_stored": 2070,
+   "valid_fraction": [
+    1.0,
+    1.0,
+    1.0
+   ]
+  }
+ },
+ "layout": "sharded",
+ "licence": {
+  "attribution": "fixture: synthetic data",
+  "derived_works": "free",
+  "name": "fixture licence",
+  "redistribution": "attribution",
+  "redistribution_confirmed": true
+ },
+ "missing_frames": [
+  {
+   "bin": 2050,
+   "day": "2010-01-24",
+   "frame": 0,
+   "group": "fx6h",
+   "reason": "before_record"
+  },
+  {
+   "bin": 2050,
+   "day": "2010-01-24",
+   "frame": 1,
+   "group": "fx6h",
+   "reason": "before_record"
+  },
+  {
+   "bin": 2050,
+   "day": "2010-01-24",
+   "frame": 2,
+   "group": "fx6h",
+   "reason": "before_record"
+  },
+  {
+   "bin": 2050,
+   "day": "2010-01-24",
+   "frame": 3,
+   "group": "fx6h",
+   "reason": "before_record"
+  },
+  {
+   "bin": 2050,
+   "day": "2010-01-25",
+   "frame": 4,
+   "group": "fx6h",
+   "reason": "before_record"
+  },
+  {
+   "bin": 2050,
+   "day": "2010-01-25",
+   "frame": 5,
+   "group": "fx6h",
+   "reason": "before_record"
+  },
+  {
+   "bin": 2050,
+   "day": "2010-01-25",
+   "frame": 6,
+   "group": "fx6h",
+   "reason": "before_record"
+  },
+  {
+   "bin": 2050,
+   "day": "2010-01-25",
+   "frame": 7,
+   "group": "fx6h",
+   "reason": "before_record"
+  },
+  {
+   "bin": 2050,
+   "day": "2010-01-26",
+   "frame": 8,
+   "group": "fx6h",
+   "reason": "before_record"
+  },
+  {
+   "bin": 2050,
+   "day": "2010-01-26",
+   "frame": 9,
+   "group": "fx6h",
+   "reason": "before_record"
+  },
+  {
+   "bin": 2050,
+   "day": "2010-01-26",
+   "frame": 10,
+   "group": "fx6h",
+   "reason": "before_record"
+  },
+  {
+   "bin": 2050,
+   "day": "2010-01-26",
+   "frame": 11,
+   "group": "fx6h",
+   "reason": "before_record"
+  },
+  {
+   "bin": 2050,
+   "day": "2010-01-27",
+   "frame": 12,
+   "group": "fx6h",
+   "reason": "before_record"
+  },
+  {
+   "bin": 2050,
+   "day": "2010-01-27",
+   "frame": 13,
+   "group": "fx6h",
+   "reason": "before_record"
+  },
+  {
+   "bin": 2050,
+   "day": "2010-01-27",
+   "frame": 14,
+   "group": "fx6h",
+   "reason": "before_record"
+  },
+  {
+   "bin": 2050,
+   "day": "2010-01-27",
+   "frame": 15,
+   "group": "fx6h",
+   "reason": "before_record"
+  },
+  {
+   "bin": 2057,
+   "day": "2010-03-03",
+   "frame": 14,
+   "group": "fx6h",
+   "reason": "after_record"
+  },
+  {
+   "bin": 2057,
+   "day": "2010-03-03",
+   "frame": 15,
+   "group": "fx6h",
+   "reason": "after_record"
+  },
+  {
+   "bin": 2057,
+   "day": "2010-03-04",
+   "frame": 16,
+   "group": "fx6h",
+   "reason": "after_record"
+  },
+  {
+   "bin": 2057,
+   "day": "2010-03-04",
+   "frame": 17,
+   "group": "fx6h",
+   "reason": "after_record"
+  },
+  {
+   "bin": 2057,
+   "day": "2010-03-04",
+   "frame": 18,
+   "group": "fx6h",
+   "reason": "after_record"
+  },
+  {
+   "bin": 2057,
+   "day": "2010-03-04",
+   "frame": 19,
+   "group": "fx6h",
+   "reason": "after_record"
+  }
+ ],
+ "normalisation": "RAW units \u2014 not z-scored, not anomalised",
+ "pentad_days": 5,
+ "per_year": {
+  "2010": {
+   "fx6h": 138
+  }
+ },
+ "plan": {
+  "dataset": "fixture"
+ },
+ "qc_policy": "",
+ "resume_granularity": "year \u2014 the bins whose FIRST day falls in the year; every frame of a chosen bin is fetched",
+ "sha256": {
+  "fx6h/2010/bin_2050.idx.npy": "eb1eacb9d83a8cceb302f26c76b4c2259afe53e3342a1572e94dd156478d4bbc",
+  "fx6h/2010/bin_2050.zst": "6b3e7275560d91f4352a79ab637ad97f8f817793fd1c55c42d2104fd705ed08a",
+  "fx6h/2010/bin_2051.idx.npy": "176d37f887ac5b27ac0d3c57be89a1099a420283d080ab5dcc449209c69b6c6c",
+  "fx6h/2010/bin_2051.zst": "14a8809cf11e091a38c4b7be364d793c7a51250a940793212e69adb107764393",
+  "fx6h/2010/bin_2052.idx.npy": "21dc030888ab87f8797e7fb71c9f091d5da464fc50c3b57b270754fddd49ba5b",
+  "fx6h/2010/bin_2052.zst": "6e2b45d9ab152ccb0a1e5aca02ce17d9e4a15b97d22ffc9e2bce6199a8eb14c9",
+  "fx6h/2010/bin_2053.idx.npy": "14fbba8cee33bad5ff30adf252d272bbdf291698042f8ce41e238d50f68eb244",
+  "fx6h/2010/bin_2053.zst": "f139550b1fd5e02bade5a7651554524a7fb1b05b1ff2507d2815803bc401ca30",
+  "fx6h/2010/bin_2054.idx.npy": "5e987e85106dd0e681e22bed0c6e00eeb4324a9bd40ac757bc69c2ee61ae1c96",
+  "fx6h/2010/bin_2054.zst": "0fc9738f1552519d11344ce7d9904f73b225fdd6f486cfc0ed25248ed2ad4c97",
+  "fx6h/2010/bin_2055.idx.npy": "1c47d35a518e4e9eb5db419f91d02bae82cdbffbca34f196d5a8fc3aefa7c5d4",
+  "fx6h/2010/bin_2055.zst": "f936e2e578b97d120d5a27b6f1a31b892e437f6f35fc8538a39b30fb6a1d9baf",
+  "fx6h/2010/bin_2056.idx.npy": "fa4c19b1bc53c03cfaae75289828de7f18d7fab7d14e0a6e64f553eac83f5a2c",
+  "fx6h/2010/bin_2056.zst": "9460d47b070ded329163a084b2a449891d1b2bbc07ed16603376539be38d65f8",
+  "fx6h/2010/bin_2057.idx.npy": "6c58771779da7f367b1732450776d17a96da56af18a62aaf67e7c8e88dc940b8",
+  "fx6h/2010/bin_2057.zst": "bc8fb7831e711a55580cc0e88c8c36a6198f66d95846e6636b503b3b249fa3fb",
+  "fx6h/shard_index.npy": "e4d7a51f632d0f8e85cf9e0344e08f0ed686ee934b100856f2e0ca758ae51e17",
+  "fx6h/tile_grid.json": "8e2c43dbb99023cab7e7f82a74db1486037eef09472ea7ef839efd487672b4f1"
+ },
+ "source_dir": "file:///tmp/gm_paths_255s98ib/fx6h/src",
+ "sources": [
+  "synthetic"
+ ],
+ "store": "fx6h",
+ "tier": "G",
+ "title": "fixture: ERA5-shaped temperature on 3 levels, six-hourly",
+ "verified": ""
+}

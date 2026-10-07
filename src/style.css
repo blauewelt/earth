@@ -905,6 +905,16 @@ footer a { color: var(--fg-dim); }
   font-size: 10.5px; padding: 1px 6px; cursor: pointer;
 }
 .dt-mini:hover { border-color: var(--accent); }
+/* the normals' three splits: chips big enough to tap */
+.dt-preset-chip { font-size: 11.5px; padding: 3px 9px; border-radius: 12px; }
+.dt-preset-chip.active { background: var(--accent); color: var(--bg); border-color: var(--accent); }
+/* which path a time mean reads (E-088): precomputed sums or every native map */
+.dt-path { margin: 4px 0 2px; font-size: 12px; color: var(--fg); }
+.dt-path.dt-path-native { color: var(--fg-dim); }
+.dt-paper-files table { border-collapse: collapse; font-size: 11.5px; margin: 4px 0 8px; }
+.dt-paper-files th, .dt-paper-files td { border: 1px solid var(--border); padding: 2px 6px; text-align: left; }
+.dt-paper-files th { color: var(--fg-dim); font-weight: normal; }
+@media (max-width: 600px) { .dt-paper-files table { font-size: 10.5px; } .dt-paper-files th, .dt-paper-files td { padding: 2px 3px; } }
 .dt-box { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 10px; }
 .dt-box label { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--fg-dim); }
 .dt-box input {
@@ -963,7 +973,7 @@ footer a { color: var(--fg-dim); }
   font-variant-numeric: tabular-nums; margin-top: 2px;
 }
 #dt-legend .dt-lg-unit { font-size: 11px; color: var(--fg-dim); margin-top: 1px; overflow-wrap: anywhere; }
-.clim-to-data { margin-top: 4px; }
+.clim-to-data, .clim-recipe { margin-top: 4px; }
 #panel-data .hint.dt-note { margin: 0 0 6px; color: #8b949e; }
 .dt-estimate .dt-how { margin-top: 4px; font-size: 11px; color: #8b949e; }
 .dt-sub { font-size: 11px; color: #8b949e; margin: 6px 0 3px; display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }

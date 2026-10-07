@@ -242,3 +242,21 @@ native bytes.
   check after 2024, OISST's preliminary days, the centred five-day wind-stress
   spread); the reader now honours their point-aligned grids. Verification
   numbers: the commit message and `docs/DATA_TAB.md`.
+- **Cheap long-period averages and the paper's climatology, 2026-10-07.**
+  For the eight sharded grids with E-088's per-year monthly sums (family 7.2d's
+  four daily stores and the four ERA5 stores), a monthly mean, one mean over the
+  selection or the new normal per calendar month over the period is read from
+  the sums whenever the selection is whole calendar months, else from every
+  native map — one rule (`monthlyPath`), said in one sentence in the estimate
+  box, with the native read it replaces; the composition is E-086's code,
+  generalised (`monthlyPlan`/`monthlyRun`). Optional population standard
+  deviation, counts and "N of M possible frames" in every file, a check box that
+  forces the native path. The normals stores gained three chips (paper split,
+  development split, all years) and the tab's explainer, the docs and the Model
+  climatology downloads block the exact recipe for the paper's numbers. Live in
+  a real browser through the tab: the two paths equal within the float32 bound
+  with identical counts (OISST, ERA5), a 30-year ERA5 mean 24 requests and
+  114 MB instead of ≈ 89,856 and 8.3 GB, the std within 9e-8 °C of numpy, the
+  paper and development chips within 1.1–1.6e-6 °C of the published clim/paper
+  and clim/dev planes, and all 35 stores still open on a downloadable first
+  look. Details: `docs/DATA_TAB.md` §1.

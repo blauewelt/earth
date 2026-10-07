@@ -30,7 +30,16 @@
 //      out, a by-year stack, a 1° pooled normal and a depth level, each
 //      against numpy's Σsum/Σcount of independent range reads; both read
 //      strategies giving identical numbers; and one daily frame of each
-//      family 7.2d store against ml/family1/sharded.py (raw float16, exact).
+//      family 7.2d store against ml/family1/sharded.py (raw float16, exact);
+//   8. E-088's precomputed monthly sums (--e088 runs only this): an OISST
+//      July normal 1991–2020 against numpy Σsum/Σcount of independent range
+//      reads; the precomputed path against every native frame (OISST July
+//      2018–2020, ERA5 January 2015 at 500 hPa) within the float32 bound
+//      with identical counts, requests, megabytes and seconds of both; a
+//      30-year ERA5 mean the native path cannot read; the population std
+//      against numpy over the native frames (ml/family1/sharded.py); and the
+//      tensor normals' paper / development / all-years presets against the
+//      published clim/{paper,dev,all} planes.
 // It exits non-zero on the first disagreement or failed read.
 import { createRequire } from "node:module";
 import { execFileSync } from "node:child_process";
@@ -71,6 +80,203 @@ function measure(fn) {
 }
 function py(code, ...args) {
   return execFileSync("python3", ["-c", code, ...args], { cwd: path.join(ROOT, "ml"), encoding: "utf8", maxBuffer: 1 << 28, stdio: ["ignore", "pipe", "pipe"] });
+}
+
+// ---------------------------------------------------------------- 8. E-088: precomputed monthly sums
+// The eight sharded grids with per-year monthly sum / count / m2 (E-088,
+// data/gridded_monthly_index.json): a long normal against numpy Σsum/Σcount
+// of independent range reads of the same planes; the precomputed path against
+// every native frame for the same selection (means within the float32 bound,
+// counts identical); the speed-up, measured; the population std against numpy
+// over the native frames read through ml/family1/sharded.py; and the tensor
+// normals' three split presets against the published clim/{paper,dev,all}.
+async function e088() {
+  const sf = async (url, init) => {
+    if (String(url).startsWith("file://")) {
+      const p = fileURLToPath(url);
+      if (!fs.existsSync(p)) return new Response("not found", { status: 404 });
+      return new Response(fs.readFileSync(p), { status: 200 });
+    }
+    return counting(url, init);
+  };
+  F1.configure({ registries: F1.DEFAULT_REGISTRIES, siteBase: "file://" + ROOT + "/", fetch: sf });
+  const reg = await F1.loadRegistry();
+  const gmStores = reg.stores.filter((s) => s.monthlySums);
+  console.log(`\nE-088: ${gmStores.length} stores with precomputed monthly sums: ${gmStores.map((s) => `${s.id} ${s.monthlySums.years.join("–")}${s.monthlySums.std ? " +m2" : ""}`).join(", ")}`);
+  if (gmStores.length !== 8) fail("expected eight stores with monthly sums");
+  if (reg.errors.length) fail("registry errors: " + JSON.stringify(reg.errors));
+  const GIX = path.join(ROOT, "data", "gridded_monthly_index.json");
+  const PYR = `
+import json, sys, time, urllib.request
+import numpy as np
+def rng(url, a, n):
+    for k in range(8):
+        try:
+            with urllib.request.urlopen(urllib.request.Request(url, headers={"Range": f"bytes={a}-{a+n-1}"})) as r:
+                assert r.status == 206; b = r.read(); assert len(b) == n; return b
+        except urllib.error.HTTPError as e:
+            if e.code != 429: raise
+            time.sleep(2 * (k + 1))
+`;
+  // numpy Σsum/Σcount (+ the float32 bound) of independent range reads
+  const numpyNormal = (key, sel) => JSON.parse(py(PYR + `
+ix = json.load(open(sys.argv[1])); G = ix["stores"][sys.argv[2]]; s = json.loads(sys.argv[3]); g = G["grid"]
+la = g["lat0"] + np.arange(g["H"]) * g["dlat"]; lo = g["lon0"] + np.arange(g["W"]) * g["dlon"]
+b = s["bbox"]; r = np.where((la >= b["s"]) & (la <= b["n"]))[0]; c = np.where((lo >= b["w"]) & (lo <= b["e"]))[0]
+C, Y, W = len(G["chans"]), int(G["n_years"]), g["W"]; ci = G["chans"].index(s["channels"][0])
+S = np.zeros((len(r), len(c))); N = np.zeros_like(S); B = np.zeros_like(S)
+for y in range(s["yearStart"], s["yearEnd"] + 1):
+    if y in s.get("excludeYears", []): continue
+    for m in s["months"]:
+        if G["frames_present"][y - G["year_first"]][m - 1] == 0: continue
+        pl = []
+        for k, dt_ in (("sum", "<f4"), ("count", "u1")):
+            f = G[k]; isz = int(f["itemsize"])
+            off = int(f["header_len"]) + (((m - 1) * C + ci) * Y + (y - int(G["year_first"]))) * int(f["plane_bytes"]) + int(r[0]) * W * isz
+            pl.append(np.frombuffer(rng(f["url"], off, len(r) * W * isz), dt_).reshape(len(r), W)[:, c])
+        S += pl[0].astype(np.float64); N += pl[1]; B += np.spacing(np.abs(pl[0])).astype(np.float64) / 2
+with np.errstate(invalid="ignore", divide="ignore"):
+    M = np.where(N > 0, S / N, np.nan); Bd = np.where(N > 0, B / N, np.nan)
+print(json.dumps({"mean": [None if not np.isfinite(v) else float(v) for v in M.ravel()], "count": [int(v) for v in N.ravel()],
+  "bound": [None if not np.isfinite(v) else float(v) for v in Bd.ravel()]}))
+`, GIX, key, JSON.stringify(sel)));
+  const ulp32 = (x) => (x === 0 || !Number.isFinite(x) ? 2 ** -149 : 2 ** (Math.floor(Math.log2(Math.abs(x))) - 23));
+  const cmpB = (a, b, bnd, label) => {
+    // a, b: two results' data; bnd: per-cell composition bound (or null: 2^-22 relative)
+    let worst = 0, maxd = 0, bad = 0, n = 0;
+    for (let i = 0; i < a.length; i++) {
+      const x = a[i], y = b[i];
+      if (Number.isNaN(x) !== (y === null || Number.isNaN(y))) { bad++; continue; }
+      if (Number.isNaN(x)) continue;
+      n++;
+      const d = Math.abs(x - y), bd = (bnd ? bnd[i] : 0) + ulp32(x) / 2 + ulp32(y) / 2;
+      maxd = Math.max(maxd, d); worst = Math.max(worst, d / bd);
+      if (d > bd) bad++;
+    }
+    console.log(`  ${label}: ${n} cells, max |Δ| ${maxd.toExponential(2)}, worst |Δ| / bound ${worst.toFixed(3)}, ${bad} outside the bound`);
+    if (bad) fail(label);
+    return { n, maxd, worst };
+  };
+  const out = {};
+  // --only=c1,c4,…: run a subset (each section is independent)
+  const onlyArg = process.argv.find((a) => a.startsWith("--only="));
+  const only = onlyArg ? new Set(onlyArg.slice(7).split(",")) : null;
+  const want = (k) => !only || only.has(k);
+  if (want("c1")) {
+  // C(1): OISST July normal 1991–2020 in a small box, precomputed vs numpy
+  const box1 = { w: -50, s: 35, e: -45, n: 40 };
+  const s1 = { family: "7.2d", store: "oisst025d", channels: ["sst"], yearStart: 1991, yearEnd: 2020, months: [7], step: "normal", bbox: box1, res: "native" };
+  const e1 = await F1.estimate(s1);
+  const m1 = await measure(F1.run)(s1);
+  const w1 = numpyNormal("family7_2d/oisst025d", s1);
+  console.log(`C1 oisst025d July normal 1991–2020, box ${JSON.stringify(box1)}: path ${m1.r.path}, ${m1.requests} requests, ${mb(m1.bytes)}, ${(m1.ms / 1000).toFixed(2)} s (estimate ${e1.requests} requests, ${mb(e1.readBytes)}; native would be ${e1.native ? e1.native.requests + " requests, " + mb(e1.native.readBytes) : "?"})`);
+  if (m1.r.path !== "monthly") fail("C1 not on the precomputed path");
+  out.c1 = cmpB(m1.r.data, w1.mean, w1.bound, "precomputed vs numpy Σsum/Σcount of the planes");
+  if (Array.from(m1.r.count).join() !== w1.count.join()) fail("C1 counts differ"); else console.log("  counts identical");
+  const s1b = Object.assign({}, s1, { yearStart: 2018, yearEnd: 2020 });
+  const a1 = await measure(F1.run)(s1b), n1 = await measure(F1.run)(Object.assign({}, s1b, { path: "native" }));
+  const w1b = numpyNormal("family7_2d/oisst025d", s1b);
+  console.log(`C1b the same box, July 2018–2020: precomputed ${a1.requests} requests ${mb(a1.bytes)} ${(a1.ms / 1000).toFixed(2)} s; native (${n1.r.frames} frames) ${n1.requests} requests ${mb(n1.bytes)} ${(n1.ms / 1000).toFixed(2)} s`);
+  out.c1b = cmpB(a1.r.data, Array.from(n1.r.data), w1b.bound, "precomputed vs native");
+  if (Array.from(a1.r.count).join() !== Array.from(n1.r.count).join()) fail("C1b counts differ"); else console.log("  counts identical");
+  }
+  if (want("c2")) {
+  // C(2): ERA5 t at 500 hPa, January 2015 monthly mean
+  const box2 = { w: -60, s: 30, e: -10, n: 60 };
+  const s2 = { family: "1.2", store: "era5_t", channels: ["t_500"], yearStart: 2015, yearEnd: 2015, months: [1], step: "month", bbox: box2, res: "native" };
+  const a2 = await measure(F1.run)(s2), n2 = await measure(F1.run)(Object.assign({}, s2, { path: "native" }));
+  const w2 = numpyNormal("family1_2/era5_t", s2);
+  console.log(`C2 era5_t 500 hPa January 2015 monthly mean: precomputed ${a2.requests} requests ${mb(a2.bytes)} ${(a2.ms / 1000).toFixed(2)} s; native ${n2.r.frames} frames ${n2.requests} requests ${mb(n2.bytes)} ${(n2.ms / 1000).toFixed(2)} s`);
+  out.c2 = cmpB(a2.r.data, Array.from(n2.r.data), w2.bound, "precomputed vs native");
+  if (Array.from(a2.r.count).join() !== Array.from(n2.r.count).join()) fail("C2 counts differ"); else console.log("  counts identical (" + a2.r.count[0] + " frames per cell)");
+  }
+  if (want("c3")) {
+  // C(3): a 30-year ERA5 mean that the native path cannot read in a browser
+  const box2 = { w: -60, s: 30, e: -10, n: 60 };
+  const s3 = { family: "1.2", store: "era5_t", channels: ["t_500"], yearStart: 1991, yearEnd: 2020, months: [], step: "all", bbox: box2, res: "native" };
+  const e3n = await F1.estimate(Object.assign({}, s3, { path: "native" })), e3 = await F1.estimate(s3);
+  const a3 = await measure(F1.run)(s3);
+  console.log(`C3 era5_t 500 hPa 1991–2020 one mean: native ${e3n.frames} frames ≈ ${e3n.requests} requests, ${mb(e3n.readBytes)} (over the cap: ${e3n.overCap}); precomputed ${a3.requests} requests ${mb(a3.bytes)} ${(a3.ms / 1000).toFixed(2)} s (estimate ${e3.requests}, ${mb(e3.readBytes)}, strategy ${e3.strategy})`);
+  const w3 = numpyNormal("family1_2/era5_t", Object.assign({}, s3, { months: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12] }));
+  out.c3 = cmpB(a3.r.data, w3.mean, w3.bound, "30-year mean vs numpy Σsum/Σcount");
+  if (Array.from(a3.r.count).join() !== w3.count.join()) fail("C3 counts differ"); else console.log("  counts identical (" + a3.r.count[0] + " frames per cell)");
+  }
+  if (want("c4")) {
+  // C(4): the population std against numpy over the native frames
+  const s4 = { family: "7.2d", store: "oisst025d", channels: ["sst"], yearStart: 2019, yearEnd: 2019, months: [7], step: "month", bbox: { w: -50, s: 35, e: -48, n: 37 }, res: "native", std: true };
+  const a4 = await F1.run(s4);
+  const w4 = JSON.parse(py(`
+import json, sys, datetime as dt
+import numpy as np
+from family1 import sharded as sh
+g = sh.ShardedGroup(sys.argv[1]); lat = json.loads(sys.argv[2]); lon = json.loads(sys.argv[3])
+rr = np.rint((np.array(lat) + 90) / 0.25).astype(int); cc = np.rint((np.array(lon) + 180) / 0.25).astype(int)
+names = [c["name"] for c in g.spec["channels"]]; ci = names.index("sst")
+# only the tile that holds the box (two range reads per frame), not the frame
+sp = g.spec
+ty = [i for i, (a, b) in enumerate(sp["row_extents"]) if a <= rr.min() and rr.max() < b]
+tx = [i for i, (a, b) in enumerate(sp["col_extents"]) if a <= cc.min() and cc.max() < b]
+assert len(ty) == 1 and len(tx) == 1, "the C4 box must sit inside one tile"
+ty, tx = ty[0], tx[0]; r0, c0 = sp["row_extents"][ty][0], sp["col_extents"][tx][0]
+fs = []
+d = dt.date(2019, 7, 1)
+while d.month == 7:
+    k = (d - dt.date(1982, 1, 1)).days
+    a = g.read_tile(k // 5, k % 5, ty, tx, raw=True, crop=True)
+    if a is not None: fs.append(a[np.ix_(rr - r0, cc - c0)][:, :, ci].astype(np.float64))
+    d += dt.timedelta(days=1)
+st = np.stack(fs)
+print(json.dumps({"n": len(fs), "mean": np.nanmean(st, 0).ravel().tolist(), "std": np.nanstd(st, 0).ravel().tolist(), "count": np.isfinite(st).sum(0).ravel().tolist()}))
+`, "https://huggingface.co/datasets/chfrank/earth-tensors/resolve/main/tensors/family7_2d/oisst025d/oisst025d", JSON.stringify(Array.from(a4.lat)), JSON.stringify(Array.from(a4.lon))));
+  let sbad = 0, smax = 0, srel = 0;
+  w4.std.forEach((x, i) => { const d = Math.abs(a4.std[i] - x); smax = Math.max(smax, d); const tol = 1e-6 * (Math.abs(w4.mean[i]) + x); srel = Math.max(srel, d / tol); if (d > tol) sbad++; });
+  console.log(`C4 oisst025d sst July 2019 std (population) in a 2° box: ${w4.std.length} cells over ${w4.n} native frames (ml/family1/sharded.py from the Hub): max |std − numpy nanstd| ${smax.toExponential(2)} °C, worst / tolerance ${srel.toFixed(3)} (tolerance 1e-6 × (|mean| + std)), ${sbad} outside; path ${a4.path}`);
+  if (sbad || a4.path !== "monthly") fail("C4 std");
+  if (Array.from(a4.count).join() !== w4.count.join()) fail("C4 counts differ");
+  out.c4 = { cells: w4.std.length, frames: w4.n, maxd: smax, worst: srel };
+  }
+  if (want("c5")) {
+  // C(5): the tensor normals' split presets vs the published clim planes
+  const CI = JSON.parse(fs.readFileSync(path.join(ROOT, "data", "family7_clim_index.json"), "utf8"));
+  const PRE = { paper: [1982, 2020, [2009, 2017]], dev: [1982, 2024, [2009, 2017, 2023]], all: [1982, 2024, []] };
+  out.c5 = [];
+  for (const [g, ch, m, box] of [["g025", "sst", 2, { w: -50, s: 35, e: -40, n: 45 }], ["g100", "t2m", 7, { w: -20, s: 40, e: 10, n: 60 }]]) {
+    for (const ver of ["paper", "dev", "all"]) {
+      const [y0, y1, ex] = PRE[ver];
+      const r = await F1.run({ family: "derived", store: "normals_" + g, channels: [ch], yearStart: y0, yearEnd: y1, excludeYears: ex, months: [m], step: "normal", bbox: box, res: "native" });
+      const f = CI.files[ver][g].clim_npy, G = CI.groups[g], C = G.chans.length, W = G.grid.nx, step = G.grid.step, c = G.chans.indexOf(ch);
+      const rows = Array.from(r.lat, (la) => Math.round((la + 90) / step)), cols = Array.from(r.lon, (lo) => Math.round((lo + 180) / step));
+      const base = f.header_len + ((m - 1) * C + c) * f.plane_bytes, r0 = rows[0], r1 = rows[rows.length - 1];
+      const res = await counting(f.url, { headers: { Range: `bytes=${base + r0 * W * 4}-${base + (r1 + 1) * W * 4 - 1}` } });
+      if (res.status !== 206) fail(`clim/${ver}/${g}: HTTP ${res.status}`);
+      const dv = new DataView(await res.arrayBuffer());
+      const [mu, sd] = G.norm[c];
+      let maxd = 0, worst = 0, n = 0, bad = 0;
+      rows.forEach((rr, i) => cols.forEach((cc, j) => {
+        const z = dv.getFloat32(((rr - r0) * W + cc) * 4, true), want = z * sd + mu, got = r.data[i * cols.length + j];
+        if ((z !== z) !== (got !== got)) { bad++; return; }
+        if (z !== z) return;
+        n++;
+        const d = Math.abs(got - want);
+        // two float32 roundings: the tab's value, and the file's z times sd
+        const bd = ulp32(got) / 2 + (ulp32(z) / 2) * sd + 4 * 2 ** -52 * Math.abs(want);
+        maxd = Math.max(maxd, d); worst = Math.max(worst, d / bd);
+      }));
+      console.log(`C5 ${g} ${ch} month ${m}, the ${ver} preset (${y0}–${y1}${ex.length ? " less " + ex.join(", ") : ""}) vs clim/${ver}/${g}/clim.npy: ${n} cells, max |Δ| ${maxd.toExponential(3)} ${r.units[0]}, worst |Δ| / (two float32 roundings) ${worst.toFixed(3)}, NaN mismatches ${bad}, ${r.stats.requests} requests, ${mb(r.stats.bytes)}`);
+      if (bad || worst > 2) fail(`C5 ${g} ${ver}`);
+      out.c5.push({ g, ch, m, ver, n, maxd, worst });
+    }
+  }
+  }
+  return out;
+}
+
+// --e088: only section 8 (it needs python3 + numpy and ml/family1/sharded.py)
+if (process.argv.includes("--e088")) {
+  const o = await e088();
+  console.log("\nE-088 RESULTS " + JSON.stringify(o));
+  console.log("\nE-088 LIVE CHECKS PASSED");
+  process.exit(0);
 }
 
 // ---------------------------------------------------------------- 1. registry
@@ -491,4 +697,5 @@ print(json.dumps({"n": int(ok.sum()), "time_s": d["time_s"][ok].tolist(), "lat":
   console.log(`glodap bin ${bin} (${new Date((bin * BIN + E) * 1000).toISOString().slice(0, 10)}): ${rows.length} rows × ${C} channels compared with ml/family10_store.py Store.open("chfrank/earth-tensors:tensors/family1_gf/glodap", verify=True) (schema ${out.schema}, sha256 of every file checked), ${bad} differ`);
   if (bad) fail("glodap bin disagrees with the Python reader");
 }
+if (!NO_PY && !process.argv.includes("--skip-e088")) await e088();
 console.log("\nALL LIVE CHECKS PASSED");

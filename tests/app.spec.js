@@ -8389,6 +8389,17 @@ test("model climatology: no version picker; its downloads open that group's mont
   await expect(body).toContainText("any other period");
   await expect(body).toContainText("1982–2020 leaving out 2009 and 2017");
   await expect(body).toContainText("More stores, any period, month, box and resolution: the Data tab");
+  // the exact recipe for the paper's numbers and the other two splits, each
+  // with its published whole-globe files for this group (URLs from the index)
+  const rec = body.locator(".clim-recipe");
+  await expect(rec).toContainText("The paper's climatology from the Data tab");
+  await expect(rec).toContainText("paper split — 1982–2020, leaving out 2009, 2017");
+  await expect(rec).toContainText("development split — 1982–2024, leaving out 2009, 2017, 2023");
+  await expect(rec).toContainText("all years — 1982–2024, nothing left out");
+  await expect(rec).toContainText("close but not identical");
+  const recHrefs = await rec.locator("a").evaluateAll((as) => as.map((x) => x.getAttribute("href")));
+  expect(recHrefs.some((h) => /\/clim\/paper\/[a-z0-9]+\/clim\.npy$/.test(h))).toBe(true);
+  expect(recHrefs.some((h) => /\/clim\/dev\/[a-z0-9]+\/clim\.npy$/.test(h))).toBe(true);
   // the hover card says the versions were retired, and how to get the paper's split
   const tip = page.locator('#layer-list input[data-id="clim7"]')
     .locator("xpath=ancestor::div[contains(@class,'layer-item')]").locator(".layer-tip");
@@ -8821,6 +8832,173 @@ test("Data tab: the monthly normals — a free period, years left out, normal or
  * `record_span` (where the data is), each store's `source_segments` say which
  * falsifier every span passed, and the newest OISST days are preliminary.
  * Served: the 1.gf fixture with its registry dressed that way. */
+/* E-088 in the tab, on the real reader: the native fixture stores and the
+ * monthly sums made from them (data/gridded_monthly/). Whole months are read
+ * from the sums and the panel says so with the native read it replaces; days
+ * or hours cut months and every native map is read, said so; the check box
+ * forces the native read; the normal per calendar month and the leave-out
+ * years are offered; the spread is an extra variable, off by default. */
+test("Data tab: precomputed monthly sums — which path a mean is read by and why, the normal per month, years left out, the standard deviation",
+     async ({ page }) => {
+  test.setTimeout(240000);
+  const real = await page.evaluate(() =>
+    !!window.F1Data && !window.F1Data.__stub && typeof window.F1Data.configure === "function");
+  test.skip(!real, "src/f1data.js is not in this tree");
+  const path = require("path"), fs = require("fs");
+  const reads = [];
+  await serveFixtureDir(page, "gmfixture", path.join(__dirname, "..", "data", "gridded_monthly"), reads);
+  await page.evaluate(() => {
+    window.F1Data.configure({ registries: [{ family: "fx", title: "Fixture stores with monthly sums", kind: "family1",
+      url: "/gmfixture/fixture_native/registry.json" }], gridMonthly: "/gmfixture/fixture_native/gridded_monthly_index.json" });
+    try { localStorage.removeItem("dataTabSel"); } catch {}
+  });
+  await dtTap(page, "#tab-data");
+  await expect(page.locator("#dt-store option")).toHaveCount(2, { timeout: 30000 });
+  const settled = () => expect.poll(async () => (await dtState(page)).estimateCurrent, { timeout: 30000 }).toBe(true);
+  await settled();
+  await dtSet(page, { "dt-store": "fx/fxdaily" });
+  await settled();
+  // the controls such a store has
+  await expect(page.locator("#dt-gm-note")).toBeVisible();
+  await expect(page.locator("#dt-gm-note")).toContainText("precomputed monthly sums");
+  await expect(page.locator("#dt-exclude-row")).toBeVisible();
+  await expect(page.locator("#dt-exclude-row")).toContainText("years left out of every mean");
+  await expect(page.locator("#dt-npresets")).toBeHidden();
+  await expect(page.locator("#dt-std-row")).toBeVisible();
+  await expect(page.locator("#dt-std-note")).toContainText("population form");
+  expect(await page.locator("#dt-std").isChecked()).toBe(false);
+  await expect(page.locator("#dt-path-row")).toBeVisible();
+  expect(await page.locator("#dt-step option").evaluateAll((os) => os.map((o) => o.value)))
+    .toEqual(["native", "pentad", "month", "all", "normal"]);
+  // whole months, a monthly mean: from the sums, with what it replaces
+  await page.evaluate(() => { for (const i of document.querySelectorAll("#dt-channels input")) { i.checked = i.value === "sst"; i.dispatchEvent(new Event("change", { bubbles: true })); } });
+  await dtTap(page, "#dt-months-all");
+  await dtSet(page, { "dt-y0": "2009", "dt-y1": "2011", "dt-d0": "1", "dt-d1": "31", "dt-w": "-60", "dt-s": "-40", "dt-e": "60", "dt-n": "40" });
+  await dtSet(page, { "dt-step": "month", "dt-res": "native" });
+  await settled();
+  const est = page.locator("#dt-estimate");
+  await expect(est.locator(".dt-path")).toHaveAttribute("data-path", "monthly");
+  await expect(est.locator(".dt-path")).toContainText(/^Read from precomputed monthly sums — \d+ requests, [\d.]+ (kB|MB)\. Whole calendar months with no day-of-month or hour filter/);
+  await expect(est.locator(".dt-path")).toContainText(/Reading its 386 native maps instead would be (≈ )?[\d,]+ requests, [\d.]+ (kB|MB)\.$/);
+  await expect(est).toContainText("monthly planes of sums (386 of 387 possible daily maps) read → 14 monthly means");
+  let st = await dtState(page);
+  expect(st.lastEstimate.path).toBe("monthly");
+  // a day range cuts the months: every native map, and why
+  await dtSet(page, { "dt-d0": "1", "dt-d1": "10" });
+  await settled();
+  await expect(est.locator(".dt-path")).toHaveAttribute("data-path", "native");
+  await expect(est.locator(".dt-path")).toHaveText("Read from the native maps: your selection cuts months (days 1–10), so every native map is read.");
+  await dtSet(page, { "dt-d0": "1", "dt-d1": "31" });
+  // the normal per calendar month, leaving out a year, with the spread
+  await dtSet(page, { "dt-step": "normal", "dt-exclude": "2010" });
+  await page.evaluate(() => { const b = document.getElementById("dt-std"); b.checked = true; b.dispatchEvent(new Event("change", { bubbles: true })); });
+  await settled();
+  st = await dtState(page);
+  expect(st.sel).toMatchObject({ step: "normal", excludeYears: [2010], std: true });
+  expect(st.sel.path).toBeUndefined();
+  await expect(est.locator(".dt-path")).toContainText("and squared deviations, for the spread");
+  await expect(est).toContainText("Averaged over 2009–2011, leaving out 2010: 2 years");
+  await expect(est).toContainText("→ 2 normals (one per calendar month)");
+  reads.length = 0;
+  const [dl] = await Promise.all([page.waitForEvent("download", { timeout: 60000 }), dtTap(page, "#dt-download")]);
+  expect(dl.suggestedFilename()).toBe("ffx_fxdaily_sst_2009-2011_ex2010_native_normal_std.nc");
+  const nc = fs.readFileSync(await dl.path()).toString("latin1");
+  for (const w of ["climatology_bounds", "sst_std", "sst_count", "frames_present", "frames_possible", "read_path", "precomputed per-year monthly sums, counts and m2", "22 of 22 possible frames"]) expect(nc).toContain(w);
+  // the sums were read, never a native tile
+  expect(reads.some(([, rel]) => /\/(sum|count|m2)\.npy$/.test(rel))).toBe(true);
+  expect(reads.some(([, rel]) => /\.zst$/.test(rel))).toBe(false);
+  // the check: every native map instead, said so — and the same file otherwise
+  await page.evaluate(() => { const b = document.getElementById("dt-native"); b.checked = true; b.dispatchEvent(new Event("change", { bubbles: true })); });
+  await settled();
+  await expect(est.locator(".dt-path")).toContainText("you asked for the native maps");
+  reads.length = 0;
+  const [dl2] = await Promise.all([page.waitForEvent("download", { timeout: 60000 }), dtTap(page, "#dt-download")]);
+  expect(dl2.suggestedFilename()).toBe("ffx_fxdaily_sst_2009-2011_ex2010_native_normal_std_nativeread.nc");
+  expect(reads.some(([, rel]) => /\.zst$/.test(rel))).toBe(true);
+  const nc2 = fs.readFileSync(await dl2.path()).toString("latin1");
+  expect(nc2).toContain("every native map");
+  // the preview of a normal from the sums says so
+  await page.evaluate(() => { const b = document.getElementById("dt-native"); b.checked = false; b.dispatchEvent(new Event("change", { bubbles: true })); });
+  await settled();
+  await dtTap(page, "#dt-preview");
+  await expect.poll(async () => (await dtState(page)).previewShown, { timeout: 30000 }).toBe(true);
+  await expect(page.locator("#dt-legend")).toContainText("January normal over 2009–2011 (leaving out 2010)");
+  // the six-hourly store: an hour filter cuts its months; levels still picked
+  await dtSet(page, { "dt-store": "fx/fx6h" });
+  await settled();
+  await expect(page.locator("#dt-hours-row")).toBeVisible();
+  // (the leave-out years carry over with the period: 2010 is this store's only year)
+  await dtSet(page, { "dt-exclude": "", "dt-y0": "2010", "dt-y1": "2010", "dt-h0": "0", "dt-h1": "6", "dt-step": "month" });
+  await settled();
+  await expect(est.locator(".dt-path")).toHaveText("Read from the native maps: your selection cuts months (hours 00–06 UTC), so every native map is read.");
+  await dtSet(page, { "dt-h0": "0", "dt-h1": "24" });
+  await settled();
+  await expect(est.locator(".dt-path")).toHaveAttribute("data-path", "monthly");
+  expect((await dtState(page)).sel.channels).toEqual(["t_500"]);
+  expect(page.__errors, `page errors: ${page.__errors.join(" | ")}`).toHaveLength(0);
+});
+
+/* The tensor's monthly normals carry the forecaster's three published
+ * splits as one-click chips, and the tab's explainer gives the exact recipe
+ * with links to the published whole-globe files of every version. */
+test("Data tab: the paper's climatology — three split chips on the tensor's normals, the recipe and the published files",
+     async ({ page }) => {
+  test.setTimeout(150000);
+  const real = await page.evaluate(() =>
+    !!window.F1Data && !window.F1Data.__stub && typeof window.F1Data.configure === "function");
+  test.skip(!real, "src/f1data.js is not in this tree");
+  const path = require("path"), fs = require("fs");
+  await serveMonthlyFixture(page, path.join(__dirname, "..", "data", "family7_monthly", "fixture"));
+  const ix = JSON.parse(fs.readFileSync(path.join(__dirname, "..", "data", "family7_monthly", "fixture", "family7_monthly_index.json"), "utf8"));
+  await page.evaluate(() => {
+    window.F1Data.configure({ registries: [{ family: "derived", title: "Derived maps", kind: "derived",
+      monthly: "data/family7_monthly_index.json" }] });
+    try { localStorage.removeItem("dataTabSel"); } catch {}
+  });
+  await dtTap(page, "#tab-data");
+  const settled = () => expect.poll(async () => (await dtState(page)).estimateCurrent, { timeout: 30000 }).toBe(true);
+  await settled();
+  await expect(page.locator("#dt-npresets")).toBeVisible();
+  const g0 = Object.keys(ix.groups)[0], G = ix.groups[g0];
+  const [a, b] = [Number(G.year_first), Number(G.year_last)];
+  for (const [key, y0, y1, ex] of [["paper", 1982, 2020, [2009, 2017]], ["dev", 1982, 2024, [2009, 2017, 2023]], ["all", 1982, 2024, []]]) {
+    await dtTap(page, `#dt-npresets button[data-npreset="${key}"]`);
+    await settled();
+    const st = await dtState(page);
+    const want = ex.filter((y) => y >= a && y <= b);
+    expect(st.sel).toMatchObject({ step: "normal", yearStart: Math.max(a, y0), yearEnd: Math.min(b, y1), excludeYears: want,
+      months: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12] });
+    await expect(page.locator(`#dt-npresets button[data-npreset="${key}"]`)).toHaveClass(/active/);
+    await expect(page.locator(`#dt-npresets button[data-npreset="${key}"]`)).toHaveAttribute("aria-pressed", "true");
+  }
+  // (on this five-year fixture all three splits clamp to the same years, so
+  // all three light; on the real store, 1982–2024, each is its own)
+  // one month at a time keeps the split (it is how a 0.25° whole globe fits
+  // under the cap); changing the years left out unlights its chip
+  await dtTap(page, '#dt-months button[data-month="3"]');
+  await settled();
+  await expect(page.locator('#dt-npresets button[data-npreset="all"]')).toHaveClass(/active/);
+  await dtSet(page, { "dt-exclude": String(a) });
+  await settled();
+  expect(await page.locator("#dt-npresets button.active").count()).toBe(0);
+  // the recipe and the published whole-globe files of every version
+  const how = page.locator("#dt-paper-recipe");
+  await expect(how).toContainText("years 1982 to 2020; leave out 2009, 2017; all twelve months");
+  await expect(how).toContainText("1982–2024 leaving out 2009, 2017 and 2023");
+  await expect(how).toContainText("close but not identical");
+  await expect(how).toContainText("far over the 600 MB cap (about 2.3 GB");
+  const files = page.locator("#dt-paper-files");
+  await expect(files.locator("table")).toBeAttached({ timeout: 30000 });
+  const hrefs = await files.locator("a").evaluateAll((as) => as.map((x) => x.getAttribute("href")));
+  const CI = JSON.parse(fs.readFileSync(path.join(__dirname, "..", "data", "family7_clim_index.json"), "utf8"));
+  for (const v of ["paper", "dev", "all"]) for (const g of Object.keys(CI.files[v])) {
+    expect(hrefs).toContain(CI.files[v][g].clim_nc.url);
+    expect(hrefs).toContain(CI.files[v][g].clim_npy.url);
+    expect(CI.files[v][g].clim_nc.url).toMatch(new RegExp(`/clim/${v}/${g}/clim\\.nc$`));
+  }
+  expect(page.__errors, `page errors: ${page.__errors.join(" | ")}`).toHaveLength(0);
+});
+
 test("Data tab: family 7.2d — its own group, the record from the registry, its caveats and attribution in the panel and in the file",
      async ({ page }) => {
   test.setTimeout(240000);
@@ -8908,12 +9086,34 @@ test("Data tab: progress for the longer reads — estimate, first look, preview 
       monthly: "/f7slow/family7_monthly_index.json" }] });
     try { localStorage.removeItem("dataTabSel"); } catch {}
   });
+  // The first-look block appears and is replaced by the estimate within a few
+  // seconds, so asserting on the live element races its end (CLAUDE.md §4:
+  // read a self-clearing state atomically). Record every label · line pair
+  // the block ever shows, from before the tab opens, and assert on that.
+  await page.evaluate(() => {
+    window.__estProgLog = [];
+    window.__progLog = [];
+    const last = {};
+    const grab = () => {
+      for (const id of ["dt-est-prog", "dt-dl-prog", "dt-pv-prog"]) {
+        const h = document.getElementById(id);
+        const l = h && h.querySelector(".dt-prog-label"), n = h && h.querySelector(".dt-prog-line");
+        if (!l || !n || h.classList.contains("hidden")) continue;
+        const t = `${l.textContent} ⏐ ${n.textContent}`;
+        if (last[id] === t) continue;
+        last[id] = t;
+        window.__progLog.push(`${id}: ${t}`);
+        if (id === "dt-est-prog") window.__estProgLog.push(t);
+      }
+    };
+    new MutationObserver(grab).observe(document.body, { subtree: true, childList: true, characterData: true, attributes: true, attributeFilter: ["class"] });
+  });
+  const estProg = () => page.evaluate(() => window.__estProgLog.join("\n"));
+  const allProg = () => page.evaluate(() => window.__progLog.join("\n"));
   await dtTap(page, "#tab-data");
   // the first look is several estimates: one block, in the estimate box,
   // indeterminate (nobody knows how many candidates it will try), counting
-  await expect(page.locator("#dt-est-prog")).toBeVisible({ timeout: 30000 });
-  await expect(page.locator("#dt-est-prog .dt-prog-label")).toContainText("choosing a first selection that fits");
-  await expect(page.locator("#dt-est-prog .dt-prog-line")).toContainText(/\d+ requests? · .* so far/);
+  await expect.poll(estProg, { timeout: 30000 }).toMatch(/choosing a first selection that fits.* ⏐ \d+ requests? · .* so far/);
   const settled = () => expect.poll(async () => (await dtState(page)).estimateCurrent, { timeout: 60000 }).toBe(true);
   await settled();
   // the first look finished, and it never pretended to know how far along it was
@@ -8930,8 +9130,9 @@ test("Data tab: progress for the longer reads — estimate, first look, preview 
   const est = (await dtState(page)).lastEstimate;
   const [dl] = await Promise.all([page.waitForEvent("download", { timeout: 60000 }), (async () => {
     await dtTap(page, "#dt-download");
-    await expect(page.locator("#dt-dl-prog")).toBeVisible({ timeout: 20000 });
-    await expect(page.locator("#dt-dl-prog .dt-prog-line")).toContainText(/\d+ of \d+ requests · .* of /, { timeout: 20000 });
+    // recorded, not read live: a small download can finish before a live
+    // assertion lands (the block then says "saved …")
+    await expect.poll(allProg, { timeout: 20000 }).toMatch(/dt-dl-prog: .* ⏐ \d+ of \d+ requests · .* of /);
   })()]);
   expect(dl.suggestedFilename()).toMatch(/\.nc$/);
   await expect.poll(async () => (await dtState(page)).progress?.state).toBe("done");

@@ -21,7 +21,7 @@
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/cesium/1.133.1/Widgets/widgets.min.css" />
-  <link rel="stylesheet" href="src/style.css?v=6aaa1b17" />
+  <link rel="stylesheet" href="src/style.css?v=622f0c08" />
   <script>window.CESIUM_BASE_URL = "https://cdnjs.cloudflare.com/ajax/libs/cesium/1.133.1/";</script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/cesium/1.133.1/Cesium.js"></script>
 </head>
@@ -1067,6 +1067,18 @@
           <input type="text" id="dt-exclude" class="dt-text" placeholder="e.g. 2009, 2017" inputmode="numeric" />
           <span class="hint dt-inline">years left out of the average</span>
         </div>
+        <!-- Only for the tensor's monthly normals: the three splits the
+             forecaster's climatology is published in, one click each. -->
+        <div class="control-row dt-wrap hidden" id="dt-npresets">
+          <label>splits</label>
+          <button type="button" class="dt-mini dt-preset-chip" data-npreset="paper"
+                  title="1982–2020, leaving out 2009 and 2017, all twelve months, one normal per month — the paper's climatology">paper split</button>
+          <button type="button" class="dt-mini dt-preset-chip" data-npreset="dev"
+                  title="1982–2024, leaving out 2009, 2017 and 2023, all twelve months, one normal per month">development split</button>
+          <button type="button" class="dt-mini dt-preset-chip" data-npreset="all"
+                  title="1982–2024, nothing left out, all twelve months, one normal per month">all years</button>
+          <span class="hint dt-inline" id="dt-npreset-note">the forecaster's three climatologies — see “the paper's climatology” below</span>
+        </div>
         <!-- Days of each chosen month: the finest period control. It narrows
              the READ (unlike the box and the hours of a point store), so it is
              what makes the dense swath stores downloadable at all. -->
@@ -1083,6 +1095,14 @@
           average runs over (and any to leave out), the calendar months, and either one
           <em>normal</em> per month over the period or the <em>by-year</em> stack — each year's
           monthly mean side by side. Every value comes with the number of five-day bins behind it.</p>
+        <!-- Only for the eight sharded grids with precomputed monthly sums
+             (E-088): which averages are cheap, and why. -->
+        <p class="hint dt-note hidden" id="dt-gm-note">This store also keeps <strong>precomputed
+          monthly sums</strong> — per year and calendar month, the sum, the count and the squared
+          deviations of every native map. A <em>monthly mean</em>, <em>one mean over the
+          selection</em> or a <em>normal per calendar month over the period</em> made of whole
+          months (no day-of-month or hour filter) is read from those: a handful of requests where
+          the native maps are thousands. The estimate says which way it reads, and why.</p>
         <p class="hint dt-note hidden" id="dt-cal-note">This store is a climatology: one map per
           calendar month, averaged over all the years 1982–2024, so it has no years and no days —
           the months below pick which calendar months.</p>
@@ -1140,6 +1160,19 @@
         <div class="control-row">
           <label for="dt-res">resolution</label>
           <select id="dt-res"></select>
+        </div>
+        <!-- Where the store keeps squared deviations (E-088's m2): the spread
+             as an optional extra variable, off by default. -->
+        <div class="control-row dt-wrap hidden" id="dt-std-row">
+          <label for="dt-std">spread</label>
+          <label class="dt-chip"><input type="checkbox" id="dt-std" /> standard deviation too</label>
+          <span class="hint dt-inline" id="dt-std-note">an extra variable beside each mean: the spread of
+            the native maps over the selection behind it, in population form (divided by N, not N − 1)</span>
+        </div>
+        <div class="control-row dt-wrap hidden" id="dt-path-row">
+          <label for="dt-native">check</label>
+          <label class="dt-chip"><input type="checkbox" id="dt-native" /> read every native map instead</label>
+          <span class="hint dt-inline">slower — to check that the precomputed sums give the same means</span>
         </div>
 
         <div id="dt-estimate" class="dt-estimate" aria-live="polite">–</div>
@@ -1216,6 +1249,35 @@
             store's indexes are still being read, or the first look is still trying months) the
             bar runs without a percentage and counts instead. A slow read says why: many small
             requests, each a round trip, or simply many megabytes.</p>
+          <p class="hint"><strong>Cheap long-period averages.</strong> Eight map stores — the
+            daily OISST, GLORYS, NCEP and OC-CCI stores (family 7.2d) and the four ERA5 stores
+            (family 1.2) — also keep per-year monthly sums, counts and squared deviations of every
+            native map. A monthly mean, one mean over the selection, or a normal per
+            calendar month over the period made of WHOLE months is read from those — January 2015
+            of ERA5 at 500 hPa over the North Atlantic is 2 requests and 56 kB instead of 255
+            requests and 24 MB — and gives the same means to float32 rounding, with the same
+            counts. A day-of-month range or (for ERA5) an hour filter cuts months, so then every
+            native map is read; the estimate says which, and why. A frame belongs to the calendar
+            month of its own start. The standard deviation is offered as an extra variable: the
+            spread of the native maps behind each mean, in population form.</p>
+          <p class="hint" id="dt-paper-recipe"><strong>The paper's climatology.</strong> Store
+            <em>Monthly normals of the global tensor</em> (the group with your channel: 0.25°
+            ocean surface, 1° fluxes and weather, ocean colour, or Argo at depth); years 1982 to
+            2020; leave out 2009, 2017; all twelve months; time step <em>normal — one mean per
+            calendar month over the period</em>. The <em>paper split</em> chip sets exactly that;
+            <em>development split</em> is 1982–2024 leaving out 2009, 2017 and 2023, and <em>all
+            years</em> is 1982–2024 with nothing left out — the forecaster's three published
+            climatologies (clim/paper, clim/dev, clim/all), reproduced to float32 rounding (about
+            10⁻⁶ in the channel's unit). Only these stores reproduce them: they use the model's own
+            rule — a five-day bin belongs to the month it opens in — and the tensor's own standard
+            scores; the daily stores' calendar-month normals are close but not identical. Size: a
+            whole-globe 0.25° twelve-month normal is far over the 600 MB cap (about 2.3 GB of sums
+            and counts per channel), so take one month at a time (about 190 MB for one channel of
+            the whole globe) or a box — 1° cells shrink the file, not the read, of a 0.25° group;
+            a 1° group's whole-globe twelve-month normal of one channel is about 150 MB. Or download
+            the published whole-globe files:</p>
+          <div class="hint dt-paper-files" id="dt-paper-files">the links load with the
+            climatology index (<a href="data/family7_clim_index.json" target="_blank" rel="noopener">data/family7_clim_index.json</a>).</div>
           <p class="hint"><strong>Three kinds of store.</strong> The fine observation stores keep
             each source at its own resolution. The global tensor (the forecaster's own input,
             0.25° and 1° five-day maps since 1982) is stored as one uncompressed file per group
@@ -1411,7 +1473,7 @@
            not obvious from the page, and "I reloaded and see no change" is
            indistinguishable from "the change isn't there". This is the sha256
            prefix of src/app.js, the same string as its ?v= stamp. -->
-      <p class="build-line">Build <code id="build-id">f2862dad</code></p>
+      <p class="build-line">Build <code id="build-id">87a264db</code></p>
     </section>
 
     <footer>
@@ -1476,7 +1538,7 @@
        family-1.gf reader that publishes window.F1Data. Both load BEFORE the
        app, and the app copes when they did not (the tab says so). -->
   <script src="lib/fzstd.js?v=207dc305"></script>
-  <script src="src/f1data.js?v=ac51d8fc"></script>
-  <script src="src/app.js?v=f2862dad"></script>
+  <script src="src/f1data.js?v=c7331385"></script>
+  <script src="src/app.js?v=87a264db"></script>
 </body>
 </html>

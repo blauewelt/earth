@@ -2270,6 +2270,59 @@ leaving the tab disarms. Measured live: a 43-year 0.25° normal over 0–60° N
 SWOT first look took 13 s with "still reading the store's indexes", and a
 Cancel left zero further requests.
 
+*Cheap long-period averages, and the paper's climatology (2026-10-07, E-088 in
+the tab).* Chris: *"please go ahead with the 'make long period averages
+cheap' plan"* and *"To make sure the plan is correct, please add how to obtain
+the paper climatology numbers … into the tab's instructions."* E-088 published,
+for the eight sharded grids family 7.2d (`glorys025d`, `oisst025d`, `ncep100d`,
+`occci025d`) and family 1.2 (`era5_t/q/u/v`), per-year per-calendar-month
+`sum.npy` (float32, physical units), `count.npy` (uint8) and `m2.npy` (float32,
+squared deviations about each month's own mean), axes `[month, channel, year,
+lat, lon]`, indexed by the committed `data/gridded_monthly_index.json`
+(`configure({gridMonthly})`; matched to a store by `source_store` = the
+registry's `path`, and any shape, dtype, grid or table mismatch is a named
+error line with the store kept on its native path). **Path selection is one
+function, `monthlyPath(plan)`**: the sums answer the steps `month`, `all` and
+the new `normal` (one mean per calendar month over the period, the by-year stack
+being `month`) whenever the selection is WHOLE calendar months — no `days`, no
+hour filter on a sub-daily store, not `native`/`pentad`, every requested
+channel in the sums, and every chosen (year, month) holding exactly the frames
+the sums were made from (compared against the shard index; a store updated
+since reads natively until its sums are remade, said so with the month). Else
+every native map, as before. **One composition code path**: E-086's
+`normalsPlan`/`normalsRun` became `monthlyPlan`/`monthlyRun` over a
+description `M` (sum, count, + m2, + frames tables, + zscored), so the tensor's
+normals and the sharded grids' sums are composed by the same loop; a gm plan
+takes the native plan's time axis so both paths write the same file. The
+estimate and the panel say which path and why (`est.path`, `est.pathWhy`, the
+`.dt-path` line first in the estimate box: "Read from precomputed monthly sums
+— 2 requests, 56 kB. Whole calendar months … Reading its 124 native maps
+instead would be 255 requests, 24.3 MB." / "Read from the native maps: your
+selection cuts months (days 1–10), so every native map is read."); a *check*
+box forces the native path (`sel.path = "native"`). `sel.std` adds
+`<channel>_std`, the population std (Chan's combination of m2 on the sums path;
+a shifted float64 accumulation on the native path), off by default; files carry
+`frames_present`/`frames_possible` per step, "N of M possible frames",
+`read_path` and `read_path_reason`; the native path now accumulates in float64.
+Measured live in the browser (`scripts/datatab_browser_check.mjs`): ERA5 t 500
+hPa January 2015 2 requests / 0.06 MB / 6 s against 248 / 24.2 MB / 166 s,
+bit-identical; a 30-year ERA5 mean 24 requests / 114 MB / 26 s against
+≈ 89,856 requests / 8.3 GB (over the cap). **The paper's climatology**: three
+chips on the normals stores (`DT_NORMAL_PRESETS`: paper 1982–2020 less 2009,
+2017; dev 1982–2024 less 2009, 2017, 2023; all 1982–2024), lit while the years
+and leave-outs are the split's (any months — one month at a time is how a 0.25°
+whole globe fits under the cap); the exact recipe is in the tab's explainer
+(`#dt-paper-recipe`, with the published clim/{paper,dev,all} files linked from
+the index), in the Model climatology layer's downloads block
+(`climRecipeHtml`) and in `docs/DATA_TAB.md`. Verified end to end through the
+tab's Download button against the published planes: g025 SST February in a box,
+paper 1.10e-6 °C, dev 1.09e-6 °C; g100 t2m July, 1.53e-6 / 1.57e-6 °C — inside
+two float32 roundings. Only those stores reproduce the paper (month-of-bin rule,
+the tensor's own values); the daily stores use true calendar months.
+Fixture: `data/gridded_monthly/fixture/` + `fixture_native/`
+(`tests/make_gridded_paths_fixture.py` rebuilds the native stores and refuses
+unless their fresh sums are byte-identical to the committed ones).
+
 *Family 1.2 — the atmosphere on pressure levels (2026-10-06, E-085).* Family
 1.2 is family 1.gf plus ECMWF's ERA5 reanalysis — temperature (K), specific
 humidity (stored and served in **g/kg**, 1000 × ERA5's kg/kg) and the
@@ -2373,7 +2426,7 @@ climatetrace, argo, rapid, sealevel, glaciers (RGI7 tars + Hugonnet parquet
 join), gistemp, gpcp, eobs, oisst, meteoswiss. Grid snapshots share
 `_bin_to_grid`/`_write_grid` (nearest scatter-binning onto regular grids).
 
-**Testing** (323 Playwright specs, plus 60 node tests of the Data tab reader): app behaviour (`tests/app.spec.js`) + data
+**Testing** (325 Playwright specs, plus 70 node tests of the Data tab reader): app behaviour (`tests/app.spec.js`) + data
 integrity (`tests/data.spec.js`), the ML status page (`tests/status.spec.js` —
 every GitHub endpoint stubbed by `page.route`, so it needs no network and no
 MIRROR), sandbox MIRROR mode, in-repo proxies, CI on real network.

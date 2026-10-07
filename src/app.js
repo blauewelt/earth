@@ -4592,6 +4592,17 @@ function fishingSampleAt(lon, lat) {
  * index that has not been published yet (a 404) is a STATE, not a bug: the
  * layer stays on, paints nothing, and a toast names the export chain. */
 const CLIM_INDEX_URL = "data/family7_clim_index.json";
+
+/* The forecaster's three published climatologies (data/family7_clim_index.json
+ * `versions`, E-083) as one-click settings of the tensor's monthly normals:
+ * the years, the years left out, all twelve months and one normal per month.
+ * The same store, years and leave-outs reproduce clim/{paper,dev,all} to
+ * float32 rounding (docs/DATA_TAB.md, "The paper's climatology"). */
+const DT_NORMAL_PRESETS = {
+  paper: { y0: 1982, y1: 2020, ex: [2009, 2017], label: "paper split" },
+  dev: { y0: 1982, y1: 2024, ex: [2009, 2017, 2023], label: "development split" },
+  all: { y0: 1982, y1: 2024, ex: [], label: "all years" },
+};
 const CLIM_LRU_PLANES = 24;           // ~100 MB of 0.25° planes; a 1° plane is 16× smaller
 const CLIM_BLOCK_BYTES = 16 << 20;    // read a month's C planes whole below this
 const LITTLE_ENDIAN = new Uint8Array(new Uint16Array([1]).buffer)[0] === 1;
@@ -4938,6 +4949,30 @@ function climFillSelects(cfg) {
 /* The Downloads block, for the selected version and group: the NetCDF (when
  * one was published), the raw array, its z-score constants, the index, and —
  * in the row, where it can be clicked — the plane on screen as CSV. */
+/* The paper's climatology, step by step, for one group: the store, the
+ * three split chips with their years, and each version's published
+ * whole-globe files (URLs from the index, none written here). The same
+ * recipe is in the Data tab's explainer and docs/DATA_TAB.md. */
+function climRecipeHtml(idx, spec, { inTip = false } = {}) {
+  if (!idx || !spec) return "";
+  const a = (f, t) => (f && f.url ? `<a href="${esc(f.url)}" target="_blank" rel="noopener">${t}</a>` : "");
+  const splits = ["paper", "dev", "all"].map((k) => {
+    const p = DT_NORMAL_PRESETS[k], f = climFiles(idx, k, spec.group);
+    const files = f ? [a(f.clim_nc, "clim.nc"), a(f.clim_npy, "clim.npy")].filter(Boolean).join(" · ") : "";
+    return `<li><em>${esc(p.label)}</em> — ${p.y0}–${p.y1}${p.ex.length ? `, leaving out ${p.ex.join(", ")}` : ", nothing left out"}` +
+      `${files ? ` (published whole-globe files, clim/${k}: ${files})` : ""}</li>`;
+  }).join("");
+  const size = spec.step < 1
+    ? "the whole globe for twelve months is over the tab's cap at this 0.25° grid (about 2.3 GB of sums and counts per channel; 1° cells shrink the file, not the read) — take one month at a time (about 190 MB for the whole globe) or a box"
+    : "the whole globe for twelve months is about 150 MB per channel at this 1° grid, inside the tab's cap";
+  return `<div class="clim-recipe"><strong>The paper's climatology from the Data tab:</strong> store ` +
+    `“Monthly normals of the global tensor” for ${esc(spec.group)}${inTip ? "" : " (the button below opens it)"}, ` +
+    `all twelve months, time step <em>normal — one mean per calendar month over the period</em>, and one of the ` +
+    `three chips:<ul>${splits}</ul>Only these stores reproduce the paper's numbers (to about 10⁻⁶ in the channel's unit, ` +
+    `measured): they use the model's rule — a five-day bin belongs to the month it opens in — and the tensor's own ` +
+    `values; the daily stores use true calendar months and are close but not identical. Size: ${size}.</div>`;
+}
+
 function climDownloadsHtml(cfg, { inTip = false } = {}) {
   const idx = climState.index;
   // The pointer to the Data tab (E-084), whatever this layer has published:
@@ -4976,8 +5011,13 @@ function climDownloadsHtml(cfg, { inTip = false } = {}) {
       : `<button type="button" class="clim-csv" data-climcsv="${cfg.id}">this channel, ` +
         `this month as CSV</button>`,
   ];
+  // the exact recipe for the paper's numbers (and the other two published
+  // splits) in the Data tab, with each version's whole-globe files for this
+  // group — verified end to end against these files (docs/DATA_TAB.md, "The
+  // paper's climatology")
+  const recipe = climRecipeHtml(idx, at.spec, { inTip });
   return `<div class="clim-dl-head">${esc(at.ver.name)} · ${esc(at.spec.group)} ` +
-    `(${at.spec.step}°)</div><ul>${items.map((x) => `<li>${x}</li>`).join("")}</ul>` + toData;
+    `(${at.spec.step}°)</div><ul>${items.map((x) => `<li>${x}</li>`).join("")}</ul>` + recipe + toData;
 }
 
 /* Everything in the row and the hover card that follows the selection. */
@@ -15991,6 +16031,14 @@ function dtReadSel() {
       step: dtEl("dt-step").value === "by-year" ? "by-year" : "normal", res,
     };
   }
+  // a store with precomputed monthly sums (E-088): years left out of every
+  // mean, the spread as an extra variable, and the check that reads every
+  // native map instead
+  const gm = !!st.monthlySums;
+  const excludeYears = gm ? dtExcludeYears() : [];
+  const step = rows ? "native"
+    : (!dtIsGrid(st) && dtEl("dt-step").value === "native") ? "pentad" : dtEl("dt-step").value;
+  const std = gm && st.monthlySums.std && dtEl("dt-std").checked && !(step === "native" && res === "native");
   return {
     ...(st.family ? { family: st.family } : {}),
     store: st.name,
@@ -16000,12 +16048,14 @@ function dtReadSel() {
     months,
     days,
     hours,
+    ...(excludeYears.length ? { excludeYears } : {}),
     bbox: box && !box.error ? { w: box.w, s: box.s, e: box.e, n: box.n } : null,
     // rows keep each report's own time: a time step is a binning choice; and
     // binned cells need a mean in time (dtSyncStepRes says why)
-    step: rows ? "native"
-      : (!dtIsGrid(st) && dtEl("dt-step").value === "native") ? "pentad" : dtEl("dt-step").value,
+    step,
     res,
+    ...(std ? { std: true } : {}),
+    ...(gm && dtEl("dt-native").checked ? { path: "native" } : {}),
     ...(group ? { group } : {}),
   };
 }
@@ -16014,7 +16064,7 @@ function dtReadSel() {
  * ranges "2009-2011" too): whole years inside the store's record only. */
 function dtExcludeYears() {
   const st = dt.store, el = dtEl("dt-exclude");
-  if (!st || !st.normals || !el) return [];
+  if (!st || !(st.normals || st.monthlySums) || !el) return [];
   const [a, b] = dtSpanYears(st), out = new Set();
   for (const part of String(el.value).split(/[,;\s]+/)) {
     const m = /^(\d{4})(?:\s*[-–]\s*(\d{4}))?$/.exec(part.trim());
@@ -16221,12 +16271,16 @@ const DT_STEP_OPTS = [["native", "native"], ["pentad", "five-day mean"], ["month
   ["all", "one mean over the whole selection"]];
 const DT_NORMALS_STEP_OPTS = [["normal", "normal — one mean per calendar month over the period"],
   ["by-year", "by year — each year's monthly mean, side by side"]];
+/* + a store with precomputed monthly sums (E-088) also offers the normal per
+ * calendar month over the period — the same two outputs as the tensor's
+ * normals: the normal, and (as the monthly mean) each year's month. */
+const DT_GM_STEP_OPTS = [...DT_STEP_OPTS, ["normal", "normal — one mean per calendar month over the period"]];
 function dtFillStep(st) {
   const sel = dtEl("dt-step");
-  const kind = st && st.normals ? "normals" : "plain";
+  const kind = st && st.normals ? "normals" : st && st.monthlySums ? "gm" : "plain";
   if (sel.dataset.kind === kind) return;
   const keep = sel.value;
-  sel.innerHTML = (kind === "normals" ? DT_NORMALS_STEP_OPTS : DT_STEP_OPTS)
+  sel.innerHTML = (kind === "normals" ? DT_NORMALS_STEP_OPTS : kind === "gm" ? DT_GM_STEP_OPTS : DT_STEP_OPTS)
     .map(([v, t]) => `<option value="${v}">${esc(t)}</option>`).join("");
   sel.dataset.kind = kind;
   if ([...sel.options].some((o) => o.value === keep)) sel.value = keep;
@@ -16237,6 +16291,14 @@ function dtSyncStepRes() {
   const step = dtEl("dt-step");
   const note = dtEl("dt-step-note");
   dtFillStep(st);
+  // the spread needs a mean: off (and said) for native maps at native cells
+  const stdBox = dtEl("dt-std");
+  if (stdBox) {
+    const noMean = step.value === "native" && dtEl("dt-res").value === "native";
+    stdBox.disabled = noMean;
+    stdBox.closest(".dt-chip").title = noMean ? "a standard deviation needs a time mean or coarser cells" : "";
+  }
+  dtSyncPresetChips();
   if (st && st.normals) {
     step.disabled = false;
     if (note) { note.textContent = ""; note.classList.add("hidden"); }
@@ -16273,8 +16335,16 @@ function dtApplyStore(st, saved) {
   dtEl("dt-d0").closest(".control-row").classList.toggle("hidden", !!st.calendar || !!st.normals);
   dtEl("dt-cal-note").classList.toggle("hidden", !st.calendar);
   dtEl("dt-normals-note").classList.toggle("hidden", !st.normals);
-  dtEl("dt-exclude-row").classList.toggle("hidden", !st.normals);
-  if (!st.normals) dtEl("dt-exclude").value = "";
+  const gm = !!st.monthlySums;
+  dtEl("dt-exclude-row").classList.toggle("hidden", !st.normals && !gm);
+  dtEl("dt-exclude-row").querySelector(".dt-inline").textContent = gm ? "years left out of every mean" : "years left out of the average";
+  dtEl("dt-npresets").classList.toggle("hidden", !st.normals);
+  dtEl("dt-gm-note").classList.toggle("hidden", !gm);
+  dtEl("dt-std-row").classList.toggle("hidden", !(gm && st.monthlySums.std));
+  dtEl("dt-path-row").classList.toggle("hidden", !gm);
+  dtEl("dt-std").checked = !!(gm && saved && saved.std);
+  dtEl("dt-native").checked = false;
+  if (!st.normals && !gm) dtEl("dt-exclude").value = "";
   else if (saved && Array.isArray(saved.excludeYears)) dtEl("dt-exclude").value = saved.excludeYears.join(", ");
   const parts = Array.isArray(st.groups) ? st.groups : [];
   dtEl("dt-group-row").classList.toggle("hidden", parts.length < 2);
@@ -16312,6 +16382,67 @@ function dtSetPeriod(y0, y1, months, days) {
   dtSetMonths(months);
   dtEl("dt-d0").value = days ? days[0] : 1;
   dtEl("dt-d1").value = days ? days[1] : 31;
+}
+
+function dtApplyNormalPreset(key) {
+  const p = DT_NORMAL_PRESETS[key], st = dt.store;
+  if (!p || !st || !st.normals) return;
+  const [a, b] = dtSpanYears(st);
+  dtEl("dt-y0").value = Math.max(a, p.y0);
+  dtEl("dt-y1").value = Math.min(b, p.y1);
+  dtEl("dt-exclude").value = p.ex.join(", ");
+  dtSetMonths([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]);
+  dtEl("dt-step").value = "normal";
+  dt.touched = true; dt.lookSeq++; dt.looking = false;
+  dtChanged();
+}
+/* A chip is lit while the controls ARE its split — its years, its years left
+ * out and the normal per calendar month — so the panel never claims a split
+ * it is not showing. The months are not part of a split: one month at a time
+ * is how a whole-globe 0.25° normal fits under the cap, and the chip stays lit. */
+function dtSyncPresetChips() {
+  const st = dt.store, row = dtEl("dt-npresets");
+  if (!row) return;
+  const sel = st && st.normals ? dtReadSel() : null;
+  let on = null;
+  for (const b of row.querySelectorAll("button[data-npreset]")) {
+    const p = DT_NORMAL_PRESETS[b.dataset.npreset];
+    const [a, z] = st ? dtSpanYears(st) : [0, 0];
+    const hit = !!sel && sel.step === "normal" && sel.yearStart === Math.max(a, p.y0) && sel.yearEnd === Math.min(z, p.y1) &&
+      sel.months.length > 0 && JSON.stringify(sel.excludeYears) === JSON.stringify(p.ex.filter((y) => y >= a && y <= z));
+    b.classList.toggle("active", hit);
+    b.setAttribute("aria-pressed", hit ? "true" : "false");
+    if (hit) on = b.dataset.npreset;
+  }
+  dt.presetOn = on;
+}
+
+/* The published whole-globe climatology files of the three versions, as a
+ * table under the paper recipe: every URL from data/family7_clim_index.json,
+ * none written here. */
+const DT_CLIM_GROUP_WORDS = { g025: "0.25° ocean surface", g100: "1° fluxes, weather, land", oc025: "0.25° ocean colour", rg100: "1° Argo at depth" };
+function dtPaperFilesHtml(idx) {
+  const vers = (idx && Array.isArray(idx.versions) ? idx.versions : []).filter((v) => idx.files && idx.files[v.key]);
+  const order = ["paper", "dev", "all"];
+  vers.sort((a, b) => order.indexOf(a.key) - order.indexOf(b.key));
+  const groups = Object.keys(idx.groups || {}).filter((g) => vers.some((v) => idx.files[v.key][g]));
+  if (!vers.length || !groups.length) return "";
+  const a = (f, t) => (f && f.url ? `<a href="${esc(f.url)}" target="_blank" rel="noopener" title="${esc(dtFmtMB(f.bytes || 0))}">${t}</a>` : "–");
+  const head = `<tr><th>version</th>${groups.map((g) => `<th>${esc(g)}<br>${esc(DT_CLIM_GROUP_WORDS[g] || "")}</th>`).join("")}</tr>`;
+  const rows = vers.map((v) => `<tr><th>clim/${esc(v.key)}<br>${esc(v.train_span || "")}</th>` +
+    groups.map((g) => { const f = idx.files[v.key][g] || {}; return `<td>${a(f.clim_nc, "clim.nc")} · ${a(f.clim_npy, "clim.npy")}</td>`; }).join("") + `</tr>`).join("");
+  return `<table>${head}${rows}</table>clim.nc is NetCDF in physical units; clim.npy is [12, C, H, W] float32 in standard scores ` +
+    `(value = z × sd + mean, with each channel's constants in the version's stats.json) — ` +
+    `<a href="${esc(CLIM_INDEX_URL)}" target="_blank" rel="noopener">the index</a> has every size and sha256.`;
+}
+async function dtFillPaperFiles() {
+  const host = dtEl("dt-paper-files");
+  if (!host) return;
+  try {
+    const idx = climState.index || await fetch(CLIM_INDEX_URL).then((r) => (r.ok ? r.json() : null));
+    const html = idx ? dtPaperFilesHtml(idx) : "";
+    if (html) host.innerHTML = html;
+  } catch { /* the sentence and the index link stay */ }
 }
 
 /* The latitudes a gridded store covers (pixel centres), from its registry
@@ -16955,6 +17086,11 @@ class DtProgress {
     if (f !== null) this.wasDeterminate = true;
     this.samples.push({ t: performance.now(), f, bytes: this.base.bytes + this.p.bytesAll });
     if (this.samples.length > 400) this.samples.splice(0, this.samples.length - 400);
+    // paint now when the last paint is older than 100 ms, else coalesce on the
+    // next frame: on a busy globe page animation frames can starve for
+    // seconds, and a read that finishes inside that gap would never have
+    // shown its counts at all
+    if (this.shown && performance.now() - (this.lastRender || 0) > 100) { this.render(); return; }
     if (!this.raf) this.raf = requestAnimationFrame(() => { this.raf = 0; this.render(); });
   }
   fraction() {
@@ -17012,7 +17148,11 @@ class DtProgress {
     const t = secs >= 1 ? ` · ${secs} s` : "";
     if (this.state === "done") return `${this.doneText || "done"}${t}`;
     if (this.state === "cancelled") return `cancelled${t}`;
-    if (!p) return `starting…${t}`;
+    // between two candidates of a first-look search the counts carried from
+    // the earlier ones are still the truth (a later candidate may read only
+    // cached headers and never report): say them, not "starting…"
+    if (!p) return this.base.requests ? `${dtFmtInt(this.base.requests)} ${this.base.requests === 1 ? "request" : "requests"} · ` +
+      `${dtFmtMB(this.base.bytes)} so far${t}` : `starting…${t}`;
     const n = this.base.requests + p.requestsAll, b = this.base.bytes + p.bytesAll;
     let head;
     if (p.phase === "data") {
@@ -17040,6 +17180,7 @@ class DtProgress {
   render() {
     if (!this.host) return;
     if (!this.shown && this.state === "running") { dt.lastProgress = this.snapshot(); return; }
+    this.lastRender = performance.now();
     const f = this.state === "done" ? 1 : this.fraction();
     if (!this.mounted) { this.mounted = true; if (this.mount) this.mount(); }
     if (!this.host.querySelector(".dt-prog-bar")) {
@@ -17204,11 +17345,30 @@ async function dtRunEstimate() {
       `${dtFmtInt(est.channelsKept)} ticked: the store keeps them side by side in every tile, so the ` +
       `megabytes above are what is really fetched.</div>`;
   }
-  if (!est.overCap && dt.store.normals) html += `<div class="dt-how">${dtNormalsHow(sel, est)}</div>`;
+  if (est.path) html = dtPathHtml(est) + html;
+  if (!est.overCap && (dt.store.normals || (est.path === "monthly" && sel.step === "normal"))) html += `<div class="dt-how">${dtNormalsHow(sel, est)}</div>`;
+  else if (!est.overCap && sel.step === "normal" && Array.isArray(est.yearsUsed)) html += `<div class="dt-how">${dtNormalsHow(sel, est).replace(/ Read .*$/, "")}</div>`;
   out.className = `dt-estimate${est.overCap ? " dt-over" : ""}`;
   out.innerHTML = html;
   dtSetDownloadEnabled(!est.overCap);
   dtEl("dt-preview").disabled = false;
+}
+
+/* Which way a time mean of a store with precomputed monthly sums is read
+ * (E-088), first in the estimate box: from the sums — and what the native read
+ * would have been — or every native map, and why. */
+function dtPathHtml(est) {
+  // small reads in kB: "2 requests, 56 kB" says more than "< 0.1 MB"
+  const mb = (b) => (Number(b) < 1e5 ? `${Math.max(1, Math.round(Number(b) / 1e3))} kB` : dtFmtMB(b));
+  if (est.path === "monthly") {
+    const nat = est.native
+      ? ` Reading its ${dtFmtInt(est.native.frames)} native maps instead would be ${est.native.exact === false ? "≈ " : ""}` +
+        `${dtFmtInt(est.native.requests)} requests, ${mb(est.native.readBytes)}.` : "";
+    const why = String(est.pathWhy || "").replace(/^whole/, "Whole");
+    return `<div class="dt-path" data-path="monthly">Read from precomputed monthly sums — <strong>${dtFmtInt(est.requests)}</strong> ` +
+      `requests, <strong>${mb(est.readBytes)}</strong>. ${esc(why)}.${nat}</div>`;
+  }
+  return `<div class="dt-path dt-path-native" data-path="native">Read from the native maps: ${esc(String(est.pathWhy || ""))}.</div>`;
 }
 
 /* The normals' read in words: which years go into the average, and which of
@@ -17238,7 +17398,8 @@ function dtNormalsHow(sel, est) {
  * not the maps, so both are said — "30 daily maps read → 1 monthly mean" —
  * because the read follows the first number and the file the second. */
 const DT_STEP_WORDS = { pentad: ["five-day mean", "five-day means"],
-  month: ["monthly mean", "monthly means"], all: ["mean over the whole selection", "means"] };
+  month: ["monthly mean", "monthly means"], all: ["mean over the whole selection", "means"],
+  normal: ["normal", "normals (one per calendar month)"] };
 function dtCountHtml(sel, est) {
   const st = dt.store;
   const plural = (n, one, many) => (Number(n) === 1 ? one : many);
@@ -17254,6 +17415,12 @@ function dtCountHtml(sel, est) {
       `<strong>${dtFmtInt(T)}</strong> ${plural(T, words[0], words[1])} on ${sel.res}° cells`;
   }
   const n = est.frames;
+  if (est.path === "monthly") {
+    const w = sel.step === "normal" ? ["normal", "normals (one per calendar month)"] : words || ["mean", "means"];
+    return `<strong>${dtFmtInt(n)}</strong> monthly ${plural(n, "plane", "planes")} of sums ` +
+      `(${dtFmtInt(est.nativeFrames)} of ${dtFmtInt(est.possibleFrames)} possible ${dtFrameAdj(st)} maps) read → ` +
+      `<strong>${dtFmtInt(T)}</strong> ${plural(T, w[0], w[1])}`;
+  }
   if (st.normals) {
     const years = Number(est.years) || 0;
     const what = sel.step === "by-year" ? plural(T, "monthly mean", "monthly means (one per year and month)")
@@ -17485,8 +17652,8 @@ function dtShowLegend(info, res, ci) {
   const what = cl && cl.period
     ? `the ${esc(mon(info.when))} normal over ${cl.period[0]}–${cl.period[1]}` +
       `${cl.excluded.length ? ` (leaving out ${esc(cl.excluded.join(", "))})` : ""}`
-    : res.kind === "grid" && dt.store && dt.store.normals
-    ? `the ${esc(mon(info.when))} mean of ${esc(dtIso(info.when).slice(0, 4))}`
+    : res.kind === "grid" && dt.store && (dt.store.normals || res.path === "monthly")
+    ? `the ${esc(mon(info.when))} mean of ${esc(dtIso(info.when).slice(0, 4))}${res.path === "monthly" ? ", from the precomputed monthly sums" : ""}`
     : res.kind === "grid"
     ? `first frame with data, ${esc(dtIso(info.when))} UTC`
     : `${dtFmtInt(info.n)} reports from the first five-day bin with data, from ${esc(dtIso(info.when))} UTC`;
@@ -17598,7 +17765,9 @@ function dtFileName(sel, ext) {
   const fam = sel.family && sel.family !== "1.gf" ? `f${clean(sel.family)}_` : "";
   const when = dt.store && dt.store.calendar ? "clim" : yrs;
   const ex = sel.excludeYears && sel.excludeYears.length ? `_ex${sel.excludeYears.join("-")}` : "";
-  return `${fam}${clean(sel.store)}_${ch}_${when}${ex}${mo}${dy}${hr}_${res}${step}.${ext}`;
+  // + the spread, and a read forced through every native map (a check)
+  const xs = `${sel.std ? "_std" : ""}${sel.path === "native" ? "_nativeread" : ""}`;
+  return `${fam}${clean(sel.store)}_${ch}_${when}${ex}${mo}${dy}${hr}_${res}${step}${xs}.${ext}`;
 }
 
 /* `onProgress` is the reader's; its argument may be a fraction, a percentage
@@ -17790,6 +17959,11 @@ function dtWire() {
       duration: 1.2,
     });
   });
+  dtEl("dt-npresets").addEventListener("click", (e) => {
+    const b = e.target.closest("button[data-npreset]");
+    if (b) dtApplyNormalPreset(b.dataset.npreset);
+  });
+  dtFillPaperFiles();
   dtEl("dt-preview").addEventListener("click", dtPreview);
   // draw the box on the globe, and the other way round for a drawn box
   dtEl("dt-draw").addEventListener("click", () => { if (dtDraw.armed) dtDrawDisarm(); else dtDrawArm(); });

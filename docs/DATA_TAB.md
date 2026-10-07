@@ -49,7 +49,7 @@ the stores themselves are described in the
 
 The tab reads the list of stores from the registries at run time, so a store
 appears in the tab the day it is published; these tables are the set as of
-2026-10-06 evening (35 stores). Three kinds:
+2026-10-07 (35 stores). Three kinds:
 
 - a **map store** (a gridded product): one value per pixel per frame;
 - a **point store**: every report at its own position and time — a ship's
@@ -192,6 +192,90 @@ and writes it into every file's `comment`:
   current) and mixed-layer depth (the log of the mean depth), so those can
   differ from the tensor where those rules bite.
 
+### Cheap long-period averages (precomputed monthly sums)
+
+Eight map stores also keep, for every year, calendar month, channel and cell,
+the **sum** of that month's native maps, **how many** had a value, and the
+**sum of squared deviations** from that month's own mean
+([E-088](https://blauewelt.github.io/earth/docs.html?f=ml/plans/E088_monthly_sums_gridded.md),
+the experiment that computed and verified them once, on a rented machine):
+
+| store | family | grid | from |
+|---|---|---|---|
+| `oisst025d` | 7.2d (daily) | 0.25° | 1982 |
+| `glorys025d` | 7.2d (daily) | 0.25° | 1993 |
+| `ncep100d` | 7.2d (daily) | 1° | 1982 |
+| `occci025d` | 7.2d (daily) | 0.25° | 1997 (from September) |
+| `era5_t`, `era5_q`, `era5_u`, `era5_v` | 1.2 (six-hourly) | 1° | 1982 |
+
+The index is the site's own `data/gridded_monthly_index.json`. A mean over any
+set of (year, month) cells is Σ sums ÷ Σ counts; a spread is
+(Σ m2 + Σ n·(month's mean − the mean)²) ÷ Σ n, the population form.
+
+**When the tab uses them.** For these stores, the time steps *monthly mean*,
+*one mean over the whole selection* and *normal — one mean per calendar month
+over the period* are read from the precomputed sums **whenever the selection
+is made of whole calendar months**: no day-of-month range and, for the
+six-hourly ERA5 stores, no hour filter. Otherwise every native map is read,
+exactly as before. The estimate box opens with one sentence saying which, and
+why, and it counts the path it names:
+
+- *Read from precomputed monthly sums — 2 requests, 56 kB. Whole calendar
+  months with no day-of-month or hour filter: each (year, month) is one
+  precomputed plane of sums and counts instead of its native maps. Reading its
+  124 native maps instead would be 255 requests, 24.3 MB.* (ERA5 temperature
+  at 500 hPa, January 2015, 30–60° N × 60–10° W)
+- *Read from the native maps: your selection cuts months (days 1–10), so every
+  native map is read.*
+
+The native path is also taken for the native time step, five-day means (they
+cross month edges), and — a safety rule — any month whose frames in the store
+differ from the frames that were summed (a store updated since its sums were
+made reads natively until they are remade; the sentence names the month).
+**read every native map instead** (the *check* row) forces the native path, to
+compare the two; the file name then ends in `_nativeread`.
+
+**What it buys**, measured in the browser against the live store on
+2026-10-07 (from the sandbox, where every request is relayed, so the seconds
+are slow in absolute terms; the ratios are the point):
+
+| selection | precomputed sums | every native map |
+|---|---|---|
+| ERA5 temperature 500 hPa, January 2015, 30–60° N × 60–10° W | 2 requests, 0.06 MB, 6 s | 248 requests, 24.2 MB, 166 s |
+| OISST July 2018–2020, 35–40° N × 50–45° W | 6 requests, 0.45 MB, 5 s | 186 requests, 10.1 MB, 128 s |
+| OISST July normal 1991–2020, same box | 60 requests, 4.5 MB, 43 s | ≈ 2,070 requests, 102 MB |
+| ERA5 temperature 500 hPa, one mean over 1991–2020, 30–60° N × 60–10° W | 24 requests, 114 MB, 26 s | ≈ 89,856 requests, 8.3 GB — over the cap |
+
+**The two paths agree.** Same selection through both: the means within the
+float32 bound of the stored sums (Σ ½ulp(sum) ÷ Σ count per cell — in practice
+identical to the last bit for one month, 1.5 × 10⁻⁵ K for a 30-year ERA5 mean
+against numpy over the same planes), the counts identical. Checked in the
+reader's tests on two small native stores and the sums made from them, and
+live (`scripts/datatab_browser_check.mjs`, `scripts/f1data_live_check.mjs --e088`).
+
+**Standard deviation** (the *spread* row, off by default): an extra variable
+`<channel>_std` beside each mean — the spread of the native maps behind it, in
+population form (divided by N, not N − 1). Offered for these stores on either
+path. Checked live: OISST July 2019 in a 2° box against numpy's `nanstd` of the
+31 native daily maps, max difference 9 × 10⁻⁸ °C.
+
+**Counts and coverage.** `<channel>_count` is always written (finite native
+frames per cell), and the file adds `frames_present` and `frames_possible`
+per time step and a global attribute such as *930 of 930 possible frames* — so
+"28 of 31 days" tells a gap upstream from a cloudy pixel. `read_path` and
+`read_path_reason` record which way the file was read.
+
+**A frame belongs to the calendar month of its own start (UTC).** A daily map
+is its day; a six-hourly ERA5 map is its instant. This is NOT the rule of the
+monthly normals below, where a five-day bin belongs to the month it OPENS in —
+so a July normal of `oisst025d` and of `normals_g025` differ slightly at month
+edges (a bin opening on 30 June is June to the tensor and five-sixths July
+here), besides the tensor's own five-day rules.
+
+ERA5's level picker works on this path as on the other (one level, the sums of
+that level's channel); unlike the native tiles, the sums are stored per channel,
+so one level reads one level.
+
 ### Derived maps
 
 | store | plain-English name | kind | native space | native time | record |
@@ -223,7 +307,8 @@ tensor's own constants), so a file carries °C, m/s, PSU and so on.
 
 - **Period**: a first and a last year, and **leave out** — whole years to
   drop ("2009, 2017"; "2009-2011" for a range). The paper's split is *1982 to
-  2020, leave out 2009, 2017*; the period 1982–2024 reproduces the Model
+  2020, leave out 2009, 2017* — one click on the **paper split** chip (below,
+  *The paper's climatology*); the period 1982–2024 reproduces the Model
   climatology layer's all-years normal.
 - **Months**: the twelve chips; one normal per chosen month.
 - **Time step**: *normal* — one mean per calendar month over the period (the
@@ -256,6 +341,65 @@ tensor's own constants), so a file carries °C, m/s, PSU and so on.
 - **First look**: the whole record, this calendar month, the Gulf Stream box
   — 12.7 MB for 0.25° SST, under 15 MB for every group.
 
+#### The paper's climatology — the exact recipe
+
+The forecaster's climatology — what it subtracts before training and scores
+against — was published in three versions, and the tab reproduces each one:
+
+1. **Store**: *Monthly normals of the global tensor* for the group with your
+   channel — `normals_g025` (0.25° ocean surface), `normals_g100` (1° fluxes,
+   weather and land), `normals_oc025` (ocean colour) or `normals_rg100` (Argo
+   at depth).
+2. **One chip** in the *splits* row, which sets the period, the years left
+   out, all twelve months and the time step *normal — one mean per calendar
+   month over the period*:
+   - **paper split** — first year 1982, last year 2020, leave out 2009 and
+     2017 (the paper's numbers);
+   - **development split** — 1982–2024, leave out 2009, 2017 and 2023;
+   - **all years** — 1982–2024, nothing left out (what the Model climatology
+     layer paints).
+3. **Size it**: a whole-globe twelve-month normal of one 0.25° channel reads
+   about 2.3 GB of sums and counts — far over the 600 MB cap — so take **one
+   month at a time** (about 190 MB for the whole globe; the chip stays lit) or
+   a box. 1° cells shrink the file, not the read, of a 0.25° group. A 1°
+   group's whole-globe twelve-month normal is about 150 MB per channel, inside
+   the cap.
+4. **Download** (NetCDF): a CF climatology whose `period_start`,
+   `period_end` and `excluded_years` say which split it is.
+
+**Only these stores reproduce the paper**: they use the model's own rule — a
+five-day bin belongs to the month it opens in — and the tensor's own values;
+the daily stores above use true calendar months and are close but not
+identical.
+
+Verified end to end on 2026-10-07 through the tab's Download button, each file
+against the published plane read independently by range and turned into the
+channel's unit with the index's mean and spread: sea-surface temperature
+(`g025`), February, 35–45° N × 50–40° W, 1,681 cells — paper split max
+difference 1.10 × 10⁻⁶ °C, development split 1.09 × 10⁻⁶ °C; 2 m air
+temperature (`g100`), July, 40–60° N × 20° W–10° E, 651 cells — 1.53 × 10⁻⁶ °C
+and 1.57 × 10⁻⁶ °C. Each is inside two float32 roundings (the published file's
+standard score times the spread, and the tab's own float32 value), with NaN in
+exactly the same cells.
+
+The published whole-globe files of the three versions (from
+`data/family7_clim_index.json`, which has every size and sha256; `clim.nc` is
+in physical units, `clim.npy` is `[12, C, H, W]` float32 standard scores —
+value = z × sd + mean with the constants in that version's `stats.json`):
+
+- paper split, g025 (0.25° ocean surface (sea-surface temperature, height, currents, mixed layer, sea ice)): [clim/paper/g025/clim.nc](https://huggingface.co/datasets/chfrank/earth-tensors/resolve/main/tensors/family7_global025_pentad_l2/clim/paper/g025/clim.nc) (150 MB, physical units) · [clim.npy](https://huggingface.co/datasets/chfrank/earth-tensors/resolve/main/tensors/family7_global025_pentad_l2/clim/paper/g025/clim.npy) (349 MB, standard scores)
+- paper split, g100 (1° air–sea fluxes, weather and land): [clim/paper/g100/clim.nc](https://huggingface.co/datasets/chfrank/earth-tensors/resolve/main/tensors/family7_global025_pentad_l2/clim/paper/g100/clim.nc) (30 MB, physical units) · [clim.npy](https://huggingface.co/datasets/chfrank/earth-tensors/resolve/main/tensors/family7_global025_pentad_l2/clim/paper/g100/clim.npy) (47 MB, standard scores)
+- paper split, oc025 (0.25° ocean colour): [clim/paper/oc025/clim.nc](https://huggingface.co/datasets/chfrank/earth-tensors/resolve/main/tensors/family7_global025_pentad_l2/clim/paper/oc025/clim.nc) (45 MB, physical units) · [clim.npy](https://huggingface.co/datasets/chfrank/earth-tensors/resolve/main/tensors/family7_global025_pentad_l2/clim/paper/oc025/clim.npy) (100 MB, standard scores)
+- paper split, rg100 (1° Argo temperature and salinity at depth): [clim/paper/rg100/clim.nc](https://huggingface.co/datasets/chfrank/earth-tensors/resolve/main/tensors/family7_global025_pentad_l2/clim/paper/rg100/clim.nc) (32 MB, physical units) · [clim.npy](https://huggingface.co/datasets/chfrank/earth-tensors/resolve/main/tensors/family7_global025_pentad_l2/clim/paper/rg100/clim.npy) (100 MB, standard scores)
+- development split, g025 (0.25° ocean surface (sea-surface temperature, height, currents, mixed layer, sea ice)): [clim/dev/g025/clim.nc](https://huggingface.co/datasets/chfrank/earth-tensors/resolve/main/tensors/family7_global025_pentad_l2/clim/dev/g025/clim.nc) (150 MB, physical units) · [clim.npy](https://huggingface.co/datasets/chfrank/earth-tensors/resolve/main/tensors/family7_global025_pentad_l2/clim/dev/g025/clim.npy) (349 MB, standard scores)
+- development split, g100 (1° air–sea fluxes, weather and land): [clim/dev/g100/clim.nc](https://huggingface.co/datasets/chfrank/earth-tensors/resolve/main/tensors/family7_global025_pentad_l2/clim/dev/g100/clim.nc) (30 MB, physical units) · [clim.npy](https://huggingface.co/datasets/chfrank/earth-tensors/resolve/main/tensors/family7_global025_pentad_l2/clim/dev/g100/clim.npy) (47 MB, standard scores)
+- development split, oc025 (0.25° ocean colour): [clim/dev/oc025/clim.nc](https://huggingface.co/datasets/chfrank/earth-tensors/resolve/main/tensors/family7_global025_pentad_l2/clim/dev/oc025/clim.nc) (45 MB, physical units) · [clim.npy](https://huggingface.co/datasets/chfrank/earth-tensors/resolve/main/tensors/family7_global025_pentad_l2/clim/dev/oc025/clim.npy) (100 MB, standard scores)
+- development split, rg100 (1° Argo temperature and salinity at depth): [clim/dev/rg100/clim.nc](https://huggingface.co/datasets/chfrank/earth-tensors/resolve/main/tensors/family7_global025_pentad_l2/clim/dev/rg100/clim.nc) (32 MB, physical units) · [clim.npy](https://huggingface.co/datasets/chfrank/earth-tensors/resolve/main/tensors/family7_global025_pentad_l2/clim/dev/rg100/clim.npy) (100 MB, standard scores)
+- all years, g025 (0.25° ocean surface (sea-surface temperature, height, currents, mixed layer, sea ice)): [clim/all/g025/clim.nc](https://huggingface.co/datasets/chfrank/earth-tensors/resolve/main/tensors/family7_global025_pentad_l2/clim/all/g025/clim.nc) (150 MB, physical units) · [clim.npy](https://huggingface.co/datasets/chfrank/earth-tensors/resolve/main/tensors/family7_global025_pentad_l2/clim/all/g025/clim.npy) (349 MB, standard scores)
+- all years, g100 (1° air–sea fluxes, weather and land): [clim/all/g100/clim.nc](https://huggingface.co/datasets/chfrank/earth-tensors/resolve/main/tensors/family7_global025_pentad_l2/clim/all/g100/clim.nc) (30 MB, physical units) · [clim.npy](https://huggingface.co/datasets/chfrank/earth-tensors/resolve/main/tensors/family7_global025_pentad_l2/clim/all/g100/clim.npy) (47 MB, standard scores)
+- all years, oc025 (0.25° ocean colour): [clim/all/oc025/clim.nc](https://huggingface.co/datasets/chfrank/earth-tensors/resolve/main/tensors/family7_global025_pentad_l2/clim/all/oc025/clim.nc) (45 MB, physical units) · [clim.npy](https://huggingface.co/datasets/chfrank/earth-tensors/resolve/main/tensors/family7_global025_pentad_l2/clim/all/oc025/clim.npy) (100 MB, standard scores)
+- all years, rg100 (1° Argo temperature and salinity at depth): [clim/all/rg100/clim.nc](https://huggingface.co/datasets/chfrank/earth-tensors/resolve/main/tensors/family7_global025_pentad_l2/clim/all/rg100/clim.nc) (32 MB, physical units) · [clim.npy](https://huggingface.co/datasets/chfrank/earth-tensors/resolve/main/tensors/family7_global025_pentad_l2/clim/all/rg100/clim.npy) (100 MB, standard scores)
+
 Not offered: the 6.25 km sea-ice store from the University of Bremen stays
 private until Bremen answers on redistribution — a browser has no access token
 and must not have one.
@@ -272,8 +416,11 @@ and must not have one.
    *none*; the channels are every variable at every level that is on. ERA5
    opens on one level, 500 hPa.
 2. **Years.** A start and an end year, clamped to the store's record. A
-   normals store adds **leave out** (whole years to drop from the average) and
-   has no days.
+   normals store adds **leave out** (whole years to drop from the average),
+   the three **splits** chips (*paper split*, *development split*, *all
+   years* — a chip is lit while the years and the years left out are its
+   split) and has no days. The eight stores with precomputed monthly sums
+   have **leave out** too (years left out of every mean).
 3. **Months.** Twelve chips with *all* / *none*. "Every February from 1998 to
    2004" is: years 1998 to 2004, only *Feb* on.
    **Days.** A day-of-month range applied inside every chosen month (*1 to 31*
@@ -326,7 +473,11 @@ and must not have one.
    from the globe's surface, not from what is drawn on it, so a place name
    under the pointer cannot swallow a click.
 6. **Time step.** *Native* keeps every frame (or every report); *five-day mean*,
-   *monthly mean* and *one mean over the whole selection* average in time.
+   *monthly mean* and *one mean over the whole selection* average in time. The
+   eight stores with precomputed monthly sums add *normal — one mean per
+   calendar month over the period* (with *monthly mean* as its by-year stack),
+   a **spread** row (*standard deviation too*) and a **check** row (*read every
+   native map instead*) — §1, *Cheap long-period averages*.
 7. **Resolution.** For a map store: *native*, 0.25° or 1°, the coarser two being
    an average over the native pixels in each cell. For a point store: *rows*
    (every report as it is, with its own time) or 0.25° / 1° **cells**. Cells
@@ -438,6 +589,12 @@ and must not have one.
   file's time is the first of each month.
 - **Family 7.2d** values are daily, physical, float16 as stored; each frame is
   dated to its day at 00:00 UTC.
+- **Means from the precomputed monthly sums** (family 7.2d, ERA5) are the same
+  means as averaging every native map, to within float32 rounding of the
+  stored sums; a frame counts in the calendar month of its own start. A
+  *normal* file's time is each month in the first year of the period, with
+  `climatology_bounds`, as for the monthly normals. `<channel>_std`, where
+  asked for, is the population standard deviation.
 - Every file states its units and carries, in its global attributes, the store
   and the full selection that produced it.
 
@@ -449,8 +606,9 @@ and must not have one.
 | the zstd decoder the reader uses for the compressed tiles | `lib/fzstd.js` |
 | the tab: controls, box on the globe, estimate line, preview, save | `src/app.js` (the block headed "data tab"), `index.html` (`#panel-data`), `src/style.css` |
 | tests of the tab | `tests/app.spec.js` ("Data tab: …") |
-| tests of the reader, and the small fixtures they read | `tests/f1data.test.mjs`; `data/family1_fixture/`, `data/family12_fixture/` (an ERA5-shaped store with levels and six-hourly frames), `data/family10_fixture/` and `data/family7_monthly/fixture_multi/` (per-year monthly sums and counts, five years, two small grids), written by `tests/make_family1_fixture.py`, `tests/make_family12_fixture.py`, `tests/make_family10_fixture.py` and `tests/make_family7_monthly_fixture.py` |
-| a check against the live data store, with independent Python reads | `scripts/f1data_live_check.mjs` |
+| tests of the reader, and the small fixtures they read | `tests/f1data.test.mjs`; `data/family1_fixture/`, `data/family12_fixture/` (an ERA5-shaped store with levels and six-hourly frames), `data/family10_fixture/` and `data/family7_monthly/fixture_multi/` (per-year monthly sums and counts, five years, two small grids), written by `tests/make_family1_fixture.py`, `tests/make_family12_fixture.py`, `tests/make_family10_fixture.py` and `tests/make_family7_monthly_fixture.py`; `data/gridded_monthly/fixture/` (per-year monthly sums, counts and m2 of two tiny stores) with `fixture_native/` (the native stores they were made from, `tests/make_gridded_paths_fixture.py`), so one selection is read both ways |
+| a check against the live data store, with independent Python reads | `scripts/f1data_live_check.mjs` (`--e088` for the precomputed sums and the paper's climatology only) |
+| the same, in a real browser through the tab's own controls and Download button | `scripts/datatab_browser_check.mjs` |
 
 The reader keeps one handler per layout — the zstd-tiled family-1.gf grids
 (also family 1.2's and family 7.2d's), the five-day-binned point stores (both

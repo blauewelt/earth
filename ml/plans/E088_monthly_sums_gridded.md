@@ -271,3 +271,8 @@ measured one month's read and compression, not the full CPU cost.
   max |Δmean| 0, max |Δstd| 8.4e-9 °C, mean 22.5337 °C both ways.
 - `data/gridded_monthly_index.json` written by the restore job
   (`restore_verified: true`) and committed. Nothing in flight.
+- 2026-10-07: **used by the website.** The Data tab reads these files for a
+  monthly mean, one mean or a normal per calendar month made of whole months
+  (else every native map), says which and why, and offers the std; verified
+  live in a real browser through the tab against numpy and against the native
+  path (`ml/plans/E084_data_tab.md` §8, `docs/DATA_TAB.md` §1).
