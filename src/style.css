@@ -1002,3 +1002,19 @@ footer a { color: var(--fg-dim); }
 @media (max-width: 600px) {
   .dt-draw-chip { top: auto; bottom: 64px; }
 }
+
+/* Data tab: the period as one slider with two handles (two overlaid ranges;
+   only the thumbs take the pointer, so either can be grabbed). */
+.dt-yslide { position: relative; height: 28px; margin: 2px 2px 6px; }
+.dt-yslide::before { content: ""; position: absolute; left: 0; right: 0; top: 12px; height: 4px;
+  border-radius: 2px; background: var(--border); }
+.dt-yslide-fill { position: absolute; top: 12px; height: 4px; border-radius: 2px; background: #4493f8; }
+.dt-yslide input[type=range] { position: absolute; left: 0; top: 0; width: 100%; height: 28px; margin: 0;
+  background: none; pointer-events: none; -webkit-appearance: none; appearance: none; }
+.dt-yslide input[type=range]::-webkit-slider-runnable-track { background: none; height: 28px; }
+.dt-yslide input[type=range]::-moz-range-track { background: none; }
+.dt-yslide input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; pointer-events: auto;
+  width: 22px; height: 22px; margin-top: 3px; border-radius: 50%; background: #4493f8;
+  border: 2px solid var(--bg); cursor: pointer; }
+.dt-yslide input[type=range]::-moz-range-thumb { pointer-events: auto; width: 18px; height: 18px;
+  border-radius: 50%; background: #4493f8; border: 2px solid var(--bg); cursor: pointer; }

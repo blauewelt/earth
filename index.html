@@ -1060,6 +1060,13 @@
           <input type="number" id="dt-y1" class="dt-num" inputmode="numeric" />
           <span class="hint dt-inline" id="dt-span"></span>
         </div>
+        <!-- The same two years as a slider with two handles: drag either end
+             of the period. The fields above stay for typing an exact year. -->
+        <div class="dt-yslide" id="dt-yslide">
+          <div class="dt-yslide-fill" id="dt-yslide-fill"></div>
+          <input type="range" id="dt-ys0" step="1" aria-label="first year of the period" />
+          <input type="range" id="dt-ys1" step="1" aria-label="last year of the period" />
+        </div>
         <!-- Only for the monthly normals (E-086): whole years left out of the
              composition — the paper's split is 1982–2020 excluding 2009, 2017. -->
         <div class="control-row dt-wrap hidden" id="dt-exclude-row">
@@ -1088,6 +1095,11 @@
           <span class="dt-to">to</span>
           <input type="number" id="dt-d1" class="dt-num dt-hr" min="1" max="31" value="31" inputmode="numeric" />
           <span class="hint dt-inline">of each chosen month; 1 to 31 is the whole month</span>
+        </div>
+        <div class="dt-yslide" id="dt-dslide">
+          <div class="dt-yslide-fill" id="dt-dslide-fill"></div>
+          <input type="range" id="dt-ds0" step="1" min="1" max="31" aria-label="first day of each month" />
+          <input type="range" id="dt-ds1" step="1" min="1" max="31" aria-label="last day of each month" />
         </div>
 
         <p class="hint dt-note hidden" id="dt-normals-note">These are the global tensor's monthly
@@ -1141,7 +1153,7 @@
           <button type="button" class="td-btn dt-btn" id="dt-box-swap"
                   title="the same latitudes, the longitudes the other way round the planet (across the dateline, or back)">the other way round</button>
           <button type="button" class="td-btn dt-btn" id="dt-box-clear"
-                  title="no box: the whole globe (point stores only)">whole globe</button>
+                  title="the whole globe: no box for a point store, the full −180…180, −90…90 box for a map store (the estimate says whether it fits)">whole globe</button>
         </div>
         <!-- Filled from the Cones tab's own six places (#cn-presets), so the
              two tabs can never disagree about where "Kuroshio" is. -->
