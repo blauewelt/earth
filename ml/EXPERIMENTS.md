@@ -45,6 +45,38 @@ low-pass).
 ---
 
 <a id="e-090"></a>
+## E-091 · Day-of-year climatology — the mean of every calendar day over any span of years, from sums cumulative over the years — BUILT 2026-10-08 for OISST and the four ERA5 stores
+
+**Why.** Chris: *"Say I want average values for every single day of year,
+across 20 years."* The Data tab had a climatology per calendar month only;
+twenty years of daily maps is about 7,300 maps per channel, over its read
+limit beyond a small box.
+
+**What.** Per store, 366 files of sums (float32) and counts (uint8),
+`[channel, year, lat, lon]`, cumulative over the years; the mean of a day over
+years a…b is `(S[b] − S[a−1]) / (N[b] − N[a−1])`. Built by twelve hosted jobs
+per store (one per calendar month, ~4–15 min each), each running a falsifier
+against numpy on the native frames before its upload.
+[Plan](https://blauewelt.github.io/earth/docs.html?f=ml/plans/E091_day_of_year_climatology.md).
+
+**Result.** OISST (sea-surface temperature and sea ice, 0.25°, 1982–2026,
+171 GB), ERA5 temperature, humidity and both wind components (13 levels, 1°,
+70 GB each). Falsifier: OISST max |Δmean| 1.5e-5 °C, inside the float32 bound.
+Through the Data tab's reader against every native map of the same days
+(three spans, including 29 February and a year left out): identical values and
+counts for OISST, ERA5 temperature and humidity. Through the tab in a browser:
+February's 29 days over 2001–2020 in a 10° box, 116 requests, 17 MB.
+
+**One mistake on the way.** The first wind runs failed the falsifier at
+2.4e-4 m/s: the bound counted the rounding of the running total at the span's
+end only, not of the one before its start, which for a signed field can be
+much larger. The bound was wrong, not the data; fixed and re-run.
+
+**Not built.** NCEP (80 GB), OC-CCI (114 GB), GLORYS (323 GB): held for
+Chris's decision. No standard deviation on this path. Cost: none (hosted
+runners).
+
+
 ## E-090 · Every store the Data tab serves, kept current with its upstream — a daily hosted refresh — SCHEDULED 2026-10-08 after real refreshes of six gridded stores were green (OISST to 2026-10-06 with two preliminary days replaced by final ones, GLORYS to 08-25, PACE to 08-31, ACSPO to 10-07 with its reissued July, the geostationary IR to 10-06; ERA5 re-fetched byte-identical)
 
 **E-090 · A scheduled GitHub-hosted job that follows each producer.**

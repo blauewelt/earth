@@ -56,12 +56,27 @@ tab reads.
 
 | store | grid | channels | years | size |
 |---|---|---|---|---|
-| OISST sea-surface temperature, daily | 0.25° | 1–2 | 45 | ≈ 85 GB per channel |
+| OISST sea-surface temperature and sea ice, daily | 0.25° | 2 | 45 | 171 GB |
 | ERA5 temperature / humidity / winds (four stores) | 1° | 13 levels each | 45 | ≈ 70 GB each |
-| NCEP air reanalysis, daily | 1° | see registry | 45 | ≈ 5 GB per channel |
-| GLORYS ocean reanalysis, OC-CCI ocean colour | 0.25° | several | 30–34 | ≈ 60 GB per channel — decided after OISST |
+| NCEP air reanalysis, daily | 1° | 15 | 45 | 80 GB — held |
+| OC-CCI ocean colour, daily | 0.25° | 2 | 30 | 114 GB — held |
+| GLORYS ocean reanalysis, daily | 0.25° | 5 | 34 | 323 GB — held |
 
 ## 6. Status
 
-- 2026-10-08: exporter, workflow and plan written; fixture run green; OISST
-  dispatched first.
+- 2026-10-08: exporter, workflow and plan written; fixture run green.
+- 2026-10-08: **OISST built and published** (gridded-doy run 1: 732 files,
+  171 GB — two channels, sea-surface temperature and sea ice; twelve jobs of
+  about 4 minutes). Falsifier max |Δmean| 1.5e-5 °C, inside the bound.
+- 2026-10-08: **ERA5 temperature and humidity built** (runs 2, 3). The wind
+  stores failed the falsifier at 2.4e-4 m/s in runs 4, 5: the bound counted
+  only the rounding of the total at the span's end, not of the one before its
+  start (larger for a signed field). Bound corrected; winds re-run (6, 7).
+- Live check through the tab's reader (`scripts/f1data_doy_live_check.mjs`):
+  three spans including 29 February and a year left out, each day against
+  every native map — identical values and counts (OISST, ERA5 t, q).
+- Browser check (`scripts/datatab_browser_check.mjs --only=c7`): February
+  2001–2020 in a 10° box — 116 requests, 17.1 MB, counts 20 and 5 (leap days).
+- Held for a decision: NCEP (80 GB), OC-CCI (114 GB), GLORYS (323 GB).
+- Not done: a refresh hook (a new day touches one day file; a new year adds a
+  plane to all 366) — the daily refresh (E-090) does not yet update these.

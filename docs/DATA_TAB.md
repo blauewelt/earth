@@ -276,6 +276,25 @@ ERA5's level picker works on this path as on the other (one level, the sums of
 that level's channel); unlike the native tiles, the sums are stored per channel,
 so one level reads one level.
 
+### Climatology per day of year (precomputed day-of-year totals)
+
+For the daily sea-surface temperature store (`oisst025d`) and the four ERA5
+stores, the time step *Climatology — mean per day of year over the years*
+gives one map per calendar day — 366 for a whole year, 29 February its own —
+averaged over the years you set (less any you leave out), each with the count
+of native maps behind it. For ERA5, with four maps a day, it is a climatology
+of daily means.
+
+It is read from files that hold, per calendar day, the running total over the
+years of the sums and of the counts: the mean over years a…b is the total at b
+minus the total before a, divided the same way. So twenty years cost what two
+do: two small reads per day and file, plus two per year left out. A whole year
+in a 10° box of the 0.25° store is about 1,500 requests and 220 MB. There is
+no standard deviation on this path, and no hour filter. The months buttons and
+the days slider pick which calendar days. Plan and checks:
+`ml/plans/E091_day_of_year_climatology.md`; index:
+`data/gridded_doy_index.json`.
+
 ### Derived maps
 
 | store | plain-English name | kind | native space | native time | record |

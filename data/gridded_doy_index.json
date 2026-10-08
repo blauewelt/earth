@@ -2,7 +2,7 @@
  "_source": "ml/export_gridded_doy.py index \u2014 do not hand-edit",
  "base": "https://huggingface.co/datasets/chfrank/earth-tensors/resolve/main/",
  "combine": "mean of a day over years a\u2026b = (S[b] \u2212 S[a\u22121]) / (N[b] \u2212 N[a\u22121]); a year e left out subtracts (S[e] \u2212 S[e\u22121]) and (N[e] \u2212 N[e\u22121])",
- "generated_utc": "2026-10-08T14:41:39Z",
+ "generated_utc": "2026-10-08T14:55:22Z",
  "layout": "sum_MMDD.npy [channel, year, lat, lon] float32, count_MMDD.npy the same shape uint8, both CUMULATIVE over the years: plane (c, y) = every frame of that calendar day in years year_first \u2026 year_first + y. Plane offset = header_len + (c * n_years + y) * H * W * itemsize.",
  "plan": "https://blauewelt.github.io/earth/docs.html?f=ml/plans/E091_day_of_year_climatology.md",
  "stores": {
@@ -4874,7 +4874,7 @@
     "u_925",
     "u_1000"
    ],
-   "complete": false,
+   "complete": true,
    "days": {
     "0101": {
      "count_bytes": 38118728,
@@ -5057,6 +5057,546 @@
      "sum_header": 128
     },
     "0131": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0201": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0202": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0203": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0204": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0205": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0206": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0207": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0208": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0209": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0210": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0211": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0212": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0213": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0214": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0215": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0216": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0217": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0218": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0219": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0220": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0221": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0222": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0223": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0224": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0225": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0226": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0227": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0228": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0229": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0301": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0302": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0303": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0304": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0305": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0306": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0307": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0308": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0309": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0310": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0311": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0312": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0313": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0314": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0315": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0316": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0317": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0318": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0319": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0320": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0321": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0322": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0323": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0324": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0325": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0326": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0327": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0328": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0329": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0330": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0331": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0401": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0402": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0403": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0404": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0405": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0406": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0407": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0408": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0409": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0410": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0411": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0412": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0413": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0414": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0415": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0416": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0417": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0418": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0419": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0420": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0421": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0422": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0423": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0424": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0425": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0426": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0427": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0428": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0429": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0430": {
      "count_bytes": 38118728,
      "count_header": 128,
      "sum_bytes": 152474528,
@@ -5247,13 +5787,1297 @@
      "count_header": 128,
      "sum_bytes": 152474528,
      "sum_header": 128
+    },
+    "0601": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0602": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0603": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0604": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0605": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0606": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0607": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0608": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0609": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0610": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0611": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0612": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0613": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0614": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0615": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0616": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0617": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0618": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0619": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0620": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0621": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0622": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0623": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0624": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0625": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0626": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0627": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0628": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0629": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0630": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0701": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0702": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0703": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0704": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0705": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0706": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0707": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0708": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0709": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0710": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0711": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0712": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0713": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0714": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0715": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0716": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0717": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0718": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0719": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0720": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0721": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0722": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0723": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0724": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0725": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0726": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0727": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0728": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0729": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0730": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0731": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0801": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0802": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0803": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0804": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0805": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0806": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0807": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0808": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0809": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0810": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0811": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0812": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0813": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0814": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0815": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0816": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0817": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0818": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0819": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0820": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0821": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0822": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0823": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0824": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0825": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0826": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0827": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0828": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0829": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0830": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0831": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0901": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0902": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0903": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0904": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0905": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0906": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0907": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0908": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0909": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0910": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0911": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0912": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0913": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0914": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0915": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0916": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0917": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0918": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0919": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0920": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0921": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0922": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0923": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0924": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0925": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0926": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0927": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0928": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0929": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0930": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "1001": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "1002": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "1003": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "1004": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "1005": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "1006": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "1007": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "1008": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "1009": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "1010": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "1011": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "1012": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "1013": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "1014": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "1015": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "1016": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "1017": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "1018": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "1019": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "1020": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "1021": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "1022": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "1023": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "1024": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "1025": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "1026": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "1027": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "1028": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "1029": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "1030": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "1031": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "1101": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "1102": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "1103": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "1104": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "1105": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "1106": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "1107": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "1108": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "1109": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "1110": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "1111": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "1112": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "1113": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "1114": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "1115": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "1116": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "1117": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "1118": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "1119": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "1120": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "1121": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "1122": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "1123": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "1124": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "1125": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "1126": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "1127": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "1128": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "1129": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "1130": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "1201": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "1202": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "1203": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "1204": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "1205": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "1206": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "1207": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "1208": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "1209": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "1210": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "1211": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "1212": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "1213": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "1214": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "1215": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "1216": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "1217": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "1218": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "1219": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "1220": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "1221": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "1222": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "1223": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "1224": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "1225": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "1226": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "1227": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "1228": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "1229": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "1230": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "1231": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
     }
    },
    "dlat": 1.0,
    "dlon": 1.0,
    "falsifier": {
-    "max_abs_mean": 0.0001220703125,
-    "max_mean_over_bound": 0.9999999989489998
+    "max_abs_mean": 0.000244140625,
+    "max_mean_over_bound": 0.999999998993
    },
    "frame_seconds": 21600,
    "lat0": -90.0,
@@ -5435,8 +7259,554 @@
     "v_925",
     "v_1000"
    ],
-   "complete": false,
+   "complete": true,
    "days": {
+    "0101": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0102": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0103": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0104": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0105": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0106": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0107": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0108": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0109": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0110": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0111": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0112": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0113": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0114": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0115": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0116": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0117": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0118": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0119": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0120": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0121": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0122": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0123": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0124": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0125": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0126": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0127": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0128": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0129": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0130": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0131": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0201": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0202": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0203": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0204": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0205": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0206": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0207": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0208": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0209": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0210": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0211": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0212": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0213": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0214": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0215": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0216": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0217": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0218": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0219": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0220": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0221": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0222": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0223": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0224": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0225": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0226": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0227": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0228": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0229": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0301": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0302": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0303": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0304": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0305": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0306": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0307": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0308": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0309": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0310": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0311": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0312": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0313": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0314": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0315": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0316": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0317": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0318": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0319": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0320": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0321": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0322": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0323": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0324": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0325": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0326": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0327": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0328": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0329": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0330": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0331": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
     "0401": {
      "count_bytes": 38118728,
      "count_header": 128,
@@ -5617,6 +7987,192 @@
      "sum_bytes": 152474528,
      "sum_header": 128
     },
+    "0501": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0502": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0503": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0504": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0505": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0506": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0507": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0508": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0509": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0510": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0511": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0512": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0513": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0514": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0515": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0516": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0517": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0518": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0519": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0520": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0521": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0522": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0523": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0524": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0525": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0526": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0527": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0528": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0529": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0530": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0531": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
     "0601": {
      "count_bytes": 38118728,
      "count_header": 128,
@@ -5792,6 +8348,1110 @@
      "sum_header": 128
     },
     "0630": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0701": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0702": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0703": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0704": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0705": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0706": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0707": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0708": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0709": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0710": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0711": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0712": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0713": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0714": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0715": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0716": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0717": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0718": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0719": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0720": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0721": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0722": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0723": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0724": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0725": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0726": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0727": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0728": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0729": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0730": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0731": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0801": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0802": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0803": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0804": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0805": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0806": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0807": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0808": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0809": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0810": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0811": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0812": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0813": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0814": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0815": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0816": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0817": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0818": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0819": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0820": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0821": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0822": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0823": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0824": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0825": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0826": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0827": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0828": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0829": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0830": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0831": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0901": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0902": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0903": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0904": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0905": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0906": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0907": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0908": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0909": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0910": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0911": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0912": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0913": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0914": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0915": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0916": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0917": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0918": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0919": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0920": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0921": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0922": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0923": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0924": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0925": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0926": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0927": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0928": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0929": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "0930": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "1001": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "1002": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "1003": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "1004": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "1005": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "1006": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "1007": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "1008": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "1009": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "1010": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "1011": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "1012": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "1013": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "1014": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "1015": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "1016": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "1017": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "1018": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "1019": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "1020": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "1021": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "1022": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "1023": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "1024": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "1025": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "1026": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "1027": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "1028": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "1029": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "1030": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "1031": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "1101": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "1102": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "1103": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "1104": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "1105": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "1106": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "1107": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "1108": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "1109": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "1110": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "1111": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "1112": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "1113": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "1114": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "1115": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "1116": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "1117": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "1118": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "1119": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "1120": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "1121": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "1122": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "1123": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "1124": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "1125": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "1126": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "1127": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "1128": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "1129": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "1130": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "1201": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "1202": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "1203": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "1204": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "1205": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "1206": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "1207": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "1208": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "1209": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "1210": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "1211": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "1212": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "1213": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "1214": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "1215": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "1216": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "1217": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "1218": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "1219": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "1220": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "1221": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "1222": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "1223": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "1224": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "1225": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "1226": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "1227": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "1228": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "1229": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "1230": {
+     "count_bytes": 38118728,
+     "count_header": 128,
+     "sum_bytes": 152474528,
+     "sum_header": 128
+    },
+    "1231": {
      "count_bytes": 38118728,
      "count_header": 128,
      "sum_bytes": 152474528,

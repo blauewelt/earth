@@ -2348,6 +2348,31 @@ climatology and E-086's normals are frozen. One status line per store:
 `tensors/refresh/status.json` on the Hub. Plan and inventory:
 `ml/plans/E090_data_refresh.md`.
 
+*Climatology per day of year, the two-handle sliders, and "whole globe" on map stores (2026-10-08, E-091).*
+Chris: *"Say I want average values for every single day of year, across 20
+years"* and *"please call this 'Climatology'"*. The step once labelled "normal"
+is **"Climatology — mean per calendar month over the years"**, and stores listed
+as complete in `data/gridded_doy_index.json` (OISST daily and the four ERA5
+stores; `configure({gridDoy})`) add **"Climatology — mean per day of year over
+the years"** (`sel.step = "doy"`): one map per calendar day, 29 February its
+own, with counts. It is read from E-091's files — per calendar day
+`sum_MMDD.npy` / `count_MMDD.npy`, `[channel, year, lat, lon]`, CUMULATIVE over
+the years — as `(S[b] − S[a−1]) / (N[b] − N[a−1])`: two band reads per day and
+file whatever the span, plus two per year left out (`doyPlan` / `doyRun` /
+`doyResult` in `src/f1data.js`; no std, no hour filter; the time value is the
+day in the nominal leap year 2000 with `climatology_bounds`). Built by
+`ml/export_gridded_doy.py` on hosted runners, twelve jobs per store
+(`gridded-doy.yml`), each with a falsifier against numpy on the native frames;
+checked live with `scripts/f1data_doy_live_check.mjs` (identical to the native
+path) and `datatab_browser_check.mjs --only=c7`. NCEP, OC-CCI and GLORYS are
+not built (held for size), and the daily refresh does not yet update these
+files. The same day: the years and the days of the month are each ONE slider
+with two handles (`DT_SLIDERS`, `dtSyncYearSlider`; two overlaid range inputs
+whose thumbs alone take the pointer — the number fields stay the truth and
+commit through their own change event), and "whole globe" on a map store
+writes the full −180…180, −90…90 box instead of being disabled (it used to
+mean "no box", which only point stores accept).
+
 *Family 1.2 — the atmosphere on pressure levels (2026-10-06, E-085).* Family
 1.2 is family 1.gf plus ECMWF's ERA5 reanalysis — temperature (K), specific
 humidity (stored and served in **g/kg**, 1000 × ERA5's kg/kg) and the
