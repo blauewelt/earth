@@ -65,7 +65,7 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  PIP_DEPS: numpy "huggingface_hub<2" "zstandard==0.23.0" netCDF4 requests rasterio pyhdf scipy pyarrow h5py numcodecs
+  PIP_DEPS: numpy huggingface_hub<2 zstandard==0.23.0 netCDF4 requests rasterio pyhdf scipy pyarrow h5py numcodecs
   # the bytes a lane writes must equal the published ones (ADAPTER_CONTRACT,
   # "Reproducibility"): zstandard pinned above, numpy on the AVX2 path
   NPY_DISABLE_CPU_FEATURES: "X86_V4 AVX512_ICL AVX512_SPR"
