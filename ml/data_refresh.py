@@ -1495,6 +1495,9 @@ def status_lines(results, plan_rows, previous=None):
         if r.get("commit"):
             line["commit"] = r["commit"]
         out.append(line)
+    # a dispatch for a few stores keeps every other store's last line
+    seen = {ln["store"] for ln in out}
+    out += [v for k, v in sorted(prev.items()) if k not in seen]
     return {"_source": "ml/data_refresh.py status (E-090) — do not "
                        "hand-edit", "plan": PLAN_DOC,
             "generated_utc": utcnow(), "stores": out}

@@ -451,3 +451,22 @@ def test_sums_update_that_only_blanks_still_verifies(tmp_path):
     assert st["update"]["written"] == [] and st["update"]["blanked"]
     rep = X.verify(KEY, out, keep, base=dest)
     assert rep["ok"] and rep["n_planes"] == 0
+
+
+def test_status_lines_keep_other_stores_and_last_update():
+    prev = {"stores": [
+        {"store": "family7_2d/ncep100d", "state": "current",
+         "last_updated_utc": None, "record_end": "2026-03-17"},
+        {"store": "family7_2d/oisst025d", "state": "updated",
+         "last_updated_utc": "2026-10-08T07:44:05Z",
+         "record_end": "2026-10-06"}]}
+    plan_rows = [{"store": "family7_2d/oisst025d", "kind": "grid",
+                  "action": "noop", "checked_utc": "2026-10-09T05:24:00Z",
+                  "record_end": "2026-10-06", "upstream_newest": "2026-10-06",
+                  "gap_days": 0, "reason": "current"}]
+    st = R.status_lines([], plan_rows, prev)
+    by = {s["store"]: s for s in st["stores"]}
+    assert by["family7_2d/oisst025d"]["state"] == "current"
+    assert by["family7_2d/oisst025d"]["last_updated_utc"] == \
+        "2026-10-08T07:44:05Z"
+    assert by["family7_2d/ncep100d"]["record_end"] == "2026-03-17"
