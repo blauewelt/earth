@@ -170,8 +170,9 @@
   // (family 7.2d's four daily stores, family 1.2's four ERA5 stores), matched
   // to their stores by `source_store` = the registry's `path`
   var DEFAULT_GRID_MONTHLY = "data/gridded_monthly_index.json";
+  var DEFAULT_GRID_DOY = "data/gridded_doy_index.json";
   var cfg = { base: DEFAULT_BASE, fetch: null, concurrency: MAX_CONCURRENCY,
-    registries: DEFAULT_REGISTRIES.slice(), siteBase: null, gridMonthly: DEFAULT_GRID_MONTHLY };
+    registries: DEFAULT_REGISTRIES.slice(), siteBase: null, gridMonthly: DEFAULT_GRID_MONTHLY, gridDoy: DEFAULT_GRID_DOY };
   var cache = new Map();                 // url/key → Promise
   var idxCache = new Map();              // url|off|len → Uint8Array (LRU)
   var idxCacheBytes = 0;
@@ -198,6 +199,9 @@
     if (o.siteBase !== undefined) cfg.siteBase = o.siteBase;
     // + gridMonthly: the E-088 index (site-relative or absolute); null = none
     if (o.gridMonthly !== undefined) cfg.gridMonthly = o.gridMonthly;
+    // + gridDoy: the E-091 day-of-year index (site-relative or absolute); null = none
+    if (o.gridDoy !== undefined) cfg.gridDoy = o.gridDoy;
+    else if (o.base != null || o.registries != null) cfg.gridDoy = o.registries != null && o.registries === DEFAULT_REGISTRIES ? DEFAULT_GRID_DOY : null;
     else if (o.base != null || o.registries != null) cfg.gridMonthly = o.registries != null && o.registries === DEFAULT_REGISTRIES ? DEFAULT_GRID_MONTHLY : null;
     if (o.fetch !== undefined) cfg.fetch = o.fetch;
     if (o.concurrency != null) {
@@ -1148,6 +1152,7 @@
         }
       }));
       if (cfg.gridMonthly) await attachGridMonthly(out, ctx);
+      if (cfg.gridDoy) await attachGridDoy(out, ctx);
       // registry order, then each family's own order
       var order = cfg.registries.map(function (f) { return f.family; });
       out.families.sort(function (a, b) { return order.indexOf(a.family) - order.indexOf(b.family); });
@@ -1380,7 +1385,11 @@
       // + normal: one mean per CALENDAR month over the period (a sharded
       // grid's climatology); "by-year" is the monthly mean under its other name
       if (s.step === "by-year") s.step = "month";
-      if (["native", "pentad", "month", "all", "normal"].indexOf(s.step) < 0) throw new Error("step must be native, pentad, month, all or normal");
+      if (s.step === "doy") {
+        if (!d._doy) throw new Error("the climatology per day of year is not published for " + d.name);
+        if (s.std) throw new Error("the day-of-year climatology has no standard deviation");
+      } else
+      if (["native", "pentad", "month", "all", "normal"].indexOf(s.step) < 0) throw new Error("step must be native, pentad, month, all, normal or doy");
       if (s.step === "normal" && d.kind !== "grid") throw new Error("the normal per calendar month is offered for gridded stores only");
       if (s.std && d.kind !== "grid") throw new Error("the standard deviation is offered for gridded stores only");
     }
@@ -2525,6 +2534,179 @@
     return r;
   }
 
+  // ============================================ DAY-OF-YEAR CLIMATOLOGY ====
+  // E-091: per gridded store, 366 files of sums and counts CUMULATIVE over
+  // the years ([channel, year, lat, lon]), so the mean of a calendar day over
+  // years a…b is (S[b] − S[a−1]) / (N[b] − N[a−1]) — two band reads per day
+  // and file whatever the span; a year left out subtracts its own two planes.
+  async function attachGridDoy(out, ctx) {
+    var url, ix;
+    try { url = siteUrl(cfg.gridDoy); ix = await readSiteJSON(url, ctx); }
+    catch (e) {
+      if (!/HTTP 404/.test(String(e && e.message))) {
+        out.errors.push({ family: "E-091", title: "Day-of-year climatology", store: null,
+          message: "the index (" + cfg.gridDoy + ") could not be read: " + (e && e.message) + " — the climatology per day of year is not offered" });
+      }
+      return;
+    }
+    var byPath = {}, stores = ix.stores || {};
+    Object.keys(stores).forEach(function (k) { if (stores[k] && stores[k].source_store) byPath[stores[k].source_store] = stores[k]; });
+    out.stores.forEach(function (d) {
+      if (d.layout !== "sharded" || !d._raw) return;
+      var G = byPath[String(d._raw.path || "")];
+      if (!G || !G.complete) return;
+      try {
+        var g = d.grid, H = Number(G.H), W = Number(G.W), step = Number(G.dlat);
+        if (!g || g.H !== H || g.W !== W || Math.abs(g.lat0 - Number(G.lat0)) > 1e-9 || Math.abs(g.lon0 - Number(G.lon0)) > 1e-9 ||
+            Math.abs(Math.abs(g.dlat) - step) > 1e-12 || Number(G.dlon) !== step) throw new Error("the day-of-year sums' grid is not the store's");
+        var chanOf = {};
+        G.chans.forEach(function (c, k) { chanOf[c] = k; });
+        hide(d, "_doy", { base: new URL(G.prefix + "/", ix.base).href, days: G.days, C: G.chans.length, Y: Number(G.n_years), H: H, W: W,
+          year0: Number(G.year_first), lat0: Number(G.lat0), lon0: Number(G.lon0), step: step, chanOf: chanOf,
+          recordLast: G.record_last || null, index: url });
+        d.doyClimatology = { years: [Number(G.year_first), Number(G.year_first) + Number(G.n_years) - 1], recordLast: G.record_last || null };
+        d.steps = (d.steps || ["native", "pentad", "month", "all"]).concat(["doy"]);
+      } catch (e) {
+        out.errors.push({ family: d.family, title: "Day-of-year climatology", store: d.name, message: e && e.message ? e.message : String(e) });
+      }
+    });
+  }
+
+  var DOY_DAYS = [31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+  async function doyPlan(d, sel, ctx, opts) {
+    opts = opts || {};
+    var M = d._doy, s = normSel(sel, d);
+    if (!s.bbox) { var e = new Error("a box (bbox) is required for the gridded store " + d.name); e.needBox = true; throw e; }
+    if (s.hours) throw new Error("the day-of-year climatology is of whole days: clear the hours filter");
+    var tg = denseTg({ H: M.H, W: M.W, lat0: M.lat0, lon0: M.lon0, step: M.step, southFirst: true });
+    var geo = boxGeometry(tg, s.bbox, s.res);
+    var rowsT = geo.byTy.get(0) || [], rowOut = new Int32Array(M.H).fill(-1), rmin = Infinity, rmax = -1;
+    for (var a = 0; a < rowsT.length; a += 2) {
+      rowOut[rowsT[a]] = rowsT[a + 1];
+      if (rowsT[a] < rmin) rmin = rowsT[a];
+      if (rowsT[a] > rmax) rmax = rowsT[a];
+    }
+    var colsT = geo.byTx.get(0) || [];
+    var chIdx = s.channels.map(function (c) {
+      var i = M.chanOf[c];
+      if (!(i >= 0)) throw new Error(d.name + ": the day-of-year sums have no channel " + c);
+      return i;
+    });
+    var conv = s.channels.map(function (c) { var x = d.channels.find(function (z) { return z.name === c; }); return conversionOf(x && x.unit); });
+    if (conv.some(function (c) { return c.offset; })) throw new Error(d.name + ": values converted after reading have no day-of-year climatology");
+    var ya = Math.max(s.yearStart, M.year0), yb = Math.min(s.yearEnd, M.year0 + M.Y - 1);
+    if (yb < ya) throw new Error("the years " + s.yearStart + "–" + s.yearEnd + " are outside the record " + M.year0 + "–" + (M.year0 + M.Y - 1));
+    // signed planes: +S[yb] −S[ya−1], and −S[e] +S[e−1] per year left out
+    var sign = {};
+    var add = function (y, v) { if (y >= M.year0) sign[y] = (sign[y] || 0) + v; };
+    add(yb, 1); add(ya - 1, -1);
+    var ex = s.excludeYears.filter(function (y, i, arr) { return y >= ya && y <= yb && arr.indexOf(y) === i; });
+    ex.forEach(function (y) { add(y, -1); add(y - 1, 1); });
+    var planes = Object.keys(sign).map(Number).filter(function (y) { return sign[y] !== 0; }).sort(function (x, y) { return x - y; });
+    var yearsUsed = [];
+    for (var yy = ya; yy <= yb; yy++) if (ex.indexOf(yy) < 0) yearsUsed.push(yy);
+    if (!yearsUsed.length) throw new Error("every year of the period is left out");
+    var keys = [];
+    s.months.slice().sort(function (x, y) { return x - y; }).forEach(function (m) {
+      var d0 = s.days ? s.days[0] : 1, d1 = Math.min(s.days ? s.days[1] : 31, DOY_DAYS[m - 1]);
+      for (var dd = d0; dd <= d1; dd++) { var k = p2(m) + p2(dd); if (M.days[k]) keys.push({ m: m, d: dd, k: k }); }
+    });
+    if (opts.first) keys = keys.slice(0, 1);
+    var T = keys.length, Cs = chIdx.length, rows = rmax >= rmin ? rmax - rmin + 1 : 0;
+    var reqs = [], readBytes = 0;
+    keys.forEach(function (key, ti) {
+      var f = M.days[key.k];
+      [["sum", 4, f.sum_header], ["count", 1, f.count_header]].forEach(function (ff) {
+        var isz = ff[1], url = M.base + ff[0] + "_" + key.k + ".npy";
+        chIdx.forEach(function (c, k) {
+          planes.forEach(function (y) {
+            var a0 = ff[2] + ((c * M.Y + (y - M.year0)) * M.H + rmin) * M.W * isz, len = rows * M.W * isz;
+            reqs.push({ url: url, a: a0, len: len, isz: isz, ti: ti, k: k, sign: sign[y] });
+            readBytes += len;
+          });
+        });
+      });
+    });
+    var times = new Float64Array(T), bounds = new Float64Array(2 * T);
+    keys.forEach(function (key, i) {
+      times[i] = daysFromCivil(2000, key.m, key.d) * 86400;
+      bounds[2 * i] = daysFromCivil(ya, key.m, key.d) * 86400;
+      bounds[2 * i + 1] = (daysFromCivil(yb, key.m, key.d) + 1) * 86400;
+    });
+    var HW = geo.Ho * geo.Wo;
+    return { d: d, s: s, M: M, geo: geo, rowOut: rowOut, rmin: rmin, rmax: rmax, colsT: colsT, chIdx: chIdx, conv: conv,
+      keys: keys, T: T, Cs: Cs, reqs: rows ? reqs : [], readBytes: rows ? readBytes : 0, outBytes: T * Cs * HW * (4 + 2 + 8 + 4),
+      times: times, bounds: bounds, ya: ya, yb: yb, excluded: ex, yearsUsed: yearsUsed, planes: planes };
+  }
+
+  function doyEstimate(plan) {
+    var y = plan.yearsUsed;
+    return { requests: plan.reqs.length, readBytes: plan.readBytes, outBytes: plan.outBytes, frames: plan.T, exact: true,
+      shape: [plan.T, plan.Cs, plan.geo.Ho, plan.geo.Wo], years: y.length, yearsUsed: y.slice(), path: "doy",
+      pathWhy: "a climatology per day of year is read from running totals over the years: " + plan.planes.length + " plane" + (plan.planes.length === 1 ? "" : "s") +
+        " of sums and of counts per calendar day, whatever the number of years",
+      channelsRead: plan.Cs, channelsKept: plan.Cs, channelWord: plan.d.levels ? "levels" : "channels",
+      why: "Climatology per day of year over " + plan.ya + "–" + plan.yb + (plan.excluded.length ? " leaving out " + plan.excluded.join(", ") : "") + " (" + y.length + " year" + (y.length === 1 ? "" : "s") +
+        "): " + plan.T + " calendar day" + (plan.T === 1 ? "" : "s") + " × " + plan.Cs + " channel" + (plan.Cs === 1 ? "" : "s") + ", read from precomputed running totals — " +
+        plan.reqs.length.toLocaleString("en-US") + " requests, " + fmtMB(plan.readBytes) + " (exact; the box's band of rows, " + plan.planes.length + " year-plane" + (plan.planes.length === 1 ? "" : "s") +
+        " per day and file). The result is " + plan.T + " × " + plan.Cs + " × " + plan.geo.Ho + " × " + plan.geo.Wo + " (" + fmtMB(plan.outBytes) + ").",
+      shrink: "Pick fewer months, days or channels, shrink the box (a narrower band of LATITUDES is what saves bytes), or take 1° cells." };
+  }
+
+  async function doyRun(plan, ctx, onProgress) {
+    var geo = plan.geo, Cs = plan.Cs, HW = geo.Ho * geo.Wo, nOut = plan.T * Cs * HW, W = plan.M.W;
+    var S = new Float64Array(nOut), N = new Int32Array(nOut);
+    var colsT = plan.colsT, rowOut = plan.rowOut, rmin = plan.rmin, rmax = plan.rmax;
+    var progress = { done: 0, total: plan.reqs.length, bytes: 0 };
+    var tell = function () { if (onProgress) { try { onProgress({ done: progress.done, total: progress.total, bytes: progress.bytes }); } catch (e) { /* the caller's */ } } };
+    var rctx = Object.assign({}, ctx, { onRead: function (n) { progress.done++; progress.bytes += n; tell(); } });
+    tell();
+    await pool(plan.reqs, async function (q) {
+      var buf = await rangeRead(q.url, q.a, q.len, rctx);
+      var dv = q.isz === 4 ? new DataView(buf.buffer, buf.byteOffset, buf.byteLength) : null;
+      for (var r = rmin; r <= rmax; r++) {
+        var orow = rowOut[r];
+        if (orow < 0) continue;
+        var rb = (r - rmin) * W * q.isz, base = (q.ti * Cs + q.k) * HW + orow * geo.Wo;
+        for (var cc = 0; cc < colsT.length; cc += 2) {
+          var oi = base + colsT[cc + 1];
+          if (dv) S[oi] += q.sign * dv.getFloat32(rb + 4 * colsT[cc], true);
+          else N[oi] += q.sign * buf[rb + colsT[cc]];
+        }
+      }
+    }, ctx);
+    var data = new Float32Array(nOut), count = new Uint16Array(nOut);
+    for (var i = 0; i < nOut; i++) {
+      if (N[i] < 0) throw new Error(plan.d.name + ": a negative count in the day-of-year sums — please report this");
+      count[i] = N[i];
+      data[i] = N[i] > 0 ? S[i] / N[i] : NaN;
+    }
+    return { data: data, count: count, std: null };
+  }
+
+  function doyResult(plan, g, ctx, t0) {
+    var y = plan.yearsUsed, s = plan.s;
+    var notes = ["a CLIMATOLOGY PER DAY OF YEAR: each time step is one calendar day (29 February its own) averaged over " + plan.ya + "–" + plan.yb +
+      " (" + y.length + " year" + (y.length === 1 ? "" : "s") + ")" + (plan.excluded.length ? ", leaving out " + plan.excluded.join(", ") : "") +
+      "; the time value is that day in the year 2000 (a nominal leap year), and climatology_bounds gives the span",
+      "read from the store's precomputed day-of-year sums and counts, cumulative over the years (E-091): mean = (S[last year] − S[year before the first]) ÷ (N[last] − N[before first]) — the same mean as averaging every native map of that calendar day, to within float32 rounding of the running totals",
+      "a frame belongs to the UTC calendar day of its own start; count = the number of finite native frames averaged" + (plan.d.frameSeconds < 86400 ? " (several per day: this is a climatology of daily means)" : "")];
+    if (s.res !== "native") notes.push("each " + s.res + "° cell POOLS the sums and the counts of every native cell in it — not a mean of means");
+    plan.conv.forEach(function (c, k) { if (c.note) notes.push(s.channels[k] + ": " + c.note); });
+    if (plan.d.reanalysis) notes.push("a REANALYSIS — a weather model's analysis constrained by observations, not an observation");
+    if (s.bbox && s.bbox.w > s.bbox.e) notes.push("the box crosses the dateline: longitudes run past 180° (subtract 360 for −180..180)");
+    caveatsFor(plan.d, s).forEach(function (t) { notes.push(t); });
+    return { kind: "grid", store: plan.d.name, family: plan.d.family, channels: s.channels.slice(),
+      units: plan.conv.map(function (c) { return c.unit; }),
+      lat: plan.geo.outLat, lon: plan.geo.outLon, time: plan.times, data: g.data, count: g.count, std: null, sel: s, notes: notes,
+      frames: plan.T, group: plan.d.name, source: plan.M.base, title: plan.d.title, licence: plan.d.licence || null,
+      countMeaning: "number of finite native frames averaged",
+      climatology: { kind: "day", bounds: plan.bounds, period: [plan.ya, plan.yb], excluded: plan.excluded.slice(), yearsUsed: y.slice() },
+      levels: plan.d.levels ? s.channels.map(function (c) { var x = plan.d.channels.find(function (z) { return z.name === c; }); return x && x.level != null ? x.level : null; }) : null,
+      path: "doy", excluded: plan.excluded.slice(), period: [plan.ya, plan.yb],
+      stats: { requests: ctx.stats.requests, bytes: ctx.stats.bytes, ms: Date.now() - t0 } };
+  }
+
   // ============================================================== POINTS ===
   function pointStoreJson(d, ctx) {
     return readJSON(d._base + "store.json", ctx);
@@ -3173,6 +3355,18 @@
       }
       return cap(denseEstimate(dp));
     }
+    if (d.kind === "grid" && sel && sel.step === "doy") {
+      var yp;
+      try { yp = await doyPlan(d, sel, ctx); }
+      catch (e) {
+        if (e.needBox) {
+          return { requests: 0, readBytes: 0, outBytes: 0, frames: 0, overCap: true, exact: true, shape: null,
+            why: "Draw or type a box first: the climatology is read row band by row band, so a box is required." };
+        }
+        throw e;
+      }
+      return cap(doyEstimate(yp));
+    }
     if (d.kind === "grid") {
       var plan;
       try { plan = await gridPlan(sel, ctx); }
@@ -3259,6 +3453,12 @@
         if (dp.outBytes > CAP_OUT) throw new Error("over the cap: the result would be " + fmtMB(dp.outBytes) + " of arrays (limit " + fmtMB(CAP_OUT) + ")");
         return denseResult(dp, await denseRun(dp, ctx, runProgress(opts, ctx, dp.readBytes, false)), ctx, t0);
       }
+      if (d.kind === "grid" && sel && sel.step === "doy") {
+        var yp = await doyPlan(d, sel, ctx);
+        if (yp.readBytes > CAP_READ) throw new Error("over the cap: this selection reads " + fmtMB(yp.readBytes) + " (limit " + fmtMB(CAP_READ) + ")");
+        if (yp.outBytes > CAP_OUT) throw new Error("over the cap: the result would be " + fmtMB(yp.outBytes) + " of arrays (limit " + fmtMB(CAP_OUT) + ")");
+        return doyResult(yp, await doyRun(yp, ctx, runProgress(opts, ctx, yp.readBytes, false)), ctx, t0);
+      }
       if (d.kind === "grid") {
         var plan = await gridPlan(sel, ctx);
         var path = monthlyPath(plan);
@@ -3300,6 +3500,11 @@
     var t0 = Date.now();
     try {
       var d = await storeDesc(sel, ctx);
+      if (d.kind === "grid" && sel && sel.step === "doy") {
+        // the first chosen calendar day's climatology
+        var y1 = await doyPlan(d, sel, ctx, { first: true });
+        return doyResult(y1, await doyRun(y1, ctx, dataProgress(ctx, y1.readBytes, false)), ctx, t0);
+      }
       if (d._monthly) {
         // the first selected calendar month: its normal over the period (or,
         // for the stack, every year of it — then the first year's field)
@@ -3579,7 +3784,8 @@
         // month, averaged over the years its bounds span
         dims.push(["nv", 2]);
         vars[0].attrs.push(["climatology", "climatology_bounds"]);
-        vars[0].attrs[1] = ["long_name", "calendar month of the climatology (its value is that month in the first year of the period)"];
+        vars[0].attrs[1] = ["long_name", clim.kind === "day" ? "calendar day of the climatology (its value is that day in the nominal leap year 2000)"
+          : "calendar month of the climatology (its value is that month in the first year of the period)"];
         vars.push({ name: "climatology_bounds", dims: [0, 3], type: NC.DOUBLE, n: 2 * T,
           attrs: [["long_name", "first and last instant of the years each climatological month averages"], ["units", "seconds since 1970-01-01 00:00:00"]],
           fill: function (dv, s, k) { for (var i = 0; i < k; i++) dv.setFloat64(8 * i, clim.bounds[s + i], false); } });
@@ -3646,7 +3852,7 @@
         }
       }
       if (result.climatology && result.climatology.period) {
-        extra.push(["climatology", "monthly normals: each time step is one calendar month averaged over the years period_start to period_end, leaving out excluded_years (Σ sums ÷ Σ counts)"],
+        extra.push(["climatology", result.climatology.kind === "day" ? "day-of-year climatology: each time step is one calendar day averaged over the years period_start to period_end, leaving out excluded_years (Σ sums ÷ Σ counts)" : "monthly normals: each time step is one calendar month averaged over the years period_start to period_end, leaving out excluded_years (Σ sums ÷ Σ counts)"],
           ["period_start", result.climatology.period[0], NC.INT],
           ["period_end", result.climatology.period[1], NC.INT],
           ["excluded_years", result.climatology.excluded.length ? result.climatology.excluded.join(", ") : "none"],

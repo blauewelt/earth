@@ -4967,7 +4967,7 @@ function climRecipeHtml(idx, spec, { inTip = false } = {}) {
     : "the whole globe for twelve months is about 150 MB per channel at this 1° grid, inside the tab's cap";
   return `<div class="clim-recipe"><strong>The paper's climatology from the Data tab:</strong> store ` +
     `“Monthly normals of the global tensor” for ${esc(spec.group)}${inTip ? "" : " (the button below opens it)"}, ` +
-    `all twelve months, time step <em>normal — one mean per calendar month over the period</em>, and one of the ` +
+    `all twelve months, time step <em>Climatology — mean per calendar month over the years</em>, and one of the ` +
     `three chips:<ul>${splits}</ul>Only these stores reproduce the paper's numbers (to about 10⁻⁶ in the channel's unit, ` +
     `measured): they use the model's rule — a five-day bin belongs to the month it opens in — and the tensor's own ` +
     `values; the daily stores use true calendar months and are close but not identical. Size: ${size}.</div>`;
@@ -16041,7 +16041,8 @@ function dtReadSel() {
   const excludeYears = gm ? dtExcludeYears() : [];
   const step = rows ? "native"
     : (!dtIsGrid(st) && dtEl("dt-step").value === "native") ? "pentad" : dtEl("dt-step").value;
-  const std = gm && st.monthlySums.std && dtEl("dt-std").checked && !(step === "native" && res === "native");
+  const std = gm && st.monthlySums.std && dtEl("dt-std").checked && !(step === "native" && res === "native") && step !== "doy";
+  if (step === "doy") hours = null;
   return {
     ...(st.family ? { family: st.family } : {}),
     store: st.name,
@@ -16272,18 +16273,21 @@ function dtFillRes(st, keep) {
  * four. Rebuilt only when the KIND changes, so a choice survives a redraw. */
 const DT_STEP_OPTS = [["native", "native"], ["pentad", "five-day mean"], ["month", "monthly mean"],
   ["all", "one mean over the whole selection"]];
-const DT_NORMALS_STEP_OPTS = [["normal", "normal — one mean per calendar month over the period"],
+const DT_NORMALS_STEP_OPTS = [["normal", "Climatology — mean per calendar month over the years"],
   ["by-year", "by year — each year's monthly mean, side by side"]];
 /* + a store with precomputed monthly sums (E-088) also offers the normal per
  * calendar month over the period — the same two outputs as the tensor's
  * normals: the normal, and (as the monthly mean) each year's month. */
-const DT_GM_STEP_OPTS = [...DT_STEP_OPTS, ["normal", "normal — one mean per calendar month over the period"]];
+const DT_GM_STEP_OPTS = [...DT_STEP_OPTS, ["normal", "Climatology — mean per calendar month over the years"]];
+/* + a store with day-of-year sums (E-091): the mean of every calendar day
+ * over the years — 366 maps for a whole year. */
+const DT_DOY_STEP_OPTS = [...DT_GM_STEP_OPTS, ["doy", "Climatology — mean per day of year over the years"]];
 function dtFillStep(st) {
   const sel = dtEl("dt-step");
-  const kind = st && st.normals ? "normals" : st && st.monthlySums ? "gm" : "plain";
+  const kind = st && st.normals ? "normals" : st && st.monthlySums ? (st.doyClimatology ? "doy" : "gm") : "plain";
   if (sel.dataset.kind === kind) return;
   const keep = sel.value;
-  sel.innerHTML = (kind === "normals" ? DT_NORMALS_STEP_OPTS : kind === "gm" ? DT_GM_STEP_OPTS : DT_STEP_OPTS)
+  sel.innerHTML = (kind === "normals" ? DT_NORMALS_STEP_OPTS : kind === "doy" ? DT_DOY_STEP_OPTS : kind === "gm" ? DT_GM_STEP_OPTS : DT_STEP_OPTS)
     .map(([v, t]) => `<option value="${v}">${esc(t)}</option>`).join("");
   sel.dataset.kind = kind;
   if ([...sel.options].some((o) => o.value === keep)) sel.value = keep;
@@ -17427,6 +17431,11 @@ function dtPathHtml(est) {
     return `<div class="dt-path" data-path="monthly">Read from precomputed monthly sums — <strong>${dtFmtInt(est.requests)}</strong> ` +
       `requests, <strong>${mb(est.readBytes)}</strong>. ${esc(why)}.${nat}</div>`;
   }
+  if (est.path === "doy") {
+    return `<div class="dt-path" data-path="doy">Read from precomputed day-of-year totals — <strong>${dtFmtInt(est.requests)}</strong> ` +
+      `requests, <strong>${mb(est.readBytes)}</strong>. Each calendar day's mean over ${dtFmtInt(est.years)} ` +
+      `${Number(est.years) === 1 ? "year" : "years"} comes from running totals over the years, so a long span costs no more than a short one.</div>`;
+  }
   return `<div class="dt-path dt-path-native" data-path="native">Read from the native maps: ${esc(String(est.pathWhy || ""))}.</div>`;
 }
 
@@ -17474,6 +17483,10 @@ function dtCountHtml(sel, est) {
       `<strong>${dtFmtInt(T)}</strong> ${plural(T, words[0], words[1])} on ${sel.res}° cells`;
   }
   const n = est.frames;
+  if (est.path === "doy") {
+    return `<strong>${dtFmtInt(T)}</strong> ${plural(T, "calendar day", "calendar days")} → ` +
+      `<strong>${dtFmtInt(T)}</strong> ${plural(T, "climatology map", "climatology maps (one per day of year)")}`;
+  }
   if (est.path === "monthly") {
     const w = sel.step === "normal" ? ["normal", "normals (one per calendar month)"] : words || ["mean", "means"];
     return `<strong>${dtFmtInt(n)}</strong> monthly ${plural(n, "plane", "planes")} of sums ` +

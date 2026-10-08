@@ -213,7 +213,7 @@ set of (year, month) cells is Σ sums ÷ Σ counts; a spread is
 (Σ m2 + Σ n·(month's mean − the mean)²) ÷ Σ n, the population form.
 
 **When the tab uses them.** For these stores, the time steps *monthly mean*,
-*one mean over the whole selection* and *normal — one mean per calendar month
+*one mean over the whole selection* and *Climatology — mean per calendar month
 over the period* are read from the precomputed sums **whenever the selection
 is made of whole calendar months**: no day-of-month range and, for the
 six-hourly ERA5 stores, no hour filter. Otherwise every native map is read,
@@ -351,8 +351,8 @@ against — was published in three versions, and the tab reproduces each one:
    weather and land), `normals_oc025` (ocean colour) or `normals_rg100` (Argo
    at depth).
 2. **One chip** in the *splits* row, which sets the period, the years left
-   out, all twelve months and the time step *normal — one mean per calendar
-   month over the period*:
+   out, all twelve months and the time step *Climatology — mean per calendar
+   month over the years*:
    - **paper split** — first year 1982, last year 2020, leave out 2009 and
      2017 (the paper's numbers);
    - **development split** — 1982–2024, leave out 2009, 2017 and 2023;
@@ -474,8 +474,8 @@ and must not have one.
    under the pointer cannot swallow a click.
 6. **Time step.** *Native* keeps every frame (or every report); *five-day mean*,
    *monthly mean* and *one mean over the whole selection* average in time. The
-   eight stores with precomputed monthly sums add *normal — one mean per
-   calendar month over the period* (with *monthly mean* as its by-year stack),
+   eight stores with precomputed monthly sums add *Climatology — mean per
+   calendar month over the years* (with *monthly mean* as its by-year stack),
    a **spread** row (*standard deviation too*) and a **check** row (*read every
    native map instead*) — §1, *Cheap long-period averages*.
 7. **Resolution.** For a map store: *native*, 0.25° or 1°, the coarser two being

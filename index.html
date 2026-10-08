@@ -1114,7 +1114,11 @@
           deviations of every native map. A <em>monthly mean</em>, <em>one mean over the
           selection</em> or a <em>normal per calendar month over the period</em> made of whole
           months (no day-of-month or hour filter) is read from those: a handful of requests where
-          the native maps are thousands. The estimate says which way it reads, and why.</p>
+          the native maps are thousands. The estimate says which way it reads, and why.
+          <strong>Climatology</strong>: set the years (and any to leave out), then pick the time
+          step <em>Climatology — mean per calendar month</em> (12 maps) or, where offered,
+          <em>Climatology — mean per day of year</em> (one map per calendar day, 366 for a whole
+          year; use the months and the days slider to take fewer).</p>
         <p class="hint dt-note hidden" id="dt-cal-note">This store is a climatology: one map per
           calendar month, averaged over all the years 1982–2024, so it has no years and no days —
           the months below pick which calendar months.</p>
@@ -1275,8 +1279,8 @@
           <p class="hint" id="dt-paper-recipe"><strong>The paper's climatology.</strong> Store
             <em>Monthly normals of the global tensor</em> (the group with your channel: 0.25°
             ocean surface, 1° fluxes and weather, ocean colour, or Argo at depth); years 1982 to
-            2020; leave out 2009, 2017; all twelve months; time step <em>normal — one mean per
-            calendar month over the period</em>. The <em>paper split</em> chip sets exactly that;
+            2020; leave out 2009, 2017; all twelve months; time step <em>Climatology — mean per
+            calendar month over the years</em>. The <em>paper split</em> chip sets exactly that;
             <em>development split</em> is 1982–2024 leaving out 2009, 2017 and 2023, and <em>all
             years</em> is 1982–2024 with nothing left out — the forecaster's three published
             climatologies (clim/paper, clim/dev, clim/all), reproduced to float32 rounding (about
@@ -1485,7 +1489,7 @@
            not obvious from the page, and "I reloaded and see no change" is
            indistinguishable from "the change isn't there". This is the sha256
            prefix of src/app.js, the same string as its ?v= stamp. -->
-      <p class="build-line">Build <code id="build-id">c309fd7d</code></p>
+      <p class="build-line">Build <code id="build-id">37965f65</code></p>
     </section>
 
     <footer>
@@ -1550,7 +1554,7 @@
        family-1.gf reader that publishes window.F1Data. Both load BEFORE the
        app, and the app copes when they did not (the tab says so). -->
   <script src="lib/fzstd.js?v=207dc305"></script>
-  <script src="src/f1data.js?v=c7331385"></script>
-  <script src="src/app.js?v=c309fd7d"></script>
+  <script src="src/f1data.js?v=65ea4d33"></script>
+  <script src="src/app.js?v=37965f65"></script>
 </body>
 </html>
