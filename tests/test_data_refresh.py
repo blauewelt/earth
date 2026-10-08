@@ -361,7 +361,8 @@ def test_sums_follow_a_refresh_only_for_settled_months(tmp_path):
                   touched=res["months_touched"], base=dest, workers=1,
                   threads=1, keep=keep)
     assert st["update"]["written"] == [[2013, 1]]
-    assert st["update"]["blanked"] == [[2013, 2]]
+    # February was not in the published sums (count 0): nothing to blank
+    assert st["update"]["blanked"] == []
     rep = X.verify(KEY, new, keep, base=dest)
     assert rep["ok"] and rep["n_planes"] == 1
     fresh = os.path.join(t, "sums_fresh")
@@ -381,3 +382,45 @@ def test_sums_follow_a_refresh_only_for_settled_months(tmp_path):
                      for r in ("sum", "count", "m2")} |
                     {"stats": os.path.join(new, "stats.json")},
                     base=dest, workers=1, threads=1) is None
+
+
+def test_sums_blank_a_month_whose_provisional_days_change(tmp_path):
+    """A complete month with provisional days, its values replaced at an
+    equal count, is BLANKED (the tab compares counts and could not tell);
+    once its days are final it is written again."""
+    import export_gridded_monthly as X
+    t = str(tmp_path)
+    E3 = dt.date(2013, 2, 5)
+    pf = dt.date(2013, 1, 25)
+    remote, hub, dest = publish_initial(os.path.join(t, "a"), E3,
+                                        prov_from=pf)
+    old = os.path.join(t, "s0")
+    X.export(KEY, old, base=dest, workers=1, threads=1)
+    prov = [pf + dt.timedelta(days=i) for i in range((E3 - pf).days + 1)]
+
+    def sums(res, src, out, prov_days):
+        return X.update(KEY, os.path.join(t, out),
+                        {r: os.path.join(t, src, f"{r}.npy")
+                         for r in ("sum", "count", "m2")}
+                        | {"stats": os.path.join(t, src, "stats.json")},
+                        touched=res["months_touched"], base=dest, workers=1,
+                        threads=1, keep=os.path.join(t, out + "_keep"),
+                        provisional=prov_days)
+    os.environ["TINY_PROV_VERSION"] = "2"            # values change
+    res = refresh(os.path.join(t, "r1"), remote, E3, E3, prov=prov)
+    assert res["state"] == "updated"
+    st = sums(res, "s0", "s1", prov)
+    # January (complete) and February (partial) both kept their counts while
+    # their values changed: both blanked
+    assert st["update"]["blanked"] == [[2013, 1], [2013, 2]]
+    assert st["frames_present"][1][0] == 0
+    assert not np.load(os.path.join(t, "s1", "count.npy"))[0, :, 1].any()
+    # the producer finalises every day: no provisional day left
+    os.environ.pop("TINY_PROV_FROM")
+    res = refresh(os.path.join(t, "r2"), remote, E3, E3, prov=prov)
+    assert res["state"] == "updated"
+    st = sums(res, "s1", "s2", [])
+    assert st["update"]["written"] == [[2013, 1]]
+    assert X.verify(KEY, os.path.join(t, "s2"), os.path.join(t, "s2_keep"),
+                    base=dest)["ok"]
+    assert st["frames_present"][1][0] == 31

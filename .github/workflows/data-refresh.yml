@@ -178,7 +178,13 @@ jobs:
             store=$(python3 -c "import json,sys; print(json.load(open(sys.argv[1]))['store'])" "$f")
             end=$(python3 -c "import json,sys; print(json.load(open(sys.argv[1]))['record_end_after'])" "$f")
             echo "== reader check ${store} → ${end}"
-            if ! node scripts/refresh_reader_check.mjs "${store}" "${end}"; then
+            ok=0
+            for i in 1 2 3; do
+              if node scripts/refresh_reader_check.mjs "${store}" "${end}"; then ok=1; break; fi
+              echo "::warning::${store}: reader check attempt ${i} failed — retrying in 45 s (a registry read can lag its commit)"
+              sleep 45
+            done
+            if [ "$ok" != 1 ]; then
               echo "::error::${store}: the Data tab's reader does not see ${end} as the tab would — reverting its family registry"
               fail=1
               python3 - "${store}" "${RUNNER_TEMP}/reg" <<'PY'

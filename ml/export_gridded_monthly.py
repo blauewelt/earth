@@ -820,10 +820,11 @@ FIXTURE_OUT = os.path.join(ROOT, "data", "gridded_monthly", "fixture")
 # shard index's frame count (src/f1data.js :: monthlyPath) — a COUNT, so a
 # provisional day replaced by its final value would leave an equal count over
 # a stale sum. The rule therefore writes a month's planes only when the
-# month is COMPLETE in the store and holds NO provisional day; any other month
-# whose frames changed is BLANKED (planes zero, frames_present 0), which the
-# tab reads as "not summed — read the native maps". An untouched month keeps
-# its planes byte for byte.
+# month is COMPLETE in the store and holds NO provisional day; a changed month
+# whose frame count still equals the published table is BLANKED (planes zero,
+# frames_present 0), which the tab reads as "not summed — read the native
+# maps"; a changed month whose count already differs is left (the tab reads it
+# natively already). An untouched month keeps its planes byte for byte.
 def _fetch_old(src, dest, sha=None, session=None):
     """A published sums file (URL or local path) to `dest`, sha256-checked."""
     if not str(src).startswith(("http://", "https://")):
@@ -916,7 +917,15 @@ def update(store, out, old, *, touched=(), base=None, workers=4, threads=4,
     settled = settled_months(times, spec, prov, lo, hi)
     write = sorted(ym for ym in tset if ym in settled and
                    pres[yrs.index(ym[0]), ym[1]] > 0)
-    blank = sorted(ym for ym in tset if ym not in set(write))
+    # BLANK only what the tab could not tell is stale: a changed month whose
+    # frame count still EQUALS the published table (a provisional day
+    # replaced). A month whose count already differs is read natively by the
+    # tab anyway, so its old planes stay until it settles — no new version
+    # just to say so.
+    blank = sorted(ym for ym in tset if ym not in set(write)
+                   and T_old[yrs.index(ym[0]), ym[1]] > 0
+                   and T_old[yrs.index(ym[0]), ym[1]]
+                   == pres[yrs.index(ym[0]), ym[1]])
     T_new = T_old.copy()
     for (y, m) in write:
         T_new[yrs.index(y), m] = pres[yrs.index(y), m]
@@ -997,9 +1006,11 @@ def update(store, out, old, *, touched=(), base=None, workers=4, threads=4,
         update=dict(
             by="ml/export_gridded_monthly.py update (E-090)",
             rule=("a month's planes are written only when it is complete in "
-                  "the store and holds no provisional day; any other changed "
-                  "month is blanked (frames_present 0, planes zero) so the "
-                  "Data tab reads its native maps"),
+                  "the store and holds no provisional day; a changed month "
+                  "whose frame count equals the published one is blanked "
+                  "(frames_present 0, planes zero) so the Data tab reads its "
+                  "native maps; a month whose count already differs keeps "
+                  "its planes (the tab already reads it natively)"),
             written=[[y, m + 1] for y, m in write],
             blanked=[[y, m + 1] for y, m in blank],
             previous_generated_utc=st_old.get("generated_utc"),
