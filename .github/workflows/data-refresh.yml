@@ -351,7 +351,11 @@ jobs:
             git pull --rebase origin main && git push origin main && break
             sleep $((i * 15))
           done
+          # a push made with the job token triggers no workflow, so both
+          # deploys are dispatched by name: GitHub Pages and the Cloudflare
+          # Pages project that serves blauewelt.org
           gh workflow run pages.yml --ref main
+          gh workflow run deploy-cloudflare.yml --ref main
       - name: Status line of every store (tensors/refresh/status.json on the Hub)
         if: ${{ github.event.inputs.dry_run != 'true' }}
         env:
