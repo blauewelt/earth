@@ -43,11 +43,17 @@ if (!d) fail(`${FAMILY}/${name} is not in the registries the tab loads (errors: 
 console.log(`${d.id}: span ${d.span.join(" → ")} (registry), frame ${d.frameSeconds} s`);
 if (d.span[1] !== want) fail(`the registry's record ends ${d.span[1]}, expected ${want}`);
 
+// a small open-ocean box (inside irtb's ±30° band); 2° on the fine grids
+const fine = d.grid && Math.abs(d.grid.dx) < 0.1;
+const BOX = name === "irtb" ? { w: -30, s: -2, e: -28, n: 0 }
+  : fine ? { w: -40, s: 40, e: -38, n: 42 } : { w: -60, s: 30, e: -30, n: 50 };
 // the newest frame: the last day, and for a sub-daily store its last hour
 const [Y, M, D] = want.split("-").map(Number);
+// the first channel; a stored offset the reader adds back ("K - 160" for
+// irtb) is read from the store's own tile_grid.json on the Python side
 const ch = d.channels[0].name;
 const sel = { family: FAMILY, store: name, channels: [ch], yearStart: Y, yearEnd: Y, months: [M], days: [D, D],
-  hours: null, bbox: { w: -60, s: 30, e: -30, n: 50 }, step: "native", res: "native" };
+  hours: null, bbox: BOX, step: "native", res: "native" };
 if (d.frameSeconds < 86400) {
   const last = 24 - d.frameSeconds / 3600;
   sel.hours = [last, 24];
@@ -71,10 +77,24 @@ point = str(gr.get("align", "")).startswith("point")
 off = 0.0 if point else 0.5
 rr = np.rint((lat - gr["y0"]) / gr["dy"] - off).astype(int)
 cc = np.rint((lon - gr["x0"]) / gr["dx"] - off).astype(int)
-fr = g.read_frame(b, f)
+# only the tiles under the box (a fine grid's whole frame is thousands)
+T = sp["tile"]
+fr = {}
+for ty in sorted(set((rr // T).tolist())):
+    for tx in sorted(set((cc // T).tolist())):
+        t = g.read_tile(b, f, ty, tx, crop=True)
+        if t is None:
+            raise SystemExit(f"frame ({b}, {f}) is not in the shard")
+        fr[(ty, tx)] = t
 names = [c["name"] for c in sp["channels"]]
-v = fr[np.ix_(rr, cc)][:, :, names.index(sys.argv[6])].astype(np.float64).ravel()
-print(json.dumps([None if not np.isfinite(x) else float(x) for x in v]))
+ci = names.index(sys.argv[6])
+v = np.array([[fr[(r // T, c // T)][r % T, c % T, ci] for c in cc] for r in rr],
+             np.float64).ravel()
+import re
+u = str(sp["channels"][ci]["unit"])
+m = re.match(r"^(?:K|nm) *- *([0-9]+)", u) or re.search(r"add ([0-9]+) for", u)
+off = float(m.group(1)) if m else 0.0
+print(json.dumps([None if not np.isfinite(x) else float(x) + off for x in v]))
 `, `https://huggingface.co/datasets/chfrank/earth-tensors/resolve/main/tensors/${key}/${name}`,
   String(Math.floor(t82 / 432000)), String(Math.round((t82 % 432000) / d.frameSeconds)),
   JSON.stringify(Array.from(r.lat)), JSON.stringify(Array.from(r.lon)), ch],
