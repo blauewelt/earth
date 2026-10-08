@@ -514,6 +514,61 @@ def store_parts(key):
     return slug, name
 
 
+# ================================================================ revert ====
+def revert_store(key, oid, remote=None, dry_run=False):
+    """Undo ONE Hub commit's changes under `tensors/<key>/` (and the
+    refreshed lanes' ledgers it carried): every file it changed gets its
+    parent's bytes back, every file it added is deleted — for a refresh
+    whose verification never finished (a cancelled or timed-out job)."""
+    from huggingface_hub import HfApi
+    remote = remote or HubRemote()
+    api = remote.api()
+    commits = list(api.list_repo_commits(remote.repo, repo_type="dataset"))
+    ids = [c.commit_id for c in commits]
+    full = [c for c in ids if c.startswith(oid)]
+    if len(full) != 1:
+        raise SystemExit(f"{oid}: matches {len(full)} commits on main")
+    i = ids.index(full[0])
+    if i + 1 >= len(ids):
+        raise SystemExit(f"{oid}: no parent commit")
+    parent = ids[i + 1]
+
+    def tree(rev, pre):
+        out = {}
+        for e in api.list_repo_tree(remote.repo, path_in_repo=pre,
+                                    repo_type="dataset", recursive=True,
+                                    revision=rev):
+            if hasattr(e, "tree_id"):
+                continue
+            lfs = getattr(e, "lfs", None)
+            out[e.path] = (lfs.sha256 if lfs else None) or e.blob_id
+        return out
+    slug, name = store_parts(key)
+    adds, dels, tmp = [], [], os.path.join(os.getcwd(), "_revert")
+    os.makedirs(tmp, exist_ok=True)
+    for pre in (f"tensors/{key}", f"partials/{slug}/{name}"):
+        a, b = tree(parent, pre), tree(full[0], pre)
+        for path in sorted(set(a) | set(b)):
+            if a.get(path) == b.get(path):
+                continue
+            if path not in a:
+                dels.append(path)
+            else:
+                lp = os.path.join(tmp, f"{len(adds)}.bin")
+                with open(lp, "wb") as fh:
+                    fh.write(remote.get(path, revision=parent))
+                adds.append((path, lp))
+    print(f"revert {key} @ {full[0][:10]} (parent {parent[:10]}): "
+          f"{len(adds)} file(s) restored, {len(dels)} deleted")
+    if dry_run or not (adds or dels):
+        return {"restored": len(adds), "deleted": len(dels),
+                "parent": parent, "committed": None}
+    c = remote.commit(adds, dels, f"E-090: revert {key} to {parent[:10]} "
+                                  f"(undo {full[0][:10]})")
+    return {"restored": len(adds), "deleted": len(dels), "parent": parent,
+            "committed": c}
+
+
 # ============================================================== registry ====
 _REG = {}
 
@@ -811,6 +866,15 @@ def _norm(v):
     return json.loads(json.dumps(v, default=str))
 
 
+def _strip_wall(v):
+    """A ledger's wall-clock fields (`fetch_seconds`, …) are not structure:
+    a re-fetched lane takes its own time."""
+    if isinstance(v, dict):
+        return {k: _strip_wall(x) for k, x in v.items()
+                if not (k.endswith("_seconds") or k == "elapsed_s")}
+    return v
+
+
 def _ledger_rel(partials, store, year, lane):
     p = f"{partials}/{store}/{year}"
     return f"{p}/{lane}/counts.json" if lane else f"{p}/counts.json"
@@ -838,7 +902,7 @@ def _bin_owned(lane_window, b):
 
 def splice(key, remote, lanes, work, *, new_end=None, adapter_cls=None,
            allow_revisions=False, provisional=(), plan_root=None,
-           check_only=False):
+           check_only=False, since_day=None):
     """Build the refreshed store's changed files and store.json in
     `work/stage/` from the published store and the re-fetched lanes.
 
@@ -891,12 +955,28 @@ def splice(key, remote, lanes, work, *, new_end=None, adapter_cls=None,
     lby = old_meta.get("lanes_by_year") or {}
     ledgers = {}
     windows = {}
+    # a lane an INTERRUPTED refresh committed to the store but never parked
+    # (its job died between the commit and the parts push) is explained by
+    # the lane re-fetched now, if this refresh re-fetches it under its name
+    refetched = {(int(y), lc.lane): lc for (y, _o, lc) in lanes}
+    repaired = []
     for y in ctx_old.years:
         for lane in (lby.get(str(y)) or {}).get("lanes") or [""]:
             rel = _ledger_rel(partials, name, y, lane)
-            c = json.loads(get(rel, f"the {y} lane ledger"))
+            b = remote.get(rel)
+            if b is None and (int(y), lane) in refetched and \
+                    old_meta.get("refresh"):
+                lc = refetched[(int(y), lane)]
+                b = open(os.path.join(lc.year_dir(y), "counts.json"),
+                         "rb").read()
+                repaired.append(f"{y}/{lane or '(unnamed)'}")
+            if b is None:
+                raise SpliceError(f"{key}: {rel} is not on the Hub (the {y} "
+                                  f"lane ledger)")
+            c = json.loads(b)
             ledgers[(int(y), lane)] = c
             windows[(int(y), lane)] = c.get("lane_window")
+    rep["ledger_repaired"] = repaired
     deg = old_meta.get("degraded") or {}
     counts_all, year_counts = _merge_ledgers(f10b, ledgers)
     rebuilt = b1.grid_store_meta(
@@ -906,8 +986,8 @@ def splice(key, remote, lanes, work, *, new_end=None, adapter_cls=None,
         lanes=old_meta.get("lanes_by_year"))
     bad = []
     for k in STRUCTURAL:
-        bad += _diff(_norm(old_meta.get(k, "<absent>")),
-                     _norm(rebuilt.get(k, "<absent>")), f".{k}")
+        bad += _diff(_strip_wall(_norm(old_meta.get(k, "<absent>"))),
+                     _strip_wall(_norm(rebuilt.get(k, "<absent>"))), f".{k}")
     drift = []
     for k in DESCRIPTIVE:
         drift += _diff(_norm(old_meta.get(k, "<absent>")),
@@ -1077,6 +1157,19 @@ def splice(key, remote, lanes, work, *, new_end=None, adapter_cls=None,
     mini = os.path.join(work, "mini")
     shutil.rmtree(mini, ignore_errors=True)
     touched = changed_bins | new_bins
+    late = []
+    if since_day is not None:
+        # frames after the day the REGISTRY announces — what an interrupted
+        # refresh committed and nobody verified
+        for g in groups:
+            for r in arrs[g]:
+                b, m = int(r["bin"]), int(r["frame_mask"])
+                for f in range(int(specs[g]["frames_per_bin"])):
+                    if m >> f & 1 and sh.frame_day(
+                            b, f, specs[g]["frame_seconds"]) > since_day:
+                        late.append((g, b, f))
+                        if f"{g}/{sh.shard_relpath(b)}" in lane_files:
+                            touched.add((g, b))
     for g in groups:
         gd = os.path.join(mini, g)
         os.makedirs(gd)
@@ -1125,10 +1218,18 @@ def splice(key, remote, lanes, work, *, new_end=None, adapter_cls=None,
         write_json(mp, man)
         adds.append(("manifest.json", mp))
     rep["adds"] = [(f"{prefix}/{r}", p) for r, p in adds]
+    # THE REFETCHED LANES' LEDGERS RIDE IN THE DATA COMMIT (data-refresh #6:
+    # an irtb refresh committed its store, was cancelled before the parts
+    # push, and the next refresh could not explain the store — its lane's
+    # counts.json was nowhere). The bulky parts follow after verification.
+    for (y, _old, lc) in lanes:
+        rel = _ledger_rel(partials, name, y, lc.lane)
+        rep["adds"].append((rel, os.path.join(lc.year_dir(y), "counts.json")))
     rep["deletes"] = [f"{prefix}/{r}" for r in deletes]
     rep["meta"] = meta
     rep["old_meta"] = old_meta
-    rep["new_frames"] = new_frames(old_arr, arrs, specs)
+    rep["new_frames"] = sorted(set(new_frames(old_arr, arrs, specs))
+                               | {x for x in late if (x[0], x[1]) in touched})
     return rep
 
 
@@ -1162,6 +1263,34 @@ def commit_and_verify(key, remote, rep, message):
     rep["commit"] = oid
     rep["commit_seconds"] = round(time.time() - t0, 1)
     try:
+        verify_revision(key, remote, rep, oid)
+    except BaseException as e:
+        print(f"::error::{key}: verification failed after commit {oid} "
+              f"({e}) — reverting", flush=True)
+        tmpd = os.path.join(os.path.dirname(rep["mini"]), "revert")
+        os.makedirs(tmpd, exist_ok=True)
+        adds, dels = [], []
+        for i, (rel, b) in enumerate(backup.items()):
+            if b is None:
+                dels.append(rel)
+            else:
+                p = os.path.join(tmpd, f"{i}.bin")
+                with open(p, "wb") as fh:
+                    fh.write(b)
+                adds.append((rel, p))
+        rep["revert_commit"] = remote.commit(adds, dels,
+                                             f"E-090: revert {key} ({oid})")
+        raise
+    return rep
+
+
+def verify_revision(key, remote, rep, oid):
+    """Every file of `rep["adds"]` read back at `oid` and sha256-compared,
+    every delete gone, and the new frames re-read over HTTP tile by tile
+    (`verify_tiles`) against the local lane files. Raises on a mismatch."""
+    from family1 import sharded as sh
+    prefix = f"tensors/{key}"
+    if True:
         for rel, local in rep["adds"]:
             b = hub_read(lambda: remote.get(rel, revision=oid))
             if b is None or sha256_bytes(b) != sha256_file(local):
@@ -1192,23 +1321,6 @@ def commit_and_verify(key, remote, rep, message):
         rep["verified"] = {"files_read_back": len(rep["adds"]),
                            "frames_reread": checked, "tiles_reread": tiles,
                            "at_revision": oid}
-    except BaseException as e:
-        print(f"::error::{key}: verification failed after commit {oid} "
-              f"({e}) — reverting", flush=True)
-        tmpd = os.path.join(os.path.dirname(rep["mini"]), "revert")
-        os.makedirs(tmpd, exist_ok=True)
-        adds, dels = [], []
-        for i, (rel, b) in enumerate(backup.items()):
-            if b is None:
-                dels.append(rel)
-            else:
-                p = os.path.join(tmpd, f"{i}.bin")
-                with open(p, "wb") as fh:
-                    fh.write(b)
-                adds.append((rel, p))
-        rep["revert_commit"] = remote.commit(adds, dels,
-                                             f"E-090: revert {key} ({oid})")
-        raise
     return rep
 
 
@@ -1357,7 +1469,8 @@ def update(key, remote, work, *, dry_run=False, force_from=None,
     prov = [parse_day(d) for d in p.get("provisional_days") or []]
     rep = splice(key, remote, lanes, os.path.join(work, "splice"),
                  new_end=new_end, adapter_cls=adapter_cls,
-                 allow_revisions=allow_revisions, provisional=prov)
+                 allow_revisions=allow_revisions, provisional=prov,
+                 since_day=parse_day(p.get("record_end")))
     meta_new = rep["meta"]
     g0 = sorted(meta_new["groups"])[0]
     res.update({k: rep[k] for k in ("files_changed", "files_added",
@@ -1369,8 +1482,32 @@ def update(key, remote, work, *, dry_run=False, force_from=None,
     res["frames_new"] = len(rep["new_frames"])
     if not rep["adds"] or (rep["files_changed"] + rep["files_added"]
                            + rep["files_deleted"]) == 0:
-        res["state"] = "noop"
-        res["detail"] = "the re-fetched lanes are byte-identical to the store"
+        if not rep.get("ledger_repaired"):
+            res["state"] = "noop"
+            res["detail"] = ("the re-fetched lanes are byte-identical to the "
+                             "store")
+            return res
+        # A REPAIR: an interrupted refresh had committed these bytes (the
+        # re-fetch reproduces them exactly) and never verified, parked or
+        # announced them. Verify what is published now, park the lane, and
+        # hand the store on to the registry as updated.
+        rep["adds"] = [a for a in rep["adds"] if a[0].startswith("tensors/")
+                       and not a[0].endswith(("store.json", "manifest.json"))]
+        verify_revision(key, remote, rep, "main")
+        res["repaired"] = rep["ledger_repaired"]
+        res["verified"] = rep["verified"]
+        res["frames_new"] = len(rep["new_frames"])
+        if push_parts:
+            res["parts"] = push_lane_parts(lanes, remote, key)
+        res["months_touched"] = months_touched(
+            {"bins_new": sorted({b for _, b, _ in rep["new_frames"]}),
+             "bins_rewritten": []}, meta_new)
+        res["record_end_before"] = p["record_end"]
+        res["record_end_after"] = p["new_end"]
+        res["state"] = "updated"
+        res["detail"] = (f"repaired an interrupted refresh: lane(s) "
+                         f"{rep['ledger_repaired']} re-fetched byte-identical "
+                         f"to the published store, verified, parked")
         return res
     msg = (f"E-090 refresh {key}: {res['frames_new']} new frame(s), "
            f"{len(rep['bins_new'])} new / {len(rep['bins_rewritten'])} "
@@ -1659,6 +1796,10 @@ def main(argv=None):
     m.add_argument("--work", required=True)
     m.add_argument("--out", required=True)
     m.add_argument("--dry-run", action="store_true")
+    v = sub.add_parser("revert")
+    v.add_argument("--store", required=True)
+    v.add_argument("--commit", required=True)
+    v.add_argument("--dry-run", action="store_true")
     f = sub.add_parser("finish")
     f.add_argument("--sums", required=True, help="dir of sums results")
     s = sub.add_parser("status")
@@ -1722,6 +1863,10 @@ def main(argv=None):
         print(json.dumps({k: v for k, v in out.items() if k != "block"},
                          indent=1, default=str))
         return 0 if out.get("state") != "error" else 1
+    if a.cmd == "revert":
+        print(json.dumps(revert_store(a.store, a.commit, remote,
+                                      dry_run=a.dry_run), indent=1))
+        return 0
     if a.cmd == "finish":
         rs = []
         for p_ in sorted(glob.glob(os.path.join(a.sums, "**", "*.json"),
