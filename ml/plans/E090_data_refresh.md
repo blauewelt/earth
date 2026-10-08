@@ -51,7 +51,7 @@ with a *ledger* (`counts.json`) of what it counted.
 | D13 | concurrency | `concurrency: data-refresh`, `cancel-in-progress: false` — two runs never overlap | a second run would race the first's splice |
 | D14 | secrets per job | plan: none; update: `HF_TOKEN` (not in a dry run), the Copernicus Marine pair only for `glorys025d`, the Earthdata pair only for `sst_acspo02` / `irtb`; registry, sums, status: `HF_TOKEN`; finish: the job token with `contents/actions/issues: write` | least privilege per store |
 | D15 | the parts follow the store | after a verified commit the refetched lane's parts are pushed to `partials/` (the build's own `push_parts`), and a superseded named lane's folder is deleted | a later from-scratch assembly from parts reproduces the refreshed store, and the NEXT refresh's self-check (D5) can explain it |
-| D16 | batching the long lanes | `pace4k`, `sst_acspo02`, `irtb` refresh when ≥ 7 new days are upstream (`min_gap_days`); every store is still checked daily | their lane re-fetch is 0.5–3 h |
+| D16 | batching the long lanes | `pace4k`, `sst_acspo02`, `irtb` refresh when ≥ 7 new days — or ≥ 7 reissued / finalised days — are upstream (`min_gap_days`); every store is still checked daily | their lane re-fetch is 0.5–3 h (measured: 64, 79 and 33 min) |
 | D17 | schedule | daily, `cron: 23 5 * * *` (05:23 UTC: after PSL's overnight OISST update, off the hour) — enabled only after a real dispatch run was green | the instruction |
 | D19 | producers that reissue files | a store whose producer reissues granules under the same name (NOAA STAR's ACSPO L3S-LEO: each daily granule updated ~10 weeks after its day, measured in the CMR) carries `revisions` in its policy: the plan lists every day of the last 150 whose granule the CMR says was updated since (two days before) the store's `built_at`, re-fetches from the first, and those bins may change; any other change is still a refused revision | found by the guard itself (data-refresh #6 refused 5 rewritten July bins of `sst_acspo02`); the producer's own timestamp, not a wider tolerance, decides |
 | D20 | the ledger rides with the data | each refetched lane's `counts.json` is committed in the SAME Hub commit as the store; the bulky parts follow verification | #6: an `irtb` commit outlived its cancelled job, and the next refresh could not explain the store (D5) without its lane's ledger |
@@ -75,9 +75,9 @@ producer's own newest day is.
 | `family7_2d/glorys025d` | GLORYS12 ocean reanalysis currents, SSH, mixed layer, daily, 0.25° | Copernicus Marine `cmems_mod_glo_phy_my_0.083deg_P1D-m` v202311 (STAC `end_datetime`); months to 2026-07 from the Hub's parked 0.25° chunks, the tail month subset from Copernicus Marine in the lane and parked | Copernicus Marine (Actions secrets) | weekly extension · ~6 weeks | 2026-08-18 | **2026-08-25** | 7 | year lane 2026 | **yes**, scheduled |
 | `family7_2d/occci025d` | ESA OC-CCI v6.0 chlorophyll, daily, 0.25° | PML THREDDS `CCI_ALL-v6.0-DAILY` (10,501 days) | none | irregular · ~3.3 months | 2026-06-30 | 2026-06-30 | 0 | year lane (PML per-day subsets, ~8 s a day) | **yes**, scheduled |
 | `family1_2/era5_{t,q,u,v}` | ERA5 temperature, humidity, wind on 13 pressure levels, six-hourly, 1° | Google's ARCO-ERA5 zarr `full_37-1h-0p25deg-chunk-1.zarr-v3` root attribute `valid_time_stop` (final ERA5); ERA5T to `valid_time_stop_era5t` 2026-10-02 not admitted (D10) | none | monthly (final ERA5) · ~3 months | 2026-06-30 | 2026-06-30 | 0 | year lane 2026 per store (~0.3 s a frame, ~5–8 min + push) | **yes**, scheduled |
-| `family1_gf/pace4k` | NASA PACE OCI ocean colour and phytoplankton, daily, 4 km | OB.DAAC OPeNDAP (anonymous); CMR newest granule of `PACE_OCI_L3M_BGC` / `_AOP` / `L4M_MOANA` | none | daily · ~5 weeks | 2026-07-31 | **2026-08-31** | 31 | year lane 2026 (14.6–35 s a frame ≈ 1–2.4 h) | **yes**, dispatch-only until a real refresh is green, then batched ≥ 7 days |
-| `family1_gf/sst_acspo02` | NOAA ACSPO L3S-LEO sea-surface temperature, daily, 2 km | PO.DAAC `L3S_LEO_DY-STAR-v2.81` (CMR C2805339147-POCLOUD) | Earthdata (Actions secrets) | daily · 1 day | 2026-09-16 | **2026-10-07** | 21 | last lane `d0701-0915` → `d0701-1231` (58 s a frame: ~1.6 h now, ~3 h by December; ~10 GB of parts) | **yes**, dispatch-only until green, batched ≥ 7 days |
-| `family1_gf/irtb` | NCEP/CPC merged geostationary IR (cloud tops), 3-hourly, 4 km, ±30° | GES DISC `GPM_MERGIR.1` (CMR C1432254058-GES_DISC) | Earthdata | hourly files · 1 day | 2026-09-16 | **2026-10-06** | 20 | last lane `d0701-0915` → `d0701-1231` (13–18 min a quarter measured) | **yes**, dispatch-only until green, batched ≥ 7 days |
+| `family1_gf/pace4k` | NASA PACE OCI ocean colour and phytoplankton, daily, 4 km | OB.DAAC OPeNDAP (anonymous); CMR newest granule of `PACE_OCI_L3M_BGC` / `_AOP` / `L4M_MOANA` | none | daily · ~5 weeks | 2026-07-31 | **2026-08-31** | 31 | year lane 2026 (14.6–35 s a frame ≈ 1–2.4 h) | **yes**, scheduled, batched ≥ 7 days (green: data-refresh #8, 64 min) |
+| `family1_gf/sst_acspo02` | NOAA ACSPO L3S-LEO sea-surface temperature, daily, 2 km | PO.DAAC `L3S_LEO_DY-STAR-v2.81` (CMR C2805339147-POCLOUD) | Earthdata (Actions secrets) | daily · 1 day | 2026-09-16 | **2026-10-07** | 21 | last lane `d0701-0915` → `d0701-1231` (58 s a frame: ~1.6 h now, ~3 h by December; ~10 GB of parts) | **yes**, scheduled, batched ≥ 7 days |
+| `family1_gf/irtb` | NCEP/CPC merged geostationary IR (cloud tops), 3-hourly, 4 km, ±30° | GES DISC `GPM_MERGIR.1` (CMR C1432254058-GES_DISC) | Earthdata | hourly files · 1 day | 2026-09-16 | **2026-10-06** | 20 | last lane `d0701-0915` → `d0701-1231` (13–18 min a quarter measured) | **yes**, scheduled, batched ≥ 7 days |
 | `family1_gf/oc4k` | ESA OC-CCI v6.0 4 km daily | CEDA `v6.0-release/…/chlor_a/daily/v6.0/` — the tree ends at 2022 | none | **closed at this source** | 2022-12-31 | 2022-12-31 | 0 | — (2023 on is PML's subset: a new source for the adapter, a build decision, not a refresh) | — |
 
 ### 2.2 Points (tier P) and the family-10 stores — designed, not automated (§5)
@@ -227,14 +227,24 @@ In short:
   extension.
 - **Sums** (#5, the recovery of #3's failed sums job): OISST's September
   2026 blanked into `monthly/r20261008T0820/`, index committed by the job.
-- **Schedule** enabled after #5: daily 05:23 UTC, the eight `auto` stores.
+- **Schedule** enabled after #5: daily 05:23 UTC.
+- **The fine grids** (#6 → #11): `pace4k` 2026-07-31 → **2026-08-31**,
+  `sst_acspo02` 2026-09-16 → **2026-10-07** (with NOAA STAR's 23 reissued
+  July days, D19), `irtb` 2026-09-16 → **2026-10-06**; each committed,
+  read back, its lane parked, announced and read through the tab's reader
+  with 0 differences. On the way the guards refused or undid three things
+  that would otherwise have been published wrong or unverified (D19–D22):
+  a pace4k commit whose re-read the Hub throttled (reverted by the job), a
+  silent rewrite of ACSPO's July (refused before commit), and an irtb commit
+  whose job was cancelled mid-verification (refused by the next refresh's
+  self-check and by the registry guard, then reverted by hand with the
+  `revert` input). Added to the schedule after #11, batched (D16).
+- **Not yet:** ERA5's append path on new data; the point stores (§5); the
+  E-089 hook (§7).
 
 ## 9 · What is NOT verified
 
 - The point-store refresh (§5) is a design.
-- `sst_acspo02`, `irtb` and `pace4k` have passed their dry runs only; their
-  first real refresh (and the named-lane replacement it performs) is a
-  dispatch, not yet run.
 - ERA5's append path has not run on new data: ARCO-ERA5's final stream still
   ends 2026-06-30 (D10); its forced byte-identical refresh is the evidence
   until the next monthly extension.

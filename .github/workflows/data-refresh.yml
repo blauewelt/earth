@@ -42,9 +42,9 @@ run-name: data refresh ${{ github.event_name }} ${{ github.event.inputs.stores |
 on:
   # Daily at 05:23 UTC (after PSL's overnight OISST update; off the hour).
   # Enabled 2026-10-08 after the first real runs were green (E-090 runs #3
-  # to #5). The scheduled run refreshes every store with `auto` set in
-  # ml/data_refresh.py's POLICY; the dispatch-only stores are refreshed by
-  # hand until their first real refresh is green.
+  # to #5; the three fine 1.gf grids after #8-#11). The scheduled run
+  # covers every tier-G store in ml/data_refresh.py's POLICY not marked
+  # auto=False; the long-lane ones are batched (min_gap_days).
   schedule:
     - cron: "23 5 * * *"
   workflow_dispatch:

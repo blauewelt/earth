@@ -45,7 +45,7 @@ low-pass).
 ---
 
 <a id="e-090"></a>
-## E-090 · Every store the Data tab serves, kept current with its upstream — a daily hosted refresh — FIRST REAL REFRESHES GREEN 2026-10-08 (OISST to 2026-10-06 with two preliminary days replaced by final ones, GLORYS to 2026-08-25, both read back and announced; ERA5 re-fetched byte-identical)
+## E-090 · Every store the Data tab serves, kept current with its upstream — a daily hosted refresh — SCHEDULED 2026-10-08 after real refreshes of six gridded stores were green (OISST to 2026-10-06 with two preliminary days replaced by final ones, GLORYS to 08-25, PACE to 08-31, ACSPO to 10-07 with its reissued July, the geostationary IR to 10-06; ERA5 re-fetched byte-identical)
 
 **E-090 · A scheduled GitHub-hosted job that follows each producer.**
 Chris, 2026-10-08: *"I guess we need a github workflow that always updates
@@ -82,13 +82,19 @@ all data as well?"* Plan and full inventory:
 | [#4](https://github.com/blauewelt/earth/actions/runs/37747717833) | `era5_t` FORCED from 2026-06-01 (ARCO-ERA5's final stream still ends 2026-06-30, so no new day exists) | green: the 2026 lane re-fetched in 213 s and came out **byte-identical** to the published store — nothing committed |
 | [#5](https://github.com/blauewelt/earth/actions/runs/37748824467) | sums recovery for #3's two stores (`sums_from_run`) | green. GLORYS: nothing to remake (August's count already differs from its sums, so the tab reads it natively; no new version). OISST: September 2026 blanked — its count (30) still equalled the sums' while two of its days changed value — into the new version `monthly/r20261008T0820/` (10.1 GB uploaded in 71 s and streamed back, every sha256 equal), index committed to main by the job (`7217949`) and the site redeployed. Checked afterwards from the sandbox: July 2019's plane is byte-identical to the previous version, September 2026's counts are all zero, the other seven stores' blocks untouched; the reader takes the sums for 2019-07 and 2026-08 and the native maps for 2026-09 ("30 frames now, 0 summed") |
 
+| [#6](https://github.com/blauewelt/earth/actions/runs/37750390302) | first real refresh of the three fine 1.gf grids (`pace4k`, `sst_acspo02`, `irtb`) | three findings, nothing wrong published or announced. pace4k: 31 new days committed, the whole-frame HTTP re-read (578 tiles a frame) answered 429 by the Hub, so the commit was REVERTED (`4c6e3e3e`) — re-read now samples ≤ 24 tiles a frame and waits out a 429 (`d4002ff`). sst_acspo02: REVISION REFUSED before any commit — bins 3252–3256 (2026-07-07 … 08-01) came back changed; the CMR shows NOAA STAR reissues each granule ~10 weeks after its day, so a store with `revisions` now re-fetches the days the CMR says were updated since its build and lets exactly those bins change (`96bf0cf`). irtb: committed (`b8b8e94c`, 160 new frames) but its two-hour whole-frame re-read was cancelled — unverified, unparked, unannounced; the lane ledger now rides in the data commit (`632c84e`) |
+| [#8](https://github.com/blauewelt/earth/actions/runs/37760926861) | the same three again, on the fixes | pace4k **2026-07-31 → 2026-08-31** (31 new days, 6 new + 1 rewritten bin, commit `6288a70b`, 31 frames / 25 tiles each re-read, parts parked; 64 min). sst_acspo02 **2026-09-16 → 2026-10-07** (21 new days + the 23 reissued July days in 5 rewritten bins, commit `ea06885c`, 21 frames / 504 tiles re-read, lane `d0701-0915` → `d0701-1231` parked and the old folder deleted; 79 min; fetch 3,623 s). irtb refused by its own self-check (the published store was #6's unverified commit, its ledger nowhere). The registry guard then REFUSED family1gf.json because irtb's span had moved unannounced — correct |
+| [#9](https://github.com/blauewelt/earth/actions/runs/37763468000) | `revert` irtb's #6 commit | green: 3 files restored, 8 deleted (`8f27c939`); irtb back to 2026-09-16 |
+| [#10](https://github.com/blauewelt/earth/actions/runs/37770432179) | `registry_from_run` #8 | green: family1gf.json published under `--refresh pace4k --refresh sst_acspo02`; the tab's reader read pace4k 2026-08-31 (2,304 cells) and sst_acspo02 2026-10-07 (10,000 cells) equal to `sharded.py`, 0 differences |
+| [#11](https://github.com/blauewelt/earth/actions/runs/37770445591) | irtb refreshed on the fixed code | green: irtb **2026-09-16 → 2026-10-06** (160 new 3-hourly frames in 4 new bins, lane fetched in 762 s, commit `0ec20ca6` with its ledger, 40 frames / 920 tiles re-read, lane `d0701-0915` → `d0701-1231` parked and the old folder deleted, family1gf.json published, the tab's reader equal to `sharded.py` on 3,025 cells; 33 min) |
+
 **Schedule:** enabled after #5, daily at 05:23 UTC, for the eight stores
-with `auto` (family 7.2d's four, family 1.2's four).
+with `auto` (family 7.2d's four, family 1.2's four); the three fine grids
+joined after #11, batched (≥ 7 new or reissued days).
 
 **Not yet:** ERA5's append path on new data (next monthly extension of the
-final stream); the first real refresh of `pace4k`, `sst_acspo02` and `irtb`
-(dispatch-only until it is green); the point stores (plan §5, designed);
-the E-089 hook (waits for its index).
+final stream); the point stores (plan §5, designed); the E-089 hook (waits
+for its index).
 
 ---
 

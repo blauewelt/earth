@@ -450,26 +450,23 @@ POLICY = {
     "family1_2/era5_v": dict(kind="grid", fam="12", upstream=up_era5,
                              sums=True),
     "family1_gf/pace4k": dict(kind="grid", fam="1gf", upstream=up_pace4k,
-                              auto=False, min_gap_days=7, sums="e089",
-                              why="dispatch-only until a real refresh is "
-                                  "green: a whole-year lane of 4 km OPeNDAP "
-                                  "reads, ~1 h — plan §4"),
-    "family1_gf/sst_acspo02": dict(kind="grid", fam="1gf", auto=False,
+                              min_gap_days=7, sums="e089",
+                              why="batched: a whole-year lane of 4 km "
+                                  "OPeNDAP reads, ~1 h (data-refresh #8)"),
+    "family1_gf/sst_acspo02": dict(kind="grid", fam="1gf",
                                    upstream=up_acspo, creds=EARTHDATA,
                                    revisions={"collection_concept_id":
                                               "C2805339147-POCLOUD"},
                                    revision_window_days=150,
                                    min_gap_days=7, sums="e089",
-                                   why="dispatch-only until a real refresh "
-                                       "is green: the refreshed lane is the "
-                                       "store's last named half-year lane "
-                                       "(58 s a frame) — plan §4"),
-    "family1_gf/irtb": dict(kind="grid", fam="1gf", auto=False,
+                                   why="batched: the store's last named "
+                                       "half-year lane, 58 s a frame (79 "
+                                       "min in data-refresh #8)"),
+    "family1_gf/irtb": dict(kind="grid", fam="1gf",
                             upstream=up_irtb, creds=EARTHDATA,
                             min_gap_days=7, sums="e089",
-                            why="dispatch-only until a real refresh is "
-                                "green: quarter lanes of 3-hourly 4 km — "
-                                "plan §4"),
+                            why="batched: its last named lane of 3-hourly "
+                                "4 km (33 min in data-refresh #11)"),
     "family1_gf/oc4k": dict(kind="static", fam="1gf", sums="e089",
                             why="CEDA's OC-CCI v6.0 4 km daily tree ends "
                                 "2022-12-31 (listed 2026-10-08); a later "
@@ -689,10 +686,11 @@ def plan_store(key, remote, force_from=None):
         cands.append(parse_day(force_from))
     start = min(cands) if cands else None
     mg = int(pol.get("min_gap_days") or 0)
-    if start is not None and not final and not force_from and mg and \
-            (gap or 0) < mg:
+    if start is not None and not force_from and mg and \
+            (gap or 0) < mg and len(final) < mg:
         out["action"] = "noop"
-        out["reason"] = (f"{gap} new day(s) upstream; this store is "
+        out["reason"] = (f"{gap} new day(s) and {len(final)} revised or "
+                         f"finalised day(s) upstream; this store is "
                          f"refreshed in batches of >= {mg} days (its lane "
                          f"re-fetch is long)")
         return out
