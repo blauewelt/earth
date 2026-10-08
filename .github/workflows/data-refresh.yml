@@ -66,6 +66,9 @@ on:
       sums_from_run:
         description: "RECOVERY: remake only the monthly sums of the stores that an earlier run (its run id) updated; skips plan, update and registry"
         default: ""
+      registry_from_run:
+        description: "RECOVERY: publish the registries (and remake the sums) for the stores an earlier run (its run id) updated but did not announce; skips plan and update"
+        default: ""
       revert:
         description: "RECOVERY: <slug>/<store>@<hub commit> — undo that one refresh commit (a refresh whose verification never finished); nothing else runs"
         default: ""
@@ -113,6 +116,7 @@ jobs:
           python3 -u ml/data_refresh.py plan "${args[@]}"
           [ -n "${SUMS_FROM}" ] && echo "[]" > matrix.json
           [ -n "${{ github.event.inputs.revert }}" ] && echo "[]" > matrix.json
+          [ -n "${{ github.event.inputs.registry_from_run }}" ] && echo "[]" > matrix.json
           echo "matrix=$(cat matrix.json)" >> "$GITHUB_OUTPUT"
           echo "any=$(python3 -c 'import json; print(str(bool(json.load(open("matrix.json")))).lower())')" >> "$GITHUB_OUTPUT"
       - uses: actions/upload-artifact@v4
@@ -161,9 +165,12 @@ jobs:
 
   registry:
     needs: [plan, update]
-    if: ${{ always() && needs.plan.outputs.any == 'true' && github.event.inputs.dry_run != 'true' }}
+    if: ${{ always() && github.event.inputs.dry_run != 'true' && (needs.plan.outputs.any == 'true' || (github.event.inputs.registry_from_run != '' && github.event.inputs.registry_from_run != null)) }}
     runs-on: ubuntu-latest
     timeout-minutes: 60
+    permissions:
+      contents: read
+      actions: read
     outputs:
       sums: ${{ steps.pub.outputs.sums }}
       anysums: ${{ steps.pub.outputs.anysums }}
@@ -179,6 +186,8 @@ jobs:
           pattern: result-*
           path: results
           merge-multiple: true
+          run-id: ${{ github.event.inputs.registry_from_run || github.run_id }}
+          github-token: ${{ github.token }}
       - name: Publish the registries of the refreshed stores (the commit point), then read their newest day through the tab's reader
         id: pub
         env:
@@ -320,7 +329,7 @@ jobs:
         with:
           name: result-${{ matrix.name }}
           path: results
-          run-id: ${{ github.event.inputs.sums_from_run || github.run_id }}
+          run-id: ${{ github.event.inputs.sums_from_run || github.event.inputs.registry_from_run || github.run_id }}
           github-token: ${{ github.token }}
       - name: Remake the settled months of ${{ matrix.store }}
         env:
@@ -385,7 +394,7 @@ jobs:
         run: |
           set -euo pipefail
           [ -f art/plan.json ] || { echo "::warning::no plan artifact"; exit 0; }
-          if [ -n "${{ github.event.inputs.sums_from_run }}${{ github.event.inputs.revert }}" ]; then echo "a recovery run: the status lines are left as the last refresh wrote them"; exit 0; fi
+          if [ -n "${{ github.event.inputs.sums_from_run }}${{ github.event.inputs.revert }}${{ github.event.inputs.registry_from_run }}" ]; then echo "a recovery run: the status lines are left as the last refresh wrote them"; exit 0; fi
           python3 -u ml/data_refresh.py status --results art --plan art/plan.json --out status.json --upload
       - name: Status (dry run, not uploaded)
         if: ${{ github.event.inputs.dry_run == 'true' }}
