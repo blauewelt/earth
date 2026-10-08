@@ -461,7 +461,12 @@ def entry(store, ad, repo, use_hub=True, work=None, probe_dir=PROBE_DIR):
 
     out["built"] = True
     seg = getattr(ad, "source_segments", None)
-    if callable(seg):
+    if meta.get("source_segments"):
+        # E-090: a REFRESHED store carries the segments its last lane wrote
+        # (the record end moves with the producer); the adapter's class
+        # constant would print the end measured when the store was built
+        out["source_segments"] = meta["source_segments"]
+    elif callable(seg):
         # which product each span comes from and which falsifier it passed
         # (E-087 §14: a frame after family 7.2's end is source-readback only)
         out["source_segments"] = seg()

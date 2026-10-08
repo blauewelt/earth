@@ -1,0 +1,317 @@
+# E-090: KEEP EVERY STORE THE DATA TAB SERVES CURRENT WITH ITS UPSTREAM.
+#
+# Chris, 2026-10-08: "I guess we need a github workflow that always updates
+# all data as well?" The plan, the inventory of every store and every
+# decision: ml/plans/E090_data_refresh.md. The code: ml/data_refresh.py.
+#
+# THE JOBS, in order — each one a GitHub-HOSTED runner (ubuntu-latest, ~85 GB
+# free, 6 h), never a rented box (ml/CLAUDE.md §6):
+#   plan      asks every producer how far its record reaches today (no
+#             secret); a store already at its producer's newest day is a
+#             no-op and gets no job.
+#   update    one job PER STORE (fail-fast off: one store failing never
+#             blocks another): re-fetch its last lane with the builder's own
+#             stages, splice the shards into the published store, ONE Hub
+#             commit, every committed file read back at that revision, the new
+#             frames re-read through sharded.py over HTTP; a failure after
+#             the commit reverts it. Secrets are scoped per store: HF_TOKEN
+#             for the commit, the Copernicus Marine pair only for glorys025d,
+#             the Earthdata pair only for the Earthdata stores.
+#   registry  the COMMIT POINT for the Data tab: the family registries
+#             rebuilt, guarded (ml/registry_guard.py --refresh: only the
+#             refreshed stores' data fields may change) and published; then
+#             the newest day of each refreshed store read through the tab's
+#             own reader (scripts/refresh_reader_check.mjs) against
+#             sharded.py — a mismatch republishes the previous registry.
+#   sums      E-088's monthly sums of each refreshed store, for the months
+#             that are settled (complete, no provisional day), into a NEW
+#             version folder; falsifier on the written planes; streamed back.
+#   finish    merges the new sums blocks into data/gridded_monthly_index.json
+#             (the sums' commit point), commits it to main and redeploys the
+#             site; writes the status line of every store to the Hub
+#             (tensors/refresh/status.json); opens or updates ONE issue when
+#             anything failed.
+#
+# SECURITY. `schedule` + `workflow_dispatch` only, `runs-on: ubuntu-latest`
+# in every job. NEVER add pull_request / issue_comment / workflow_run, and
+# never point any job here at `runs-on: gpu` or a box label (ml/CLAUDE.md §6:
+# a scheduled job must never be able to reach a rented machine).
+name: Data refresh (E-090)
+run-name: data refresh ${{ github.event_name }} ${{ github.event.inputs.stores || 'auto' }}${{ github.event.inputs.dry_run == 'true' && ' (dry run)' || '' }}${{ github.event.inputs.force_from && format(' force-from {0}', github.event.inputs.force_from) || '' }}
+
+on:
+  workflow_dispatch:
+    inputs:
+      stores:
+        description: "auto (every scheduled tier-G store), all, or a comma list like family7_2d/oisst025d,family1_2/era5_t"
+        default: "auto"
+      dry_run:
+        description: "report what each store would fetch (and run each store's self-check) — no commit"
+        type: boolean
+        default: true
+      force_from:
+        description: "re-fetch from this day (YYYY-MM-DD) even without new upstream data (a forced, byte-compared refresh); empty = no"
+        default: ""
+      sums:
+        description: "also remake E-088's monthly sums of the refreshed stores"
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: data-refresh
+  cancel-in-progress: false
+
+env:
+  PIP_DEPS: numpy "huggingface_hub<2" "zstandard==0.23.0" netCDF4 requests rasterio pyhdf scipy pyarrow h5py numcodecs
+  # the bytes a lane writes must equal the published ones (ADAPTER_CONTRACT,
+  # "Reproducibility"): zstandard pinned above, numpy on the AVX2 path
+  NPY_DISABLE_CPU_FEATURES: "X86_V4 AVX512_ICL AVX512_SPR"
+  HF_HUB_DISABLE_XET: "1"
+
+jobs:
+  plan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    outputs:
+      matrix: ${{ steps.plan.outputs.matrix }}
+      any: ${{ steps.plan.outputs.any }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install
+        run: pip install --quiet ${PIP_DEPS}
+      - name: Ask every producer how far its record reaches
+        id: plan
+        env:
+          STORES: ${{ github.event.inputs.stores || 'auto' }}
+          DRY: ${{ github.event.inputs.dry_run == 'true' && 'true' || 'false' }}
+          FORCE_FROM: ${{ github.event.inputs.force_from || '' }}
+        run: |
+          set -euo pipefail
+          [[ "${STORES}" =~ ^[a-z0-9_/,.-]+$ ]] || { echo "::error::stores must match ^[a-z0-9_/,.-]+$"; exit 1; }
+          [[ -z "${FORCE_FROM}" || "${FORCE_FROM}" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ ]] || { echo "::error::force_from must be YYYY-MM-DD"; exit 1; }
+          args=(--stores "${STORES}" --json plan.json --matrix matrix.json)
+          [ "${DRY}" = "true" ] && args+=(--all-grid)
+          [ -n "${FORCE_FROM}" ] && args+=(--force-from "${FORCE_FROM}")
+          python3 -u ml/data_refresh.py plan "${args[@]}"
+          echo "matrix=$(cat matrix.json)" >> "$GITHUB_OUTPUT"
+          echo "any=$(python3 -c 'import json; print(str(bool(json.load(open("matrix.json")))).lower())')" >> "$GITHUB_OUTPUT"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: plan
+          path: plan.json
+
+  update:
+    needs: plan
+    if: ${{ needs.plan.outputs.any == 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 340
+    strategy:
+      fail-fast: false
+      max-parallel: 6
+      matrix:
+        include: ${{ fromJSON(needs.plan.outputs.matrix) }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install
+        run: |
+          pip install --quiet ${PIP_DEPS}
+          df -h / | tail -1; nproc; free -g | head -2
+      - name: Refresh ${{ matrix.store }}
+        env:
+          HF_TOKEN: ${{ github.event.inputs.dry_run != 'true' && secrets.HF_TOKEN || '' }}
+          COPERNICUSMARINE_SERVICE_USERNAME: ${{ matrix.store == 'family7_2d/glorys025d' && secrets.COPERNICUSMARINE_SERVICE_USERNAME || '' }}
+          COPERNICUSMARINE_SERVICE_PASSWORD: ${{ matrix.store == 'family7_2d/glorys025d' && secrets.COPERNICUSMARINE_SERVICE_PASSWORD || '' }}
+          EARTHDATA_USERNAME: ${{ (matrix.store == 'family1_gf/sst_acspo02' || matrix.store == 'family1_gf/irtb') && secrets.EARTHDATA_USERNAME || '' }}
+          EARTHDATA_PASSWORD: ${{ (matrix.store == 'family1_gf/sst_acspo02' || matrix.store == 'family1_gf/irtb') && secrets.EARTHDATA_PASSWORD || '' }}
+          STORE: ${{ matrix.store }}
+          DRY: ${{ github.event.inputs.dry_run == 'true' && 'true' || 'false' }}
+          FORCE_FROM: ${{ github.event.inputs.force_from || '' }}
+        run: |
+          set -euo pipefail
+          args=(--store "${STORE}" --work "${RUNNER_TEMP}/w" --result "result-${{ matrix.name }}.json")
+          [ "${DRY}" = "true" ] && args+=(--dry-run)
+          [ -n "${FORCE_FROM}" ] && args+=(--force-from "${FORCE_FROM}")
+          python3 -u ml/data_refresh.py update "${args[@]}"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: result-${{ matrix.name }}
+          path: result-${{ matrix.name }}.json
+          if-no-files-found: ignore
+
+  registry:
+    needs: [plan, update]
+    if: ${{ always() && needs.plan.outputs.any == 'true' && github.event.inputs.dry_run != 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    outputs:
+      sums: ${{ steps.pub.outputs.sums }}
+      anysums: ${{ steps.pub.outputs.anysums }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Install
+        run: pip install --quiet ${PIP_DEPS}
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: result-*
+          path: results
+          merge-multiple: true
+      - name: Publish the registries of the refreshed stores (the commit point), then read their newest day through the tab's reader
+        id: pub
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+          SUMS: ${{ github.event.inputs.sums != 'false' && 'true' || 'false' }}
+        run: |
+          set -euo pipefail
+          python3 -u ml/data_refresh.py registry --results results --out "${RUNNER_TEMP}/reg" --json registry.json
+          fail=0
+          for f in results/result-*.json; do
+            [ -e "$f" ] || continue
+            st=$(python3 -c "import json,sys; r=json.load(open(sys.argv[1])); print(r.get('state'))" "$f")
+            [ "$st" = "updated" ] || continue
+            store=$(python3 -c "import json,sys; print(json.load(open(sys.argv[1]))['store'])" "$f")
+            end=$(python3 -c "import json,sys; print(json.load(open(sys.argv[1]))['record_end_after'])" "$f")
+            echo "== reader check ${store} → ${end}"
+            if ! node scripts/refresh_reader_check.mjs "${store}" "${end}"; then
+              echo "::error::${store}: the Data tab's reader does not see ${end} as the tab would — reverting its family registry"
+              fail=1
+              python3 - "${store}" "${RUNNER_TEMP}/reg" <<'PY'
+          import json, os, sys
+          sys.path.insert(0, "ml")
+          import data_refresh as R
+          import build_family1_registry as r
+          fam = R.POLICY[sys.argv[1]]["fam"]
+          prev = os.path.join(sys.argv[2], "published_" + r.REGISTRY_NAME[fam])
+          r.publish_one(prev, fam)
+          print("republished the previous", r.REGISTRY_NAME[fam])
+          PY
+            fi
+          done
+          python3 - > sums.json <<'PY'
+          import glob, json, os, sys
+          sys.path.insert(0, "ml")
+          import data_refresh as R
+          out = []
+          if os.environ.get("SUMS") == "true":
+              for p in sorted(glob.glob("results/result-*.json")):
+                  r = json.load(open(p))
+                  if r.get("state") == "updated" and R.POLICY[r["store"]].get("sums"):
+                      out.append({"store": r["store"], "name": r["store"].replace("/", "__")})
+          print(json.dumps(out))
+          PY
+          echo "sums=$(cat sums.json)" >> "$GITHUB_OUTPUT"
+          echo "anysums=$(python3 -c 'import json; print(str(bool(json.load(open("sums.json")))).lower())')" >> "$GITHUB_OUTPUT"
+          exit $fail
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: registry
+          path: registry.json
+          if-no-files-found: ignore
+
+  sums:
+    needs: registry
+    if: ${{ always() && needs.registry.result == 'success' && needs.registry.outputs.anysums == 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 240
+    strategy:
+      fail-fast: false
+      max-parallel: 4
+      matrix:
+        include: ${{ fromJSON(needs.registry.outputs.sums) }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install
+        run: |
+          pip install --quiet ${PIP_DEPS}
+          df -h / | tail -1
+      - uses: actions/download-artifact@v4
+        with:
+          name: result-${{ matrix.name }}
+          path: results
+      - name: Remake the settled months of ${{ matrix.store }}
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+        run: |
+          set -euo pipefail
+          python3 -u ml/data_refresh.py sums --result "results/result-${{ matrix.name }}.json" \
+            --work "${RUNNER_TEMP}/s" --out "sums-${{ matrix.name }}.json"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: sums-${{ matrix.name }}
+          path: sums-${{ matrix.name }}.json
+          if-no-files-found: ignore
+
+  finish:
+    needs: [plan, update, registry, sums]
+    if: ${{ always() }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: write
+      actions: write
+      issues: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install
+        run: pip install --quiet numpy "huggingface_hub<2" requests
+      - uses: actions/download-artifact@v4
+        with:
+          path: art
+          merge-multiple: true
+      - name: Commit the monthly-sums index (the sums' commit point) and redeploy
+        if: ${{ github.event.inputs.dry_run != 'true' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p art
+          python3 -u ml/data_refresh.py finish --sums art
+          if git diff --quiet -- data/gridded_monthly_index.json; then
+            echo "monthly-sums index unchanged"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data/gridded_monthly_index.json
+          git commit -m "E-090: monthly sums of the refreshed stores (automated, run ${{ github.run_number }})"
+          for i in 1 2 3 4 5; do
+            git pull --rebase origin main && git push origin main && break
+            sleep $((i * 15))
+          done
+          gh workflow run pages.yml --ref main
+      - name: Status line of every store (tensors/refresh/status.json on the Hub)
+        if: ${{ github.event.inputs.dry_run != 'true' }}
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+        run: |
+          set -euo pipefail
+          [ -f art/plan.json ] || { echo "::warning::no plan artifact"; exit 0; }
+          python3 -u ml/data_refresh.py status --results art --plan art/plan.json --out status.json --upload
+      - name: Status (dry run, not uploaded)
+        if: ${{ github.event.inputs.dry_run == 'true' }}
+        run: |
+          [ -f art/plan.json ] && python3 -u ml/data_refresh.py status --results art --plan art/plan.json --out status.json || true
+      - name: One issue for failures
+        if: ${{ needs.plan.result == 'failure' || needs.update.result == 'failure' || needs.registry.result == 'failure' || needs.sums.result == 'failure' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          url="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          body="Data refresh run ${{ github.run_number }} (${{ github.event_name }}) had a failing job: plan=${{ needs.plan.result }} update=${{ needs.update.result }} registry=${{ needs.registry.result }} sums=${{ needs.sums.result }}. Log: ${url} — plan: ml/plans/E090_data_refresh.md"
+          n=$(gh issue list --state open --search "E-090 data refresh failing in:title" --json number --jq '.[0].number' || true)
+          if [ -n "$n" ]; then gh issue comment "$n" --body "$body"; else gh issue create --title "E-090 data refresh failing" --body "$body"; fi
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: status
+          path: status.json
+          if-no-files-found: ignore

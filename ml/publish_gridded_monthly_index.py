@@ -53,13 +53,18 @@ JSONS = (("stats", "stats.json"), ("verify", "verify.json"))
 HEAD = 4096
 
 
-def prefix_of(store):
-    return f"tensors/{store}/monthly"
+def prefix_of(store, version=None):
+    """`tensors/<store>/monthly`, or — for a REFRESHED store's sums (E-090) —
+    `tensors/<store>/monthly/<version>`: a new version never overwrites the
+    files the committed index points at, so a reader mid-read keeps a
+    consistent (index, files) pair until the new index is deployed."""
+    p = f"tensors/{store}/monthly"
+    return f"{p}/{version}" if version else p
 
 
-def base_of(store):
+def base_of(store, version=None):
     return (f"https://huggingface.co/datasets/{REPO_ID}/resolve/main/"
-            f"{prefix_of(store)}/")
+            f"{prefix_of(store, version)}/")
 
 
 def npy_record(head, nbytes, role, st, where):
@@ -103,8 +108,9 @@ def make_manifest(store, d):
                 generated_utc=X.now_utc())
 
 
-def upload_store(store, d, api=None):
-    """Manifest + one commit of the store's monthly files (the box)."""
+def upload_store(store, d, api=None, version=None):
+    """Manifest + one commit of the store's monthly files (the box; E-090's
+    refresh passes a `version` subfolder)."""
     from build_family7 import hub_add_ops, hub_commit
     man = make_manifest(store, d)
     X.write_json(os.path.join(d, "manifest.json"), man)
@@ -114,10 +120,12 @@ def upload_store(store, d, api=None):
             raise SystemExit("no HF_TOKEN in the environment")
         from huggingface_hub import HfApi
         api = HfApi(token=tok)
-    pairs = [(f"{prefix_of(store)}/{r['rel']}", os.path.join(d, r["rel"]))
+    pre = prefix_of(store, version)
+    man["prefix"] = pre
+    X.write_json(os.path.join(d, "manifest.json"), man)
+    pairs = [(f"{pre}/{r['rel']}", os.path.join(d, r["rel"]))
              for r in man["files"].values()]
-    pairs.append((f"{prefix_of(store)}/manifest.json",
-                  os.path.join(d, "manifest.json")))
+    pairs.append((f"{pre}/manifest.json", os.path.join(d, "manifest.json")))
     gb = sum(os.path.getsize(p) for _, p in pairs) / 1e9
     t0 = time.time()
     print(f"  uploading {store}: {len(pairs)} files, {gb:.2f} GB …",
@@ -131,9 +139,9 @@ def upload_store(store, d, api=None):
     return man
 
 
-def restore(store, session, workers=8, fetch=P7.fetch_bytes):
+def restore(store, session, workers=8, fetch=P7.fetch_bytes, version=None):
     """manifest from the Hub, every file streamed back and matched."""
-    base = base_of(store)
+    base = base_of(store, version)
     raw, _ = _get_whole(session, base + "manifest.json", fetch)
     man = json.loads(raw)
     if man["store"] != store:
@@ -242,9 +250,23 @@ def main(argv=None, fetch=None, measure=None, session=None):
     ap.add_argument("--workers", type=int, default=8)
     ap.add_argument("--restore-where", default="GitHub-hosted runner")
     ap.add_argument("--fixture-dir", default=None)
+    ap.add_argument("--version", action="append", default=[],
+                    help="STORE=VERSION: that store's files are under "
+                         "monthly/VERSION/ (E-090's refreshed sums)")
+    ap.add_argument("--merge", action="store_true",
+                    help="keep every other store's block of the existing "
+                         "--index and replace only --stores' (E-090)")
     a = ap.parse_args(argv)
     stores = [s for s in a.stores.split(",") if s]
+    vers = dict(v.split("=", 1) for v in a.version)
     blocks, heads0 = {}, None
+    prev = None
+    if a.merge:
+        prev = json.load(open(a.index, encoding="utf-8"))
+        if not prev.get("restore_verified"):
+            raise SystemExit("--merge: the existing index is not "
+                             "restore-verified; rebuild it whole")
+        blocks.update(prev["stores"])
     if a.local:
         for s in stores:
             d = os.path.join(a.out, X.store_name(s))
@@ -267,15 +289,23 @@ def main(argv=None, fetch=None, measure=None, session=None):
                 pool_maxsize=max(8, a.workers * 2)))
         kw = {"fetch": fetch} if fetch else {}
         for s in stores:
-            man, jsons, heads = restore(s, session, a.workers, **kw)
+            man, jsons, heads = restore(s, session, a.workers,
+                                        version=vers.get(s), **kw)
             if not jsons["verify"].get("ok"):
                 raise SystemExit(f"REFUSING: {s}'s verify report failed")
             blocks[s] = store_block(s, man, jsons["stats"], jsons["verify"],
-                                    base_of(s))
+                                    base_of(s, vers.get(s)))
+            if vers.get(s):
+                blocks[s]["version"] = vers[s]
+                upd = (jsons["stats"] or {}).get("update")
+                if upd:
+                    blocks[s]["update"] = upd
             if heads0 is None:
                 heads0 = (s, heads)
         verified, where = True, a.restore_where
     cors = None
+    if prev is not None and a.no_cors:
+        cors = prev.get("cors_measured")
     if not a.no_cors:
         s0, hd = heads0
         cors = {r: P7.cors_record(blocks[s0][r]["url"], hd[r],

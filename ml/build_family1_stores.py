@@ -982,13 +982,64 @@ def stage_assemble_grid(ctx):
                  + "\nRe-run the fetch stage with the same --work value, or "
                    "pass --allow-missing-years for a deliberately short "
                    "store.")
-    groups, per_year = {}, {}
+    arrs = write_group_files(dest, specs, entries)
+    meta = grid_store_meta(ctx, specs, arrs, counts_all, year_counts,
+                           degraded, allow)
+    groups = meta["groups"]
+    names = sh.store_files(dest, sorted(groups))
+    meta["sha256"] = sh.sha256_block(
+        dest, names, workers=GRID_CHECK_WORKERS,
+        progress=_grid_progress(ctx, "store.json"))
+    atomic_json(os.path.join(dest, "store.json"), meta)
+    st = sh.check_store(dest, sample=GRID_ASSEMBLE_SAMPLE,
+                        workers=GRID_CHECK_WORKERS,
+                        progress=_grid_progress(ctx, "check"))
+    mark(ctx.root, "assemble")
+    ctx.prog.item("store", 1, {"files": st["files"]})
+    print(f"  store: {ad.store} — " + ", ".join(
+        f"{g} {v['bins']} bin(s), {v['frames_present']} frame(s), "
+        f"{v['tiles_stored']} tile(s), {v['bytes'] / 1e6:.1f} MB"
+        for g, v in groups.items()) + f" -> {dest}")
+    return meta
+
+
+def write_group_files(dest, specs, entries):
+    """Each group's tile_grid.json and shard_index.npy under `dest/<group>/`
+    from its shard-index entries; returns {group: the saved structured
+    array}. Shared by the assembler and the refresh splice
+    (`ml/data_refresh.py`), so both write these two files the same way."""
+    arrs = {}
     for g, spec in specs.items():
         gd = os.path.join(dest, g)
         os.makedirs(gd, exist_ok=True)
         atomic_json(os.path.join(gd, "tile_grid.json"), spec)
-        arr = sh.save_shard_index(os.path.join(gd, "shard_index.npy"),
-                                  entries[g], spec["C"])
+        arrs[g] = sh.save_shard_index(os.path.join(gd, "shard_index.npy"),
+                                      entries[g], spec["C"])
+    return arrs
+
+
+_LANES_FROM_CTX = object()
+
+
+def grid_store_meta(ctx, specs, arrs, counts_all, year_counts, degraded,
+                    allow, lanes=_LANES_FROM_CTX):
+    """store.json's content for a tier-G store, WITHOUT its sha256 block.
+
+    `arrs` are the groups' shard indices (`write_group_files`), `counts_all`
+    the merge of every lane's ledger counts, `year_counts` {year: [each
+    lane's counts]}, `degraded` the admitted-unmarked notes. The assembler
+    calls this once per store; the refresh splice (`ml/data_refresh.py`)
+    calls it with the published store's kept rows and ledgers plus the
+    refetched lanes', so a refreshed store.json is built by the same code as
+    an assembled one — and the splice's own self-check (rebuild the
+    PUBLISHED store.json from the published ledgers before touching
+    anything) is a comparison against this function's output.
+    """
+    ad = ctx.adapter
+    lay = ctx.layout
+    groups, per_year = {}, {}
+    for g, spec in specs.items():
+        arr = arrs[g]
         vp = arr["valid_pixels"].sum(axis=0) if len(arr) else \
             np.zeros(spec["C"], np.int64)
         fp = int(arr["frames_present"].sum())
@@ -1056,8 +1107,10 @@ def stage_assemble_grid(ctx):
     }
     # WHICH LANES THIS STORE WAS ASSEMBLED FROM, and whether anybody declared
     # which ones to expect. Absent — and store.json therefore unchanged — when
-    # every year is one unnamed lane (E-082 wave 7).
-    lanes = f10b.lanes_meta(ctx)
+    # every year is one unnamed lane (E-082 wave 7). The refresh splice has no
+    # lanes on disk for the years it keeps, so it hands the map in.
+    if lanes is _LANES_FROM_CTX:
+        lanes = f10b.lanes_meta(ctx)
     if lanes is not None:
         meta["lanes_by_year"] = lanes
         meta["lanes_note"] = f10b.LANES_NOTE
@@ -1079,20 +1132,6 @@ def stage_assemble_grid(ctx):
         meta["degraded"] = {"allow_missing_years": allow,
                             "inputs_not_read": ctx.absent,
                             "years_admitted_unmarked": degraded}
-    names = sh.store_files(dest, sorted(groups))
-    meta["sha256"] = sh.sha256_block(
-        dest, names, workers=GRID_CHECK_WORKERS,
-        progress=_grid_progress(ctx, "store.json"))
-    atomic_json(os.path.join(dest, "store.json"), meta)
-    st = sh.check_store(dest, sample=GRID_ASSEMBLE_SAMPLE,
-                        workers=GRID_CHECK_WORKERS,
-                        progress=_grid_progress(ctx, "check"))
-    mark(ctx.root, "assemble")
-    ctx.prog.item("store", 1, {"files": st["files"]})
-    print(f"  store: {ad.store} — " + ", ".join(
-        f"{g} {v['bins']} bin(s), {v['frames_present']} frame(s), "
-        f"{v['tiles_stored']} tile(s), {v['bytes'] / 1e6:.1f} MB"
-        for g, v in groups.items()) + f" -> {dest}")
     return meta
 
 

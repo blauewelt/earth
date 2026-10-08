@@ -813,6 +813,203 @@ def probe(store, month, out, threads=8, level=15):
 FIXTURE_OUT = os.path.join(ROOT, "data", "gridded_monthly", "fixture")
 
 
+# ================================================================ update ====
+# E-090: the scheduled refresh extends a store; its sums follow, but only for
+# months that are SETTLED. The Data tab decides per (year, month) between the
+# sums and the native maps by comparing the index's frames_present with the
+# shard index's frame count (src/f1data.js :: monthlyPath) — a COUNT, so a
+# provisional day replaced by its final value would leave an equal count over
+# a stale sum. The rule therefore writes a month's planes only when the
+# month is COMPLETE in the store and holds NO provisional day; any other month
+# whose frames changed is BLANKED (planes zero, frames_present 0), which the
+# tab reads as "not summed — read the native maps". An untouched month keeps
+# its planes byte for byte.
+def _fetch_old(src, dest, sha=None, session=None):
+    """A published sums file (URL or local path) to `dest`, sha256-checked."""
+    if not str(src).startswith(("http://", "https://")):
+        shutil.copyfile(src, dest)
+    else:
+        import requests
+        s = session or requests.Session()
+        tok = os.environ.get("HF_TOKEN", "").strip()
+        hdr = {"Authorization": f"Bearer {tok}"} if tok else {}
+        for i in range(6):
+            try:
+                with s.get(src, headers=hdr, stream=True, timeout=600) as r:
+                    r.raise_for_status()
+                    with open(dest + ".part", "wb") as fh:
+                        for blk in r.iter_content(1 << 22):
+                            fh.write(blk)
+                os.replace(dest + ".part", dest)
+                break
+            except Exception as e:                            # noqa: BLE001
+                if i == 5:
+                    raise SystemExit(f"{src}: {e}")
+                time.sleep(10 * (i + 1))
+    if sha:
+        h = hashlib.sha256()
+        with open(dest, "rb") as fh:
+            for blk in iter(lambda: fh.read(1 << 22), b""):
+                h.update(blk)
+        if h.hexdigest() != sha:
+            raise SystemExit(f"{src}: sha256 differs from the index")
+    return dest
+
+
+def settled_months(times, spec, provisional, lo, hi):
+    """{(y, m0)}: calendar months wholly inside the record [lo, hi] with no
+    provisional day."""
+    fs = spec["frame_seconds"]
+    prov = {(d.year, d.month - 1) for d in provisional}
+    out = set()
+    for y in range(lo.year, hi.year + 1):
+        for m in range(12):
+            a, b = month_bounds(y, m)
+            if a < lo or b - dt.timedelta(seconds=fs) > hi:
+                continue
+            if (y, m) not in prov:
+                out.add((y, m))
+    return out
+
+
+def update(store, out, old, *, touched=(), base=None, workers=4, threads=4,
+           keep=None, provisional=(), session=None):
+    """Remake the sums of `store` after a refresh, from the PUBLISHED sums.
+
+    `old` = {"sum": src, "count": src, "m2": src, "stats": src, + the
+    index's sha256s as "<role>_sha256"}, src a URL or a path. `touched` are
+    the [year, month] (month 1-based) the refresh changed; any month whose
+    frame count differs from the published table counts as touched too.
+    Writes <out>/{sum,count,m2}.npy + stats.json (with `update`); returns the
+    stats, or None when no month changes (nothing to publish)."""
+    from numpy.lib.format import open_memmap
+    t0 = time.time()
+    base = base or HUB + store
+    src, meta, spec, arr, g = open_store(base, store)
+    H, W, C = spec["H"], spec["W"], spec["C"]
+    fs = spec["frame_seconds"]
+    times = frame_times(arr, spec)
+    yrs, pres, poss, lo, hi = calendar_tables(times, fs)
+    os.makedirs(out, exist_ok=True)
+    st_old = json.load(open(_fetch_old(
+        old["stats"], os.path.join(out, "_old_stats.json"),
+        old.get("stats_sha256"), session), encoding="utf-8"))
+    oy0, oY = int(st_old["year_first"]), int(st_old["n_years"])
+    T_old = np.zeros((len(yrs), 12), np.int64)
+    for i, y in enumerate(range(oy0, oy0 + oY)):
+        if y in yrs:
+            T_old[yrs.index(y)] = st_old["frames_present"][i]
+    if oy0 < yrs[0]:
+        raise SystemExit(f"{store}: the published sums start in {oy0}, the "
+                         f"store in {yrs[0]} — a refresh never drops years")
+    if st_old["chans"] != [c["name"] for c in spec["channels"]] or \
+            st_old["grid"]["H"] != H or st_old["grid"]["W"] != W:
+        raise SystemExit(f"{store}: the store's channels or grid differ from "
+                         f"the published sums'")
+    tset = {(int(y), int(m) - 1) for y, m in touched}
+    for yi, y in enumerate(yrs):
+        for m in range(12):
+            if pres[yi, m] != T_old[yi, m]:
+                tset.add((y, m))
+    prov = [d if isinstance(d, dt.date) else dt.date.fromisoformat(str(d))
+            for d in provisional]
+    settled = settled_months(times, spec, prov, lo, hi)
+    write = sorted(ym for ym in tset if ym in settled and
+                   pres[yrs.index(ym[0]), ym[1]] > 0)
+    blank = sorted(ym for ym in tset if ym not in set(write))
+    T_new = T_old.copy()
+    for (y, m) in write:
+        T_new[yrs.index(y), m] = pres[yrs.index(y), m]
+    for (y, m) in blank:
+        T_new[yrs.index(y), m] = 0
+    if np.array_equal(T_new, T_old) and not write and len(yrs) == oY:
+        print(f"[{store}] sums: nothing settled changed — no new version",
+              flush=True)
+        return None
+    Y = len(yrs)
+    shape = (12, C, Y, H, W)
+    oshape = (12, C, oY, H, W)
+    for role, dtp in (("sum", "<f4"), ("count", "u1"), ("m2", "<f4")):
+        tmp = os.path.join(out, f"_old_{role}.npy")
+        _fetch_old(old[role], tmp, old.get(f"{role}_sha256"), session)
+        dst = os.path.join(out, f"{role}.npy")
+        if oY == Y:
+            os.replace(tmp, dst)
+            mm = np.load(dst, mmap_mode="r+")
+            if mm.shape != shape:
+                raise SystemExit(f"{store}: published {role} is {mm.shape}")
+        else:
+            src_mm = np.load(tmp, mmap_mode="r")
+            if src_mm.shape != oshape:
+                raise SystemExit(f"{store}: published {role} is "
+                                 f"{src_mm.shape}, the stats say {oshape}")
+            mm = open_memmap(dst, mode="w+", dtype=dtp, shape=shape)
+            for m in range(12):
+                for c in range(C):
+                    mm[m, c, :oY] = src_mm[m, c]
+            del src_mm
+            os.remove(tmp)
+        for (y, m) in write + blank:
+            mm[m, :, yrs.index(y)] = 0
+        mm.flush()
+        del mm
+    os.makedirs(os.path.join(out, "_spec", g), exist_ok=True)
+    write_json(os.path.join(out, "_spec", g, "tile_grid.json"), spec)
+    by_ym = {}
+    for b, f, t in times:
+        by_ym.setdefault((t.year, t.month - 1), []).append((b, f))
+    jobs, wy = [], sorted({y for y, _ in write})
+    for y in wy:
+        months = [by_ym.get((y, m), []) if (y, m) in set(write) else []
+                  for m in range(12)]
+        bins = sorted({b for fl in months for b, _ in fl})
+        jobs.append((base, g, y, yrs.index(y), bins, months, out, keep,
+                     bins if keep else [], meta.get("sha256") or {}, threads))
+    nbytes = 0
+    with ProcessPoolExecutor(max_workers=max(1, min(workers, len(jobs) or 1))
+                             ) as ex:
+        for r in ex.map(year_worker, jobs):
+            nbytes += r["bytes"]
+            for m in range(12):
+                if (r["year"], m) in set(write) and \
+                        r["present"][m] != T_new[yrs.index(r["year"]), m]:
+                    raise SystemExit(f"{store} {r['year']}-{m + 1}: summed "
+                                     f"{r['present'][m]} frames, the table "
+                                     f"says {T_new[yrs.index(r['year']), m]}")
+            print(f"  [{store}] {r['year']}: {sum(r['present'])} frames "
+                  f"re-summed, {r['bytes'] / 1e6:.0f} MB", flush=True)
+    shutil.rmtree(os.path.join(out, "_spec"), ignore_errors=True)
+    blk = meta.get("sha256") or {}
+    st = dict(st_old)
+    st.update(
+        shape=list(shape), year_first=yrs[0], year_last=yrs[-1], n_years=Y,
+        years=yrs, frames_present=T_new.tolist(),
+        frames_possible=poss.tolist(), max_count=int(T_new.max()),
+        record_first=lo.strftime("%Y-%m-%dT%H:%M:%SZ"),
+        record_last=hi.strftime("%Y-%m-%dT%H:%M:%SZ"),
+        source_sha256_block_digest=hashlib.sha256(json.dumps(
+            blk, sort_keys=True).encode()).hexdigest(),
+        source_shard_index_sha256=blk.get(f"{g}/shard_index.npy"),
+        source_bytes_read=int(nbytes),
+        falsifier_months=[[y, m + 1] for y, m in write],
+        falsifier_period_years=[], git_sha=git_sha(),
+        generated_utc=now_utc(), export_seconds=round(time.time() - t0, 1),
+        update=dict(
+            by="ml/export_gridded_monthly.py update (E-090)",
+            rule=("a month's planes are written only when it is complete in "
+                  "the store and holds no provisional day; any other changed "
+                  "month is blanked (frames_present 0, planes zero) so the "
+                  "Data tab reads its native maps"),
+            written=[[y, m + 1] for y, m in write],
+            blanked=[[y, m + 1] for y, m in blank],
+            previous_generated_utc=st_old.get("generated_utc"),
+            previous_years=[oy0, oy0 + oY - 1]))
+    write_json(os.path.join(out, "stats.json"), st)
+    print(f"[{store}] sums updated: {len(write)} month(s) written, "
+          f"{len(blank)} blanked, years {yrs[0]}–{yrs[-1]}", flush=True)
+    return st
+
+
 def run_fixture(out=FIXTURE_OUT):
     """Build two tiny sharded stores with the real tier-G framework (one daily
     across a year boundary with gaps and an absent day, one six-hourly), run

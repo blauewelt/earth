@@ -184,6 +184,14 @@ class F7DailyBase(sh.GridAdapter):
     def __init__(self):
         cfg = fd.STORES[self.store]
         self.cfg = cfg
+        # THE LIVE RECORD END (E-090). The class constant is the end measured
+        # when the store was built; the scheduled refresh measures the
+        # producer's last day again and hands it in as F1_RECORD_END, so a
+        # lane fetches through it and source_segments says so. Unset, every
+        # build behaves exactly as before.
+        rend = os.environ.get("F1_RECORD_END", "").strip()
+        if rend:
+            self.record_end = dt.date.fromisoformat(rend)
         self.note_estimate = {
             "bytes": int(PROBE_BYTES_PER_FRAME[self.store]
                          * self.record_days()),
@@ -258,7 +266,14 @@ class F7DailyBase(sh.GridAdapter):
         os.makedirs(os.path.dirname(dest), exist_ok=True)
         if os.path.exists(dest):
             return dest
-        got = f10b.fetch_first(list(urls), dest, attempts=max(
+        urls = list(urls)
+        if os.environ.get("F7D_UPSTREAM_FIRST", "").strip() not in \
+                ("", "0", "off", "no", "false"):
+            # E-090: the Hub's PSL mirror is a snapshot; a refresh of the
+            # LIVE year must read the producer's file of today first
+            urls = [u for u in urls if not u.startswith(HUB)] + \
+                [u for u in urls if u.startswith(HUB)]
+        got = f10b.fetch_first(urls, dest, attempts=max(
             1, int(getattr(ctx.a, "attempts", 3) or 3)))
         return dest if got else None
 

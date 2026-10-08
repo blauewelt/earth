@@ -26,6 +26,16 @@ Two opt-in widenings, each for one named reason:
                  field of the group whose `name` is NAME may change, and only
                  that group.
 
+  --refresh NAME
+                 E-090: the scheduled data refresh extended store NAME to
+                 its producer's newest day. Its DATA fields may change —
+                 the file list and checksums, the store_* blocks, counts,
+                 the span fields, built_at, builder_git_sha, source_segments,
+                 N / bins — and NOTHING that describes the store (its title,
+                 channels, licence, adapter, path, tier, layout, sources,
+                 qc policy, probe, estimate) may; those are held to equality
+                 exactly as in a strict publish. Repeatable.
+
   --allow-group rebuilt_<code>
                  EVERY store of the registry whose `family_code` is <code>
                  was rebuilt (E-087 §14: family 7.2d's four stores extended
@@ -56,6 +66,11 @@ SPAN_TOP = {"span_rule"}
 SPAN_FIELDS = {"record_span", "record_span_instants", "record_span_basis",
                "requested_window", "date_range"}
 GROUP_PATH = re.compile(r"^\.groups\[(\d+)\]")
+REFRESH_FIELDS = {"files", "store_groups", "store_per_year",
+                  "store_frames_missing_by_reason", "store_counts_by_year",
+                  "store_lanes_by_year", "store_degraded", "counts",
+                  "built_at", "builder_git_sha", "source_segments", "N",
+                  "bin_first", "bin_last", "n_bins"} | SPAN_FIELDS
 
 
 def walk(a, b, path, bad, filled, spans_seen, opts):
@@ -83,6 +98,20 @@ def walk(a, b, path, bad, filled, spans_seen, opts):
                          or opts["rebuilt"]):
                 if x != y:
                     opts["groups_changed"].append(x.get("name"))
+                continue
+            if path == ".groups" and isinstance(x, dict) \
+                    and isinstance(y, dict) \
+                    and x.get("name") == y.get("name") \
+                    and x.get("name") in opts.get("refresh", ()):
+                for k in sorted(set(x) | set(y)):
+                    xa, yb = x.get(k, "<absent>"), y.get(k, "<absent>")
+                    if k in REFRESH_FIELDS:
+                        if xa != yb:
+                            opts["refreshed"].setdefault(
+                                x.get("name"), []).append(k)
+                        continue
+                    walk(xa, yb, f"{path}[{i}].{k}", bad, filled,
+                         spans_seen, opts)
                 continue
             walk(x, y, f"{path}[{i}]", bad, filled, spans_seen, opts)
     elif a != b:
@@ -114,6 +143,7 @@ def main(argv=None):
     ap.add_argument("rebuilt")
     ap.add_argument("--spans", action="store_true")
     ap.add_argument("--allow-group", action="append", default=[])
+    ap.add_argument("--refresh", action="append", default=[])
     a = ap.parse_args(argv)
     old, new = json.load(open(a.published)), json.load(open(a.rebuilt))
     bad, filled, spans_seen = [], [], []
@@ -129,7 +159,17 @@ def main(argv=None):
         print("REFUSING: the rebuilt registry does not hold the same stores")
         return 1
     opts = {"spans": a.spans, "allow_group": set(a.allow_group),
-            "groups_changed": [], "rebuilt": bool(rebuilt)}
+            "groups_changed": [], "rebuilt": bool(rebuilt),
+            "refresh": set(a.refresh), "refreshed": {}}
+    if a.refresh:
+        have = {g.get("name") for g in old.get("groups") or []}
+        miss = sorted(set(a.refresh) - have)
+        if miss or sorted(have) != sorted(g.get("name") for g in
+                                          new.get("groups") or []):
+            print(f"REFUSING: --refresh {miss or a.refresh}: the store is not "
+                  f"in the published registry, or the rebuilt one holds "
+                  f"different stores")
+            return 1
     walk(old, new, "", bad, filled, spans_seen, opts)
     if a.spans:
         window_kept(old, new, bad)
@@ -154,6 +194,8 @@ def main(argv=None):
                   f"{o.get('record_span', o.get('date_range'))} -> "
                   f"{g.get('record_span')} ({g.get('record_span_basis')}); "
                   f"fields {sorted(names[gi])}")
+    for n, ks in sorted(opts["refreshed"].items()):
+        print(f"refreshed store {n}: data fields changed {sorted(ks)}")
     if opts["groups_changed"]:
         print(f"groups rebuilt and allowed to change: "
               f"{sorted(set(opts['groups_changed']))}")
