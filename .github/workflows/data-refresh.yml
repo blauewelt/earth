@@ -56,6 +56,9 @@ on:
         description: "also remake E-088's monthly sums of the refreshed stores"
         type: boolean
         default: true
+      sums_from_run:
+        description: "RECOVERY: remake only the monthly sums of the stores that an earlier run (its run id) updated; skips plan, update and registry"
+        default: ""
 
 permissions:
   contents: read
@@ -88,14 +91,17 @@ jobs:
           STORES: ${{ github.event.inputs.stores || 'auto' }}
           DRY: ${{ github.event.inputs.dry_run == 'true' && 'true' || 'false' }}
           FORCE_FROM: ${{ github.event.inputs.force_from || '' }}
+          SUMS_FROM: ${{ github.event.inputs.sums_from_run || '' }}
         run: |
           set -euo pipefail
           [[ "${STORES}" =~ ^[a-z0-9_/,.-]+$ ]] || { echo "::error::stores must match ^[a-z0-9_/,.-]+$"; exit 1; }
+          [[ -z "${SUMS_FROM}" || "${SUMS_FROM}" =~ ^[0-9]+$ ]] || { echo "::error::sums_from_run must be a run id"; exit 1; }
           [[ -z "${FORCE_FROM}" || "${FORCE_FROM}" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ ]] || { echo "::error::force_from must be YYYY-MM-DD"; exit 1; }
           args=(--stores "${STORES}" --json plan.json --matrix matrix.json)
           [ "${DRY}" = "true" ] && args+=(--all-grid)
           [ -n "${FORCE_FROM}" ] && args+=(--force-from "${FORCE_FROM}")
           python3 -u ml/data_refresh.py plan "${args[@]}"
+          [ -n "${SUMS_FROM}" ] && echo "[]" > matrix.json
           echo "matrix=$(cat matrix.json)" >> "$GITHUB_OUTPUT"
           echo "any=$(python3 -c 'import json; print(str(bool(json.load(open("matrix.json")))).lower())')" >> "$GITHUB_OUTPUT"
       - uses: actions/upload-artifact@v4
@@ -221,16 +227,60 @@ jobs:
           path: registry.json
           if-no-files-found: ignore
 
+  recover:
+    needs: plan
+    if: ${{ github.event.inputs.sums_from_run != '' && github.event.inputs.sums_from_run != null }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      actions: read
+    outputs:
+      sums: ${{ steps.m.outputs.sums }}
+      anysums: ${{ steps.m.outputs.anysums }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install
+        run: pip install --quiet ${PIP_DEPS}
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: result-*
+          path: results
+          merge-multiple: true
+          run-id: ${{ github.event.inputs.sums_from_run }}
+          github-token: ${{ github.token }}
+      - name: The stores that run updated
+        id: m
+        run: |
+          set -euo pipefail
+          python3 - > sums.json <<'PY'
+          import glob, json, sys
+          sys.path.insert(0, "ml")
+          import data_refresh as R
+          out = []
+          for p in sorted(glob.glob("results/result-*.json")):
+              r = json.load(open(p))
+              if r.get("state") == "updated" and R.POLICY[r["store"]].get("sums"):
+                  out.append({"store": r["store"], "name": r["store"].replace("/", "__")})
+          print(json.dumps(out))
+          PY
+          cat sums.json
+          echo "sums=$(cat sums.json)" >> "$GITHUB_OUTPUT"
+          echo "anysums=$(python3 -c 'import json; print(str(bool(json.load(open("sums.json")))).lower())')" >> "$GITHUB_OUTPUT"
+
   sums:
-    needs: registry
-    if: ${{ always() && needs.registry.result == 'success' && needs.registry.outputs.anysums == 'true' }}
+    needs: [registry, recover]
+    if: ${{ always() && ((needs.registry.result == 'success' && needs.registry.outputs.anysums == 'true') || (needs.recover.result == 'success' && needs.recover.outputs.anysums == 'true')) }}
     runs-on: ubuntu-latest
     timeout-minutes: 240
+    permissions:
+      contents: read
+      actions: read
     strategy:
       fail-fast: false
       max-parallel: 4
       matrix:
-        include: ${{ fromJSON(needs.registry.outputs.sums) }}
+        include: ${{ fromJSON(needs.registry.outputs.sums || needs.recover.outputs.sums) }}
     steps:
       - uses: actions/checkout@v4
       - name: Install
@@ -241,6 +291,8 @@ jobs:
         with:
           name: result-${{ matrix.name }}
           path: results
+          run-id: ${{ github.event.inputs.sums_from_run || github.run_id }}
+          github-token: ${{ github.token }}
       - name: Remake the settled months of ${{ matrix.store }}
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
@@ -256,7 +308,7 @@ jobs:
           if-no-files-found: ignore
 
   finish:
-    needs: [plan, update, registry, sums]
+    needs: [plan, update, registry, recover, sums]
     if: ${{ always() }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
@@ -300,6 +352,7 @@ jobs:
         run: |
           set -euo pipefail
           [ -f art/plan.json ] || { echo "::warning::no plan artifact"; exit 0; }
+          if [ -n "${{ github.event.inputs.sums_from_run }}" ]; then echo "a sums recovery: the status lines are the earlier run's"; exit 0; fi
           python3 -u ml/data_refresh.py status --results art --plan art/plan.json --out status.json --upload
       - name: Status (dry run, not uploaded)
         if: ${{ github.event.inputs.dry_run == 'true' }}

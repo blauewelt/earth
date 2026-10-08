@@ -424,3 +424,30 @@ def test_sums_blank_a_month_whose_provisional_days_change(tmp_path):
     assert X.verify(KEY, os.path.join(t, "s2"), os.path.join(t, "s2_keep"),
                     base=dest)["ok"]
     assert st["frames_present"][1][0] == 31
+
+
+def test_sums_update_that_only_blanks_still_verifies(tmp_path):
+    """data-refresh run 3: OISST's sums had two months to blank and none to
+    write, and the falsifier's keep folder did not exist — verify must pass
+    with no plane rather than crash."""
+    import export_gridded_monthly as X
+    t = str(tmp_path)
+    E3 = dt.date(2013, 2, 5)
+    pf = dt.date(2013, 1, 25)
+    remote, hub, dest = publish_initial(os.path.join(t, "a"), E3,
+                                        prov_from=pf)
+    old = os.path.join(t, "s0")
+    X.export(KEY, old, base=dest, workers=1, threads=1)
+    prov = [pf + dt.timedelta(days=i) for i in range((E3 - pf).days + 1)]
+    os.environ["TINY_PROV_VERSION"] = "3"
+    res = refresh(os.path.join(t, "r1"), remote, E3, E3, prov=prov)
+    out = os.path.join(t, "s1")
+    keep = os.path.join(t, "never_made")
+    st = X.update(KEY, out, {r: os.path.join(old, f"{r}.npy")
+                             for r in ("sum", "count", "m2")}
+                  | {"stats": os.path.join(old, "stats.json")},
+                  touched=res["months_touched"], base=dest, workers=1,
+                  threads=1, keep=keep, provisional=prov)
+    assert st["update"]["written"] == [] and st["update"]["blanked"]
+    rep = X.verify(KEY, out, keep, base=dest)
+    assert rep["ok"] and rep["n_planes"] == 0

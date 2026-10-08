@@ -609,6 +609,7 @@ def verify(store, out, keep, report=None, base=None):
     spec_src = Source(base or HUB + store)
     spec = json.loads(spec_src.get(f"{g}/tile_grid.json"))
     gd = os.path.join(keep, g)
+    os.makedirs(gd, exist_ok=True)       # an update that wrote no plane
     with open(os.path.join(gd, "tile_grid.json"), "w") as fh:
         json.dump(spec, fh)
     grp = sh.ShardedGroup(gd)
