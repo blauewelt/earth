@@ -1107,7 +1107,7 @@ def commit_and_verify(key, remote, rep, message):
     rep["commit_seconds"] = round(time.time() - t0, 1)
     try:
         for rel, local in rep["adds"]:
-            b = remote.get(rel, revision=oid)
+            b = hub_read(lambda: remote.get(rel, revision=oid))
             if b is None or sha256_bytes(b) != sha256_file(local):
                 raise SpliceError(f"READ-BACK MISMATCH {rel} at {oid}")
         for rel in rep["deletes"]:
@@ -1116,21 +1116,25 @@ def commit_and_verify(key, remote, rep, message):
         nf = rep["new_frames"]
         pick = nf if len(nf) <= VERIFY_FRAMES else \
             [nf[int(i)] for i in np.linspace(0, len(nf) - 1, VERIFY_FRAMES)]
-        checked = 0
+        checked = tiles = 0
+        groups = {}
         for (g, b, f) in pick:
-            base = remote.base(oid)
-            url = f"{base}/{prefix}/{g}"
-            grp = sh.ShardedGroup(url)
-            got = grp.read_frame(b, f, raw=True)
-            want = sh.ShardedGroup(os.path.join(rep["mini"], g)).read_frame(
-                b, f, raw=True)
-            if got is None or not np.array_equal(
-                    got, want, equal_nan=want.dtype.kind == "f"):
-                raise SpliceError(f"HTTP RE-READ MISMATCH {g} bin {b} "
-                                  f"frame {f} at {oid}")
+            if g not in groups:
+                groups[g] = (sh.ShardedGroup(f"{remote.base(oid)}/{prefix}/"
+                                             f"{g}", attempts=6),
+                             sh.ShardedGroup(os.path.join(rep["mini"], g)))
+            hub, loc = groups[g]
+            for (ty, tx) in verify_tiles(loc, b, f):
+                got = hub_read(lambda: hub.read_tile(b, f, ty, tx, raw=True))
+                want = loc.read_tile(b, f, ty, tx, raw=True)
+                if got is None or want is None or not np.array_equal(
+                        got, want, equal_nan=want.dtype.kind == "f"):
+                    raise SpliceError(f"HTTP RE-READ MISMATCH {g} bin {b} "
+                                      f"frame {f} tile ({ty},{tx}) at {oid}")
+                tiles += 1
             checked += 1
         rep["verified"] = {"files_read_back": len(rep["adds"]),
-                           "frames_reread": checked,
+                           "frames_reread": checked, "tiles_reread": tiles,
                            "at_revision": oid}
     except BaseException as e:
         print(f"::error::{key}: verification failed after commit {oid} "
@@ -1150,6 +1154,49 @@ def commit_and_verify(key, remote, rep, message):
                                              f"E-090: revert {key} ({oid})")
         raise
     return rep
+
+
+VERIFY_TILES = 24          # per re-read frame: all of a coarse grid's 18
+
+
+def verify_tiles(grp, b, f, k=VERIFY_TILES):
+    """The tiles of frame (b, f) the HTTP re-read compares: every tile when
+    the frame has at most k, else k of its STORED tiles spread evenly in
+    write order (plus the first tile, stored or not) — a fine grid's frame
+    is hundreds of tiles and the Hub's resolver answers 429 to a full
+    re-read of dozens of them (data-refresh #6, pace4k: 578 tiles a frame)."""
+    from family1 import sharded as sh
+    sp = grp.spec
+    allt = [(ty, tx) for ty in range(sp["n_tiles_y"])
+            for tx in range(sp["n_tiles_x"])]
+    if len(allt) <= k:
+        return allt
+    idx = np.load(os.path.join(grp.src.base, sh.index_relpath(b)))
+    stored = [(ty, tx) for (ty, tx) in allt if idx[f, ty, tx, 1] > 0]
+    if len(stored) > k - 1:
+        stored = [stored[int(i)] for i in np.linspace(0, len(stored) - 1,
+                                                      k - 1)]
+    return sorted(set([allt[0]] + stored))
+
+
+def hub_read(fn, budget_s=1200):
+    """`fn()` (a Hub range read) retried through the Hub's rate limit: an
+    HTTP 429 or a 5xx sleeps (60 s doubling, up to `budget_s` in all) — a
+    throttled read is not a failed verification. Anything else raises."""
+    waited, nap = 0.0, 60.0
+    while True:
+        try:
+            return fn()
+        except (IOError, OSError) as e:
+            msg = str(e)
+            if not re.search(r"\b(429|5\d\d)\b|Too Many|timed out|"
+                             r"Connection", msg) or waited >= budget_s:
+                raise
+            print(f"  ::warning::Hub read throttled ({msg[-80:]}) — "
+                  f"sleeping {nap:.0f} s", flush=True)
+            time.sleep(nap)
+            waited += nap
+            nap = min(nap * 2, 300.0)
 
 
 def push_lane_parts(lanes, remote, key):

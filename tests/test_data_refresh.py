@@ -470,3 +470,31 @@ def test_status_lines_keep_other_stores_and_last_update():
     assert by["family7_2d/oisst025d"]["last_updated_utc"] == \
         "2026-10-08T07:44:05Z"
     assert by["family7_2d/ncep100d"]["record_end"] == "2026-03-17"
+
+
+def test_verify_tiles_samples_a_fine_frame(tmp_path):
+    t = str(tmp_path)
+    remote, hub, dest = publish_initial(t, E1)
+    grp = sh.ShardedGroup(os.path.join(dest, NAME))
+    b = R.bin_of_day(E1)
+    allt = R.verify_tiles(grp, b, 0)
+    assert len(allt) == grp.spec["n_tiles_y"] * grp.spec["n_tiles_x"]
+    few = R.verify_tiles(grp, b, 0, k=3)
+    assert len(few) <= 3 and (0, 0) in few
+
+    calls = {"n": 0}
+
+    def flaky():
+        calls["n"] += 1
+        if calls["n"] < 3:
+            raise IOError("x bytes 1-2: HTTPError: HTTP Error 429: Too Many")
+        return "ok"
+    import data_refresh
+    real = data_refresh.time.sleep
+    data_refresh.time.sleep = lambda s: None
+    try:
+        assert R.hub_read(flaky) == "ok" and calls["n"] == 3
+        with pytest.raises(IOError):
+            R.hub_read(lambda: (_ for _ in ()).throw(IOError("bad sha")))
+    finally:
+        data_refresh.time.sleep = real
