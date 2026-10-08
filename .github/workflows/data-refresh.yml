@@ -368,6 +368,13 @@ jobs:
           body="Data refresh run ${{ github.run_number }} (${{ github.event_name }}) had a failing job: plan=${{ needs.plan.result }} update=${{ needs.update.result }} registry=${{ needs.registry.result }} sums=${{ needs.sums.result }}. Log: ${url} — plan: ml/plans/E090_data_refresh.md"
           n=$(gh issue list --state open --search "E-090 data refresh failing in:title" --json number --jq '.[0].number' || true)
           if [ -n "$n" ]; then gh issue comment "$n" --body "$body"; else gh issue create --title "E-090 data refresh failing" --body "$body"; fi
+      - name: Close the failure issue once a real run is green again
+        if: ${{ github.event.inputs.dry_run != 'true' && needs.plan.result == 'success' && needs.update.result != 'failure' && needs.registry.result != 'failure' && needs.sums.result != 'failure' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          n=$(gh issue list --state open --search "E-090 data refresh failing in:title" --json number --jq '.[0].number' || true)
+          if [ -n "$n" ]; then gh issue close "$n" --comment "Green again: data refresh run ${{ github.run_number }} — ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"; fi
       - uses: actions/upload-artifact@v4
         if: always()
         with:
