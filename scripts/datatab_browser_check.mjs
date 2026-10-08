@@ -314,6 +314,30 @@ try {
     sameCounts(P.vars.t_500_count.data, Nn.vars.t_500_count.data, "precomputed vs native");
     say("c2", { panel: line.text, sums: dp, native: dn, cmp: c });
   }
+  // ---------------------------------------------------------------- C7
+  // E-091: the climatology per day of year — every calendar day, 2001–2020,
+  // a box — through the tab's controls and its Download button
+  if (want("c7")) {
+    const C7_MONTHS = process.env.C7_MONTHS ? JSON.parse(process.env.C7_MONTHS) : [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
+    const box = { w: -40, s: 30, e: -30, n: 40 };
+    await choose(page, { store: "7.2d/oisst025d", channels: ["sst"], months: C7_MONTHS, years: [2001, 2020], days: null, box, exclude: "", step: "doy", res: "native", std: false, native: false });
+    const line = await estLine(page);
+    const dp = await download(page, "c7-doy");
+    const P = readNc(dp.file);
+    const T = P.vars.time.data.length;
+    console.log(`C7 oisst025d climatology per day of year 2001–2020, ${JSON.stringify(box)}: the panel says: ${line.text}`);
+    console.log(`  ${T} calendar days, ${dp.requests} requests ${mb(dp.bytes)} ${dp.secs.toFixed(1)} s; file ${dp.name}`);
+    const full = C7_MONTHS.length === 12, feb = C7_MONTHS.includes(2);
+    if (full && T !== 366) fail("C7: " + T + " time steps, expected 366");
+    const cnt = P.vars.sst_count.data, HW = cnt.length / T;
+    const li = full ? 59 : C7_MONTHS.indexOf(2) === 0 ? 28 : -1;
+    let lo = Infinity, hi = 0;
+    for (let i = 0; i < cnt.length; i++) { if (li >= 0 && i >= li * HW && i < (li + 1) * HW) continue; lo = Math.min(lo, cnt[i]); hi = Math.max(hi, cnt[i]); }
+    let leap = li >= 0 ? 0 : 5; if (li >= 0) for (let i = li * HW; i < (li + 1) * HW; i++) leap = Math.max(leap, cnt[i]);
+    console.log(`  counts: ${lo}–${hi} on ordinary days (expected 20), ${leap} on 29 February (expected 5)`);
+    if (lo !== 20 || hi !== 20 || leap !== 5) fail("C7: counts are not 20 years per day and 5 leap days");
+    say("c7", { panel: line.text, doy: dp, days: T });
+  }
   // ---------------------------------------------------------------- C3
   if (want("c3")) {
     const box = { w: -60, s: 30, e: -10, n: 60 };
