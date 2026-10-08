@@ -1,0 +1,50 @@
+# E-091: DAY-OF-YEAR CLIMATOLOGY sums of one gridded store, cumulative over the
+# years (ml/export_gridded_doy.py, plan ml/plans/E091_day_of_year_climatology.md).
+# Twelve hosted jobs, one per calendar month: each streams that month's frames
+# of every year from the Hub (sha256-checked), writes the month's day files,
+# runs the falsifier (composed means against numpy on the native frames), and
+# only then commits the files to the Hub and reads their sizes and sha256 back.
+#
+# workflow_dispatch ONLY, ubuntu-latest ONLY (ml/CLAUDE.md §6). HF_TOKEN is the
+# only secret; nothing here can reach a rented box.
+name: gridded-doy
+on:
+  workflow_dispatch:
+    inputs:
+      store:
+        description: "store, e.g. family7_2d/oisst025d"
+        required: true
+      months:
+        description: "JSON list of calendar months"
+        default: "[1,2,3,4,5,6,7,8,9,10,11,12]"
+permissions:
+  contents: read
+concurrency:
+  group: gridded-doy-${{ github.event.inputs.store }}
+  cancel-in-progress: false
+jobs:
+  month:
+    runs-on: ubuntu-latest
+    timeout-minutes: 340
+    strategy:
+      fail-fast: false
+      max-parallel: 6
+      matrix:
+        month: ${{ fromJSON(github.event.inputs.months) }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install
+        run: pip install --quiet numpy requests zstandard huggingface_hub
+      - name: Free disk
+        run: |
+          sudo rm -rf /usr/share/dotnet /opt/ghc /usr/local/lib/android || true
+          df -h /
+      - name: Export, check, upload
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+          HF_HUB_DISABLE_PROGRESS_BARS: "1"
+          STORE: ${{ github.event.inputs.store }}
+          MONTH: ${{ matrix.month }}
+        run: |
+          python3 -u ml/export_gridded_doy.py month --store "${STORE}" \
+              --month "${MONTH}" --out "${RUNNER_TEMP}/doy" --upload
