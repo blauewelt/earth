@@ -87,6 +87,9 @@ jobs:
       - name: Export, verify, publish and read back each store
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
+          # run #1: the Hub client's per-file progress bars were 16 MB of the
+          # log and kept the live job log hours behind the run
+          HF_HUB_DISABLE_PROGRESS_BARS: "1"
           STORES: ${{ github.event.inputs.stores }}
           WORKERS: ${{ github.event.inputs.workers }}
           VWORKERS: ${{ github.event.inputs.verify_workers }}
