@@ -322,6 +322,17 @@ def test_refresh_lanes_for_named_and_unnamed_years():
                           dt.date(2026, 10, 6))
     assert out == [(2026, "d0701-0915", dt.date(2026, 7, 1),
                     dt.date(2026, 12, 31))]
+    # a revision reaching back into the first half-year re-runs both lanes,
+    # the earlier one with its own window (so its own name)
+    meta2 = {"lanes_by_year": {"2026": {"declared": False,
+                                        "lanes": ["d0101-0630",
+                                                  "d0701-0915"]}}}
+    out = R.refresh_lanes(meta2, R.bin_of_day(dt.date(2026, 6, 20)),
+                          dt.date(2026, 10, 7))
+    assert out == [(2026, "d0101-0630", dt.date(2026, 1, 1),
+                    dt.date(2026, 6, 30)),
+                   (2026, "d0701-0915", dt.date(2026, 7, 1),
+                    dt.date(2026, 12, 31))]
     out = R.refresh_lanes({}, R.bin_of_day(dt.date(2026, 12, 29)),
                           dt.date(2027, 1, 3))
     assert [x[0] for x in out] == [2026, 2027]

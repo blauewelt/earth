@@ -371,6 +371,28 @@ def _cmr_day(params, full_day=True):
     return d, s
 
 
+def cmr_revised(params, since, lo, hi):
+    """The days in [lo, hi] whose granule the CMR says was UPDATED at or
+    after `since` — a producer that reissues its files under the same name
+    (NOAA STAR's ACSPO L3S-LEO: the granule of 2026-07-14 was updated
+    2026-09-25, of 06-14 on 08-18 — about ten weeks after the day)."""
+    out, page = set(), 1
+    while True:
+        q = urllib.parse.urlencode({
+            **params, "temporal": f"{lo}T00:00:00Z,{hi}T23:59:59Z",
+            "page_size": 200, "page_num": page})
+        e = ((http_json(f"{CMR}?{q}") or {}).get("feed") or {}).get(
+            "entry") or []
+        for g in e:
+            u = g.get("updated")
+            if u and dt.datetime.fromisoformat(u.replace("Z", "+00:00")) \
+                    >= since:
+                out.add(parse_day(g["time_start"]))
+        if len(e) < 200:
+            return sorted(out)
+        page += 1
+
+
 def up_pace4k():
     out = []
     for sn in ("PACE_OCI_L3M_BGC", "PACE_OCI_L3M_AOP", "PACE_OCI_L4M_MOANA"):
@@ -434,6 +456,9 @@ POLICY = {
                                   "reads, ~1 h — plan §4"),
     "family1_gf/sst_acspo02": dict(kind="grid", fam="1gf", auto=False,
                                    upstream=up_acspo, creds=EARTHDATA,
+                                   revisions={"collection_concept_id":
+                                              "C2805339147-POCLOUD"},
+                                   revision_window_days=150,
                                    min_gap_days=7, sums="e089",
                                    why="dispatch-only until a real refresh "
                                        "is green: the refreshed lane is the "
@@ -580,6 +605,26 @@ def plan_store(key, remote, force_from=None):
         except Exception as e:                                # noqa: BLE001
             out["provisional_error"] = f"{type(e).__name__}: {e}"[:300]
     out["provisional_now_final"] = [iso(d) for d in final]
+    if pol.get("revisions") and ours:
+        # the producer REISSUES files: every day whose granule was updated
+        # since (two days before) the store was last built or refreshed is
+        # re-fetched, and its bin may change (it is provisional to the
+        # splice); a change anywhere else is still a refused revision
+        try:
+            since = dt.datetime.fromisoformat(str(ent.get("built_at"))
+                                              .replace("Z", "+00:00")) \
+                - dt.timedelta(days=2)
+            lo = ours - dt.timedelta(days=int(pol.get(
+                "revision_window_days") or 120))
+            rev = cmr_revised(pol["revisions"], since, lo, ours)
+        except Exception as e:                                # noqa: BLE001
+            out.update(action="error", error=f"revision probe failed: "
+                       f"{type(e).__name__}: {str(e)[:300]}")
+            return out
+        out["revised_upstream"] = [iso(d) for d in rev]
+        final = sorted(set(final) | set(rev))
+        out["provisional_days"] = sorted(set(out["provisional_days"])
+                                         | {iso(d) for d in rev})
     cands = []
     if gap is not None and gap > 0:
         cands.append(ours + dt.timedelta(days=1))
@@ -702,14 +747,25 @@ def refresh_lanes(meta, b0, newest):
         wins.sort()
         pick = [w for w in wins if w[0] <= max(d0, dt.date(y, 1, 1))] or \
             wins[:1]
-        lo, n = pick[-1]
-        later = [w for w in wins if w[0] > lo]
-        if later:
-            raise SystemExit(f"{y}: lanes {[w[1] for w in later]} start after "
-                             f"the lane {n!r} that holds the refresh's first "
-                             f"bin — a refresh re-fetches the LAST lane of a "
-                             f"year only")
-        out.append((y, n, lo, dt.date(y, 12, 31)))
+        first = wins.index(pick[-1])
+        todo = wins[first:]
+        # every lane from the one holding the refresh's first bin: an earlier
+        # one keeps its own window (and so its name), the LAST is extended to
+        # 31 December
+        for i, (lo, n) in enumerate(todo):
+            if i < len(todo) - 1:
+                hi = todo[i + 1][0] - dt.timedelta(days=1)
+                m = re.fullmatch(r"d(\d{4})-(\d{4})", n or "")
+                if m:
+                    hi = dt.date(y, int(m.group(2)[:2]), int(m.group(2)[2:]))
+                q = re.fullmatch(r"q([1-4])", n or "")
+                if q:
+                    hi = dt.date(y, 3 * int(q.group(1)), 1)
+                    hi = dt.date(y + (hi.month == 12), (hi.month % 12) + 1,
+                                 1) - dt.timedelta(days=1)
+                out.append((y, n, lo, hi))
+            else:
+                out.append((y, n, lo, dt.date(y, 12, 31)))
     return out
 
 
