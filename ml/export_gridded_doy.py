@@ -173,9 +173,14 @@ def export_month(store, month, out, *, base=None, threads=6):
             ref = np.where(fin, st, 0.0).sum(0)[ok] / rn[ok]
             mean = s[ok] / n[ok]
             err = np.abs(mean - ref)
-            # two float32 roundings of running totals, each ≤ ½ ulp
-            bound = (np.spacing(np.abs(Sd[:, b]).astype(np.float32)).astype(np.float64)[ok]
-                     / n[ok] + 1e-12 * np.abs(ref) + 1e-30)
+            # two float32 roundings of running totals — the plane at the
+            # span's end and the one before its start — each ≤ ½ ulp of ITS
+            # OWN magnitude (a signed field's total can be near zero at one
+            # and large at the other)
+            ulp = np.spacing(np.abs(Sd[:, b]).astype(np.float32)).astype(np.float64)
+            if a:
+                ulp = ulp + np.spacing(np.abs(Sd[:, a - 1]).astype(np.float32)).astype(np.float64)
+            bound = 0.5 * ulp[ok] / n[ok] * (1 + 1e-9) + 1e-12 * np.abs(ref) + 1e-30
             worst = max(worst, float(err.max()))
             worst_ratio = max(worst_ratio, float((err / bound).max()))
             checks += 1
