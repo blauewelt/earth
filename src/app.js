@@ -16366,7 +16366,8 @@ function dtApplyStore(st, saved) {
   dtEl("dt-box-note").textContent = dtIsGrid(st)
     ? "— required for a map store; W > E crosses the dateline"
     : "— optional for a point store (empty: the whole globe)";
-  dtEl("dt-box-clear").disabled = dtIsGrid(st);
+  dtEl("dt-box-clear").disabled = false;
+  dtSyncYearSlider();
   dtClearPreview();
 }
 
@@ -16385,6 +16386,7 @@ function dtSetPeriod(y0, y1, months, days) {
   dtSetMonths(months);
   dtEl("dt-d0").value = days ? days[0] : 1;
   dtEl("dt-d1").value = days ? days[1] : 31;
+  dtSyncYearSlider();
 }
 
 function dtApplyNormalPreset(key) {
@@ -17524,8 +17526,31 @@ function dtEstimateEmpty(sel, est) {
 
 /* Any control moved: one funnel, so the box, the saved selection and the
  * estimate always follow the same reading of the controls. */
+/* The period slider mirrors the two year fields (which stay the truth every
+ * other piece of code reads and writes): range and both handles, and the
+ * filled stretch between them. Hidden with the years row. */
+const DT_SLIDERS = [
+  { wrap: "dt-yslide", fill: "dt-yslide-fill", s0: "dt-ys0", s1: "dt-ys1", f0: "dt-y0", f1: "dt-y1" },
+  { wrap: "dt-dslide", fill: "dt-dslide-fill", s0: "dt-ds0", s1: "dt-ds1", f0: "dt-d0", f1: "dt-d1" },
+];
+function dtSyncYearSlider() {
+  for (const S of DT_SLIDERS) {
+    const y0 = dtEl(S.f0), y1 = dtEl(S.f1), s0 = dtEl(S.s0), s1 = dtEl(S.s1);
+    if (!s0 || !s1) continue;
+    const a = Number(y0.min), b = Number(y0.max);
+    dtEl(S.wrap).classList.toggle("hidden", y0.closest(".control-row").classList.contains("hidden") || !(b > a));
+    for (const s of [s0, s1]) { s.min = a; s.max = b; }
+    const v0 = Number(y0.value) || a, v1 = Number(y1.value) || b;
+    s0.value = v0; s1.value = v1;
+    const f = dtEl(S.fill), span = Math.max(1, b - a);
+    f.style.left = (100 * (Math.min(v0, v1) - a) / span) + "%";
+    f.style.width = (100 * Math.abs(v1 - v0) / span) + "%";
+  }
+}
+
 function dtChanged() {
   if (!dt.store) return;
+  dtSyncYearSlider();
   dtSyncStepRes();
   // a preview is a picture OF a selection: once the selection moves it is a
   // picture of something no longer asked for, so it goes
@@ -18008,8 +18033,29 @@ function dtWire() {
         (b.w === -180 && b.e === 180 ? " — a pole is on screen, so the box runs all the way round" : ""));
   });
   dtEl("dt-box-clear").addEventListener("click", () => {
-    dtWriteBox(null); dt.touched = true; dt.lookSeq++; dtChanged();
+    // a point store takes no box at all; a map store needs one, so the whole
+    // globe is the full box — and the estimate says whether that fits the cap
+    const grid = dt.store && dtIsGrid(dt.store);
+    dtWriteBox(grid ? { w: -180, s: -90, e: 180, n: 90 } : null);
+    dt.touched = true; dt.lookSeq++; dtChanged();
+    if (grid) dtStatus("box: the whole globe (W −180°, S −90°, E 180°, N 90°) — if the estimate says it is too large, shorten the period, pick a coarser time step, or draw a smaller box");
   });
+  // The period slider: dragging moves the year fields live (the handles may
+  // not cross); releasing commits through the fields' own change event, so
+  // the slider follows exactly the path typing a year does.
+  for (const S of DT_SLIDERS) for (const [sid, fid] of [[S.s0, S.f0], [S.s1, S.f1]]) {
+    const s = dtEl(sid);
+    s.addEventListener("input", () => {
+      const s0 = dtEl(S.s0), s1 = dtEl(S.s1);
+      if (Number(s0.value) > Number(s1.value)) { if (sid === S.s0) s0.value = s1.value; else s1.value = s0.value; }
+      dtEl(S.f0).value = s0.value; dtEl(S.f1).value = s1.value;
+      dtSyncYearSlider();
+    });
+    s.addEventListener("change", (e) => {
+      e.stopPropagation();
+      dtEl(fid).dispatchEvent(new Event("change", { bubbles: true }));
+    });
+  }
   dtEl("dt-presets").addEventListener("click", (e) => {
     const b = e.target.closest("button[data-lat]");
     if (!b) return;

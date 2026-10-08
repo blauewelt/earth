@@ -9458,3 +9458,41 @@ test("Data tab: a typed box's handle drags without arming the draw mode, and dra
   await expect.poll(async () => (await boxFields(page))[1]).toBeLessThan(-89);
   await expectStillRendering(page, "handle dragged to the pole");
 });
+
+test("Data tab: the years and the days of the month are each one slider with two handles, and 'whole globe' works on a map store",
+     async ({ page }) => {
+  test.setTimeout(180000);
+  await openDataTab(page);
+  await dtTap(page, "#tab-data");
+  await expect.poll(async () => (await dtState(page)).store, { timeout: 30000 }).toBeTruthy();
+  const r = await page.evaluate(() => {
+    const el = (id) => document.getElementById(id);
+    const set = (id, v) => { el(id).value = v; el(id).dispatchEvent(new Event("input", { bubbles: true })); el(id).dispatchEvent(new Event("change", { bubbles: true })); };
+    const a = Number(el("dt-ys0").min), b = Number(el("dt-ys0").max);
+    const out = { a, b, fa: Number(el("dt-y0").min), fb: Number(el("dt-y0").max) };
+    set("dt-ys0", a); set("dt-ys1", b);
+    out.y = [Number(el("dt-y0").value), Number(el("dt-y1").value)];
+    // the handles may not cross
+    set("dt-ys0", b + 5);
+    out.cross = [Number(el("dt-y0").value), Number(el("dt-y1").value)];
+    // typing a year moves the handle
+    el("dt-y0").value = a; el("dt-y0").dispatchEvent(new Event("change", { bubbles: true }));
+    out.typed = Number(el("dt-ys0").value);
+    const dHidden = el("dt-dslide").classList.contains("hidden");
+    out.dHidden = dHidden;
+    if (!dHidden) { set("dt-ds0", 5); set("dt-ds1", 12); out.d = [Number(el("dt-d0").value), Number(el("dt-d1").value)]; }
+    out.globeDisabled = el("dt-box-clear").disabled;
+    return out;
+  });
+  expect(r.a).toBe(r.fa); expect(r.b).toBe(r.fb);
+  expect(r.y).toEqual([r.a, r.b]);
+  expect(r.cross).toEqual([r.b, r.b]);
+  expect(r.typed).toBe(r.a);
+  if (!r.dHidden) expect(r.d).toEqual([5, 12]);
+  expect(r.globeDisabled).toBe(false);
+  const st = await dtState(page);
+  if (!r.dHidden) expect(st.sel.days).toEqual([5, 12]);
+  await dtTap(page, "#dt-box-clear");
+  const st2 = await dtState(page);
+  if (st2.sel.bbox) expect(st2.sel.bbox).toEqual({ w: -180, s: -90, e: 180, n: 90 });
+});
