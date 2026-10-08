@@ -482,7 +482,11 @@ def export(store, out, *, base=None, workers=8, threads=4, keep=None,
     keep_set = set(fmonths) | set(bmonths)
     workers = auto_workers(workers, spec)
     if months_per_job is None:
-        months_per_job = int(np.clip(len(seq) // max(1, 2 * workers), 1, 12))
+        # >= 4 jobs per worker: a job is its months in sequence, so long jobs
+        # leave the last few running alone on one core (run #1's ACSPO tail:
+        # 10-month jobs at ~400 s a month). The price is one bin downloaded
+        # twice per job boundary (~5 % at 3 months a job).
+        months_per_job = int(np.clip(len(seq) // max(1, 4 * workers), 1, 12))
     runs = [seq[i:i + months_per_job] for i in range(0, len(seq),
                                                      months_per_job)]
     jobs = [(base, g, [(y, m, by_ym[(y, m)]) for y, m in r], out, keep,
