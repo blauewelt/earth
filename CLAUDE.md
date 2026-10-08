@@ -2323,6 +2323,31 @@ Fixture: `data/gridded_monthly/fixture/` + `fixture_native/`
 (`tests/make_gridded_paths_fixture.py` rebuilds the native stores and refuses
 unless their fresh sums are byte-identical to the committed ones).
 
+*The stores follow their producers (2026-10-08, E-090).* Chris: *"I guess
+we need a github workflow that always updates all data as well?"*
+`.github/workflows/data-refresh.yml` (daily 05:23 UTC, ubuntu-latest only,
+`schedule` + `workflow_dispatch`) runs `ml/data_refresh.py`: per gridded
+store it asks the producer for its newest day, does nothing when the store
+ends there, else re-fetches the store's LAST LANE with the builder's own
+stages and splices it into the published store in ONE Hub commit. Rules worth
+keeping: the published store.json must first be rebuilt EXACTLY from its own
+shard indices and lane ledgers (`grid_store_meta`, the assembler's function),
+or the store is refused; a rewritten bin must be PREFIX-PRESERVING (the
+reader computes shard URLs from bin numbers, so a mid-read reader then gets
+the old frames or a loud failure) unless it holds provisional days (OISST's
+preliminary fortnight, replaced when NCEI finalises them); a changed
+published bin outside the refresh window is a refused REVISION; every
+committed file is read back at its revision and the new frames re-read
+before the REGISTRY — the tab's commit point — is published (guard
+`--refresh`), then the newest day is read through `src/f1data.js`
+(`scripts/refresh_reader_check.mjs`). E-088's sums follow only for SETTLED
+months (complete, no provisional day) into a new `monthly/r<UTC>/` folder,
+and a changed month whose frame count still equals the sums' is blanked —
+the tab compares counts, not values. The training tensor 7.2, the paper's
+climatology and E-086's normals are frozen. One status line per store:
+`tensors/refresh/status.json` on the Hub. Plan and inventory:
+`ml/plans/E090_data_refresh.md`.
+
 *Family 1.2 — the atmosphere on pressure levels (2026-10-06, E-085).* Family
 1.2 is family 1.gf plus ECMWF's ERA5 reanalysis — temperature (K), specific
 humidity (stored and served in **g/kg**, 1000 × ERA5's kg/kg) and the

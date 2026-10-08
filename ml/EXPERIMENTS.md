@@ -44,6 +44,54 @@ low-pass).
 
 ---
 
+<a id="e-090"></a>
+## E-090 · Every store the Data tab serves, kept current with its upstream — a daily hosted refresh — FIRST REAL REFRESHES GREEN 2026-10-08 (OISST to 2026-10-06 with two preliminary days replaced by final ones, GLORYS to 2026-08-25, both read back and announced; ERA5 re-fetched byte-identical)
+
+**E-090 · A scheduled GitHub-hosted job that follows each producer.**
+Chris, 2026-10-08: *"I guess we need a github workflow that always updates
+all data as well?"* Plan and full inventory:
+[ml/plans/E090_data_refresh.md](https://blauewelt.github.io/earth/docs.html?f=ml/plans/E090_data_refresh.md).
+
+- **What it is:** `ml/data_refresh.py` + `.github/workflows/data-refresh.yml`
+  — every day, for each gridded (tier-G) store, ask the producer for its
+  newest day; no-op if the store ends there; otherwise re-fetch the store's
+  last lane with the builder's own stages, splice it into the published
+  store in ONE Hub commit, read every committed file back at that revision,
+  re-read the new frames over HTTP, then publish the registry (the Data
+  tab's commit point) and read the newest day through the tab's own reader.
+- **Stage:** data pipeline, no training. **Params / batch / steps:** none.
+  **Data points:** the frames each refresh appends (below).
+- **Frozen (given):** the five-day training tensor (family 7.2), the
+  paper's climatology files, E-086's tensor normals.
+- **Falsifiers:** the splice's self-check (the published store.json must be
+  rebuilt exactly from its own shard indices and lane ledgers before any
+  change); the prefix rule for rewritten bins; the revision guard (a changed
+  published bin outside the refresh window is refused); read-back sha256 at
+  the commit's revision; the HTTP re-read of the new frames; the registry
+  guard `--refresh` (only data fields may change); the reader check (node +
+  `src/f1data.js` against `sharded.py`, exact); E-088's falsifier on every
+  monthly-sum plane rewritten.
+
+**Runs** (data-refresh workflow; each is one dispatch):
+
+| run | what it did | result |
+|---|---|---|
+| [#1](https://github.com/blauewelt/earth/actions/runs/37744615972) | dry run of all eleven tier-G stores | failed in its install step (quoted pip requirements in an env line), fixed `2b9d813` |
+| [#2](https://github.com/blauewelt/earth/actions/runs/37744718098) | dry run of all eleven tier-G stores (plan + each store's self-check, no token) | green: every self-check passed on the hosted runner — irtb 115 lane ledgers, sst_acspo02 54, OISST/NCEP/ERA5 45, GLORYS 35, OC-CCI 30, pace4k 3; five stores with new upstream days (OISST 2, GLORYS 7, pace4k 31, sst_acspo02 21, irtb 20) |
+| [#3](https://github.com/blauewelt/earth/actions/runs/37745160871) | the first REAL refresh: `oisst025d` and `glorys025d` | data and registry green. OISST: the 2026 lane re-fetched in 202 s, 2 new days (10-05, 10-06) and the two days NCEI had finalised (09-21, 09-22) replaced, 3 bins rewritten, 270 tiles decoded before upload, Hub commit `f089598d`, 10 files read back, 2 frames re-read; record end 2026-10-04 → **2026-10-06**. GLORYS: the August tail fetched from Copernicus Marine and parked, 7 new days, 1 new and 1 rewritten bin (prefix-preserving), commit `fc69e5c3`; record end 2026-08-18 → **2026-08-25**. Registry `family72d.json` published under the `--refresh` guard; the tab's reader read 2026-10-06 (OISST `sst`, 9,801 cells) and 2026-08-25 (GLORYS `cur_speed`, 9,801 cells) equal to `sharded.py` with 0 differences. The sums job failed (a falsifier keep folder never made when no plane is written), fixed `3a77c1d` |
+| [#4](https://github.com/blauewelt/earth/actions/runs/37747717833) | `era5_t` FORCED from 2026-06-01 (ARCO-ERA5's final stream still ends 2026-06-30, so no new day exists) | green: the 2026 lane re-fetched in 213 s and came out **byte-identical** to the published store — nothing committed |
+| [#5](https://github.com/blauewelt/earth/actions/runs/37748824467) | sums recovery for #3's two stores (`sums_from_run`) | green. GLORYS: nothing to remake (August's count already differs from its sums, so the tab reads it natively; no new version). OISST: September 2026 blanked — its count (30) still equalled the sums' while two of its days changed value — into the new version `monthly/r20261008T0820/` (10.1 GB uploaded in 71 s and streamed back, every sha256 equal), index committed to main by the job (`7217949`) and the site redeployed. Checked afterwards from the sandbox: July 2019's plane is byte-identical to the previous version, September 2026's counts are all zero, the other seven stores' blocks untouched; the reader takes the sums for 2019-07 and 2026-08 and the native maps for 2026-09 ("30 frames now, 0 summed") |
+
+**Schedule:** enabled after #5, daily at 05:23 UTC, for the eight stores
+with `auto` (family 7.2d's four, family 1.2's four).
+
+**Not yet:** ERA5's append path on new data (next monthly extension of the
+final stream); the first real refresh of `pace4k`, `sst_acspo02` and `irtb`
+(dispatch-only until it is green); the point stores (plan §5, designed);
+the E-089 hook (waits for its index).
+
+---
+
 <a id="e-089"></a>
 ## E-089 · Long-period averages for the fine family 1.gf grids — native monthly tiles and an exact 0.25° pooled layer of sum / count / m2 — DISPATCHED 2026-10-08
 

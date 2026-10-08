@@ -53,6 +53,7 @@ with a *ledger* (`counts.json`) of what it counted.
 | D15 | the parts follow the store | after a verified commit the refetched lane's parts are pushed to `partials/` (the build's own `push_parts`), and a superseded named lane's folder is deleted | a later from-scratch assembly from parts reproduces the refreshed store, and the NEXT refresh's self-check (D5) can explain it |
 | D16 | batching the long lanes | `pace4k`, `sst_acspo02`, `irtb` refresh when ≥ 7 new days are upstream (`min_gap_days`); every store is still checked daily | their lane re-fetch is 0.5–3 h |
 | D17 | schedule | daily, `cron: 23 5 * * *` (05:23 UTC: after PSL's overnight OISST update, off the hour) — enabled only after a real dispatch run was green | the instruction |
+| D18 | recovery | workflow input `sums_from_run`: remake only the sums of the stores an earlier run updated, from its result artifacts; the failure issue closes itself on the next green real run | a sums failure must not need a data re-fetch |
 
 ## 2 · The inventory — every store the tab's registries list
 
@@ -201,10 +202,28 @@ the commit point. `data_refresh.sums_hook_e089` is the place: it reports
 "waiting" until both the index and an `update` entry point in
 `ml/export_fine_monthly.py` are on main, then is wired there.
 
-## 8 · Status
+## 8 · Status (2026-10-08)
 
-Filled in as runs land (§9 of `ml/EXPERIMENTS.md`'s E-090 entry carries the
-run numbers with what each did).
+The run-by-run record is
+[E-090 in the log](https://blauewelt.github.io/earth/docs.html?f=ml/EXPERIMENTS.md#e-090).
+In short:
+
+- **Dry run of all eleven tier-G stores** (data-refresh #2): every
+  self-check passed on the hosted runner, five stores had new days.
+- **The first real refresh** (#3): `oisst025d` 2026-10-04 → **2026-10-06**
+  (2 new days, 09-21 and 09-22 replaced by NCEI's final values, 3 bins
+  rewritten, Hub commit `f089598d`) and `glorys025d` 2026-08-18 →
+  **2026-08-25** (7 new days, the August tail from Copernicus Marine, commit
+  `fc69e5c3`); every committed file read back, the new frames re-read; the
+  registry published under `--refresh`; the tab's reader read both newest
+  days equal to `sharded.py`, 0 differences in 9,801 cells each.
+- **ERA5 forced** (#4): `era5_t`'s 2026 lane re-fetched byte-identical to
+  the published store — nothing committed. ARCO-ERA5's final stream has not
+  moved past 2026-06-30, so ERA5's append path waits for its next monthly
+  extension.
+- **Sums** (#5, the recovery of #3's failed sums job): OISST's September
+  2026 blanked into `monthly/r20261008T0820/`, index committed by the job.
+- **Schedule** enabled after #5: daily 05:23 UTC, the eight `auto` stores.
 
 ## 9 · What is NOT verified
 
