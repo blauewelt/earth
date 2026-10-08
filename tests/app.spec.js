@@ -9340,3 +9340,121 @@ test("Data tab: the box can be drawn on the globe — two clicks, a drag, the da
   await expect(page.locator("#pixel-card")).toBeVisible({ timeout: 15000 });
   expect(page.__errors, `page errors: ${page.__errors.join(" | ")}`).toHaveLength(0);
 });
+
+/* A box touching a pole stopped the whole app (Chris, 2026-10-08): from the
+ * default whole-globe view, "use the current view" wrote S −90 / N 90, the
+ * outline's RHUMB edge along the south pole got a NaN heading (σ = ln tan 0 =
+ * −∞, and −∞ − −∞ is NaN), and Cesium's polyline worker threw "normalized
+ * result is not a number" — a render error, which stops rendering for good.
+ * pageerror never sees it (Cesium catches it and shows its red panel), so
+ * these listen on scene.renderError and check the render loop is still on. */
+async function watchRenderErrors(page) {
+  await page.evaluate(() => {
+    if (window.__renderErrors) return;
+    window.__renderErrors = [];
+    window.__earth.viewer.scene.renderError.addEventListener((_s, e) => {
+      window.__renderErrors.push(String((e && e.stack) || e).slice(0, 600));
+    });
+  });
+}
+/* let the polyline worker build whatever was just assigned (3 s: on the
+ * software-GL sandbox the old code's whole-globe ring had not come back from
+ * the worker after 1.5 s, so its error landed on the NEXT box), then: no
+ * render error, the default render loop still running, a fresh frame renders */
+async function expectStillRendering(page, what) {
+  await page.evaluate(() => window.__earth.viewer.scene.requestRender());
+  await page.waitForTimeout(3000);
+  const r = await page.evaluate(async () => {
+    const v = window.__earth.viewer;
+    const framed = await new Promise((res) => {
+      const off = v.scene.postRender.addEventListener(() => { off(); res(true); });
+      v.scene.requestRender();
+      setTimeout(() => res(false), 5000);
+    });
+    return { errors: window.__renderErrors, loop: v.useDefaultRenderLoop, framed };
+  });
+  expect(r.errors, `${what}: render errors`).toEqual([]);
+  expect(r.loop, `${what}: the render loop is still on`).toBe(true);
+  expect(r.framed, `${what}: a new frame rendered`).toBe(true);
+  expect(page.__errors, `${what}: page errors: ${page.__errors.join(" | ")}`).toHaveLength(0);
+}
+
+test("Data tab: 'use the current view' at the default whole-globe view gives the whole globe, says so, and keeps rendering",
+     async ({ page }) => {
+  test.setTimeout(180000);
+  await openDataTab(page);
+  await watchRenderErrors(page);
+  await dtTap(page, "#tab-data");
+  await expect.poll(async () => (await dtState(page)).store, { timeout: 30000 }).toBeTruthy();
+  // the camera untouched: the default load shows the whole disc
+  await dtTap(page, "#dt-view");
+  expect(await boxFields(page)).toEqual([-180, -90, 180, 90]);
+  await expect(page.locator("#dt-status")).toContainText("the whole globe is on screen");
+  const st = await dtState(page);
+  expect(st.sel.bbox).toEqual({ w: -180, s: -90, e: 180, n: 90 });
+  expect(st.outlineShown).toBe(true);
+  expect(st.handles).toHaveLength(8);
+  await expectStillRendering(page, "view box at the default view");
+});
+
+test("Data tab: any box the fields accept draws without stopping the render loop — both poles, one pole, the full width, the dateline",
+     async ({ page }) => {
+  test.setTimeout(240000);
+  await openDataTab(page);
+  // the default imagery off: only the outline's geometry matters here, and the
+  // software-GL render loop is slow enough with nothing else to draw
+  await page.evaluate(() => {
+    for (const el of document.querySelectorAll("#layer-list input[data-id]:checked")) {
+      el.checked = false; el.dispatchEvent(new Event("change", { bubbles: true }));
+    }
+  });
+  await watchRenderErrors(page);
+  await dtTap(page, "#tab-data");
+  await expect.poll(async () => (await dtState(page)).store, { timeout: 30000 }).toBeTruthy();
+  const boxes = [
+    ["-180", "-90", "180", "90"],    // the whole globe
+    ["-30", "-90", "30", "-60"],     // touching the south pole only
+    ["-30", "60", "30", "90"],       // touching the north pole only
+    ["170", "-90", "-170", "-80"],   // across the dateline, on the south pole
+    ["-180", "-20", "180", "20"],    // the full width, no pole: the seam
+    ["10", "-90", "-10", "90"],      // 340° wide, pole to pole
+    ["-5", "-90", "5", "-89.99"],    // a sliver at the pole
+  ];
+  for (const b of boxes) {
+    await dtSet(page, { "dt-w": b[0], "dt-s": b[1], "dt-e": b[2], "dt-n": b[3] });
+    const st = await dtState(page);
+    // the reader gets the box as typed — the drawing alone keeps off the pole
+    expect(st.sel.bbox).toEqual({ w: +b[0], s: +b[1], e: +b[2], n: +b[3] });
+    expect(st.outlineShown, `outline for ${b}`).toBe(true);
+    for (const [lon, lat] of st.outlineDegrees) {
+      expect(Number.isFinite(lon) && Number.isFinite(lat)).toBe(true);
+    }
+    await expectStillRendering(page, `box ${b.join(",")}`);
+  }
+});
+
+test("Data tab: a typed box's handle drags without arming the draw mode, and dragging it onto the south pole keeps rendering", async ({ page }) => {
+  test.setTimeout(240000);
+  await openDataTab(page);
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await page.evaluate(() => {
+    for (const el of document.querySelectorAll("#layer-list input[data-id]:checked")) {
+      el.checked = false; el.dispatchEvent(new Event("change", { bubbles: true }));
+    }
+  });
+  await watchRenderErrors(page);
+  await dtTap(page, "#tab-data");
+  await expect.poll(async () => (await dtState(page)).store, { timeout: 30000 }).toBeTruthy();
+  await lookAt(page, 0, -90);
+  await dtSet(page, { "dt-w": "-30", "dt-s": "-75", "dt-e": "30", "dt-n": "-60" });
+  await page.waitForTimeout(600);
+  // the south edge's midpoint handle, dragged to the pole
+  const from = await globeXY(page, 0, -75), to = await globeXY(page, 0, -90);
+  await page.mouse.move(from.x, from.y);
+  await page.mouse.down();
+  await page.mouse.move((from.x + to.x) / 2, (from.y + to.y) / 2, { steps: 2 });
+  await page.mouse.move(to.x, to.y, { steps: 2 });
+  await page.mouse.up();
+  await expect.poll(async () => (await boxFields(page))[1]).toBeLessThan(-89);
+  await expectStillRendering(page, "handle dragged to the pole");
+});

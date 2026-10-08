@@ -8961,11 +8961,14 @@ function showProbeMark(res) {
   const c = res.cell;
   if (c) {
     m.fill.rectangle.coordinates = Cesium.Rectangle.fromDegrees(c.west, c.south, c.east, c.north);
-    m.edge.polyline.positions = Cesium.Cartesian3.fromDegreesArray([
+    // a cell on the bottom row of a global grid has its south edge ON the
+    // south pole — the same rhumb trap as the Data tab's box (rhumbSafePositions)
+    const edge = rhumbSafePositions([
       c.west, c.south, c.east, c.south, c.east, c.north, c.west, c.north, c.west, c.south,
     ]);
+    if (edge) m.edge.polyline.positions = edge;
     m.fill.show = true;
-    m.edge.show = true;
+    m.edge.show = !!edge;
   } else {
     m.fill.show = false;
     m.edge.show = false;
@@ -16645,32 +16648,82 @@ function dtViewBox() {
 
 /* ---- the box on the globe ----------------------------------------------- */
 
-/* The ring of a lat/lon box, densified along the parallels: consecutive points
- * are ≤ 5° apart, so neither a rhumb segment nor Cesium's shortest-way choice
- * can send an edge the wrong way round the planet — which is what makes a
- * W > E box (across the dateline) and a box wider than 180° both draw as the
- * box the fields describe. */
+/* The ring of a lat/lon box, densified along the parallels AND the meridians:
+ * consecutive points are ≤ 5° apart, so neither a rhumb segment nor Cesium's
+ * shortest-way choice can send an edge the wrong way round the planet — which
+ * is what makes a W > E box (across the dateline) and a box wider than 180°
+ * both draw as the box the fields describe. The meridians are densified too
+ * because Cesium refuses a rhumb segment whose ends are (nearly) antipodal:
+ * EllipsoidRhumbLine checks |angle − π| ≥ 0.0125 rad, and a pole-to-pole edge
+ * (S −90 / N 90, drawn ±89.99) is 0.0003 rad short of π — another render
+ * error, behind the pole one (see rhumbSafePositions). */
 function dtBoxRing(b) {
   let e = b.e;
   if (e <= b.w) e += 360;
-  const span = e - b.w;
+  const span = e - b.w, rise = b.n - b.s;
   const k = Math.max(2, Math.ceil(span / 5));
+  const m = Math.max(1, Math.ceil(rise / 5));
   const pts = [];
   for (let i = 0; i <= k; i++) pts.push(b.w + (span * i) / k, b.s);
+  for (let j = 1; j < m; j++) pts.push(e, b.s + (rise * j) / m);
   for (let i = k; i >= 0; i--) pts.push(b.w + (span * i) / k, b.n);
+  for (let j = m - 1; j >= 1; j--) pts.push(b.w, b.s + (rise * j) / m);
   pts.push(b.w, b.s);
   return pts;
 }
 
+/* The outline is drawn with ArcType.RHUMB, and a rhumb segment cannot run
+ * ALONG a pole. Cesium's heading for a segment is atan2(Δλ, σ₂ − σ₁) with
+ * σ = ln tan(π/4 + φ/2) (EllipsoidRhumbLine's calculateSigma); at φ = −90°
+ * that is ln 0 = −∞, so an edge between two points on the south pole gets
+ * atan2(Δλ, −∞ − (−∞)) = atan2(Δλ, NaN): NaN heading, NaN points, and
+ * Cartesian3.normalize throws "normalized result is not a number" inside the
+ * polyline geometry worker. Cesium reports that as a render error and stops
+ * rendering for good — the red panel Chris got from "use the current view" at
+ * the default whole-globe view (2026-10-08), whose box is S −90 / N 90. (At
+ * +90° tan(π/2) comes out 1.6e16, not ∞, so the north pole survived by float
+ * luck.) A parallel at ±90° is a point anyway, so the drawing stands it
+ * 0.01° (1.1 km) off the pole — invisible at any zoom the app allows. This is
+ * DRAWING only: the fields, the handles and the reader keep the true ±90. */
+const RHUMB_POLE_LAT = 89.99;
+
+/* A flat [lon, lat, …] list (degrees) → Cartesians a RHUMB polyline can
+ * always draw, or null. Every value must be finite and every latitude within
+ * ±90 (otherwise null — the caller draws nothing rather than handing Cesium a
+ * position that would stop the render loop); latitudes are held off the poles
+ * as above, and consecutive coincident points (a clamped pole, the −180/180
+ * seam) are dropped, so no segment has zero length. A segment whose ends are
+ * within 10° of antipodal is refused (null) rather than passed on: Cesium's
+ * own check throws at 0.7°, and every caller here densifies far below that.
+ * Fewer than two points left → null. */
+function rhumbSafePositions(degs) {
+  if (!Array.isArray(degs) || degs.length < 4 || degs.length % 2) return null;
+  const out = [];
+  for (let i = 0; i < degs.length; i += 2) {
+    const lon = degs[i], lat = degs[i + 1];
+    if (!Number.isFinite(lon) || !Number.isFinite(lat) || Math.abs(lat) > 90) return null;
+    const c = Cesium.Cartesian3.fromDegrees(lon, Math.max(-RHUMB_POLE_LAT, Math.min(RHUMB_POLE_LAT, lat)));
+    if (![c.x, c.y, c.z].every(Number.isFinite)) return null;
+    const prev = out[out.length - 1];
+    if (prev && Cesium.Cartesian3.equalsEpsilon(c, prev, 0, 1e-3)) continue;
+    if (prev && Cesium.Cartesian3.angleBetween(c, prev) > Math.PI - 0.17) return null;
+    out.push(c);
+  }
+  return out.length >= 2 ? out : null;
+}
+
 function dtDrawBox() {
   const box = dtBoxFromFields();
-  if (!dataTabVisible() || !box || box.error) {
+  const positions = dataTabVisible() && box && !box.error ? rhumbSafePositions(dtBoxRing(box)) : null;
+  if (box && !box.error && dataTabVisible() && !positions) {
+    console.warn("Data tab: the box outline has no drawable ring", box);
+  }
+  if (!positions) {
     if (dt.outline) { viewer.entities.remove(dt.outline); dt.outline = null; }
     dtHandlesSync();
     viewer.scene.requestRender();
     return;
   }
-  const positions = Cesium.Cartesian3.fromDegreesArray(dtBoxRing(box));
   if (!dt.outline) {
     dt.outline = viewer.entities.add({
       polyline: {
@@ -16745,12 +16798,12 @@ function dtBoxFromCorners(a, b) {
 }
 
 function dtDrawSetRubber(b) {
-  if (!b || b.w === b.e || b.s >= b.n) {
+  const positions = !b || b.w === b.e || b.s >= b.n ? null : rhumbSafePositions(dtBoxRing(b));
+  if (!positions) {
     if (dtDraw.rubber) dtDraw.rubber.show = false;
     viewer.scene.requestRender();
     return;
   }
-  const positions = Cesium.Cartesian3.fromDegreesArray(dtBoxRing(b));
   if (!dtDraw.rubber) {
     dtDraw.rubber = viewer.entities.add({
       polyline: { positions, width: 2, arcType: Cesium.ArcType.RHUMB,
@@ -16857,6 +16910,10 @@ function dtHandlesSync() {
     { which: "s", lon: mid, lat: box.s }, { which: "n", lon: mid, lat: box.n },
     { which: "w", lon: box.w, lat: my }, { which: "e", lon: box.e, lat: my },
   ];
+  // the handles are drawn for ANY box (typed, a preset, the view), so they
+  // must answer for any box — the pointer listeners used to be wired only by
+  // the first "draw on the globe", and until then the handles were inert
+  dtDrawWire();
   if (!dtDraw.handles) {
     dtDraw.handles = viewer.scene.primitives.add(new Cesium.PointPrimitiveCollection());
   }
@@ -17933,13 +17990,22 @@ function dtWire() {
   dtEl("dt-view").addEventListener("click", () => {
     const b = dtViewBox();
     if (!b) {
-      showToast("<strong>Data</strong>: the view shows the edge of the globe, so it has no box — " +
-        "zoom in until the globe fills the screen, or type the four edges.", { key: "data-view-box" });
+      showToast("<strong>Data</strong>: no part of the globe is in view, so the view has no box — " +
+        "turn back to the globe, or type the four edges.", { key: "data-view-box" });
       return;
     }
     dtWriteBox(b);
     dt.touched = true; dt.lookSeq++;
     dtChanged();
+    // the box is the smallest lat/lon box round everything on screen
+    // (computeViewRectangle). With a pole in view that box runs all the way
+    // round; with the whole disc in view it is the whole globe — say so, so a
+    // whole-globe estimate is never a surprise.
+    const whole = b.w === -180 && b.e === 180 && b.s === -90 && b.n === 90;
+    dtStatus(whole
+      ? "box from the view: the whole globe is on screen, so the box is the whole globe (W −180°, S −90°, E 180°, N 90°) — zoom in for a smaller one"
+      : `box from the view: W ${b.w}°, S ${b.s}°, E ${b.e}°, N ${b.n}°` +
+        (b.w === -180 && b.e === 180 ? " — a pole is on screen, so the box runs all the way round" : ""));
   });
   dtEl("dt-box-clear").addEventListener("click", () => {
     dtWriteBox(null); dt.touched = true; dt.lookSeq++; dtChanged();
