@@ -1,0 +1,328 @@
+{
+ "_source": "ml/export_fine_monthly.py \u2014 do not hand-edit",
+ "axes": [
+  "month",
+  "channel",
+  "year",
+  "lat",
+  "lon"
+ ],
+ "channels": [
+  {
+   "max": 414.0,
+   "min": 160.0,
+   "name": "tb",
+   "stored_unit": "K - 160 (uint8; add 160 for kelvin)",
+   "unit": "K"
+  }
+ ],
+ "chans": [
+  "tb"
+ ],
+ "combine": "mean over cells K = \u03a3 sum / \u03a3 count (NaN where \u03a3 count = 0); population variance = (\u03a3 m2 + \u03a3 n_k (sum_k / n_k \u2212 mean)\u00b2) / \u03a3 n_k, summing over the (year, month) cells with n_k > 0",
+ "dtype_source": "uint8",
+ "export_seconds": 0.1,
+ "falsifier_boxes": [
+  {
+   "box": [
+    -30.0,
+    0.0,
+    -45.0,
+    0.0
+   ],
+   "months": [
+    2,
+    3,
+    4
+   ],
+   "year": 2010
+  },
+  {
+   "box": [
+    0.0,
+    30.0,
+    90.0,
+    135.0
+   ],
+   "months": [
+    3
+   ],
+   "year": 2010
+  }
+ ],
+ "falsifier_months": [
+  [
+   2010,
+   2
+  ],
+  [
+   2010,
+   3
+  ],
+  [
+   2010,
+   4
+  ]
+ ],
+ "frame_seconds": 10800,
+ "frames_per_bin": 40,
+ "frames_possible": [
+  [
+   0,
+   72,
+   248,
+   16,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0
+  ]
+ ],
+ "frames_present": [
+  [
+   0,
+   71,
+   248,
+   16,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0
+  ]
+ ],
+ "generated_utc": "2026-10-08T07:23:11Z",
+ "git_sha": "aa1aedde244cea5aba566310a33c1430e204942b",
+ "group": "fxtb",
+ "licence": {
+  "attribution": "fixture: synthetic data",
+  "derived_works": "free",
+  "name": "fixture licence",
+  "redistribution": "attribution",
+  "redistribution_confirmed": true
+ },
+ "max_count": 248,
+ "month_rule": "the CALENDAR month (UTC) of each frame's own start instant (sharded.frame_datetime) \u2014 not E-086's month-of-bin rule",
+ "n_years": 1,
+ "native": {
+  "C": 1,
+  "H": 9,
+  "W": 50,
+  "layout": "native/<yyyy>/m_<yyyy>-<mm>.zst + .idx.npy, one pair per (year, month) with at least one frame: the store's own tiles, each tile's parts sum (float32), count (uint8), m2 (float32) \u2014 T x T x C, C order [row, col, channel], little-endian, one zstd frame per (tile, part) \u2014 concatenated tiles row-major and parts sum, count, m2 within a tile (so a tile's parts are ADJACENT). The index is int64 [n_tiles_y, n_tiles_x, 3, 2] of (offset, length), header index_header_bytes; length 0 for all three parts = the tile holds no observation that month (sum 0, count 0, m2 0, nothing stored). Edge tiles are padded with zeros (count 0).",
+  "months": [
+   [
+    2010,
+    2,
+    71,
+    14,
+    3967
+   ],
+   [
+    2010,
+    3,
+    248,
+    14,
+    4067
+   ],
+   [
+    2010,
+    4,
+    16,
+    14,
+    3727
+   ]
+  ],
+  "months_columns": [
+   "year",
+   "month",
+   "frames",
+   "tiles_stored",
+   "shard_bytes"
+  ],
+  "n_tiles_x": 7,
+  "n_tiles_y": 2,
+  "shard_bytes_total": 11761,
+  "spec": "native/tile_grid.json",
+  "tile": 8
+ },
+ "plan": "https://blauewelt.github.io/earth/docs.html?f=ml/plans/E089_fine_grid_monthly_sums.md",
+ "pooled": {
+  "count_dtype": "uint16",
+  "count_note": "uint16: a 0.25\u00b0 cell pools up to 3 x 3 pixels x 248 frames = 2232 values, past uint8",
+  "grid": {
+   "H": 4,
+   "W": 24,
+   "block_note": "2/3 native rows x 2/3 native columns per cell (centre-binned)",
+   "cols": [
+    [
+     0,
+     2
+    ],
+    [
+     2,
+     4
+    ],
+    [
+     4,
+     6
+    ],
+    [
+     6,
+     8
+    ],
+    [
+     8,
+     10
+    ],
+    [
+     10,
+     12
+    ],
+    [
+     12,
+     15
+    ],
+    [
+     15,
+     17
+    ],
+    [
+     17,
+     19
+    ],
+    [
+     19,
+     21
+    ],
+    [
+     21,
+     23
+    ],
+    [
+     23,
+     25
+    ],
+    [
+     25,
+     27
+    ],
+    [
+     27,
+     29
+    ],
+    [
+     29,
+     31
+    ],
+    [
+     31,
+     33
+    ],
+    [
+     33,
+     35
+    ],
+    [
+     35,
+     37
+    ],
+    [
+     37,
+     40
+    ],
+    [
+     40,
+     42
+    ],
+    [
+     42,
+     44
+    ],
+    [
+     44,
+     46
+    ],
+    [
+     46,
+     48
+    ],
+    [
+     48,
+     50
+    ]
+   ],
+   "coordinates": "cell centres (lat0 + row * dlat, lon0 + col * dlon); cell edges at multiples of dlat",
+   "deg": 15.0,
+   "dlat": 15.0,
+   "dlon": 15.0,
+   "exact_blocks": false,
+   "global_col0": 0,
+   "global_row0": 4,
+   "lat0": -22.5,
+   "lon0": -172.5,
+   "native_north_first": false,
+   "registration": "cell \u2014 row r covers latitudes [lat0 - dlat/2 + r dlat, lat0 + dlat/2 + r dlat); NOT family 7's point-registered g025 grid (whose centres are the multiples of 0.25\u00b0)",
+   "rows": [
+    [
+     0,
+     3
+    ],
+    [
+     3,
+     5
+    ],
+    [
+     5,
+     7
+    ],
+    [
+     7,
+     9
+    ]
+   ],
+   "rule": "a pooled cell holds every native pixel whose CENTRE lies in it; cells are half-open [south, north) x [west, east) on the 0.25\u00b0 grid whose edges are multiples of 0.25\u00b0 (cell-registered: cell centres at -89.875, \u2026), and a centre within 1e-6 of a cell (2.5e-7\u00b0) of an edge lies ON that edge; `rows` / `cols` give each pooled row's / column's native [start, stop)",
+   "south_first": true
+  },
+  "layout": "pooled025/sum.npy, m2.npy: [month, channel, year, lat, lon] float32; count.npy the same shape uint16; lat south-first; plane (m, c, y) starts at header_len + ((m * C + c) * n_years + (y - year_first)) * plane_bytes \u2014 E-088's layout and formula. sum and m2 are 0.0 where count is 0.",
+  "m2_dtype": "float32",
+  "shape": [
+   12,
+   1,
+   1,
+   4,
+   24
+  ],
+  "sum_dtype": "float32"
+ },
+ "record_first": "2010-02-20T00:00:00Z",
+ "record_last": "2010-04-02T21:00:00Z",
+ "source_bytes_read": 363614,
+ "source_channels": [
+  {
+   "max": 254.0,
+   "min": 0.0,
+   "name": "tb",
+   "unit": "K - 160 (uint8; add 160 for kelvin)"
+  }
+ ],
+ "source_sha256_block_digest": "d1c22372f62f3403cde993aaa9c2c78254537c468354acabc0527590411a890b",
+ "source_shard_index_sha256": "4119fc49d0b9e9022b777380bba06c4ccb70e139a3a4cd7a39960172d783bdaf",
+ "store": "fixture/fxtb",
+ "title": "fixture: uint8 K-160 three-hourly tropical band (irtb-shaped)",
+ "units": {
+  "tb": "K"
+ },
+ "value_offset": 160.0,
+ "year_first": 2010,
+ "year_last": 2010,
+ "years": [
+  2010
+ ]
+}

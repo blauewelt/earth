@@ -1,0 +1,160 @@
+# E-089: per-year, per-calendar-month SUM, COUNT and M2 of the four FINE
+# family 1.gf grids (oc4k, pace4k, sst_acspo02, irtb) in two layers — native
+# monthly tiles in each store's own tiling, and an exact 0.25° pooled layer in
+# E-088's dense layout — so the Data tab can compose a long-period mean and
+# standard deviation of a 2-4 km field from a few range reads.
+# Plan: ml/plans/E089_fine_grid_monthly_sums.md.
+#
+# WHAT IT DOES. Job `export` (a rented box) runs ml/export_fine_monthly.py
+# `run`: ONE STORE AT A TIME it streams the store's bins month by month (each
+# shard sha256-checked against the store's own store.json, decoded tile by
+# tile), writes the native month files and the pooled planes, runs THE
+# FALSIFIER (sampled whole-globe months and two period boxes, both layers,
+# against numpy over the native frames; the pooled layer against the native
+# layer block-summed, every month — refusing the store on any miss), then
+# COMMITS the store's files to the Hub, STREAMS EVERY FILE BACK and compares
+# sha256s, and only then frees the disk — so a lost box redoes at most one
+# store (ml/CLAUDE.md §5.26), and a store already on the Hub from the same
+# source is skipped. Job `restore` (a GitHub-hosted runner) streams every
+# published file back again, requires each sha256 to match its manifest,
+# measures CORS from https://blauewelt.org and writes
+# data/gridded_monthly_fine_index.json as an artifact. The session commits
+# the index (contents: read here).
+#
+# SECURITY. `workflow_dispatch` ONLY (ml/CLAUDE.md §6). HF_TOKEN reaches the
+# scripts as an ENV VAR for the life of the job and never as an argument —
+# the same secret and the same pattern as gridded-monthly.yml.
+name: Fine-grid monthly sums
+run-name: fine-grid monthly sums on ${{ github.event.inputs.runner }}
+
+on:
+  workflow_dispatch:
+    inputs:
+      runner:
+        description: "runner label — a Vast box's runner NAME (gpu-box-NNNNNNNN); >= 250 GB free disk"
+        required: true
+      stores:
+        description: "comma list of store keys (empty = the four fine 1.gf grids)"
+        default: ""
+      workers:
+        description: "month-run workers (processes) per store; capped by RAM"
+        default: "16"
+      verify_workers:
+        description: "falsifier workers (processes)"
+        default: "8"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: fine-monthly
+  cancel-in-progress: false
+
+jobs:
+  export:
+    runs-on: ${{ github.event.inputs.runner }}
+    timeout-minutes: 1200
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Persistent data cache (self-hosted box)
+        run: |
+          mkdir -p /opt/earth-cache
+          rm -rf ml/cache
+          ln -s /opt/earth-cache ml/cache
+
+      - name: Preflight
+        id: preflight
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+        run: |
+          if [ -z "${HF_TOKEN}" ]; then
+            echo "::error::HF_TOKEN secret is not set."
+            exit 1
+          fi
+          line=$(df -P ml/cache | tail -1)
+          free_gb=$(printf '%s\n' "${line}" | awk '{print int($4 / 1048576)}')
+          echo "free disk ${free_gb} GB · RAM $(awk '/MemTotal/ {print int($2 / 1048576)}' /proc/meminfo) GB · $(nproc) cpu"
+          if [ "${free_gb}" -lt 250 ]; then
+            echo "::error::only ${free_gb} GB free; this job needs 250 GB (ACSPO's native layer is ~150 GB before its upload)."
+            exit 1
+          fi
+          python3 --version
+
+      - name: Install
+        run: pip install --quiet numpy requests huggingface_hub zstandard
+
+      - name: Export, verify, publish and read back each store
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+          STORES: ${{ github.event.inputs.stores }}
+          WORKERS: ${{ github.event.inputs.workers }}
+          VWORKERS: ${{ github.event.inputs.verify_workers }}
+        run: |
+          set -o pipefail
+          mkdir -p ml/cache/fine_monthly
+          args=(run --out ml/cache/fine_monthly --workers "${WORKERS}" --verify-workers "${VWORKERS}" --threads 3)
+          [ -n "${STORES}" ] && args+=(--stores "${STORES}")
+          python3 -u ml/export_fine_monthly.py "${args[@]}" \
+              2>&1 | tee "${RUNNER_TEMP}/run.log"
+
+      - name: Collect the summary and logs
+        if: always() && steps.preflight.outcome == 'success'
+        run: |
+          out="${RUNNER_TEMP}/fine-monthly"
+          rm -rf "${out}"; mkdir -p "${out}"
+          cp ml/cache/fine_monthly/run_summary.json "${out}/" 2>/dev/null \
+            || echo "::warning::no run_summary.json"
+          for d in ml/cache/fine_monthly/*/; do
+            [ -f "${d}verify.json" ] && cp "${d}verify.json" "${out}/verify_$(basename "${d}").json"
+          done
+          [ -f "${RUNNER_TEMP}/run.log" ] && tail -n 2000 "${RUNNER_TEMP}/run.log" > "${out}/run.log.tail"
+          ls -la "${out}"
+
+      - name: Upload the summary
+        if: always() && steps.preflight.outcome == 'success'
+        uses: actions/upload-artifact@v4
+        with:
+          name: fine-monthly-${{ github.run_number }}
+          path: ${{ runner.temp }}/fine-monthly
+          if-no-files-found: warn
+          retention-days: 30
+
+      - name: Drop the scratch
+        if: always()
+        run: |
+          rm -rf ml/cache/fine_monthly || true
+          df -h ml/cache || true
+
+  restore:
+    needs: export
+    runs-on: ubuntu-latest
+    timeout-minutes: 240
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install
+        run: pip install --quiet numpy requests
+
+      - name: Stream every file back from the Hub and write the index
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+          STORES: ${{ github.event.inputs.stores }}
+        run: |
+          set -o pipefail
+          args=(index --index data/gridded_monthly_fine_index.json --workers 8
+                --restore-where "GitHub-hosted runner (fine-monthly run ${GITHUB_RUN_NUMBER})")
+          [ -n "${STORES}" ] && args+=(--stores "${STORES}")
+          python3 -u ml/publish_fine_monthly_index.py "${args[@]}" \
+              2>&1 | tee "${RUNNER_TEMP}/restore.log"
+          mkdir -p "${RUNNER_TEMP}/fine-monthly-index"
+          cp data/gridded_monthly_fine_index.json "${RUNNER_TEMP}/restore.log" "${RUNNER_TEMP}/fine-monthly-index/"
+
+      - name: Upload the index
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fine-monthly-index-${{ github.run_number }}
+          path: ${{ runner.temp }}/fine-monthly-index
+          if-no-files-found: warn
+          retention-days: 30

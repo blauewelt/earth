@@ -1,0 +1,397 @@
+{
+ "_source": "ml/export_fine_monthly.py \u2014 do not hand-edit",
+ "axes": [
+  "month",
+  "channel",
+  "year",
+  "lat",
+  "lon"
+ ],
+ "channels": [
+  {
+   "max": 40.0,
+   "min": -5.0,
+   "name": "sst",
+   "unit": "degC"
+  },
+  {
+   "max": 2.5,
+   "min": -4.0,
+   "name": "log_chl",
+   "unit": "log10(mg m-3) \u2014 fixture"
+  }
+ ],
+ "chans": [
+  "sst",
+  "log_chl"
+ ],
+ "combine": "mean over cells K = \u03a3 sum / \u03a3 count (NaN where \u03a3 count = 0); population variance = (\u03a3 m2 + \u03a3 n_k (sum_k / n_k \u2212 mean)\u00b2) / \u03a3 n_k, summing over the (year, month) cells with n_k > 0",
+ "dtype_source": "float16",
+ "export_seconds": 0.1,
+ "falsifier_boxes": [
+  {
+   "box": [
+    30.0,
+    60.0,
+    -60.0,
+    -30.0
+   ],
+   "months": [
+    1,
+    2
+   ],
+   "year": 2010
+  },
+  {
+   "box": [
+    -45.0,
+    -15.0,
+    0.0,
+    45.0
+   ],
+   "months": [
+    12
+   ],
+   "year": 2009
+  }
+ ],
+ "falsifier_months": [
+  [
+   2009,
+   12
+  ],
+  [
+   2010,
+   2
+  ]
+ ],
+ "frame_seconds": 86400,
+ "frames_per_bin": 5,
+ "frames_possible": [
+  [
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   7
+  ],
+  [
+   31,
+   10,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0
+  ]
+ ],
+ "frames_present": [
+  [
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   7
+  ],
+  [
+   30,
+   10,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0
+  ]
+ ],
+ "generated_utc": "2026-10-08T07:23:11Z",
+ "git_sha": "aa1aedde244cea5aba566310a33c1430e204942b",
+ "group": "fxfine",
+ "licence": {
+  "attribution": "fixture: synthetic data",
+  "derived_works": "free",
+  "name": "fixture licence",
+  "redistribution": "attribution",
+  "redistribution_confirmed": true
+ },
+ "max_count": 30,
+ "month_rule": "the CALENDAR month (UTC) of each frame's own start instant (sharded.frame_datetime) \u2014 not E-086's month-of-bin rule",
+ "n_years": 2,
+ "native": {
+  "C": 2,
+  "H": 36,
+  "W": 72,
+  "layout": "native/<yyyy>/m_<yyyy>-<mm>.zst + .idx.npy, one pair per (year, month) with at least one frame: the store's own tiles, each tile's parts sum (float32), count (uint8), m2 (float32) \u2014 T x T x C, C order [row, col, channel], little-endian, one zstd frame per (tile, part) \u2014 concatenated tiles row-major and parts sum, count, m2 within a tile (so a tile's parts are ADJACENT). The index is int64 [n_tiles_y, n_tiles_x, 3, 2] of (offset, length), header index_header_bytes; length 0 for all three parts = the tile holds no observation that month (sum 0, count 0, m2 0, nothing stored). Edge tiles are padded with zeros (count 0).",
+  "months": [
+   [
+    2009,
+    12,
+    7,
+    14,
+    31889
+   ],
+   [
+    2010,
+    1,
+    30,
+    14,
+    33603
+   ],
+   [
+    2010,
+    2,
+    10,
+    14,
+    32260
+   ]
+  ],
+  "months_columns": [
+   "year",
+   "month",
+   "frames",
+   "tiles_stored",
+   "shard_bytes"
+  ],
+  "n_tiles_x": 5,
+  "n_tiles_y": 3,
+  "shard_bytes_total": 97752,
+  "spec": "native/tile_grid.json",
+  "tile": 16
+ },
+ "plan": "https://blauewelt.github.io/earth/docs.html?f=ml/plans/E089_fine_grid_monthly_sums.md",
+ "pooled": {
+  "count_dtype": "uint16",
+  "count_note": "uint16: a 0.25\u00b0 cell pools up to 3 x 3 pixels x 30 frames = 270 values, past uint8",
+  "grid": {
+   "H": 12,
+   "W": 24,
+   "block_note": "exact 3 x 3 blocks of native pixels",
+   "cols": [
+    [
+     0,
+     3
+    ],
+    [
+     3,
+     6
+    ],
+    [
+     6,
+     9
+    ],
+    [
+     9,
+     12
+    ],
+    [
+     12,
+     15
+    ],
+    [
+     15,
+     18
+    ],
+    [
+     18,
+     21
+    ],
+    [
+     21,
+     24
+    ],
+    [
+     24,
+     27
+    ],
+    [
+     27,
+     30
+    ],
+    [
+     30,
+     33
+    ],
+    [
+     33,
+     36
+    ],
+    [
+     36,
+     39
+    ],
+    [
+     39,
+     42
+    ],
+    [
+     42,
+     45
+    ],
+    [
+     45,
+     48
+    ],
+    [
+     48,
+     51
+    ],
+    [
+     51,
+     54
+    ],
+    [
+     54,
+     57
+    ],
+    [
+     57,
+     60
+    ],
+    [
+     60,
+     63
+    ],
+    [
+     63,
+     66
+    ],
+    [
+     66,
+     69
+    ],
+    [
+     69,
+     72
+    ]
+   ],
+   "coordinates": "cell centres (lat0 + row * dlat, lon0 + col * dlon); cell edges at multiples of dlat",
+   "deg": 15.0,
+   "dlat": 15.0,
+   "dlon": 15.0,
+   "exact_blocks": true,
+   "global_col0": 0,
+   "global_row0": 0,
+   "lat0": -82.5,
+   "lon0": -172.5,
+   "native_north_first": true,
+   "registration": "cell \u2014 row r covers latitudes [lat0 - dlat/2 + r dlat, lat0 + dlat/2 + r dlat); NOT family 7's point-registered g025 grid (whose centres are the multiples of 0.25\u00b0)",
+   "rows": [
+    [
+     33,
+     36
+    ],
+    [
+     30,
+     33
+    ],
+    [
+     27,
+     30
+    ],
+    [
+     24,
+     27
+    ],
+    [
+     21,
+     24
+    ],
+    [
+     18,
+     21
+    ],
+    [
+     15,
+     18
+    ],
+    [
+     12,
+     15
+    ],
+    [
+     9,
+     12
+    ],
+    [
+     6,
+     9
+    ],
+    [
+     3,
+     6
+    ],
+    [
+     0,
+     3
+    ]
+   ],
+   "rule": "a pooled cell holds every native pixel whose CENTRE lies in it; cells are half-open [south, north) x [west, east) on the 0.25\u00b0 grid whose edges are multiples of 0.25\u00b0 (cell-registered: cell centres at -89.875, \u2026), and a centre within 1e-6 of a cell (2.5e-7\u00b0) of an edge lies ON that edge; `rows` / `cols` give each pooled row's / column's native [start, stop)",
+   "south_first": true
+  },
+  "layout": "pooled025/sum.npy, m2.npy: [month, channel, year, lat, lon] float32; count.npy the same shape uint16; lat south-first; plane (m, c, y) starts at header_len + ((m * C + c) * n_years + (y - year_first)) * plane_bytes \u2014 E-088's layout and formula. sum and m2 are 0.0 where count is 0.",
+  "m2_dtype": "float32",
+  "shape": [
+   12,
+   2,
+   2,
+   12,
+   24
+  ],
+  "sum_dtype": "float32"
+ },
+ "record_first": "2009-12-25T00:00:00Z",
+ "record_last": "2010-02-10T00:00:00Z",
+ "source_bytes_read": 488860,
+ "source_channels": [
+  {
+   "max": 40.0,
+   "min": -5.0,
+   "name": "sst",
+   "unit": "degC"
+  },
+  {
+   "max": 2.5,
+   "min": -4.0,
+   "name": "log_chl",
+   "unit": "log10(mg m-3) \u2014 fixture"
+  }
+ ],
+ "source_sha256_block_digest": "b53e9c1d4f9ccd9b9920ae44fdf2e85d7249cea71f7e99b59f5816be6cb2e4a0",
+ "source_shard_index_sha256": "8a1bcf67031ebbb592b7436405699c3769401d3b04d93111213806c77a190d0b",
+ "store": "fixture/fxfine",
+ "title": "fixture: daily 2-channel ocean-colour-shaped field, north-first",
+ "units": {
+  "log_chl": "log10(mg m-3) \u2014 fixture",
+  "sst": "degC"
+ },
+ "value_offset": 0.0,
+ "year_first": 2009,
+ "year_last": 2010,
+ "years": [
+  2009,
+  2010
+ ]
+}

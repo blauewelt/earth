@@ -1,0 +1,243 @@
+{
+ "blocksum": [
+  {
+   "max_abs_sum": 0.0,
+   "max_std_over_tol": 0.0015405035302500346,
+   "month": 2,
+   "ok": true,
+   "why": [],
+   "year": 2010
+  },
+  {
+   "max_abs_sum": 0.0,
+   "max_std_over_tol": 0.0015137729985538213,
+   "month": 3,
+   "ok": true,
+   "why": [],
+   "year": 2010
+  },
+  {
+   "max_abs_sum": 0.0,
+   "max_std_over_tol": 0.0015666519853444725,
+   "month": 4,
+   "ok": true,
+   "why": [],
+   "year": 2010
+  }
+ ],
+ "blocksum_summary": {
+  "max_abs_sum": 0.0,
+  "max_std_over_tol": 0.0015666519853444725,
+  "months": 3
+ },
+ "boxes": [
+  {
+   "box": [
+    -30.0,
+    0.0,
+    -45.0,
+    0.0
+   ],
+   "channel": "tb",
+   "frames": 335,
+   "layer": "native",
+   "max_abs_mean": 0.0,
+   "max_abs_std": 3.4604491006007265e-07,
+   "max_mean_over_bound": 0.0,
+   "max_std_over_tol": 0.0010518031502979048,
+   "months": [
+    2,
+    3,
+    4
+   ],
+   "n_cells": 30,
+   "ok": true,
+   "what": "2010 [2, 3, 4] box tb native",
+   "why": [],
+   "year": 2010
+  },
+  {
+   "box": [
+    -30.0,
+    0.0,
+    -45.0,
+    0.0
+   ],
+   "channel": "tb",
+   "frames": 335,
+   "layer": "pooled",
+   "max_abs_mean": 0.0,
+   "max_abs_std": 2.9389438438442994e-07,
+   "max_mean_over_bound": 0.0,
+   "max_std_over_tol": 0.0009230838157175288,
+   "months": [
+    2,
+    3,
+    4
+   ],
+   "n_cells": 6,
+   "ok": true,
+   "what": "2010 [2, 3, 4] box tb pooled",
+   "why": [],
+   "year": 2010
+  },
+  {
+   "box": [
+    0.0,
+    30.0,
+    90.0,
+    135.0
+   ],
+   "channel": "tb",
+   "frames": 248,
+   "layer": "native",
+   "max_abs_mean": 0.0,
+   "max_abs_std": 4.49923053480461e-07,
+   "max_mean_over_bound": 0.0,
+   "max_std_over_tol": 0.0014157867828890473,
+   "months": [
+    3
+   ],
+   "n_cells": 28,
+   "ok": true,
+   "what": "2010 [3] box tb native",
+   "why": [],
+   "year": 2010
+  },
+  {
+   "box": [
+    0.0,
+    30.0,
+    90.0,
+    135.0
+   ],
+   "channel": "tb",
+   "frames": 248,
+   "layer": "pooled",
+   "max_abs_mean": 0.0,
+   "max_abs_std": 4.0744395946035183e-07,
+   "max_mean_over_bound": 0.0,
+   "max_std_over_tol": 0.00126812755170534,
+   "months": [
+    3
+   ],
+   "n_cells": 6,
+   "ok": true,
+   "what": "2010 [3] box tb pooled",
+   "why": [],
+   "year": 2010
+  }
+ ],
+ "failures": [],
+ "generated_utc": "2026-10-08T07:23:11Z",
+ "native": {
+  "max_abs_mean": 0.0,
+  "max_abs_std": 5.32318985335678e-07,
+  "max_mean_over_bound": 0.0,
+  "max_std_over_tol": 0.0016490301642262744,
+  "n_checks": 5
+ },
+ "ok": true,
+ "planes": [
+  {
+   "channel": "tb",
+   "frames": 71,
+   "layer": "native",
+   "max_abs_mean": 0.0,
+   "max_abs_std": 5.32318985335678e-07,
+   "max_mean_over_bound": 0.0,
+   "max_std_over_tol": 0.0016490301642262744,
+   "month": 2,
+   "n_cells": 450,
+   "ok": true,
+   "what": "2010-02 tb native",
+   "why": [],
+   "year": 2010
+  },
+  {
+   "channel": "tb",
+   "frames": 71,
+   "layer": "pooled",
+   "max_abs_mean": 0.0,
+   "max_abs_std": 6.377208343621987e-07,
+   "max_mean_over_bound": 0.0,
+   "max_std_over_tol": 0.0020065574722123165,
+   "month": 2,
+   "n_cells": 96,
+   "ok": true,
+   "what": "2010-02 tb pooled",
+   "why": [],
+   "year": 2010
+  },
+  {
+   "channel": "tb",
+   "frames": 248,
+   "layer": "native",
+   "max_abs_mean": 0.0,
+   "max_abs_std": 4.49923053480461e-07,
+   "max_mean_over_bound": 0.0,
+   "max_std_over_tol": 0.0014157867828890473,
+   "month": 3,
+   "n_cells": 450,
+   "ok": true,
+   "what": "2010-03 tb native",
+   "why": [],
+   "year": 2010
+  },
+  {
+   "channel": "tb",
+   "frames": 248,
+   "layer": "pooled",
+   "max_abs_mean": 0.0,
+   "max_abs_std": 5.735819001984055e-07,
+   "max_mean_over_bound": 0.0,
+   "max_std_over_tol": 0.0017252705881313176,
+   "month": 3,
+   "n_cells": 96,
+   "ok": true,
+   "what": "2010-03 tb pooled",
+   "why": [],
+   "year": 2010
+  },
+  {
+   "channel": "tb",
+   "frames": 16,
+   "layer": "native",
+   "max_abs_mean": 0.0,
+   "max_abs_std": 4.4597446446914546e-07,
+   "max_mean_over_bound": 0.0,
+   "max_std_over_tol": 0.0014280419171170612,
+   "month": 4,
+   "n_cells": 450,
+   "ok": true,
+   "what": "2010-04 tb native",
+   "why": [],
+   "year": 2010
+  },
+  {
+   "channel": "tb",
+   "frames": 16,
+   "layer": "pooled",
+   "max_abs_mean": 0.0,
+   "max_abs_std": 5.771968822898543e-07,
+   "max_mean_over_bound": 0.0,
+   "max_std_over_tol": 0.0018180737295687376,
+   "month": 4,
+   "n_cells": 96,
+   "ok": true,
+   "what": "2010-04 tb pooled",
+   "why": [],
+   "year": 2010
+  }
+ ],
+ "pooled": {
+  "max_abs_mean": 0.0,
+  "max_abs_std": 6.377208343621987e-07,
+  "max_mean_over_bound": 0.0,
+  "max_std_over_tol": 0.0020065574722123165,
+  "n_checks": 5
+ },
+ "seconds": 0.3,
+ "std_rel_tol": 1e-06,
+ "store": "fixture/fxtb"
+}

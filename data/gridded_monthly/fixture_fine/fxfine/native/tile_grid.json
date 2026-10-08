@@ -1,0 +1,135 @@
+{
+ "C": 2,
+ "H": 36,
+ "W": 72,
+ "channels": [
+  {
+   "max": 40.0,
+   "min": -5.0,
+   "name": "sst",
+   "unit": "degC"
+  },
+  {
+   "max": 2.5,
+   "min": -4.0,
+   "name": "log_chl",
+   "unit": "log10(mg m-3) \u2014 fixture"
+  }
+ ],
+ "col_extents": [
+  [
+   0,
+   16
+  ],
+  [
+   16,
+   32
+  ],
+  [
+   32,
+   48
+  ],
+  [
+   48,
+   64
+  ],
+  [
+   64,
+   72
+  ]
+ ],
+ "compression": {
+  "codec": "zstd",
+  "level": 15,
+  "unit": "one zstd frame per (tile, part)"
+ },
+ "format": "family1-monthly-tiles/1",
+ "grid": {
+  "H": 36,
+  "W": 72,
+  "coordinates": "lon = x0 + (col + 0.5) * dx, lat = y0 + (row + 0.5) * dy",
+  "crs": "EPSG:4326",
+  "dx": 5.0,
+  "dy": -5.0,
+  "row_order": "row 0 is the NORTHERNMOST row (fixture, like oc4k)",
+  "x0": -180.0,
+  "y0": 90.0
+ },
+ "group": "fxfine",
+ "index_dtype": "<i8",
+ "index_header_bytes": 128,
+ "index_path": "<yyyy>/m_<yyyy>-<mm>.idx.npy",
+ "index_semantics": "(offset, length) per (ty, tx, part): length > 0 a stored part; length 0 for all three parts \u2014 the tile has no observation this month (sum 0, count 0, m2 0), nothing stored",
+ "index_shape": [
+  3,
+  5,
+  3,
+  2
+ ],
+ "n_tiles_x": 5,
+ "n_tiles_y": 3,
+ "pad": "edge tiles padded to tile x tile with zeros (count 0)",
+ "pad_cols": 8,
+ "pad_rows": 12,
+ "parts": [
+  {
+   "dtype": "<f4",
+   "itemsize": 4,
+   "name": "sum",
+   "part_bytes": 2048
+  },
+  {
+   "dtype": "|u1",
+   "itemsize": 1,
+   "name": "count",
+   "part_bytes": 512
+  },
+  {
+   "dtype": "<f4",
+   "itemsize": 4,
+   "name": "m2",
+   "part_bytes": 2048
+  }
+ ],
+ "row_extents": [
+  [
+   0,
+   16
+  ],
+  [
+   16,
+   32
+  ],
+  [
+   32,
+   36
+  ]
+ ],
+ "shard_path": "<yyyy>/m_<yyyy>-<mm>.zst (mm = 01 .. 12)",
+ "source_channels": [
+  {
+   "max": 40.0,
+   "min": -5.0,
+   "name": "sst",
+   "unit": "degC"
+  },
+  {
+   "max": 2.5,
+   "min": -4.0,
+   "name": "log_chl",
+   "unit": "log10(mg m-3) \u2014 fixture"
+  }
+ ],
+ "source_dtype": "float16",
+ "source_format": "family1-sharded/1",
+ "tile": 16,
+ "tile_order": "C order [row, col, channel], little-endian",
+ "tile_shape": [
+  16,
+  16,
+  2
+ ],
+ "value_offset": 0.0,
+ "write_order": "tiles row-major (ty, then tx); within a tile the parts sum, count, m2 \u2014 one tile's parts are adjacent",
+ "zeros": "sum and m2 are 0.0 where count is 0; m2 is 0.0 where count is 1"
+}

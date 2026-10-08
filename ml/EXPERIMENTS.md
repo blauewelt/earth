@@ -44,6 +44,70 @@ low-pass).
 
 ---
 
+<a id="e-089"></a>
+## E-089 · Long-period averages for the fine family 1.gf grids — native monthly tiles and an exact 0.25° pooled layer of sum / count / m2 — DISPATCHED 2026-10-08
+
+**E-089 · Per year and calendar month, the sum, count and centred sum of
+squared deviations (m2) of every pixel of the four fine family 1.gf grids —
+`oc4k` (OC-CCI ocean colour, 4 km daily), `pace4k` (PACE ocean colour, 4 km
+daily), `sst_acspo02` (ACSPO sea-surface temperature, 2 km daily) and `irtb`
+(geostationary cloud-top brightness temperature, 4 km three-hourly, ±30°) — in
+two layers: native monthly tiles in each store's own 256 × 256 tiling, and an
+exact 0.25° pooled layer in E-088's dense layout (absolute description; the
+build E-088 §8 recommended) · `params` n/a (nothing trains — a DATA build) ·
+`stage` data-build · `data` `tensors/family1_gf/{oc4k,pace4k,sst_acspo02,irtb}`
+→ `tensors/family1_gf/<store>/monthly/` · `arch` n/a · `steps×batch` n/a (no
+training step of any kind) · `resume` none — derived from the published shards,
+each sha256-checked against its store's own store.json**
+
+WHAT IT IS, in sentences that need no other document. Family 1.gf is the set
+of global observation stores finer than 0.25°, each kept at its own
+resolution as compressed tiles per five-day bin. A long-period average of one
+of them — a 20-year July chlorophyll map, say — today means reading every
+native frame: hundreds of gigabytes. An average is a sum divided by a count,
+and sums, counts and (by Chan's formula) the m2 that gives a standard
+deviation all combine across months and years, so this build computes them
+once per (year, month) and publishes them twice: at full resolution, as one
+file of compressed tiles per month (empty tiles not stored, so a box costs a
+few tiles per month), and pooled exactly to 0.25° (so a global map costs what
+a 0.25° store costs). Plan: [E-089 plan](https://blauewelt.github.io/earth/docs.html?f=ml/plans/E089_fine_grid_monthly_sums.md).
+
+HYPOTHESIS (stated before the run). The two layers reproduce numpy over the
+native frames: counts exactly, means within E-088's rigorous float32 bound,
+standard deviations within 10⁻⁶ (|mean| + std), in sampled whole-globe months
+and two period boxes per store; and the pooled sums and counts ARE the native
+layer block-summed, bit for bit, in every month. **Falsifier:** any count
+that differs, any mean past its bound, any std past its tolerance, or any
+pooled cell whose sum is not the native block sum stops that store's upload.
+
+GEOMETRY, measured on the four real tile grids before dispatch. The 4 km grids
+pool as exact 6 × 6 blocks onto the cell-registered 0.25° grid. The 2 km SST is
+12.5 pixels per 0.25°, so it does NOT divide (the brief's "12 × 12" would be
+0.24° cells): its cells are centre-binned, 12/13 pixels a side; the IR grid
+(360/9896°) is centre-binned at 6/7, and its ±30° band maps to the 240 cell
+rows from −30° (its first row's centre lies exactly on −30°). One rule covers
+all four: a cell holds every native pixel whose centre lies in it. Pooled
+counts are uint16 (up to 12,152 values in an IR cell).
+
+TRIALS before dispatch, real data, from the sandbox (one core): `pace4k`
+2025-07 — 31 frames, 0.9 GB read, a 463 MB native month (sum + count + m2:
+2.2 × E-088 §8's sum + count), 190 s to compute; the falsifier over every pixel
+and pooled cell of all 7 channels: native max |Δmean| 1.6 × 10⁻⁴ (in the
+MOANA channel of up to 6 × 10⁴; ratio to the bound 1.000, a rounding tie),
+std ≤ 0.030 of the tolerance; pooled |Δmean| ratio 0.81, std ≤ 0.043; the
+pooled sums the native block sums exactly. `irtb` 2024-02 — 232 frames,
+1.7 GB read, an 83 MB native month, 45 s; falsifier native and pooled max
+|Δmean| 0 (kelvin sums of integers are exact), std ≤ 0.004 of the tolerance,
+block sums exact.
+
+RUN. One rented Vast box (assembly profile), workflow
+`.github/workflows/fine-monthly.yml` (job `export` on the box: per store export
+→ falsifier → Hub commit → every file streamed back and sha256-compared → free;
+job `restore` on a hosted runner writes `data/gridded_monthly_fine_index.json`).
+Result and cost: below, when it lands.
+
+---
+
 <a id="e-081"></a>
 ## E-081 · Family 10.2 — the fishing fleet as a fifth tier-P observation store — BUILT, PUBLISHED AND VERIFIED 2026-09-16 (617,164,038 rows, 0.70 billion apparent fishing hours, 84 minutes and ≈ $0.70 on one rented box; the falsifier holds in all five clauses and the two numbers the plan projected were both corrected by measurement)
 
