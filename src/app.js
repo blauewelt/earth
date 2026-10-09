@@ -3388,6 +3388,12 @@ const RAMPS = {
   // painted on an empty cell, because zero effort renders transparent.
   effort: [[0, 68, 1, 84], [0.25, 59, 82, 139], [0.5, 33, 145, 140],
            [0.75, 94, 201, 98], [1, 253, 231, 37]],
+  // Plasma, unaltered — perceptually uniform and colourblind-safe, for the
+  // floating-plastic points. Not viridis, so the plastic dots cannot be read
+  // on the same scale as the fishing/loitering layers that use it, and not a
+  // house ramp, because plastic is not a physical field of the ocean.
+  plastic: [[0, 13, 8, 135], [0.25, 126, 3, 168], [0.5, 204, 71, 120],
+            [0.75, 248, 149, 64], [1, 240, 249, 33]],
 };
 
 function rampColor(name, t) {
@@ -6072,6 +6078,7 @@ function pointLayerActive() {
     (pointLayers.climatetrace && pointLayers.climatetrace.collection.show) ||
     (pointLayers.argo && pointLayers.argo.collection.show) ||
     (typeof loiterState !== "undefined" && loiterState.on) ||
+    (typeof gpgpState !== "undefined" && gpgpState.on) ||
     !!gbifLayer;
 }
 function glaciersActive() {
@@ -6201,6 +6208,10 @@ function updateLegends() {
     panel.appendChild(loiterLegendEl());
     any = true;
   }
+  if (typeof gpgpState !== "undefined" && gpgpState.on && gpgpState.shown) {
+    panel.appendChild(gpgpLegendEl());
+    any = true;
+  }
   for (const e of Object.values(state.layers)) {
     if (!e.layer) continue;
     if (e.isDelta) {
@@ -6280,6 +6291,7 @@ const STATIC_LAYER_CHIPS = [
   ["toggle-climatetrace", "Facility emissions"],
   ["toggle-argo", "Argo floats"],
   ["toggle-loitering", "Loitering vessels"],
+  ["toggle-gpgp", "Floating plastic"],
   ["toggle-stations", "Monitoring stations"],
   ["toggle-glaciers", "Glaciers"],
   ["toggle-tidelive", "Tide (live)"],
@@ -7046,6 +7058,10 @@ function datelessToast(id) {
     loitering: null,   // date-DRIVEN: its own toast names the snapshot's window
                        // and refuses to show points for a date the snapshot
                        // cannot speak for (loiteringToast)
+    gpgp: "<strong>Floating plastic, North Pacific</strong> is a fixed set of surveys — " +
+      "net tows in summer 2015, two aircraft flights in October 2016, and earlier tows " +
+      "1972–2015 — so the <strong>date selector doesn't change it</strong>. " +
+      "Each dot says when it was sampled.",
     stations: "<strong>Monitoring stations</strong> are fixed sites, so the " +
       "<strong>date selector doesn't change this layer</strong>.",
     glaciers: "<strong>Glaciers (RGI v7)</strong> is a single inventory (~year 2000), so the " +
@@ -8347,6 +8363,373 @@ document.getElementById("toggle-loitering").addEventListener("change", (e) => {
   updateDeltaHint();
 });
 
+/* ====================== floating plastic, North Pacific (GPGP) ===========
+ *
+ * The Ocean Cleanup's survey of the Great Pacific Garbage Patch, published
+ * with Lebreton et al. 2018 (Sci. Rep. 8:4666) as figshare 5873142, CC BY 4.0:
+ *   - 501 fine-mesh MANTA tows and 151 large "MEGA" net tows by 18 vessels,
+ *     summer 2015 — each manta tow carries a micro- and a mesoplastic
+ *     concentration, each mega tow a macroplastic one;
+ *   - 31 photo MOSAICS from two C-130 flights, October 2016, each with a
+ *     megaplastic (> 50 cm) concentration, and the 1,595 individual objects
+ *     identified in them;
+ *   - 3,532 earlier net tows 1972-2015 compiled from the literature.
+ * Baked by `scripts/refresh_data.py gpgp` into one static file; the browser
+ * never talks to figshare (CLAUDE.md §3).
+ *
+ * THE COLOUR IS LOG-SCALED because the values span three to six decades
+ * (4,800 to 4.7 million microplastic pieces per km² in one summer). The ramp's
+ * ends are DERIVED from the data shown, rounded out to whole decades, so the
+ * legend and the dots always agree. A MEASURED ZERO — the net came up empty —
+ * is a hollow grey ring that reads "none caught", never the ramp's foot: a
+ * zero is an observation, and painting it as "a little" would be a lie about
+ * the one thing the tow established.
+ *
+ * Values are the paper's WIND-MIXING-CORRECTED midpoint: waves push light
+ * pieces below a surface net, so a tow in a rough sea undercounts and the
+ * paper scales it up by a modelled factor. The card shows the low-high range
+ * and the RAW value (what was actually caught) beside it, so a reader can see
+ * how much of a number is the correction.
+ *
+ * It is DATELESS (§4b): a closed campaign, so the date selector cannot drive
+ * it — each dot instead carries its own sampling date in its card. */
+const GPGP_FILE = "data/gpgp_plastic.json";
+const GPGP_SETS = {
+  micro: { label: "Microplastics 0.05–0.5 cm", gear: "manta" },
+  meso: { label: "Mesoplastics 0.5–5 cm", gear: "manta" },
+  macro: { label: "Macroplastics 5–50 cm", gear: "mega" },
+  mega: { label: "Megaplastics > 50 cm", gear: "aerial" },
+  objects: { label: "Objects seen from the aircraft" },
+  historical: { label: "Microplastics, earlier surveys 1972–2015" },
+};
+const GPGP_UNITS = { n: "pieces per km²", g: "grams per km²" };
+/* Object types get a categorical palette: a ramp would invent an ordering
+ * between "buoy" and "rope" that does not exist (§2.3). Nets are warm because
+ * the paper's headline is that fishing nets are at least 46% of the mass. */
+const GPGP_OBJ_PALETTE = [
+  ["Bundled net", [255, 140, 26]],
+  ["Loose net", [255, 214, 51]],
+  ["Rope", [196, 130, 74]],
+  ["Buoy", [235, 64, 64]],
+  ["Container", [64, 200, 235]],
+  ["Life ring", [230, 90, 220]],
+  ["Unknown", [170, 176, 186]],
+];
+const GPGP_GEAR = {
+  manta: "fine-mesh manta net (0.5 mm mesh) towed beside the ship",
+  mega: "large “mega” net towed behind the ship for pieces of 5–50 cm",
+  aerial: "photo mosaic taken from a C-130 Hercules aircraft at about 400 m",
+};
+const gpgpState = {
+  data: null, load: null, on: false, collection: null, error: null,
+  set: "micro", unit: "n", shown: 0, zeros: 0, missing: 0, range: null,
+};
+
+function loadGpgp() {
+  if (!gpgpState.load) {
+    gpgpState.load = fetch(GPGP_FILE)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j) => (gpgpState.data = j))
+      .catch(() => { gpgpState.error = "could not be read"; return null; });
+  }
+  return gpgpState.load;
+}
+
+// Compact number: 4,680,000 → "4.68 M", 0.0532 → "0.053".
+function gpgpFmt(v) {
+  if (v == null || !Number.isFinite(Number(v))) return "–";
+  v = Number(v);
+  const a = Math.abs(v);
+  if (a >= 1e6) return `${+(v / 1e6).toPrecision(3)} M`;
+  if (a >= 1e4) return `${+(v / 1e3).toPrecision(3)} k`;
+  if (a >= 100) return Math.round(v).toLocaleString("en-US");
+  if (a === 0) return "0";
+  return String(+v.toPrecision(3));
+}
+
+/* The points of the current picker setting, as {lon, lat, v, kind, rec}.
+ * `v` is the value the colour encodes; null means "this record reports no
+ * value in this unit" (77 earlier tows give only a mass) and the point is
+ * left out and counted, rather than drawn as if it were a zero. */
+function gpgpPoints(data, set = gpgpState.set, unit = gpgpState.unit) {
+  if (!data) return [];
+  if (set === "objects") {
+    return (data.objects || []).map((o) => ({ lon: o[1], lat: o[2], v: null, rec: o, kind: "object" }));
+  }
+  if (set === "historical") {
+    return (data.historical || []).map((h) => ({
+      lon: h[4], lat: h[5], v: unit === "n" ? h[9] : h[10], rec: h, kind: "historical",
+    }));
+  }
+  return (data.events || []).filter((e) => e.c && e.c[set]).map((e) => ({
+    lon: e.lon, lat: e.lat, v: e.c[set][unit] ? e.c[set][unit][0] : null, rec: e, kind: "event",
+  }));
+}
+
+// Decade-rounded log range over the positive values shown.
+function gpgpRange(points) {
+  let lo = Infinity, hi = -Infinity;
+  for (const p of points) {
+    if (p.v == null || !(p.v > 0)) continue;
+    if (p.v < lo) lo = p.v;
+    if (p.v > hi) hi = p.v;
+  }
+  if (!Number.isFinite(lo)) return null;
+  const l = Math.floor(Math.log10(lo)), h = Math.max(l + 1, Math.ceil(Math.log10(hi)));
+  return { lo: Math.pow(10, l), hi: Math.pow(10, h), l, h };
+}
+
+function gpgpFrac(v, r) {
+  return Math.max(0, Math.min(1, (Math.log10(v) - r.l) / (r.h - r.l)));
+}
+
+function gpgpColor(v, r) {
+  const c = rampColor("plastic", gpgpFrac(v, r));
+  return Cesium.Color.fromBytes(c[0], c[1], c[2], 240);
+}
+
+function gpgpObjColor(type) {
+  const hit = GPGP_OBJ_PALETTE.find(([t]) => t === type) || GPGP_OBJ_PALETTE[GPGP_OBJ_PALETTE.length - 1];
+  return hit[1];
+}
+
+const GPGP_CREDIT = `<a href="https://doi.org/10.6084/m9.figshare.5873142" target="_blank" ` +
+  `rel="noopener">Data: Lebreton et al. 2018 / The Ocean Cleanup, CC BY 4.0 ↗</a>`;
+const GPGP_MIXING = "Midpoint is corrected for wind mixing — waves push light pieces " +
+  "below a surface net, so the catch is scaled up by a modelled factor; the raw value " +
+  "is what was actually caught.";
+
+function gpgpWhenOfEvent(ev) {
+  return ev.t.includes("T") ? whenAt("instant", ev.t.slice(0, 16)) : whenAt("day", ev.t.slice(0, 10));
+}
+
+function gpgpEventHtml(ev, set, unit) {
+  const w = gpgpWhenOfEvent(ev);
+  const c = ev.c[set] || {};
+  const other = unit === "n" ? "g" : "n";
+  const row = (u) => {
+    const a = c[u] || [];
+    if (a[0] == null) return `${GPGP_UNITS[u]}: not reported`;
+    if (a[0] === 0) return `<b>none caught</b> (0 ${GPGP_UNITS[u]})`;
+    const rng = a[1] != null && a[2] != null && (a[1] !== a[0] || a[2] !== a[0])
+      ? ` (range ${gpgpFmt(a[1])}–${gpgpFmt(a[2])})` : "";
+    const raw = a[3] != null ? ` · raw ${gpgpFmt(a[3])}` : " · raw not recorded";
+    return `<b>${gpgpFmt(a[0])}</b> ${GPGP_UNITS[u]}${rng}${raw}`;
+  };
+  const bits = [];
+  if (ev.area_km2 != null) bits.push(`${gpgpFmt(ev.area_km2)} km² sampled`);
+  if (ev.dist_km != null) bits.push(`${gpgpFmt(ev.dist_km)} km towed`);
+  if (ev.wind_kn != null) bits.push(`wind ${gpgpFmt(ev.wind_kn)} kn`);
+  if (ev.bft != null) bits.push(`sea state Beaufort ${ev.bft}`);
+  return `<strong>${esc(GPGP_SETS[set].label)}</strong> ${whenStamp(w)}<br/>` +
+    `${row(unit)}<br/>${row(other)}<br/>` +
+    `${esc(GPGP_GEAR[ev.type] || ev.type)} · ${esc(ev.platform)} · event ${esc(ev.id)}<br/>` +
+    `${bits.join(" · ")}<br/>` +
+    `<span class="pick-note">${GPGP_MIXING}</span><br/>${GPGP_CREDIT}`;
+}
+
+function gpgpObjectHtml(o, data) {
+  const ev = (data.events || []).find((e) => e.id === o[0]);
+  const w = ev ? whenAt("day", ev.t.slice(0, 10)) : null;
+  const size = o[5] != null ? `${gpgpFmt(o[5])} m long${o[6] != null ? ` × ${gpgpFmt(o[6])} m wide` : ""}` : "size not recorded";
+  const kg = o[10] != null ? `estimated weight ${gpgpFmt(o[10])} kg (range ${gpgpFmt(o[9])}–${gpgpFmt(o[11])} kg)` : "weight not estimated";
+  return `<strong>${esc(o[3] || "Unknown")}</strong> · ${esc((o[4] || "colour unknown").toLowerCase())} ${whenStamp(w)}<br/>` +
+    `${size}${o[7] === 1 ? " — flagged smaller than 50 cm" : ""}<br/>` +
+    `${kg}${o[8] != null ? ` · ${gpgpFmt(o[8])} m² seen from above` : ""}<br/>` +
+    `${esc(GPGP_GEAR.aerial)} · mosaic ${esc(o[0])}<br/>` +
+    `<span class="pick-note">One object identified by eye in the aircraft's photo mosaics; ` +
+    `the weight is estimated from its top-view area.</span><br/>${GPGP_CREDIT}`;
+}
+
+function gpgpHistHtml(h, data, unit) {
+  const w = h[3] ? whenAt("month", `${h[2]}-${String(h[3]).padStart(2, "0")}`) : whenAt("year", String(h[2]));
+  const val = (u, v) => v == null ? `${GPGP_UNITS[u]}: not reported`
+    : v === 0 ? `<b>none caught</b> (0 ${GPGP_UNITS[u]})` : `<b>${gpgpFmt(v)}</b> ${GPGP_UNITS[u]}`;
+  const first = unit === "n" ? val("n", h[9]) : val("g", h[10]);
+  const second = unit === "n" ? val("g", h[10]) : val("n", h[9]);
+  const origin = h[0] != null ? data.origins[h[0]] : null;
+  const ref = h[1] != null ? data.refs[h[1]] : null;
+  const gear = [h[6] ? `${h[6]} net` : "net type not recorded",
+    h[7] != null ? `${h[7]} µm mesh` : null, h[8] != null ? `towed ${h[8]} m deep` : null]
+    .filter(Boolean).join(", ");
+  return `<strong>Microplastics, earlier survey</strong> ${whenStamp(w)}<br/>` +
+    `${first}<br/>${second}<br/>` +
+    `${esc(gear)}<br/>` +
+    `${origin ? `cruise ${esc(origin)} · ` : ""}${ref ? esc(ref) : "reference not given"}` +
+    `${h[11] === 1 ? " · inside the patch" : h[11] === 0 ? " · outside the patch" : ""}<br/>` +
+    `<span class="pick-note">Compiled by Lebreton et al. from earlier published tows; ` +
+    `not corrected for wind mixing, and nets and mesh sizes differ between surveys, so ` +
+    `compare these with care.</span><br/>${GPGP_CREDIT}`;
+}
+
+/* Rebuilt only when the picker or the unit changes — the data is fixed, so
+ * nothing else can change what is drawn. */
+function buildGpgpPoints() {
+  if (!gpgpState.collection) {
+    gpgpState.collection = viewer.scene.primitives.add(new Cesium.PointPrimitiveCollection());
+  }
+  const col = gpgpState.collection;
+  col.removeAll();
+  const data = gpgpState.data;
+  gpgpState.shown = gpgpState.zeros = gpgpState.missing = 0;
+  gpgpState.range = null;
+  if (!data) return;
+  const set = gpgpState.set, unit = gpgpState.unit;
+  const pts = gpgpPoints(data, set, unit);
+  const r = set === "objects" ? null : gpgpRange(pts);
+  gpgpState.range = r;
+  const ZERO = Cesium.Color.fromBytes(150, 155, 165, 255);
+  for (const p of pts) {
+    let html, opts;
+    if (p.kind === "object") {
+      const rgb = gpgpObjColor(p.rec[3]);
+      const len = Number(p.rec[5]) || 0.5;
+      opts = {
+        pixelSize: Math.max(4, Math.min(13, 4 + 3 * Math.log2(1 + len))),
+        color: Cesium.Color.fromBytes(rgb[0], rgb[1], rgb[2], 235),
+        outlineColor: Cesium.Color.BLACK.withAlpha(0.6), outlineWidth: 1,
+      };
+      html = gpgpObjectHtml(p.rec, data);
+    } else {
+      if (p.v == null) { gpgpState.missing++; continue; }
+      if (p.v === 0) {
+        gpgpState.zeros++;
+        opts = { pixelSize: 5, color: Cesium.Color.TRANSPARENT, outlineColor: ZERO, outlineWidth: 1.5 };
+      } else {
+        opts = {
+          pixelSize: 8, color: gpgpColor(p.v, r),
+          outlineColor: Cesium.Color.BLACK.withAlpha(0.6), outlineWidth: 1,
+        };
+      }
+      html = p.kind === "event" ? gpgpEventHtml(p.rec, set, unit) : gpgpHistHtml(p.rec, data, unit);
+    }
+    col.add({
+      position: Cesium.Cartesian3.fromDegrees(p.lon, p.lat),
+      ...opts,
+      id: { kind: "plastic", set, v: p.v, rec: p.rec, html },
+    });
+    gpgpState.shown++;
+  }
+  const metaEl = document.getElementById("meta-gpgp");
+  if (metaEl) {
+    const extra = [];
+    if (gpgpState.zeros) extra.push(`${gpgpState.zeros} with none caught`);
+    if (gpgpState.missing) extra.push(`${gpgpState.missing} not shown — no value in ${GPGP_UNITS[unit]}`);
+    metaEl.textContent = `${gpgpState.shown.toLocaleString("en-US")} points · ` +
+      `${GPGP_SETS[set].label}${extra.length ? ` · ${extra.join(" · ")}` : ""} · ${data.attribution}`;
+  }
+}
+
+function gpgpLegendEl() {
+  const div = document.createElement("div");
+  div.className = "legend-item";
+  const set = gpgpState.set, unit = gpgpState.unit;
+  if (set === "objects") {
+    div.innerHTML = `<div class="legend-title">Objects seen from the aircraft — type (dot size: length)</div>`;
+    const list = document.createElement("div");
+    list.className = "legend-classes";
+    for (const [label, rgb] of GPGP_OBJ_PALETTE) {
+      const row = document.createElement("div");
+      row.className = "legend-class";
+      row.innerHTML = `<span class="legend-swatch" style="background:rgb(${rgb.join(",")})"></span>` +
+        `<span class="legend-class-label">${label}</span>`;
+      list.appendChild(row);
+    }
+    div.appendChild(list);
+    return div;
+  }
+  const r = gpgpState.range;
+  div.innerHTML = `<div class="legend-title">${esc(GPGP_SETS[set].label)} — ${GPGP_UNITS[unit]}</div>`;
+  if (!r) return div;
+  const wrap = document.createElement("div");
+  wrap.className = "legend-bar-wrap";
+  const canvas = document.createElement("canvas");
+  const W = 268, H = 14, dpr = window.devicePixelRatio || 1;
+  canvas.width = W * dpr; canvas.height = H * dpr;
+  canvas.style.height = H + "px";
+  canvas.className = "legend-bar";
+  const ctx = canvas.getContext("2d");
+  ctx.scale(dpr, dpr);
+  for (let i = 0; i < 120; i++) {
+    const c = rampColor("plastic", i / 119);
+    ctx.fillStyle = `rgb(${c[0]},${c[1]},${c[2]})`;
+    ctx.fillRect((i / 120) * W, 0, W / 120 + 1, H);
+  }
+  const tip = document.createElement("div");
+  tip.className = "legend-tip hidden";
+  // the read-out inverts exactly the transform the painter applied (gpgpFrac)
+  canvas.addEventListener("mousemove", (e) => {
+    const rect = canvas.getBoundingClientRect();
+    const frac = Cesium.Math.clamp((e.clientX - rect.left) / rect.width, 0, 1);
+    tip.textContent = `${gpgpFmt(Math.pow(10, r.l + frac * (r.h - r.l)))} ${GPGP_UNITS[unit]}`;
+    tip.style.left = `${Math.min(Math.max(frac * rect.width - 28, 0), rect.width - 80)}px`;
+    tip.classList.remove("hidden");
+  });
+  canvas.addEventListener("mouseleave", () => tip.classList.add("hidden"));
+  wrap.appendChild(tip);
+  wrap.appendChild(canvas);
+  div.appendChild(wrap);
+  const range = document.createElement("div");
+  range.className = "legend-range";
+  range.innerHTML = `<span>${gpgpFmt(r.lo)}</span><span>log scale</span><span>${gpgpFmt(r.hi)}</span>`;
+  div.appendChild(range);
+  if (gpgpState.zeros) {
+    div.insertAdjacentHTML("beforeend",
+      `<div class="legend-note">hollow grey ring = net came up empty (none caught)</div>`);
+  }
+  return div;
+}
+
+function gpgpLayerState() {
+  const d = gpgpState.data;
+  return {
+    on: gpgpState.on, loaded: !!d, set: gpgpState.set, unit: gpgpState.unit,
+    shown: gpgpState.shown, zeros: gpgpState.zeros, missing: gpgpState.missing,
+    range: gpgpState.range, counts: d ? d.counts : null, periods: d ? d.periods : null,
+    attribution: d ? d.attribution : null,
+  };
+}
+
+function gpgpRebuild() {
+  if (!gpgpState.on || !gpgpState.data) return;
+  buildGpgpPoints();
+  updateLegends();
+}
+
+document.getElementById("toggle-gpgp").addEventListener("change", (e) => {
+  gpgpState.on = e.target.checked;
+  if (gpgpState.on) {
+    maybeDatelessToast("gpgp");
+    loadGpgp().then(() => {
+      if (!gpgpState.data) {
+        showToast(`<strong>Floating plastic</strong> could not be read — ` +
+          `<code>${GPGP_FILE}</code> is baked by <code>scripts/refresh_data.py gpgp</code>. ` +
+          `The rest of the globe is unaffected.`, { key: "gpgp-err" });
+        return;
+      }
+      buildGpgpPoints();
+      if (gpgpState.collection) gpgpState.collection.show = gpgpState.on;
+      updateLegends();
+      updateDeltaHint();
+    });
+  } else {
+    if (gpgpState.collection) gpgpState.collection.show = false;
+    updateLegends();
+  }
+  updateDeltaHint();
+});
+document.getElementById("gpgp-set").addEventListener("change", (e) => {
+  gpgpState.set = e.target.value;
+  // the unit choice means nothing for objects (they have a type, not a density)
+  const u = document.getElementById("gpgp-unit");
+  if (u) u.disabled = gpgpState.set === "objects";
+  gpgpRebuild();
+});
+document.getElementById("gpgp-unit").addEventListener("change", (e) => {
+  gpgpState.unit = e.target.value === "g" ? "g" : "n";
+  gpgpRebuild();
+});
+
 /* Randolph Glacier Inventory v7 — ~274k glaciers as centroid points sized by area.
  * Two colourings: by extent (area), or by 2000-2020 thinning rate (Hugonnet 2021),
  * so you can see which glaciers are actually melting. Display-only for performance. */
@@ -9229,10 +9612,10 @@ new Cesium.ScreenSpaceEventHandler(viewer.scene.canvas).setInputAction((m) => {
    * probe, because a scene pick on every mouse move is a cost the software-GL
    * render loop cannot carry. It shows exactly the card a click shows, and
    * falls through to the ordinary probe when the cursor is not on an event. */
-  if (loiterState.on && loiterState.shown) {
+  if ((loiterState.on && loiterState.shown) || (gpgpState.on && gpgpState.shown)) {
     probeDwellTimer = setTimeout(() => {
       const hit = seeThrough(viewer.scene.pick({ x, y }));
-      if (hit?.id?.kind === "loitering") {
+      if (hit?.id?.kind === "loitering" || hit?.id?.kind === "plastic") {
         pickCard.innerHTML = hit.id.html;
         pickCard.classList.remove("hidden");
         return;
@@ -18544,4 +18927,11 @@ window.__earth = {
   buildLoiterPoints,
   refreshLoitering,
   get loiterCollection() { return loiterState.collection; },
+  // floating plastic, North Pacific (The Ocean Cleanup / Lebreton et al. 2018)
+  loadGpgp,
+  gpgpPoints,
+  gpgpRange,
+  gpgpLayerState,
+  buildGpgpPoints,
+  get gpgpCollection() { return gpgpState.collection; },
 };

@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>earth — open climate data on a globe</title>
-  <meta name="description" content="A 3D globe for the world's open climate data: NASA GIBS layers, AMOC monitoring network, live data layers, and a 276-dataset open-data catalog." />
+  <meta name="description" content="A 3D globe for the world's open climate data: NASA GIBS layers, AMOC monitoring network, live data layers, and a 277-dataset open-data catalog." />
   <!-- Installable on a phone home screen: manifest + icons, no service worker.
        A worker would be the one thing able to serve last week's JavaScript
        after a deploy, which is the exact failure the ?v= stamps below exist to
@@ -70,7 +70,7 @@
           eighteen satellite layers, the ocean's interior from Argo floats and the GLORYS
           reanalysis, glaciers, biodiversity, facility-level emissions — plus dashboards for
           global temperature, Earth's energy imbalance, the AMOC and sea level, and a searchable
-          catalog of 276 open datasets. Public data only; no keys, no accounts, no server.</p>
+          catalog of 277 open datasets. Public data only; no keys, no accounts, no server.</p>
         <p class="hint">In a hurry? The words in the tagline above are <strong>one-click
           scenes</strong> — "sea ice" puts the daily sea-ice field on the globe, "floats" the
           live Argo fleet, and so on. Each shows exactly one layer (and replaces whatever was
@@ -149,7 +149,7 @@
           humidity and wind at 13 heights from the ERA5 reanalysis, and derived maps (fishing
           effort, the model's climatology) for any period, month, box and resolution, as a file
           built in your browser ·
-          <em>Catalog</em> — all 276 datasets ·
+          <em>Catalog</em> — all 277 datasets ·
           <em>About</em> — background &amp; further reading.</p>
       </details>
       <div class="control-row">
@@ -386,6 +386,51 @@
           <div><span>Recorded</span>rolling last 30 days &mdash; rebaked daily; the layer shows events whose drift overlaps the date you pick</div>
           <div><span>Interval</span>events &mdash; each has its own start and end instant</div>
           <div><span>Spatial</span>one point per event</div>
+        </div>
+      </div>
+      <!-- Floating plastic in the North Pacific. Baked by
+           `scripts/refresh_data.py gpgp` from The Ocean Cleanup's published
+           figshare files (Lebreton et al. 2018, CC BY 4.0); the browser reads
+           only data/gpgp_plastic.json. A closed 2015-16 campaign plus a
+           1972-2015 compilation, so the date selector does not drive it and
+           every dot carries its own sampling date. -->
+      <div class="layer-item">
+        <div class="layer-head"><input type="checkbox" id="toggle-gpgp" title="Show / hide layer"/>
+          <a class="title-link" href="https://www.nature.com/articles/s41598-018-22939-w" target="_blank" rel="noopener" title="Open the paper the data was published with">Floating plastic, North Pacific — net tows and aircraft survey (The Ocean Cleanup), points</a></div>
+        <div class="control-row" style="margin:6px 0 2px">
+          <label for="gpgp-set">Show</label>
+          <select id="gpgp-set">
+            <option value="micro" selected>Microplastics 0.05–0.5 cm — fine net, 2015 (501)</option>
+            <option value="meso">Mesoplastics 0.5–5 cm — fine net, 2015 (501)</option>
+            <option value="macro">Macroplastics 5–50 cm — large net, 2015 (151)</option>
+            <option value="mega">Megaplastics &gt; 50 cm — aircraft, 2016 (31)</option>
+            <option value="objects">Objects seen from the aircraft, 2016 (1,595)</option>
+            <option value="historical">Microplastics, earlier surveys 1972–2015 (compiled) (3,532)</option>
+          </select>
+        </div>
+        <div class="control-row" style="margin:2px 0 2px">
+          <label for="gpgp-unit">As</label>
+          <select id="gpgp-unit">
+            <option value="n" selected>pieces per km²</option>
+            <option value="g">grams per km²</option>
+          </select>
+        </div>
+        <div class="meta"><span id="meta-gpgp">One dot per net tow or aircraft mosaic, coloured by how much plastic it found · Data: Lebreton et al. 2018 / The Ocean Cleanup, CC BY 4.0</span></div>
+        <div class="layer-tip">
+          <p class="tip-sum">How much plastic floats in the Great Pacific Garbage Patch &mdash; the
+            accumulation zone between Hawaii and California where ocean currents converge. In summer
+            2015 The Ocean Cleanup sent 18 vessels to tow nets across it (a fine-mesh net catches
+            pieces down to 0.5&nbsp;mm, a larger net the 5&ndash;50&nbsp;cm pieces), and in October
+            2016 a C-130 aircraft photographed it from about 400&nbsp;m to count objects over
+            50&nbsp;cm. From these the paper estimated at least 79,000 tonnes of floating plastic
+            (45,000&ndash;129,000) in about 1.6 million km², over three-quarters of the mass in
+            pieces larger than 5&nbsp;cm and at least 46% of it fishing nets, while 94% of the
+            1.8 trillion pieces are microplastics. Each dot is one tow or one photo mosaic; values
+            are corrected for wind mixing (waves push light pieces below the net), and the card
+            also shows what was actually caught.</p>
+          <div><span>Recorded</span>a closed set of surveys &mdash; net tows 2015-07-25 → 2015-09-20, aircraft 2016-10-02 → 2016-10-06, plus a compilation of earlier tows 1972–2015; not updated</div>
+          <div><span>Interval</span>a one-off campaign &mdash; each dot is stamped with the day (or, for the earlier tows, the month) it was sampled</div>
+          <div><span>Spatial</span>points &mdash; one point per sampling event (a tow of a few km, or a photo mosaic) or per object</div>
         </div>
       </div>
       <div class="layer-item">
@@ -1431,7 +1476,7 @@
     </section>
 
     <section id="panel-catalog" class="panel hidden">
-      <input type="search" id="catalog-search" placeholder="Search 276 datasets…" />
+      <input type="search" id="catalog-search" placeholder="Search 277 datasets…" />
       <div class="control-row filters">
         <select id="catalog-domain"><option value="">All domains</option></select>
       </div>
@@ -1453,7 +1498,7 @@
         forest loss, water storage, energy balance …), the ocean interior from Argo floats and the GLORYS
         reanalysis (currents, mixed-layer depth, subsurface heat), the Randolph glacier inventory
         with melt rates, GBIF biodiversity, Climate TRACE emitters, and the AMOC monitoring
-        network. Behind it: a machine-readable catalog of 276 open climate datasets and dashboards
+        network. Behind it: a machine-readable catalog of 277 open climate datasets and dashboards
         for temperature, the planet's energy imbalance, the AMOC and sea level. The full guide
         lives at the top of the <em>Layers</em> tab.</p>
       <h2>Tips</h2>
@@ -1489,7 +1534,7 @@
            not obvious from the page, and "I reloaded and see no change" is
            indistinguishable from "the change isn't there". This is the sha256
            prefix of src/app.js, the same string as its ?v= stamp. -->
-      <p class="build-line">Build <code id="build-id">37965f65</code></p>
+      <p class="build-line">Build <code id="build-id">961e2b1d</code></p>
     </section>
 
     <footer>
@@ -1507,7 +1552,10 @@
            and the loitering events are served under: the exact string
            "Powered by Global Fishing Watch", linked to globalfishingwatch.org.
            It also rides on each layer's own credit and hover card. -->
-      <a href="https://globalfishingwatch.org">Powered by Global Fishing Watch</a> (CC&nbsp;BY-NC&nbsp;4.0)
+      <a href="https://globalfishingwatch.org">Powered by Global Fishing Watch</a> (CC&nbsp;BY-NC&nbsp;4.0) ·
+      <!-- CC BY 4.0 attribution for the floating-plastic layer; it also rides
+           on the layer's own meta line, hover card and every dot's card. -->
+      <a href="https://doi.org/10.6084/m9.figshare.5873142">Data: Lebreton et al. 2018 / The Ocean Cleanup</a> (CC&nbsp;BY&nbsp;4.0)
     </footer>
   </div>
 
@@ -1555,6 +1603,6 @@
        app, and the app copes when they did not (the tab says so). -->
   <script src="lib/fzstd.js?v=207dc305"></script>
   <script src="src/f1data.js?v=65ea4d33"></script>
-  <script src="src/app.js?v=37965f65"></script>
+  <script src="src/app.js?v=961e2b1d"></script>
 </body>
 </html>

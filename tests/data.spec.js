@@ -2579,3 +2579,67 @@ test.describe("loitering.json", () => {
     }
   });
 });
+
+/* ============ data/gpgp_plastic.json (The Ocean Cleanup, Lebreton 2018) =====
+ *
+ * Baked by `scripts/refresh_data.py gpgp` from figshare 5873142. The bake
+ * already asserts its joins and the Megaplastics lat/lon swap; these tests
+ * guard the FILE, so a hand edit or a re-bake that skipped those checks still
+ * fails. Min/max reductions only — never one expect() per point (§4). */
+test.describe("gpgp_plastic.json", () => {
+  const d = read("gpgp_plastic.json");
+
+  test("the five parts carry the counts the published files have", () => {
+    expect(d.counts).toEqual({ micro: 501, meso: 501, macro: 151, mega: 31,
+      events: 683, objects: 1595, historical: 3532 });
+    expect(d.events.length).toBe(683);
+    expect(d.objects.length).toBe(1595);
+    expect(d.historical.length).toBe(3532);
+    const has = (k) => d.events.filter((e) => e.c && e.c[k]).length;
+    expect([has("micro"), has("meso"), has("macro"), has("mega")]).toEqual([501, 501, 151, 31]);
+    const types = {};
+    for (const e of d.events) types[e.type] = (types[e.type] || 0) + 1;
+    expect(types).toEqual({ manta: 501, mega: 151, aerial: 31 });
+  });
+
+  test("the aircraft mosaics sit in the patch — catches the swapped lat/lon sheet", () => {
+    const air = d.events.filter((e) => e.type === "aerial");
+    const lats = air.map((e) => e.lat), lons = air.map((e) => e.lon);
+    expect(Math.min(...lats)).toBeGreaterThanOrEqual(25);
+    expect(Math.max(...lats)).toBeLessThanOrEqual(40);
+    expect(Math.min(...lons)).toBeGreaterThanOrEqual(-160);
+    expect(Math.max(...lons)).toBeLessThanOrEqual(-125);
+    const olat = d.objects.map((o) => o[2]), olon = d.objects.map((o) => o[1]);
+    expect(Math.min(...olat)).toBeGreaterThanOrEqual(25);
+    expect(Math.max(...olat)).toBeLessThanOrEqual(40);
+    expect(Math.min(...olon)).toBeGreaterThanOrEqual(-160);
+    expect(Math.max(...olon)).toBeLessThanOrEqual(-125);
+    // every object hangs off a real aircraft mosaic
+    const airIds = new Set(air.map((e) => e.id));
+    expect(d.objects.filter((o) => !airIds.has(o[0])).length).toBe(0);
+  });
+
+  test("every value has an observation time derived from the files (§2.9)", () => {
+    const bad = d.events.filter((e) => !/^\d{4}-\d{2}-\d{2}(T\d{2}:\d{2}Z)?$/.test(e.t)).length;
+    expect(bad).toBe(0);
+    expect(d.periods.manta).toEqual({ start: "2015-07-25", end: "2015-09-20" });
+    expect(d.periods.mega).toEqual({ start: "2015-07-25", end: "2015-08-18" });
+    expect(d.periods.aerial).toEqual({ start: "2016-10-02", end: "2016-10-06" });
+    const yrs = d.historical.map((h) => h[2]);
+    expect(Math.min(...yrs)).toBe(1972);
+    expect(Math.max(...yrs)).toBe(2015);
+    expect(d.historical.filter((h) => !(h[3] >= 1 && h[3] <= 12)).length).toBe(0);
+  });
+
+  test("values are densities, zeros are real, and the attribution travels with them", () => {
+    const mids = d.events.filter((e) => e.c.micro).map((e) => e.c.micro.n[0]);
+    expect(Math.min(...mids)).toBeGreaterThan(1000);        // pieces per km², not counts
+    expect(Math.max(...mids)).toBeLessThan(1e8);
+    // measured zeros survive the bake (nets that came up empty)
+    expect(d.historical.filter((h) => h[9] === 0).length).toBeGreaterThan(100);
+    expect(d.attribution).toBe("Data: Lebreton et al. 2018 / The Ocean Cleanup, CC BY 4.0");
+    expect(d.licence).toBe("CC BY 4.0");
+    expect(d.source).toBe("https://doi.org/10.6084/m9.figshare.5873142");
+    expect(fs.statSync(path.join(DATA, "gpgp_plastic.json")).size).toBeLessThan(1.5e6);
+  });
+});

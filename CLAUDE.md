@@ -422,6 +422,7 @@ A new layer is not done until it has **all** of:
    | Model climatology, family 7 (grid) | ✗ | ✗ | already a multi-decade average, one calendar month per frame — a window would blend two months' normals into a number no trainer ever subtracted, and a per-pixel difference between two dates is just the seasonal cycle the ±1 month stepper already shows |
    | Fishing effort, AIS (grid) | ✗ | ✗ | the cell is ALREADY a monthly SUM of vessel-hours: averaging one over a 12-day window produces a number in no unit at all, and differencing two per pixel differences two sums over different numbers of days unless the window happens to land on a month. The family-7 byte-count argument applies unchanged on top of that — each month is one 8.3 MB range read. The month is the window |
    | Loitering vessels (points) | ✗ | ✗ | not a raster at all: each event is an interval with a start and an end, and the layer shows the ones whose interval overlaps the selected day. "The average of an event" is not a thing, and a difference of two days' event sets is a list, not a field |
+   | Floating plastic, North Pacific (points) | ✗ | ✗ | points from a closed 2015–16 campaign plus a 1972–2015 compilation: nothing to average over a window, and each dot is a different tow at a different place, so there is no per-pixel series to difference |
 6. **Catalog consistency** — the dataset exists in `data/catalog.json`; set
    `globe: true` and append "Live globe layer in this app." to its notes.
    **Exception, for layers that are not datasets:** a layer describing our OWN
@@ -631,7 +632,8 @@ Enabling any layer with no per-date data fires an animated warning toast
 (`showToast` / `datelessToast(id)`) so the date selector's lack of effect is
 never a silent mystery. This applies to grid climatologies, night lights
 (fixed composite), and the data/point layers (GBIF all-time, Climate TRACE
-annual inventory, Argo latest positions, stations, glaciers single inventory).
+annual inventory, Argo latest positions, stations, glaciers single inventory,
+the 2015–16 floating-plastic surveys).
 Any NEW layer that ignores the date selector must be added to `datelessToast`;
 date-driven rasters must return `null` there. An untimed RASTER may carry its
 own `datelessNote` (elevation: "a fixed terrain model"; HBASE/GMIS: "one map
@@ -2471,9 +2473,53 @@ placeholder (`fixture: true`, written deterministically by
 `scripts/make_loitering_fixture.py`) keeps the layer reviewable before the
 secret exists and says so in its own toast.
 
+**Floating plastic, North Pacific (2026-10-09).** Chris: *"Can you display the
+data as a layer on Blauewelt.org first?"* — The Ocean Cleanup's public survey of
+the Great Pacific Garbage Patch, published with Lebreton et al. 2018 (Sci. Rep.
+8:4666) as figshare article 5873142, CC BY 4.0. `scripts/refresh_data.py gpgp`
+(needs `xlrd`) resolves the files through the keyless figshare API by NAME — the
+figshare web page answers 403 to scripts — and bakes `data/gpgp_plastic.json`
+(0.56 MB): 683 sampling events (501 fine-mesh manta tows carrying a micro- and a
+mesoplastic concentration, 151 large "mega" net tows carrying a macroplastic one,
+all summer 2015 from RV Ocean Starr and 17 sailing vessels; 31 photo mosaics from
+a C-130 in October 2016 carrying a megaplastic one), the 1,595 objects identified
+in the mosaics, and 3,532 earlier net tows compiled for 1972–2015 (with
+origin/reference lookup tables). Each value is `[midpoint, lower, higher, raw]`
+in pieces/km² and g/km²; mid/lower/higher are the paper's **wind-mixing**
+correction (waves push light pieces below a surface net) and raw is what was
+actually caught — the card prints both, so a reader sees how much of a number
+is the correction. **Two traps in the published files, both asserted by the
+bake:** the *Megaplastics* sheet has its Longitude and Latitude columns
+**swapped** (~33 under "Longitude", ~−141 under "Latitude"), so every position
+comes from `StationInfo`'s start/end midpoint and each concentration row must
+match it within 0.01°, the swap allowed for that one sheet only; and the event
+IDs are **floats** with representation noise (`1.2000000000000002` in
+StationInfo, `1.2` in the concentration sheets — a naive join drops 35 of 501
+rows), so IDs are normalised by rounding to 6 decimals and every join — four
+sheets and `MosaicDebrisInfo` — must be 100%. Text cells read `"nan"` for
+missing values and are mapped to null. The layer is hand-written (`gpgpState`,
+a `PointPrimitiveCollection` rebuilt only on a picker or unit change) with a
+six-way picker (four size classes, the aircraft objects, the earlier surveys)
+and a pieces/grams switch. **Colour is log10 on the plasma ramp, its ends
+derived from the values shown and rounded out to whole decades**, and the
+legend's hover inverts the same transform. **A measured zero is a hollow grey
+ring reading "none caught"**, never the ramp's foot — 1,506 of the earlier tows
+and 7 mesoplastic tows found nothing, and that is an observation. Earlier tows
+that report only a mass (77) are LEFT OUT in pieces mode and counted on the
+row, never drawn as zero. Objects are categorical (seven types, a swatch legend
+— nets warm because the paper's headline is that nets are ≥ 46% of the mass;
+dot size by length). Dateless (§4b toast); every card stamps its own instant
+(UTC start of the tow), day (aircraft) or month (earlier tows). Headline numbers
+in the hover card were checked against the paper's abstract on 2026-10-09:
+≥ 79,000 t (45–129 kt), 1.8 trillion pieces, ~1.6 million km², > 3/4 of the
+mass in pieces > 5 cm, 94% of pieces microplastic, nets ≥ 46% of the mass.
+Not baked (optional later): the paper's modelled patch outline and mass map
+(`GPGP_contours.zip`, `MassConcentrationAllSizes.tif`) — derived, not
+observations. Not public anywhere: the raw aerial imagery, lidar and SWIR.
+
 **Data pipeline** (`scripts/refresh_data.py`): one function per snapshot —
 climatetrace, argo, rapid, sealevel, glaciers (RGI7 tars + Hugonnet parquet
-join), gistemp, gpcp, eobs, oisst, meteoswiss. Grid snapshots share
+join), gistemp, gpcp, eobs, oisst, meteoswiss, loitering, gpgp. Grid snapshots share
 `_bin_to_grid`/`_write_grid` (nearest scatter-binning onto regular grids).
 
 **Testing** (325 Playwright specs, plus 70 node tests of the Data tab reader): app behaviour (`tests/app.spec.js`) + data

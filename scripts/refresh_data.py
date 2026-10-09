@@ -7,6 +7,8 @@ Produces (relative to repo root):
   data/rapid_moc.json     - RAPID 26.5N overturning transport time series (rapid.ac.uk)
   data/loitering.json     - last 30 days of Global Fishing Watch loitering events
                             (needs GFW_API_TOKEN in the environment; CC BY-NC 4.0)
+  data/gpgp_plastic.json  - The Ocean Cleanup GPGP net tows + aircraft survey 2015-16 and the
+                            1972-2015 tow compilation (Lebreton et al. 2018; CC BY 4.0; needs xlrd)
 
 Run from the repo root:  python3 scripts/refresh_data.py
 Requires: netCDF4 (pip install netCDF4)
@@ -2263,6 +2265,282 @@ def tides():
     print(f"  wrote tide_constituents.json ({sz:.1f} MB, 5 constituents)")
 
 
+# -------------------------------------------------------------------- gpgp ---
+# Floating plastic in the North Pacific: The Ocean Cleanup's 2015 net
+# expedition and 2016 aircraft survey of the Great Pacific Garbage Patch, plus
+# the 1972-2015 compilation of earlier net tows, as published with
+#   Lebreton et al. 2018, "Evidence that the Great Pacific Garbage Patch is
+#   rapidly accumulating plastic", Sci. Rep. 8:4666, doi:10.1038/s41598-018-22939-w
+# Data: figshare article 5873142 (doi:10.6084/m9.figshare.5873142), CC BY 4.0.
+#
+# The figshare WEB page answers 403 to scripts; the API and the ndownloader
+# links are keyless. File ids are resolved through the API by NAME, never typed.
+#
+# Two traps, both in the published files (seen 2026-10-08/09, asserted below):
+#  * the Megaplastics sheet has its Longitude and Latitude columns SWAPPED
+#    ("Longitude" ~ 33, "Latitude" ~ -141). Every position here comes from
+#    StationInfo; each concentration row must agree with its StationInfo
+#    midpoint within 0.01 deg — the swap is allowed for that one sheet only,
+#    anything else refuses the bake.
+#  * event IDs are FLOATS in the sheets ("1.2000000000000002" in StationInfo,
+#    1.2 in the concentration sheets), so a naive join silently drops ~7% of
+#    rows. IDs are normalised by rounding to 6 decimals and the join must be
+#    100% for all four sheets and for MosaicDebrisInfo.
+GPGP_ARTICLE = "5873142"
+GPGP_DOI = "10.6084/m9.figshare.5873142"
+GPGP_PAPER_DOI = "10.1038/s41598-018-22939-w"
+GPGP_ATTRIBUTION = "Data: Lebreton et al. 2018 / The Ocean Cleanup, CC BY 4.0"
+GPGP_SHEETS = [   # (size-class key, sheet name, expected rows, sampling type)
+    ("micro", "Microplastics (0.05-0.5 cm)", 501, "Manta trawl"),
+    ("meso", "Mesoplastics (0.5-5 cm)", 501, "Manta trawl"),
+    ("macro", "Macroplastics (5-50 cm)", 151, "Mega trawl"),
+    ("mega", "Megaplastics (>50 cm)", 31, "RGB mosaic"),
+]
+GPGP_TYPE = {"Manta trawl": "manta", "Mega trawl": "mega", "RGB mosaic": "aerial"}
+
+
+def _sig(v, n=4):
+    """Round to n significant figures; None for blanks/NaN."""
+    try:
+        v = float(v)
+    except (TypeError, ValueError):
+        return None
+    if v != v or v in (float("inf"), float("-inf")):
+        return None
+    if v == 0:
+        return 0
+    from math import floor, log10
+    r = round(v, -int(floor(log10(abs(v)))) + (n - 1))
+    return int(r) if r == int(r) and abs(r) < 1e15 else r
+
+
+def _gpgp_id(v):
+    """Event IDs arrive as floats with representation noise."""
+    x = round(float(v), 6)
+    s = f"{x:.6f}".rstrip("0").rstrip(".")
+    return s if s else "0"
+
+
+def gpgp():
+    import xlrd
+    print("GPGP plastic (Lebreton et al. 2018): resolving files via figshare API ...")
+    files = fetch_json(f"https://api.figshare.com/v2/articles/{GPGP_ARTICLE}/files")
+    by_name = {f["name"]: f for f in files}
+    paths = {}
+    for nm in ("Lebreton2018_Concentration.xls", "Lebreton2018_SamplingInformation.xls",
+               "Lebreton2018_HistoricalDataset.xls"):
+        f = by_name[nm]
+        paths[nm] = _download(f["download_url"], f"/tmp/nc/gpgp_{f['id']}_{nm}")
+
+    samp = xlrd.open_workbook(paths["Lebreton2018_SamplingInformation.xls"])
+    conc = xlrd.open_workbook(paths["Lebreton2018_Concentration.xls"])
+    hist = xlrd.open_workbook(paths["Lebreton2018_HistoricalDataset.xls"])
+
+    def rows(sheet):
+        hdr = [str(h).strip() for h in sheet.row_values(0)]
+        for r in range(1, sheet.nrows):
+            yield dict(zip(hdr, sheet.row_values(r)))
+
+    def num(v):
+        try:
+            v = float(v)
+        except (TypeError, ValueError):
+            return None
+        return None if v != v else v
+
+    # --- StationInfo: one record per sampling event --------------------------
+    events, order = {}, []
+    for r in rows(samp.sheet_by_name("StationInfo")):
+        eid = _gpgp_id(r["Sampling event ID"])
+        assert eid not in events, f"duplicate event id {eid} after normalisation"
+        typ = GPGP_TYPE[r["Sampling type"]]
+        y, mo, d = int(r["Start year (UTC)"]), int(r["Start month (UTC)"]), int(r["Start day (UTC)"])
+        h = num(r["Start UTC time (hours)"])
+        ts = f"{y:04d}-{mo:02d}-{d:02d}"
+        if h is not None:
+            assert 0 <= h < 24, f"event {eid}: start hour {h}"
+            mins = int(round(h * 60))
+            if mins >= 1440:
+                mins = 1439
+            ts += f"T{mins // 60:02d}:{mins % 60:02d}Z"
+        la0, lo0 = num(r["Start latitude (degrees)"]), num(r["Start longitude (degrees)"])
+        la1, lo1 = num(r["End latitude (degrees)"]), num(r["End longitude (degrees)"])
+        if la1 is None or lo1 is None:
+            la1, lo1 = la0, lo0
+        events[eid] = {
+            "id": eid, "type": typ, "platform": str(r["Platform name"]).strip(),
+            "t": ts,
+            "lon": round((lo0 + lo1) / 2, 4), "lat": round((la0 + la1) / 2, 4),
+            "area_km2": _sig(r["Sampling area (km2)"]),
+            "dist_km": _sig(r["Sampling distance (km)"]),
+            "dur_h": _sig(r["Sampling duration (hours)"]),
+            "wind_kn": _sig(r["Wind speed (Knots)"]),
+            "bft": _sig(r["Sea state (Beaufort)"]),
+            "c": {},
+        }
+        order.append(eid)
+    n_by_type = {}
+    for e in events.values():
+        n_by_type[e["type"]] = n_by_type.get(e["type"], 0) + 1
+    print(f"  StationInfo: {len(events)} events {n_by_type}")
+    assert len(events) == 683 and n_by_type == {"manta": 501, "mega": 151, "aerial": 31}, n_by_type
+
+    # --- the four concentration sheets ---------------------------------------
+    for key, sheet, expect_n, stype in GPGP_SHEETS:
+        sh = conc.sheet_by_name(sheet)
+        n = swapped = 0
+        for r in rows(sh):
+            eid = _gpgp_id(r["Sampling event ID"])
+            assert eid in events, f"{sheet}: event {eid} has no StationInfo row"
+            ev = events[eid]
+            assert r["Sampling type"] == stype and ev["type"] == GPGP_TYPE[stype], \
+                f"{sheet}: event {eid} type mismatch"
+            clon, clat = num(r["Longitude (degrees)"]), num(r["Latitude (degrees)"])
+            ok = abs(clon - ev["lon"]) < 0.01 and abs(clat - ev["lat"]) < 0.01
+            if not ok and key == "mega":
+                ok = abs(clat - ev["lon"]) < 0.01 and abs(clon - ev["lat"]) < 0.01
+                swapped += ok
+            assert ok, (f"{sheet}: event {eid} at ({clon},{clat}) disagrees with "
+                        f"StationInfo ({ev['lon']},{ev['lat']}) by more than 0.01 deg")
+
+            def col(prefix, unit):
+                for k, v in r.items():
+                    kk = " ".join(k.lower().split())
+                    if kk.startswith(prefix) and kk.endswith(f"({unit} km-2)"):
+                        return _sig(v)
+                raise KeyError(f"{sheet}: no column {prefix} {unit}")
+            assert key not in ev["c"], f"{sheet}: event {eid} twice"
+            ev["c"][key] = {
+                "n": [col("midpoint", "#"), col("lower", "#"), col("higher", "#"), col("raw", "#")],
+                "g": [col("midpoint", "g"), col("lower", "g"), col("higher", "g"), col("raw", "g")],
+            }
+            n += 1
+        print(f"  {sheet}: {n} rows, 100% joined{f', {swapped} lat/lon-swapped rows matched' if swapped else ''}")
+        assert n == expect_n, f"{sheet}: {n} rows, expected {expect_n}"
+        if key == "mega":
+            assert swapped == n, f"Megaplastics swap: only {swapped}/{n} rows matched swapped"
+    # every event carries exactly the size classes its gear samples
+    want = {"manta": {"micro", "meso"}, "mega": {"macro"}, "aerial": {"mega"}}
+    for e in events.values():
+        assert set(e["c"]) == want[e["type"]], f"event {e['id']}: classes {set(e['c'])}"
+
+    # --- MosaicDebrisInfo: every object seen from the aircraft ---------------
+    objects = []
+    for r in rows(samp.sheet_by_name("MosaicDebrisInfo")):
+        eid = _gpgp_id(r["Sampling event ID"])
+        assert eid in events and events[eid]["type"] == "aerial", f"object on event {eid}"
+        lo0, la0 = num(r["Start longitude debris (degrees)"]), num(r["Start latitude debris (degrees)"])
+        lo1, la1 = num(r["End longitude debris (degrees)"]), num(r["End latitude debris (degrees)"])
+        if lo1 is None or la1 is None:
+            lo1, la1 = lo0, la0
+        lt50 = str(r["< 50 cm?"]).strip().lower()
+        objects.append([
+            eid, round((lo0 + lo1) / 2, 4), round((la0 + la1) / 2, 4),
+            str(r["Object type"]).strip(), str(r["Color"]).strip(),
+            _sig(r["Length (m)"]), _sig(r["Width (m)"]),
+            1 if lt50 == "yes" else 0 if lt50 == "no" else None,
+            _sig(r["Topview area (m^2)"]),
+            _sig(r["Lower weight (kg)"]), _sig(r["Mid weight (kg)"]), _sig(r["Upper weight (kg)"]),
+        ])
+    print(f"  MosaicDebrisInfo: {len(objects)} objects, 100% joined")
+    assert len(objects) == 1595, len(objects)
+
+    # --- 1972-2015 compilation of earlier net tows ---------------------------
+    hs = hist.sheets()[0]
+    origins, refs, historical = [], [], []
+    def txt(v):
+        s = " ".join(str(v).split())
+        return None if s.lower() in ("", "nan", "none") else s
+
+    def idx(lst, s):
+        s = txt(s)
+        if s is None:
+            return None
+        if s not in lst:
+            lst.append(s)
+        return lst.index(s)
+    for r in rows(hs):
+        y, mo = num(r["Sampling Year"]), num(r["Sampling Month"])
+        lon, lat = num(r["Longitude (degrees)"]), num(r["Latitude (degrees)"])
+        assert y is not None and lon is not None and lat is not None, r
+        gear = txt(r["Sampling type"])
+        gear = gear.lower() if gear else None
+        ins = num(r["Inside GPGP?"])
+        historical.append([
+            idx(origins, r["Data Origin"]), idx(refs, r["Data Reference"]),
+            int(y), int(mo) if mo else None,
+            round(lon, 4), round(lat, 4), gear,
+            _sig(r["Mesh Size (microns)"]), _sig(r["Net tow Depth (in m)"]),
+            _sig(r["Microplastic Numerical Concentration (#/km²)"]),
+            _sig(r["Microplastic Mass Concentration (g/km²)"]),
+            None if ins is None else int(ins),
+        ])
+    print(f"  historical: {len(historical)} tows, {len(origins)} cruises/origins, "
+          f"{len(refs)} references, gears {sorted({h[6] or '-' for h in historical})}")
+    assert len(historical) == 3532, len(historical)
+
+    # --- derived counts, periods and ranges (never typed in) -----------------
+    def span(ts):
+        ts = sorted(ts)
+        return {"start": ts[0], "end": ts[-1]}
+    ev_list = [events[i] for i in order]
+    periods = {t: span(e["t"][:10] for e in ev_list if e["type"] == t)
+               for t in ("manta", "mega", "aerial")}
+    yrs = sorted(h[2] for h in historical)
+    hist_months = sorted(f"{h[2]:04d}-{h[3]:02d}" for h in historical if h[3])
+    periods["historical"] = {"start": hist_months[0] if hist_months else str(yrs[0]),
+                             "end": hist_months[-1] if hist_months else str(yrs[-1])}
+    print(f"  periods {periods}")
+    lons = [e["lon"] for e in ev_list] + [o[1] for o in objects]
+    lats = [e["lat"] for e in ev_list] + [o[2] for o in objects]
+    print(f"  campaign lon {min(lons)}..{max(lons)} lat {min(lats)}..{max(lats)}; "
+          f"historical lon {min(h[4] for h in historical)}..{max(h[4] for h in historical)} "
+          f"lat {min(h[5] for h in historical)}..{max(h[5] for h in historical)}")
+    assert -160 < min(lons) and max(lons) < -120 and 20 < min(lats) and max(lats) < 45
+    for e in ev_list:
+        if e["type"] == "aerial":
+            assert 25 <= e["lat"] <= 40 and -160 <= e["lon"] <= -125, e
+    assert all(-180 <= h[4] <= 180 and -90 <= h[5] <= 90 for h in historical)
+
+    counts = {k: sum(1 for e in ev_list if k in e["c"]) for k, *_ in GPGP_SHEETS}
+    counts.update(events=len(ev_list), objects=len(objects), historical=len(historical))
+    payload = {
+        "id": "gpgp_plastic",
+        "title": "Floating plastic, North Pacific (The Ocean Cleanup / Lebreton et al. 2018)",
+        "source": f"https://doi.org/{GPGP_DOI}",
+        "paper": f"https://doi.org/{GPGP_PAPER_DOI}",
+        "citation": ("Lebreton, L. et al. (2018) Evidence that the Great Pacific Garbage "
+                     "Patch is rapidly accumulating plastic. Sci. Rep. 8, 4666."),
+        "attribution": GPGP_ATTRIBUTION,
+        "licence": "CC BY 4.0",
+        "licence_url": "https://creativecommons.org/licenses/by/4.0/",
+        "files": {f["name"]: f["id"] for f in files if f["name"] in paths},
+        "counts": counts,
+        "periods": periods,
+        "units": {"n": "pieces per km²", "g": "grams per km²",
+                  "values": "[midpoint, lower, higher, raw] — mid/lower/higher are corrected "
+                            "for wind mixing; raw is what the net or the mosaic actually saw"},
+        "event_fields": ["id", "type", "platform", "t (UTC start)", "lon", "lat",
+                         "area_km2", "dist_km", "dur_h", "wind_kn", "bft", "c"],
+        "object_fields": ["event", "lon", "lat", "type", "colour", "length_m", "width_m",
+                          "lt50", "area_m2", "kg_lo", "kg_mid", "kg_hi"],
+        "historical_fields": ["origin", "ref", "year", "month", "lon", "lat", "gear",
+                              "mesh_um", "depth_m", "n_km2", "g_km2", "inside_gpgp"],
+        "origins": origins,
+        "refs": refs,
+        "events": ev_list,
+        "objects": objects,
+        "historical": historical,
+        "snapshot": datetime.now(timezone.utc).strftime("%Y-%m-%d"),
+    }
+    out = os.path.join(DATA, "gpgp_plastic.json")
+    with open(out, "w") as f:
+        json.dump(payload, f, separators=(",", ":"), ensure_ascii=False)
+    sz = os.path.getsize(out) / 1e6
+    print(f"  wrote gpgp_plastic.json ({sz:.2f} MB) counts {counts}")
+    assert sz < 1.5, f"gpgp_plastic.json is {sz:.2f} MB"
+
+
 if __name__ == "__main__":
     os.makedirs("/tmp/nc", exist_ok=True)
     default = ["climatetrace", "argo", "rapid", "sealevel", "glaciers", "gistemp"]
@@ -2275,7 +2553,7 @@ if __name__ == "__main__":
            "oisst_monthly": oisst_monthly,
            "oisst_clim": oisst_clim,
            "gazetteer": gazetteer, "islands": islands, "icon_sources": icon_sources,
-           "loitering": loitering}
+           "loitering": loitering, "gpgp": gpgp}
     for w in which:
         fns[w]()
     print("done")

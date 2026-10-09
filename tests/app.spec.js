@@ -7846,6 +7846,98 @@ test("a loitering event answers with its vessel, its drift and a stamp", async (
   expect(page.__errors, `page errors: ${page.__errors.join(" | ")}`).toHaveLength(0);
 });
 
+/* =========== floating plastic, North Pacific (The Ocean Cleanup) ==========
+ *
+ * A closed 2015-16 campaign plus a 1972-2015 compilation, baked into one
+ * static file. Dateless (§4b), one point per tow / mosaic / object, a log
+ * colour ramp, and every card stamped with its own sampling date. */
+async function enableGpgp(page) {
+  await page.evaluate(() => {
+    const el = document.getElementById("toggle-gpgp");
+    el.checked = true;
+    el.dispatchEvent(new Event("change", { bubbles: true }));
+  });
+  await expect.poll(() => page.evaluate(() => window.__earth.gpgpLayerState().shown),
+                    { timeout: 20000 }).toBeGreaterThan(0);
+}
+async function setGpgp(page, id, value) {
+  await page.evaluate(([id, value]) => {
+    const el = document.getElementById(id);
+    el.value = value;
+    el.dispatchEvent(new Event("change", { bubbles: true }));
+  }, [id, value]);
+}
+
+test("floating plastic: 501 tows by default, the objects with swatches, and a dateless toast",
+     async ({ page }) => {
+  test.setTimeout(120000);
+  const toasts = await recordToasts(page);
+  await enableGpgp(page);
+  const st = await page.evaluate(() => window.__earth.gpgpLayerState());
+  expect(st.set).toBe("micro");
+  expect(st.shown).toBe(501);
+  expect(await page.evaluate(() => window.__earth.gpgpCollection.length)).toBe(501);
+  expect(st.range.lo).toBeLessThan(st.range.hi);
+  await expect.poll(toasts).toContain("Floating plastic, North Pacific");
+  await expect.poll(toasts).toContain("date selector doesn't change it");
+  expect(await page.evaluate(() => window.__earth.datelessToast("gpgp"))).toContain("Floating plastic");
+  await expect(page.locator("#active-layers")).toContainText("Floating plastic");
+  await expect(page.locator("#legend-panel")).toContainText("pieces per km²");
+  await expect(page.locator("#legend-panel")).toContainText("log scale");
+
+  // grams flips the legend and keeps the points
+  await setGpgp(page, "gpgp-unit", "g");
+  await expect(page.locator("#legend-panel")).toContainText("grams per km²");
+  expect(await page.evaluate(() => window.__earth.gpgpLayerState().shown)).toBe(501);
+  await setGpgp(page, "gpgp-unit", "n");
+
+  // the aircraft objects: 1,595 points with a categorical swatch legend
+  await setGpgp(page, "gpgp-set", "objects");
+  await expect.poll(() => page.evaluate(() => window.__earth.gpgpCollection.length)).toBe(1595);
+  await expect(page.locator("#legend-panel .legend-swatch")).toHaveCount(7);
+  await expect(page.locator("#legend-panel")).toContainText("Bundled net");
+
+  // the earlier surveys: the measured zeros are drawn as "none caught", and
+  // tows without a piece count are left out and counted, not painted as zero
+  await setGpgp(page, "gpgp-set", "historical");
+  const h = await page.evaluate(() => window.__earth.gpgpLayerState());
+  expect(h.shown + h.missing).toBe(3532);
+  expect(h.zeros).toBeGreaterThan(100);
+  await expect(page.locator("#legend-panel")).toContainText("none caught");
+
+  expect(page.__errors, `page errors: ${page.__errors.join(" | ")}`).toHaveLength(0);
+});
+
+test("a plastic tow answers with its date, its value, its range and the raw catch", async ({ page }) => {
+  test.setTimeout(120000);
+  const snap = await page.evaluate(() => fetch("data/gpgp_plastic.json").then((r) => r.json()));
+  await enableGpgp(page);
+  // read the card from the primitive's own id rather than by a pick (§4)
+  const card = await page.evaluate(() => {
+    const p = window.__earth.gpgpCollection.get(0);
+    return { html: p.id.html, id: p.id.rec.id };
+  });
+  const ev = snap.events.find((e) => e.id === card.id);
+  expect(ev.c.micro).toBeTruthy();
+  expect(card.html).toMatch(/px-when/);
+  expect(card.html).toContain(ev.t.slice(0, 10));
+  expect(card.html).toContain("pieces per km²");
+  expect(card.html).toContain("raw");
+  expect(card.html).toContain("wind mixing");
+  expect(card.html).toContain(ev.platform);
+  expect(card.html).toContain("manta net");
+  expect(card.html).toContain("Lebreton et al. 2018 / The Ocean Cleanup");
+
+  // an aircraft object card names its type and its flight day
+  await setGpgp(page, "gpgp-set", "objects");
+  await expect.poll(() => page.evaluate(() => window.__earth.gpgpCollection.length)).toBe(1595);
+  const obj = await page.evaluate(() => window.__earth.gpgpCollection.get(0).id.html);
+  expect(obj).toContain("2016-10-0");
+  expect(obj).toMatch(/kg/);
+  expect(obj).toContain("C-130");
+  expect(page.__errors, `page errors: ${page.__errors.join(" | ")}`).toHaveLength(0);
+});
+
 /* ============================================================ Data tab =====
  *
  * The Data tab (E-084 §3) is the UI half of a feature whose other half — the
