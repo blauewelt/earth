@@ -9205,7 +9205,10 @@ test("Data tab: progress for the longer reads — estimate, first look, preview 
   await dtTap(page, "#tab-data");
   // the first look is several estimates: one block, in the estimate box,
   // indeterminate (nobody knows how many candidates it will try), counting
-  await expect.poll(estProg, { timeout: 30000 }).toMatch(/choosing a first selection that fits.* ⏐ \d+ requests? · .* so far/);
+  // Since E-088 the normals' file headers come from the index, so a first
+  // look can finish without a single request: the block then shows
+  // "starting…" rather than a count — either is the honest state.
+  await expect.poll(estProg, { timeout: 30000 }).toMatch(/choosing a first selection that fits.* ⏐ (\d+ requests? · .* so far|starting…)/);
   const settled = () => expect.poll(async () => (await dtState(page)).estimateCurrent, { timeout: 60000 }).toBe(true);
   await settled();
   // the first look finished, and it never pretended to know how far along it was
@@ -9213,7 +9216,7 @@ test("Data tab: progress for the longer reads — estimate, first look, preview 
   expect(look).toBeTruthy();
   expect(look.state).toBe("done");
   expect(look.determinate).toBe(false);
-  expect(look.requestsAll).toBeGreaterThan(0);
+  expect(look.requestsAll).toBeGreaterThanOrEqual(0);
   // the box the fixture covers, so a download has something in it
   await dtSet(page, { "dt-w": "-79", "dt-s": "31", "dt-e": "-74.5", "dt-n": "34", "dt-y0": "2000", "dt-y1": "2004" });
   await settled();
