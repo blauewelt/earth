@@ -58,9 +58,9 @@ tab reads.
 |---|---|---|---|---|
 | OISST sea-surface temperature and sea ice, daily | 0.25° | 2 | 45 | 171 GB |
 | ERA5 temperature / humidity / winds (four stores) | 1° | 13 levels each | 45 | ≈ 70 GB each |
-| NCEP air reanalysis, daily | 1° | 15 | 45 | 80 GB — held |
-| OC-CCI ocean colour, daily | 0.25° | 2 | 30 | 114 GB — held |
-| GLORYS ocean reanalysis, daily | 0.25° | 5 | 34 | 323 GB — held |
+| NCEP air reanalysis, daily | 1° | 15 | 45 | 80 GB |
+| OC-CCI ocean colour, daily | 0.25° | 2 | 30 | 114 GB |
+| GLORYS ocean reanalysis, daily | 0.25° | 5 | 34 | 323 GB |
 
 ## 6. Status
 
@@ -77,6 +77,6 @@ tab reads.
   every native map — identical values and counts (OISST, ERA5 t, q).
 - Browser check (`scripts/datatab_browser_check.mjs --only=c7`): February
   2001–2020 in a 10° box — 116 requests, 17.1 MB, counts 20 and 5 (leap days).
-- Held for a decision: NCEP (80 GB), OC-CCI (114 GB), GLORYS (323 GB).
+- 2026-10-08/09: **NCEP, OC-CCI and GLORYS built** (runs 8–10, every job green); live check through the reader against every native map: identical (NCEP, OC-CCI), relative difference ≤ 3.3e-7 (GLORYS). All eight daily stores now have the climatology.
 - Not done: a refresh hook (a new day touches one day file; a new year adds a
   plane to all 366) — the daily refresh (E-090) does not yet update these.

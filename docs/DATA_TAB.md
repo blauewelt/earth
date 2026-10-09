@@ -278,7 +278,7 @@ so one level reads one level.
 
 ### Climatology per day of year (precomputed day-of-year totals)
 
-For the daily sea-surface temperature store (`oisst025d`) and the four ERA5
+For the four daily global stores (OISST, GLORYS, NCEP, OC-CCI) and the four ERA5
 stores, the time step *Climatology — mean per day of year over the years*
 gives one map per calendar day — 366 for a whole year, 29 February its own —
 averaged over the years you set (less any you leave out), each with the count

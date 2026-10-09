@@ -2354,8 +2354,8 @@ climatology and E-086's normals are frozen. One status line per store:
 Chris: *"Say I want average values for every single day of year, across 20
 years"* and *"please call this 'Climatology'"*. The step once labelled "normal"
 is **"Climatology — mean per calendar month over the years"**, and stores listed
-as complete in `data/gridded_doy_index.json` (OISST daily and the four ERA5
-stores; `configure({gridDoy})`) add **"Climatology — mean per day of year over
+as complete in `data/gridded_doy_index.json` (all four daily stores of family
+7.2d and the four ERA5 stores; `configure({gridDoy})`) add **"Climatology — mean per day of year over
 the years"** (`sel.step = "doy"`): one map per calendar day, 29 February its
 own, with counts. It is read from E-091's files — per calendar day
 `sum_MMDD.npy` / `count_MMDD.npy`, `[channel, year, lat, lon]`, CUMULATIVE over
@@ -2366,9 +2366,9 @@ day in the nominal leap year 2000 with `climatology_bounds`). Built by
 `ml/export_gridded_doy.py` on hosted runners, twelve jobs per store
 (`gridded-doy.yml`), each with a falsifier against numpy on the native frames;
 checked live with `scripts/f1data_doy_live_check.mjs` (identical to the native
-path) and `datatab_browser_check.mjs --only=c7`. NCEP, OC-CCI and GLORYS are
-not built (held for size), and the daily refresh does not yet update these
-files. The same day: the years and the days of the month are each ONE slider
+path) and `datatab_browser_check.mjs --only=c7`. The daily refresh does not yet update
+these files, the five-day tensor has no pentad-of-year climatology yet, and
+the fine 1.gf maps none at all. The same day: the years and the days of the month are each ONE slider
 with two handles (`DT_SLIDERS`, `dtSyncYearSlider`; two overlaid range inputs
 whose thumbs alone take the pointer — the number fields stay the truth and
 commit through their own change event), and "whole globe" on a map store

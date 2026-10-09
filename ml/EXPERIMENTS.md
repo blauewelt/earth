@@ -72,9 +72,10 @@ February's 29 days over 2001–2020 in a 10° box, 116 requests, 17 MB.
 end only, not of the one before its start, which for a signed field can be
 much larger. The bound was wrong, not the data; fixed and re-run.
 
-**Not built.** NCEP (80 GB), OC-CCI (114 GB), GLORYS (323 GB): held for
-Chris's decision. No standard deviation on this path. Cost: none (hosted
-runners).
+**Then the rest.** Chris: *"Make sure all channels are available at their
+granularity."* NCEP, OC-CCI and GLORYS built overnight (runs 8–10): all
+eight daily stores now carry the climatology, ~1.1 TB in all. No standard
+deviation on this path. Cost: none (hosted runners).
 
 
 ## E-090 · Every store the Data tab serves, kept current with its upstream — a daily hosted refresh — SCHEDULED 2026-10-08 after real refreshes of six gridded stores were green (OISST to 2026-10-06 with two preliminary days replaced by final ones, GLORYS to 08-25, PACE to 08-31, ACSPO to 10-07 with its reissued July, the geostationary IR to 10-06; ERA5 re-fetched byte-identical)
