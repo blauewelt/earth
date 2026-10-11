@@ -1,0 +1,78 @@
+{
+ "bins": [
+  2483,
+  2556
+ ],
+ "builder_git_sha": "bae8a5467a317a4aa896e65c54de071a5120910b",
+ "built_at": "2026-10-11T19:46:43+00:00",
+ "channels": [
+  {
+   "max": 100.0,
+   "min": 0.0,
+   "name": "length_m",
+   "unit": "m"
+  },
+  {
+   "max": 50.0,
+   "min": 0.0,
+   "name": "width_m",
+   "unit": "m"
+  },
+  {
+   "max": 1000.0,
+   "min": 0.0,
+   "name": "topview_area_m2",
+   "unit": "m2"
+  },
+  {
+   "max": 100000.0,
+   "min": 0.0,
+   "name": "kg_lo",
+   "unit": "kg"
+  },
+  {
+   "max": 100000.0,
+   "min": 0.0,
+   "name": "kg_mid",
+   "unit": "kg"
+  },
+  {
+   "max": 100000.0,
+   "min": 0.0,
+   "name": "kg_hi",
+   "unit": "kg"
+  },
+  {
+   "max": 1.0,
+   "min": 0.0,
+   "name": "lt50",
+   "unit": "1 = shorter than 50 cm (producer's flag)"
+  }
+ ],
+ "dataset": "Lebreton et al. 2018, MosaicDebrisInfo",
+ "date_range": [
+  "2016-01-01",
+  "2016-12-31"
+ ],
+ "footprint": {
+  "log2_dt": -4.0,
+  "log2_fp": -4.0
+ },
+ "lebreton2018_files": {
+  "Lebreton2018_Concentration.xls": 10441962,
+  "Lebreton2018_HistoricalDataset.xls": 10441965,
+  "Lebreton2018_SamplingInformation.xls": 10441968
+ },
+ "per_year_resume": false,
+ "qc_policy": "qc bits 0-3 = object type (1 Bundled net; 2 Loose net; 3 Rope; 4 Buoy; 5 Container; 6 Life ring; 7 Unknown); bit 4 (16): time of day not given, placed at 12:00 UTC. Out-of-bounds values -> NaN, counted.",
+ "sources": [
+  "https://api.figshare.com/v2/articles/5873142/files",
+  "https://api.figshare.com/v2/articles/25674120"
+ ],
+ "store": "mobjects",
+ "title": "Objects identified in The Ocean Cleanup's 2016 aircraft photo mosaics of the Great Pacific Garbage Patch (Lebreton et al. 2018), one row per object",
+ "verified": "2026-10-11 from the sandbox: figshare 5873142's listing and MosaicDebrisInfo (1,595 objects, seven types, 100 % joined); the per-mosaic check against both papers' concentrations",
+ "years": [
+  2016
+ ]
+}

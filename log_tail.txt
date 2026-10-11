@@ -1,0 +1,76 @@
+store     mobjects — Objects identified in The Ocean Cleanup's 2016 aircraft photo mosaics of the Great Pacific Garbage Patch (Lebreton et al. 2018), one row per object
+family    family1_3 (1.3) · public -> chfrank/earth-tensors:tensors/family1_3/mobjects
+axis      2016-01-01 .. 2016-12-31  bins 2483..2556 · time_s int32 (schema 2)
+lane      (unnamed) — whole calendar year(s), no group subset: the year folder's own files, as every store on the Hub holds them
+channels  C=7: length_m, width_m, topview_area_m2, kg_lo, kg_mid, kg_hi, lt50
+work      /home/runner/work/earth/earth/ml/cache/family1_3
+
+=== stage index (mobjects) ===
+  [index mobjects] start (1 items)  0/1  0.0s
+  [index mobjects] plan.json  1/1  0.6s
+  index: mobjects — 1 year(s), C=7 (length_m, width_m, topview_area_m2, kg_lo, kg_mid, kg_hi, lt50), bins 2483..2556
+=== stage index done in 0.6s ===
+
+=== stage fetch (mobjects) ===
+  [fetch mobjects (one stream)] start  0/0  0.0s
+  mobjects: 1,595 row(s) over 1 year(s) in one pass (6.6s)
+=== stage fetch done in 6.6s ===
+
+=== stage assemble (mobjects) ===
+  assemble: auto -> memory (1,595 part row(s) by the per-year ledgers, threshold 50,000,000)
+  store: 1,595 row(s), C=7, bins 2538..2539 (2 live) -> /home/runner/work/earth/earth/ml/cache/family1_3/mobjects/mobjects
+  assemble: memory done, peak RSS 0.08 GB
+  [fetch mobjects (one stream)] store  1/0  6.6s
+=== stage assemble done in 0.0s ===
+
+=== stage publish (mobjects) ===
+  restore: the largest file is values.npy at 0.00 GB; 90.84 GB free under /home/runner/work/earth/earth/ml/cache/family1_3/mobjects/src; 1.1x margin wants 0.00 GB
+  hub: chfrank/earth-tensors with the token from $HF_TOKEN
+  [publish mobjects] start (10 items)  0/10  0.0s
+Upload 3 LFS files:   0%|          | 0/3 [00:00<?, ?it/s]
+bin.npy:   0%|          | 0.00/3.32k [00:00<?, ?B/s][A
+
+bin_offsets.npy:   0%|          | 0.00/152 [00:00<?, ?B/s][A[A
+
+
+fp.npy:   0%|          | 0.00/6.51k [00:00<?, ?B/s][A[A[Afp.npy: 100%|██████████| 6.51k/6.51k [00:00<00:00, 40.7kB/s]
+bin_offsets.npy: 100%|██████████| 152/152 [00:00<00:00, 885B/s]
+bin.npy: 100%|██████████| 3.32k/3.32k [00:00<00:00, 18.1kB/s]
+Upload 3 LFS files:  33%|███▎      | 1/3 [00:00<00:00,  4.15it/s]Upload 3 LFS files: 100%|██████████| 3/3 [00:00<00:00,  9.99it/s]Upload 3 LFS files: 100%|██████████| 3/3 [00:00<00:00,  8.75it/s]
+Upload 3 LFS files:   0%|          | 0/3 [00:00<?, ?it/s]
+lon.npy:   0%|          | 0.00/6.51k [00:00<?, ?B/s][A
+
+lat.npy:   0%|          | 0.00/6.51k [00:00<?, ?B/s][A[A
+
+
+platform.npy:   0%|          | 0.00/12.9k [00:00<?, ?B/s][A[A[Alon.npy: 100%|██████████| 6.51k/6.51k [00:00<00:00, 70.1kB/s]
+platform.npy: 100%|██████████| 12.9k/12.9k [00:00<00:00, 118kB/s]
+lat.npy: 100%|██████████| 6.51k/6.51k [00:00<00:00, 42.3kB/s]
+Upload 3 LFS files:  33%|███▎      | 1/3 [00:00<00:00,  5.48it/s]Upload 3 LFS files: 100%|██████████| 3/3 [00:00<00:00, 10.81it/s]
+Upload 3 LFS files:   0%|          | 0/3 [00:00<?, ?it/s]
+time_s.npy:   0%|          | 0.00/6.51k [00:00<?, ?B/s][A
+
+qc.npy:   0%|          | 0.00/1.72k [00:00<?, ?B/s][A[A
+
+
+values.npy:   0%|          | 0.00/22.5k [00:00<?, ?B/s][A[A[Avalues.npy: 100%|██████████| 22.5k/22.5k [00:00<00:00, 190kB/s]
+time_s.npy: 100%|██████████| 6.51k/6.51k [00:00<00:00, 50.5kB/s]
+qc.npy: 100%|██████████| 1.72k/1.72k [00:00<00:00, 10.2kB/s]
+Upload 3 LFS files:  33%|███▎      | 1/3 [00:00<00:00,  4.70it/s]Upload 3 LFS files: 100%|██████████| 3/3 [00:00<00:00,  7.12it/s]Upload 3 LFS files: 100%|██████████| 3/3 [00:00<00:00,  6.77it/s]
+  [publish mobjects] bin.npy  1/10  19.8s
+  [publish mobjects] bin_offsets.npy  2/10  20.1s
+  [publish mobjects] fp.npy  3/10  20.2s
+  [publish mobjects] lat.npy  4/10  20.4s
+  [publish mobjects] lon.npy  5/10  20.6s
+  [publish mobjects] platform.npy  6/10  20.8s
+  [publish mobjects] qc.npy  7/10  20.9s
+  [publish mobjects] time_s.npy  8/10  21.1s
+  [publish mobjects] values.npy  9/10  21.2s
+  [publish mobjects] store.json  10/10  21.4s
+  publish: 10 file(s) verified by restore -> https://huggingface.co/datasets/chfrank/earth-tensors/tree/main/tensors/family1_3/mobjects
+=== stage publish done in 24.7s ===
+
+=== stage check (mobjects) ===
+  hub: chfrank/earth-tensors with the token from $HF_TOKEN
+  check: mobjects — 9 file(s) verified, N=1,595, schema 2, Hub chfrank/earth-tensors:tensors/family1_3/mobjects agrees
+=== stage check done in 0.4s ===
