@@ -1,0 +1,80 @@
+store     mplastic — Floating plastic at the sea surface: one row per net tow, water sample or aircraft survey line (The Ocean Cleanup, NOAA NCEI, EMODnet), de-duplicated across producers
+family    family1_3 (1.3) · public -> chfrank/earth-tensors:tensors/family1_3/mplastic
+axis      1972-01-01 .. 2025-12-31  bins -731..3214 · time_s int32 (schema 2)
+lane      (unnamed) — whole calendar year(s), no group subset: the year folder's own files, as every store on the Hub holds them
+channels  C=12: log_n_km2, log_g_km2, log_n_m3, log_n_km2_wc, log_n_km2_micro, log_n_km2_meso, log_n_km2_macro, log_n_km2_mega, mesh_um, net_depth_m, sample_depth_m, wind_ms
+work      /home/runner/work/earth/earth/ml/cache/family1_3
+
+=== stage index (mplastic) ===
+  [index mplastic] start (1 items)  0/1  0.0s
+  [index mplastic] plan.json  1/1  7.8s
+  index: mplastic — 54 year(s), C=12 (log_n_km2, log_g_km2, log_n_m3, log_n_km2_wc, log_n_km2_micro, log_n_km2_meso, log_n_km2_macro, log_n_km2_mega …), bins -731..3214
+=== stage index done in 7.8s ===
+
+=== stage fetch (mplastic) ===
+  [fetch mplastic (one stream)] start  0/0  0.0s
+  [fetch mplastic (one stream)] mplastic accessions 10/48  20.3s
+  [fetch mplastic (one stream)] mplastic accessions 20/48  33.9s
+  [fetch mplastic (one stream)] mplastic accessions 30/48  48.5s
+  [fetch mplastic (one stream)] mplastic accessions 40/48  64.1s
+  mplastic: 18,504 row(s) over 42 year(s) in one pass (87.4s)
+=== stage fetch done in 87.4s ===
+
+=== stage assemble (mplastic) ===
+  assemble: auto -> memory (18,504 part row(s) by the per-year ledgers, threshold 50,000,000)
+  store: 18,504 row(s), C=12, bins -710..3127 (1,766 live) -> /home/runner/work/earth/earth/ml/cache/family1_3/mplastic/mplastic
+  assemble: memory done, peak RSS 0.63 GB
+  [fetch mplastic (one stream)] store  1/0  87.5s
+=== stage assemble done in 0.0s ===
+
+=== stage publish (mplastic) ===
+  restore: the largest file is values.npy at 0.00 GB; 90.81 GB free under /home/runner/work/earth/earth/ml/cache/family1_3/mplastic/src; 1.1x margin wants 0.00 GB
+  hub: chfrank/earth-tensors with the token from $HF_TOKEN
+  [publish mplastic] start (10 items)  0/10  0.0s
+Upload 3 LFS files:   0%|          | 0/3 [00:00<?, ?it/s]
+bin.npy:   0%|          | 0.00/37.1k [00:00<?, ?B/s][A
+
+bin_offsets.npy:   0%|          | 0.00/30.8k [00:00<?, ?B/s][A[A
+
+
+fp.npy:   0%|          | 0.00/74.1k [00:00<?, ?B/s][A[A[Abin.npy: 100%|██████████| 37.1k/37.1k [00:00<00:00, 193kB/s]
+bin_offsets.npy: 100%|██████████| 30.8k/30.8k [00:00<00:00, 98.6kB/s]
+fp.npy: 100%|██████████| 74.1k/74.1k [00:00<00:00, 226kB/s]
+Upload 3 LFS files:  33%|███▎      | 1/3 [00:00<00:00,  2.33it/s]Upload 3 LFS files: 100%|██████████| 3/3 [00:00<00:00,  6.45it/s]
+Upload 3 LFS files:   0%|          | 0/3 [00:00<?, ?it/s]
+lat.npy:   0%|          | 0.00/74.1k [00:00<?, ?B/s][A
+
+
+lon.npy:   0%|          | 0.00/74.1k [00:00<?, ?B/s][A[A[A
+
+platform.npy:   0%|          | 0.00/148k [00:00<?, ?B/s][A[Alon.npy: 100%|██████████| 74.1k/74.1k [00:00<00:00, 601kB/s]
+lat.npy: 100%|██████████| 74.1k/74.1k [00:00<00:00, 521kB/s]
+platform.npy: 100%|██████████| 148k/148k [00:00<00:00, 804kB/s]
+Upload 3 LFS files:  33%|███▎      | 1/3 [00:00<00:00,  4.12it/s]Upload 3 LFS files: 100%|██████████| 3/3 [00:00<00:00,  9.46it/s]
+Upload 3 LFS files:   0%|          | 0/3 [00:00<?, ?it/s]
+time_s.npy:   0%|          | 0.00/74.1k [00:00<?, ?B/s][A
+
+
+values.npy:   0%|          | 0.00/444k [00:00<?, ?B/s][A[A[A
+
+qc.npy:   0%|          | 0.00/18.6k [00:00<?, ?B/s][A[Aqc.npy: 100%|██████████| 18.6k/18.6k [00:00<00:00, 146kB/s]
+time_s.npy: 100%|██████████| 74.1k/74.1k [00:00<00:00, 549kB/s]
+values.npy: 100%|██████████| 444k/444k [00:00<00:00, 2.48MB/s]
+Upload 3 LFS files:  33%|███▎      | 1/3 [00:00<00:00,  4.19it/s]Upload 3 LFS files: 100%|██████████| 3/3 [00:00<00:00, 10.64it/s]
+  [publish mplastic] bin.npy  1/10  13.4s
+  [publish mplastic] bin_offsets.npy  2/10  13.6s
+  [publish mplastic] fp.npy  3/10  13.8s
+  [publish mplastic] lat.npy  4/10  14.1s
+  [publish mplastic] lon.npy  5/10  14.3s
+  [publish mplastic] platform.npy  6/10  14.5s
+  [publish mplastic] qc.npy  7/10  14.8s
+  [publish mplastic] time_s.npy  8/10  15.0s
+  [publish mplastic] values.npy  9/10  15.3s
+  [publish mplastic] store.json  10/10  15.5s
+  publish: 10 file(s) verified by restore -> https://huggingface.co/datasets/chfrank/earth-tensors/tree/main/tensors/family1_3/mplastic
+=== stage publish done in 18.8s ===
+
+=== stage check (mplastic) ===
+  hub: chfrank/earth-tensors with the token from $HF_TOKEN
+  check: mplastic — 9 file(s) verified, N=18,504, schema 2, Hub chfrank/earth-tensors:tensors/family1_3/mplastic agrees
+=== stage check done in 0.4s ===
