@@ -1,0 +1,537 @@
+\documentclass[10pt]{article}
+\usepackage[a4paper,margin=2.4cm]{geometry}
+\usepackage{array}
+\usepackage{booktabs}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage[hidelinks]{hyperref}
+\usepackage{xcolor}
+\usepackage{longtable}
+\setlength{\parskip}{2pt}
+\setlength{\emergencystretch}{2em}
+\newcommand{\code}[1]{\texttt{#1}}
+\newcolumntype{L}[1]{>{\raggedright\arraybackslash}p{#1}}
+
+\title{Family 1.3: family 1.2 plus the stores that could identify plastic in the ocean\\
+a dataset design note --- where floating plastic is, and how much\\
+\large the nets first; the satellites tested against them before anything large is built}
+\author{blauewelt/earth --- design note}
+\date{11 October 2026}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+Family 1.3 is a proposed \emph{family} --- a numbered set of datasets built to one storage design and read by the
+programme's forecasting model --- made of family 1.2 \textbf{inherited by reference} (listed in the new family's
+registry, the JSON file that names every store, with no byte copied) plus a small number of new \emph{stores} (a
+store is one dataset, published as a small set of arrays) whose job is to say \textbf{where floating plastic is in
+the ocean, and how much}. Plastic is not one of the programme's four prediction goals (El Ni\~no, the ocean carbon
+sink, the Atlantic overturning circulation and sea-surface temperature), so the family adds a \textbf{fifth
+read-out} --- floating plastic concentration at a place and a time --- and the stores that measure it, and is kept
+separate so that family 1.2's registry and its verdicts stay untouched. Every candidate source was measured by
+request on 2026-10-11 rather than transcribed from its documentation. The finding that shapes everything:
+\textbf{plastic in the open ocean is measured almost only by nets, not by satellites.} A net towed at the surface
+catches pieces down to a third of a millimetre; a satellite pixel sees a 10\,m or 1\,km square of sea, and the
+densest open-ocean microplastic covers about 0.005\,\% of the surface (Hu 2021). So the first store,
+\code{mplastic}, is the nets --- built from one producer per cruise, because the published compilations are mostly
+the same tows compiled again and again; storing pieces per km$^2$ \emph{as caught}, because the per-volume figures
+rest on a net depth each compiler assumed; and storing an empty net as the observation it is. The satellite stores
+are tested against the nets and against human-labelled pixels before anything large is built: Sentinel-2 does not
+image the open ocean, except in one 2021 campaign over the Great Pacific Garbage Patch that coincides with The Ocean
+Cleanup's aerial surveys, and a one-hour probe there is expected to find nothing above noise. The note gives the
+ledger of sources, the stores, eight decisions, the build ladder, the test that can show each store is not worth
+keeping, and the open items. Nothing has been built, dispatched, rented or uploaded.
+\end{abstract}
+
+\section{What family 1.3 is, and the fifth read-out}
+
+\paragraph{Family 1.2, the parent.} Family 1.2 is the set of global observation stores at 10\,km and 5 days or
+finer --- family 1.gf: ocean colour, satellite sea-surface temperature, ship reports, floats, bottles, moorings,
+the swaths of SWOT (the Surface Water and Ocean Topography satellite, which maps sea level across wide strips) and
+more --- plus the upper-air temperature, humidity and wind of ERA5, the European weather reanalysis (E-085, the
+experiment that added it). It is published on the project's public Hugging Face dataset
+\code{chfrank/earth-tensors}.
+
+\paragraph{Family 1.3.} Family 1.2, inherited by reference, plus a small number of new stores whose job is to say
+where floating plastic is, and how much. Chris asked on 2026-10-08 for this family to be drafted --- family 1.2
+unchanged, plus stores that could identify plastic in the ocean --- and on 2026-10-09 for The Ocean Cleanup's
+survey to be shown on blauewelt.org first; it shipped that day as the globe's ``Floating plastic, North Pacific''
+layer.
+
+\paragraph{Why a new family and not a new store in 1.2.} Plastic is not one of the programme's four prediction
+goals. Family 1.3 adds a \textbf{fifth read-out} (a quantity the model is asked to predict or report): floating
+plastic concentration at a place and a time, and the stores that measure it. Keeping it a separate family keeps
+1.2's registry and its verdicts --- the recorded result of each store's keep-or-drop test --- untouched.
+
+\paragraph{The finding that shapes everything.} Plastic in the open ocean is measured almost only by nets, not by
+satellites. A net towed at the surface catches pieces down to a third of a millimetre; a satellite pixel sees a
+10\,m or 1\,km square of sea, and the densest open-ocean microplastic covers about 0.005\,\% of the surface
+(Hu 2021), far below what any optical sensor can see. Satellites see plastic only where it is piled up ---
+windrows (lines where wind and currents gather floating material), river plumes, harbours --- and even then mixed
+with seaweed and foam. So the first store is the nets, and the satellite stores are tested against them before
+anything large is built.
+
+\section{What the family already holds --- and why none of it identifies plastic}
+
+Measured from the registries and adapters (the per-source fetch code) on 2026-10-11, these inherited stores bear
+on plastic:
+
+\begin{table}[h]
+\centering\setlength{\tabcolsep}{4pt}\footnotesize
+\begin{tabular}{@{}L{2.4cm}L{6.4cm}L{6.4cm}@{}}
+\toprule
+store (inherited) & what it holds & why it matters for plastic \\
+\midrule
+\code{oc4k} (1.gf) & daily 4\,km ocean colour: log-chlorophyll, light attenuation \code{kd\_490}, observation count,
+1997-09 $\to$ 2022-12 & turbid or bloom water is what a debris index confuses with plastic \\
+\addlinespace
+\code{pace4k} (1.gf) & daily 4\,km PACE (NASA's 2024 hyperspectral ocean-colour satellite): log-chlorophyll,
+organic and phytoplankton carbon, apparent visible wavelength, three plankton cell counts, 2024-03 $\to$ & the same
+confusers; \textbf{no reflectance and no shortwave-infrared band} \\
+\addlinespace
+\code{swot} (1.gf) & 2\,km swath sea-surface height, radar backscatter \code{sig0\_karin} (linear), uncertainty &
+currents converge where plastic gathers; backscatter dims over surface films (no published plastic use found) \\
+\addlinespace
+\code{swh} (1.gf) & wave height along altimeter tracks & waves mix light plastic below a surface net --- the
+wind-mixing correction \\
+\addlinespace
+\code{icoads} (1.gf), \code{era5\_u} / \code{era5\_v} (1.2) & ship winds; upper-air wind on 13 pressure levels &
+wind drives both the drift and the mixing \\
+\bottomrule
+\end{tabular}
+\caption{The inherited stores that bear on plastic, as measured on 2026-10-11.}
+\end{table}
+
+\paragraph{No inherited channel can identify plastic.} Ocean colour at 4\,km carries no reflectance bands, and no
+family-1 store holds a shortwave-infrared band over water. This was found on 2026-10-08 and confirmed against the
+adapters (\code{ml/family1/adapters/pace4k.py}, \code{oc4k.py}, \code{swot.py}). The inherited stores are
+therefore context --- the confusers, the convergence, the wind --- and family 1.3 has to bring its own measurement.
+
+\section{The ledger, part one --- net tows and water samples, the ground truth}
+
+Every row below was measured by request on 2026-10-11 (HTTP status 200 means the file was served in full).
+
+{\setlength{\tabcolsep}{2pt}\scriptsize
+\begin{longtable}{@{}L{3.0cm}L{3.4cm}L{2.1cm}L{2.6cm}L{1.8cm}L{2.5cm}@{}}
+\caption{Net tows and water samples, as measured on 2026-10-11.} \label{tab:nets}\\
+\toprule
+source & access & licence & rows & span & units as published \\
+\midrule
+\endfirsthead
+\toprule
+source & access & licence & rows & span & units as published \\
+\midrule
+\endhead
+\textbf{NOAA NCEI Global Marine Microplastics} (the US national archive's harmonised compilation) & ArcGIS
+FeatureServer (a web map service that answers record queries)
+\url{services2.arcgis.com/C8EMgrsFcRFL6LrL/}\dots\url{/Hub_Microplastics_Replace/FeatureServer/0}, and the Hub CSV
+export of item \code{1b56a456ad8c4388\allowbreak 9652e62aa25a317e} --- 200, identical; the product page names neither & CC0 1.0
+(accession 0306475; citation requested, DOI 10.25921/v8gj-k896) & 29,076, of which \textbf{16,988 ocean-water
+samples} (893 beach, 580 sediment, 10,615 citizen nurdle counts) & water 1972-04-20 $\to$ 2024-10-23 & water and
+beach in pieces/m$^3$; sediment pieces/kg; nurdles pieces per 10 minutes \\
+\addlinespace
+\textbf{The Ocean Cleanup, Lebreton et al.\ 2018} (figshare 5873142) & figshare API and its download server --- 200
+& CC BY 4.0 & 683 events + 1,595 aircraft objects + 3,532 compiled tows & 2015-07 $\to$ 2016-10 (compilation
+1972--2015) & pieces/km$^2$ and g/km$^2$, four size classes, wind-corrected AND raw \\
+\addlinespace
+\textbf{The Ocean Cleanup, Lebreton et al.\ 2024} (figshare 25674120) & figshare --- 200 & CC BY 4.0 & 917 manta
+tows (510 are the 2015 expedition again, \textbf{407 new, 2018--2022}), 162 large-net tows, 74 aerial surveys, 40
+cleanup-system catches & 2015 $\to$ 2022 & pieces/km$^2$ and g/km$^2$ over 7 size classes \\
+\addlinespace
+\textbf{EMODnet Chemistry floating micro-litter} v2026 (the EU's marine data network) &
+\url{nodc.ogs.it/repository/aggregated-datasets/litter/EMODnet_floating_microlitter_2026_unrestricted.zip} --- 200
+& CC BY 4.0 (in every record) & $\approx 3,368$ samples (32,067 lines: sample $\times$ litter type $\times$ size
+class) & 2011-06-14 $\to$ 2025-08-30; mostly European seas & \textbf{raw counts per net}, with mouth width and
+either track length (21,497 lines) or filtered volume (10,588) --- normalised by the builder \\
+\addlinespace
+\textbf{Isobe et al.\ 2021} (the multilevel dataset behind Japan's Atlas of Ocean Microplastics) & Springer
+supplement zip --- 200 & article CC BY 4.0; data licence to confirm & 8,218 samples, 27 projects & 2000 $\to$ 2019 &
+pieces/m$^3$ (levels 0 and 1); pieces/km$^2$ wind-corrected (level 2) \\
+\addlinespace
+\textbf{AOMI} (Japan's Atlas of Ocean Microplastics) & \url{aomi.env.go.jp/arcgis/rest/services/opendata/MapServer/1000}
+--- 200 & \textbf{non-commercial only} (the site's data policy); per-record Creative Commons licences, 6,900 rows
+with none & 18,860 raw samples & 1972 $\to$ 2026-01 & pieces/m$^3$ and pieces/km$^2$ by size class \\
+\addlinespace
+\textbf{Eriksen et al.\ 2023} compilation (``plastic smog'') & raw CSV on GitHub, from the authors' repository ---
+200 & \textbf{none in the repository}; the paper is CC BY 4.0 & 12,546 & 1971 $\to$ 2019 & pieces/km$^2$,
+g/km$^2$ \\
+\bottomrule
+\end{longtable}}
+
+\paragraph{Three facts about these sources decide the design.}
+\begin{enumerate}\itemsep2pt
+\item \textbf{They are mostly the SAME tows, compiled again and again.} The cruises of SEA (the Sea Education
+Association), The Ocean Cleanup's 2015 expedition and Eriksen's 5 Gyres tows sit in NCEI, AOMI and Eriksen 2023
+alike, and the SEA Pacific tows are in AOMI twice (2,527 submitted by SEA, 2,130 imported via NOAA). 12,160 of
+AOMI's 18,860 rows match NCEI on date and position; 7,758 of Eriksen 2023's 12,546 do; 644 of the 683 Ocean
+Cleanup 2015--16 events have an NCEI row on the same day and place. A store that concatenated the compilations
+would count the same tow three times.
+\item \textbf{``Pieces/m$^3$'' for a surface net tow is not a measurement.} A neuston or manta net (a surface net
+that skims the top of the sea) skims the top few tens of centimetres and measures pieces per AREA; NCEI converts to
+per VOLUME by dividing by a net depth the compiler assumed, and the assumption differs by study. Matched against The
+Ocean Cleanup's own pieces/km$^2$, the implied depths are 0.25\,m for Law 2014, 0.08\,m for Eriksen 2014,
+0.155--0.25\,m for Goldstein, and 0.075\,m for The Ocean Cleanup's 2015 tows; Isobe 2021 uses 0.5\,m for the same
+SEA tows. Values from different studies are not comparable until that division is undone.
+\item \textbf{Zeros are real and common.} 4,958 of NCEI's 16,988 water samples, 5,566 of AOMI's, 1,506 of
+Lebreton's compiled tows: the net came up empty. A zero is an observation and is stored as one.
+\end{enumerate}
+
+\paragraph{An unresolved conflict, found while checking --- and it affects the live globe layer.} SEA's 2,529
+Pacific tows (Law et al.\ 2014) exist in two published copies: SEA's own submission to NCEI (accession 0211008) and
+the copy inside Lebreton 2018's compilation. They agree on every year-month count (2,529 = 2,529) and on the first
+$\sim 46$ rows, then diverge: only 399 positions and 386 (position, value) pairs match. Both copies are coherent ship
+tracks (median step between consecutive tows 92\,km and 100\,km), so neither is obviously scrambled. The globe's
+``Microplastics, earlier surveys 1972--2015'' option draws Lebreton's copy. \textbf{Which copy is right must be
+settled before the store is built} (\S\ref{sec:ladder}, step 0) --- by asking SEA, or by a third independent copy:
+Eriksen 2023 holds 10,170 SEA rows to 2017.
+
+\section{The ledger, part two --- satellites, and the one window where they meet the nets}
+
+{\setlength{\tabcolsep}{2pt}\scriptsize
+\begin{longtable}{@{}L{2.3cm}L{3.0cm}L{3.2cm}L{1.9cm}L{5.2cm}@{}}
+\caption{Satellite sources and labelled sets, as measured on 2026-10-11. 200 and 206 are the HTTP codes for a whole file and for a requested byte range served; 302 $\to$ 401 is a redirect to a login that refused.} \label{tab:sat}\\
+\toprule
+source & what it is & access & licence & the measured fact that matters \\
+\midrule
+\endfirsthead
+\toprule
+source & what it is & access & licence & the measured fact that matters \\
+\midrule
+\endhead
+\textbf{Sentinel-2 MSI} (the MultiSpectral Instrument on the EU's Sentinel-2 satellites) & 10--20\,m optical
+imager, 13 bands including red-edge B06 (740\,nm), near-infrared B08 (842\,nm), and shortwave-infrared B11
+(1,610\,nm) and B12 (2,190\,nm) & level-2A COGs on AWS (\code{sentinel-cogs}): anonymous range read
+\textbf{206}, CORS \code{*}; level-1C as JPEG 2000 in \code{sentinel-s2-l1c}, anonymous 206 from here (documented
+as requester-pays --- recheck outside the proxy) & Copernicus free, full and open; notice ``Contains modified
+Copernicus Sentinel data [year]'' & \textbf{It does not image the open ocean.} ESA's acquisition plan covers land,
+coastal waters to 20\,km, islands, the Mediterranean and closed seas; the measured offshore reach is $\sim 250$\,km
+where a swath clips land (off Portugal: items at 65--250\,km, none at 350\,km). The Great Pacific Garbage Patch box
+(30--35$^\circ$\,N, 135--145$^\circ$\,W) has \textbf{0 items in 2023 and in every year except one special
+campaign: 2,602 level-2A items, 61 dates, 2021-07-02 $\to$ 2021-09-19} \\
+\addlinespace
+\dots\ its level-2A over water & Sen2Cor's atmospheric correction is tuned for land & measured on one clear tile
+100+\,km off Portugal & --- & \textbf{11\,\% of B08, 27\,\% of B11 and 8\,\% of B06 pixels pinned at the lowest
+value} --- the bands the debris index differences. The debris papers start from level-1C and correct with ACOLITE
+(an open-source atmospheric correction tuned for water) \\
+\addlinespace
+\textbf{MARIDA} (Marine Debris Archive, Kikaki et al.\ 2022) & human-labelled Sentinel-2 pixels in 15 classes &
+Zenodo 5151941 --- 200, 1.16\,GB & CC BY 4.0 & 1,381 patches of $256 \times 256$ pixels, 63 scenes, 2015-11 $\to$
+2021-01, 11 countries; \textbf{837,377 labelled pixels, 3,399 of them ``marine debris''} (in 373 patches) \\
+\addlinespace
+\textbf{MADOS} (Kikaki et al.\ 2024) & the same kind; adds oil spills & Zenodo 10664073 --- 200, 4.04\,GB & CC BY 4.0
+& 174 scenes, 2,803 crops of $240 \times 240$, 2015--2022 \\
+\addlinespace
+\textbf{Plastic Litter Project} (Topouzelis, University of the Aegean) & KNOWN plastic targets moored in the Gulf
+of Gera, Lesvos, imaged by Sentinel-2 and drones & Zenodo 3752719 (2019), 7085112 (2021, 159.5\,GB), 10046182
+(2022--23) --- 200 & CC BY 4.0 & 2021: 22 acquisition dates, 2021-06-11 $\to$ 2021-10-04; detection of targets
+covering $\ge 25$\,\% of a pixel shown (Topouzelis 2020) \\
+\addlinespace
+\textbf{FloatingObjects} (Mifdal et al.\ 2021) & line annotations of floating objects on 26 scenes & Google Drive
+zip, 16.6\,GB --- 206 & Apache-2.0 & 2,270 features, 2018--2020 \\
+\addlinespace
+\textbf{PACE OCI} level 2 & the 2024 hyperspectral ocean-colour instrument (the Ocean Color Instrument on NASA's
+PACE satellite) at $\sim 1$\,km & CMR (NASA's catalogue) anonymous; downloads need an Earthdata login (302 $\to$
+401); the anonymous OB.DAAC OPeNDAP server holds only levels 3 and 4 & NASA open & water-leaving reflectance stops
+at 719\,nm; the only shortwave-infrared above level 1 is the \textbf{surface-reflectance product SFREFL,
+\code{rhos} at 1038, 1249, 1618, 2131 and 2258\,nm}; \textbf{no band sits on plastic's 1,732\,nm absorption};
+$\sim 89$\,GB a day at level 2; anonymous only as level-3 2\,km / 4\,km daily maps \\
+\addlinespace
+\textbf{CYGNSS microplastic level 3} (Evans \& Ruf 2021) & an empirical index from the sea-surface roughness that
+CYGNSS measures in reflected GPS signals, fitted to a plastic MODEL & PO.DAAC, Earthdata login & NASA open &
+$0.25^\circ$ daily files, but the authors' feature resolution is $1^\circ$ and 30 days; latitudes within about
+$\pm 38^\circ$; confounded by natural surfactants and the tropical rain band \\
+\bottomrule
+\end{longtable}}
+
+\paragraph{Sentinel-2's coverage.} The one satellite with the bands the debris indices need (red edge, near
+infrared, shortwave infrared) at 10--20\,m does not image the open ocean: its plan stops at coastal waters, islands
+and closed seas, and the measured reach offshore is about 250\,km and only where a swath clips land. Over the Great
+Pacific Garbage Patch it imaged one campaign in one summer, 2021.
+
+\paragraph{Level-2A clips over water.} The anonymously served, already-corrected product cannot be used as it is:
+on a clear tile more than 100\,km off Portugal, 11\,\% of B08, 27\,\% of B11 and 8\,\% of B06 pixels sit at the
+lowest value --- the very bands the floating debris index differences. Any debris store starts from level-1C and
+corrects with ACOLITE, as the debris papers do.
+
+\paragraph{The labelled sets.} MARIDA, MADOS, the Plastic Litter Project and FloatingObjects are human labels or
+known targets on Sentinel-2 scenes, all near coasts. They are what any satellite debris method is tested on, and
+the first three are CC BY 4.0.
+
+\paragraph{PACE and CYGNSS.} PACE's water-leaving reflectance stops at 719\,nm, its only shortwave-infrared above
+level 1 is the surface-reflectance product, and no band sits on plastic's 1,732\,nm absorption. CYGNSS's
+microplastic index is a roughness anomaly fitted to a plastic model, at $1^\circ$ and 30 days, and natural
+surfactants and the tropical rain band confound it.
+
+\paragraph{The 2021 co-location window --- where a satellite and the nets meet in the open gyre.} The Ocean
+Cleanup's North Pacific missions of 2021 (in Lebreton 2024) flew 22 aerial surveys (34.8--35.4$^\circ$\,N,
+144.4--145.9$^\circ$\,W, every few days from 2021-08-05 to 08-31) and towed 6 manta nets in August, inside the area
+and the weeks of the only Sentinel-2 campaign over the patch: a $0.7^\circ$ box around the surveys has 167 level-2A
+items on 20 dates in August--September 2021, including 2021-08-11, 08-16, 08-24, 08-26 and 08-31 --- days with
+surveys. It is the one place on Earth where an open-gyre plastic measurement and a 20\,m multispectral image are
+days apart, and it is cheap to look at (\S\ref{sec:ladder}, step 2).
+
+\section{The stores --- what each holds, the indices it would compute, and the footprints}
+
+{\setlength{\tabcolsep}{2pt}\scriptsize
+\begin{longtable}{@{}L{1.8cm}L{1.0cm}L{2.9cm}L{4.8cm}L{4.1cm}L{0.75cm}@{}}
+\caption{The proposed stores. The first three are built in phase A.} \label{tab:stores}\\
+\toprule
+store & tier & what one row / frame is & channels & rows / size & phase \\
+\midrule
+\endfirsthead
+\toprule
+store & tier & what one row / frame is & channels & rows / size & phase \\
+\midrule
+\endhead
+\textbf{\code{mplastic}} & P (points) & one surface sample: a net tow, a pump or grab sample, or an aircraft survey
+line & \code{n\_km2} (pieces/km$^2$, as caught), \code{g\_km2}, \code{n\_m3} (volumetric samples only),
+\code{n\_km2\_wc} (the producer's wind-mixing-corrected value, where given), four size-class counts where the
+producer resolves them (0.05--0.5, 0.5--5, 5--50, $> 50$\,cm), \code{mesh\_um} (net mesh in $\mu$m),
+\code{depth\_m} (net depth, assumed or measured), \code{wind\_ms} at sampling; \code{qc} = gear class (manta,
+neuston, large net, pump, grab, aircraft); \code{platform} = cruise & $\approx 20,000$ rows after de-duplication
+(NCEI $\approx 17$\,k water samples, of which $\approx 0.6$\,k are replaced by The Ocean Cleanup's own
+$\approx 1.2$\,k rows, + EMODnet $\approx 3.4$\,k $-$ $\approx 0.6$\,k already in NCEI); $< 5$\,MB & A \\
+\addlinespace
+\textbf{\code{mobjects}} & P & one object identified in an aircraft photo mosaic & length, width, top-view area,
+weight low / mid / high; \code{qc} = object type (net, rope, buoy, container, unknown \dots) & 1,595 (2016) + the
+2021--22 surveys if Lebreton 2024 resolves objects; $< 1$\,MB & A \\
+\addlinespace
+\textbf{\code{s2labels}} & P & one human-labelled Sentinel-2 pixel & the 11 ACOLITE-corrected band reflectances the
+label set ships; \code{qc} = class (marine debris, \emph{Sargassum}, foam, ship, clear water, turbid water, \dots),
+confidence & MARIDA 837,377 (measured) + MADOS $\approx 1.5$\,M (its project page) + the Plastic Litter Project's
+target pixels (to count) --- $\approx 2.4$\,M rows, $\approx 130$\,MB at 53 bytes a row & A \\
+\addlinespace
+\code{s2fdi\_gpgp} & G-fine & one 20\,m Sentinel-2 frame over the patch, July--September 2021 & FDI, FAI, NDVI,
+PI and the four bands they use, from level-1C via ACOLITE & only if step 2 passes; the campaign is 2,602 tiles
+$\times$ $5,490^2$ pixels $\times$ 8 float16 channels $\approx 1.25$\,TB before any cut to water and cloud-free & B \\
+\addlinespace
+\code{s2fdi\_coast} & G-fine & the same over the water of the coastal band and enclosed seas & as above & a cost
+estimate, not a build & C \\
+\addlinespace
+\code{pace\_swir} & G & PACE \code{rhos} at 865, 1038, 1249, 1618, 2131, 2258\,nm, daily 4\,km (anonymous level
+3) or 1.2\,km (level 2, Earthdata) & 6 reflectances & $\approx 2$\,TB a year at level 2 & C \\
+\addlinespace
+\code{cygnss\_mss} & P or G & GPS-reflection roughness, the observable under the CYGNSS index & mean-square slope,
+wind & to measure & C \\
+\addlinespace
+\code{beachlitter} & P & shoreline litter surveys (NCEI beach and nurdle counts, EMODnet beach litter, NOAA MDMAP)
+& counts per transect or per 10 minutes & $\approx 12$\,k NCEI rows + others & C \\
+\bottomrule
+\end{longtable}}
+
+\paragraph{The indices, as their papers define them.} $R_n$ is the reflectance in Sentinel-2 band $n$ and
+$\lambda_n$ that band's centre wavelength (band 4 is red, 6 red edge, 8 near infrared, 11 shortwave infrared).
+\begin{itemize}\itemsep2pt
+\item \textbf{FDI}, the floating debris index (Biermann et al.\ 2020), brightens where something floats on the
+water: it is band 8 minus a baseline drawn from bands 6 and 11,
+\[
+\mathrm{FDI} = R_8 - R'_8, \qquad
+R'_8 = R_6 + \left(R_{11} - R_6\right)\,\frac{\lambda_8 - \lambda_4}{\lambda_{11} - \lambda_4}\times 10 ,
+\]
+with the centre wavelengths of each satellite: the factor $10\,(\lambda_8 - \lambda_4)/(\lambda_{11} - \lambda_4)$
+is 1.7722 for Sentinel-2A and 1.7770 for Sentinel-2B.
+\item \textbf{FAI}, the floating algae index (Hu 2009):
+\[
+\mathrm{FAI} = R_8 - \left[ R_4 + \left(R_{11} - R_4\right)\frac{\lambda_8 - \lambda_4}{\lambda_{11} - \lambda_4}\right].
+\]
+\item \textbf{NDVI}, the normalised difference vegetation index, and \textbf{PI}, the plastic index
+(Themistocleous et al.\ 2020):
+\[
+\mathrm{NDVI} = \frac{R_8 - R_4}{R_8 + R_4}, \qquad \mathrm{PI} = \frac{R_8}{R_8 + R_4}.
+\]
+\end{itemize}
+
+\paragraph{Footprints.} Every value reaches the model with a footprint, the area and time span it stands for. A
+manta tow sweeps $\sim 0.9$\,m $\times$ 1--15\,km: its token's area is the swept area ($\approx 0.001$--0.02\,km$^2$)
+and its length the tow line; a pump sample is a point (\code{log2\_fp} $= -4$, the family's label for a point); a
+Sentinel-2 pixel is 20\,m.
+
+\section{Decisions D1--D8 --- this note's picks, each reversible}
+\label{sec:decisions}
+
+\begin{enumerate}\itemsep2pt
+\item[\textbf{D1}] \textbf{The first store is the nets.} \code{mplastic} is built first; every satellite store is
+gated on a test against it or against labelled pixels.
+\item[\textbf{D2}] \textbf{One producer per cruise, the original producer first.} Precedence: The Ocean Cleanup
+(its own cruises, its own size classes) $\to$ NCEI (each study's own accession where one exists, else the
+harmonised table) $\to$ EMODnet (European cruises) $\to$ Isobe 2021 (rows not in the above, once its data licence is
+confirmed). A row from a later source is dropped when an earlier one holds the same day within $0.01^\circ$, and
+its drop is counted in the de-duplication ledger, never silently. Compilations are sources of rows nobody else
+published, not of copies.
+\item[\textbf{D3}] \textbf{Store what the net measured.} For surface net tows the stored quantity is pieces/km$^2$
+(and g/km$^2$ where weighed) \textbf{as caught}; NCEI's pieces/m$^3$ is multiplied back by the depth the compiler
+assumed, recorded per study in a committed table with the match that measured it. Pumps and grab samples are
+volumetric and stay in pieces/m$^3$, in their own channel. The producer's wind-mixing correction is kept beside the
+raw value, never in place of it.
+\item[\textbf{D4}] \textbf{AOMI stays out of phase A}: non-commercial, mixed per-record licences, 64\,\% already in
+NCEI, and 79 rows with latitude and longitude swapped. The probe measures what it would add; if it is worth it, it
+goes on the \emph{private} track (held for this project's own use, never republished).
+\item[\textbf{D5}] \textbf{Eriksen 2023 stays out until its licence is clear} (there is no licence in the
+repository). It is the third copy that can settle the SEA conflict, and that use needs no redistribution.
+\item[\textbf{D6}] \textbf{No satellite debris store is built at scale in this family's first pass.} Sentinel-2
+cannot see the open ocean, PACE has no band on plastic's absorption, and CYGNSS's index is fitted to a model. What
+IS built is cheap: the labelled pixels (\code{s2labels}) and one probe at the 2021 co-location window. A coastal
+Sentinel-2 debris store is a phase-C decision with a cost estimate, taken on the probe's result.
+\item[\textbf{D7}] \textbf{CYGNSS's microplastic index is rejected} under the family's rule --- raw observations
+first, a derived product only where it carries observations nothing else does: it is a roughness anomaly fitted to
+a plastic model, at $1^\circ$ and 30 days. The roughness itself (mean-square slope) is a phase-C candidate.
+\item[\textbf{D8}] \textbf{Family code \code{13}, version \code{1.3}, root \code{tensors/\allowbreak family1\_3/}, registry
+\code{tensors/\allowbreak family1\_3/\allowbreak family13.json}.} It inherits 1.2, which inherits 1.gf: the registry's
+\code{inherits\_block} lists the RESOLVED chain (1.gf's 13 stores under their own paths and 1.2's four), so a reader
+opens one parent list, not a chain. \code{ml/build\_family1\_registry.py} needs that small extension; today it
+resolves one parent.
+\end{enumerate}
+
+\section{The ladder --- the order of building}
+\label{sec:ladder}
+
+\begin{enumerate}\itemsep2pt
+\item[\textbf{0}] \textbf{Settle the SEA conflict} (\S3) before any row is written: compare both copies with
+Eriksen 2023's 10,170 SEA rows and, if that does not decide, ask SEA. The answer also decides whether the globe
+layer's ``earlier surveys'' option keeps Lebreton's copy. Cost: an afternoon.
+\item[\textbf{1}] \textbf{Phase A, on a hosted runner (one of GitHub's own build machines), \$0.} Adapters for
+\code{mplastic}, \code{mobjects} and \code{s2labels} against the family-10 point-store builder; a probe that runs
+the whole of each (they are small enough that the probe IS the build); the per-study depth table committed with the
+match that measured each depth; the de-duplication ledger (rows read, rows dropped as copies per pair of sources,
+rows kept). Publish to \code{tensors/family1\_3/}, registry \code{family13.json} inheriting the resolved 1.2 chain.
+\item[\textbf{2}] \textbf{The co-location probe --- one hour, \$0.} For each 2021 aerial survey and manta tow in
+the patch with a Sentinel-2 acquisition within $\pm 1$ day, fetch the level-1C tiles over the survey line, correct
+with ACOLITE, compute FDI, and compare FDI's distribution under the line (and its upper percentiles) with the same
+tile's open water away from it, and with the survey's megaplastic count. \textbf{Expected: nothing above noise} ---
+the densest patch holds at most $\sim 13$ objects over 50\,cm per km$^2$ (Lebreton 2018's highest mosaic), of the
+order of 0.001\,\% of the surface. A clear signal would be a finding worth a paragraph; no signal closes
+\code{s2fdi\_gpgp} for good, with a measured reason.
+\item[\textbf{3}] \textbf{Phase B} only on step 2's result: \code{s2fdi\_gpgp}, if it showed signal.
+\item[\textbf{4}] \textbf{Phase C} decisions, each with its own probe first: \code{s2fdi\_coast}, \code{pace\_swir},
+\code{cygnss\_mss}, \code{beachlitter}, and AOMI's unique remainder on the private track.
+\end{enumerate}
+
+\section{The falsifiers --- what would show each store is not worth keeping}
+
+\paragraph{\code{mplastic} as a read-out.} The family is worth having only if a model reading 1.3's inputs
+predicts held-out tows --- left out by CRUISE, so a cruise's neighbouring tows cannot leak --- better than two
+baselines: the nearest tows in space and time ($k$ nearest neighbours, $k = 5$), and the published climatological
+map (Isobe 2021's level-3 grid). Score: the error in $\log_{10}(1 + \text{pieces/km}^2)$ and, separately, whether an
+empty net is predicted empty. If the model does not beat the neighbours, the inputs carry nothing the tows' own
+geography does not, and the read-out is shelved.
+
+\paragraph{\code{mobjects}.} Kept as the aircraft's own record; falsified only if its counts do not reproduce
+Lebreton 2018's published megaplastic concentrations per mosaic --- a check made when the store is baked.
+
+\paragraph{\code{s2labels}.} The baseline is an index threshold --- FDI above its 95th percentile over clear water
+in MARIDA's training split --- scored on MARIDA's own test split. The store earns its place if a model reading the
+11 bands plus the inherited ocean colour beats it on debris-versus-not F1 (a score that balances missed debris
+against false alarms). If the threshold already matches the model, the labels are a test set, not a training store.
+
+\paragraph{\code{s2fdi\_gpgp}.} The co-location probe of \S\ref{sec:ladder}, step 2.
+
+\section{Open items, in the order they block}
+
+Status: \textbf{draft --- nothing built.} The sources were measured on 2026-10-11; the raw downloads are in
+scratch space, not committed.
+\begin{enumerate}\itemsep2pt
+\item the SEA Pacific conflict, which blocks \code{mplastic}'s SEA rows and the globe layer's earlier-surveys option;
+\item Isobe 2021's data licence; Eriksen 2023's licence;
+\item whether the repository's Earthdata account (secrets \code{EARTHDATA\_USERNAME} / \code{EARTHDATA\_PASSWORD},
+working for LP DAAC, GES DISC and PO.DAAC) reads OB.DAAC's PACE level 2 --- never tried;
+\item the registry builder's resolved-chain inheritance (D8);
+\item the level-1C bucket's requester-pays status outside this machine's network proxy.
+\end{enumerate}
+
+\section*{Terms used above, in one line each}
+\footnotesize
+\textbf{Family} a numbered set of datasets built to one storage design and read by the programme's forecasting
+model; \textbf{store} one dataset of a family; \textbf{registry} the JSON file listing every store of a family.
+\textbf{Family 1.gf / 1.2 / 1.3} the global observation stores at 10\,km and 5 days or finer; 1.gf plus ERA5's
+upper air; 1.2 plus the plastic stores. \textbf{Inherited by reference / \code{inherits\_block} / resolved chain}
+a parent's stores listed in the child's registry without copying a byte; the registry field holding that list; the
+list written out in full so a reader opens one parent list, not a chain. \textbf{Read-out} a quantity the model is
+asked to predict or report. \textbf{Verdict} a store's recorded keep-or-drop result. \textbf{Tier P / G / G-fine}
+points, profiles and tracks; gridded fields; grids finer than $0.25^\circ$ stored as compressed tiles.
+\textbf{Footprint / \code{log2\_fp} / token} the area and time span a value stands for; its area as a base-2
+logarithm, $-4$ being the label for a point; the unit the model reads. \textbf{\code{qc} / \code{platform}} a point
+store's quality-or-class column and its instrument (here cruise) column. \textbf{Phase A / B / C} the cheap first
+build, the stores taken on a probe's result, and decisions taken later. \textbf{Probe} a test run of a store's real
+fetch code before any full build. \textbf{Falsifier} the test, fixed before building, that can show a store is not
+worth keeping. \textbf{Hosted runner} one of GitHub's own build machines. \textbf{Public / private track} a store
+anyone may read, or one held for this project's own use because its licence forbids republishing.
+\textbf{Adapter} the per-source fetch-and-convert code. \textbf{Hugging Face / \code{chfrank/earth-tensors}} the
+dataset host and the project's public repository there. \textbf{E-085} the experiment that added ERA5 to family 1.2.
+\textbf{ERA5} the European weather reanalysis, a weather model run over past decades and continually corrected towards
+observations. \textbf{SWOT / \code{sig0\_karin}} the Surface Water and Ocean Topography satellite and its radar
+backscatter. \textbf{PACE / OCI} NASA's Plankton, Aerosol, Cloud, ocean Ecosystem satellite (2024) and its Ocean
+Color Instrument, which resolves the whole visible spectrum (hyperspectral). \textbf{Ocean colour / \code{kd\_490}}
+the colour of light leaving the sea, from which chlorophyll is estimated; the attenuation of light at 490\,nm.
+\textbf{Altimeter} a radar satellite measuring sea height and wave height straight below it. \textbf{Wind-mixing
+correction} the producer's scaling up of a net's catch for light pieces that waves pushed below the net.
+\textbf{Confusers} turbid water, blooms, \emph{Sargassum} (a floating brown seaweed) and foam, which a debris
+index can mistake for plastic. \textbf{Windrows} lines where wind and currents gather floating material.
+\textbf{Manta / neuston net} surface nets that skim the top few tens of centimetres of the sea; \textbf{large net}
+a bigger net towed for larger pieces; \textbf{pump / grab sample} water pumped or scooped and filtered, a per-volume
+measurement. \textbf{Mesh} the size of a net's openings ($\mu$m, micrometres). \textbf{Microplastic /
+megaplastic} the smallest size class (here 0.05--0.5\,cm) and objects over 50\,cm. \textbf{Nurdles} plastic
+pellets, the raw material of plastic goods, counted on beaches. \textbf{Compilation} a table gathered from many
+studies rather than measured by its publisher. \textbf{Accession / DOI} an archive's catalogue number; a
+permanent identifier for a dataset. \textbf{CC0 / CC BY 4.0 / non-commercial / Apache-2.0} public domain; free with
+attribution; free only for non-commercial use; a permissive software licence. \textbf{NOAA / NCEI} the US National
+Oceanic and Atmospheric Administration and its National Centers for Environmental Information, the US national
+environmental archive. \textbf{ArcGIS FeatureServer / MapServer / Hub} web services that answer queries for map records.
+\textbf{CSV} comma-separated values, a plain-text table. \textbf{figshare / Zenodo / Springer supplement / GitHub
+/ Google Drive} the public file hosts the sources come from. \textbf{The Ocean Cleanup} the organisation whose surveys produced Lebreton 2018 and 2024;
+\textbf{cleanup-system catches} what its collecting systems brought up. \textbf{EMODnet}
+the European Marine Observation and Data Network. \textbf{AOMI} Japan's Atlas of Ocean Microplastics; \textbf{Isobe
+levels 0--3} its source dataset's stages: 0 and 1 per volume, 2 per area and wind-corrected, 3 a gridded map. \textbf{SEA / 5 Gyres} the Sea Education
+Association, whose cruises towed the Pacific nets of Law 2014, and 5 Gyres, the organisation behind Eriksen's
+tows. \textbf{NOAA MDMAP} NOAA's Marine Debris Monitoring and Assessment Project of beach surveys.
+\textbf{Great Pacific Garbage Patch} the area of the North Pacific gyre where floating plastic gathers.
+\textbf{Sentinel-2 / MSI / S2A, S2B} the EU Copernicus optical satellites and their MultiSpectral Instrument; the
+two satellites. \textbf{Red edge / NIR / SWIR} light just beyond red, near-infrared, shortwave-infrared.
+\textbf{nm} nanometre, the unit of wavelength. \textbf{Level 1C / 2A} Sentinel-2's top-of-atmosphere product and its
+surface product after atmospheric correction; \textbf{level 2 / 3 / 4} elsewhere: swath measurements, gridded maps,
+model-filled products. \textbf{Atmospheric correction / Sen2Cor / ACOLITE} removing the air's contribution to what a
+satellite sees; ESA's land-tuned corrector; an open-source corrector tuned for water. \textbf{Item / tile / scene}
+one catalogued Sentinel-2 image file, its fixed grid square, one acquisition. \textbf{COG / JPEG 2000}
+image formats; a cloud-optimised GeoTIFF can be read in byte ranges. \textbf{AWS / requester-pays} Amazon Web Services'
+storage; a bucket whose downloads are billed to the reader. \textbf{HTTP 200 / 206 / 302 / 401} whole file served;
+byte range served; redirect; login refused. \textbf{CORS \code{*}} a header allowing any website to read the file.
+\textbf{Copernicus / ESA} the EU's Earth-observation programme and the European Space Agency. \textbf{MARIDA /
+MADOS} the Marine Debris Archive and its successor with oil spills, labelled Sentinel-2 pixels. \textbf{Plastic
+Litter Project} the University of the Aegean's moored plastic targets off Lesvos. \textbf{FloatingObjects} line
+annotations of floating objects on Sentinel-2 scenes. \textbf{CMR / Earthdata login / OB.DAAC / PO.DAAC / LP DAAC
+/ GES DISC} NASA's catalogue, its free user account, and its ocean-biology, ocean, land and Earth-science data
+centres. \textbf{OPeNDAP} a protocol for reading subsets of scientific files over HTTP. \textbf{SFREFL / \code{rhos}}
+PACE's surface-reflectance product and its reflectance variable. \textbf{1,732\,nm absorption} the wavelength at
+which plastic absorbs light distinctively. \textbf{CYGNSS / mean-square slope} NASA's Cyclone Global Navigation
+Satellite System, small satellites that measure sea roughness from reflected GPS signals; the roughness they
+measure. \textbf{Surfactants} natural films that smooth the sea surface. \textbf{FDI / FAI / NDVI / PI} the floating
+debris, floating algae, normalised difference vegetation and plastic indices of \S5. \textbf{Float16} a two-byte
+number. \textbf{Percentile} the value below which a given share of the data lies. \textbf{$k$ nearest neighbours}
+a forecast that averages the $k$ closest observations. \textbf{Training / test split} the labelled data a method is
+tuned on, and the part kept back to score it. \textbf{F1} a score combining missed detections and false alarms.
+\textbf{TB / GB / MB} tera-, giga- and megabytes.
+\normalsize
+
+\begin{thebibliography}{99}\small
+\bibitem{bie20} Biermann et al.\ (2020). The floating debris index (FDI).
+\bibitem{eri14} Eriksen et al.\ (2014). Net tows, implied net depth 0.08\,m in NCEI.
+\bibitem{eri23} Eriksen et al.\ (2023). The ``plastic smog'' compilation, 12,546 rows; no licence in the authors'
+repository, paper CC BY 4.0.
+\bibitem{eva21} Evans \& Ruf (2021). The CYGNSS microplastic level-3 index. PO.DAAC.
+\bibitem{gol} Goldstein. Net tows, implied net depth 0.155--0.25\,m in NCEI.
+\bibitem{hu09} Hu (2009). The floating algae index (FAI).
+\bibitem{hu21} Hu (2021). The densest open-ocean microplastic covers about 0.005\,\% of the surface.
+\bibitem{iso21} Isobe et al.\ (2021). The multilevel dataset behind Japan's Atlas of Ocean Microplastics. Springer
+supplement; article CC BY 4.0.
+\bibitem{kik22} Kikaki et al.\ (2022). MARIDA, the Marine Debris Archive. Zenodo 5151941, CC BY 4.0.
+\bibitem{kik24} Kikaki et al.\ (2024). MADOS. Zenodo 10664073, CC BY 4.0.
+\bibitem{law14} Law et al.\ (2014). SEA's Pacific tows; NCEI accession 0211008.
+\bibitem{leb18} Lebreton et al.\ (2018). The Ocean Cleanup's 2015--16 survey. figshare 5873142, CC BY 4.0.
+\bibitem{leb24} Lebreton et al.\ (2024). The Ocean Cleanup's surveys 2015--2022. figshare 25674120, CC BY 4.0.
+\bibitem{mif21} Mifdal et al.\ (2021). FloatingObjects. Apache-2.0.
+\bibitem{ncei} NOAA NCEI. Global Marine Microplastics. Accession 0306475, DOI 10.25921/v8gj-k896, CC0 1.0.
+\bibitem{the20} Themistocleous et al.\ (2020). The plastic index (PI).
+\bibitem{top20} Topouzelis et al.\ (2020). The Plastic Litter Project. Zenodo 3752719, 7085112, 10046182; CC BY 4.0.
+\end{thebibliography}
+
+\end{document}

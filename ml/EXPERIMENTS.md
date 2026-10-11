@@ -45,6 +45,27 @@ low-pass).
 ---
 
 <a id="e-090"></a>
+## E-092 · Family 1.3 — family 1.2 plus the stores that could identify plastic in the ocean — DESIGN ONLY, nothing built (written 2026-10-11)
+
+TL;DR — a new family whose job is a FIFTH read-out, floating plastic
+concentration at a place and time, on top of family 1.2 (the global fine
+observation stores plus ERA5 upper air) inherited by reference. Every
+candidate source was measured from the sandbox on 2026-10-11. The finding
+that shapes it: open-ocean plastic is measured almost only by nets — the
+densest microplastic covers ~0.005 % of the sea surface, below any optical
+sensor; Sentinel-2 does not image the open ocean (the garbage patch has one
+campaign, 2021-07-02 → 09-19); PACE has no band on plastic's 1,732 nm
+absorption; CYGNSS's index is fitted to a model. So the first store is
+`mplastic` (the in-situ tows, one producer per cruise, pieces per km² as
+caught), with `mobjects` (aircraft-identified objects) and `s2labels`
+(2.4 M human-labelled Sentinel-2 pixels); a one-hour probe at the only
+open-gyre co-location of tows, aircraft surveys and Sentinel-2 (August 2021)
+decides whether any satellite store is built. **Control** for the read-out:
+the five nearest tows in space and time, and Isobe 2021's climatological map,
+scored on cruises held out. Blocking: two published copies of SEA's 2,529
+Pacific tows disagree on position. Plan:
+[E-092](https://blauewelt.github.io/earth/docs.html?f=ml/plans/E092_family13_plastic.md).
+
 ## E-091 · Day-of-year climatology — the mean of every calendar day over any span of years, from sums cumulative over the years — BUILT 2026-10-08 for OISST and the four ERA5 stores
 
 **Why.** Chris: *"Say I want average values for every single day of year,

@@ -2515,7 +2515,12 @@ in the hover card were checked against the paper's abstract on 2026-10-09:
 mass in pieces > 5 cm, 94% of pieces microplastic, nets ≥ 46% of the mass.
 Not baked (optional later): the paper's modelled patch outline and mass map
 (`GPGP_contours.zip`, `MassConcentrationAllSizes.tif`) — derived, not
-observations. Not public anywhere: the raw aerial imagery, lidar and SWIR.
+observations. Not public anywhere: the raw aerial imagery, lidar and SWIR. **Open
+(found 2026-10-11, E-092):** the "earlier surveys" option draws Lebreton's
+copy of SEA's 2,529 Pacific tows (Law et al. 2014), and SEA's own submission
+to NCEI (accession 0211008) agrees with it on every year-month count but on
+only 399 positions — both are coherent ship tracks, so which is right is not
+settled; E-092 §5 step 0 settles it before family 1.3 uses either.
 
 **Data pipeline** (`scripts/refresh_data.py`): one function per snapshot —
 climatetrace, argo, rapid, sealevel, glaciers (RGI7 tars + Hugonnet parquet
