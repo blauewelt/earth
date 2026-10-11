@@ -45,7 +45,7 @@ low-pass).
 ---
 
 <a id="e-090"></a>
-## E-092 · Family 1.3 — family 1.2 plus the stores that could identify plastic in the ocean — DESIGN ONLY, nothing built (written 2026-10-11)
+## E-092 · Family 1.3 — family 1.2 plus the stores that could identify plastic in the ocean — PHASE A PUBLISHED 2026-10-11 (`mplastic` 18,504 surface samples, `mobjects` 1,595 aircraft objects)
 
 TL;DR — a new family whose job is a FIFTH read-out, floating plastic
 concentration at a place and time, on top of family 1.2 (the global fine
@@ -69,6 +69,16 @@ and not NCEI's accession 0211008 (~355) — NCEI's positions are wrong, the
 globe's copy is right; SEA's later resubmitted values (≈ 3× for 1,027 tows)
 are an open question for SEA. Plan:
 [E-092](https://blauewelt.github.io/earth/docs.html?f=ml/plans/E092_family13_plastic.md).
+
+**Built and published the same evening** (hosted runners, $0): `mplastic`,
+18,504 surface samples 1972-04 → 2024-10 — The Ocean Cleanup 4,210, NOAA
+NCEI 13,385, EMODnet 909, one producer per cruise with every copy counted in
+the ledger — stored as log10(1 + value) because float16 stops at 65,504; and
+`mobjects`, 1,595 objects from the 2016 aircraft mosaics, which match the
+producer's 2024 reprocessed counts on 31 of 31 mosaics and the 2018 paper's on
+2 (the falsifier amended to the 2024 counts). Registry
+`tensors/family1_3/family13.json`. Details: plan §8 and
+[the family-1 build log](https://blauewelt.github.io/earth/docs.html?f=ml/family1/BUILD_LOG.md).
 
 ## E-091 · Day-of-year climatology — the mean of every calendar day over any span of years, from sums cumulative over the years — BUILT 2026-10-08 for OISST and the four ERA5 stores
 

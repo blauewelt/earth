@@ -346,7 +346,7 @@ it needs AOMI's rows, which D4 keeps out. The comparison stays in §2a.
 
 ## 7 · Status
 
-**Phase A `mplastic` and `mobjects` built locally and tested (§8); publishing next. Nothing else built.** Sources measured 2026-10-11 (the raw downloads are
+**Phase A `mplastic` and `mobjects` BUILT AND PUBLISHED 2026-10-11** (family1-build #1057 and #1058, hosted runners, $0; registry `tensors/family1_3/family13.json` by family1-registry #7; every file read back from the Hub). `s2labels` and the co-location probe (§5 steps 1–2) are next. Sources measured 2026-10-11 (the raw downloads are
 in the session's scratch space, not committed). Open items, in the order they
 block:
 

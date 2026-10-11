@@ -2140,3 +2140,20 @@ have let one box do all four.
    run is first seen. It is matched by that id alone, fetched by id when the
    listings miss it, and never declared lost. Five selftest checks were
    added, and `tests/test_family1_queue.py` runs the selftest in the suite.
+
+## E-092 — family 1.3, phase A: `mplastic` and `mobjects` (2026-10-11)
+
+Plan: [E-092](https://blauewelt.github.io/earth/docs.html?f=ml/plans/E092_family13_plastic.md)
+§8. Family 1.3 is family 1.2 (inherited by reference, resolved chain) plus
+stores that could identify floating plastic. Both phase-A stores were built
+locally against the live sources first (ledgers in `ml/family1/probes/`),
+then built and published on hosted runners from `bae8a54`, no cost:
+
+| run | store | what | result |
+|---|---|---|---|
+| family1-build #1057 | `mplastic` | stage all, 1972-01-01 → 2025-12-31, `ubuntu-latest` | **18,504 rows**, record 1972-04-16 → 2024-10-23, 12 channels (log10(1 + value) concentrations, D10); every array's sha256 on the Hub equals store.json's (checked from the sandbox: values, time_s, lat, lon, qc) |
+| family1-build #1058 | `mobjects` | stage all, 2016, `ubuntu-latest` | **1,595 objects**, 2016-10-02 → 2016-10-06; matches the producer's 2024 aircraft counts on 31 of 31 mosaics, the 2018 paper's on 2 |
+| family1-registry #7 | `family13.json` | families 13, siblings10 true, guard strict | published; 2 built groups; `inherits_block` lists the resolved chain (1.2's four ERA5 stores, 1.gf's 13); family 10.2's `siblings` names it |
+
+A green run was not taken as evidence: the store.json, the five arrays and
+the registry were read back from the Hub after each run.
