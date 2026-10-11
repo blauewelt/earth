@@ -141,6 +141,10 @@ SIBLING_REGISTRIES = (
     # E-085: family 1.2 = 1.gf by reference + ERA5's upper air
     {"family": "family1_2", "family_version": "1.2",
      "registry": "tensors/family1_2/family12.json"},
+    # E-092: family 1.3 = 1.2 by reference + stores that could identify
+    # plastic in the ocean
+    {"family": "family1_3", "family_version": "1.3",
+     "registry": "tensors/family1_3/family13.json"},
 )
 
 

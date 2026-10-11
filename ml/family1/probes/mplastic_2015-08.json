@@ -1,0 +1,1712 @@
+{
+ "at": "2026-10-11T19:43:56+00:00",
+ "builder_git_sha": "e7766a452f882672053c8c6f840a9fc94dfcd491",
+ "bytes_fetched": 10008327,
+ "bytes_index": 21156948,
+ "bytes_per_row": 21249.102,
+ "channels": [
+  "log_n_km2",
+  "log_g_km2",
+  "log_n_m3",
+  "log_n_km2_wc",
+  "log_n_km2_micro",
+  "log_n_km2_meso",
+  "log_n_km2_macro",
+  "log_n_km2_mega",
+  "mesh_um",
+  "net_depth_m",
+  "sample_depth_m",
+  "wind_ms"
+ ],
+ "counts": {
+  "channel_rows_filled": {
+   "log_g_km2": 442,
+   "log_n_km2": 442,
+   "log_n_km2_macro": 116,
+   "log_n_km2_mega": 0,
+   "log_n_km2_meso": 326,
+   "log_n_km2_micro": 326,
+   "log_n_km2_wc": 442,
+   "log_n_m3": 29,
+   "mesh_um": 29,
+   "net_depth_m": 442,
+   "sample_depth_m": 471,
+   "wind_ms": 438
+  },
+  "dedup": {
+   "lebreton2018 > lebreton2018_hist": 501,
+   "lebreton2018_hist > ncei": 400,
+   "ncei > emodnet": 657
+  },
+  "emodnet_date_only": 5,
+  "emodnet_line_classes": {
+   "ambiguous": 18906,
+   "non-plastic": 3242,
+   "plastic": 9919
+  },
+  "emodnet_lines": 32067,
+  "emodnet_samples_dropped": {
+   "ambiguous_line_with_catch": 164,
+   "no_area_and_no_volume": 1,
+   "no_plastic_line": 1415,
+   "plastic_line_without_count": 118,
+   "vor_count_undefined": 121
+  },
+  "emodnet_type_mapping": [
+   {
+    "class": "plastic",
+    "type | polymer": "SDN:H01::H0100001 (microplastic items) | (no polymer type)"
+   },
+   {
+    "class": "ambiguous",
+    "type | polymer": "SDN:H01::H0100002 (fragments) | (no polymer type)"
+   },
+   {
+    "class": "plastic",
+    "type | polymer": "SDN:H01::H0100002 (fragments) | SDN:H05::H0500001 (polyethylene)"
+   },
+   {
+    "class": "plastic",
+    "type | polymer": "SDN:H01::H0100002 (fragments) | SDN:H05::H0500002 (polypropylene)"
+   },
+   {
+    "class": "plastic",
+    "type | polymer": "SDN:H01::H0100002 (fragments) | SDN:H05::H0500003 (polystyrene)"
+   },
+   {
+    "class": "plastic",
+    "type | polymer": "SDN:H01::H0100002 (fragments) | SDN:H05::H0500004 (polyamide (nylon))"
+   },
+   {
+    "class": "plastic",
+    "type | polymer": "SDN:H01::H0100002 (fragments) | SDN:H05::H0500005 (polyester)"
+   },
+   {
+    "class": "plastic",
+    "type | polymer": "SDN:H01::H0100002 (fragments) | SDN:H05::H0500008 (polyvinyl alcohol)"
+   },
+   {
+    "class": "plastic",
+    "type | polymer": "SDN:H01::H0100002 (fragments) | SDN:H05::H0500009 (polychlorinated polymer)"
+   },
+   {
+    "class": "plastic",
+    "type | polymer": "SDN:H01::H0100002 (fragments) | SDN:H05::H0500010 (polymethylacrylate)"
+   },
+   {
+    "class": "plastic",
+    "type | polymer": "SDN:H01::H0100002 (fragments) | SDN:H05::H0500013 (polyurethane)"
+   },
+   {
+    "class": "non-plastic",
+    "type | polymer": "SDN:H01::H0100002 (fragments) | SDN:H05::H0500020 (tar residue)"
+   },
+   {
+    "class": "non-plastic",
+    "type | polymer": "SDN:H01::H0100002 (fragments) | SDN:H05::H0500021 (natural rubber)"
+   },
+   {
+    "class": "non-plastic",
+    "type | polymer": "SDN:H01::H0100002 (fragments) | SDN:H05::H0500022 (natural fibres)"
+   },
+   {
+    "class": "plastic",
+    "type | polymer": "SDN:H01::H0100002 (fragments) | SDN:H05::H0500025 (undefined plastic)"
+   },
+   {
+    "class": "non-plastic",
+    "type | polymer": "SDN:H01::H0100002 (fragments) | SDN:H05::H0500026 (undefined non-plastic)"
+   },
+   {
+    "class": "ambiguous",
+    "type | polymer": "SDN:H01::H0100003 (pellets) | (no polymer type)"
+   },
+   {
+    "class": "plastic",
+    "type | polymer": "SDN:H01::H0100003 (pellets) | SDN:H05::H0500001 (polyethylene)"
+   },
+   {
+    "class": "non-plastic",
+    "type | polymer": "SDN:H01::H0100003 (pellets) | SDN:H05::H0500022 (natural fibres)"
+   },
+   {
+    "class": "plastic",
+    "type | polymer": "SDN:H01::H0100003 (pellets) | SDN:H05::H0500025 (undefined plastic)"
+   },
+   {
+    "class": "ambiguous",
+    "type | polymer": "SDN:H01::H0100004 (filaments) | (no polymer type)"
+   },
+   {
+    "class": "plastic",
+    "type | polymer": "SDN:H01::H0100004 (filaments) | SDN:H05::H0500001 (polyethylene)"
+   },
+   {
+    "class": "plastic",
+    "type | polymer": "SDN:H01::H0100004 (filaments) | SDN:H05::H0500002 (polypropylene)"
+   },
+   {
+    "class": "plastic",
+    "type | polymer": "SDN:H01::H0100004 (filaments) | SDN:H05::H0500003 (polystyrene)"
+   },
+   {
+    "class": "plastic",
+    "type | polymer": "SDN:H01::H0100004 (filaments) | SDN:H05::H0500004 (polyamide (nylon))"
+   },
+   {
+    "class": "plastic",
+    "type | polymer": "SDN:H01::H0100004 (filaments) | SDN:H05::H0500005 (polyester)"
+   },
+   {
+    "class": "non-plastic",
+    "type | polymer": "SDN:H01::H0100004 (filaments) | SDN:H05::H0500022 (natural fibres)"
+   },
+   {
+    "class": "plastic",
+    "type | polymer": "SDN:H01::H0100004 (filaments) | SDN:H05::H0500025 (undefined plastic)"
+   },
+   {
+    "class": "non-plastic",
+    "type | polymer": "SDN:H01::H0100004 (filaments) | SDN:H05::H0500026 (undefined non-plastic)"
+   },
+   {
+    "class": "ambiguous",
+    "type | polymer": "SDN:H01::H0100005 (films) | (no polymer type)"
+   },
+   {
+    "class": "plastic",
+    "type | polymer": "SDN:H01::H0100005 (films) | SDN:H05::H0500001 (polyethylene)"
+   },
+   {
+    "class": "plastic",
+    "type | polymer": "SDN:H01::H0100005 (films) | SDN:H05::H0500002 (polypropylene)"
+   },
+   {
+    "class": "plastic",
+    "type | polymer": "SDN:H01::H0100005 (films) | SDN:H05::H0500003 (polystyrene)"
+   },
+   {
+    "class": "plastic",
+    "type | polymer": "SDN:H01::H0100005 (films) | SDN:H05::H0500005 (polyester)"
+   },
+   {
+    "class": "plastic",
+    "type | polymer": "SDN:H01::H0100005 (films) | SDN:H05::H0500009 (polychlorinated polymer)"
+   },
+   {
+    "class": "non-plastic",
+    "type | polymer": "SDN:H01::H0100005 (films) | SDN:H05::H0500020 (tar residue)"
+   },
+   {
+    "class": "non-plastic",
+    "type | polymer": "SDN:H01::H0100005 (films) | SDN:H05::H0500021 (natural rubber)"
+   },
+   {
+    "class": "non-plastic",
+    "type | polymer": "SDN:H01::H0100005 (films) | SDN:H05::H0500022 (natural fibres)"
+   },
+   {
+    "class": "plastic",
+    "type | polymer": "SDN:H01::H0100005 (films) | SDN:H05::H0500025 (undefined plastic)"
+   },
+   {
+    "class": "non-plastic",
+    "type | polymer": "SDN:H01::H0100005 (films) | SDN:H05::H0500026 (undefined non-plastic)"
+   },
+   {
+    "class": "ambiguous",
+    "type | polymer": "SDN:H01::H0100006 (foams) | (no polymer type)"
+   },
+   {
+    "class": "plastic",
+    "type | polymer": "SDN:H01::H0100006 (foams) | SDN:H05::H0500001 (polyethylene)"
+   },
+   {
+    "class": "plastic",
+    "type | polymer": "SDN:H01::H0100006 (foams) | SDN:H05::H0500002 (polypropylene)"
+   },
+   {
+    "class": "plastic",
+    "type | polymer": "SDN:H01::H0100006 (foams) | SDN:H05::H0500003 (polystyrene)"
+   },
+   {
+    "class": "non-plastic",
+    "type | polymer": "SDN:H01::H0100006 (foams) | SDN:H05::H0500020 (tar residue)"
+   },
+   {
+    "class": "non-plastic",
+    "type | polymer": "SDN:H01::H0100006 (foams) | SDN:H05::H0500021 (natural rubber)"
+   },
+   {
+    "class": "plastic",
+    "type | polymer": "SDN:H01::H0100006 (foams) | SDN:H05::H0500025 (undefined plastic)"
+   },
+   {
+    "class": "non-plastic",
+    "type | polymer": "SDN:H01::H0100006 (foams) | SDN:H05::H0500026 (undefined non-plastic)"
+   },
+   {
+    "class": "non-plastic",
+    "type | polymer": "SDN:H01::H0100007 (non-plastic man-made micro-particles (e.g. glass, metal, tar)) | (no polymer type)"
+   },
+   {
+    "class": "non-plastic",
+    "type | polymer": "SDN:H01::H0100008 (non-plastic filaments (natural fibres, rubber)) | (no polymer type)"
+   },
+   {
+    "class": "ambiguous",
+    "type | polymer": "SDN:H01::H0100009 (granules) | (no polymer type)"
+   },
+   {
+    "class": "plastic",
+    "type | polymer": "SDN:H01::H0100009 (granules) | SDN:H05::H0500001 (polyethylene)"
+   },
+   {
+    "class": "plastic",
+    "type | polymer": "SDN:H01::H0100009 (granules) | SDN:H05::H0500002 (polypropylene)"
+   },
+   {
+    "class": "plastic",
+    "type | polymer": "SDN:H01::H0100009 (granules) | SDN:H05::H0500003 (polystyrene)"
+   },
+   {
+    "class": "plastic",
+    "type | polymer": "SDN:H01::H0100009 (granules) | SDN:H05::H0500005 (polyester)"
+   },
+   {
+    "class": "non-plastic",
+    "type | polymer": "SDN:H01::H0100009 (granules) | SDN:H05::H0500020 (tar residue)"
+   },
+   {
+    "class": "plastic",
+    "type | polymer": "SDN:H01::H0100009 (granules) | SDN:H05::H0500025 (undefined plastic)"
+   },
+   {
+    "class": "ambiguous",
+    "type | polymer": "SDN:H01::H0100010 (Undefined micro-litter items) | (no polymer type)"
+   },
+   {
+    "class": "plastic",
+    "type | polymer": "SDN:H01::H0100010 (Undefined micro-litter items) | SDN:H05::H0500001 (polyethylene)"
+   },
+   {
+    "class": "plastic",
+    "type | polymer": "SDN:H01::H0100010 (Undefined micro-litter items) | SDN:H05::H0500002 (polypropylene)"
+   },
+   {
+    "class": "plastic",
+    "type | polymer": "SDN:H01::H0100010 (Undefined micro-litter items) | SDN:H05::H0500003 (polystyrene)"
+   },
+   {
+    "class": "plastic",
+    "type | polymer": "SDN:H01::H0100010 (Undefined micro-litter items) | SDN:H05::H0500025 (undefined plastic)"
+   }
+  ],
+  "kept_by_gear": {
+   "1": 333,
+   "3": 116,
+   "5": 22
+  },
+  "kept_by_source": {
+   "lebreton2018": 442,
+   "ncei": 29
+  },
+  "lebreton2018_hist_gear": {
+   "-": 180,
+   "manta": 701,
+   "neuston": 2576,
+   "ovoid plankton": 31,
+   "ring net": 16,
+   "seston": 28
+  },
+  "lebreton2024_aerial_count_ratio_2024_over_2018": {
+   "max": 7.175061105882354,
+   "median": 0.9766670471428572,
+   "min": 0.27160260114285717,
+   "n": 30
+  },
+  "lebreton2024_excluded_by_name": {
+   "AERIAL Expedition (Aerial survey)": 31,
+   "MEGA Expedition (Manta trawl)": 510,
+   "MEGA Expedition (Mega trawl)": 151
+  },
+  "lebreton2024_manta_is_midpoint": 1,
+  "lebreton2024_vs_2018": {
+   "aerial_mass_mid": 31,
+   "aerial_pairs": 31,
+   "aerial_raw": 2,
+   "manta_mid": 352,
+   "manta_pairs": 352,
+   "manta_raw": 8,
+   "mega_pairs": 18,
+   "mega_raw": 18
+  },
+  "ncei_accessions_read": 48,
+  "ncei_depth_table": [
+   {
+    "areal_source": [
+     "lebreton2018_hist: Law et al. 2014"
+    ],
+    "depth_used_m": null,
+    "implied_depth_m": 0.25,
+    "method": "dropped by name",
+    "n_matched": 134,
+    "ratio_cv": 7.112776712998809e-17,
+    "rows": 2530,
+    "rows_with_a_copy_in_sources_1_2": 399,
+    "sampling_method": "Neuston net",
+    "study": "Law et al. 2014",
+    "why": "D9: NCEI accession 0211008's positions are wrong (SEA's own AOMI submission and Eriksen 2023 agree with Lebreton 2018's copy, which this store uses)",
+    "zero_mismatch": 0
+   },
+   {
+    "accessions": [
+     "0259524"
+    ],
+    "areal_source": [],
+    "depth_used_m": null,
+    "implied_depth_m": null,
+    "method": "c",
+    "n_matched": 0,
+    "ratio_cv": null,
+    "rows": 76,
+    "sampling_method": "Manta net",
+    "study": "Adamopoulou et al. 2021",
+    "why": "0 matched row(s) (< 20)",
+    "zero_mismatch": 0
+   },
+   {
+    "accessions": [
+     "0276018"
+    ],
+    "depth_used_m": null,
+    "method": "volumetric",
+    "rows": 40,
+    "sampling_method": "Plankton net",
+    "study": "Alfaro?N\u00fa\u00f1ez et al. 2021"
+   },
+   {
+    "accessions": [
+     "0305567"
+    ],
+    "depth_used_m": null,
+    "method": "volumetric",
+    "rows": 33,
+    "sampling_method": "Bongo net",
+    "study": "Arteaga et al. 2024"
+   },
+   {
+    "accessions": [
+     "0314555"
+    ],
+    "depth_used_m": null,
+    "method": "volumetric",
+    "rows": 24,
+    "sampling_method": "Plankton net",
+    "study": "Aytan et al. 2016"
+   },
+   {
+    "accessions": [
+     "0314558"
+    ],
+    "areal_source": [],
+    "depth_used_m": null,
+    "implied_depth_m": null,
+    "method": "c",
+    "n_matched": 0,
+    "ratio_cv": null,
+    "rows": 12,
+    "sampling_method": "Manta net",
+    "study": "Bakir et al. 2020",
+    "why": "0 matched row(s) (< 20)",
+    "zero_mismatch": 0
+   },
+   {
+    "accessions": [
+     "0211009"
+    ],
+    "depth_used_m": null,
+    "method": "volumetric",
+    "rows": 1389,
+    "sampling_method": "Grab sample",
+    "study": "Barrows et al. 2018"
+   },
+   {
+    "accessions": [
+     "0276019"
+    ],
+    "areal_source": [],
+    "depth_used_m": null,
+    "implied_depth_m": null,
+    "method": "c",
+    "n_matched": 0,
+    "ratio_cv": null,
+    "rows": 10,
+    "sampling_method": "Manta net",
+    "study": "Berov and Klayn, 2020",
+    "why": "0 matched row(s) (< 20)",
+    "zero_mismatch": 0
+   },
+   {
+    "accessions": [
+     "0279322"
+    ],
+    "depth_note": "net_depth_m carries the depth NCEI's compiler assumed (one ratio, cv < 1 %)",
+    "depth_used_m": 0.07999987862715172,
+    "files": [
+     "0279322/MP_data_S2N_Caldwell.xlsx"
+    ],
+    "implied_depth_m": 0.07999987862715172,
+    "method": "a",
+    "n_matched": 34,
+    "ncei_value_is": "Mesoplastics measurement",
+    "ratio_cv": 9.543596167456642e-06,
+    "rows": 34,
+    "sampling_method": "Manta net",
+    "study": "Caldwell et al. 2019",
+    "zero_mismatch": 1
+   },
+   {
+    "accessions": [
+     "0279323"
+    ],
+    "depth_note": "net_depth_m carries the depth NCEI's compiler assumed (one ratio, cv < 1 %)",
+    "depth_used_m": 0.08,
+    "files": [
+     "0279323/MP_data_S2N_Caldwell.xlsx"
+    ],
+    "implied_depth_m": 0.08,
+    "method": "a",
+    "n_matched": 20,
+    "ncei_value_is": "Microplastics measurement",
+    "ratio_cv": 3.034611464986019e-06,
+    "rows": 20,
+    "sampling_method": "Manta net",
+    "study": "Caldwell et al. 2020",
+    "zero_mismatch": 0
+   },
+   {
+    "accessions": [
+     "0279321"
+    ],
+    "areal_source": [],
+    "depth_used_m": null,
+    "implied_depth_m": null,
+    "method": "c",
+    "n_matched": 0,
+    "ratio_cv": null,
+    "rows": 16,
+    "sampling_method": "Manta net",
+    "study": "Carbery et al. 2022",
+    "why": "0 matched row(s) (< 20)",
+    "zero_mismatch": 0
+   },
+   {
+    "accessions": [
+     "0314559"
+    ],
+    "depth_used_m": null,
+    "method": "volumetric",
+    "rows": 37,
+    "sampling_method": "Plankton net",
+    "study": "Collignon et al. 2014"
+   },
+   {
+    "accessions": [
+     "0314180"
+    ],
+    "areal_source": [],
+    "depth_used_m": null,
+    "implied_depth_m": null,
+    "method": "c",
+    "n_matched": 0,
+    "ratio_cv": null,
+    "rows": 39,
+    "sampling_method": "Neuston net",
+    "study": "C\u00f3zar et al. 2015",
+    "why": "0 matched row(s) (< 20)",
+    "zero_mismatch": 0
+   },
+   {
+    "accessions": [
+     "0314179"
+    ],
+    "areal_source": [],
+    "depth_used_m": null,
+    "implied_depth_m": null,
+    "method": "c",
+    "n_matched": 0,
+    "ratio_cv": null,
+    "rows": 42,
+    "sampling_method": "Manta net",
+    "study": "C\u00f3zar et al. 2017",
+    "why": "0 matched row(s) (< 20)",
+    "zero_mismatch": 0
+   },
+   {
+    "accessions": [
+     "0294676"
+    ],
+    "depth_used_m": null,
+    "method": "volumetric",
+    "rows": 81,
+    "sampling_method": "Niskin bottle",
+    "study": "Dehm et al. 2020"
+   },
+   {
+    "accessions": [
+     "0314178"
+    ],
+    "areal_source": [],
+    "depth_used_m": null,
+    "implied_depth_m": null,
+    "method": "c",
+    "n_matched": 0,
+    "ratio_cv": null,
+    "rows": 270,
+    "sampling_method": "Neuston net",
+    "study": "Doyle et al. 2011",
+    "why": "0 matched row(s) (< 20)",
+    "zero_mismatch": 0
+   },
+   {
+    "accessions": [
+     "0276264",
+     "0276266"
+    ],
+    "areal_definition": "lebreton2024: micro 0.05-0.5 cm, producer-corrected",
+    "areal_source": [
+     "lebreton2024: North Pacific Mission 2 (NPM2)",
+     "lebreton2024: North Pacific Mission 3 (NPM3)",
+     "lebreton2024: The Vortex Swim"
+    ],
+    "depth_candidates": [
+     {
+      "definition": "lebreton2018: n_km2 (as caught)",
+      "implied_depth_m": 0.17192220075246176,
+      "n_matched": 38,
+      "ratio_cv": 0.7734515534973534
+     },
+     {
+      "definition": "lebreton2018: n_km2_wc (producer-corrected)",
+      "implied_depth_m": 0.11747944949828394,
+      "n_matched": 38,
+      "ratio_cv": 0.7137857965386449
+     },
+     {
+      "definition": "lebreton2018: micro 0.05-0.5 cm, producer-corrected",
+      "implied_depth_m": 0.11147066771119385,
+      "n_matched": 38,
+      "ratio_cv": 0.7227328414056247
+     },
+     {
+      "definition": "lebreton2024: n_km2_wc (producer-corrected)",
+      "implied_depth_m": 0.0820404510219028,
+      "n_matched": 64,
+      "ratio_cv": 0.1303673752388753
+     },
+     {
+      "definition": "lebreton2024: micro 0.05-0.5 cm, producer-corrected",
+      "implied_depth_m": 0.07500000102701429,
+      "n_matched": 64,
+      "ratio_cv": 4.74841857158188e-06
+     }
+    ],
+    "depth_used_m": null,
+    "dropped_by_match": 625,
+    "implied_depth_m": 0.07500000102701429,
+    "kept": 9,
+    "method": "c",
+    "n_matched": 64,
+    "ratio_cv": 4.74841857158188e-06,
+    "rows": 634,
+    "sampling_method": "Manta net",
+    "share_within_1pct_of_median": 1.0,
+    "study": "Egger et al. 2020",
+    "why": "the depth multiplies back to lebreton2024: micro 0.05-0.5 cm, producer-corrected, which is not a channel",
+    "why_per_m3": "the depth multiplies back to lebreton2024: micro 0.05-0.5 cm, producer-corrected, which is not a channel",
+    "zero_mismatch": 0
+   },
+   {
+    "accessions": [
+     "0276264"
+    ],
+    "areal_definition": null,
+    "areal_source": [],
+    "depth_candidates": [],
+    "depth_used_m": null,
+    "dropped_by_match": 0,
+    "implied_depth_m": null,
+    "kept": 45,
+    "method": "c",
+    "n_matched": 0,
+    "ratio_cv": null,
+    "rows": 45,
+    "sampling_method": "Neuston net",
+    "study": "Egger et al. 2020",
+    "why": "0 matched row(s) (< 20)",
+    "zero_mismatch": 0
+   },
+   {
+    "accessions": [
+     "0276263"
+    ],
+    "areal_definition": "lebreton2024: n_km2_wc (producer-corrected)",
+    "areal_source": [
+     "lebreton2024: North Pacific Mission 3 (NPM3)"
+    ],
+    "depth_candidates": [
+     {
+      "definition": "lebreton2024: n_km2_wc (producer-corrected)",
+      "implied_depth_m": 0.08208015655902523,
+      "n_matched": 1,
+      "ratio_cv": 0.0
+     },
+     {
+      "definition": "lebreton2024: micro 0.05-0.5 cm, producer-corrected",
+      "implied_depth_m": 0.07469806537912003,
+      "n_matched": 1,
+      "ratio_cv": 0.0
+     }
+    ],
+    "depth_used_m": null,
+    "dropped_by_match": 48,
+    "implied_depth_m": 0.08208015655902523,
+    "kept": 6,
+    "method": "c",
+    "n_matched": 1,
+    "ratio_cv": 0.0,
+    "rows": 54,
+    "sampling_method": "Manta net",
+    "share_within_1pct_of_median": 1.0,
+    "study": "Egger et al. 2021",
+    "why": "1 matched row(s) (< 20)",
+    "why_per_m3": "the depth multiplies back to lebreton2024: n_km2_wc (producer-corrected), which is not a channel",
+    "zero_mismatch": 0
+   },
+   {
+    "accessions": [
+     "0276265"
+    ],
+    "areal_definition": null,
+    "areal_source": [],
+    "depth_candidates": [],
+    "depth_used_m": null,
+    "dropped_by_match": 0,
+    "implied_depth_m": null,
+    "kept": 36,
+    "method": "c",
+    "n_matched": 0,
+    "ratio_cv": null,
+    "rows": 36,
+    "sampling_method": "Manta net",
+    "study": "Egger et al. 2022",
+    "why": "0 matched row(s) (< 20)",
+    "zero_mismatch": 0
+   },
+   {
+    "accessions": [
+     "0276017"
+    ],
+    "areal_source": [],
+    "depth_used_m": null,
+    "implied_depth_m": null,
+    "method": "c",
+    "n_matched": 0,
+    "ratio_cv": null,
+    "rows": 48,
+    "sampling_method": "Manta net",
+    "study": "Eriksen et al. 2013",
+    "why": "0 matched row(s) (< 20)",
+    "zero_mismatch": 0
+   },
+   {
+    "accessions": [
+     "0275968"
+    ],
+    "areal_source": [
+     "lebreton2018_hist: Eriksen et al. 2014"
+    ],
+    "depth_used_m": 0.07999999774442992,
+    "implied_depth_m": 0.07999999774442992,
+    "method": "b",
+    "n_matched": 161,
+    "ratio_cv": 7.941461189964557e-06,
+    "rows": 680,
+    "sampling_method": "Neuston net",
+    "study": "Eriksen et al. 2014",
+    "zero_mismatch": 0
+   },
+   {
+    "accessions": [
+     "0275967"
+    ],
+    "areal_source": [],
+    "depth_used_m": null,
+    "implied_depth_m": null,
+    "method": "c",
+    "n_matched": 0,
+    "ratio_cv": null,
+    "rows": 36,
+    "sampling_method": "AVANI net",
+    "study": "Eriksen et al. 2018",
+    "why": "0 matched row(s) (< 20)",
+    "zero_mismatch": 0
+   },
+   {
+    "accessions": [
+     "0275967"
+    ],
+    "areal_source": [],
+    "depth_used_m": null,
+    "implied_depth_m": null,
+    "method": "c",
+    "n_matched": 0,
+    "ratio_cv": null,
+    "rows": 18,
+    "sampling_method": "Manta net",
+    "study": "Eriksen et al. 2018",
+    "why": "0 matched row(s) (< 20)",
+    "zero_mismatch": 0
+   },
+   {
+    "accessions": [
+     "0275967"
+    ],
+    "areal_source": [],
+    "depth_used_m": null,
+    "implied_depth_m": null,
+    "method": "c",
+    "n_matched": 0,
+    "ratio_cv": null,
+    "rows": 34,
+    "sampling_method": "Neuston net",
+    "study": "Eriksen et al. 2018",
+    "why": "0 matched row(s) (< 20)",
+    "zero_mismatch": 0
+   },
+   {
+    "accessions": [
+     "0289355"
+    ],
+    "areal_source": [],
+    "depth_used_m": null,
+    "implied_depth_m": null,
+    "method": "c",
+    "n_matched": 0,
+    "ratio_cv": null,
+    "rows": 4,
+    "sampling_method": "Neuston net",
+    "study": "Exp\u00f3sito et al. 2021",
+    "why": "0 matched row(s) (< 20)",
+    "zero_mismatch": 0
+   },
+   {
+    "accessions": [
+     "0277997",
+     "0277998"
+    ],
+    "areal_source": [],
+    "depth_used_m": null,
+    "implied_depth_m": null,
+    "method": "c",
+    "n_matched": 0,
+    "ratio_cv": null,
+    "rows": 63,
+    "sampling_method": "Manta net",
+    "study": "Fatema et al. 2023",
+    "why": "0 matched row(s) (< 20)",
+    "zero_mismatch": 0
+   },
+   {
+    "accessions": [
+     "0276422"
+    ],
+    "areal_source": [],
+    "depth_used_m": null,
+    "implied_depth_m": null,
+    "method": "c",
+    "n_matched": 0,
+    "ratio_cv": null,
+    "rows": 38,
+    "sampling_method": "Manta net",
+    "study": "Faure et al. 2015",
+    "why": "0 matched row(s) (< 20)",
+    "zero_mismatch": 0
+   },
+   {
+    "accessions": [
+     "0294865"
+    ],
+    "depth_note": "no single assumed depth (cv >= 1 %): net_depth_m is NaN",
+    "depth_used_m": null,
+    "files": [
+     "0294865/MP_data_S2N_Frias_MPB2020.xlsx"
+    ],
+    "implied_depth_m": 0.1338971905154867,
+    "method": "a",
+    "n_matched": 20,
+    "ncei_value_is": "total",
+    "ratio_cv": 0.25197544608448846,
+    "rows": 20,
+    "sampling_method": "Manta net",
+    "study": "Frias et al. 2020",
+    "zero_mismatch": 0
+   },
+   {
+    "accessions": [
+     "0295115"
+    ],
+    "areal_source": [],
+    "depth_used_m": null,
+    "implied_depth_m": null,
+    "method": "c",
+    "n_matched": 0,
+    "ratio_cv": null,
+    "rows": 11,
+    "sampling_method": "Manta net",
+    "study": "Frias et al. 2024",
+    "why": "0 matched row(s) (< 20)",
+    "zero_mismatch": 0
+   },
+   {
+    "accessions": [
+     "0314557"
+    ],
+    "areal_source": [],
+    "depth_used_m": null,
+    "implied_depth_m": null,
+    "method": "c",
+    "n_matched": 0,
+    "ratio_cv": null,
+    "rows": 17,
+    "sampling_method": "Neuston net",
+    "study": "Gaj\u0161t et al. 2016",
+    "why": "0 matched row(s) (< 20)",
+    "zero_mismatch": 0
+   },
+   {
+    "accessions": [
+     "0253448"
+    ],
+    "areal_source": [
+     "lebreton2018_hist: Goldstein et al. 2012"
+    ],
+    "depth_used_m": null,
+    "implied_depth_m": 0.2,
+    "method": "c",
+    "n_matched": 129,
+    "ratio_cv": 0.09563096580251071,
+    "rows": 190,
+    "sampling_method": "Manta net",
+    "study": "Goldstein et al. 2013",
+    "why": "ratio cv 0.0956 >= 0.01",
+    "zero_mismatch": 0
+   },
+   {
+    "accessions": [
+     "0253448"
+    ],
+    "areal_source": [
+     "lebreton2018_hist: Goldstein et al. 2012"
+    ],
+    "depth_used_m": null,
+    "implied_depth_m": 0.5,
+    "method": "c",
+    "n_matched": 29,
+    "ratio_cv": 0.29938823998872954,
+    "rows": 45,
+    "sampling_method": "Neuston net",
+    "study": "Goldstein et al. 2013",
+    "why": "ratio cv 0.2994 >= 0.01",
+    "zero_mismatch": 0
+   },
+   {
+    "accessions": [
+     "0260245"
+    ],
+    "areal_source": [],
+    "depth_used_m": null,
+    "implied_depth_m": null,
+    "method": "c",
+    "n_matched": 0,
+    "ratio_cv": null,
+    "rows": 108,
+    "sampling_method": "Manta net",
+    "study": "Hal et al. 2017",
+    "why": "0 matched row(s) (< 20)",
+    "zero_mismatch": 0
+   },
+   {
+    "accessions": [
+     "0313391"
+    ],
+    "depth_used_m": null,
+    "method": "volumetric",
+    "rows": 17,
+    "sampling_method": "Steel bucket",
+    "study": "Kalangutkar et al. 2025"
+   },
+   {
+    "accessions": [
+     "0313393"
+    ],
+    "depth_used_m": null,
+    "method": "volumetric",
+    "rows": 14,
+    "sampling_method": "Steel bucket",
+    "study": "Kalangutkar et al. 2025a"
+   },
+   {
+    "accessions": [
+     "0313392"
+    ],
+    "depth_used_m": null,
+    "method": "volumetric",
+    "rows": 12,
+    "sampling_method": "Steel bucket",
+    "study": "Kalangutkar et al. 2026"
+   },
+   {
+    "accessions": [
+     "0270542"
+    ],
+    "depth_used_m": null,
+    "method": "volumetric",
+    "rows": 76,
+    "sampling_method": "Intake seawater pump",
+    "study": "Kanhai et al. 2017"
+   },
+   {
+    "accessions": [
+     "0270539"
+    ],
+    "depth_used_m": null,
+    "method": "volumetric",
+    "rows": 48,
+    "sampling_method": "CTD rosette sampler",
+    "study": "Kanhai et al. 2018"
+   },
+   {
+    "accessions": [
+     "0270539"
+    ],
+    "depth_used_m": null,
+    "method": "volumetric",
+    "rows": 58,
+    "sampling_method": "Intake seawater pump",
+    "study": "Kanhai et al. 2018"
+   },
+   {
+    "accessions": [
+     "0282701"
+    ],
+    "depth_used_m": null,
+    "method": "volumetric",
+    "rows": 72,
+    "sampling_method": "Plankton net",
+    "study": "Keerthika et al. 2022"
+   },
+   {
+    "accessions": [
+     "0295696"
+    ],
+    "depth_used_m": null,
+    "method": "volumetric",
+    "rows": 11,
+    "sampling_method": "Stainless steel bucket",
+    "study": "Kosore et al. 2018"
+   },
+   {
+    "accessions": [
+     "0295694"
+    ],
+    "areal_source": [],
+    "depth_used_m": null,
+    "implied_depth_m": null,
+    "method": "c",
+    "n_matched": 0,
+    "ratio_cv": null,
+    "rows": 6,
+    "sampling_method": "Manta net",
+    "study": "Kosore et al. 2022",
+    "why": "0 matched row(s) (< 20)",
+    "zero_mismatch": 0
+   },
+   {
+    "accessions": [
+     "0211007"
+    ],
+    "depth_note": "net_depth_m carries the depth NCEI's compiler assumed (one ratio, cv < 1 %)",
+    "depth_used_m": 0.25,
+    "files": [
+     "0211007/Microplastic_Data_SEA_NorthAtlantic.xlsx"
+    ],
+    "implied_depth_m": 0.25,
+    "method": "a",
+    "n_matched": 6135,
+    "ncei_value_is": "total",
+    "ratio_cv": 6.129666522312716e-17,
+    "rows": 6135,
+    "sampling_method": "Neuston net",
+    "study": "Law et al. 2010",
+    "zero_mismatch": 0
+   },
+   {
+    "accessions": [
+     "0314176"
+    ],
+    "depth_used_m": null,
+    "method": "volumetric",
+    "rows": 563,
+    "sampling_method": "Pump",
+    "study": "Lusher et al. 2014"
+   },
+   {
+    "accessions": [
+     "0314177"
+    ],
+    "areal_source": [],
+    "depth_used_m": null,
+    "implied_depth_m": null,
+    "method": "c",
+    "n_matched": 0,
+    "ratio_cv": null,
+    "rows": 21,
+    "sampling_method": "Manta net",
+    "study": "Lusher et al. 2015",
+    "why": "0 matched row(s) (< 20)",
+    "zero_mismatch": 0
+   },
+   {
+    "accessions": [
+     "0285700"
+    ],
+    "depth_used_m": null,
+    "method": "volumetric",
+    "rows": 34,
+    "sampling_method": "Plankton net",
+    "study": "McEachern et al. 2019"
+   },
+   {
+    "accessions": [
+     "0285700"
+    ],
+    "depth_used_m": null,
+    "method": "volumetric",
+    "rows": 181,
+    "sampling_method": "Van Dorn sampler",
+    "study": "McEachern et al. 2019"
+   },
+   {
+    "accessions": [
+     "0259525"
+    ],
+    "areal_source": [],
+    "depth_used_m": null,
+    "implied_depth_m": null,
+    "method": "c",
+    "n_matched": 0,
+    "ratio_cv": null,
+    "rows": 13,
+    "sampling_method": "Manta net",
+    "study": "Mu et al. 2019",
+    "why": "0 matched row(s) (< 20)",
+    "zero_mismatch": 0
+   },
+   {
+    "accessions": [
+     "0296746"
+    ],
+    "areal_source": [],
+    "depth_used_m": null,
+    "implied_depth_m": null,
+    "method": "c",
+    "n_matched": 0,
+    "ratio_cv": null,
+    "rows": 8,
+    "sampling_method": "Manta net",
+    "study": "Nchimbi et al. 2022",
+    "why": "0 matched row(s) (< 20)",
+    "zero_mismatch": 0
+   },
+   {
+    "accessions": [
+     "0291180"
+    ],
+    "depth_used_m": null,
+    "method": "volumetric",
+    "rows": 6,
+    "sampling_method": "Plankton net",
+    "study": "Olivatto et al. 2019"
+   },
+   {
+    "accessions": [
+     "0271964"
+    ],
+    "depth_used_m": null,
+    "method": "volumetric",
+    "rows": 5,
+    "sampling_method": "Surface water intake",
+    "study": "Osorio et al. 2021"
+   },
+   {
+    "accessions": [
+     "0276021"
+    ],
+    "areal_source": [],
+    "depth_used_m": null,
+    "implied_depth_m": null,
+    "method": "c",
+    "n_matched": 0,
+    "ratio_cv": null,
+    "rows": 18,
+    "sampling_method": "Manta net",
+    "study": "Pan et al. 2019",
+    "why": "0 matched row(s) (< 20)",
+    "zero_mismatch": 0
+   },
+   {
+    "accessions": [
+     "0276020"
+    ],
+    "areal_source": [],
+    "depth_used_m": null,
+    "implied_depth_m": null,
+    "method": "c",
+    "n_matched": 0,
+    "ratio_cv": null,
+    "rows": 15,
+    "sampling_method": "Manta net",
+    "study": "Pan et al. 2022",
+    "why": "0 matched row(s) (< 20)",
+    "zero_mismatch": 0
+   },
+   {
+    "accessions": [
+     "0270520"
+    ],
+    "areal_source": [],
+    "depth_used_m": null,
+    "implied_depth_m": null,
+    "method": "c",
+    "n_matched": 0,
+    "ratio_cv": null,
+    "rows": 33,
+    "sampling_method": "Manta net",
+    "study": "Pedrotti et al. 2016",
+    "why": "0 matched row(s) (< 20)",
+    "zero_mismatch": 0
+   },
+   {
+    "accessions": [
+     "0270530"
+    ],
+    "areal_source": [],
+    "depth_used_m": null,
+    "implied_depth_m": null,
+    "method": "c",
+    "n_matched": 0,
+    "ratio_cv": null,
+    "rows": 124,
+    "sampling_method": "Manta net",
+    "study": "Pedrotti et al. 2022",
+    "why": "0 matched row(s) (< 20)",
+    "zero_mismatch": 0
+   },
+   {
+    "accessions": [
+     "0280922"
+    ],
+    "depth_used_m": null,
+    "method": "volumetric",
+    "rows": 26,
+    "sampling_method": "Plankton net",
+    "study": "Qu et al. 2022"
+   },
+   {
+    "accessions": [
+     "0276482"
+    ],
+    "depth_used_m": null,
+    "method": "volumetric",
+    "rows": 57,
+    "sampling_method": "Aluminum bucket",
+    "study": "Queiroz et al. 2022"
+   },
+   {
+    "accessions": [
+     "0252260"
+    ],
+    "areal_source": [],
+    "depth_used_m": null,
+    "implied_depth_m": null,
+    "method": "c",
+    "n_matched": 0,
+    "ratio_cv": null,
+    "rows": 129,
+    "sampling_method": "Manta net",
+    "study": "Reisser et al. 2013",
+    "why": "0 matched row(s) (< 20)",
+    "zero_mismatch": 0
+   },
+   {
+    "accessions": [
+     "0252260"
+    ],
+    "areal_source": [],
+    "depth_used_m": null,
+    "implied_depth_m": null,
+    "method": "c",
+    "n_matched": 0,
+    "ratio_cv": null,
+    "rows": 42,
+    "sampling_method": "Neuston net",
+    "study": "Reisser et al. 2013",
+    "why": "0 matched row(s) (< 20)",
+    "zero_mismatch": 0
+   },
+   {
+    "accessions": [
+     "0279324"
+    ],
+    "areal_source": [],
+    "depth_used_m": null,
+    "implied_depth_m": null,
+    "method": "c",
+    "n_matched": 0,
+    "ratio_cv": null,
+    "rows": 36,
+    "sampling_method": "Neuston net",
+    "study": "Rodrigues et al. 2020",
+    "why": "0 matched row(s) (< 20)",
+    "zero_mismatch": 0
+   },
+   {
+    "accessions": [
+     "0291179"
+    ],
+    "depth_used_m": null,
+    "method": "volumetric",
+    "rows": 1,
+    "sampling_method": "Glass jar",
+    "study": "Romano et al. 2023"
+   },
+   {
+    "accessions": [
+     "0291179"
+    ],
+    "depth_used_m": null,
+    "method": "volumetric",
+    "rows": 1,
+    "sampling_method": "Plankton net",
+    "study": "Romano et al. 2023"
+   },
+   {
+    "accessions": [
+     "0284765"
+    ],
+    "depth_note": "no single assumed depth (cv >= 1 %): net_depth_m is NaN",
+    "depth_used_m": null,
+    "files": [
+     "0284765/MP_data_S2N__Rose_STE_2019.xlsx"
+    ],
+    "implied_depth_m": 0.4702706202531645,
+    "method": "a",
+    "n_matched": 32,
+    "ncei_value_is": "total",
+    "ratio_cv": 0.014311913405405776,
+    "rows": 32,
+    "sampling_method": "Manta net",
+    "study": "Rose and Webber, 2019",
+    "zero_mismatch": 0
+   },
+   {
+    "accessions": [
+     "0259692"
+    ],
+    "depth_note": "net_depth_m carries the depth NCEI's compiler assumed (one ratio, cv < 1 %)",
+    "depth_used_m": 0.06749998788950022,
+    "files": [
+     "0259692/MP_data_S2N_Russell.xlsx"
+    ],
+    "implied_depth_m": 0.06749998788950022,
+    "method": "a",
+    "n_matched": 514,
+    "ncei_value_is": "SUM_micro_km2",
+    "ratio_cv": 2.6446776593557372e-05,
+    "rows": 514,
+    "sampling_method": "Neuston net",
+    "study": "Russell and Webster, 2021",
+    "zero_mismatch": 47
+   },
+   {
+    "accessions": [
+     "0275966"
+    ],
+    "areal_source": [],
+    "depth_used_m": null,
+    "implied_depth_m": null,
+    "method": "c",
+    "n_matched": 0,
+    "ratio_cv": null,
+    "rows": 24,
+    "sampling_method": "Manta net",
+    "study": "Setiti et al. 2021",
+    "why": "0 matched row(s) (< 20)",
+    "zero_mismatch": 0
+   },
+   {
+    "accessions": [
+     "0253450"
+    ],
+    "areal_source": [],
+    "depth_used_m": null,
+    "implied_depth_m": null,
+    "method": "c",
+    "n_matched": 0,
+    "ratio_cv": null,
+    "rows": 74,
+    "sampling_method": "Neuston net",
+    "study": "Suaria et al. 2016",
+    "why": "0 matched row(s) (< 20)",
+    "zero_mismatch": 0
+   },
+   {
+    "accessions": [
+     "0253447"
+    ],
+    "areal_source": [],
+    "depth_used_m": null,
+    "implied_depth_m": null,
+    "method": "c",
+    "n_matched": 0,
+    "ratio_cv": null,
+    "rows": 75,
+    "sampling_method": "Neuston net",
+    "study": "Suaria et al. 2020",
+    "why": "0 matched row(s) (< 20)",
+    "zero_mismatch": 0
+   },
+   {
+    "accessions": [
+     "0170967"
+    ],
+    "depth_used_m": null,
+    "method": "volumetric",
+    "rows": 90,
+    "sampling_method": "Intake seawater pump",
+    "study": "Tanhua et al. 2020"
+   },
+   {
+    "accessions": [
+     "0279325"
+    ],
+    "depth_note": "net_depth_m carries the depth NCEI's compiler assumed (one ratio, cv < 1 %)",
+    "depth_used_m": 0.37499997875113444,
+    "files": [
+     "0279325/MP_data_S2N_Thushari.xlsx"
+    ],
+    "implied_depth_m": 0.37499997875113444,
+    "method": "a",
+    "n_matched": 132,
+    "ncei_value_is": "Microplastics measurement",
+    "ratio_cv": 1.6680244349699823e-05,
+    "rows": 132,
+    "sampling_method": "Neuston net",
+    "study": "Thushari et al. 2023",
+    "zero_mismatch": 0
+   },
+   {
+    "accessions": [
+     "0277995"
+    ],
+    "depth_note": "net_depth_m carries the depth NCEI's compiler assumed (one ratio, cv < 1 %)",
+    "depth_used_m": 0.5000002134329273,
+    "files": [
+     "0277995/MP_data_S2N_Trani.xlsx"
+    ],
+    "implied_depth_m": 0.5000002134329273,
+    "method": "a",
+    "n_matched": 18,
+    "ncei_value_is": "total",
+    "ratio_cv": 1.5653556009061802e-06,
+    "rows": 18,
+    "sampling_method": "Manta net",
+    "study": "Trani et al. 2023",
+    "zero_mismatch": 0
+   },
+   {
+    "accessions": [
+     "0270528"
+    ],
+    "areal_source": [],
+    "depth_used_m": null,
+    "implied_depth_m": null,
+    "method": "c",
+    "n_matched": 0,
+    "ratio_cv": null,
+    "rows": 71,
+    "sampling_method": "Manta net",
+    "study": "Tsiaras et al. 2022",
+    "why": "0 matched row(s) (< 20)",
+    "zero_mismatch": 0
+   },
+   {
+    "accessions": [
+     "0276422"
+    ],
+    "areal_source": [],
+    "depth_used_m": null,
+    "implied_depth_m": null,
+    "method": "c",
+    "n_matched": 0,
+    "ratio_cv": null,
+    "rows": 1107,
+    "sampling_method": "Manta net",
+    "study": "Unpublished",
+    "why": "0 matched row(s) (< 20)",
+    "zero_mismatch": 0
+   },
+   {
+    "accessions": [
+     "0276267"
+    ],
+    "depth_used_m": null,
+    "method": "volumetric",
+    "rows": 69,
+    "sampling_method": "Stainless steel bucket",
+    "study": "Xu et al. 2022"
+   },
+   {
+    "accessions": [
+     "0277532"
+    ],
+    "depth_used_m": null,
+    "method": "volumetric",
+    "rows": 60,
+    "sampling_method": "Intake seawater pump",
+    "study": "Yakushev et al. 2021"
+   },
+   {
+    "accessions": [
+     "0259526"
+    ],
+    "areal_source": [],
+    "depth_used_m": null,
+    "implied_depth_m": null,
+    "method": "c",
+    "n_matched": 0,
+    "ratio_cv": null,
+    "rows": 48,
+    "sampling_method": "Neuston net",
+    "study": "Yakushev et al. 2021",
+    "why": "0 matched row(s) (< 20)",
+    "zero_mismatch": 0
+   },
+   {
+    "accessions": [
+     "0280675"
+    ],
+    "depth_used_m": null,
+    "method": "volumetric",
+    "rows": 23,
+    "sampling_method": "Stainless steel sampler",
+    "study": "Zhu et al. 2019"
+   },
+   {
+    "accessions": [
+     "0253140"
+    ],
+    "areal_source": [],
+    "depth_used_m": null,
+    "implied_depth_m": null,
+    "method": "c",
+    "n_matched": 0,
+    "ratio_cv": null,
+    "rows": 21,
+    "sampling_method": "Manta net",
+    "study": "de Haan et al. 2019",
+    "why": "0 matched row(s) (< 20)",
+    "zero_mismatch": 0
+   },
+   {
+    "accessions": [
+     "0253923"
+    ],
+    "areal_source": [],
+    "depth_used_m": null,
+    "implied_depth_m": null,
+    "method": "c",
+    "n_matched": 0,
+    "ratio_cv": null,
+    "rows": 124,
+    "sampling_method": "Manta net",
+    "study": "de Haan et al. 2022",
+    "why": "0 matched row(s) (< 20)",
+    "zero_mismatch": 0
+   },
+   {
+    "accessions": [
+     "0314556"
+    ],
+    "areal_source": [],
+    "depth_used_m": null,
+    "implied_depth_m": null,
+    "method": "c",
+    "n_matched": 0,
+    "ratio_cv": null,
+    "rows": 10,
+    "sampling_method": "Manta net",
+    "study": "de Lucia et al. 2014",
+    "why": "0 matched row(s) (< 20)",
+    "zero_mismatch": 0
+   }
+  ],
+  "ncei_dropped_by_name": {
+   "Law et al. 2014": 2530
+  },
+  "ncei_egger_dropped_by_match": {
+   "lebreton2018 > ncei (Egger match)": 293,
+   "lebreton2018_hist > ncei (Egger match)": 217,
+   "lebreton2024 > ncei (Egger match)": 163
+  },
+  "ncei_egger_kept_by_year": {
+   "Egger et al. 2020 2018": 3,
+   "Egger et al. 2020 2019": 51,
+   "Egger et al. 2021 2019": 6,
+   "Egger et al. 2022 2020": 36
+  },
+  "ncei_egger_kept_near_toc_loose": [],
+  "ncei_marine_setting": {
+   "Beach": 893,
+   "Nurdle Patrol": 10615,
+   "Ocean sediment": 580,
+   "Ocean water": 16988
+  },
+  "ncei_rows_by_method": {
+   "a": 6905,
+   "b": 680,
+   "c": 3845,
+   "dropped by name": 2530,
+   "volumetric": 3028
+  },
+  "ncei_rows_total": 29076,
+  "ncei_time_of_day": {
+   "5:00:00 AM": 10173,
+   "6:00:00 AM": 6815
+  },
+  "ncei_unknown_sampling_method": {},
+  "read": {
+   "emodnet": 3385,
+   "lebreton2018": 683,
+   "lebreton2018_hist": 3532,
+   "lebreton2024": 1193,
+   "ncei": 16988
+  },
+  "rows_kept": 471,
+  "rows_no_value": 0,
+  "rows_outside_window": 18038
+ },
+ "counts_scope": "archive",
+ "days_with_no_rows": 2,
+ "distinct_platforms": 19,
+ "distribution": "public",
+ "estimate_rows_per_year": null,
+ "estimate_store_bytes": null,
+ "family": "13",
+ "month": "2015-08",
+ "nan_fraction": {
+  "log_g_km2": 0.061571,
+  "log_n_km2": 0.061571,
+  "log_n_km2_macro": 0.753715,
+  "log_n_km2_mega": 1.0,
+  "log_n_km2_meso": 0.307856,
+  "log_n_km2_micro": 0.307856,
+  "log_n_km2_wc": 0.061571,
+  "log_n_m3": 0.938429,
+  "mesh_um": 0.938429,
+  "net_depth_m": 0.061571,
+  "sample_depth_m": 0.0,
+  "wind_ms": 0.070064
+ },
+ "note_estimate": null,
+ "out_of_bounds": {
+  "log_g_km2": 0,
+  "log_n_km2": 0,
+  "log_n_km2_macro": 0,
+  "log_n_km2_mega": 0,
+  "log_n_km2_meso": 0,
+  "log_n_km2_micro": 0,
+  "log_n_km2_wc": 0,
+  "log_n_m3": 0,
+  "mesh_um": 0,
+  "net_depth_m": 0,
+  "sample_depth_m": 0,
+  "wind_ms": 0
+ },
+ "out_of_bounds_stored": {
+  "log_g_km2": 0,
+  "log_n_km2": 0,
+  "log_n_km2_macro": 0,
+  "log_n_km2_mega": 0,
+  "log_n_km2_meso": 0,
+  "log_n_km2_micro": 0,
+  "log_n_km2_wc": 0,
+  "log_n_m3": 0,
+  "mesh_um": 0,
+  "net_depth_m": 0,
+  "sample_depth_m": 0,
+  "wind_ms": 0
+ },
+ "platforms": null,
+ "qc": {
+  "1": 326,
+  "17": 7,
+  "21": 22,
+  "3": 116
+ },
+ "rows": 471,
+ "rows_outside_month_dropped_by_probe": 0,
+ "rows_per_day": [
+  15,
+  16,
+  19,
+  20,
+  20,
+  22,
+  23,
+  37,
+  37,
+  29,
+  30,
+  24,
+  30,
+  30,
+  26,
+  20,
+  11,
+  6,
+  5,
+  5,
+  9,
+  6,
+  4,
+  5,
+  4,
+  9,
+  3,
+  4,
+  0,
+  2,
+  0
+ ],
+ "runner": "vm",
+ "schema_version": 2,
+ "source": "https://api.figshare.com/v2/articles/5873142/files",
+ "store": "mplastic",
+ "stored_bytes_per_row": 51,
+ "time_dtype": "int32",
+ "wall_seconds": 114.4,
+ "wall_seconds_index": 43.82
+}

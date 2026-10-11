@@ -1,0 +1,279 @@
+{
+ "store": "mplastic",
+ "family": "13",
+ "plan": "ml/plans/E092_family13_plastic.md",
+ "measured_at": "2026-10-11T19:40:50+00:00",
+ "builder_git_sha": "e7766a452f882672053c8c6f840a9fc94dfcd491",
+ "working_tree": "uncommitted changes on top of builder_git_sha (E-092 adapters)",
+ "window": [
+  "1972-01-01",
+  "2025-12-31"
+ ],
+ "N": 18504,
+ "source": "live sources from the sandbox; NCEI Hub CSV item 1b56a456ad8c43889652e62aa25a317e and every accession the surface-net rows cite",
+ "what": "EMODnet floating micro-litter v2026: every (litter type | polymer type) combination met, and the class this store gave it by the NVS H01/H05 vocabularies' own definitions (plastic / non-plastic / ambiguous). Only 'plastic' lines are summed; a sample with an ambiguous line that caught something gets no total. EMODNET_SHAPES_ARE_PLASTIC = False (a shape without a polymer type is ambiguous by the vocabulary's text).",
+ "line_classes": {
+  "ambiguous": 18906,
+  "non-plastic": 3242,
+  "plastic": 9919
+ },
+ "samples_dropped": {
+  "ambiguous_line_with_catch": 164,
+  "no_area_and_no_volume": 1,
+  "no_plastic_line": 1415,
+  "plastic_line_without_count": 118,
+  "vor_count_undefined": 121
+ },
+ "samples_read": 3385,
+ "samples_kept_after_dedup": 909,
+ "mapping": [
+  {
+   "class": "plastic",
+   "type | polymer": "SDN:H01::H0100001 (microplastic items) | (no polymer type)"
+  },
+  {
+   "class": "ambiguous",
+   "type | polymer": "SDN:H01::H0100002 (fragments) | (no polymer type)"
+  },
+  {
+   "class": "plastic",
+   "type | polymer": "SDN:H01::H0100002 (fragments) | SDN:H05::H0500001 (polyethylene)"
+  },
+  {
+   "class": "plastic",
+   "type | polymer": "SDN:H01::H0100002 (fragments) | SDN:H05::H0500002 (polypropylene)"
+  },
+  {
+   "class": "plastic",
+   "type | polymer": "SDN:H01::H0100002 (fragments) | SDN:H05::H0500003 (polystyrene)"
+  },
+  {
+   "class": "plastic",
+   "type | polymer": "SDN:H01::H0100002 (fragments) | SDN:H05::H0500004 (polyamide (nylon))"
+  },
+  {
+   "class": "plastic",
+   "type | polymer": "SDN:H01::H0100002 (fragments) | SDN:H05::H0500005 (polyester)"
+  },
+  {
+   "class": "plastic",
+   "type | polymer": "SDN:H01::H0100002 (fragments) | SDN:H05::H0500008 (polyvinyl alcohol)"
+  },
+  {
+   "class": "plastic",
+   "type | polymer": "SDN:H01::H0100002 (fragments) | SDN:H05::H0500009 (polychlorinated polymer)"
+  },
+  {
+   "class": "plastic",
+   "type | polymer": "SDN:H01::H0100002 (fragments) | SDN:H05::H0500010 (polymethylacrylate)"
+  },
+  {
+   "class": "plastic",
+   "type | polymer": "SDN:H01::H0100002 (fragments) | SDN:H05::H0500013 (polyurethane)"
+  },
+  {
+   "class": "non-plastic",
+   "type | polymer": "SDN:H01::H0100002 (fragments) | SDN:H05::H0500020 (tar residue)"
+  },
+  {
+   "class": "non-plastic",
+   "type | polymer": "SDN:H01::H0100002 (fragments) | SDN:H05::H0500021 (natural rubber)"
+  },
+  {
+   "class": "non-plastic",
+   "type | polymer": "SDN:H01::H0100002 (fragments) | SDN:H05::H0500022 (natural fibres)"
+  },
+  {
+   "class": "plastic",
+   "type | polymer": "SDN:H01::H0100002 (fragments) | SDN:H05::H0500025 (undefined plastic)"
+  },
+  {
+   "class": "non-plastic",
+   "type | polymer": "SDN:H01::H0100002 (fragments) | SDN:H05::H0500026 (undefined non-plastic)"
+  },
+  {
+   "class": "ambiguous",
+   "type | polymer": "SDN:H01::H0100003 (pellets) | (no polymer type)"
+  },
+  {
+   "class": "plastic",
+   "type | polymer": "SDN:H01::H0100003 (pellets) | SDN:H05::H0500001 (polyethylene)"
+  },
+  {
+   "class": "non-plastic",
+   "type | polymer": "SDN:H01::H0100003 (pellets) | SDN:H05::H0500022 (natural fibres)"
+  },
+  {
+   "class": "plastic",
+   "type | polymer": "SDN:H01::H0100003 (pellets) | SDN:H05::H0500025 (undefined plastic)"
+  },
+  {
+   "class": "ambiguous",
+   "type | polymer": "SDN:H01::H0100004 (filaments) | (no polymer type)"
+  },
+  {
+   "class": "plastic",
+   "type | polymer": "SDN:H01::H0100004 (filaments) | SDN:H05::H0500001 (polyethylene)"
+  },
+  {
+   "class": "plastic",
+   "type | polymer": "SDN:H01::H0100004 (filaments) | SDN:H05::H0500002 (polypropylene)"
+  },
+  {
+   "class": "plastic",
+   "type | polymer": "SDN:H01::H0100004 (filaments) | SDN:H05::H0500003 (polystyrene)"
+  },
+  {
+   "class": "plastic",
+   "type | polymer": "SDN:H01::H0100004 (filaments) | SDN:H05::H0500004 (polyamide (nylon))"
+  },
+  {
+   "class": "plastic",
+   "type | polymer": "SDN:H01::H0100004 (filaments) | SDN:H05::H0500005 (polyester)"
+  },
+  {
+   "class": "non-plastic",
+   "type | polymer": "SDN:H01::H0100004 (filaments) | SDN:H05::H0500022 (natural fibres)"
+  },
+  {
+   "class": "plastic",
+   "type | polymer": "SDN:H01::H0100004 (filaments) | SDN:H05::H0500025 (undefined plastic)"
+  },
+  {
+   "class": "non-plastic",
+   "type | polymer": "SDN:H01::H0100004 (filaments) | SDN:H05::H0500026 (undefined non-plastic)"
+  },
+  {
+   "class": "ambiguous",
+   "type | polymer": "SDN:H01::H0100005 (films) | (no polymer type)"
+  },
+  {
+   "class": "plastic",
+   "type | polymer": "SDN:H01::H0100005 (films) | SDN:H05::H0500001 (polyethylene)"
+  },
+  {
+   "class": "plastic",
+   "type | polymer": "SDN:H01::H0100005 (films) | SDN:H05::H0500002 (polypropylene)"
+  },
+  {
+   "class": "plastic",
+   "type | polymer": "SDN:H01::H0100005 (films) | SDN:H05::H0500003 (polystyrene)"
+  },
+  {
+   "class": "plastic",
+   "type | polymer": "SDN:H01::H0100005 (films) | SDN:H05::H0500005 (polyester)"
+  },
+  {
+   "class": "plastic",
+   "type | polymer": "SDN:H01::H0100005 (films) | SDN:H05::H0500009 (polychlorinated polymer)"
+  },
+  {
+   "class": "non-plastic",
+   "type | polymer": "SDN:H01::H0100005 (films) | SDN:H05::H0500020 (tar residue)"
+  },
+  {
+   "class": "non-plastic",
+   "type | polymer": "SDN:H01::H0100005 (films) | SDN:H05::H0500021 (natural rubber)"
+  },
+  {
+   "class": "non-plastic",
+   "type | polymer": "SDN:H01::H0100005 (films) | SDN:H05::H0500022 (natural fibres)"
+  },
+  {
+   "class": "plastic",
+   "type | polymer": "SDN:H01::H0100005 (films) | SDN:H05::H0500025 (undefined plastic)"
+  },
+  {
+   "class": "non-plastic",
+   "type | polymer": "SDN:H01::H0100005 (films) | SDN:H05::H0500026 (undefined non-plastic)"
+  },
+  {
+   "class": "ambiguous",
+   "type | polymer": "SDN:H01::H0100006 (foams) | (no polymer type)"
+  },
+  {
+   "class": "plastic",
+   "type | polymer": "SDN:H01::H0100006 (foams) | SDN:H05::H0500001 (polyethylene)"
+  },
+  {
+   "class": "plastic",
+   "type | polymer": "SDN:H01::H0100006 (foams) | SDN:H05::H0500002 (polypropylene)"
+  },
+  {
+   "class": "plastic",
+   "type | polymer": "SDN:H01::H0100006 (foams) | SDN:H05::H0500003 (polystyrene)"
+  },
+  {
+   "class": "non-plastic",
+   "type | polymer": "SDN:H01::H0100006 (foams) | SDN:H05::H0500020 (tar residue)"
+  },
+  {
+   "class": "non-plastic",
+   "type | polymer": "SDN:H01::H0100006 (foams) | SDN:H05::H0500021 (natural rubber)"
+  },
+  {
+   "class": "plastic",
+   "type | polymer": "SDN:H01::H0100006 (foams) | SDN:H05::H0500025 (undefined plastic)"
+  },
+  {
+   "class": "non-plastic",
+   "type | polymer": "SDN:H01::H0100006 (foams) | SDN:H05::H0500026 (undefined non-plastic)"
+  },
+  {
+   "class": "non-plastic",
+   "type | polymer": "SDN:H01::H0100007 (non-plastic man-made micro-particles (e.g. glass, metal, tar)) | (no polymer type)"
+  },
+  {
+   "class": "non-plastic",
+   "type | polymer": "SDN:H01::H0100008 (non-plastic filaments (natural fibres, rubber)) | (no polymer type)"
+  },
+  {
+   "class": "ambiguous",
+   "type | polymer": "SDN:H01::H0100009 (granules) | (no polymer type)"
+  },
+  {
+   "class": "plastic",
+   "type | polymer": "SDN:H01::H0100009 (granules) | SDN:H05::H0500001 (polyethylene)"
+  },
+  {
+   "class": "plastic",
+   "type | polymer": "SDN:H01::H0100009 (granules) | SDN:H05::H0500002 (polypropylene)"
+  },
+  {
+   "class": "plastic",
+   "type | polymer": "SDN:H01::H0100009 (granules) | SDN:H05::H0500003 (polystyrene)"
+  },
+  {
+   "class": "plastic",
+   "type | polymer": "SDN:H01::H0100009 (granules) | SDN:H05::H0500005 (polyester)"
+  },
+  {
+   "class": "non-plastic",
+   "type | polymer": "SDN:H01::H0100009 (granules) | SDN:H05::H0500020 (tar residue)"
+  },
+  {
+   "class": "plastic",
+   "type | polymer": "SDN:H01::H0100009 (granules) | SDN:H05::H0500025 (undefined plastic)"
+  },
+  {
+   "class": "ambiguous",
+   "type | polymer": "SDN:H01::H0100010 (Undefined micro-litter items) | (no polymer type)"
+  },
+  {
+   "class": "plastic",
+   "type | polymer": "SDN:H01::H0100010 (Undefined micro-litter items) | SDN:H05::H0500001 (polyethylene)"
+  },
+  {
+   "class": "plastic",
+   "type | polymer": "SDN:H01::H0100010 (Undefined micro-litter items) | SDN:H05::H0500002 (polypropylene)"
+  },
+  {
+   "class": "plastic",
+   "type | polymer": "SDN:H01::H0100010 (Undefined micro-litter items) | SDN:H05::H0500003 (polystyrene)"
+  },
+  {
+   "class": "plastic",
+   "type | polymer": "SDN:H01::H0100010 (Undefined micro-litter items) | SDN:H05::H0500025 (undefined plastic)"
+  }
+ ]
+}

@@ -1,0 +1,272 @@
+{
+ "at": "2026-10-11T19:09:35+00:00",
+ "builder_git_sha": "e7766a452f882672053c8c6f840a9fc94dfcd491",
+ "bytes_fetched": 3774023,
+ "bytes_index": 1823,
+ "bytes_per_row": 2366.159,
+ "channels": [
+  "length_m",
+  "width_m",
+  "topview_area_m2",
+  "kg_lo",
+  "kg_mid",
+  "kg_hi",
+  "lt50"
+ ],
+ "counts": {
+  "mosaic_check": {
+   "match_2018": 2,
+   "match_2024": 31,
+   "matched_to_2024": 31,
+   "mosaics": 31
+  },
+  "mosaic_check_not_matching_2018": [
+   {
+    "event": "448",
+    "objects_per_km2": 2.191389573824947,
+    "published_2018": 2.7392369672811836
+   },
+   {
+    "event": "449",
+    "objects_per_km2": 2.0017957928075845,
+    "published_2018": 3.0026936892113762
+   },
+   {
+    "event": "450",
+    "objects_per_km2": 1.8658248065139675,
+    "published_2018": 1.959116046839666
+   },
+   {
+    "event": "451",
+    "objects_per_km2": 1.4877461324876984,
+    "published_2018": 1.5807302657681797
+   },
+   {
+    "event": "452",
+    "objects_per_km2": 5.128542160605426,
+    "published_2018": 2.2793520713801896
+   },
+   {
+    "event": "453",
+    "objects_per_km2": 3.8582675757497906,
+    "published_2018": 2.823122616402286
+   },
+   {
+    "event": "454",
+    "objects_per_km2": 0.8339262703546346,
+    "published_2018": 2.5944372855477518
+   },
+   {
+    "event": "455",
+    "objects_per_km2": 1.6395785781535992,
+    "published_2018": 2.507590766587858
+   },
+   {
+    "event": "456",
+    "objects_per_km2": 1.409081417006091,
+    "published_2018": 2.818162834012182
+   },
+   {
+    "event": "457",
+    "objects_per_km2": 1.6742080437883533,
+    "published_2018": 2.0462542757413207
+   },
+   {
+    "event": "458",
+    "objects_per_km2": 0.4678933019857298,
+    "published_2018": 1.3101012455600436
+   },
+   {
+    "event": "460",
+    "objects_per_km2": 0.186391396396812,
+    "published_2018": 0.1750641945490285
+   },
+   {
+    "event": "461",
+    "objects_per_km2": 0.7492577197427723,
+    "published_2018": 0.8474304396688239
+   },
+   {
+    "event": "462",
+    "objects_per_km2": 0.5409720022645088,
+    "published_2018": 1.2095628513885957
+   },
+   {
+    "event": "463",
+    "objects_per_km2": 5.524295901835006,
+    "published_2018": 1.5506795513922826
+   },
+   {
+    "event": "464",
+    "objects_per_km2": 9.360567384105869,
+    "published_2018": 2.451577172027728
+   },
+   {
+    "event": "465",
+    "objects_per_km2": 2.807676937460868,
+    "published_2018": 1.591016931227825
+   },
+   {
+    "event": "466",
+    "objects_per_km2": 3.5868892778251524,
+    "published_2018": 1.8878364620132377
+   },
+   {
+    "event": "467",
+    "objects_per_km2": 1.6991556234924126,
+    "published_2018": 1.7935531581308795
+   },
+   {
+    "event": "468",
+    "objects_per_km2": 11.552268903488937,
+    "published_2018": 1.6097423881910813
+   },
+   {
+    "event": "469",
+    "objects_per_km2": 3.6311188203309204,
+    "published_2018": 1.4304407474030898
+   },
+   {
+    "event": "470",
+    "objects_per_km2": 2.027958106441437,
+    "published_2018": 4.393909230623113
+   },
+   {
+    "event": "471",
+    "objects_per_km2": 2.4856123674128954,
+    "published_2018": 1.529607610715628
+   },
+   {
+    "event": "472",
+    "objects_per_km2": 6.156038723567153,
+    "published_2018": 1.5153326088780685
+   },
+   {
+    "event": "473",
+    "objects_per_km2": 2.1729192102024415,
+    "published_2018": 2.0784444619327704
+   },
+   {
+    "event": "474",
+    "objects_per_km2": 1.2218651451876559,
+    "published_2018": 2.537719916928209
+   },
+   {
+    "event": "475",
+    "objects_per_km2": 5.828927557242184,
+    "published_2018": 3.384538581624494
+   },
+   {
+    "event": "476",
+    "objects_per_km2": 8.20860375474595,
+    "published_2018": 5.037097758594105
+   },
+   {
+    "event": "477",
+    "objects_per_km2": 3.617680480367038,
+    "published_2018": 13.328296506615404
+   }
+  ],
+  "objects_by_type": {
+   "Bundled net": 291,
+   "Buoy": 217,
+   "Container": 179,
+   "Life ring": 1,
+   "Loose net": 43,
+   "Rope": 61,
+   "Unknown": 803
+  },
+  "objects_outside_window": 0,
+  "objects_read": 1595,
+  "rows_kept": 1595
+ },
+ "counts_scope": "archive",
+ "days_with_no_rows": 29,
+ "distinct_platforms": 30,
+ "distribution": "public",
+ "estimate_rows_per_year": null,
+ "estimate_store_bytes": null,
+ "family": "13",
+ "month": "2016-10",
+ "nan_fraction": {
+  "kg_hi": 0.0,
+  "kg_lo": 0.0,
+  "kg_mid": 0.0,
+  "length_m": 0.0,
+  "lt50": 0.0,
+  "topview_area_m2": 0.000627,
+  "width_m": 0.0
+ },
+ "note_estimate": null,
+ "out_of_bounds": {
+  "kg_hi": 0,
+  "kg_lo": 0,
+  "kg_mid": 0,
+  "length_m": 0,
+  "lt50": 0,
+  "topview_area_m2": 0,
+  "width_m": 0
+ },
+ "out_of_bounds_stored": {
+  "kg_hi": 0,
+  "kg_lo": 0,
+  "kg_mid": 0,
+  "length_m": 0,
+  "lt50": 0,
+  "topview_area_m2": 0,
+  "width_m": 0
+ },
+ "platforms": null,
+ "qc": {
+  "17": 291,
+  "18": 43,
+  "19": 61,
+  "20": 217,
+  "21": 179,
+  "22": 1,
+  "23": 803
+ },
+ "rows": 1595,
+ "rows_outside_month_dropped_by_probe": 0,
+ "rows_per_day": [
+  0,
+  403,
+  0,
+  0,
+  0,
+  1192,
+  0,
+  0,
+  0,
+  0,
+  0,
+  0,
+  0,
+  0,
+  0,
+  0,
+  0,
+  0,
+  0,
+  0,
+  0,
+  0,
+  0,
+  0,
+  0,
+  0,
+  0,
+  0,
+  0,
+  0,
+  0
+ ],
+ "runner": "vm",
+ "schema_version": 2,
+ "source": "https://api.figshare.com/v2/articles/5873142/files",
+ "store": "mobjects",
+ "stored_bytes_per_row": 41,
+ "time_dtype": "int32",
+ "wall_seconds": 6.85,
+ "wall_seconds_index": 0.55
+}

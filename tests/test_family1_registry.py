@@ -31,10 +31,10 @@ import build_family10_registry as reg10                         # noqa: E402
 import build_family1_registry as r1                             # noqa: E402
 from family1.adapters import FAMILIES, REGISTRY                 # noqa: E402
 
-CODES = ("1gf", "1tf", "09tf", "12", "72d")
-#: the registries family 10.2's `siblings` line names — all four (family 1.2
-#: joined it in E-085)
-SIBLING_CODES = ("1gf", "1tf", "09tf", "12")
+CODES = ("1gf", "1tf", "09tf", "12", "13", "72d")
+#: the registries family 10.2's `siblings` line names (family 1.2 joined it
+#: in E-085, family 1.3 in E-092)
+SIBLING_CODES = ("1gf", "1tf", "09tf", "12", "13")
 
 
 # --------------------------------------------------------------- the stub --
@@ -202,6 +202,62 @@ def test_1_2_inherits_1gf_by_reference_and_names_its_exception(offline):
         assert g["distribution"] == "public"
         assert g["cadence"] == "6-hourly"
         assert g["frames_per_bin"] == 20 and g["frame_seconds"] == 21600
+
+
+def test_1_3_inherits_the_resolved_chain_1_2_and_1gf(offline):
+    """Family 1.3 (E-092) is 1.2 by reference plus the plastic stores, and
+    1.2 inherits 1.gf: the block names the direct parent as 1.2's names its,
+    and lists the WHOLE chain — every 1.gf store under tensors/family1_gf/
+    and every 1.2 store under tensors/family1_2/ — so a reader opens one
+    list."""
+    r = offline["13"]
+    assert r["family"] == "family1_3" and r["family_version"] == "1.3"
+    assert r["registry"] == "tensors/family1_3/family13.json"
+    assert r["hf_root"] == "tensors/family1_3"
+    assert r["inherits"] == "family12"
+    assert "plastic" in r["description"]
+    b = r["inherits_block"]
+    assert b["family_code"] == "12" and b["family_version"] == "1.2"
+    assert b["registry"] == "tensors/family1_2/family12.json"
+    assert b["root"] == "tensors/family1_2"
+    gf = sorted(g["name"] for g in offline["1gf"]["groups"])
+    twelve = sorted(g["name"] for g in offline["12"]["groups"])
+    assert b["groups"] == sorted(gf + twelve)
+    assert [c["registry"] for c in b["chain"]] == [
+        "tensors/family1_2/family12.json", "tensors/family1_gf/family1gf.json"]
+    assert [c["groups"] for c in b["chain"]] == [twelve, gf]
+    paths = {x["name"]: x["path"] for x in b["stores"]}
+    assert set(paths) == set(gf) | set(twelve)
+    for n in gf:
+        assert paths[n] == f"tensors/family1_gf/{n}"
+    for n in twelve:
+        assert paths[n] == f"tensors/family1_2/{n}"
+    assert "1.2 (inherited by reference) plus stores that could identify " \
+           "plastic in the ocean (E-092)" in b["note"]
+    own = sorted(g["name"] for g in r["groups"])
+    assert own == ["mobjects", "mplastic"]
+    assert set(own) & set(b["groups"]) == set()
+    for g in r["groups"]:
+        assert g["path"] == f"tensors/family1_3/{g['name']}"
+        assert g["distribution"] == "public"
+    assert "exceptions" not in r
+
+
+def test_inheritance_chains_of_any_length_and_their_refusals(monkeypatch):
+    assert r1.inheritance_chain("13") == ["12", "1gf"]
+    assert r1.inheritance_chain("12") == ["1gf"]
+    assert r1.inheritance_chain("09tf") == ["1tf"]
+    assert r1.inheritance_chain("1gf") == []
+    # a single parent keeps exactly the six keys it always had
+    assert sorted(r1.inherits_block("12")) == sorted(
+        ["family_code", "family_version", "registry", "root", "groups",
+         "note"])
+    monkeypatch.setitem(r1.INHERITS, "1gf", "13")
+    with pytest.raises(ValueError, match="cycle"):
+        r1.inheritance_chain("13")
+    monkeypatch.setitem(r1.INHERITS, "1gf", "nope")
+    with pytest.raises(ValueError, match="not a family"):
+        r1.inheritance_chain("12")
 
 
 # ============================================================== the numbers ==

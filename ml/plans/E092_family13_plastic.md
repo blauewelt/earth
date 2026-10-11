@@ -268,8 +268,10 @@ a point (`log2_fp` −4, the family's point label); a Sentinel-2 pixel is 20 m.
   empty. If it does not beat the neighbours, the inputs carry nothing the
   tows' own geography does not, and the read-out is shelved.
 - **`mobjects`**: kept as the aircraft's own record; falsified only if its
-  counts do not reproduce Lebreton 2018's published megaplastic
-  concentrations per mosaic (a bake-time check).
+  counts do not reproduce The Ocean Cleanup's published aircraft
+  concentrations per mosaic — amended 2026-10-11 to the producer's 2024
+  reprocessing, which they match on 31 of 31 (they match the 2018 paper's on
+  2 of 31; §8).
 - **`s2labels`**: an index threshold (FDI > its MARIDA-train 95th percentile
   over clear water) is the baseline on MARIDA's own test split; the store
   earns its place if a model reading the 11 bands plus the inherited ocean
@@ -277,9 +279,74 @@ a point (`log2_fp` −4, the family's point label); a Sentinel-2 pixel is 20 m.
   model, the labels are a test set, not a training store.
 - **`s2fdi_gpgp`**: §5 step 2.
 
+## 8 · Phase A, built locally — what the adapters found (2026-10-11)
+
+The adapters `mplastic` and `mobjects` (`ml/family1/adapters/`), the shared
+Lebreton 2018 parser (`_lebreton2018.py`, now also used by the globe bake —
+`data/gpgp_plastic.json` rebuilt identical apart from its snapshot date) and
+the family-1.3 plumbing are written and tested (19 store tests, 20 registry
+tests). Both stores were built end to end against the live sources in the
+sandbox; nothing is published yet. Every number below is in
+`ml/family1/probes/mplastic_ledger.json`, `mplastic_depth_table.json`,
+`mplastic_emodnet_types.json` and the two probe files.
+
+**`mplastic`: 18,504 surface samples, 1972-04-16 → 2024-10-23, 349 platforms,
+0 values out of bounds.**
+
+| source | rows read | kept | why the rest went |
+|---|---|---|---|
+| The Ocean Cleanup 2015–16 events (Lebreton 2018) | 683 | 683 | — |
+| Lebreton 2018's compilation of earlier tows | 3,532 | 3,031 | 501 are the 2015 events again ("This study") |
+| The Ocean Cleanup 2018–2022 (Lebreton 2024) | 1,193 | 496 | 692 are the 2015–16 expeditions, excluded by name and confirmed against 2018 |
+| NOAA NCEI, ocean-water samples | 16,988 | 13,385 | 2,530 SEA Pacific rows by name (D9); 673 of The Ocean Cleanup's own submissions ("Egger et al.") matched to its files; 400 already in the compilation |
+| EMODnet floating micro-litter | 3,385 samples | 909 | 657 already in NCEI; the rest have no plastic-only total (below) |
+
+Decisions taken while building, each reversible by one constant:
+
+- **D10 — concentrations are stored as log10(1 + value).** The store's values
+  are float16, which stops at 65,504; real tows reach ~10⁷ pieces/km² and one
+  NCEI pump sample 137,800 pieces/m³. A measured zero stays exactly 0. The
+  channels are `log_n_km2`, `log_g_km2`, `log_n_m3`, `log_n_km2_wc` and four
+  size classes; `sample_depth_m` was added (some pumps and bottles sample
+  3–11 m down), and two time-precision flags ride in `qc` (no time of day →
+  noon; month only → mid-month, the gbif/glodap precedent).
+- **D11 — NCEI's per-m³ values are undone per study AND sampling method**
+  (one study used two nets). 6,905 rows take an areal value from the study's
+  own accession (44 accessions read; implied net depths 0.0675–0.5 m, e.g.
+  Law et al. 2010 0.25 m); Eriksen 2014 is back-converted with a measured
+  0.08 m (161 matches, cv 0); 3,076 net rows stay per m³ because no depth
+  could be measured, and 3,028 volumetric samples are per m³ by nature.
+  NCEI records several studies at the END of the tow, so matching tries both
+  ends. The Ocean Cleanup's own NCEI rows are dropped only where they match its
+  files (±1 day, 0.06°: its 2024 positions are rounded to 0.01°); the 96 that
+  match nothing — 2018–2020 tows in no Ocean Cleanup file — are kept, per m³
+  (NCEI's value there is the wind-corrected 0.5–5 mm count over 0.075 m, a
+  quantity no areal channel holds).
+- **D12 — EMODnet counts only what its own vocabulary calls plastic.** A
+  shape ("fragments") with no polymer type is ambiguous and excluded, which
+  leaves 1,566 samples with a plastic total (909 after removing NCEI copies).
+  Counting shapes as plastic (`EMODNET_SHAPES_ARE_PLASTIC`) would give ≈ 3,357.
+  **A decision for Chris** — conservative by default.
+- **The Ocean Cleanup's 2024 file re-uses earlier numbers in specific ways**,
+  checked on the shared 2015 tows: its manta values equal 2018's
+  wind-CORRECTED midpoints (352 of 352), so its new 2018–22 manta tows fill
+  only `log_n_km2_wc`; its large-net values equal the raw catch (18 of 18);
+  its aircraft counts were REPROCESSED and equal 2018's on only 2 of 31
+  mosaics (ratio 0.27–7.2, median 0.98).
+
+**`mobjects`: 1,595 objects, 100 % joined, seven types.** The §6 falsifier as
+written ("reproduce Lebreton 2018's megaplastic concentration per mosaic")
+**fails on 29 of 31 mosaics — and the objects reproduce The Ocean Cleanup's
+2024 reprocessed aircraft counts on all 31.** The producer re-derived its own
+2016 aircraft numbers; the objects are consistent with the current version.
+The falsifier is amended to the 2024 counts, which it passes.
+
+**D9's per-tow note** (does SEA's later value differ?) is not in the store:
+it needs AOMI's rows, which D4 keeps out. The comparison stays in §2a.
+
 ## 7 · Status
 
-**DRAFT — nothing built.** Sources measured 2026-10-11 (the raw downloads are
+**Phase A `mplastic` and `mobjects` built locally and tested (§8); publishing next. Nothing else built.** Sources measured 2026-10-11 (the raw downloads are
 in the session's scratch space, not committed). Open items, in the order they
 block:
 

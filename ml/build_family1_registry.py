@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""The REGISTRIES of families 1.gf, 1.0.tf, 0.9.tf and 1.2 — one file each.
+"""The REGISTRIES of families 1.gf, 1.0.tf, 0.9.tf, 1.2 and 1.3 — one file each.
 
 E-082 §4 ("the three registries"), modelled on `ml/build_family10_registry.py`
 and written for the same reader: **a consumer dispatches on `tier` and needs
@@ -14,6 +14,10 @@ no other document.** Writes three files beside family 10's own registry:
                                       ERA5's upper air (E-085): the one
                                       numbered exception, E4, to 1.gf's
                                       "observations at <= 10 km" rule
+    family13.json     family 1.3    — 1.2 INHERITED by reference (and with it
+                                      1.gf: the chain is RESOLVED), plus the
+                                      stores that could identify plastic in
+                                      the ocean (E-092)
 
 WHAT IS DIFFERENT FROM FAMILY 10'S REGISTRY, and why.
 
@@ -61,6 +65,15 @@ WHAT IS DIFFERENT FROM FAMILY 10'S REGISTRY, and why.
   `exceptions` list: ERA5 is a ~31 km model-filled reanalysis, which 1.gf's
   rule would exclude, so it is admitted by NAME (E4, after the note's
   E1-E3), never silently.
+
+  **1.3 inherits 1.2, which inherits 1.gf, and the chain is RESOLVED.**
+  Family 1.3 (E-092, Chris 2026-10-08) is family 1.2 unchanged plus stores
+  that could identify plastic in the ocean. Its `inherits_block` names the
+  direct parent the same way, and additionally lists the whole CHAIN — each
+  ancestor registry with its own stores — and every inherited store under
+  its OWN path (`tensors/family1_gf/<store>`, `tensors/family1_2/<store>`),
+  so a reader opens one list instead of walking registries. A family with a
+  single parent (0.9.tf, 1.2) keeps exactly the block it always had.
 
   **An access failure is not evidence of absence** (ml/CLAUDE.md §0.2). A 404
   from the Hub means the store is not published; a 401 or a 403 means the read
@@ -118,18 +131,23 @@ REGISTRY_NAME = {"1gf": "family1gf.json",
                  "1tf": "family1tf.json",
                  "09tf": "family09tf.json",
                  "12": "family12.json",
+                 "13": "family13.json",
                  "72d": "family72d.json"}
 PLAN_E085 = "ml/plans/E085_family12_atmosphere.md"
 PLAN_E087 = "ml/plans/E087_family7_daily.md"
+PLAN_E092 = "ml/plans/E092_family13_plastic.md"
 NOTE = {"1gf": "ml/paper/notes/family1gf.tex",
         "1tf": "ml/paper/notes/family1tf.tex",
         "09tf": "ml/paper/notes/family09tf.tex",
         "12": PLAN_E085,
+        "13": "ml/paper/notes/family13.tex",
         "72d": PLAN_E087}
 #: 0.9.tf is 1.0.tf with the imagery replaced; 1.2 is 1.gf with ERA5's
-#: upper air added. In both, every parent store is the same bytes under the
-#: same path, so it is inherited by reference.
-INHERITS = {"09tf": "1tf", "12": "1gf"}
+#: upper air added; 1.3 is 1.2 with stores that could identify plastic in the
+#: ocean added. In all three, every parent store is the same bytes under the
+#: same path, so it is inherited by reference. A parent may itself inherit:
+#: `inheritance_chain` follows the links to the root.
+INHERITS = {"09tf": "1tf", "12": "1gf", "13": "12"}
 INHERIT_NOTE = {
     "09tf": ("family {version} is family {pversion} with the raw satellite "
              "imagery replaced by Google's AlphaEarth embedding. Every other "
@@ -143,6 +161,14 @@ INHERIT_NOTE = {
            "path (`tensors/family1_gf/<store>`), listed BY REFERENCE — no "
            "byte is copied: read the named registry for them. `groups` below "
            "holds only the stores {version} adds, under tensors/family1_2/."),
+    "13": ("family {version} is family {pversion} (inherited by reference) "
+           "plus stores that could identify plastic in the ocean (E-092). "
+           "{pversion} itself inherits 1.gf, so the chain is RESOLVED here: "
+           "`chain` names every ancestor registry with its own stores, and "
+           "`stores` lists every inherited store under its OWN path "
+           "(tensors/family1_gf/<store>, tensors/family1_2/<store>) — the "
+           "SAME BYTES, no byte copied. `groups` below holds only the stores "
+           "{version} adds, under tensors/family1_3/."),
 }
 DESCRIPTION_1 = (
     "Family 1 is the FINE observation families: everything at 10 km or finer "
@@ -153,6 +179,18 @@ DESCRIPTION_1 = (
     "burned-area map from a half-hourly flux tower at the same place. "
     "Dispatch on `tier`.")
 DESCRIPTION = {
+    "13": (
+        "Family 1.3 is family 1.2 (inherited by reference) plus stores that "
+        "could identify plastic in the ocean (E-092). Family 1.2 is itself "
+        "family 1.gf — the global fine observation stores — plus ERA5's "
+        "upper air, and both are listed by reference in `inherits_block` "
+        "(the chain resolved: every inherited store under its own path). "
+        "The stores 1.3 adds are the ground truth for floating plastic: "
+        "surface net tows, water samples and aircraft surveys (`mplastic`, "
+        "one row per sample, concentrations stored as log10(1 + value) "
+        "because float16 cannot hold a busy tow's pieces per km2) and the "
+        "objects identified in The Ocean Cleanup's 2016 aircraft mosaics "
+        "(`mobjects`). Dispatch on `tier`."),
     "72d": (
         "Family 7.2d is family 7.2 — the programme's global input tensor "
         "(family7_global025_pentad_l2: 0.25-degree and 1-degree grids pole "
@@ -523,7 +561,8 @@ def build_one(code, repo=PUBLIC_REPO, use_hub=True, work=None,
             "rows and have no time column at all — their bin axis is the "
             "shard index."),
         "description": DESCRIPTION.get(code, DESCRIPTION_1),
-        "plan": {"12": PLAN_E085, "72d": PLAN_E087}.get(code, PLAN),
+        "plan": {"12": PLAN_E085, "13": PLAN_E092,
+                 "72d": PLAN_E087}.get(code, PLAN),
         "design": DESIGN, "wave6": WAVE6, "contract": CONTRACT,
         "note": NOTE[code],
         "epoch": str(sh.EPOCH), "pentad_days": f10.PENTAD_DAYS,
@@ -553,21 +592,79 @@ def build_one(code, repo=PUBLIC_REPO, use_hub=True, work=None,
         "generated_utc": utcnow(),
     }
     if code in INHERITS:
-        parent = INHERITS[code]
-        pname, pversion, pslug = FAMILIES[parent]
-        reg["inherits"] = REGISTRY_NAME[parent].replace(".json", "")
-        reg["inherits_block"] = {
-            "family_code": parent,
-            "family_version": pversion,
-            "registry": f"tensors/{pslug}/{REGISTRY_NAME[parent]}",
-            "root": f"tensors/{pslug}",
-            "groups": stores_of(parent),
-            "note": INHERIT_NOTE[code].format(version=version,
-                                              pversion=pversion),
-        }
+        reg["inherits"] = REGISTRY_NAME[INHERITS[code]].replace(".json", "")
+        reg["inherits_block"] = inherits_block(code)
     if code in EXCEPTIONS:
         reg["exceptions"] = json.loads(json.dumps(EXCEPTIONS[code]))
     return reg
+
+
+def inheritance_chain(code):
+    """The ancestors of `code`, nearest first: ["12", "1gf"] for 1.3.
+
+    Any length; a cycle or a parent that is not a family raises, because a
+    registry that walked a loop would never be written and one that named a
+    missing parent would point a reader at nothing.
+    """
+    chain, seen = [], {code}
+    cur = code
+    while cur in INHERITS:
+        cur = INHERITS[cur]
+        if cur not in FAMILIES:
+            raise ValueError(f"family {code}: ancestor {cur!r} is not a "
+                             f"family ({sorted(FAMILIES)})")
+        if cur in seen:
+            raise ValueError(f"family {code}: inheritance cycle through "
+                             f"{cur!r} ({chain})")
+        seen.add(cur)
+        chain.append(cur)
+    return chain
+
+
+def _registry_ref(code):
+    _n, v, slug = FAMILIES[code]
+    return {"family_code": code, "family_version": v,
+            "registry": f"tensors/{slug}/{REGISTRY_NAME[code]}",
+            "root": f"tensors/{slug}"}
+
+
+def inherits_block(code):
+    """The `inherits_block` of a family that inherits.
+
+    One parent (0.9.tf, 1.2): exactly the block those registries have always
+    carried — the parent's registry, root and stores, and the note. A longer
+    chain (1.3 -> 1.2 -> 1.gf) carries the same keys for the DIRECT parent,
+    with `groups` holding every inherited store name, plus `chain` (each
+    ancestor registry and its own stores, nearest first) and `stores` (every
+    inherited store with its OWN path and the registry that describes it), so
+    a reader opens ONE list.
+    """
+    chain = inheritance_chain(code)
+    if not chain:
+        raise ValueError(f"family {code} inherits nothing")
+    parent = chain[0]
+    _n, version, _s = FAMILIES[code]
+    pversion = FAMILIES[parent][1]
+    note = INHERIT_NOTE[code].format(version=version, pversion=pversion)
+    head = _registry_ref(parent)
+    if len(chain) == 1:
+        return {**head, "groups": stores_of(parent), "note": note}
+    links = [{**_registry_ref(c), "groups": stores_of(c)} for c in chain]
+    stores = []
+    for link in links:
+        for s in link["groups"]:
+            stores.append({"name": s, "path": f"{link['root']}/{s}",
+                           "family_code": link["family_code"],
+                           "family_version": link["family_version"],
+                           "registry": link["registry"]})
+    stores.sort(key=lambda x: x["name"])
+    names = [x["name"] for x in stores]
+    dup = sorted({n for n in names if names.count(n) > 1})
+    if dup:
+        raise ValueError(f"family {code}: stores {dup} appear in more than "
+                         f"one ancestor of the chain {chain}")
+    return {**head, "groups": names, "chain": links, "stores": stores,
+            "note": note}
 
 
 def build_all(repo=PUBLIC_REPO, use_hub=True, work=None,
@@ -593,7 +690,7 @@ def siblings_block():
             {"family": FAMILIES[c][0], "family_version": FAMILIES[c][1],
              "registry": f"tensors/{FAMILIES[c][2]}/{REGISTRY_NAME[c]}",
              "builder": "ml/build_family1_registry.py"}
-            for c in ("1gf", "1tf", "09tf", "12")],
+            for c in ("1gf", "1tf", "09tf", "12", "13")],
     }
 
 
@@ -665,9 +762,9 @@ def publish_one(path, code, repo=None):
 # ===================================================================== main ==
 def main():
     ap = argparse.ArgumentParser(
-        description="Write family1gf.json, family1tf.json, family09tf.json "
-                    "and family12.json — the family-1 registries (E-082 §4, "
-                    "E-085).")
+        description="Write family1gf.json, family1tf.json, family09tf.json, "
+                    "family12.json and family13.json — the family-1 "
+                    "registries (E-082 §4, E-085, E-092).")
     ap.add_argument("--out-dir", default=REGISTRY_DIR,
                     help="where to write them (default: beside family 10's "
                          "own registry)")

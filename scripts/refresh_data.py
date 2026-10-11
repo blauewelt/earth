@@ -2276,7 +2276,8 @@ def tides():
 # The figshare WEB page answers 403 to scripts; the API and the ndownloader
 # links are keyless. File ids are resolved through the API by NAME, never typed.
 #
-# Two traps, both in the published files (seen 2026-10-08/09, asserted below):
+# Two traps, both in the published files (seen 2026-10-08/09), asserted in the
+# parser this bake shares with family 1.3 (ml/family1/adapters/_lebreton2018.py):
 #  * the Megaplastics sheet has its Longitude and Latitude columns SWAPPED
 #    ("Longitude" ~ 33, "Latitude" ~ -141). Every position here comes from
 #    StationInfo; each concentration row must agree with its StationInfo
@@ -2296,7 +2297,6 @@ GPGP_SHEETS = [   # (size-class key, sheet name, expected rows, sampling type)
     ("macro", "Macroplastics (5-50 cm)", 151, "Mega trawl"),
     ("mega", "Megaplastics (>50 cm)", 31, "RGB mosaic"),
 ]
-GPGP_TYPE = {"Manta trawl": "manta", "Mega trawl": "mega", "RGB mosaic": "aerial"}
 
 
 def _sig(v, n=4):
@@ -2314,143 +2314,76 @@ def _sig(v, n=4):
     return int(r) if r == int(r) and abs(r) < 1e15 else r
 
 
-def _gpgp_id(v):
-    """Event IDs arrive as floats with representation noise."""
-    x = round(float(v), 6)
-    s = f"{x:.6f}".rstrip("0").rstrip(".")
-    return s if s else "0"
+def _lebreton2018():
+    """The shared parser (ml/family1/adapters/_lebreton2018.py), loaded by FILE
+    PATH so the bake does not import the family-1 adapter package (which
+    imports every adapter). Family 1.3's `mplastic` and `mobjects` stores
+    read the same files through the same functions (E-092)."""
+    import importlib.util
+    path = os.path.join(ROOT, "ml", "family1", "adapters", "_lebreton2018.py")
+    spec = importlib.util.spec_from_file_location("_lebreton2018", path)
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
 
 
 def gpgp():
     import xlrd
+    lb = _lebreton2018()
     print("GPGP plastic (Lebreton et al. 2018): resolving files via figshare API ...")
     files = fetch_json(f"https://api.figshare.com/v2/articles/{GPGP_ARTICLE}/files")
-    by_name = {f["name"]: f for f in files}
     paths = {}
-    for nm in ("Lebreton2018_Concentration.xls", "Lebreton2018_SamplingInformation.xls",
-               "Lebreton2018_HistoricalDataset.xls"):
-        f = by_name[nm]
+    for nm, f in lb.resolve(files).items():
         paths[nm] = _download(f["download_url"], f"/tmp/nc/gpgp_{f['id']}_{nm}")
 
     samp = xlrd.open_workbook(paths["Lebreton2018_SamplingInformation.xls"])
     conc = xlrd.open_workbook(paths["Lebreton2018_Concentration.xls"])
     hist = xlrd.open_workbook(paths["Lebreton2018_HistoricalDataset.xls"])
 
-    def rows(sheet):
-        hdr = [str(h).strip() for h in sheet.row_values(0)]
-        for r in range(1, sheet.nrows):
-            yield dict(zip(hdr, sheet.row_values(r)))
-
-    def num(v):
-        try:
-            v = float(v)
-        except (TypeError, ValueError):
-            return None
-        return None if v != v else v
-
     # --- StationInfo: one record per sampling event --------------------------
-    events, order = {}, []
-    for r in rows(samp.sheet_by_name("StationInfo")):
-        eid = _gpgp_id(r["Sampling event ID"])
-        assert eid not in events, f"duplicate event id {eid} after normalisation"
-        typ = GPGP_TYPE[r["Sampling type"]]
-        y, mo, d = int(r["Start year (UTC)"]), int(r["Start month (UTC)"]), int(r["Start day (UTC)"])
-        h = num(r["Start UTC time (hours)"])
-        ts = f"{y:04d}-{mo:02d}-{d:02d}"
-        if h is not None:
-            assert 0 <= h < 24, f"event {eid}: start hour {h}"
-            mins = int(round(h * 60))
-            if mins >= 1440:
-                mins = 1439
-            ts += f"T{mins // 60:02d}:{mins % 60:02d}Z"
-        la0, lo0 = num(r["Start latitude (degrees)"]), num(r["Start longitude (degrees)"])
-        la1, lo1 = num(r["End latitude (degrees)"]), num(r["End longitude (degrees)"])
-        if la1 is None or lo1 is None:
-            la1, lo1 = la0, lo0
+    raw_events, order = lb.read_events(samp)
+    events = {}
+    for eid in order:
+        e = raw_events[eid]
         events[eid] = {
-            "id": eid, "type": typ, "platform": str(r["Platform name"]).strip(),
-            "t": ts,
-            "lon": round((lo0 + lo1) / 2, 4), "lat": round((la0 + la1) / 2, 4),
-            "area_km2": _sig(r["Sampling area (km2)"]),
-            "dist_km": _sig(r["Sampling distance (km)"]),
-            "dur_h": _sig(r["Sampling duration (hours)"]),
-            "wind_kn": _sig(r["Wind speed (Knots)"]),
-            "bft": _sig(r["Sea state (Beaufort)"]),
+            "id": eid, "type": e["type"], "platform": e["platform"],
+            "t": lb.start_iso(e),
+            "lon": e["lon"], "lat": e["lat"],
+            "area_km2": _sig(e["area_km2"]),
+            "dist_km": _sig(e["dist_km"]),
+            "dur_h": _sig(e["dur_h"]),
+            "wind_kn": _sig(e["wind_kn"]),
+            "bft": _sig(e["bft"]),
             "c": {},
         }
-        order.append(eid)
     n_by_type = {}
     for e in events.values():
         n_by_type[e["type"]] = n_by_type.get(e["type"], 0) + 1
     print(f"  StationInfo: {len(events)} events {n_by_type}")
-    assert len(events) == 683 and n_by_type == {"manta": 501, "mega": 151, "aerial": 31}, n_by_type
 
     # --- the four concentration sheets ---------------------------------------
+    stats = lb.read_concentrations(conc, raw_events)
     for key, sheet, expect_n, stype in GPGP_SHEETS:
-        sh = conc.sheet_by_name(sheet)
-        n = swapped = 0
-        for r in rows(sh):
-            eid = _gpgp_id(r["Sampling event ID"])
-            assert eid in events, f"{sheet}: event {eid} has no StationInfo row"
-            ev = events[eid]
-            assert r["Sampling type"] == stype and ev["type"] == GPGP_TYPE[stype], \
-                f"{sheet}: event {eid} type mismatch"
-            clon, clat = num(r["Longitude (degrees)"]), num(r["Latitude (degrees)"])
-            ok = abs(clon - ev["lon"]) < 0.01 and abs(clat - ev["lat"]) < 0.01
-            if not ok and key == "mega":
-                ok = abs(clat - ev["lon"]) < 0.01 and abs(clon - ev["lat"]) < 0.01
-                swapped += ok
-            assert ok, (f"{sheet}: event {eid} at ({clon},{clat}) disagrees with "
-                        f"StationInfo ({ev['lon']},{ev['lat']}) by more than 0.01 deg")
-
-            def col(prefix, unit):
-                for k, v in r.items():
-                    kk = " ".join(k.lower().split())
-                    if kk.startswith(prefix) and kk.endswith(f"({unit} km-2)"):
-                        return _sig(v)
-                raise KeyError(f"{sheet}: no column {prefix} {unit}")
-            assert key not in ev["c"], f"{sheet}: event {eid} twice"
-            ev["c"][key] = {
-                "n": [col("midpoint", "#"), col("lower", "#"), col("higher", "#"), col("raw", "#")],
-                "g": [col("midpoint", "g"), col("lower", "g"), col("higher", "g"), col("raw", "g")],
-            }
-            n += 1
+        n, swapped = stats[key]
         print(f"  {sheet}: {n} rows, 100% joined{f', {swapped} lat/lon-swapped rows matched' if swapped else ''}")
-        assert n == expect_n, f"{sheet}: {n} rows, expected {expect_n}"
-        if key == "mega":
-            assert swapped == n, f"Megaplastics swap: only {swapped}/{n} rows matched swapped"
-    # every event carries exactly the size classes its gear samples
-    want = {"manta": {"micro", "meso"}, "mega": {"macro"}, "aerial": {"mega"}}
-    for e in events.values():
-        assert set(e["c"]) == want[e["type"]], f"event {e['id']}: classes {set(e['c'])}"
+    for eid in order:
+        for key, cv in raw_events[eid]["c"].items():
+            events[eid]["c"][key] = {"n": [_sig(v) for v in cv["n"]],
+                                     "g": [_sig(v) for v in cv["g"]]}
 
     # --- MosaicDebrisInfo: every object seen from the aircraft ---------------
-    objects = []
-    for r in rows(samp.sheet_by_name("MosaicDebrisInfo")):
-        eid = _gpgp_id(r["Sampling event ID"])
-        assert eid in events and events[eid]["type"] == "aerial", f"object on event {eid}"
-        lo0, la0 = num(r["Start longitude debris (degrees)"]), num(r["Start latitude debris (degrees)"])
-        lo1, la1 = num(r["End longitude debris (degrees)"]), num(r["End latitude debris (degrees)"])
-        if lo1 is None or la1 is None:
-            lo1, la1 = lo0, la0
-        lt50 = str(r["< 50 cm?"]).strip().lower()
-        objects.append([
-            eid, round((lo0 + lo1) / 2, 4), round((la0 + la1) / 2, 4),
-            str(r["Object type"]).strip(), str(r["Color"]).strip(),
-            _sig(r["Length (m)"]), _sig(r["Width (m)"]),
-            1 if lt50 == "yes" else 0 if lt50 == "no" else None,
-            _sig(r["Topview area (m^2)"]),
-            _sig(r["Lower weight (kg)"]), _sig(r["Mid weight (kg)"]), _sig(r["Upper weight (kg)"]),
-        ])
+    objects = [[o["event"], o["lon"], o["lat"], o["type"], o["colour"],
+                _sig(o["length_m"]), _sig(o["width_m"]), o["lt50"],
+                _sig(o["area_m2"]), _sig(o["kg_lo"]), _sig(o["kg_mid"]),
+                _sig(o["kg_hi"])]
+               for o in lb.read_objects(samp, raw_events)]
     print(f"  MosaicDebrisInfo: {len(objects)} objects, 100% joined")
-    assert len(objects) == 1595, len(objects)
 
     # --- 1972-2015 compilation of earlier net tows ---------------------------
-    hs = hist.sheets()[0]
     origins, refs, historical = [], [], []
+
     def txt(v):
-        s = " ".join(str(v).split())
-        return None if s.lower() in ("", "nan", "none") else s
+        return lb.txt(v)
 
     def idx(lst, s):
         s = txt(s)
@@ -2459,21 +2392,14 @@ def gpgp():
         if s not in lst:
             lst.append(s)
         return lst.index(s)
-    for r in rows(hs):
-        y, mo = num(r["Sampling Year"]), num(r["Sampling Month"])
-        lon, lat = num(r["Longitude (degrees)"]), num(r["Latitude (degrees)"])
-        assert y is not None and lon is not None and lat is not None, r
-        gear = txt(r["Sampling type"])
-        gear = gear.lower() if gear else None
-        ins = num(r["Inside GPGP?"])
+    for h in lb.read_historical(hist):
         historical.append([
-            idx(origins, r["Data Origin"]), idx(refs, r["Data Reference"]),
-            int(y), int(mo) if mo else None,
-            round(lon, 4), round(lat, 4), gear,
-            _sig(r["Mesh Size (microns)"]), _sig(r["Net tow Depth (in m)"]),
-            _sig(r["Microplastic Numerical Concentration (#/km²)"]),
-            _sig(r["Microplastic Mass Concentration (g/km²)"]),
-            None if ins is None else int(ins),
+            idx(origins, h["origin"]), idx(refs, h["ref"]),
+            h["y"], h["mo"],
+            round(h["lon"], 4), round(h["lat"], 4), h["gear"],
+            _sig(h["mesh_um"]), _sig(h["depth_m"]),
+            _sig(h["n"]), _sig(h["g"]),
+            None if h["inside"] is None else int(h["inside"]),
         ])
     print(f"  historical: {len(historical)} tows, {len(origins)} cruises/origins, "
           f"{len(refs)} references, gears {sorted({h[6] or '-' for h in historical})}")

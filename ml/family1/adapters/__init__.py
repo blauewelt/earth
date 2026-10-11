@@ -42,6 +42,10 @@ FAMILIES = {
     # family 1.2 = family 1.gf (inherited by reference) + ERA5's upper air
     # (E-085); its own stores live under tensors/family1_2/
     "12": ("family1_2", "1.2", "family1_2"),
+    # family 1.3 = family 1.2 (inherited by reference, and with it 1.gf) +
+    # stores that could identify plastic in the ocean (E-092); under
+    # tensors/family1_3/
+    "13": ("family1_3", "1.3", "family1_3"),
     # family 7.2d = family 7.2's channels (the global five-day tensor) at
     # DAILY resolution, one store per source (E-087); under tensors/family7_2d/
     "72d": ("family7_2d", "7.2d", "family7_2d"),
