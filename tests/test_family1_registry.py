@@ -235,7 +235,7 @@ def test_1_3_inherits_the_resolved_chain_1_2_and_1gf(offline):
     assert "1.2 (inherited by reference) plus stores that could identify " \
            "plastic in the ocean (E-092)" in b["note"]
     own = sorted(g["name"] for g in r["groups"])
-    assert own == ["mobjects", "mplastic"]
+    assert own == ["mobjects", "mplastic", "s2labels"]
     assert set(own) & set(b["groups"]) == set()
     for g in r["groups"]:
         assert g["path"] == f"tensors/family1_3/{g['name']}"

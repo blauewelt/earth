@@ -81,6 +81,18 @@ producer's 2024 reprocessed counts on 31 of 31 mosaics and the 2018 paper's on
 `tensors/family1_3/family13.json`. Details: plan §8 and
 [the family-1 build log](https://blauewelt.github.io/earth/docs.html?f=ml/family1/BUILD_LOG.md).
 
+**The co-location probe — does Sentinel-2 see the garbage patch? No.**
+Control: 200 random 2 km discs of open water in the same scene. Nine (survey,
+acquisition) pairs within ±1 day of The Ocean Cleanup's 2021 aircraft
+surveys and tows (none on the same day), ACOLITE-corrected: no disc ranks
+above its control's 95th percentile (median rank 0.49, Wilcoxon p = 0.16),
+and the debris index does not follow the aircraft's object counts (Spearman
+ρ = −0.06, n = 6). The bright pixels are cloud fringes. The store of
+Sentinel-2 debris indices over the patch (`s2fdi_gpgp`) is closed with that
+measured reason. **`s2labels`** (837,964 human-labelled Sentinel-2 pixels from
+MARIDA and the placeable part of MADOS) built locally; its baseline — a
+debris-index threshold — scores F1 0.0063 on MARIDA's test split.
+
 ## E-091 · Day-of-year climatology — the mean of every calendar day over any span of years, from sums cumulative over the years — BUILT 2026-10-08 for OISST and the four ERA5 stores
 
 **Why.** Chris: *"Say I want average values for every single day of year,

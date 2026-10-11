@@ -50,3 +50,41 @@ def test_rebuilt_family_may_not_lose_a_store(tmp_path):
 def test_rebuilt_token_must_name_this_registrys_family(tmp_path):
     assert _run(tmp_path, _reg(), _reg(description="x"),
                 "--allow-group", "rebuilt_12") == 1
+
+
+# `--allow-group added_<name>` (E-092): a store published for the FIRST time
+# into an existing registry. The new group and the build counts may appear;
+# every existing group and every other top-level field is held to equality.
+def _added(**kw):
+    new = _reg(built=["a", "c"], not_built=["b"], n_built=2, n_groups=3,
+               description="new", generated_utc="t1",
+               groups=[{"name": "a", "built": True, "record_span": ["1", "2"]},
+                       {"name": "b", "built": False},
+                       {"name": "c", "built": True, "record_span": ["5", "6"]}])
+    new.update(kw)
+    return new
+
+
+def test_added_store_may_appear(tmp_path):
+    old = _reg(n_groups=2)
+    assert _run(tmp_path, old, _added(), "--allow-group", "added_c") == 0
+    assert _run(tmp_path, old, _added()) == 1                 # strict refuses
+
+
+def test_added_store_holds_the_existing_groups(tmp_path):
+    old = _reg(n_groups=2)
+    new = _added()
+    new["groups"][0]["record_span"] = ["1", "9"]               # a changed
+    assert _run(tmp_path, old, new, "--allow-group", "added_c") == 1
+
+
+def test_added_store_must_be_new_and_present(tmp_path):
+    old = _reg(n_groups=2)
+    assert _run(tmp_path, old, _added(), "--allow-group", "added_a") == 1
+    assert _run(tmp_path, old, _added(), "--allow-group", "added_z") == 1
+
+
+def test_added_store_holds_other_top_level_fields(tmp_path):
+    old = _reg(n_groups=2)
+    assert _run(tmp_path, old, _added(repo="y"),
+                "--allow-group", "added_c") == 1

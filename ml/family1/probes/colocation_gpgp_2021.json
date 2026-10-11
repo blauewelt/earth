@@ -1,0 +1,6552 @@
+{
+ "experiment": "E-092 §5 step 2 — the co-location probe",
+ "question": "Is there any floating-debris signal in Sentinel-2 under The Ocean Cleanup's 2021 measurements in the Great Pacific Garbage Patch?",
+ "at": "2026-10-11T21:27:11+00:00",
+ "script": "ml/family1/colocation_probe.py",
+ "repo_git_sha": "20f4cb0a860e3b2c543c42b3c0565bf596181b1d",
+ "versions": {
+  "python": "3.13.16",
+  "numpy": "2.5.3",
+  "scipy": "1.18.1",
+  "rasterio": "1.5.2",
+  "gdal_rasterio": "3.12.2",
+  "gdal_osgeo": "3.8.4",
+  "pyproj": "3.8.0",
+  "netCDF4": "1.7.4",
+  "acolite": {
+   "repo": "https://github.com/acolite/acolite.git",
+   "commit": "ca477dd91dfb5f8eb77333824b38cb0bcce5e083"
+  }
+ },
+ "sources": {
+  "insitu": {
+   "article": "https://api.figshare.com/v2/articles/25674120",
+   "file": "Lebreton2024_concentration_data.xlsx",
+   "download_url": "https://ndownloader.figshare.com/files/48791128",
+   "md5": "c265079db71717fba2aa0d1662f5bd3d",
+   "licence": "CC BY 4.0",
+   "doi": "10.6084/m9.figshare.25674120.v1"
+  },
+  "stac": "https://earth-search.aws.element84.com/v1",
+  "l1c": "https://sentinel-s2-l1c.s3.eu-central-1.amazonaws.com/",
+  "l1c_access": "anonymous HTTPS GET/Range from this sandbox (200/206); the bucket is documented as requester-pays",
+  "scl": "sentinel-cogs L2A COG, windowed range reads",
+  "licence_satellite": "Contains modified Copernicus Sentinel data 2021"
+ },
+ "method": {
+  "grid": "the tile's 20 m grid; B08 and B04 reduced 10 m → 20 m (ACOLITE's resampling for ρ_s; 2×2 mean for TOA); B06, B11 native 20 m",
+  "corrections": {
+   "acolite": "PRIMARY. ACOLITE dark spectrum fitting on L1C: dsf_aot_estimate=fixed, resolved_geometry=False, ancillary_data=False, no glint correction, s2_target_res=20; ρ_s",
+   "toa": "TOA, not atmospherically corrected: (DN + RADIO_ADD_OFFSET)/QUANTIFICATION_VALUE from the L1C product metadata"
+  },
+  "fdi": "R8 − [R6 + (R11 − R6)·(λ8−λ4)/(λ11−λ4)·10]; 1.7722 S2A, 1.7770 S2B (asserted against the wavelengths)",
+  "fai": "R8 − [R4 + (R11 − R4)·(λ8−λ4)/(λ11−λ4)]",
+  "ndvi": "(R8 − R4)/(R8 + R4)",
+  "masks": {
+   "scl_water": "SCL == 6 (primary)",
+   "scl_not_cloud": "SCL ∉ {0,1,3,8,9,10}",
+   "scl_water_cloud_buffer": "SCL == 6 and > 300 m from any SCL 3/8/9/10 pixel"
+  },
+  "target_m": 2000.0,
+  "background_m": [
+   10000.0,
+   30000.0
+  ],
+  "null": "200 random 2 km discs centred 12000–28000 m from the point, same scene, same mask, ≥ 5000 usable px; exceedance of the same background p99.9; target_rank = fraction of null discs below the target (ties half)",
+  "day_window": "±1 UTC day (acquisition UTC date − survey date as published)",
+  "selection": "≥ 5000 SCL-water px in the disc, ≥ 100000 background water px; ordered by |offset|, then disc water fraction; at most 30; one tile per (point, datatake) — the tile with the most water in disc and annulus",
+  "caveat_independence": "pairs in one scene share its clouds, aerosol and noise; several survey points lie within a few km of each other, so their discs overlap — per-scene statistics are given"
+ },
+ "counts": {
+  "insitu_points": 73,
+  "insitu_aerial": 22,
+  "insitu_manta": 51,
+  "candidates_tile_acquisitions": 14,
+  "pairs_point_acquisition": 10,
+  "pairs_by_offset": {
+   "-1": 2,
+   "0": 0,
+   "1": 8
+  },
+  "eligible": 9,
+  "eligible_by_offset": {
+   "-1": 2,
+   "0": 0,
+   "1": 7
+  },
+  "analysed": 9,
+  "scenes": 6,
+  "points_without_any_acquisition": [
+   "aerial:Aerial survey row 34",
+   "aerial:Aerial survey row 36",
+   "aerial:Aerial survey row 37",
+   "aerial:Aerial survey row 38",
+   "aerial:Aerial survey row 39",
+   "aerial:Aerial survey row 40",
+   "aerial:Aerial survey row 41",
+   "aerial:Aerial survey row 45",
+   "aerial:Aerial survey row 46",
+   "aerial:Aerial survey row 47",
+   "aerial:Aerial survey row 49",
+   "aerial:Aerial survey row 50",
+   "aerial:Aerial survey row 51",
+   "aerial:Aerial survey row 53",
+   "aerial:Aerial survey row 54",
+   "manta:Manta trawl row 636",
+   "manta:Manta trawl row 637",
+   "manta:Manta trawl row 638",
+   "manta:Manta trawl row 639",
+   "manta:Manta trawl row 640",
+   "manta:Manta trawl row 641",
+   "manta:Manta trawl row 645",
+   "manta:Manta trawl row 646",
+   "manta:Manta trawl row 647",
+   "manta:Manta trawl row 648",
+   "manta:Manta trawl row 649",
+   "manta:Manta trawl row 650",
+   "manta:Manta trawl row 651",
+   "manta:Manta trawl row 652",
+   "manta:Manta trawl row 653",
+   "manta:Manta trawl row 654",
+   "manta:Manta trawl row 655",
+   "manta:Manta trawl row 656",
+   "manta:Manta trawl row 657",
+   "manta:Manta trawl row 658",
+   "manta:Manta trawl row 659",
+   "manta:Manta trawl row 660",
+   "manta:Manta trawl row 661",
+   "manta:Manta trawl row 662",
+   "manta:Manta trawl row 663",
+   "manta:Manta trawl row 664",
+   "manta:Manta trawl row 665",
+   "manta:Manta trawl row 666",
+   "manta:Manta trawl row 667",
+   "manta:Manta trawl row 668",
+   "manta:Manta trawl row 669",
+   "manta:Manta trawl row 670",
+   "manta:Manta trawl row 671",
+   "manta:Manta trawl row 672",
+   "manta:Manta trawl row 673",
+   "manta:Manta trawl row 674",
+   "manta:Manta trawl row 675",
+   "manta:Manta trawl row 676",
+   "manta:Manta trawl row 677",
+   "manta:Manta trawl row 678",
+   "manta:Manta trawl row 679",
+   "manta:Manta trawl row 680",
+   "manta:Manta trawl row 681",
+   "manta:Manta trawl row 682",
+   "manta:Manta trawl row 683",
+   "manta:Manta trawl row 684",
+   "manta:Manta trawl row 685",
+   "manta:Manta trawl row 686"
+  ],
+  "toa_pinned_le_0_total": {
+   "B02": 0,
+   "B03": 0,
+   "B04": 0,
+   "B08": 0,
+   "B06": 0,
+   "B11": 0
+  }
+ },
+ "all_pairs_clear": [
+  {
+   "point": "aerial:Aerial survey row 33",
+   "scene": "S2A_6SXD_20210804_1_L1C",
+   "offset_days": -1,
+   "target_water_fraction": 0.9652,
+   "target_clear_fraction": 0.9679,
+   "background_clear_fraction": 0.5995,
+   "background_water_px": 2000338,
+   "eligible": true,
+   "selected": true
+  },
+  {
+   "point": "aerial:Aerial survey row 35",
+   "scene": "S2B_6SWD_20210809_1_L1C",
+   "offset_days": 1,
+   "target_water_fraction": 0.9857,
+   "target_clear_fraction": 0.9856,
+   "background_clear_fraction": 0.9089,
+   "background_water_px": 3485674,
+   "eligible": true,
+   "selected": true
+  },
+  {
+   "point": "aerial:Aerial survey row 42",
+   "scene": "S2B_6SXD_20210819_1_L1C",
+   "offset_days": 1,
+   "target_water_fraction": 1.0,
+   "target_clear_fraction": 1.0,
+   "background_clear_fraction": 0.5392,
+   "background_water_px": 2558758,
+   "eligible": true,
+   "selected": true
+  },
+  {
+   "point": "aerial:Aerial survey row 43",
+   "scene": "S2B_6SXD_20210819_1_L1C",
+   "offset_days": 1,
+   "target_water_fraction": 0.9999,
+   "target_clear_fraction": 0.9999,
+   "background_clear_fraction": 0.4967,
+   "background_water_px": 2633880,
+   "eligible": true,
+   "selected": true
+  },
+  {
+   "point": "aerial:Aerial survey row 44",
+   "scene": "S2A_6SXE_20210824_1_L1C",
+   "offset_days": 1,
+   "target_water_fraction": 0.4295,
+   "target_clear_fraction": 1.0,
+   "background_clear_fraction": 0.8761,
+   "background_water_px": 552259,
+   "eligible": true,
+   "selected": true
+  },
+  {
+   "point": "aerial:Aerial survey row 48",
+   "scene": "S2B_6SYE_20210826_1_L1C",
+   "offset_days": 1,
+   "target_water_fraction": 0.0,
+   "target_clear_fraction": 0.0,
+   "background_clear_fraction": 0.7,
+   "background_water_px": 1291912,
+   "eligible": false,
+   "selected": false
+  },
+  {
+   "point": "aerial:Aerial survey row 52",
+   "scene": "S2B_6SXD_20210829_1_L1C",
+   "offset_days": -1,
+   "target_water_fraction": 1.0,
+   "target_clear_fraction": 1.0,
+   "background_clear_fraction": 0.8113,
+   "background_water_px": 5060044,
+   "eligible": true,
+   "selected": true
+  },
+  {
+   "point": "manta:Manta trawl row 642",
+   "scene": "S2B_6SXD_20210918_1_L1C",
+   "offset_days": 1,
+   "target_water_fraction": 0.875,
+   "target_clear_fraction": 0.8748,
+   "background_clear_fraction": 0.8926,
+   "background_water_px": 4918077,
+   "eligible": true,
+   "selected": true
+  },
+  {
+   "point": "manta:Manta trawl row 643",
+   "scene": "S2B_6SXD_20210918_1_L1C",
+   "offset_days": 1,
+   "target_water_fraction": 0.9274,
+   "target_clear_fraction": 0.927,
+   "background_clear_fraction": 0.8986,
+   "background_water_px": 4802897,
+   "eligible": true,
+   "selected": true
+  },
+  {
+   "point": "manta:Manta trawl row 644",
+   "scene": "S2B_6SXD_20210918_1_L1C",
+   "offset_days": 1,
+   "target_water_fraction": 0.8654,
+   "target_clear_fraction": 0.8652,
+   "background_clear_fraction": 0.8964,
+   "background_water_px": 4600067,
+   "eligible": true,
+   "selected": true
+  }
+ ],
+ "km_to_nearest_footprint_by_day_offset": {
+  "aerial:Aerial survey row 33": {
+   "date": "2021-08-05",
+   "km_to_nearest_footprint": {
+    "-1": 0.0,
+    "+0": null,
+    "+1": 123.6
+   }
+  },
+  "aerial:Aerial survey row 34": {
+   "date": "2021-08-07",
+   "km_to_nearest_footprint": {
+    "-1": 122.5,
+    "+0": null,
+    "+1": null
+   }
+  },
+  "aerial:Aerial survey row 35": {
+   "date": "2021-08-08",
+   "km_to_nearest_footprint": {
+    "-1": null,
+    "+0": null,
+    "+1": 0.0
+   }
+  },
+  "aerial:Aerial survey row 36": {
+   "date": "2021-08-11",
+   "km_to_nearest_footprint": {
+    "-1": null,
+    "+0": 114.4,
+    "+1": null
+   }
+  },
+  "aerial:Aerial survey row 37": {
+   "date": "2021-08-11",
+   "km_to_nearest_footprint": {
+    "-1": null,
+    "+0": 115.2,
+    "+1": null
+   }
+  },
+  "aerial:Aerial survey row 38": {
+   "date": "2021-08-16",
+   "km_to_nearest_footprint": {
+    "-1": null,
+    "+0": null,
+    "+1": null
+   }
+  },
+  "aerial:Aerial survey row 39": {
+   "date": "2021-08-16",
+   "km_to_nearest_footprint": {
+    "-1": null,
+    "+0": null,
+    "+1": null
+   }
+  },
+  "aerial:Aerial survey row 40": {
+   "date": "2021-08-17",
+   "km_to_nearest_footprint": {
+    "-1": null,
+    "+0": null,
+    "+1": null
+   }
+  },
+  "aerial:Aerial survey row 41": {
+   "date": "2021-08-17",
+   "km_to_nearest_footprint": {
+    "-1": null,
+    "+0": null,
+    "+1": null
+   }
+  },
+  "aerial:Aerial survey row 42": {
+   "date": "2021-08-18",
+   "km_to_nearest_footprint": {
+    "-1": null,
+    "+0": null,
+    "+1": 0.0
+   }
+  },
+  "aerial:Aerial survey row 43": {
+   "date": "2021-08-18",
+   "km_to_nearest_footprint": {
+    "-1": null,
+    "+0": null,
+    "+1": 0.0
+   }
+  },
+  "aerial:Aerial survey row 44": {
+   "date": "2021-08-23",
+   "km_to_nearest_footprint": {
+    "-1": null,
+    "+0": 276.5,
+    "+1": 0.4
+   }
+  },
+  "aerial:Aerial survey row 45": {
+   "date": "2021-08-23",
+   "km_to_nearest_footprint": {
+    "-1": null,
+    "+0": 260.4,
+    "+1": 22.1
+   }
+  },
+  "aerial:Aerial survey row 46": {
+   "date": "2021-08-24",
+   "km_to_nearest_footprint": {
+    "-1": 231.0,
+    "+0": 35.4,
+    "+1": null
+   }
+  },
+  "aerial:Aerial survey row 47": {
+   "date": "2021-08-24",
+   "km_to_nearest_footprint": {
+    "-1": 226.8,
+    "+0": 37.9,
+    "+1": null
+   }
+  },
+  "aerial:Aerial survey row 48": {
+   "date": "2021-08-25",
+   "km_to_nearest_footprint": {
+    "-1": 35.5,
+    "+0": null,
+    "+1": 2.6
+   }
+  },
+  "aerial:Aerial survey row 49": {
+   "date": "2021-08-25",
+   "km_to_nearest_footprint": {
+    "-1": 32.9,
+    "+0": null,
+    "+1": 8.8
+   }
+  },
+  "aerial:Aerial survey row 50": {
+   "date": "2021-08-26",
+   "km_to_nearest_footprint": {
+    "-1": null,
+    "+0": 45.5,
+    "+1": null
+   }
+  },
+  "aerial:Aerial survey row 51": {
+   "date": "2021-08-27",
+   "km_to_nearest_footprint": {
+    "-1": 104.6,
+    "+0": null,
+    "+1": 330.1
+   }
+  },
+  "aerial:Aerial survey row 52": {
+   "date": "2021-08-30",
+   "km_to_nearest_footprint": {
+    "-1": 0.0,
+    "+0": null,
+    "+1": 54.7
+   }
+  },
+  "aerial:Aerial survey row 53": {
+   "date": "2021-08-31",
+   "km_to_nearest_footprint": {
+    "-1": null,
+    "+0": 23.9,
+    "+1": null
+   }
+  },
+  "aerial:Aerial survey row 54": {
+   "date": "2021-08-31",
+   "km_to_nearest_footprint": {
+    "-1": null,
+    "+0": 19.0,
+    "+1": null
+   }
+  },
+  "manta:Manta trawl row 636": {
+   "date": "2021-08-12",
+   "km_to_nearest_footprint": {
+    "-1": 115.2,
+    "+0": null,
+    "+1": null
+   }
+  },
+  "manta:Manta trawl row 637": {
+   "date": "2021-08-12",
+   "km_to_nearest_footprint": {
+    "-1": 115.4,
+    "+0": null,
+    "+1": null
+   }
+  },
+  "manta:Manta trawl row 638": {
+   "date": "2021-08-12",
+   "km_to_nearest_footprint": {
+    "-1": 115.7,
+    "+0": null,
+    "+1": null
+   }
+  },
+  "manta:Manta trawl row 639": {
+   "date": "2021-08-16",
+   "km_to_nearest_footprint": {
+    "-1": null,
+    "+0": null,
+    "+1": null
+   }
+  },
+  "manta:Manta trawl row 640": {
+   "date": "2021-08-16",
+   "km_to_nearest_footprint": {
+    "-1": null,
+    "+0": null,
+    "+1": null
+   }
+  },
+  "manta:Manta trawl row 641": {
+   "date": "2021-08-16",
+   "km_to_nearest_footprint": {
+    "-1": null,
+    "+0": null,
+    "+1": null
+   }
+  },
+  "manta:Manta trawl row 642": {
+   "date": "2021-09-17",
+   "km_to_nearest_footprint": {
+    "-1": null,
+    "+0": 334.4,
+    "+1": 0.0
+   }
+  },
+  "manta:Manta trawl row 643": {
+   "date": "2021-09-17",
+   "km_to_nearest_footprint": {
+    "-1": null,
+    "+0": 335.5,
+    "+1": 0.0
+   }
+  },
+  "manta:Manta trawl row 644": {
+   "date": "2021-09-17",
+   "km_to_nearest_footprint": {
+    "-1": null,
+    "+0": 337.2,
+    "+1": 0.0
+   }
+  },
+  "manta:Manta trawl row 645": {
+   "date": "2021-09-20",
+   "km_to_nearest_footprint": {
+    "-1": null,
+    "+0": null,
+    "+1": null
+   }
+  },
+  "manta:Manta trawl row 646": {
+   "date": "2021-09-20",
+   "km_to_nearest_footprint": {
+    "-1": null,
+    "+0": null,
+    "+1": null
+   }
+  },
+  "manta:Manta trawl row 647": {
+   "date": "2021-09-20",
+   "km_to_nearest_footprint": {
+    "-1": null,
+    "+0": null,
+    "+1": null
+   }
+  },
+  "manta:Manta trawl row 648": {
+   "date": "2021-09-20",
+   "km_to_nearest_footprint": {
+    "-1": null,
+    "+0": null,
+    "+1": null
+   }
+  },
+  "manta:Manta trawl row 649": {
+   "date": "2021-09-20",
+   "km_to_nearest_footprint": {
+    "-1": null,
+    "+0": null,
+    "+1": null
+   }
+  },
+  "manta:Manta trawl row 650": {
+   "date": "2021-09-21",
+   "km_to_nearest_footprint": {
+    "-1": null,
+    "+0": null,
+    "+1": null
+   }
+  },
+  "manta:Manta trawl row 651": {
+   "date": "2021-09-24",
+   "km_to_nearest_footprint": {
+    "-1": null,
+    "+0": null,
+    "+1": null
+   }
+  },
+  "manta:Manta trawl row 652": {
+   "date": "2021-09-24",
+   "km_to_nearest_footprint": {
+    "-1": null,
+    "+0": null,
+    "+1": null
+   }
+  },
+  "manta:Manta trawl row 653": {
+   "date": "2021-09-24",
+   "km_to_nearest_footprint": {
+    "-1": null,
+    "+0": null,
+    "+1": null
+   }
+  },
+  "manta:Manta trawl row 654": {
+   "date": "2021-09-29",
+   "km_to_nearest_footprint": {
+    "-1": null,
+    "+0": null,
+    "+1": null
+   }
+  },
+  "manta:Manta trawl row 655": {
+   "date": "2021-09-29",
+   "km_to_nearest_footprint": {
+    "-1": null,
+    "+0": null,
+    "+1": null
+   }
+  },
+  "manta:Manta trawl row 656": {
+   "date": "2021-09-29",
+   "km_to_nearest_footprint": {
+    "-1": null,
+    "+0": null,
+    "+1": null
+   }
+  },
+  "manta:Manta trawl row 657": {
+   "date": "2021-09-29",
+   "km_to_nearest_footprint": {
+    "-1": null,
+    "+0": null,
+    "+1": null
+   }
+  },
+  "manta:Manta trawl row 658": {
+   "date": "2021-09-29",
+   "km_to_nearest_footprint": {
+    "-1": null,
+    "+0": null,
+    "+1": null
+   }
+  },
+  "manta:Manta trawl row 659": {
+   "date": "2021-09-29",
+   "km_to_nearest_footprint": {
+    "-1": null,
+    "+0": null,
+    "+1": null
+   }
+  },
+  "manta:Manta trawl row 660": {
+   "date": "2021-10-02",
+   "km_to_nearest_footprint": {
+    "-1": null,
+    "+0": null,
+    "+1": null
+   }
+  },
+  "manta:Manta trawl row 661": {
+   "date": "2021-10-02",
+   "km_to_nearest_footprint": {
+    "-1": null,
+    "+0": null,
+    "+1": null
+   }
+  },
+  "manta:Manta trawl row 662": {
+   "date": "2021-10-02",
+   "km_to_nearest_footprint": {
+    "-1": null,
+    "+0": null,
+    "+1": null
+   }
+  },
+  "manta:Manta trawl row 663": {
+   "date": "2021-10-04",
+   "km_to_nearest_footprint": {
+    "-1": null,
+    "+0": null,
+    "+1": null
+   }
+  },
+  "manta:Manta trawl row 664": {
+   "date": "2021-10-04",
+   "km_to_nearest_footprint": {
+    "-1": null,
+    "+0": null,
+    "+1": null
+   }
+  },
+  "manta:Manta trawl row 665": {
+   "date": "2021-10-04",
+   "km_to_nearest_footprint": {
+    "-1": null,
+    "+0": null,
+    "+1": null
+   }
+  },
+  "manta:Manta trawl row 666": {
+   "date": "2021-10-04",
+   "km_to_nearest_footprint": {
+    "-1": null,
+    "+0": null,
+    "+1": null
+   }
+  },
+  "manta:Manta trawl row 667": {
+   "date": "2021-10-04",
+   "km_to_nearest_footprint": {
+    "-1": null,
+    "+0": null,
+    "+1": null
+   }
+  },
+  "manta:Manta trawl row 668": {
+   "date": "2021-10-04",
+   "km_to_nearest_footprint": {
+    "-1": null,
+    "+0": null,
+    "+1": null
+   }
+  },
+  "manta:Manta trawl row 669": {
+   "date": "2021-10-08",
+   "km_to_nearest_footprint": {
+    "-1": null,
+    "+0": null,
+    "+1": null
+   }
+  },
+  "manta:Manta trawl row 670": {
+   "date": "2021-10-08",
+   "km_to_nearest_footprint": {
+    "-1": null,
+    "+0": null,
+    "+1": null
+   }
+  },
+  "manta:Manta trawl row 671": {
+   "date": "2021-10-08",
+   "km_to_nearest_footprint": {
+    "-1": null,
+    "+0": null,
+    "+1": null
+   }
+  },
+  "manta:Manta trawl row 672": {
+   "date": "2021-10-11",
+   "km_to_nearest_footprint": {
+    "-1": null,
+    "+0": null,
+    "+1": null
+   }
+  },
+  "manta:Manta trawl row 673": {
+   "date": "2021-10-11",
+   "km_to_nearest_footprint": {
+    "-1": null,
+    "+0": null,
+    "+1": null
+   }
+  },
+  "manta:Manta trawl row 674": {
+   "date": "2021-10-11",
+   "km_to_nearest_footprint": {
+    "-1": null,
+    "+0": null,
+    "+1": null
+   }
+  },
+  "manta:Manta trawl row 675": {
+   "date": "2021-10-12",
+   "km_to_nearest_footprint": {
+    "-1": null,
+    "+0": null,
+    "+1": null
+   }
+  },
+  "manta:Manta trawl row 676": {
+   "date": "2021-10-12",
+   "km_to_nearest_footprint": {
+    "-1": null,
+    "+0": null,
+    "+1": null
+   }
+  },
+  "manta:Manta trawl row 677": {
+   "date": "2021-10-12",
+   "km_to_nearest_footprint": {
+    "-1": null,
+    "+0": null,
+    "+1": null
+   }
+  },
+  "manta:Manta trawl row 678": {
+   "date": "2021-11-06",
+   "km_to_nearest_footprint": {
+    "-1": null,
+    "+0": null,
+    "+1": null
+   }
+  },
+  "manta:Manta trawl row 679": {
+   "date": "2021-11-06",
+   "km_to_nearest_footprint": {
+    "-1": null,
+    "+0": null,
+    "+1": null
+   }
+  },
+  "manta:Manta trawl row 680": {
+   "date": "2021-11-06",
+   "km_to_nearest_footprint": {
+    "-1": null,
+    "+0": null,
+    "+1": null
+   }
+  },
+  "manta:Manta trawl row 681": {
+   "date": "2021-11-06",
+   "km_to_nearest_footprint": {
+    "-1": null,
+    "+0": null,
+    "+1": null
+   }
+  },
+  "manta:Manta trawl row 682": {
+   "date": "2021-11-06",
+   "km_to_nearest_footprint": {
+    "-1": null,
+    "+0": null,
+    "+1": null
+   }
+  },
+  "manta:Manta trawl row 683": {
+   "date": "2021-11-06",
+   "km_to_nearest_footprint": {
+    "-1": null,
+    "+0": null,
+    "+1": null
+   }
+  },
+  "manta:Manta trawl row 684": {
+   "date": "2021-11-12",
+   "km_to_nearest_footprint": {
+    "-1": null,
+    "+0": null,
+    "+1": null
+   }
+  },
+  "manta:Manta trawl row 685": {
+   "date": "2021-11-12",
+   "km_to_nearest_footprint": {
+    "-1": null,
+    "+0": null,
+    "+1": null
+   }
+  },
+  "manta:Manta trawl row 686": {
+   "date": "2021-11-12",
+   "km_to_nearest_footprint": {
+    "-1": null,
+    "+0": null,
+    "+1": null
+   }
+  }
+ },
+ "catalogue_quirks": [
+  {
+   "item": "S2B_6SXD_20210829_1_L1C",
+   "href": "s3://sentinel-s2-l2a/tiles/6/S/XD/2021/8/29/1/B08.jp2",
+   "used": "https://sentinel-s2-l1c.s3.eu-central-1.amazonaws.com/tiles/6/S/XD/2021/8/29/1/"
+  },
+  {
+   "item": "S2B_6SWD_20210809_1_L1C",
+   "href": "s3://sentinel-s2-l2a/tiles/6/S/WD/2021/8/9/1/B08.jp2",
+   "used": "https://sentinel-s2-l1c.s3.eu-central-1.amazonaws.com/tiles/6/S/WD/2021/8/9/1/"
+  },
+  {
+   "item": "S2A_6SXD_20210804_1_L1C",
+   "href": "s3://sentinel-s2-l2a/tiles/6/S/XD/2021/8/4/1/B08.jp2",
+   "used": "https://sentinel-s2-l1c.s3.eu-central-1.amazonaws.com/tiles/6/S/XD/2021/8/4/1/"
+  },
+  {
+   "item": "S2A_6SXE_20210824_1_L1C",
+   "href": "s3://sentinel-s2-l2a/tiles/6/S/XE/2021/8/24/1/B08.jp2",
+   "used": "https://sentinel-s2-l1c.s3.eu-central-1.amazonaws.com/tiles/6/S/XE/2021/8/24/1/"
+  }
+ ],
+ "toa_vs_acolite_rhot833": [
+  {
+   "pair": "aerial:Aerial survey row 52",
+   "scene": "S2B_6SXD_20210829_1_L1C",
+   "median_abs_diff": 0.0022,
+   "p99_abs_diff": 0.015025,
+   "median_value": 0.0373
+  },
+  {
+   "pair": "aerial:Aerial survey row 42",
+   "scene": "S2B_6SXD_20210819_1_L1C",
+   "median_abs_diff": 0.00264999,
+   "p99_abs_diff": 0.019925,
+   "median_value": 0.1498
+  },
+  {
+   "pair": "aerial:Aerial survey row 43",
+   "scene": "S2B_6SXD_20210819_1_L1C",
+   "median_abs_diff": 0.002725,
+   "p99_abs_diff": 0.020625,
+   "median_value": 0.1584
+  },
+  {
+   "pair": "aerial:Aerial survey row 35",
+   "scene": "S2B_6SWD_20210809_1_L1C",
+   "median_abs_diff": 0.001725,
+   "p99_abs_diff": 0.0217,
+   "median_value": 0.0353
+  },
+  {
+   "pair": "aerial:Aerial survey row 33",
+   "scene": "S2A_6SXD_20210804_1_L1C",
+   "median_abs_diff": 0.000250001,
+   "p99_abs_diff": 0.002225,
+   "median_value": 0.0185
+  },
+  {
+   "pair": "manta:Manta trawl row 643",
+   "scene": "S2B_6SXD_20210918_1_L1C",
+   "median_abs_diff": 0.001625,
+   "p99_abs_diff": 0.02805,
+   "median_value": 0.028
+  },
+  {
+   "pair": "manta:Manta trawl row 642",
+   "scene": "S2B_6SXD_20210918_1_L1C",
+   "median_abs_diff": 0.00165,
+   "p99_abs_diff": 0.029225,
+   "median_value": 0.0282
+  },
+  {
+   "pair": "manta:Manta trawl row 644",
+   "scene": "S2B_6SXD_20210918_1_L1C",
+   "median_abs_diff": 0.001625,
+   "p99_abs_diff": 0.027025,
+   "median_value": 0.0279
+  },
+  {
+   "pair": "aerial:Aerial survey row 44",
+   "scene": "S2A_6SXE_20210824_1_L1C",
+   "median_abs_diff": 0.001525,
+   "p99_abs_diff": 0.011475,
+   "median_value": 0.0302
+  }
+ ],
+ "pairs": [
+  {
+   "pair_id": "aerial:Aerial survey row 52 @ S2B_6SXD_20210829_1_L1C",
+   "point": {
+    "id": "aerial:Aerial survey row 52",
+    "kind": "aerial",
+    "expedition": "S002-1",
+    "lat": 34.968,
+    "lon": -145.08,
+    "date": "2021-08-30",
+    "objects_gt50cm_per_km2": 1.14678899082569,
+    "mass_gt50cm_g_per_km2_modelled": 1259.17431192661
+   },
+   "scene": "S2B_6SXD_20210829_1_L1C",
+   "l2a": "S2B_6SXD_20210829_1_L2A",
+   "platform": "sentinel-2b",
+   "datetime": "2021-08-29T20:35:29.334000Z",
+   "offset_days": -1,
+   "baseline": "05.00",
+   "radio_add_offset": -1000.0,
+   "quantification": 10000.0,
+   "clear": {
+    "target": {
+     "pixels_in_tile": 31428,
+     "pixels_with_data": 31428,
+     "water_px": 31428,
+     "clear_fraction": 1.0,
+     "scl_histogram": {
+      "water": 31428
+     },
+     "disc_pixels_nominal": 31416,
+     "water_fraction_of_disc": 1.0003819709702062
+    },
+    "background": {
+     "pixels_in_tile": 6250386,
+     "pixels_with_data": 6236914,
+     "water_px": 5060044,
+     "clear_fraction": 0.8113057194631832,
+     "scl_histogram": {
+      "no data": 13472,
+      "vegetation": 1,
+      "water": 5060044,
+      "cloud medium probability": 415189,
+      "cloud high probability": 761680
+     }
+    }
+   },
+   "window_rows_cols": [
+    0,
+    2944,
+    2262,
+    5267
+   ],
+   "acolite_run": {
+    "limit": [
+     34.6815,
+     -145.4242,
+     35.2426,
+     -144.7338
+    ],
+    "ac_aot_550": 0.12943178415298462,
+    "ac_model": "ACOLITE-LUT-202110-MOD1",
+    "sza": 29.8618422681264,
+    "vza": 2.817764807692308,
+    "raa": 42.363553765149305,
+    "acolite_version": "Generic GitHub Clone c2026-10-11T21:58:35"
+   },
+   "pinned_toa_le_0": {
+    "B02": 0,
+    "B03": 0,
+    "B04": 0,
+    "B08": 0,
+    "B06": 0,
+    "B11": 0
+   },
+   "acolite": {
+    "stats": {
+     "scl_water": {
+      "FDI": {
+       "target": {
+        "n": 31428,
+        "median": 0.00108894,
+        "p99": 0.0154061,
+        "p999": 0.0215882,
+        "max": 0.0358251
+       },
+       "background": {
+        "n": 5060044,
+        "median": 0.000737067,
+        "p99": 0.0271707,
+        "p999": 0.0411601,
+        "max": 0.123715
+       },
+       "target_exceed_bg_p999": 0.0,
+       "target_exceed_bg_p99": 0.000127275,
+       "null_median_shift": {
+        "note": "the target disc's median FDI ranked among the null discs' medians (a bulk shift, not a tail)",
+        "null_median_of_medians": 5.07478e-05,
+        "null_p5": -0.00200299,
+        "null_p95": 0.011543,
+        "target_rank": 0.635
+       },
+       "null": {
+        "n_discs": 200,
+        "median": 0.0,
+        "p95": 0.00471721,
+        "max": 0.0480029,
+        "target_rank": 0.27
+       }
+      },
+      "FAI": {
+       "target": {
+        "n": 31428,
+        "median": -0.00116418,
+        "p99": 0.00884051,
+        "p999": 0.0125737,
+        "max": 0.0179357
+       },
+       "background": {
+        "n": 5060044,
+        "median": -0.00291963,
+        "p99": 0.00827685,
+        "p999": 0.0141679,
+        "max": 0.100371
+       },
+       "target_exceed_bg_p999": 0.000445463,
+       "target_exceed_bg_p99": 0.0140639
+      },
+      "NDVI": {
+       "target": {
+        "n": 31428,
+        "median": -0.0342377,
+        "p99": 0.182067,
+        "p999": 0.260735,
+        "max": 0.381382
+       },
+       "background": {
+        "n": 5060044,
+        "median": -0.0488639,
+        "p99": 0.145248,
+        "p999": 0.224814,
+        "max": 2.57541
+       },
+       "target_exceed_bg_p999": 0.00270459,
+       "target_exceed_bg_p99": 0.0263141
+      }
+     },
+     "scl_not_cloud": {
+      "FDI": {
+       "target": {
+        "n": 31428,
+        "median": 0.00108894,
+        "p99": 0.0154061,
+        "p999": 0.0215882,
+        "max": 0.0358251
+       },
+       "background": {
+        "n": 5060045,
+        "median": 0.000737067,
+        "p99": 0.0271707,
+        "p999": 0.0411601,
+        "max": 0.123715
+       },
+       "target_exceed_bg_p999": 0.0,
+       "target_exceed_bg_p99": 0.000127275,
+       "null_median_shift": {
+        "note": "the target disc's median FDI ranked among the null discs' medians (a bulk shift, not a tail)",
+        "null_median_of_medians": 0.000294932,
+        "null_p5": -0.00180058,
+        "null_p95": 0.0143934,
+        "target_rank": 0.615
+       },
+       "null": {
+        "n_discs": 200,
+        "median": 0.0,
+        "p95": 0.00856905,
+        "max": 0.177759,
+        "target_rank": 0.2775
+       }
+      },
+      "FAI": {
+       "target": {
+        "n": 31428,
+        "median": -0.00116418,
+        "p99": 0.00884051,
+        "p999": 0.0125737,
+        "max": 0.0179357
+       },
+       "background": {
+        "n": 5060045,
+        "median": -0.00291963,
+        "p99": 0.00827685,
+        "p999": 0.0141679,
+        "max": 0.100371
+       },
+       "target_exceed_bg_p999": 0.000445463,
+       "target_exceed_bg_p99": 0.0140639
+      },
+      "NDVI": {
+       "target": {
+        "n": 31428,
+        "median": -0.0342377,
+        "p99": 0.182067,
+        "p999": 0.260735,
+        "max": 0.381382
+       },
+       "background": {
+        "n": 5060045,
+        "median": -0.048864,
+        "p99": 0.145248,
+        "p999": 0.224814,
+        "max": 2.57541
+       },
+       "target_exceed_bg_p999": 0.00270459,
+       "target_exceed_bg_p99": 0.0263141
+      }
+     },
+     "scl_water_cloud_buffer": {
+      "FDI": {
+       "target": {
+        "n": 31331,
+        "median": 0.00108978,
+        "p99": 0.0154238,
+        "p999": 0.0215963,
+        "max": 0.0358251
+       },
+       "background": {
+        "n": 4411974,
+        "median": 0.000592019,
+        "p99": 0.018071,
+        "p999": 0.0276235,
+        "max": 0.0936547
+       },
+       "target_exceed_bg_p999": 0.000127669,
+       "target_exceed_bg_p99": 0.00341515,
+       "null_median_shift": {
+        "note": "the target disc's median FDI ranked among the null discs' medians (a bulk shift, not a tail)",
+        "null_median_of_medians": 0.00072097,
+        "null_p5": -0.00165439,
+        "null_p95": 0.00931116,
+        "target_rank": 0.58
+       },
+       "null": {
+        "n_discs": 200,
+        "median": 0.000103373,
+        "p95": 0.0120851,
+        "max": 0.131142,
+        "target_rank": 0.55
+       }
+      },
+      "FAI": {
+       "target": {
+        "n": 31331,
+        "median": -0.00116362,
+        "p99": 0.00884918,
+        "p999": 0.0125812,
+        "max": 0.0179357
+       },
+       "background": {
+        "n": 4411974,
+        "median": -0.00280042,
+        "p99": 0.00799842,
+        "p999": 0.0124364,
+        "max": 0.09428
+       },
+       "target_exceed_bg_p999": 0.00108519,
+       "target_exceed_bg_p99": 0.016214
+      },
+      "NDVI": {
+       "target": {
+        "n": 31331,
+        "median": -0.0342078,
+        "p99": 0.182122,
+        "p999": 0.26076,
+        "max": 0.381382
+       },
+       "background": {
+        "n": 4411974,
+        "median": -0.0521746,
+        "p99": 0.149269,
+        "p999": 0.227591,
+        "max": 1.29808
+       },
+       "target_exceed_bg_p999": 0.00248955,
+       "target_exceed_bg_p99": 0.0236507
+      }
+     }
+    },
+    "fraction_le_0": {
+     "B04": {
+      "target": 0.0,
+      "background": 1.38339e-06
+     },
+     "B06": {
+      "target": 0.0,
+      "background": 0.0
+     },
+     "B08": {
+      "target": 0.0,
+      "background": 5.9288e-07
+     },
+     "B11": {
+      "target": 0.0,
+      "background": 0.0
+     }
+    }
+   },
+   "toa": {
+    "stats": {
+     "scl_water": {
+      "FDI": {
+       "target": {
+        "n": 31428,
+        "median": 0.0180507,
+        "p99": 0.0264728,
+        "p999": 0.0298755,
+        "max": 0.0373732
+       },
+       "background": {
+        "n": 5060036,
+        "median": 0.0169794,
+        "p99": 0.0334769,
+        "p999": 0.0453028,
+        "max": 0.135056
+       },
+       "target_exceed_bg_p999": 0.0,
+       "target_exceed_bg_p99": 3.18188e-05,
+       "null_median_shift": {
+        "note": "the target disc's median FDI ranked among the null discs' medians (a bulk shift, not a tail)",
+        "null_median_of_medians": 0.0159361,
+        "null_p5": 0.0141953,
+        "null_p95": 0.0208715,
+        "target_rank": 0.73
+       },
+       "null": {
+        "n_discs": 200,
+        "median": 0.0,
+        "p95": 0.00212525,
+        "max": 0.0525114,
+        "target_rank": 0.32
+       }
+      },
+      "FAI": {
+       "target": {
+        "n": 31428,
+        "median": -0.00883545,
+        "p99": -0.00265477,
+        "p999": 1.00224e-05,
+        "max": 0.0042876
+       },
+       "background": {
+        "n": 5060036,
+        "median": -0.0103406,
+        "p99": -0.00298243,
+        "p999": 0.00176313,
+        "max": 0.0599577
+       },
+       "target_exceed_bg_p999": 0.000190913,
+       "target_exceed_bg_p99": 0.0133002
+      },
+      "NDVI": {
+       "target": {
+        "n": 31428,
+        "median": -0.172823,
+        "p99": -0.0803386,
+        "p999": -0.0427015,
+        "max": -0.000822116
+       },
+       "background": {
+        "n": 5060036,
+        "median": -0.162543,
+        "p99": -0.0479864,
+        "p999": -0.0133604,
+        "max": 0.253001
+       },
+       "target_exceed_bg_p999": 9.54563e-05,
+       "target_exceed_bg_p99": 0.00143184
+      }
+     },
+     "scl_not_cloud": {
+      "FDI": {
+       "target": {
+        "n": 31428,
+        "median": 0.0180507,
+        "p99": 0.0264728,
+        "p999": 0.0298755,
+        "max": 0.0373732
+       },
+       "background": {
+        "n": 5060036,
+        "median": 0.0169794,
+        "p99": 0.0334769,
+        "p999": 0.0453028,
+        "max": 0.135056
+       },
+       "target_exceed_bg_p999": 0.0,
+       "target_exceed_bg_p99": 3.18188e-05,
+       "null_median_shift": {
+        "note": "the target disc's median FDI ranked among the null discs' medians (a bulk shift, not a tail)",
+        "null_median_of_medians": 0.0170034,
+        "null_p5": 0.0146746,
+        "null_p95": 0.0234513,
+        "target_rank": 0.615
+       },
+       "null": {
+        "n_discs": 200,
+        "median": 0.0,
+        "p95": 0.00437707,
+        "max": 0.0748937,
+        "target_rank": 0.325
+       }
+      },
+      "FAI": {
+       "target": {
+        "n": 31428,
+        "median": -0.00883545,
+        "p99": -0.00265477,
+        "p999": 1.00224e-05,
+        "max": 0.0042876
+       },
+       "background": {
+        "n": 5060036,
+        "median": -0.0103406,
+        "p99": -0.00298243,
+        "p999": 0.00176313,
+        "max": 0.0599577
+       },
+       "target_exceed_bg_p999": 0.000190913,
+       "target_exceed_bg_p99": 0.0133002
+      },
+      "NDVI": {
+       "target": {
+        "n": 31428,
+        "median": -0.172823,
+        "p99": -0.0803386,
+        "p999": -0.0427015,
+        "max": -0.000822116
+       },
+       "background": {
+        "n": 5060036,
+        "median": -0.162543,
+        "p99": -0.0479864,
+        "p999": -0.0133604,
+        "max": 0.253001
+       },
+       "target_exceed_bg_p999": 9.54563e-05,
+       "target_exceed_bg_p99": 0.00143184
+      }
+     },
+     "scl_water_cloud_buffer": {
+      "FDI": {
+       "target": {
+        "n": 31331,
+        "median": 0.018053,
+        "p99": 0.0264726,
+        "p999": 0.0298809,
+        "max": 0.0373732
+       },
+       "background": {
+        "n": 4411968,
+        "median": 0.0169956,
+        "p99": 0.027776,
+        "p999": 0.0345245,
+        "max": 0.0776201
+       },
+       "target_exceed_bg_p999": 3.19173e-05,
+       "target_exceed_bg_p99": 0.00440458,
+       "null_median_shift": {
+        "note": "the target disc's median FDI ranked among the null discs' medians (a bulk shift, not a tail)",
+        "null_median_of_medians": 0.0168358,
+        "null_p5": 0.0144863,
+        "null_p95": 0.0190542,
+        "target_rank": 0.655
+       },
+       "null": {
+        "n_discs": 200,
+        "median": 6.3674e-05,
+        "p95": 0.00170565,
+        "max": 0.100077,
+        "target_rank": 0.33
+       }
+      },
+      "FAI": {
+       "target": {
+        "n": 31331,
+        "median": -0.008834,
+        "p99": -0.00265667,
+        "p999": 1.81251e-05,
+        "max": 0.0042876
+       },
+       "background": {
+        "n": 4411968,
+        "median": -0.0102559,
+        "p99": -0.00333532,
+        "p999": -0.000498345,
+        "max": 0.0237272
+       },
+       "target_exceed_bg_p999": 0.00159586,
+       "target_exceed_bg_p99": 0.0175226
+      },
+      "NDVI": {
+       "target": {
+        "n": 31331,
+        "median": -0.172816,
+        "p99": -0.0803764,
+        "p999": -0.0426977,
+        "max": -0.000822116
+       },
+       "background": {
+        "n": 4411968,
+        "median": -0.167064,
+        "p99": -0.0654652,
+        "p999": -0.0403556,
+        "max": 0.170308
+       },
+       "target_exceed_bg_p999": 0.000861766,
+       "target_exceed_bg_p99": 0.00434075
+      }
+     }
+    },
+    "fraction_le_0": {
+     "B04": {
+      "target": 0.0,
+      "background": 0.0
+     },
+     "B06": {
+      "target": 0.0,
+      "background": 0.0
+     },
+     "B08": {
+      "target": 0.0,
+      "background": 0.0
+     },
+     "B11": {
+      "target": 0.0,
+      "background": 0.0
+     }
+    }
+   }
+  },
+  {
+   "pair_id": "aerial:Aerial survey row 42 @ S2B_6SXD_20210819_1_L1C",
+   "point": {
+    "id": "aerial:Aerial survey row 42",
+    "kind": "aerial",
+    "expedition": "S002-1",
+    "lat": 34.918,
+    "lon": -145.754,
+    "date": "2021-08-18",
+    "objects_gt50cm_per_km2": 3.19829424307036,
+    "mass_gt50cm_g_per_km2_modelled": 22571.4285714286
+   },
+   "scene": "S2B_6SXD_20210819_1_L1C",
+   "l2a": "S2B_6SXD_20210819_1_L2A",
+   "platform": "sentinel-2b",
+   "datetime": "2021-08-19T20:35:31.305000Z",
+   "offset_days": 1,
+   "baseline": "05.00",
+   "radio_add_offset": -1000.0,
+   "quantification": 10000.0,
+   "clear": {
+    "target": {
+     "pixels_in_tile": 31427,
+     "pixels_with_data": 31427,
+     "water_px": 31427,
+     "clear_fraction": 1.0,
+     "scl_histogram": {
+      "water": 31427
+     },
+     "disc_pixels_nominal": 31416,
+     "water_fraction_of_disc": 1.0003501400560224
+    },
+    "background": {
+     "pixels_in_tile": 4745532,
+     "pixels_with_data": 4745532,
+     "water_px": 2558758,
+     "clear_fraction": 0.5391930767720037,
+     "scl_histogram": {
+      "water": 2558758,
+      "cloud medium probability": 1204691,
+      "cloud high probability": 966417,
+      "thin cirrus": 15666
+     }
+    }
+   },
+   "window_rows_cols": [
+    265,
+    3270,
+    0,
+    2193
+   ],
+   "acolite_run": {
+    "limit": [
+     34.6232,
+     -145.9189,
+     35.2003,
+     -145.3617
+    ],
+    "ac_aot_550": 0.13830779492855072,
+    "ac_model": "ACOLITE-LUT-202110-MOD2",
+    "sza": 27.2230601779832,
+    "vza": 2.821072675,
+    "raa": 47.86031513054442,
+    "acolite_version": "Generic GitHub Clone c2026-10-11T21:58:35"
+   },
+   "pinned_toa_le_0": {
+    "B02": 0,
+    "B03": 0,
+    "B04": 0,
+    "B08": 0,
+    "B06": 0,
+    "B11": 0
+   },
+   "acolite": {
+    "stats": {
+     "scl_water": {
+      "FDI": {
+       "target": {
+        "n": 31427,
+        "median": 0.000903526,
+        "p99": 0.0163259,
+        "p999": 0.0238672,
+        "max": 0.045291
+       },
+       "background": {
+        "n": 2558758,
+        "median": -0.00888905,
+        "p99": 0.0193348,
+        "p999": 0.0386564,
+        "max": 0.115675
+       },
+       "target_exceed_bg_p999": 0.000159099,
+       "target_exceed_bg_p99": 0.00404111,
+       "null_median_shift": {
+        "note": "the target disc's median FDI ranked among the null discs' medians (a bulk shift, not a tail)",
+        "null_median_of_medians": -0.0141544,
+        "null_p5": -0.0253703,
+        "null_p95": 0.00108939,
+        "target_rank": 0.945
+       },
+       "null": {
+        "n_discs": 200,
+        "median": 0.000241146,
+        "p95": 0.00578046,
+        "max": 0.0185957,
+        "target_rank": 0.415
+       }
+      },
+      "FAI": {
+       "target": {
+        "n": 31427,
+        "median": -0.00180352,
+        "p99": 0.0104299,
+        "p999": 0.018125,
+        "max": 0.0352617
+       },
+       "background": {
+        "n": 2558758,
+        "median": -0.00223198,
+        "p99": 0.0213921,
+        "p999": 0.0368008,
+        "max": 0.117772
+       },
+       "target_exceed_bg_p999": 0.0,
+       "target_exceed_bg_p99": 0.000636395
+      },
+      "NDVI": {
+       "target": {
+        "n": 31427,
+        "median": -0.0504283,
+        "p99": 0.191619,
+        "p999": 0.282972,
+        "max": 0.448577
+       },
+       "background": {
+        "n": 2558758,
+        "median": -0.0117825,
+        "p99": 0.149528,
+        "p999": 0.255171,
+        "max": 0.754301
+       },
+       "target_exceed_bg_p999": 0.00210011,
+       "target_exceed_bg_p99": 0.022783
+      }
+     },
+     "scl_not_cloud": {
+      "FDI": {
+       "target": {
+        "n": 31427,
+        "median": 0.000903526,
+        "p99": 0.0163259,
+        "p999": 0.0238672,
+        "max": 0.045291
+       },
+       "background": {
+        "n": 2558758,
+        "median": -0.00888905,
+        "p99": 0.0193348,
+        "p999": 0.0386564,
+        "max": 0.115675
+       },
+       "target_exceed_bg_p999": 0.000159099,
+       "target_exceed_bg_p99": 0.00404111,
+       "null_median_shift": {
+        "note": "the target disc's median FDI ranked among the null discs' medians (a bulk shift, not a tail)",
+        "null_median_of_medians": -0.0128895,
+        "null_p5": -0.0241735,
+        "null_p95": 0.00133423,
+        "target_rank": 0.925
+       },
+       "null": {
+        "n_discs": 200,
+        "median": 0.000282559,
+        "p95": 0.0127203,
+        "max": 0.0272525,
+        "target_rank": 0.395
+       }
+      },
+      "FAI": {
+       "target": {
+        "n": 31427,
+        "median": -0.00180352,
+        "p99": 0.0104299,
+        "p999": 0.018125,
+        "max": 0.0352617
+       },
+       "background": {
+        "n": 2558758,
+        "median": -0.00223198,
+        "p99": 0.0213921,
+        "p999": 0.0368008,
+        "max": 0.117772
+       },
+       "target_exceed_bg_p999": 0.0,
+       "target_exceed_bg_p99": 0.000636395
+      },
+      "NDVI": {
+       "target": {
+        "n": 31427,
+        "median": -0.0504283,
+        "p99": 0.191619,
+        "p999": 0.282972,
+        "max": 0.448577
+       },
+       "background": {
+        "n": 2558758,
+        "median": -0.0117825,
+        "p99": 0.149528,
+        "p999": 0.255171,
+        "max": 0.754301
+       },
+       "target_exceed_bg_p999": 0.00210011,
+       "target_exceed_bg_p99": 0.022783
+      }
+     },
+     "scl_water_cloud_buffer": {
+      "FDI": {
+       "target": {
+        "n": 31240,
+        "median": 0.000933079,
+        "p99": 0.0162944,
+        "p999": 0.0237389,
+        "max": 0.045291
+       },
+       "background": {
+        "n": 1512718,
+        "median": -0.00362301,
+        "p99": 0.0148924,
+        "p999": 0.0239917,
+        "max": 0.0664135
+       },
+       "target_exceed_bg_p999": 0.000960307,
+       "target_exceed_bg_p99": 0.015557,
+       "null_median_shift": {
+        "note": "the target disc's median FDI ranked among the null discs' medians (a bulk shift, not a tail)",
+        "null_median_of_medians": -0.0111578,
+        "null_p5": -0.0225861,
+        "null_p95": 0.00276576,
+        "target_rank": 0.81
+       },
+       "null": {
+        "n_discs": 200,
+        "median": 0.00060473,
+        "p95": 0.00464593,
+        "max": 0.00851181,
+        "target_rank": 0.61
+       }
+      },
+      "FAI": {
+       "target": {
+        "n": 31240,
+        "median": -0.00180003,
+        "p99": 0.0102129,
+        "p999": 0.0177179,
+        "max": 0.0352617
+       },
+       "background": {
+        "n": 1512718,
+        "median": -0.0028119,
+        "p99": 0.0121926,
+        "p999": 0.0220831,
+        "max": 0.0560721
+       },
+       "target_exceed_bg_p999": 0.000448143,
+       "target_exceed_bg_p99": 0.00547375
+      },
+      "NDVI": {
+       "target": {
+        "n": 31240,
+        "median": -0.0509367,
+        "p99": 0.192159,
+        "p999": 0.283086,
+        "max": 0.448577
+       },
+       "background": {
+        "n": 1512718,
+        "median": -0.0302182,
+        "p99": 0.152963,
+        "p999": 0.261619,
+        "max": 0.754301
+       },
+       "target_exceed_bg_p999": 0.00195262,
+       "target_exceed_bg_p99": 0.0208707
+      }
+     }
+    },
+    "fraction_le_0": {
+     "B04": {
+      "target": 0.0,
+      "background": 0.0
+     },
+     "B06": {
+      "target": 0.0,
+      "background": 3.90815e-07
+     },
+     "B08": {
+      "target": 0.0,
+      "background": 3.90815e-07
+     },
+     "B11": {
+      "target": 0.0,
+      "background": 0.0
+     }
+    }
+   },
+   "toa": {
+    "stats": {
+     "scl_water": {
+      "FDI": {
+       "target": {
+        "n": 31427,
+        "median": 0.0196246,
+        "p99": 0.0288913,
+        "p999": 0.0335843,
+        "max": 0.0434579
+       },
+       "background": {
+        "n": 2558758,
+        "median": 0.00452,
+        "p99": 0.029642,
+        "p999": 0.0435045,
+        "max": 0.113226
+       },
+       "target_exceed_bg_p999": 0.0,
+       "target_exceed_bg_p99": 0.00680943,
+       "null_median_shift": {
+        "note": "the target disc's median FDI ranked among the null discs' medians (a bulk shift, not a tail)",
+        "null_median_of_medians": -0.00151785,
+        "null_p5": -0.0130651,
+        "null_p95": 0.0201326,
+        "target_rank": 0.945
+       },
+       "null": {
+        "n_discs": 200,
+        "median": 0.000334894,
+        "p95": 0.00687438,
+        "max": 0.0139446,
+        "target_rank": 0.1175
+       }
+      },
+      "FAI": {
+       "target": {
+        "n": 31427,
+        "median": -0.00900239,
+        "p99": -0.000424972,
+        "p999": 0.00552243,
+        "max": 0.0181921
+       },
+       "background": {
+        "n": 2558758,
+        "median": -0.00951742,
+        "p99": 0.00843345,
+        "p999": 0.0199594,
+        "max": 0.0828759
+       },
+       "target_exceed_bg_p999": 0.0,
+       "target_exceed_bg_p99": 0.000540936
+      },
+      "NDVI": {
+       "target": {
+        "n": 31427,
+        "median": -0.164599,
+        "p99": -0.0249961,
+        "p999": 0.0132336,
+        "max": 0.112447
+       },
+       "background": {
+        "n": 2558758,
+        "median": -0.067841,
+        "p99": 0.0252734,
+        "p999": 0.073655,
+        "max": 0.398984
+       },
+       "target_exceed_bg_p999": 3.18198e-05,
+       "target_exceed_bg_p99": 0.000700035
+      }
+     },
+     "scl_not_cloud": {
+      "FDI": {
+       "target": {
+        "n": 31427,
+        "median": 0.0196246,
+        "p99": 0.0288913,
+        "p999": 0.0335843,
+        "max": 0.0434579
+       },
+       "background": {
+        "n": 2558758,
+        "median": 0.00452,
+        "p99": 0.029642,
+        "p999": 0.0435045,
+        "max": 0.113226
+       },
+       "target_exceed_bg_p999": 0.0,
+       "target_exceed_bg_p99": 0.00680943,
+       "null_median_shift": {
+        "note": "the target disc's median FDI ranked among the null discs' medians (a bulk shift, not a tail)",
+        "null_median_of_medians": -0.000890899,
+        "null_p5": -0.0123495,
+        "null_p95": 0.0200084,
+        "target_rank": 0.94
+       },
+       "null": {
+        "n_discs": 200,
+        "median": 0.000321817,
+        "p95": 0.00652937,
+        "max": 0.00978752,
+        "target_rank": 0.12
+       }
+      },
+      "FAI": {
+       "target": {
+        "n": 31427,
+        "median": -0.00900239,
+        "p99": -0.000424972,
+        "p999": 0.00552243,
+        "max": 0.0181921
+       },
+       "background": {
+        "n": 2558758,
+        "median": -0.00951742,
+        "p99": 0.00843345,
+        "p999": 0.0199594,
+        "max": 0.0828759
+       },
+       "target_exceed_bg_p999": 0.0,
+       "target_exceed_bg_p99": 0.000540936
+      },
+      "NDVI": {
+       "target": {
+        "n": 31427,
+        "median": -0.164599,
+        "p99": -0.0249961,
+        "p999": 0.0132336,
+        "max": 0.112447
+       },
+       "background": {
+        "n": 2558758,
+        "median": -0.067841,
+        "p99": 0.0252734,
+        "p999": 0.073655,
+        "max": 0.398984
+       },
+       "target_exceed_bg_p999": 3.18198e-05,
+       "target_exceed_bg_p99": 0.000700035
+      }
+     },
+     "scl_water_cloud_buffer": {
+      "FDI": {
+       "target": {
+        "n": 31240,
+        "median": 0.0196499,
+        "p99": 0.0288981,
+        "p999": 0.0336269,
+        "max": 0.0434579
+       },
+       "background": {
+        "n": 1512718,
+        "median": 0.0145212,
+        "p99": 0.0285408,
+        "p999": 0.0343612,
+        "max": 0.0758412
+       },
+       "target_exceed_bg_p999": 0.000736236,
+       "target_exceed_bg_p99": 0.012356,
+       "null_median_shift": {
+        "note": "the target disc's median FDI ranked among the null discs' medians (a bulk shift, not a tail)",
+        "null_median_of_medians": 0.0029644,
+        "null_p5": -0.00945618,
+        "null_p95": 0.020705,
+        "target_rank": 0.865
+       },
+       "null": {
+        "n_discs": 200,
+        "median": 0.000794165,
+        "p95": 0.00331464,
+        "max": 0.00583508,
+        "target_rank": 0.45
+       }
+      },
+      "FAI": {
+       "target": {
+        "n": 31240,
+        "median": -0.0090023,
+        "p99": -0.000531163,
+        "p999": 0.00502823,
+        "max": 0.0181921
+       },
+       "background": {
+        "n": 1512718,
+        "median": -0.00995953,
+        "p99": 0.00115044,
+        "p999": 0.00855556,
+        "max": 0.0407773
+       },
+       "target_exceed_bg_p999": 0.000384123,
+       "target_exceed_bg_p99": 0.00505762
+      },
+      "NDVI": {
+       "target": {
+        "n": 31240,
+        "median": -0.164993,
+        "p99": -0.0273064,
+        "p999": 0.0105912,
+        "max": 0.112447
+       },
+       "background": {
+        "n": 1512718,
+        "median": -0.12519,
+        "p99": -0.00677921,
+        "p999": 0.0315034,
+        "max": 0.262022
+       },
+       "target_exceed_bg_p999": 0.000384123,
+       "target_exceed_bg_p99": 0.00336108
+      }
+     }
+    },
+    "fraction_le_0": {
+     "B04": {
+      "target": 0.0,
+      "background": 0.0
+     },
+     "B06": {
+      "target": 0.0,
+      "background": 0.0
+     },
+     "B08": {
+      "target": 0.0,
+      "background": 0.0
+     },
+     "B11": {
+      "target": 0.0,
+      "background": 0.0
+     }
+    }
+   }
+  },
+  {
+   "pair_id": "aerial:Aerial survey row 43 @ S2B_6SXD_20210819_1_L1C",
+   "point": {
+    "id": "aerial:Aerial survey row 43",
+    "kind": "aerial",
+    "expedition": "S002-1",
+    "lat": 34.908,
+    "lon": -145.706,
+    "date": "2021-08-18",
+    "objects_gt50cm_per_km2": 5.91016548463357,
+    "mass_gt50cm_g_per_km2_modelled": 16995.2718676123
+   },
+   "scene": "S2B_6SXD_20210819_1_L1C",
+   "l2a": "S2B_6SXD_20210819_1_L2A",
+   "platform": "sentinel-2b",
+   "datetime": "2021-08-19T20:35:31.305000Z",
+   "offset_days": 1,
+   "baseline": "05.00",
+   "radio_add_offset": -1000.0,
+   "quantification": 10000.0,
+   "clear": {
+    "target": {
+     "pixels_in_tile": 31416,
+     "pixels_with_data": 31416,
+     "water_px": 31414,
+     "clear_fraction": 0.9999363381716323,
+     "scl_histogram": {
+      "water": 31414,
+      "cloud medium probability": 2
+     },
+     "disc_pixels_nominal": 31416,
+     "water_fraction_of_disc": 0.9999363381716323
+    },
+    "background": {
+     "pixels_in_tile": 5302487,
+     "pixels_with_data": 5302487,
+     "water_px": 2633880,
+     "clear_fraction": 0.4967254045130144,
+     "scl_histogram": {
+      "water": 2633880,
+      "cloud medium probability": 1346726,
+      "cloud high probability": 1303637,
+      "thin cirrus": 18244
+     }
+    }
+   },
+   "window_rows_cols": [
+    317,
+    3322,
+    0,
+    2413
+   ],
+   "acolite_run": {
+    "limit": [
+     34.6232,
+     -145.9189,
+     35.2003,
+     -145.3617
+    ],
+    "ac_aot_550": 0.13830779492855072,
+    "ac_model": "ACOLITE-LUT-202110-MOD2",
+    "sza": 27.2230601779832,
+    "vza": 2.821072675,
+    "raa": 47.86031513054442,
+    "acolite_version": "Generic GitHub Clone c2026-10-11T21:58:35"
+   },
+   "pinned_toa_le_0": {
+    "B02": 0,
+    "B03": 0,
+    "B04": 0,
+    "B08": 0,
+    "B06": 0,
+    "B11": 0
+   },
+   "acolite": {
+    "stats": {
+     "scl_water": {
+      "FDI": {
+       "target": {
+        "n": 31414,
+        "median": 0.00121571,
+        "p99": 0.0178471,
+        "p999": 0.0292913,
+        "max": 0.111062
+       },
+       "background": {
+        "n": 2633880,
+        "median": -0.00872599,
+        "p99": 0.0197094,
+        "p999": 0.0387301,
+        "max": 0.115234
+       },
+       "target_exceed_bg_p999": 0.000350162,
+       "target_exceed_bg_p99": 0.00601643,
+       "null_median_shift": {
+        "note": "the target disc's median FDI ranked among the null discs' medians (a bulk shift, not a tail)",
+        "null_median_of_medians": -0.0143073,
+        "null_p5": -0.0250082,
+        "null_p95": 0.00207463,
+        "target_rank": 0.935
+       },
+       "null": {
+        "n_discs": 200,
+        "median": 0.000358524,
+        "p95": 0.00506104,
+        "max": 0.0268168,
+        "target_rank": 0.49
+       }
+      },
+      "FAI": {
+       "target": {
+        "n": 31414,
+        "median": -0.00184019,
+        "p99": 0.0104668,
+        "p999": 0.0177129,
+        "max": 0.0428248
+       },
+       "background": {
+        "n": 2633880,
+        "median": -0.00222485,
+        "p99": 0.0213228,
+        "p999": 0.0365477,
+        "max": 0.117772
+       },
+       "target_exceed_bg_p999": 3.18329e-05,
+       "target_exceed_bg_p99": 0.000445661
+      },
+      "NDVI": {
+       "target": {
+        "n": 31414,
+        "median": -0.0541107,
+        "p99": 0.20494,
+        "p999": 0.294639,
+        "max": 0.380232
+       },
+       "background": {
+        "n": 2633880,
+        "median": -0.0119074,
+        "p99": 0.153618,
+        "p999": 0.259947,
+        "max": 0.754301
+       },
+       "target_exceed_bg_p999": 0.00292863,
+       "target_exceed_bg_p99": 0.0282358
+      }
+     },
+     "scl_not_cloud": {
+      "FDI": {
+       "target": {
+        "n": 31414,
+        "median": 0.00121571,
+        "p99": 0.0178471,
+        "p999": 0.0292913,
+        "max": 0.111062
+       },
+       "background": {
+        "n": 2633880,
+        "median": -0.00872599,
+        "p99": 0.0197094,
+        "p999": 0.0387301,
+        "max": 0.115234
+       },
+       "target_exceed_bg_p999": 0.000350162,
+       "target_exceed_bg_p99": 0.00601643,
+       "null_median_shift": {
+        "note": "the target disc's median FDI ranked among the null discs' medians (a bulk shift, not a tail)",
+        "null_median_of_medians": -0.0120212,
+        "null_p5": -0.0239833,
+        "null_p95": 0.00307928,
+        "target_rank": 0.86
+       },
+       "null": {
+        "n_discs": 200,
+        "median": 0.000325955,
+        "p95": 0.00743569,
+        "max": 0.0203384,
+        "target_rank": 0.505
+       }
+      },
+      "FAI": {
+       "target": {
+        "n": 31414,
+        "median": -0.00184019,
+        "p99": 0.0104668,
+        "p999": 0.0177129,
+        "max": 0.0428248
+       },
+       "background": {
+        "n": 2633880,
+        "median": -0.00222485,
+        "p99": 0.0213228,
+        "p999": 0.0365477,
+        "max": 0.117772
+       },
+       "target_exceed_bg_p999": 3.18329e-05,
+       "target_exceed_bg_p99": 0.000445661
+      },
+      "NDVI": {
+       "target": {
+        "n": 31414,
+        "median": -0.0541107,
+        "p99": 0.20494,
+        "p999": 0.294639,
+        "max": 0.380232
+       },
+       "background": {
+        "n": 2633880,
+        "median": -0.0119074,
+        "p99": 0.153618,
+        "p999": 0.259947,
+        "max": 0.754301
+       },
+       "target_exceed_bg_p999": 0.00292863,
+       "target_exceed_bg_p99": 0.0282358
+      }
+     },
+     "scl_water_cloud_buffer": {
+      "FDI": {
+       "target": {
+        "n": 30365,
+        "median": 0.00117897,
+        "p99": 0.0177724,
+        "p999": 0.0269837,
+        "max": 0.0476761
+       },
+       "background": {
+        "n": 1525408,
+        "median": -0.00339538,
+        "p99": 0.0148149,
+        "p999": 0.0238792,
+        "max": 0.0664135
+       },
+       "target_exceed_bg_p999": 0.00194303,
+       "target_exceed_bg_p99": 0.0228882,
+       "null_median_shift": {
+        "note": "the target disc's median FDI ranked among the null discs' medians (a bulk shift, not a tail)",
+        "null_median_of_medians": -0.0123211,
+        "null_p5": -0.0230731,
+        "null_p95": 0.00284144,
+        "target_rank": 0.845
+       },
+       "null": {
+        "n_discs": 200,
+        "median": 0.000679229,
+        "p95": 0.00550772,
+        "max": 0.0104626,
+        "target_rank": 0.805
+       }
+      },
+      "FAI": {
+       "target": {
+        "n": 30365,
+        "median": -0.00183446,
+        "p99": 0.0105362,
+        "p999": 0.0177296,
+        "max": 0.0428248
+       },
+       "background": {
+        "n": 1525408,
+        "median": -0.00273756,
+        "p99": 0.0121149,
+        "p999": 0.0219072,
+        "max": 0.0560721
+       },
+       "target_exceed_bg_p999": 0.000428124,
+       "target_exceed_bg_p99": 0.00533509
+      },
+      "NDVI": {
+       "target": {
+        "n": 30365,
+        "median": -0.0537126,
+        "p99": 0.205342,
+        "p999": 0.294654,
+        "max": 0.380232
+       },
+       "background": {
+        "n": 1525408,
+        "median": -0.0302685,
+        "p99": 0.160493,
+        "p999": 0.270025,
+        "max": 0.754301
+       },
+       "target_exceed_bg_p999": 0.00210769,
+       "target_exceed_bg_p99": 0.024469
+      }
+     }
+    },
+    "fraction_le_0": {
+     "B04": {
+      "target": 0.0,
+      "background": 0.0
+     },
+     "B06": {
+      "target": 0.0,
+      "background": 3.79668e-07
+     },
+     "B08": {
+      "target": 0.0,
+      "background": 3.79668e-07
+     },
+     "B11": {
+      "target": 0.0,
+      "background": 0.0
+     }
+    }
+   },
+   "toa": {
+    "stats": {
+     "scl_water": {
+      "FDI": {
+       "target": {
+        "n": 31414,
+        "median": 0.0197142,
+        "p99": 0.029855,
+        "p999": 0.0353002,
+        "max": 0.0518284
+       },
+       "background": {
+        "n": 2633880,
+        "median": 0.0046979,
+        "p99": 0.0301873,
+        "p999": 0.0448716,
+        "max": 0.113226
+       },
+       "target_exceed_bg_p999": 0.000350162,
+       "target_exceed_bg_p99": 0.00872223,
+       "null_median_shift": {
+        "note": "the target disc's median FDI ranked among the null discs' medians (a bulk shift, not a tail)",
+        "null_median_of_medians": -0.0019321,
+        "null_p5": -0.0131943,
+        "null_p95": 0.0207781,
+        "target_rank": 0.885
+       },
+       "null": {
+        "n_discs": 200,
+        "median": 0.000251946,
+        "p95": 0.00598973,
+        "max": 0.021404,
+        "target_rank": 0.54
+       }
+      },
+      "FAI": {
+       "target": {
+        "n": 31414,
+        "median": -0.00901982,
+        "p99": -0.000910279,
+        "p999": 0.00533336,
+        "max": 0.0209005
+       },
+       "background": {
+        "n": 2633880,
+        "median": -0.00949758,
+        "p99": 0.00843514,
+        "p999": 0.0198288,
+        "max": 0.0828759
+       },
+       "target_exceed_bg_p999": 3.18329e-05,
+       "target_exceed_bg_p99": 0.000318329
+      },
+      "NDVI": {
+       "target": {
+        "n": 31414,
+        "median": -0.164687,
+        "p99": -0.0416136,
+        "p999": 0.0111037,
+        "max": 0.0973631
+       },
+       "background": {
+        "n": 2633880,
+        "median": -0.0683687,
+        "p99": 0.0250971,
+        "p999": 0.0731387,
+        "max": 0.398984
+       },
+       "target_exceed_bg_p999": 3.18329e-05,
+       "target_exceed_bg_p99": 0.000604826
+      }
+     },
+     "scl_not_cloud": {
+      "FDI": {
+       "target": {
+        "n": 31414,
+        "median": 0.0197142,
+        "p99": 0.029855,
+        "p999": 0.0353002,
+        "max": 0.0518284
+       },
+       "background": {
+        "n": 2633880,
+        "median": 0.0046979,
+        "p99": 0.0301873,
+        "p999": 0.0448716,
+        "max": 0.113226
+       },
+       "target_exceed_bg_p999": 0.000350162,
+       "target_exceed_bg_p99": 0.00872223,
+       "null_median_shift": {
+        "note": "the target disc's median FDI ranked among the null discs' medians (a bulk shift, not a tail)",
+        "null_median_of_medians": -0.000771657,
+        "null_p5": -0.0117568,
+        "null_p95": 0.0216059,
+        "target_rank": 0.81
+       },
+       "null": {
+        "n_discs": 200,
+        "median": 0.000241985,
+        "p95": 0.00593595,
+        "max": 0.0249318,
+        "target_rank": 0.53
+       }
+      },
+      "FAI": {
+       "target": {
+        "n": 31414,
+        "median": -0.00901982,
+        "p99": -0.000910279,
+        "p999": 0.00533336,
+        "max": 0.0209005
+       },
+       "background": {
+        "n": 2633880,
+        "median": -0.00949758,
+        "p99": 0.00843514,
+        "p999": 0.0198288,
+        "max": 0.0828759
+       },
+       "target_exceed_bg_p999": 3.18329e-05,
+       "target_exceed_bg_p99": 0.000318329
+      },
+      "NDVI": {
+       "target": {
+        "n": 31414,
+        "median": -0.164687,
+        "p99": -0.0416136,
+        "p999": 0.0111037,
+        "max": 0.0973631
+       },
+       "background": {
+        "n": 2633880,
+        "median": -0.0683687,
+        "p99": 0.0250971,
+        "p999": 0.0731387,
+        "max": 0.398984
+       },
+       "target_exceed_bg_p999": 3.18329e-05,
+       "target_exceed_bg_p99": 0.000604826
+      }
+     },
+     "scl_water_cloud_buffer": {
+      "FDI": {
+       "target": {
+        "n": 30365,
+        "median": 0.0196773,
+        "p99": 0.0297415,
+        "p999": 0.0348059,
+        "max": 0.0498911
+       },
+       "background": {
+        "n": 1525408,
+        "median": 0.0150233,
+        "p99": 0.0285813,
+        "p999": 0.0347797,
+        "max": 0.0758412
+       },
+       "target_exceed_bg_p999": 0.00102091,
+       "target_exceed_bg_p99": 0.0177836,
+       "null_median_shift": {
+        "note": "the target disc's median FDI ranked among the null discs' medians (a bulk shift, not a tail)",
+        "null_median_of_medians": 0.0098697,
+        "null_p5": -0.00767213,
+        "null_p95": 0.0215132,
+        "target_rank": 0.77
+       },
+       "null": {
+        "n_discs": 200,
+        "median": 0.000652465,
+        "p95": 0.00404963,
+        "max": 0.0197343,
+        "target_rank": 0.615
+       }
+      },
+      "FAI": {
+       "target": {
+        "n": 30365,
+        "median": -0.00902095,
+        "p99": -0.000865257,
+        "p999": 0.00563311,
+        "max": 0.0209005
+       },
+       "background": {
+        "n": 1525408,
+        "median": -0.00988157,
+        "p99": 0.00111554,
+        "p999": 0.00848685,
+        "max": 0.0407773
+       },
+       "target_exceed_bg_p999": 0.000329327,
+       "target_exceed_bg_p99": 0.00414951
+      },
+      "NDVI": {
+       "target": {
+        "n": 30365,
+        "median": -0.164526,
+        "p99": -0.0412936,
+        "p999": 0.0120354,
+        "max": 0.0973631
+       },
+       "background": {
+        "n": 1525408,
+        "median": -0.128685,
+        "p99": -0.00695741,
+        "p999": 0.0310793,
+        "max": 0.262022
+       },
+       "target_exceed_bg_p999": 0.000395192,
+       "target_exceed_bg_p99": 0.00223942
+      }
+     }
+    },
+    "fraction_le_0": {
+     "B04": {
+      "target": 0.0,
+      "background": 0.0
+     },
+     "B06": {
+      "target": 0.0,
+      "background": 0.0
+     },
+     "B08": {
+      "target": 0.0,
+      "background": 0.0
+     },
+     "B11": {
+      "target": 0.0,
+      "background": 0.0
+     }
+    }
+   }
+  },
+  {
+   "pair_id": "aerial:Aerial survey row 35 @ S2B_6SWD_20210809_1_L1C",
+   "point": {
+    "id": "aerial:Aerial survey row 35",
+    "kind": "aerial",
+    "expedition": "S002-1",
+    "lat": 34.845,
+    "lon": -145.873,
+    "date": "2021-08-08",
+    "objects_gt50cm_per_km2": 6.4,
+    "mass_gt50cm_g_per_km2_modelled": 51632.0
+   },
+   "scene": "S2B_6SWD_20210809_1_L1C",
+   "l2a": "S2B_6SWD_20210809_1_L2A",
+   "platform": "sentinel-2b",
+   "datetime": "2021-08-09T20:35:35.820000Z",
+   "offset_days": 1,
+   "baseline": "05.00",
+   "radio_add_offset": -1000.0,
+   "quantification": 10000.0,
+   "clear": {
+    "target": {
+     "pixels_in_tile": 31419,
+     "pixels_with_data": 31419,
+     "water_px": 30967,
+     "clear_fraction": 0.9856138005665361,
+     "scl_histogram": {
+      "water": 30967,
+      "cloud medium probability": 396,
+      "cloud high probability": 56
+     },
+     "disc_pixels_nominal": 31416,
+     "water_fraction_of_disc": 0.985707919531449
+    },
+    "background": {
+     "pixels_in_tile": 3835044,
+     "pixels_with_data": 3835044,
+     "water_px": 3485674,
+     "clear_fraction": 0.9089006540733301,
+     "scl_histogram": {
+      "water": 3485674,
+      "cloud medium probability": 193615,
+      "cloud high probability": 155755
+     }
+    }
+   },
+   "window_rows_cols": [
+    676,
+    3681,
+    3650,
+    5490
+   ],
+   "acolite_run": {
+    "limit": [
+     34.5633,
+     -146.2143,
+     35.1285,
+     -145.7853
+    ],
+    "ac_aot_550": 0.11748792231082916,
+    "ac_model": "ACOLITE-LUT-202110-MOD2",
+    "sza": 25.5547817284196,
+    "vza": 7.263298062842744,
+    "raa": 28.096777809588104,
+    "acolite_version": "Generic GitHub Clone c2026-10-11T21:58:35"
+   },
+   "pinned_toa_le_0": {
+    "B02": 0,
+    "B03": 0,
+    "B04": 0,
+    "B08": 0,
+    "B06": 0,
+    "B11": 0
+   },
+   "acolite": {
+    "stats": {
+     "scl_water": {
+      "FDI": {
+       "target": {
+        "n": 30967,
+        "median": 0.00171645,
+        "p99": 0.0133094,
+        "p999": 0.0210248,
+        "max": 0.132005
+       },
+       "background": {
+        "n": 3485674,
+        "median": 0.000711607,
+        "p99": 0.0121755,
+        "p999": 0.0225693,
+        "max": 0.219943
+       },
+       "target_exceed_bg_p999": 0.000871896,
+       "target_exceed_bg_p99": 0.0160171,
+       "null_median_shift": {
+        "note": "the target disc's median FDI ranked among the null discs' medians (a bulk shift, not a tail)",
+        "null_median_of_medians": 0.000322761,
+        "null_p5": -0.000188048,
+        "null_p95": 0.00224046,
+        "target_rank": 0.825
+       },
+       "null": {
+        "n_discs": 200,
+        "median": 0.000365012,
+        "p95": 0.00419162,
+        "max": 0.00582646,
+        "target_rank": 0.62
+       }
+      },
+      "FAI": {
+       "target": {
+        "n": 30967,
+        "median": -0.00170193,
+        "p99": 0.0070507,
+        "p999": 0.016261,
+        "max": 0.0305384
+       },
+       "background": {
+        "n": 3485674,
+        "median": -0.00283128,
+        "p99": 0.00641162,
+        "p999": 0.0179278,
+        "max": 0.0902226
+       },
+       "target_exceed_bg_p999": 0.000645849,
+       "target_exceed_bg_p99": 0.0134014
+      },
+      "NDVI": {
+       "target": {
+        "n": 30967,
+        "median": -0.0472016,
+        "p99": 0.118916,
+        "p999": 0.173738,
+        "max": 0.25842
+       },
+       "background": {
+        "n": 3485674,
+        "median": -0.0694731,
+        "p99": 0.0968055,
+        "p999": 0.172694,
+        "max": 0.744546
+       },
+       "target_exceed_bg_p999": 0.00109794,
+       "target_exceed_bg_p99": 0.0211838
+      }
+     },
+     "scl_not_cloud": {
+      "FDI": {
+       "target": {
+        "n": 30967,
+        "median": 0.00171645,
+        "p99": 0.0133094,
+        "p999": 0.0210248,
+        "max": 0.132005
+       },
+       "background": {
+        "n": 3485674,
+        "median": 0.000711607,
+        "p99": 0.0121755,
+        "p999": 0.0225693,
+        "max": 0.219943
+       },
+       "target_exceed_bg_p999": 0.000871896,
+       "target_exceed_bg_p99": 0.0160171,
+       "null_median_shift": {
+        "note": "the target disc's median FDI ranked among the null discs' medians (a bulk shift, not a tail)",
+        "null_median_of_medians": 0.00038402,
+        "null_p5": -0.000169739,
+        "null_p95": 0.00231332,
+        "target_rank": 0.795
+       },
+       "null": {
+        "n_discs": 200,
+        "median": 0.000394943,
+        "p95": 0.00398159,
+        "max": 0.00792291,
+        "target_rank": 0.645
+       }
+      },
+      "FAI": {
+       "target": {
+        "n": 30967,
+        "median": -0.00170193,
+        "p99": 0.0070507,
+        "p999": 0.016261,
+        "max": 0.0305384
+       },
+       "background": {
+        "n": 3485674,
+        "median": -0.00283128,
+        "p99": 0.00641162,
+        "p999": 0.0179278,
+        "max": 0.0902226
+       },
+       "target_exceed_bg_p999": 0.000645849,
+       "target_exceed_bg_p99": 0.0134014
+      },
+      "NDVI": {
+       "target": {
+        "n": 30967,
+        "median": -0.0472016,
+        "p99": 0.118916,
+        "p999": 0.173738,
+        "max": 0.25842
+       },
+       "background": {
+        "n": 3485674,
+        "median": -0.0694731,
+        "p99": 0.0968055,
+        "p999": 0.172694,
+        "max": 0.744546
+       },
+       "target_exceed_bg_p999": 0.00109794,
+       "target_exceed_bg_p99": 0.0211838
+      }
+     },
+     "scl_water_cloud_buffer": {
+      "FDI": {
+       "target": {
+        "n": 26223,
+        "median": 0.00195813,
+        "p99": 0.0131602,
+        "p999": 0.0187209,
+        "max": 0.0351616
+       },
+       "background": {
+        "n": 2811765,
+        "median": 0.000862965,
+        "p99": 0.0115186,
+        "p999": 0.0164732,
+        "max": 0.0657724
+       },
+       "target_exceed_bg_p999": 0.0023262,
+       "target_exceed_bg_p99": 0.0202494,
+       "null_median_shift": {
+        "note": "the target disc's median FDI ranked among the null discs' medians (a bulk shift, not a tail)",
+        "null_median_of_medians": 0.00055,
+        "null_p5": -5.93616e-05,
+        "null_p95": 0.00273592,
+        "target_rank": 0.825
+       },
+       "null": {
+        "n_discs": 200,
+        "median": 0.000372723,
+        "p95": 0.00368464,
+        "max": 0.00425006,
+        "target_rank": 0.825
+       }
+      },
+      "FAI": {
+       "target": {
+        "n": 26223,
+        "median": -0.00167533,
+        "p99": 0.00640226,
+        "p999": 0.0107302,
+        "max": 0.0201882
+       },
+       "background": {
+        "n": 2811765,
+        "median": -0.00281763,
+        "p99": 0.00503614,
+        "p999": 0.00886709,
+        "max": 0.0463134
+       },
+       "target_exceed_bg_p999": 0.00202113,
+       "target_exceed_bg_p99": 0.0242917
+      },
+      "NDVI": {
+       "target": {
+        "n": 26223,
+        "median": -0.0477969,
+        "p99": 0.119453,
+        "p999": 0.173677,
+        "max": 0.25842
+       },
+       "background": {
+        "n": 2811765,
+        "median": -0.0713657,
+        "p99": 0.0928566,
+        "p999": 0.152847,
+        "max": 0.487292
+       },
+       "target_exceed_bg_p999": 0.00282195,
+       "target_exceed_bg_p99": 0.0249781
+      }
+     }
+    },
+    "fraction_le_0": {
+     "B04": {
+      "target": 0.0,
+      "background": 0.0
+     },
+     "B06": {
+      "target": 0.0,
+      "background": 0.0
+     },
+     "B08": {
+      "target": 0.0,
+      "background": 2.29511e-06
+     },
+     "B11": {
+      "target": 0.0,
+      "background": 0.0
+     }
+    }
+   },
+   "toa": {
+    "stats": {
+     "scl_water": {
+      "FDI": {
+       "target": {
+        "n": 30967,
+        "median": 0.0192841,
+        "p99": 0.0268779,
+        "p999": 0.0308087,
+        "max": 0.0712184
+       },
+       "background": {
+        "n": 3485674,
+        "median": 0.018305,
+        "p99": 0.0261334,
+        "p999": 0.0325519,
+        "max": 0.18103
+       },
+       "target_exceed_bg_p999": 0.000419802,
+       "target_exceed_bg_p99": 0.0167275,
+       "null_median_shift": {
+        "note": "the target disc's median FDI ranked among the null discs' medians (a bulk shift, not a tail)",
+        "null_median_of_medians": 0.0180082,
+        "null_p5": 0.017573,
+        "null_p95": 0.0196827,
+        "target_rank": 0.795
+       },
+       "null": {
+        "n_discs": 200,
+        "median": 0.000489891,
+        "p95": 0.00663991,
+        "max": 0.0106928,
+        "target_rank": 0.48
+       }
+      },
+      "FAI": {
+       "target": {
+        "n": 30967,
+        "median": -0.00894769,
+        "p99": -0.00324053,
+        "p999": 0.00213407,
+        "max": 0.0114588
+       },
+       "background": {
+        "n": 3485674,
+        "median": -0.00997652,
+        "p99": -0.00334994,
+        "p999": 0.00625072,
+        "max": 0.058901
+       },
+       "target_exceed_bg_p999": 0.000355217,
+       "target_exceed_bg_p99": 0.0109794
+      },
+      "NDVI": {
+       "target": {
+        "n": 30967,
+        "median": -0.155287,
+        "p99": -0.0434271,
+        "p999": 0.00522303,
+        "max": 0.0455148
+       },
+       "background": {
+        "n": 3485674,
+        "median": -0.165363,
+        "p99": -0.03668,
+        "p999": 0.0156096,
+        "max": 0.271252
+       },
+       "target_exceed_bg_p999": 0.000452094,
+       "target_exceed_bg_p99": 0.0081054
+      }
+     },
+     "scl_not_cloud": {
+      "FDI": {
+       "target": {
+        "n": 30967,
+        "median": 0.0192841,
+        "p99": 0.0268779,
+        "p999": 0.0308087,
+        "max": 0.0712184
+       },
+       "background": {
+        "n": 3485674,
+        "median": 0.018305,
+        "p99": 0.0261334,
+        "p999": 0.0325519,
+        "max": 0.18103
+       },
+       "target_exceed_bg_p999": 0.000419802,
+       "target_exceed_bg_p99": 0.0167275,
+       "null_median_shift": {
+        "note": "the target disc's median FDI ranked among the null discs' medians (a bulk shift, not a tail)",
+        "null_median_of_medians": 0.017981,
+        "null_p5": 0.0175713,
+        "null_p95": 0.0196339,
+        "target_rank": 0.85
+       },
+       "null": {
+        "n_discs": 200,
+        "median": 0.000432555,
+        "p95": 0.0054605,
+        "max": 0.0122278,
+        "target_rank": 0.5
+       }
+      },
+      "FAI": {
+       "target": {
+        "n": 30967,
+        "median": -0.00894769,
+        "p99": -0.00324053,
+        "p999": 0.00213407,
+        "max": 0.0114588
+       },
+       "background": {
+        "n": 3485674,
+        "median": -0.00997652,
+        "p99": -0.00334994,
+        "p999": 0.00625072,
+        "max": 0.058901
+       },
+       "target_exceed_bg_p999": 0.000355217,
+       "target_exceed_bg_p99": 0.0109794
+      },
+      "NDVI": {
+       "target": {
+        "n": 30967,
+        "median": -0.155287,
+        "p99": -0.0434271,
+        "p999": 0.00522303,
+        "max": 0.0455148
+       },
+       "background": {
+        "n": 3485674,
+        "median": -0.165363,
+        "p99": -0.03668,
+        "p999": 0.0156096,
+        "max": 0.271252
+       },
+       "target_exceed_bg_p999": 0.000452094,
+       "target_exceed_bg_p99": 0.0081054
+      }
+     },
+     "scl_water_cloud_buffer": {
+      "FDI": {
+       "target": {
+        "n": 26223,
+        "median": 0.0194787,
+        "p99": 0.0269211,
+        "p999": 0.0306284,
+        "max": 0.0429047
+       },
+       "background": {
+        "n": 2811765,
+        "median": 0.0184037,
+        "p99": 0.0257773,
+        "p999": 0.028984,
+        "max": 0.056331
+       },
+       "target_exceed_bg_p999": 0.00270755,
+       "target_exceed_bg_p99": 0.0221561,
+       "null_median_shift": {
+        "note": "the target disc's median FDI ranked among the null discs' medians (a bulk shift, not a tail)",
+        "null_median_of_medians": 0.018062,
+        "null_p5": 0.0176386,
+        "null_p95": 0.0200146,
+        "target_rank": 0.79
+       },
+       "null": {
+        "n_discs": 200,
+        "median": 0.000483102,
+        "p95": 0.00379284,
+        "max": 0.00539208,
+        "target_rank": 0.87
+       }
+      },
+      "FAI": {
+       "target": {
+        "n": 26223,
+        "median": -0.00892774,
+        "p99": -0.00359083,
+        "p999": -0.000543125,
+        "max": 0.00783627
+       },
+       "background": {
+        "n": 2811765,
+        "median": -0.00996877,
+        "p99": -0.00466755,
+        "p999": -0.0018027,
+        "max": 0.031018
+       },
+       "target_exceed_bg_p999": 0.00202113,
+       "target_exceed_bg_p99": 0.0286771
+      },
+      "NDVI": {
+       "target": {
+        "n": 26223,
+        "median": -0.15659,
+        "p99": -0.0722149,
+        "p999": -0.018096,
+        "max": 0.0319256
+       },
+       "background": {
+        "n": 2811765,
+        "median": -0.167977,
+        "p99": -0.0888139,
+        "p999": -0.0345787,
+        "max": 0.199349
+       },
+       "target_exceed_bg_p999": 0.0020974,
+       "target_exceed_bg_p99": 0.021546
+      }
+     }
+    },
+    "fraction_le_0": {
+     "B04": {
+      "target": 0.0,
+      "background": 0.0
+     },
+     "B06": {
+      "target": 0.0,
+      "background": 0.0
+     },
+     "B08": {
+      "target": 0.0,
+      "background": 0.0
+     },
+     "B11": {
+      "target": 0.0,
+      "background": 0.0
+     }
+    }
+   }
+  },
+  {
+   "pair_id": "aerial:Aerial survey row 33 @ S2A_6SXD_20210804_1_L1C",
+   "point": {
+    "id": "aerial:Aerial survey row 33",
+    "kind": "aerial",
+    "expedition": "S002-1",
+    "lat": 34.84,
+    "lon": -145.885,
+    "date": "2021-08-05",
+    "objects_gt50cm_per_km2": 2.77777777777778,
+    "mass_gt50cm_g_per_km2_modelled": 11090.2777777778
+   },
+   "scene": "S2A_6SXD_20210804_1_L1C",
+   "l2a": "S2A_6SXD_20210804_1_L2A",
+   "platform": "sentinel-2a",
+   "datetime": "2021-08-04T20:35:35.016000Z",
+   "offset_days": -1,
+   "baseline": "05.00",
+   "radio_add_offset": -1000.0,
+   "quantification": 10000.0,
+   "clear": {
+    "target": {
+     "pixels_in_tile": 31331,
+     "pixels_with_data": 31331,
+     "water_px": 30324,
+     "clear_fraction": 0.9678593086719224,
+     "scl_histogram": {
+      "water": 30324,
+      "thin cirrus": 1007
+     },
+     "disc_pixels_nominal": 31416,
+     "water_fraction_of_disc": 0.9652406417112299
+    },
+    "background": {
+     "pixels_in_tile": 3336549,
+     "pixels_with_data": 3336549,
+     "water_px": 2000338,
+     "clear_fraction": 0.5995230401231931,
+     "scl_histogram": {
+      "water": 2000338,
+      "cloud medium probability": 8816,
+      "thin cirrus": 1327395
+     }
+    }
+   },
+   "window_rows_cols": [
+    704,
+    3709,
+    0,
+    1600
+   ],
+   "acolite_run": {
+    "limit": [
+     34.5557,
+     -145.9198,
+     35.1211,
+     -145.5416
+    ],
+    "ac_aot_550": 0.04655707627534866,
+    "ac_model": "ACOLITE-LUT-202110-MOD1",
+    "sza": 23.8873030625571,
+    "vza": 2.8145654380425023,
+    "raa": 54.18959881482698,
+    "acolite_version": "Generic GitHub Clone c2026-10-11T21:58:35"
+   },
+   "pinned_toa_le_0": {
+    "B02": 0,
+    "B03": 0,
+    "B04": 0,
+    "B08": 0,
+    "B06": 0,
+    "B11": 0
+   },
+   "acolite": {
+    "stats": {
+     "scl_water": {
+      "FDI": {
+       "target": {
+        "n": 30324,
+        "median": 0.00420118,
+        "p99": 0.0093447,
+        "p999": 0.0133076,
+        "max": 0.0270122
+       },
+       "background": {
+        "n": 2000338,
+        "median": 0.00395065,
+        "p99": 0.00930188,
+        "p999": 0.0128058,
+        "max": 0.0341469
+       },
+       "target_exceed_bg_p999": 0.00128611,
+       "target_exceed_bg_p99": 0.0103878,
+       "null_median_shift": {
+        "note": "the target disc's median FDI ranked among the null discs' medians (a bulk shift, not a tail)",
+        "null_median_of_medians": 0.00386921,
+        "null_p5": 0.00289743,
+        "null_p95": 0.00581435,
+        "target_rank": 0.585
+       },
+       "null": {
+        "n_discs": 200,
+        "median": 0.000541134,
+        "p95": 0.00404614,
+        "max": 0.00864904,
+        "target_rank": 0.73
+       }
+      },
+      "FAI": {
+       "target": {
+        "n": 30324,
+        "median": -0.00101333,
+        "p99": 0.00137971,
+        "p999": 0.0043157,
+        "max": 0.0171836
+       },
+       "background": {
+        "n": 2000338,
+        "median": -0.000934933,
+        "p99": 0.0020377,
+        "p999": 0.00457755,
+        "max": 0.0176341
+       },
+       "target_exceed_bg_p999": 0.000857407,
+       "target_exceed_bg_p99": 0.00583696
+      },
+      "NDVI": {
+       "target": {
+        "n": 30324,
+        "median": -0.121199,
+        "p99": 0.0305178,
+        "p999": 0.122472,
+        "max": 0.390845
+       },
+       "background": {
+        "n": 2000338,
+        "median": -0.111447,
+        "p99": 0.0597825,
+        "p999": 0.144608,
+        "max": 0.593006
+       },
+       "target_exceed_bg_p999": 0.000725498,
+       "target_exceed_bg_p99": 0.00438596
+      }
+     },
+     "scl_not_cloud": {
+      "FDI": {
+       "target": {
+        "n": 30324,
+        "median": 0.00420118,
+        "p99": 0.0093447,
+        "p999": 0.0133076,
+        "max": 0.0270122
+       },
+       "background": {
+        "n": 2000338,
+        "median": 0.00395065,
+        "p99": 0.00930188,
+        "p999": 0.0128058,
+        "max": 0.0341469
+       },
+       "target_exceed_bg_p999": 0.00128611,
+       "target_exceed_bg_p99": 0.0103878,
+       "null_median_shift": {
+        "note": "the target disc's median FDI ranked among the null discs' medians (a bulk shift, not a tail)",
+        "null_median_of_medians": 0.00397231,
+        "null_p5": 0.00289557,
+        "null_p95": 0.00570947,
+        "target_rank": 0.565
+       },
+       "null": {
+        "n_discs": 200,
+        "median": 0.000599612,
+        "p95": 0.00269168,
+        "max": 0.00667623,
+        "target_rank": 0.79
+       }
+      },
+      "FAI": {
+       "target": {
+        "n": 30324,
+        "median": -0.00101333,
+        "p99": 0.00137971,
+        "p999": 0.0043157,
+        "max": 0.0171836
+       },
+       "background": {
+        "n": 2000338,
+        "median": -0.000934933,
+        "p99": 0.0020377,
+        "p999": 0.00457755,
+        "max": 0.0176341
+       },
+       "target_exceed_bg_p999": 0.000857407,
+       "target_exceed_bg_p99": 0.00583696
+      },
+      "NDVI": {
+       "target": {
+        "n": 30324,
+        "median": -0.121199,
+        "p99": 0.0305178,
+        "p999": 0.122472,
+        "max": 0.390845
+       },
+       "background": {
+        "n": 2000338,
+        "median": -0.111447,
+        "p99": 0.0597825,
+        "p999": 0.144608,
+        "max": 0.593006
+       },
+       "target_exceed_bg_p999": 0.000725498,
+       "target_exceed_bg_p99": 0.00438596
+      }
+     },
+     "scl_water_cloud_buffer": {
+      "FDI": {
+       "target": {
+        "n": 25773,
+        "median": 0.00399619,
+        "p99": 0.00806741,
+        "p999": 0.0113089,
+        "max": 0.0196394
+       },
+       "background": {
+        "n": 1599974,
+        "median": 0.00363642,
+        "p99": 0.00811584,
+        "p999": 0.0116819,
+        "max": 0.0284654
+       },
+       "target_exceed_bg_p999": 0.000970007,
+       "target_exceed_bg_p99": 0.00938967,
+       "null_median_shift": {
+        "note": "the target disc's median FDI ranked among the null discs' medians (a bulk shift, not a tail)",
+        "null_median_of_medians": 0.00361965,
+        "null_p5": 0.0029196,
+        "null_p95": 0.0048159,
+        "target_rank": 0.65
+       },
+       "null": {
+        "n_discs": 200,
+        "median": 0.000732134,
+        "p95": 0.00244543,
+        "max": 0.00551868,
+        "target_rank": 0.595
+       }
+      },
+      "FAI": {
+       "target": {
+        "n": 25773,
+        "median": -0.00102503,
+        "p99": 0.000958505,
+        "p999": 0.00290258,
+        "max": 0.00972234
+       },
+       "background": {
+        "n": 1599974,
+        "median": -0.00097324,
+        "p99": 0.00153863,
+        "p999": 0.0037794,
+        "max": 0.0160179
+       },
+       "target_exceed_bg_p999": 0.000582004,
+       "target_exceed_bg_p99": 0.00384123
+      },
+      "NDVI": {
+       "target": {
+        "n": 25773,
+        "median": -0.126708,
+        "p99": 0.0148313,
+        "p999": 0.0801143,
+        "max": 0.272928
+       },
+       "background": {
+        "n": 1599974,
+        "median": -0.126676,
+        "p99": 0.0490547,
+        "p999": 0.130559,
+        "max": 0.593006
+       },
+       "target_exceed_bg_p999": 0.000155201,
+       "target_exceed_bg_p99": 0.00337563
+      }
+     }
+    },
+    "fraction_le_0": {
+     "B04": {
+      "target": 0.0,
+      "background": 0.0
+     },
+     "B06": {
+      "target": 0.0,
+      "background": 4.99916e-07
+     },
+     "B08": {
+      "target": 0.0,
+      "background": 0.0
+     },
+     "B11": {
+      "target": 0.0,
+      "background": 1.09981e-05
+     }
+    }
+   },
+   "toa": {
+    "stats": {
+     "scl_water": {
+      "FDI": {
+       "target": {
+        "n": 30324,
+        "median": 0.0197997,
+        "p99": 0.0240235,
+        "p999": 0.0269155,
+        "max": 0.0380725
+       },
+       "background": {
+        "n": 2000338,
+        "median": 0.0195608,
+        "p99": 0.0238352,
+        "p999": 0.0262219,
+        "max": 0.0377808
+       },
+       "target_exceed_bg_p999": 0.00171481,
+       "target_exceed_bg_p99": 0.0118388,
+       "null_median_shift": {
+        "note": "the target disc's median FDI ranked among the null discs' medians (a bulk shift, not a tail)",
+        "null_median_of_medians": 0.0197891,
+        "null_p5": 0.0187994,
+        "null_p95": 0.0210212,
+        "target_rank": 0.505
+       },
+       "null": {
+        "n_discs": 200,
+        "median": 0.000482352,
+        "p95": 0.00452789,
+        "max": 0.00966755,
+        "target_rank": 0.825
+       }
+      },
+      "FAI": {
+       "target": {
+        "n": 30324,
+        "median": -0.00844356,
+        "p99": -0.00649679,
+        "p999": -0.00408242,
+        "max": 0.00993239
+       },
+       "background": {
+        "n": 2000338,
+        "median": -0.00837045,
+        "p99": -0.00600874,
+        "p999": -0.00406666,
+        "max": 0.00539121
+       },
+       "target_exceed_bg_p999": 0.000989315,
+       "target_exceed_bg_p99": 0.00590292
+      },
+      "NDVI": {
+       "target": {
+        "n": 30324,
+        "median": -0.302719,
+        "p99": -0.206933,
+        "p999": -0.148996,
+        "max": 0.0897719
+       },
+       "background": {
+        "n": 2000338,
+        "median": -0.29994,
+        "p99": -0.183709,
+        "p999": -0.0875188,
+        "max": 0.0197061
+       },
+       "target_exceed_bg_p999": 0.000164886,
+       "target_exceed_bg_p99": 0.00402322
+      }
+     },
+     "scl_not_cloud": {
+      "FDI": {
+       "target": {
+        "n": 30324,
+        "median": 0.0197997,
+        "p99": 0.0240235,
+        "p999": 0.0269155,
+        "max": 0.0380725
+       },
+       "background": {
+        "n": 2000338,
+        "median": 0.0195608,
+        "p99": 0.0238352,
+        "p999": 0.0262219,
+        "max": 0.0377808
+       },
+       "target_exceed_bg_p999": 0.00171481,
+       "target_exceed_bg_p99": 0.0118388,
+       "null_median_shift": {
+        "note": "the target disc's median FDI ranked among the null discs' medians (a bulk shift, not a tail)",
+        "null_median_of_medians": 0.019628,
+        "null_p5": 0.0187608,
+        "null_p95": 0.0209835,
+        "target_rank": 0.55
+       },
+       "null": {
+        "n_discs": 200,
+        "median": 0.000419206,
+        "p95": 0.00354483,
+        "max": 0.00706728,
+        "target_rank": 0.895
+       }
+      },
+      "FAI": {
+       "target": {
+        "n": 30324,
+        "median": -0.00844356,
+        "p99": -0.00649679,
+        "p999": -0.00408242,
+        "max": 0.00993239
+       },
+       "background": {
+        "n": 2000338,
+        "median": -0.00837045,
+        "p99": -0.00600874,
+        "p999": -0.00406666,
+        "max": 0.00539121
+       },
+       "target_exceed_bg_p999": 0.000989315,
+       "target_exceed_bg_p99": 0.00590292
+      },
+      "NDVI": {
+       "target": {
+        "n": 30324,
+        "median": -0.302719,
+        "p99": -0.206933,
+        "p999": -0.148996,
+        "max": 0.0897719
+       },
+       "background": {
+        "n": 2000338,
+        "median": -0.29994,
+        "p99": -0.183709,
+        "p999": -0.0875188,
+        "max": 0.0197061
+       },
+       "target_exceed_bg_p999": 0.000164886,
+       "target_exceed_bg_p99": 0.00402322
+      }
+     },
+     "scl_water_cloud_buffer": {
+      "FDI": {
+       "target": {
+        "n": 25773,
+        "median": 0.0196319,
+        "p99": 0.0229675,
+        "p999": 0.0246704,
+        "max": 0.0279802
+       },
+       "background": {
+        "n": 1599974,
+        "median": 0.0193269,
+        "p99": 0.022783,
+        "p999": 0.0249869,
+        "max": 0.0377808
+       },
+       "target_exceed_bg_p999": 0.000853606,
+       "target_exceed_bg_p99": 0.0136965,
+       "null_median_shift": {
+        "note": "the target disc's median FDI ranked among the null discs' medians (a bulk shift, not a tail)",
+        "null_median_of_medians": 0.0195173,
+        "null_p5": 0.0187538,
+        "null_p95": 0.0204476,
+        "target_rank": 0.555
+       },
+       "null": {
+        "n_discs": 200,
+        "median": 0.000700258,
+        "p95": 0.00428263,
+        "max": 0.00845823,
+        "target_rank": 0.58
+       }
+      },
+      "FAI": {
+       "target": {
+        "n": 25773,
+        "median": -0.00844862,
+        "p99": -0.00692218,
+        "p999": -0.00577775,
+        "max": -0.00344419
+       },
+       "background": {
+        "n": 1599974,
+        "median": -0.00840653,
+        "p99": -0.00649451,
+        "p999": -0.00492549,
+        "max": 0.00381655
+       },
+       "target_exceed_bg_p999": 0.000310402,
+       "target_exceed_bg_p99": 0.00364723
+      },
+      "NDVI": {
+       "target": {
+        "n": 25773,
+        "median": -0.307937,
+        "p99": -0.228287,
+        "p999": -0.178746,
+        "max": -0.115702
+       },
+       "background": {
+        "n": 1599974,
+        "median": -0.31201,
+        "p99": -0.211422,
+        "p999": -0.139908,
+        "max": 0.00868311
+       },
+       "target_exceed_bg_p999": 0.000155201,
+       "target_exceed_bg_p99": 0.00388003
+      }
+     }
+    },
+    "fraction_le_0": {
+     "B04": {
+      "target": 0.0,
+      "background": 0.0
+     },
+     "B06": {
+      "target": 0.0,
+      "background": 0.0
+     },
+     "B08": {
+      "target": 0.0,
+      "background": 0.0
+     },
+     "B11": {
+      "target": 0.0,
+      "background": 0.0
+     }
+    }
+   }
+  },
+  {
+   "pair_id": "manta:Manta trawl row 643 @ S2B_6SXD_20210918_1_L1C",
+   "point": {
+    "id": "manta:Manta trawl row 643",
+    "kind": "manta",
+    "expedition": "North Pacific Mission 4 (NPM4)",
+    "lat": 34.99,
+    "lon": -145.69,
+    "date": "2021-09-17",
+    "pieces_per_km2_wc": 1781920.358339,
+    "pieces_5_50cm_per_km2_wc": 3774.046859
+   },
+   "scene": "S2B_6SXD_20210918_1_L1C",
+   "l2a": "S2B_6SXD_20210918_1_L2A",
+   "platform": "sentinel-2b",
+   "datetime": "2021-09-18T20:35:28.528000Z",
+   "offset_days": 1,
+   "baseline": "05.00",
+   "radio_add_offset": -1000.0,
+   "quantification": 10000.0,
+   "clear": {
+    "target": {
+     "pixels_in_tile": 31428,
+     "pixels_with_data": 31428,
+     "water_px": 29134,
+     "clear_fraction": 0.9270077637775233,
+     "scl_histogram": {
+      "water": 29134,
+      "cloud medium probability": 1844,
+      "cloud high probability": 450
+     },
+     "disc_pixels_nominal": 31416,
+     "water_fraction_of_disc": 0.9273618538324421
+    },
+    "background": {
+     "pixels_in_tile": 5344832,
+     "pixels_with_data": 5344832,
+     "water_px": 4802897,
+     "clear_fraction": 0.8986057934094093,
+     "scl_histogram": {
+      "water": 4802897,
+      "cloud medium probability": 318138,
+      "cloud high probability": 223797
+     }
+    }
+   },
+   "window_rows_cols": [
+    0,
+    2867,
+    0,
+    2480
+   ],
+   "acolite_run": {
+    "limit": [
+     34.6952,
+     -145.918,
+     35.2481,
+     -145.3357
+    ],
+    "ac_aot_550": 0.15865971148014069,
+    "ac_model": "ACOLITE-LUT-202110-MOD1",
+    "sza": 36.0000105073508,
+    "vza": 2.816897100014708,
+    "raa": 34.281911165080174,
+    "acolite_version": "Generic GitHub Clone c2026-10-11T21:58:35"
+   },
+   "pinned_toa_le_0": {
+    "B02": 0,
+    "B03": 0,
+    "B04": 0,
+    "B08": 0,
+    "B06": 0,
+    "B11": 0
+   },
+   "acolite": {
+    "stats": {
+     "scl_water": {
+      "FDI": {
+       "target": {
+        "n": 29134,
+        "median": 0.00259304,
+        "p99": 0.0202334,
+        "p999": 0.0416509,
+        "max": 0.0785073
+       },
+       "background": {
+        "n": 4802897,
+        "median": 0.00142383,
+        "p99": 0.0218155,
+        "p999": 0.0435925,
+        "max": 0.184786
+       },
+       "target_exceed_bg_p999": 0.000755131,
+       "target_exceed_bg_p99": 0.00871834,
+       "null_median_shift": {
+        "note": "the target disc's median FDI ranked among the null discs' medians (a bulk shift, not a tail)",
+        "null_median_of_medians": 0.00145986,
+        "null_p5": -0.00041998,
+        "null_p95": 0.00276492,
+        "target_rank": 0.89
+       },
+       "null": {
+        "n_discs": 200,
+        "median": 0.000388205,
+        "p95": 0.00408412,
+        "max": 0.0128062,
+        "target_rank": 0.675
+       }
+      },
+      "FAI": {
+       "target": {
+        "n": 29134,
+        "median": -0.00089637,
+        "p99": 0.0122566,
+        "p999": 0.0302179,
+        "max": 0.0606171
+       },
+       "background": {
+        "n": 4802897,
+        "median": -0.00110486,
+        "p99": 0.012073,
+        "p999": 0.0272055,
+        "max": 0.177402
+       },
+       "target_exceed_bg_p999": 0.00137297,
+       "target_exceed_bg_p99": 0.0103316
+      },
+      "NDVI": {
+       "target": {
+        "n": 29134,
+        "median": -0.0411868,
+        "p99": 0.139336,
+        "p999": 0.214895,
+        "max": 0.29784
+       },
+       "background": {
+        "n": 4802897,
+        "median": -0.0390637,
+        "p99": 0.168708,
+        "p999": 0.255192,
+        "max": 1.3413
+       },
+       "target_exceed_bg_p999": 0.000274593,
+       "target_exceed_bg_p99": 0.00387863
+      }
+     },
+     "scl_not_cloud": {
+      "FDI": {
+       "target": {
+        "n": 29134,
+        "median": 0.00259304,
+        "p99": 0.0202334,
+        "p999": 0.0416509,
+        "max": 0.0785073
+       },
+       "background": {
+        "n": 4802897,
+        "median": 0.00142383,
+        "p99": 0.0218155,
+        "p999": 0.0435925,
+        "max": 0.184786
+       },
+       "target_exceed_bg_p999": 0.000755131,
+       "target_exceed_bg_p99": 0.00871834,
+       "null_median_shift": {
+        "note": "the target disc's median FDI ranked among the null discs' medians (a bulk shift, not a tail)",
+        "null_median_of_medians": 0.00158844,
+        "null_p5": -0.000514566,
+        "null_p95": 0.00286095,
+        "target_rank": 0.905
+       },
+       "null": {
+        "n_discs": 200,
+        "median": 0.000384115,
+        "p95": 0.00416693,
+        "max": 0.00892296,
+        "target_rank": 0.665
+       }
+      },
+      "FAI": {
+       "target": {
+        "n": 29134,
+        "median": -0.00089637,
+        "p99": 0.0122566,
+        "p999": 0.0302179,
+        "max": 0.0606171
+       },
+       "background": {
+        "n": 4802897,
+        "median": -0.00110486,
+        "p99": 0.012073,
+        "p999": 0.0272055,
+        "max": 0.177402
+       },
+       "target_exceed_bg_p999": 0.00137297,
+       "target_exceed_bg_p99": 0.0103316
+      },
+      "NDVI": {
+       "target": {
+        "n": 29134,
+        "median": -0.0411868,
+        "p99": 0.139336,
+        "p999": 0.214895,
+        "max": 0.29784
+       },
+       "background": {
+        "n": 4802897,
+        "median": -0.0390637,
+        "p99": 0.168708,
+        "p999": 0.255192,
+        "max": 1.3413
+       },
+       "target_exceed_bg_p999": 0.000274593,
+       "target_exceed_bg_p99": 0.00387863
+      }
+     },
+     "scl_water_cloud_buffer": {
+      "FDI": {
+       "target": {
+        "n": 23035,
+        "median": 0.00275767,
+        "p99": 0.0130778,
+        "p999": 0.0213846,
+        "max": 0.0460704
+       },
+       "background": {
+        "n": 3862247,
+        "median": 0.00146902,
+        "p99": 0.0140365,
+        "p999": 0.0254344,
+        "max": 0.128642
+       },
+       "target_exceed_bg_p999": 0.000564359,
+       "target_exceed_bg_p99": 0.00681572,
+       "null_median_shift": {
+        "note": "the target disc's median FDI ranked among the null discs' medians (a bulk shift, not a tail)",
+        "null_median_of_medians": 0.00155639,
+        "null_p5": -0.000471789,
+        "null_p95": 0.00288557,
+        "target_rank": 0.92
+       },
+       "null": {
+        "n_discs": 200,
+        "median": 0.000333192,
+        "p95": 0.0065473,
+        "max": 0.0118234,
+        "target_rank": 0.59
+       }
+      },
+      "FAI": {
+       "target": {
+        "n": 23035,
+        "median": -0.000929775,
+        "p99": 0.00545151,
+        "p999": 0.0103283,
+        "max": 0.0349793
+       },
+       "background": {
+        "n": 3862247,
+        "median": -0.00109232,
+        "p99": 0.00716586,
+        "p999": 0.0132819,
+        "max": 0.0878213
+       },
+       "target_exceed_bg_p999": 0.000564359,
+       "target_exceed_bg_p99": 0.00360321
+      },
+      "NDVI": {
+       "target": {
+        "n": 23035,
+        "median": -0.0466948,
+        "p99": 0.129745,
+        "p999": 0.189562,
+        "max": 0.294511
+       },
+       "background": {
+        "n": 3862247,
+        "median": -0.0442884,
+        "p99": 0.17226,
+        "p999": 0.256103,
+        "max": 1.3413
+       },
+       "target_exceed_bg_p999": 8.68244e-05,
+       "target_exceed_bg_p99": 0.00186672
+      }
+     }
+    },
+    "fraction_le_0": {
+     "B04": {
+      "target": 0.0,
+      "background": 4.16415e-07
+     },
+     "B06": {
+      "target": 0.0,
+      "background": 2.08208e-07
+     },
+     "B08": {
+      "target": 0.0,
+      "background": 0.0
+     },
+     "B11": {
+      "target": 0.0,
+      "background": 0.0
+     }
+    }
+   },
+   "toa": {
+    "stats": {
+     "scl_water": {
+      "FDI": {
+       "target": {
+        "n": 29134,
+        "median": 0.0218016,
+        "p99": 0.0292926,
+        "p999": 0.0344865,
+        "max": 0.0468155
+       },
+       "background": {
+        "n": 4802897,
+        "median": 0.0204692,
+        "p99": 0.0304259,
+        "p999": 0.0454027,
+        "max": 0.165607
+       },
+       "target_exceed_bg_p999": 3.43242e-05,
+       "target_exceed_bg_p99": 0.00569781,
+       "null_median_shift": {
+        "note": "the target disc's median FDI ranked among the null discs' medians (a bulk shift, not a tail)",
+        "null_median_of_medians": 0.020228,
+        "null_p5": 0.0177088,
+        "null_p95": 0.0217771,
+        "target_rank": 0.95
+       },
+       "null": {
+        "n_discs": 200,
+        "median": 0.000122196,
+        "p95": 0.00432962,
+        "max": 0.0150329,
+        "target_rank": 0.425
+       }
+      },
+      "FAI": {
+       "target": {
+        "n": 29134,
+        "median": -0.00912991,
+        "p99": 0.000437171,
+        "p999": 0.0116702,
+        "max": 0.0309354
+       },
+       "background": {
+        "n": 4802897,
+        "median": -0.00932189,
+        "p99": 0.0005631,
+        "p999": 0.0116179,
+        "max": 0.0994749
+       },
+       "target_exceed_bg_p999": 0.00106405,
+       "target_exceed_bg_p99": 0.00981671
+      },
+      "NDVI": {
+       "target": {
+        "n": 29134,
+        "median": -0.203943,
+        "p99": -0.0128379,
+        "p999": 0.0411959,
+        "max": 0.137935
+       },
+       "background": {
+        "n": 4802897,
+        "median": -0.20016,
+        "p99": -0.0111555,
+        "p999": 0.0370875,
+        "max": 0.477686
+       },
+       "target_exceed_bg_p999": 0.00130432,
+       "target_exceed_bg_p99": 0.00954212
+      }
+     },
+     "scl_not_cloud": {
+      "FDI": {
+       "target": {
+        "n": 29134,
+        "median": 0.0218016,
+        "p99": 0.0292926,
+        "p999": 0.0344865,
+        "max": 0.0468155
+       },
+       "background": {
+        "n": 4802897,
+        "median": 0.0204692,
+        "p99": 0.0304259,
+        "p999": 0.0454027,
+        "max": 0.165607
+       },
+       "target_exceed_bg_p999": 3.43242e-05,
+       "target_exceed_bg_p99": 0.00569781,
+       "null_median_shift": {
+        "note": "the target disc's median FDI ranked among the null discs' medians (a bulk shift, not a tail)",
+        "null_median_of_medians": 0.0203837,
+        "null_p5": 0.0163983,
+        "null_p95": 0.0218815,
+        "target_rank": 0.91
+       },
+       "null": {
+        "n_discs": 200,
+        "median": 0.000143914,
+        "p95": 0.00472428,
+        "max": 0.014962,
+        "target_rank": 0.405
+       }
+      },
+      "FAI": {
+       "target": {
+        "n": 29134,
+        "median": -0.00912991,
+        "p99": 0.000437171,
+        "p999": 0.0116702,
+        "max": 0.0309354
+       },
+       "background": {
+        "n": 4802897,
+        "median": -0.00932189,
+        "p99": 0.0005631,
+        "p999": 0.0116179,
+        "max": 0.0994749
+       },
+       "target_exceed_bg_p999": 0.00106405,
+       "target_exceed_bg_p99": 0.00981671
+      },
+      "NDVI": {
+       "target": {
+        "n": 29134,
+        "median": -0.203943,
+        "p99": -0.0128379,
+        "p999": 0.0411959,
+        "max": 0.137935
+       },
+       "background": {
+        "n": 4802897,
+        "median": -0.20016,
+        "p99": -0.0111555,
+        "p999": 0.0370875,
+        "max": 0.477686
+       },
+       "target_exceed_bg_p999": 0.00130432,
+       "target_exceed_bg_p99": 0.00954212
+      }
+     },
+     "scl_water_cloud_buffer": {
+      "FDI": {
+       "target": {
+        "n": 23035,
+        "median": 0.0221023,
+        "p99": 0.0291919,
+        "p999": 0.0331021,
+        "max": 0.0374043
+       },
+       "background": {
+        "n": 3862247,
+        "median": 0.0206942,
+        "p99": 0.0285698,
+        "p999": 0.0343641,
+        "max": 0.131641
+       },
+       "target_exceed_bg_p999": 0.000434122,
+       "target_exceed_bg_p99": 0.0154982,
+       "null_median_shift": {
+        "note": "the target disc's median FDI ranked among the null discs' medians (a bulk shift, not a tail)",
+        "null_median_of_medians": 0.0203688,
+        "null_p5": 0.0191912,
+        "null_p95": 0.0221507,
+        "target_rank": 0.93
+       },
+       "null": {
+        "n_discs": 200,
+        "median": 0.000370112,
+        "p95": 0.0064892,
+        "max": 0.0178061,
+        "target_rank": 0.555
+       }
+      },
+      "FAI": {
+       "target": {
+        "n": 23035,
+        "median": -0.00915065,
+        "p99": -0.00474714,
+        "p999": -0.00112862,
+        "max": 0.013667
+       },
+       "background": {
+        "n": 3862247,
+        "median": -0.00932399,
+        "p99": -0.00380048,
+        "p999": 0.000916202,
+        "max": 0.0518465
+       },
+       "target_exceed_bg_p999": 0.00039071,
+       "target_exceed_bg_p99": 0.00481875
+      },
+      "NDVI": {
+       "target": {
+        "n": 23035,
+        "median": -0.209268,
+        "p99": -0.110818,
+        "p999": -0.0365836,
+        "max": 0.0466031
+       },
+       "background": {
+        "n": 3862247,
+        "median": -0.20737,
+        "p99": -0.0611985,
+        "p999": -0.0175413,
+        "max": 0.322809
+       },
+       "target_exceed_bg_p999": 0.000520946,
+       "target_exceed_bg_p99": 0.00195355
+      }
+     }
+    },
+    "fraction_le_0": {
+     "B04": {
+      "target": 0.0,
+      "background": 0.0
+     },
+     "B06": {
+      "target": 0.0,
+      "background": 0.0
+     },
+     "B08": {
+      "target": 0.0,
+      "background": 0.0
+     },
+     "B11": {
+      "target": 0.0,
+      "background": 0.0
+     }
+    }
+   }
+  },
+  {
+   "pair_id": "manta:Manta trawl row 642 @ S2B_6SXD_20210918_1_L1C",
+   "point": {
+    "id": "manta:Manta trawl row 642",
+    "kind": "manta",
+    "expedition": "North Pacific Mission 4 (NPM4)",
+    "lat": 34.98,
+    "lon": -145.68,
+    "date": "2021-09-17",
+    "pieces_per_km2_wc": 7727943.80358,
+    "pieces_5_50cm_per_km2_wc": 51039.27286
+   },
+   "scene": "S2B_6SXD_20210918_1_L1C",
+   "l2a": "S2B_6SXD_20210918_1_L2A",
+   "platform": "sentinel-2b",
+   "datetime": "2021-09-18T20:35:28.528000Z",
+   "offset_days": 1,
+   "baseline": "05.00",
+   "radio_add_offset": -1000.0,
+   "quantification": 10000.0,
+   "clear": {
+    "target": {
+     "pixels_in_tile": 31423,
+     "pixels_with_data": 31423,
+     "water_px": 27489,
+     "clear_fraction": 0.874805079082201,
+     "scl_histogram": {
+      "water": 27489,
+      "cloud medium probability": 3235,
+      "cloud high probability": 699
+     },
+     "disc_pixels_nominal": 31416,
+     "water_fraction_of_disc": 0.875
+    },
+    "background": {
+     "pixels_in_tile": 5509692,
+     "pixels_with_data": 5509692,
+     "water_px": 4918077,
+     "clear_fraction": 0.8926228544172705,
+     "scl_histogram": {
+      "water": 4918077,
+      "cloud medium probability": 343178,
+      "cloud high probability": 248437
+     }
+    }
+   },
+   "window_rows_cols": [
+    0,
+    2921,
+    0,
+    2527
+   ],
+   "acolite_run": {
+    "limit": [
+     34.6952,
+     -145.918,
+     35.2481,
+     -145.3357
+    ],
+    "ac_aot_550": 0.15865971148014069,
+    "ac_model": "ACOLITE-LUT-202110-MOD1",
+    "sza": 36.0000105073508,
+    "vza": 2.816897100014708,
+    "raa": 34.281911165080174,
+    "acolite_version": "Generic GitHub Clone c2026-10-11T21:58:35"
+   },
+   "pinned_toa_le_0": {
+    "B02": 0,
+    "B03": 0,
+    "B04": 0,
+    "B08": 0,
+    "B06": 0,
+    "B11": 0
+   },
+   "acolite": {
+    "stats": {
+     "scl_water": {
+      "FDI": {
+       "target": {
+        "n": 27489,
+        "median": 0.00230956,
+        "p99": 0.0261745,
+        "p999": 0.0488327,
+        "max": 0.0785073
+       },
+       "background": {
+        "n": 4918077,
+        "median": 0.00146493,
+        "p99": 0.0220327,
+        "p999": 0.0439676,
+        "max": 0.184786
+       },
+       "target_exceed_bg_p999": 0.00163702,
+       "target_exceed_bg_p99": 0.0144785,
+       "null_median_shift": {
+        "note": "the target disc's median FDI ranked among the null discs' medians (a bulk shift, not a tail)",
+        "null_median_of_medians": 0.00157157,
+        "null_p5": -0.000415905,
+        "null_p95": 0.00290565,
+        "target_rank": 0.76
+       },
+       "null": {
+        "n_discs": 200,
+        "median": 0.000382672,
+        "p95": 0.00469991,
+        "max": 0.0100419,
+        "target_rank": 0.83
+       }
+      },
+      "FAI": {
+       "target": {
+        "n": 27489,
+        "median": -0.000815539,
+        "p99": 0.016649,
+        "p999": 0.035453,
+        "max": 0.0606171
+       },
+       "background": {
+        "n": 4918077,
+        "median": -0.00111053,
+        "p99": 0.012082,
+        "p999": 0.0272171,
+        "max": 0.177402
+       },
+       "target_exceed_bg_p999": 0.00291026,
+       "target_exceed_bg_p99": 0.0168795
+      },
+      "NDVI": {
+       "target": {
+        "n": 27489,
+        "median": -0.0374205,
+        "p99": 0.14464,
+        "p999": 0.236378,
+        "max": 0.396288
+       },
+       "background": {
+        "n": 4918077,
+        "median": -0.0392731,
+        "p99": 0.167756,
+        "p999": 0.254103,
+        "max": 1.3413
+       },
+       "target_exceed_bg_p999": 0.000509295,
+       "target_exceed_bg_p99": 0.00556586
+      }
+     },
+     "scl_not_cloud": {
+      "FDI": {
+       "target": {
+        "n": 27489,
+        "median": 0.00230956,
+        "p99": 0.0261745,
+        "p999": 0.0488327,
+        "max": 0.0785073
+       },
+       "background": {
+        "n": 4918077,
+        "median": 0.00146493,
+        "p99": 0.0220327,
+        "p999": 0.0439676,
+        "max": 0.184786
+       },
+       "target_exceed_bg_p999": 0.00163702,
+       "target_exceed_bg_p99": 0.0144785,
+       "null_median_shift": {
+        "note": "the target disc's median FDI ranked among the null discs' medians (a bulk shift, not a tail)",
+        "null_median_of_medians": 0.00156873,
+        "null_p5": -0.000593631,
+        "null_p95": 0.00288213,
+        "target_rank": 0.8
+       },
+       "null": {
+        "n_discs": 200,
+        "median": 0.000337524,
+        "p95": 0.00483853,
+        "max": 0.0130983,
+        "target_rank": 0.79
+       }
+      },
+      "FAI": {
+       "target": {
+        "n": 27489,
+        "median": -0.000815539,
+        "p99": 0.016649,
+        "p999": 0.035453,
+        "max": 0.0606171
+       },
+       "background": {
+        "n": 4918077,
+        "median": -0.00111053,
+        "p99": 0.012082,
+        "p999": 0.0272171,
+        "max": 0.177402
+       },
+       "target_exceed_bg_p999": 0.00291026,
+       "target_exceed_bg_p99": 0.0168795
+      },
+      "NDVI": {
+       "target": {
+        "n": 27489,
+        "median": -0.0374205,
+        "p99": 0.14464,
+        "p999": 0.236378,
+        "max": 0.396288
+       },
+       "background": {
+        "n": 4918077,
+        "median": -0.0392731,
+        "p99": 0.167756,
+        "p999": 0.254103,
+        "max": 1.3413
+       },
+       "target_exceed_bg_p999": 0.000509295,
+       "target_exceed_bg_p99": 0.00556586
+      }
+     },
+     "scl_water_cloud_buffer": {
+      "FDI": {
+       "target": {
+        "n": 18746,
+        "median": 0.00258037,
+        "p99": 0.0144958,
+        "p999": 0.0283225,
+        "max": 0.0460704
+       },
+       "background": {
+        "n": 3922422,
+        "median": 0.00151205,
+        "p99": 0.0140671,
+        "p999": 0.0254793,
+        "max": 0.128642
+       },
+       "target_exceed_bg_p999": 0.001547,
+       "target_exceed_bg_p99": 0.0109357,
+       "null_median_shift": {
+        "note": "the target disc's median FDI ranked among the null discs' medians (a bulk shift, not a tail)",
+        "null_median_of_medians": 0.00148668,
+        "null_p5": -0.000379246,
+        "null_p95": 0.002806,
+        "target_rank": 0.875
+       },
+       "null": {
+        "n_discs": 200,
+        "median": 0.000451465,
+        "p95": 0.00611825,
+        "max": 0.0158965,
+        "target_rank": 0.77
+       }
+      },
+      "FAI": {
+       "target": {
+        "n": 18746,
+        "median": -0.000866463,
+        "p99": 0.00650466,
+        "p999": 0.0151273,
+        "max": 0.0349793
+       },
+       "background": {
+        "n": 3922422,
+        "median": -0.00109151,
+        "p99": 0.00716395,
+        "p999": 0.0132694,
+        "max": 0.0878213
+       },
+       "target_exceed_bg_p999": 0.00160034,
+       "target_exceed_bg_p99": 0.00768164
+      },
+      "NDVI": {
+       "target": {
+        "n": 18746,
+        "median": -0.0457483,
+        "p99": 0.130627,
+        "p999": 0.202088,
+        "max": 0.3158
+       },
+       "background": {
+        "n": 3922422,
+        "median": -0.0443981,
+        "p99": 0.171324,
+        "p999": 0.255054,
+        "max": 1.3413
+       },
+       "target_exceed_bg_p999": 0.000106689,
+       "target_exceed_bg_p99": 0.0029873
+      }
+     }
+    },
+    "fraction_le_0": {
+     "B04": {
+      "target": 0.0,
+      "background": 4.06663e-07
+     },
+     "B06": {
+      "target": 0.0,
+      "background": 2.03332e-07
+     },
+     "B08": {
+      "target": 0.0,
+      "background": 0.0
+     },
+     "B11": {
+      "target": 0.0,
+      "background": 0.0
+     }
+    }
+   },
+   "toa": {
+    "stats": {
+     "scl_water": {
+      "FDI": {
+       "target": {
+        "n": 27489,
+        "median": 0.0214975,
+        "p99": 0.0295387,
+        "p999": 0.0358869,
+        "max": 0.053158
+       },
+       "background": {
+        "n": 4918077,
+        "median": 0.0205016,
+        "p99": 0.0305441,
+        "p999": 0.0459072,
+        "max": 0.165607
+       },
+       "target_exceed_bg_p999": 0.000109135,
+       "target_exceed_bg_p99": 0.00691186,
+       "null_median_shift": {
+        "note": "the target disc's median FDI ranked among the null discs' medians (a bulk shift, not a tail)",
+        "null_median_of_medians": 0.0204187,
+        "null_p5": 0.0168527,
+        "null_p95": 0.0220209,
+        "target_rank": 0.75
+       },
+       "null": {
+        "n_discs": 200,
+        "median": 8.23556e-05,
+        "p95": 0.00361562,
+        "max": 0.0111834,
+        "target_rank": 0.525
+       }
+      },
+      "FAI": {
+       "target": {
+        "n": 27489,
+        "median": -0.00906267,
+        "p99": 0.00349041,
+        "p999": 0.0166131,
+        "max": 0.0309354
+       },
+       "background": {
+        "n": 4918077,
+        "median": -0.00932617,
+        "p99": 0.000566877,
+        "p999": 0.0116533,
+        "max": 0.0994749
+       },
+       "target_exceed_bg_p999": 0.0023282,
+       "target_exceed_bg_p99": 0.0162247
+      },
+      "NDVI": {
+       "target": {
+        "n": 27489,
+        "median": -0.20254,
+        "p99": 0.00255454,
+        "p999": 0.063642,
+        "max": 0.137935
+       },
+       "background": {
+        "n": 4918077,
+        "median": -0.199841,
+        "p99": -0.0112669,
+        "p999": 0.0371229,
+        "max": 0.477686
+       },
+       "target_exceed_bg_p999": 0.00258285,
+       "target_exceed_bg_p99": 0.0157518
+      }
+     },
+     "scl_not_cloud": {
+      "FDI": {
+       "target": {
+        "n": 27489,
+        "median": 0.0214975,
+        "p99": 0.0295387,
+        "p999": 0.0358869,
+        "max": 0.053158
+       },
+       "background": {
+        "n": 4918077,
+        "median": 0.0205016,
+        "p99": 0.0305441,
+        "p999": 0.0459072,
+        "max": 0.165607
+       },
+       "target_exceed_bg_p999": 0.000109135,
+       "target_exceed_bg_p99": 0.00691186,
+       "null_median_shift": {
+        "note": "the target disc's median FDI ranked among the null discs' medians (a bulk shift, not a tail)",
+        "null_median_of_medians": 0.0202961,
+        "null_p5": 0.0171776,
+        "null_p95": 0.0219326,
+        "target_rank": 0.785
+       },
+       "null": {
+        "n_discs": 200,
+        "median": 8.3066e-05,
+        "p95": 0.00293349,
+        "max": 0.00947717,
+        "target_rank": 0.535
+       }
+      },
+      "FAI": {
+       "target": {
+        "n": 27489,
+        "median": -0.00906267,
+        "p99": 0.00349041,
+        "p999": 0.0166131,
+        "max": 0.0309354
+       },
+       "background": {
+        "n": 4918077,
+        "median": -0.00932617,
+        "p99": 0.000566877,
+        "p999": 0.0116533,
+        "max": 0.0994749
+       },
+       "target_exceed_bg_p999": 0.0023282,
+       "target_exceed_bg_p99": 0.0162247
+      },
+      "NDVI": {
+       "target": {
+        "n": 27489,
+        "median": -0.20254,
+        "p99": 0.00255454,
+        "p999": 0.063642,
+        "max": 0.137935
+       },
+       "background": {
+        "n": 4918077,
+        "median": -0.199841,
+        "p99": -0.0112669,
+        "p999": 0.0371229,
+        "max": 0.477686
+       },
+       "target_exceed_bg_p999": 0.00258285,
+       "target_exceed_bg_p99": 0.0157518
+      }
+     },
+     "scl_water_cloud_buffer": {
+      "FDI": {
+       "target": {
+        "n": 18746,
+        "median": 0.0219827,
+        "p99": 0.0292513,
+        "p999": 0.0331783,
+        "max": 0.0374043
+       },
+       "background": {
+        "n": 3922422,
+        "median": 0.02073,
+        "p99": 0.0285901,
+        "p999": 0.0343809,
+        "max": 0.131641
+       },
+       "target_exceed_bg_p999": 0.000533447,
+       "target_exceed_bg_p99": 0.0149899,
+       "null_median_shift": {
+        "note": "the target disc's median FDI ranked among the null discs' medians (a bulk shift, not a tail)",
+        "null_median_of_medians": 0.0204675,
+        "null_p5": 0.0190816,
+        "null_p95": 0.0221909,
+        "target_rank": 0.885
+       },
+       "null": {
+        "n_discs": 200,
+        "median": 0.00038482,
+        "p95": 0.00797013,
+        "max": 0.0124821,
+        "target_rank": 0.595
+       }
+      },
+      "FAI": {
+       "target": {
+        "n": 18746,
+        "median": -0.00910792,
+        "p99": -0.00404578,
+        "p999": 0.00155198,
+        "max": 0.013667
+       },
+       "background": {
+        "n": 3922422,
+        "median": -0.00932329,
+        "p99": -0.0038043,
+        "p999": 0.000895526,
+        "max": 0.0518465
+       },
+       "target_exceed_bg_p999": 0.00128027,
+       "target_exceed_bg_p99": 0.00896191
+      },
+      "NDVI": {
+       "target": {
+        "n": 18746,
+        "median": -0.211609,
+        "p99": -0.0731789,
+        "p999": -0.0152833,
+        "max": 0.0466031
+       },
+       "background": {
+        "n": 3922422,
+        "median": -0.207149,
+        "p99": -0.0614616,
+        "p999": -0.017814,
+        "max": 0.322809
+       },
+       "target_exceed_bg_p999": 0.00138696,
+       "target_exceed_bg_p99": 0.0075216
+      }
+     }
+    },
+    "fraction_le_0": {
+     "B04": {
+      "target": 0.0,
+      "background": 0.0
+     },
+     "B06": {
+      "target": 0.0,
+      "background": 0.0
+     },
+     "B08": {
+      "target": 0.0,
+      "background": 0.0
+     },
+     "B11": {
+      "target": 0.0,
+      "background": 0.0
+     }
+    }
+   }
+  },
+  {
+   "pair_id": "manta:Manta trawl row 644 @ S2B_6SXD_20210918_1_L1C",
+   "point": {
+    "id": "manta:Manta trawl row 644",
+    "kind": "manta",
+    "expedition": "North Pacific Mission 4 (NPM4)",
+    "lat": 34.99,
+    "lon": -145.71,
+    "date": "2021-09-17",
+    "pieces_per_km2_wc": null,
+    "pieces_5_50cm_per_km2_wc": null
+   },
+   "scene": "S2B_6SXD_20210918_1_L1C",
+   "l2a": "S2B_6SXD_20210918_1_L2A",
+   "platform": "sentinel-2b",
+   "datetime": "2021-09-18T20:35:28.528000Z",
+   "offset_days": 1,
+   "baseline": "05.00",
+   "radio_add_offset": -1000.0,
+   "quantification": 10000.0,
+   "clear": {
+    "target": {
+     "pixels_in_tile": 31420,
+     "pixels_with_data": 31420,
+     "water_px": 27186,
+     "clear_fraction": 0.8652450668364099,
+     "scl_histogram": {
+      "water": 27186,
+      "cloud medium probability": 2512,
+      "cloud high probability": 1722
+     },
+     "disc_pixels_nominal": 31416,
+     "water_fraction_of_disc": 0.8653552330022918
+    },
+    "background": {
+     "pixels_in_tile": 5131903,
+     "pixels_with_data": 5131903,
+     "water_px": 4600067,
+     "clear_fraction": 0.8963667084120647,
+     "scl_histogram": {
+      "water": 4600067,
+      "cloud medium probability": 303592,
+      "cloud high probability": 228244
+     }
+    }
+   },
+   "window_rows_cols": [
+    0,
+    2868,
+    0,
+    2389
+   ],
+   "acolite_run": {
+    "limit": [
+     34.6952,
+     -145.918,
+     35.2481,
+     -145.3357
+    ],
+    "ac_aot_550": 0.15865971148014069,
+    "ac_model": "ACOLITE-LUT-202110-MOD1",
+    "sza": 36.0000105073508,
+    "vza": 2.816897100014708,
+    "raa": 34.281911165080174,
+    "acolite_version": "Generic GitHub Clone c2026-10-11T21:58:35"
+   },
+   "pinned_toa_le_0": {
+    "B02": 0,
+    "B03": 0,
+    "B04": 0,
+    "B08": 0,
+    "B06": 0,
+    "B11": 0
+   },
+   "acolite": {
+    "stats": {
+     "scl_water": {
+      "FDI": {
+       "target": {
+        "n": 27186,
+        "median": 0.00224594,
+        "p99": 0.0173513,
+        "p999": 0.038036,
+        "max": 0.0630064
+       },
+       "background": {
+        "n": 4600067,
+        "median": 0.00143989,
+        "p99": 0.0217695,
+        "p999": 0.0435024,
+        "max": 0.184786
+       },
+       "target_exceed_bg_p999": 0.000367836,
+       "target_exceed_bg_p99": 0.00551755,
+       "null_median_shift": {
+        "note": "the target disc's median FDI ranked among the null discs' medians (a bulk shift, not a tail)",
+        "null_median_of_medians": 0.0017251,
+        "null_p5": -0.00059132,
+        "null_p95": 0.00283597,
+        "target_rank": 0.735
+       },
+       "null": {
+        "n_discs": 200,
+        "median": 0.000419434,
+        "p95": 0.00586956,
+        "max": 0.0131553,
+        "target_rank": 0.47
+       }
+      },
+      "FAI": {
+       "target": {
+        "n": 27186,
+        "median": -0.000712712,
+        "p99": 0.0100713,
+        "p999": 0.0258899,
+        "max": 0.0372287
+       },
+       "background": {
+        "n": 4600067,
+        "median": -0.00109227,
+        "p99": 0.0122994,
+        "p999": 0.0275669,
+        "max": 0.177402
+       },
+       "target_exceed_bg_p999": 0.000662105,
+       "target_exceed_bg_p99": 0.00772456
+      },
+      "NDVI": {
+       "target": {
+        "n": 27186,
+        "median": -0.0369553,
+        "p99": 0.14095,
+        "p999": 0.207129,
+        "max": 0.301643
+       },
+       "background": {
+        "n": 4600067,
+        "median": -0.038758,
+        "p99": 0.169238,
+        "p999": 0.256108,
+        "max": 1.3413
+       },
+       "target_exceed_bg_p999": 0.000147135,
+       "target_exceed_bg_p99": 0.00371515
+      }
+     },
+     "scl_not_cloud": {
+      "FDI": {
+       "target": {
+        "n": 27186,
+        "median": 0.00224594,
+        "p99": 0.0173513,
+        "p999": 0.038036,
+        "max": 0.0630064
+       },
+       "background": {
+        "n": 4600067,
+        "median": 0.00143989,
+        "p99": 0.0217695,
+        "p999": 0.0435024,
+        "max": 0.184786
+       },
+       "target_exceed_bg_p999": 0.000367836,
+       "target_exceed_bg_p99": 0.00551755,
+       "null_median_shift": {
+        "note": "the target disc's median FDI ranked among the null discs' medians (a bulk shift, not a tail)",
+        "null_median_of_medians": 0.00145354,
+        "null_p5": -0.00052181,
+        "null_p95": 0.00269951,
+        "target_rank": 0.785
+       },
+       "null": {
+        "n_discs": 200,
+        "median": 0.000389954,
+        "p95": 0.00471413,
+        "max": 0.0118107,
+        "target_rank": 0.455
+       }
+      },
+      "FAI": {
+       "target": {
+        "n": 27186,
+        "median": -0.000712712,
+        "p99": 0.0100713,
+        "p999": 0.0258899,
+        "max": 0.0372287
+       },
+       "background": {
+        "n": 4600067,
+        "median": -0.00109227,
+        "p99": 0.0122994,
+        "p999": 0.0275669,
+        "max": 0.177402
+       },
+       "target_exceed_bg_p999": 0.000662105,
+       "target_exceed_bg_p99": 0.00772456
+      },
+      "NDVI": {
+       "target": {
+        "n": 27186,
+        "median": -0.0369553,
+        "p99": 0.14095,
+        "p999": 0.207129,
+        "max": 0.301643
+       },
+       "background": {
+        "n": 4600067,
+        "median": -0.038758,
+        "p99": 0.169238,
+        "p999": 0.256108,
+        "max": 1.3413
+       },
+       "target_exceed_bg_p999": 0.000147135,
+       "target_exceed_bg_p99": 0.00371515
+      }
+     },
+     "scl_water_cloud_buffer": {
+      "FDI": {
+       "target": {
+        "n": 20353,
+        "median": 0.00238675,
+        "p99": 0.0130193,
+        "p999": 0.0213602,
+        "max": 0.039317
+       },
+       "background": {
+        "n": 3711451,
+        "median": 0.0014797,
+        "p99": 0.014005,
+        "p999": 0.0252169,
+        "max": 0.128642
+       },
+       "target_exceed_bg_p999": 0.000442195,
+       "target_exceed_bg_p99": 0.00732079,
+       "null_median_shift": {
+        "note": "the target disc's median FDI ranked among the null discs' medians (a bulk shift, not a tail)",
+        "null_median_of_medians": 0.00164187,
+        "null_p5": -0.000431652,
+        "null_p95": 0.00285233,
+        "target_rank": 0.81
+       },
+       "null": {
+        "n_discs": 200,
+        "median": 0.000417804,
+        "p95": 0.00621109,
+        "max": 0.0144065,
+        "target_rank": 0.51
+       }
+      },
+      "FAI": {
+       "target": {
+        "n": 20353,
+        "median": -0.000744721,
+        "p99": 0.0053557,
+        "p999": 0.0102382,
+        "max": 0.0259477
+       },
+       "background": {
+        "n": 3711451,
+        "median": -0.00108609,
+        "p99": 0.00714799,
+        "p999": 0.0132709,
+        "max": 0.0878213
+       },
+       "target_exceed_bg_p999": 0.000442195,
+       "target_exceed_bg_p99": 0.00378323
+      },
+      "NDVI": {
+       "target": {
+        "n": 20353,
+        "median": -0.0411826,
+        "p99": 0.128884,
+        "p999": 0.188014,
+        "max": 0.294511
+       },
+       "background": {
+        "n": 3711451,
+        "median": -0.0442668,
+        "p99": 0.172758,
+        "p999": 0.257065,
+        "max": 1.3413
+       },
+       "target_exceed_bg_p999": 4.91328e-05,
+       "target_exceed_bg_p99": 0.00186705
+      }
+     }
+    },
+    "fraction_le_0": {
+     "B04": {
+      "target": 0.0,
+      "background": 4.34776e-07
+     },
+     "B06": {
+      "target": 0.0,
+      "background": 2.17388e-07
+     },
+     "B08": {
+      "target": 0.0,
+      "background": 0.0
+     },
+     "B11": {
+      "target": 0.0,
+      "background": 0.0
+     }
+    }
+   },
+   "toa": {
+    "stats": {
+     "scl_water": {
+      "FDI": {
+       "target": {
+        "n": 27186,
+        "median": 0.0215861,
+        "p99": 0.0288331,
+        "p999": 0.0334224,
+        "max": 0.0468155
+       },
+       "background": {
+        "n": 4600067,
+        "median": 0.0204847,
+        "p99": 0.0303179,
+        "p999": 0.0449225,
+        "max": 0.165607
+       },
+       "target_exceed_bg_p999": 3.67836e-05,
+       "target_exceed_bg_p99": 0.00437725,
+       "null_median_shift": {
+        "note": "the target disc's median FDI ranked among the null discs' medians (a bulk shift, not a tail)",
+        "null_median_of_medians": 0.0203739,
+        "null_p5": 0.0167641,
+        "null_p95": 0.0220815,
+        "target_rank": 0.83
+       },
+       "null": {
+        "n_discs": 200,
+        "median": 6.39819e-05,
+        "p95": 0.00385016,
+        "max": 0.0199699,
+        "target_rank": 0.455
+       }
+      },
+      "FAI": {
+       "target": {
+        "n": 27186,
+        "median": -0.00898423,
+        "p99": -0.00118539,
+        "p999": 0.0103253,
+        "max": 0.0235919
+       },
+       "background": {
+        "n": 4600067,
+        "median": -0.00931154,
+        "p99": 0.000719142,
+        "p999": 0.0118248,
+        "max": 0.0994749
+       },
+       "target_exceed_bg_p999": 0.000551755,
+       "target_exceed_bg_p99": 0.00665784
+      },
+      "NDVI": {
+       "target": {
+        "n": 27186,
+        "median": -0.20715,
+        "p99": -0.0251743,
+        "p999": 0.035818,
+        "max": 0.0802858
+       },
+       "background": {
+        "n": 4600067,
+        "median": -0.200394,
+        "p99": -0.0101988,
+        "p999": 0.0381499,
+        "max": 0.477686
+       },
+       "target_exceed_bg_p999": 0.000772456,
+       "target_exceed_bg_p99": 0.00647392
+      }
+     },
+     "scl_not_cloud": {
+      "FDI": {
+       "target": {
+        "n": 27186,
+        "median": 0.0215861,
+        "p99": 0.0288331,
+        "p999": 0.0334224,
+        "max": 0.0468155
+       },
+       "background": {
+        "n": 4600067,
+        "median": 0.0204847,
+        "p99": 0.0303179,
+        "p999": 0.0449225,
+        "max": 0.165607
+       },
+       "target_exceed_bg_p999": 3.67836e-05,
+       "target_exceed_bg_p99": 0.00437725,
+       "null_median_shift": {
+        "note": "the target disc's median FDI ranked among the null discs' medians (a bulk shift, not a tail)",
+        "null_median_of_medians": 0.0202175,
+        "null_p5": 0.0164844,
+        "null_p95": 0.0219441,
+        "target_rank": 0.85
+       },
+       "null": {
+        "n_discs": 200,
+        "median": 8.65404e-05,
+        "p95": 0.00445112,
+        "max": 0.0170003,
+        "target_rank": 0.405
+       }
+      },
+      "FAI": {
+       "target": {
+        "n": 27186,
+        "median": -0.00898423,
+        "p99": -0.00118539,
+        "p999": 0.0103253,
+        "max": 0.0235919
+       },
+       "background": {
+        "n": 4600067,
+        "median": -0.00931154,
+        "p99": 0.000719142,
+        "p999": 0.0118248,
+        "max": 0.0994749
+       },
+       "target_exceed_bg_p999": 0.000551755,
+       "target_exceed_bg_p99": 0.00665784
+      },
+      "NDVI": {
+       "target": {
+        "n": 27186,
+        "median": -0.20715,
+        "p99": -0.0251743,
+        "p999": 0.035818,
+        "max": 0.0802858
+       },
+       "background": {
+        "n": 4600067,
+        "median": -0.200394,
+        "p99": -0.0101988,
+        "p999": 0.0381499,
+        "max": 0.477686
+       },
+       "target_exceed_bg_p999": 0.000772456,
+       "target_exceed_bg_p99": 0.00647392
+      }
+     },
+     "scl_water_cloud_buffer": {
+      "FDI": {
+       "target": {
+        "n": 20353,
+        "median": 0.0218212,
+        "p99": 0.0287107,
+        "p999": 0.0325104,
+        "max": 0.0365671
+       },
+       "background": {
+        "n": 3711451,
+        "median": 0.0207104,
+        "p99": 0.0285976,
+        "p999": 0.0343004,
+        "max": 0.131641
+       },
+       "target_exceed_bg_p999": 0.000393062,
+       "target_exceed_bg_p99": 0.0108092,
+       "null_median_shift": {
+        "note": "the target disc's median FDI ranked among the null discs' medians (a bulk shift, not a tail)",
+        "null_median_of_medians": 0.0208974,
+        "null_p5": 0.0192888,
+        "null_p95": 0.0221856,
+        "target_rank": 0.825
+       },
+       "null": {
+        "n_discs": 200,
+        "median": 0.000342492,
+        "p95": 0.00586935,
+        "max": 0.011129,
+        "target_rank": 0.54
+       }
+      },
+      "FAI": {
+       "target": {
+        "n": 20353,
+        "median": -0.00901502,
+        "p99": -0.00476483,
+        "p999": -0.00129643,
+        "max": 0.011777
+       },
+       "background": {
+        "n": 3711451,
+        "median": -0.00931886,
+        "p99": -0.00380138,
+        "p999": 0.0009211,
+        "max": 0.0518465
+       },
+       "target_exceed_bg_p999": 0.000196531,
+       "target_exceed_bg_p99": 0.00481501
+      },
+      "NDVI": {
+       "target": {
+        "n": 20353,
+        "median": -0.212121,
+        "p99": -0.102821,
+        "p999": -0.0471011,
+        "max": 0.0357472
+       },
+       "background": {
+        "n": 3711451,
+        "median": -0.207635,
+        "p99": -0.0607824,
+        "p999": -0.0174954,
+        "max": 0.322809
+       },
+       "target_exceed_bg_p999": 0.000245664,
+       "target_exceed_bg_p99": 0.00201445
+      }
+     }
+    },
+    "fraction_le_0": {
+     "B04": {
+      "target": 0.0,
+      "background": 0.0
+     },
+     "B06": {
+      "target": 0.0,
+      "background": 0.0
+     },
+     "B08": {
+      "target": 0.0,
+      "background": 0.0
+     },
+     "B11": {
+      "target": 0.0,
+      "background": 0.0
+     }
+    }
+   }
+  },
+  {
+   "pair_id": "aerial:Aerial survey row 44 @ S2A_6SXE_20210824_1_L1C",
+   "point": {
+    "id": "aerial:Aerial survey row 44",
+    "kind": "aerial",
+    "expedition": "S002-1",
+    "lat": 35.197,
+    "lon": -144.981,
+    "date": "2021-08-23",
+    "objects_gt50cm_per_km2": 17.0068027210884,
+    "mass_gt50cm_g_per_km2_modelled": 33312.925170068
+   },
+   "scene": "S2A_6SXE_20210824_1_L1C",
+   "l2a": "S2A_6SXE_20210824_1_L2A",
+   "platform": "sentinel-2a",
+   "datetime": "2021-08-24T20:35:26.659000Z",
+   "offset_days": 1,
+   "baseline": "05.00",
+   "radio_add_offset": -1000.0,
+   "quantification": 10000.0,
+   "clear": {
+    "target": {
+     "pixels_in_tile": 31412,
+     "pixels_with_data": 13494,
+     "water_px": 13494,
+     "clear_fraction": 1.0,
+     "scl_histogram": {
+      "no data": 17918,
+      "water": 13494
+     },
+     "disc_pixels_nominal": 31416,
+     "water_fraction_of_disc": 0.4295263559969442
+    },
+    "background": {
+     "pixels_in_tile": 3649507,
+     "pixels_with_data": 630351,
+     "water_px": 552259,
+     "clear_fraction": 0.8761134669414342,
+     "scl_histogram": {
+      "no data": 3019156,
+      "vegetation": 2,
+      "water": 552259,
+      "cloud medium probability": 59851,
+      "cloud high probability": 18239
+     }
+    }
+   },
+   "window_rows_cols": [
+    3661,
+    5490,
+    2688,
+    5490
+   ],
+   "acolite_run": {
+    "limit": [
+     35.123,
+     -145.3221,
+     35.4828,
+     -144.678
+    ],
+    "ac_aot_550": 0.16634128987789154,
+    "ac_model": "ACOLITE-LUT-202110-MOD1",
+    "sza": 29.2396294854897,
+    "vza": 2.8457778032967034,
+    "raa": 6.471675063101941,
+    "acolite_version": "Generic GitHub Clone c2026-10-11T21:58:35"
+   },
+   "pinned_toa_le_0": {
+    "B02": 0,
+    "B03": 0,
+    "B04": 0,
+    "B08": 0,
+    "B06": 0,
+    "B11": 0
+   },
+   "acolite": {
+    "stats": {
+     "scl_water": {
+      "FDI": {
+       "target": {
+        "n": 13494,
+        "median": -0.00186099,
+        "p99": 0.00883056,
+        "p999": 0.0150522,
+        "max": 0.0224593
+       },
+       "background": {
+        "n": 552259,
+        "median": 0.0011446,
+        "p99": 0.0282991,
+        "p999": 0.0423109,
+        "max": 0.0922954
+       },
+       "target_exceed_bg_p999": 0.0,
+       "target_exceed_bg_p99": 0.0,
+       "null_median_shift": {
+        "note": "the target disc's median FDI ranked among the null discs' medians (a bulk shift, not a tail)",
+        "null_median_of_medians": 0.00194902,
+        "null_p5": -0.00343354,
+        "null_p95": 0.0116113,
+        "target_rank": 0.09
+       },
+       "null": {
+        "n_discs": 200,
+        "median": 0.000273455,
+        "p95": 0.0122339,
+        "max": 0.0259007,
+        "target_rank": 0.1525
+       }
+      },
+      "FAI": {
+       "target": {
+        "n": 13494,
+        "median": -0.00134671,
+        "p99": 0.00616265,
+        "p999": 0.00977107,
+        "max": 0.0148876
+       },
+       "background": {
+        "n": 552259,
+        "median": -0.00104582,
+        "p99": 0.0122104,
+        "p999": 0.0223087,
+        "max": 0.189243
+       },
+       "target_exceed_bg_p999": 0.0,
+       "target_exceed_bg_p99": 0.000222321
+      },
+      "NDVI": {
+       "target": {
+        "n": 13494,
+        "median": -0.0518126,
+        "p99": 0.260211,
+        "p999": 0.387437,
+        "max": 0.677024
+       },
+       "background": {
+        "n": 552259,
+        "median": -0.0197254,
+        "p99": 0.165515,
+        "p999": 0.280182,
+        "max": 12.2851
+       },
+       "target_exceed_bg_p999": 0.0074107,
+       "target_exceed_bg_p99": 0.0511338
+      }
+     },
+     "scl_not_cloud": {
+      "FDI": {
+       "target": {
+        "n": 13494,
+        "median": -0.00186099,
+        "p99": 0.00883056,
+        "p999": 0.0150522,
+        "max": 0.0224593
+       },
+       "background": {
+        "n": 552261,
+        "median": 0.00114455,
+        "p99": 0.0282991,
+        "p999": 0.0423108,
+        "max": 0.0922954
+       },
+       "target_exceed_bg_p999": 0.0,
+       "target_exceed_bg_p99": 0.0,
+       "null_median_shift": {
+        "note": "the target disc's median FDI ranked among the null discs' medians (a bulk shift, not a tail)",
+        "null_median_of_medians": 0.00217334,
+        "null_p5": -0.00346209,
+        "null_p95": 0.01136,
+        "target_rank": 0.085
+       },
+       "null": {
+        "n_discs": 200,
+        "median": 0.000364798,
+        "p95": 0.0068935,
+        "max": 0.0209029,
+        "target_rank": 0.125
+       }
+      },
+      "FAI": {
+       "target": {
+        "n": 13494,
+        "median": -0.00134671,
+        "p99": 0.00616265,
+        "p999": 0.00977107,
+        "max": 0.0148876
+       },
+       "background": {
+        "n": 552261,
+        "median": -0.00104582,
+        "p99": 0.0122114,
+        "p999": 0.0223405,
+        "max": 0.189243
+       },
+       "target_exceed_bg_p999": 0.0,
+       "target_exceed_bg_p99": 0.000222321
+      },
+      "NDVI": {
+       "target": {
+        "n": 13494,
+        "median": -0.0518126,
+        "p99": 0.260211,
+        "p999": 0.387437,
+        "max": 0.677024
+       },
+       "background": {
+        "n": 552261,
+        "median": -0.0197254,
+        "p99": 0.165515,
+        "p999": 0.280182,
+        "max": 12.2851
+       },
+       "target_exceed_bg_p999": 0.0074107,
+       "target_exceed_bg_p99": 0.0511338
+      }
+     },
+     "scl_water_cloud_buffer": {
+      "FDI": {
+       "target": {
+        "n": 13494,
+        "median": -0.00186099,
+        "p99": 0.00883056,
+        "p999": 0.0150522,
+        "max": 0.0224593
+       },
+       "background": {
+        "n": 427193,
+        "median": 0.000495034,
+        "p99": 0.020748,
+        "p999": 0.0300532,
+        "max": 0.0532842
+       },
+       "target_exceed_bg_p999": 0.0,
+       "target_exceed_bg_p99": 0.000222321,
+       "null_median_shift": {
+        "note": "the target disc's median FDI ranked among the null discs' medians (a bulk shift, not a tail)",
+        "null_median_of_medians": 0.00193128,
+        "null_p5": -0.00278399,
+        "null_p95": 0.0071366,
+        "target_rank": 0.105
+       },
+       "null": {
+        "n_discs": 200,
+        "median": 0.000509768,
+        "p95": 0.00656452,
+        "max": 0.0189757,
+        "target_rank": 0.1375
+       }
+      },
+      "FAI": {
+       "target": {
+        "n": 13494,
+        "median": -0.00134671,
+        "p99": 0.00616265,
+        "p999": 0.00977107,
+        "max": 0.0148876
+       },
+       "background": {
+        "n": 427193,
+        "median": -0.00120968,
+        "p99": 0.0078928,
+        "p999": 0.013784,
+        "max": 0.189243
+       },
+       "target_exceed_bg_p999": 0.000148214,
+       "target_exceed_bg_p99": 0.00281607
+      },
+      "NDVI": {
+       "target": {
+        "n": 13494,
+        "median": -0.0518126,
+        "p99": 0.260211,
+        "p999": 0.387437,
+        "max": 0.677024
+       },
+       "background": {
+        "n": 427193,
+        "median": -0.0286619,
+        "p99": 0.177006,
+        "p999": 0.293957,
+        "max": 12.2851
+       },
+       "target_exceed_bg_p999": 0.00570624,
+       "target_exceed_bg_p99": 0.0419446
+      }
+     }
+    },
+    "fraction_le_0": {
+     "B04": {
+      "target": 0.000518749,
+      "background": 1.08645e-05
+     },
+     "B06": {
+      "target": 7.4107e-05,
+      "background": 0.0
+     },
+     "B08": {
+      "target": 0.000666963,
+      "background": 3.62149e-06
+     },
+     "B11": {
+      "target": 0.0,
+      "background": 0.0
+     }
+    }
+   },
+   "toa": {
+    "stats": {
+     "scl_water": {
+      "FDI": {
+       "target": {
+        "n": 13493,
+        "median": 0.0176286,
+        "p99": 0.0244691,
+        "p999": 0.0272308,
+        "max": 0.0297564
+       },
+       "background": {
+        "n": 552251,
+        "median": 0.0187025,
+        "p99": 0.0326352,
+        "p999": 0.0413589,
+        "max": 0.0917792
+       },
+       "target_exceed_bg_p999": 0.0,
+       "target_exceed_bg_p99": 0.0,
+       "null_median_shift": {
+        "note": "the target disc's median FDI ranked among the null discs' medians (a bulk shift, not a tail)",
+        "null_median_of_medians": 0.0184061,
+        "null_p5": 0.0143815,
+        "null_p95": 0.0217148,
+        "target_rank": 0.39
+       },
+       "null": {
+        "n_discs": 200,
+        "median": 0.000791877,
+        "p95": 0.00836934,
+        "max": 0.0143416,
+        "target_rank": 0.125
+       }
+      },
+      "FAI": {
+       "target": {
+        "n": 13493,
+        "median": -0.00931889,
+        "p99": -0.00464884,
+        "p999": -0.00222663,
+        "max": 0.000138389
+       },
+       "background": {
+        "n": 552251,
+        "median": -0.00901446,
+        "p99": 0.00101168,
+        "p999": 0.00836506,
+        "max": 0.0647817
+       },
+       "target_exceed_bg_p999": 0.0,
+       "target_exceed_bg_p99": 0.0
+      },
+      "NDVI": {
+       "target": {
+        "n": 13493,
+        "median": -0.223789,
+        "p99": -0.132175,
+        "p999": -0.0904472,
+        "max": -0.049222
+       },
+       "background": {
+        "n": 552251,
+        "median": -0.151911,
+        "p99": -0.0112821,
+        "p999": 0.0186885,
+        "max": 0.273679
+       },
+       "target_exceed_bg_p999": 0.0,
+       "target_exceed_bg_p99": 0.0
+      }
+     },
+     "scl_not_cloud": {
+      "FDI": {
+       "target": {
+        "n": 13493,
+        "median": 0.0176286,
+        "p99": 0.0244691,
+        "p999": 0.0272308,
+        "max": 0.0297564
+       },
+       "background": {
+        "n": 552251,
+        "median": 0.0187025,
+        "p99": 0.0326352,
+        "p999": 0.0413589,
+        "max": 0.0917792
+       },
+       "target_exceed_bg_p999": 0.0,
+       "target_exceed_bg_p99": 0.0,
+       "null_median_shift": {
+        "note": "the target disc's median FDI ranked among the null discs' medians (a bulk shift, not a tail)",
+        "null_median_of_medians": 0.0194182,
+        "null_p5": 0.0141894,
+        "null_p95": 0.0216322,
+        "target_rank": 0.33
+       },
+       "null": {
+        "n_discs": 200,
+        "median": 0.00057852,
+        "p95": 0.0085312,
+        "max": 0.0185584,
+        "target_rank": 0.14
+       }
+      },
+      "FAI": {
+       "target": {
+        "n": 13493,
+        "median": -0.00931889,
+        "p99": -0.00464884,
+        "p999": -0.00222663,
+        "max": 0.000138389
+       },
+       "background": {
+        "n": 552251,
+        "median": -0.00901446,
+        "p99": 0.00101168,
+        "p999": 0.00836506,
+        "max": 0.0647817
+       },
+       "target_exceed_bg_p999": 0.0,
+       "target_exceed_bg_p99": 0.0
+      },
+      "NDVI": {
+       "target": {
+        "n": 13493,
+        "median": -0.223789,
+        "p99": -0.132175,
+        "p999": -0.0904472,
+        "max": -0.049222
+       },
+       "background": {
+        "n": 552251,
+        "median": -0.151911,
+        "p99": -0.0112821,
+        "p999": 0.0186885,
+        "max": 0.273679
+       },
+       "target_exceed_bg_p999": 0.0,
+       "target_exceed_bg_p99": 0.0
+      }
+     },
+     "scl_water_cloud_buffer": {
+      "FDI": {
+       "target": {
+        "n": 13493,
+        "median": 0.0176286,
+        "p99": 0.0244691,
+        "p999": 0.0272308,
+        "max": 0.0297564
+       },
+       "background": {
+        "n": 427187,
+        "median": 0.0188308,
+        "p99": 0.0295164,
+        "p999": 0.0358461,
+        "max": 0.0528537
+       },
+       "target_exceed_bg_p999": 0.0,
+       "target_exceed_bg_p99": 7.41125e-05,
+       "null_median_shift": {
+        "note": "the target disc's median FDI ranked among the null discs' medians (a bulk shift, not a tail)",
+        "null_median_of_medians": 0.0197411,
+        "null_p5": 0.0152067,
+        "null_p95": 0.0213307,
+        "target_rank": 0.28
+       },
+       "null": {
+        "n_discs": 200,
+        "median": 0.000210053,
+        "p95": 0.00472778,
+        "max": 0.0193897,
+        "target_rank": 0.1825
+       }
+      },
+      "FAI": {
+       "target": {
+        "n": 13493,
+        "median": -0.00931889,
+        "p99": -0.00464884,
+        "p999": -0.00222663,
+        "max": 0.000138389
+       },
+       "background": {
+        "n": 427187,
+        "median": -0.00916126,
+        "p99": -0.00261129,
+        "p999": 0.00178228,
+        "max": 0.0284444
+       },
+       "target_exceed_bg_p999": 0.0,
+       "target_exceed_bg_p99": 0.00111169
+      },
+      "NDVI": {
+       "target": {
+        "n": 13493,
+        "median": -0.223789,
+        "p99": -0.132175,
+        "p999": -0.0904472,
+        "max": -0.049222
+       },
+       "background": {
+        "n": 427187,
+        "median": -0.177713,
+        "p99": -0.0354064,
+        "p999": -0.0126791,
+        "max": 0.202934
+       },
+       "target_exceed_bg_p999": 0.0,
+       "target_exceed_bg_p99": 0.0
+      }
+     }
+    },
+    "fraction_le_0": {
+     "B04": {
+      "target": 0.0,
+      "background": 0.0
+     },
+     "B06": {
+      "target": 0.0,
+      "background": 0.0
+     },
+     "B08": {
+      "target": 0.0,
+      "background": 0.0
+     },
+     "B11": {
+      "target": 0.0,
+      "background": 0.0
+     }
+    }
+   }
+  }
+ ],
+ "across_pairs": {
+  "acolite": {
+   "scl_water": {
+    "n_pairs": 9,
+    "n_scenes": 6,
+    "exceedance": {
+     "median": 0.000367836,
+     "mean": 0.000603028,
+     "min": 0.0,
+     "max": 0.00163702
+    },
+    "null_median": {
+     "median": 0.000365012,
+     "min": 0.0,
+     "max": 0.000541134
+    },
+    "pairs_above_null_p95": 0,
+    "expected_above_null_p95": 0.45,
+    "target_rank_in_null": {
+     "median": 0.49,
+     "mean": 0.516944
+    },
+    "bulk_median_rank_in_null": {
+     "ranks": [
+      0.635,
+      0.945,
+      0.935,
+      0.825,
+      0.585,
+      0.89,
+      0.76,
+      0.735,
+      0.09
+     ],
+     "above_p95": 0,
+     "below_p5": 0
+    },
+    "wilcoxon_exceed_minus_null_median": {
+     "statistic": 26.0,
+     "p_one_sided_greater": 0.156,
+     "n": 8
+    },
+    "wilcoxon_exceed_minus_0.001": {
+     "statistic": 8.0,
+     "p_one_sided_greater": 0.963
+    },
+    "wilcoxon_per_scene_mean": {
+     "n_scenes": 6,
+     "statistic": 12.0,
+     "p_one_sided_greater": 0.156
+    },
+    "spearman_vs_aerial_objects_gt50cm": {
+     "n": 6,
+     "rho": -0.058,
+     "p_two_sided": 0.913,
+     "note": "exceedance fraction vs CD7 (objects > 50 cm per km²)"
+    },
+    "spearman_p999_excess_vs_aerial": {
+     "n": 6,
+     "rho": -0.2,
+     "p_two_sided": 0.704,
+     "note": "target p99.9 − background p99.9 vs CD7"
+    }
+   },
+   "scl_not_cloud": {
+    "n_pairs": 9,
+    "n_scenes": 6,
+    "exceedance": {
+     "median": 0.000367836,
+     "mean": 0.000603028,
+     "min": 0.0,
+     "max": 0.00163702
+    },
+    "null_median": {
+     "median": 0.000364798,
+     "min": 0.0,
+     "max": 0.000599612
+    },
+    "pairs_above_null_p95": 0,
+    "expected_above_null_p95": 0.45,
+    "target_rank_in_null": {
+     "median": 0.505,
+     "mean": 0.516389
+    },
+    "bulk_median_rank_in_null": {
+     "ranks": [
+      0.615,
+      0.925,
+      0.86,
+      0.795,
+      0.565,
+      0.905,
+      0.8,
+      0.785,
+      0.085
+     ],
+     "above_p95": 0,
+     "below_p5": 0
+    },
+    "wilcoxon_exceed_minus_null_median": {
+     "statistic": 28.0,
+     "p_one_sided_greater": 0.0977,
+     "n": 8
+    },
+    "wilcoxon_exceed_minus_0.001": {
+     "statistic": 8.0,
+     "p_one_sided_greater": 0.963
+    },
+    "wilcoxon_per_scene_mean": {
+     "n_scenes": 6,
+     "statistic": 12.0,
+     "p_one_sided_greater": 0.156
+    },
+    "spearman_vs_aerial_objects_gt50cm": {
+     "n": 6,
+     "rho": -0.058,
+     "p_two_sided": 0.913,
+     "note": "exceedance fraction vs CD7 (objects > 50 cm per km²)"
+    },
+    "spearman_p999_excess_vs_aerial": {
+     "n": 6,
+     "rho": -0.2,
+     "p_two_sided": 0.704,
+     "note": "target p99.9 − background p99.9 vs CD7"
+    }
+   },
+   "scl_water_cloud_buffer": {
+    "n_pairs": 9,
+    "n_scenes": 6,
+    "exceedance": {
+     "median": 0.000960307,
+     "mean": 0.000986752,
+     "min": 0.0,
+     "max": 0.0023262
+    },
+    "null_median": {
+     "median": 0.000451465,
+     "min": 0.000103373,
+     "max": 0.000732134
+    },
+    "pairs_above_null_p95": 0,
+    "expected_above_null_p95": 0.45,
+    "target_rank_in_null": {
+     "median": 0.595,
+     "mean": 0.599167
+    },
+    "bulk_median_rank_in_null": {
+     "ranks": [
+      0.58,
+      0.81,
+      0.845,
+      0.825,
+      0.65,
+      0.92,
+      0.875,
+      0.81,
+      0.105
+     ],
+     "above_p95": 0,
+     "below_p5": 0
+    },
+    "wilcoxon_exceed_minus_null_median": {
+     "statistic": 39.0,
+     "p_one_sided_greater": 0.0273,
+     "n": 9
+    },
+    "wilcoxon_exceed_minus_0.001": {
+     "statistic": 20.0,
+     "p_one_sided_greater": 0.633
+    },
+    "wilcoxon_per_scene_mean": {
+     "n_scenes": 6,
+     "statistic": 17.0,
+     "p_one_sided_greater": 0.109
+    },
+    "spearman_vs_aerial_objects_gt50cm": {
+     "n": 6,
+     "rho": 0.0857,
+     "p_two_sided": 0.872,
+     "note": "exceedance fraction vs CD7 (objects > 50 cm per km²)"
+    },
+    "spearman_p999_excess_vs_aerial": {
+     "n": 6,
+     "rho": 0.0857,
+     "p_two_sided": 0.872,
+     "note": "target p99.9 − background p99.9 vs CD7"
+    }
+   }
+  },
+  "toa": {
+   "scl_water": {
+    "n_pairs": 9,
+    "n_scenes": 6,
+    "exceedance": {
+     "median": 3.67836e-05,
+     "mean": 0.000296113,
+     "min": 0.0,
+     "max": 0.00171481
+    },
+    "null_median": {
+     "median": 0.000251946,
+     "min": 0.0,
+     "max": 0.000791877
+    },
+    "pairs_above_null_p95": 0,
+    "expected_above_null_p95": 0.45,
+    "target_rank_in_null": {
+     "median": 0.455,
+     "mean": 0.423611
+    },
+    "bulk_median_rank_in_null": {
+     "ranks": [
+      0.73,
+      0.945,
+      0.885,
+      0.795,
+      0.505,
+      0.95,
+      0.75,
+      0.83,
+      0.39
+     ],
+     "above_p95": 0,
+     "below_p5": 0
+    },
+    "wilcoxon_exceed_minus_null_median": {
+     "statistic": 14.0,
+     "p_one_sided_greater": 0.727,
+     "n": 8
+    },
+    "wilcoxon_exceed_minus_0.001": {
+     "statistic": 3.0,
+     "p_one_sided_greater": 0.994
+    },
+    "wilcoxon_per_scene_mean": {
+     "n_scenes": 6,
+     "statistic": 5.0,
+     "p_one_sided_greater": 0.781
+    },
+    "spearman_vs_aerial_objects_gt50cm": {
+     "n": 6,
+     "rho": -0.0304,
+     "p_two_sided": 0.954,
+     "note": "exceedance fraction vs CD7 (objects > 50 cm per km²)"
+    },
+    "spearman_p999_excess_vs_aerial": {
+     "n": 6,
+     "rho": 0.0857,
+     "p_two_sided": 0.872,
+     "note": "target p99.9 − background p99.9 vs CD7"
+    }
+   },
+   "scl_not_cloud": {
+    "n_pairs": 9,
+    "n_scenes": 6,
+    "exceedance": {
+     "median": 3.67836e-05,
+     "mean": 0.000296113,
+     "min": 0.0,
+     "max": 0.00171481
+    },
+    "null_median": {
+     "median": 0.000241985,
+     "min": 0.0,
+     "max": 0.00057852
+    },
+    "pairs_above_null_p95": 0,
+    "expected_above_null_p95": 0.45,
+    "target_rank_in_null": {
+     "median": 0.405,
+     "mean": 0.428333
+    },
+    "bulk_median_rank_in_null": {
+     "ranks": [
+      0.615,
+      0.94,
+      0.81,
+      0.85,
+      0.55,
+      0.91,
+      0.785,
+      0.85,
+      0.33
+     ],
+     "above_p95": 0,
+     "below_p5": 0
+    },
+    "wilcoxon_exceed_minus_null_median": {
+     "statistic": 14.0,
+     "p_one_sided_greater": 0.727,
+     "n": 8
+    },
+    "wilcoxon_exceed_minus_0.001": {
+     "statistic": 3.0,
+     "p_one_sided_greater": 0.994
+    },
+    "wilcoxon_per_scene_mean": {
+     "n_scenes": 6,
+     "statistic": 5.0,
+     "p_one_sided_greater": 0.781
+    },
+    "spearman_vs_aerial_objects_gt50cm": {
+     "n": 6,
+     "rho": -0.0304,
+     "p_two_sided": 0.954,
+     "note": "exceedance fraction vs CD7 (objects > 50 cm per km²)"
+    },
+    "spearman_p999_excess_vs_aerial": {
+     "n": 6,
+     "rho": 0.0857,
+     "p_two_sided": 0.872,
+     "note": "target p99.9 − background p99.9 vs CD7"
+    }
+   },
+   "scl_water_cloud_buffer": {
+    "n_pairs": 9,
+    "n_scenes": 6,
+    "exceedance": {
+     "median": 0.000533447,
+     "mean": 0.00074565,
+     "min": 0.0,
+     "max": 0.00270755
+    },
+    "null_median": {
+     "median": 0.00038482,
+     "min": 6.3674e-05,
+     "max": 0.000794165
+    },
+    "pairs_above_null_p95": 0,
+    "expected_above_null_p95": 0.45,
+    "target_rank_in_null": {
+     "median": 0.555,
+     "mean": 0.524167
+    },
+    "bulk_median_rank_in_null": {
+     "ranks": [
+      0.655,
+      0.865,
+      0.77,
+      0.79,
+      0.555,
+      0.93,
+      0.885,
+      0.825,
+      0.28
+     ],
+     "above_p95": 0,
+     "below_p5": 0
+    },
+    "wilcoxon_exceed_minus_null_median": {
+     "statistic": 34.0,
+     "p_one_sided_greater": 0.102,
+     "n": 9
+    },
+    "wilcoxon_exceed_minus_0.001": {
+     "statistic": 10.0,
+     "p_one_sided_greater": 0.936
+    },
+    "wilcoxon_per_scene_mean": {
+     "n_scenes": 6,
+     "statistic": 15.0,
+     "p_one_sided_greater": 0.219
+    },
+    "spearman_vs_aerial_objects_gt50cm": {
+     "n": 6,
+     "rho": 0.0857,
+     "p_two_sided": 0.872,
+     "note": "exceedance fraction vs CD7 (objects > 50 cm per km²)"
+    },
+    "spearman_p999_excess_vs_aerial": {
+     "n": 6,
+     "rho": 0.0857,
+     "p_two_sided": 0.872,
+     "note": "target p99.9 − background p99.9 vs CD7"
+    }
+   }
+  }
+ },
+ "top_target_pixels": [
+  {
+   "pair": "aerial:Aerial survey row 35 @ S2B_6SWD_20210809_1_L1C",
+   "lat": 34.82885,
+   "lon": -145.8652,
+   "dist_from_point_m": 1928,
+   "fdi": 0.132005,
+   "fdi_excess_units": 6.007,
+   "fdi_bg_median": 0.000711607,
+   "fdi_bg_p999": 0.0225693,
+   "fai": 0.0166402,
+   "ndvi": -0.01408,
+   "rhos": {
+    "B04": 0.1884,
+    "B06": 0.08357,
+    "B08": 0.1832,
+    "B11": 0.06535
+   },
+   "toa_10m_max_of_2x2": {
+    "B04": 0.1861,
+    "B08": 0.1798
+   },
+   "toa_20m": {
+    "B04": 0.1203,
+    "B06": 0.0949,
+    "B08": 0.1069,
+    "B11": 0.0674
+   },
+   "red_above_bg_p999": true,
+   "nir_above_bg_p999": true,
+   "cluster_px_above_bg_p999": 5,
+   "dist_to_cloud_m": 200.0,
+   "scl": "water",
+   "bg_pixels_as_extreme": 1,
+   "bg_pixels": 3485674,
+   "target_pixels": 30967,
+   "looks_like": "bright; spectrally flat red≈NIR (|NDVI| < 0.15); 5-pixel cluster above the background p99.9; 200 m from a Sen2Cor cloud/shadow/cirrus pixel → cloud fringe / cloudlet Sen2Cor called water"
+  },
+  {
+   "pair": "aerial:Aerial survey row 35 @ S2B_6SWD_20210809_1_L1C",
+   "lat": 34.82885,
+   "lon": -145.86564,
+   "dist_from_point_m": 1914,
+   "fdi": 0.0709769,
+   "fdi_excess_units": 3.215,
+   "fdi_bg_median": 0.000711607,
+   "fdi_bg_p999": 0.0225693,
+   "fai": 0.0296845,
+   "ndvi": 0.06027,
+   "rhos": {
+    "B04": 0.158,
+    "B06": 0.1022,
+    "B08": 0.1783,
+    "B11": 0.1051
+   },
+   "toa_10m_max_of_2x2": {
+    "B04": 0.1611,
+    "B08": 0.1694
+   },
+   "toa_20m": {
+    "B04": 0.1124,
+    "B06": 0.1119,
+    "B08": 0.1135,
+    "B11": 0.1051
+   },
+   "red_above_bg_p999": false,
+   "nir_above_bg_p999": true,
+   "cluster_px_above_bg_p999": 5,
+   "dist_to_cloud_m": 203.96078491210938,
+   "scl": "water",
+   "bg_pixels_as_extreme": 19,
+   "bg_pixels": 3485674,
+   "target_pixels": 30967,
+   "looks_like": "bright; spectrally flat red≈NIR (|NDVI| < 0.15); 5-pixel cluster above the background p99.9; 204 m from a Sen2Cor cloud/shadow/cirrus pixel → cloud fringe / cloudlet Sen2Cor called water"
+  },
+  {
+   "pair": "aerial:Aerial survey row 33 @ S2A_6SXD_20210804_1_L1C",
+   "lat": 34.83732,
+   "lon": -145.9038,
+   "dist_from_point_m": 1744,
+   "fdi": 0.0270122,
+   "fdi_excess_units": 2.604,
+   "fdi_bg_median": 0.00395065,
+   "fdi_bg_p999": 0.0128058,
+   "fai": 0.00299321,
+   "ndvi": -0.02465,
+   "rhos": {
+    "B04": 0.03479,
+    "B06": 0.0115,
+    "B08": 0.03312,
+    "B11": 0.008455
+   },
+   "toa_10m_max_of_2x2": {
+    "B04": 0.0533,
+    "B08": 0.0393
+   },
+   "toa_20m": {
+    "B04": 0.04478,
+    "B06": 0.0234,
+    "B08": 0.03325,
+    "B11": 0.0092
+   },
+   "red_above_bg_p999": false,
+   "nir_above_bg_p999": false,
+   "cluster_px_above_bg_p999": 9,
+   "dist_to_cloud_m": 44.72135925292969,
+   "scl": "water",
+   "bg_pixels_as_extreme": 6,
+   "bg_pixels": 2000338,
+   "target_pixels": 30324,
+   "looks_like": "dim; spectrally flat red≈NIR (|NDVI| < 0.15); 9-pixel cluster above the background p99.9; 45 m from a Sen2Cor cloud/shadow/cirrus pixel → cloud fringe / cloudlet Sen2Cor called water"
+  },
+  {
+   "pair": "aerial:Aerial survey row 35 @ S2B_6SWD_20210809_1_L1C",
+   "lat": 34.82885,
+   "lon": -145.86542,
+   "dist_from_point_m": 1921,
+   "fdi": 0.0566808,
+   "fdi_excess_units": 2.561,
+   "fdi_bg_median": 0.000711607,
+   "fdi_bg_p999": 0.0225693,
+   "fai": 0.00691183,
+   "ndvi": -0.007948,
+   "rhos": {
+    "B04": 0.143,
+    "B06": 0.1008,
+    "B08": 0.1407,
+    "B11": 0.09138
+   },
+   "toa_10m_max_of_2x2": {
+    "B04": 0.1864,
+    "B08": 0.1683
+   },
+   "toa_20m": {
+    "B04": 0.1323,
+    "B06": 0.1107,
+    "B08": 0.1181,
+    "B11": 0.0921
+   },
+   "red_above_bg_p999": false,
+   "nir_above_bg_p999": false,
+   "cluster_px_above_bg_p999": 5,
+   "dist_to_cloud_m": 200.9975128173828,
+   "scl": "water",
+   "bg_pixels_as_extreme": 100,
+   "bg_pixels": 3485674,
+   "target_pixels": 30967,
+   "looks_like": "bright; spectrally flat red≈NIR (|NDVI| < 0.15); 5-pixel cluster above the background p99.9; 201 m from a Sen2Cor cloud/shadow/cirrus pixel → cloud fringe / cloudlet Sen2Cor called water"
+  },
+  {
+   "pair": "aerial:Aerial survey row 43 @ S2B_6SXD_20210819_1_L1C",
+   "lat": 34.89565,
+   "lon": -145.71041,
+   "dist_from_point_m": 1428,
+   "fdi": 0.111062,
+   "fdi_excess_units": 2.524,
+   "fdi_bg_median": -0.00872599,
+   "fdi_bg_p999": 0.0387301,
+   "fai": 0.0359881,
+   "ndvi": 0.07444,
+   "rhos": {
+    "B04": 0.1376,
+    "B06": 0.07368,
+    "B08": 0.1597,
+    "B11": 0.05959
+   },
+   "toa_10m_max_of_2x2": {
+    "B04": 0.1567,
+    "B08": 0.1676
+   },
+   "toa_20m": {
+    "B04": 0.1017,
+    "B06": 0.0865,
+    "B08": 0.09533,
+    "B11": 0.0623
+   },
+   "red_above_bg_p999": false,
+   "nir_above_bg_p999": false,
+   "cluster_px_above_bg_p999": 3,
+   "dist_to_cloud_m": 44.72135925292969,
+   "scl": "water",
+   "bg_pixels_as_extreme": 1,
+   "bg_pixels": 2633880,
+   "target_pixels": 31414,
+   "looks_like": "bright; spectrally flat red≈NIR (|NDVI| < 0.15); 3-pixel cluster above the background p99.9; 45 m from a Sen2Cor cloud/shadow/cirrus pixel → cloud fringe / cloudlet Sen2Cor called water"
+  },
+  {
+   "pair": "aerial:Aerial survey row 35 @ S2B_6SWD_20210809_1_L1C",
+   "lat": 34.83314,
+   "lon": -145.88133,
+   "dist_from_point_m": 1519,
+   "fdi": 0.0512493,
+   "fdi_excess_units": 2.312,
+   "fdi_bg_median": 0.000711607,
+   "fdi_bg_p999": 0.0225693,
+   "fai": 0.0305384,
+   "ndvi": 0.1177,
+   "rhos": {
+    "B04": 0.09248,
+    "B06": 0.05134,
+    "B08": 0.1172,
+    "B11": 0.05954
+   },
+   "toa_10m_max_of_2x2": {
+    "B04": 0.1077,
+    "B08": 0.1177
+   },
+   "toa_20m": {
+    "B04": 0.081,
+    "B06": 0.0655,
+    "B08": 0.08873,
+    "B11": 0.0619
+   },
+   "red_above_bg_p999": false,
+   "nir_above_bg_p999": false,
+   "cluster_px_above_bg_p999": 5,
+   "dist_to_cloud_m": 101.98039245605469,
+   "scl": "water",
+   "bg_pixels_as_extreme": 177,
+   "bg_pixels": 3485674,
+   "target_pixels": 30967,
+   "looks_like": "bright; spectrally flat red≈NIR (|NDVI| < 0.15); 5-pixel cluster above the background p99.9; 102 m from a Sen2Cor cloud/shadow/cirrus pixel → cloud fringe / cloudlet Sen2Cor called water"
+  },
+  {
+   "pair": "aerial:Aerial survey row 33 @ S2A_6SXD_20210804_1_L1C",
+   "lat": 34.83587,
+   "lon": -145.90338,
+   "dist_from_point_m": 1742,
+   "fdi": 0.0231525,
+   "fdi_excess_units": 2.168,
+   "fdi_bg_median": 0.00395065,
+   "fdi_bg_p999": 0.0128058,
+   "fai": 0.0168873,
+   "ndvi": 0.3409,
+   "rhos": {
+    "B04": 0.01563,
+    "B06": 0.01541,
+    "B08": 0.0318,
+    "B11": 0.0116
+   },
+   "toa_10m_max_of_2x2": {
+    "B04": 0.0344,
+    "B08": 0.0354
+   },
+   "toa_20m": {
+    "B04": 0.0339,
+    "B06": 0.027,
+    "B08": 0.0289,
+    "B11": 0.0122
+   },
+   "red_above_bg_p999": false,
+   "nir_above_bg_p999": false,
+   "cluster_px_above_bg_p999": 6,
+   "dist_to_cloud_m": 144.2220458984375,
+   "scl": "water",
+   "bg_pixels_as_extreme": 29,
+   "bg_pixels": 2000338,
+   "target_pixels": 30324,
+   "looks_like": "dim; NIR > red (NDVI 0.34); 6-pixel cluster above the background p99.9; 144 m from a Sen2Cor cloud/shadow/cirrus pixel → next to a cloud (adjacency)"
+  },
+  {
+   "pair": "aerial:Aerial survey row 33 @ S2A_6SXD_20210804_1_L1C",
+   "lat": 34.83569,
+   "lon": -145.9036,
+   "dist_from_point_m": 1767,
+   "fdi": 0.0221692,
+   "fdi_excess_units": 2.057,
+   "fdi_bg_median": 0.00395065,
+   "fdi_bg_p999": 0.0128058,
+   "fai": 0.0171836,
+   "ndvi": 0.3908,
+   "rhos": {
+    "B04": 0.01297,
+    "B06": 0.01313,
+    "B08": 0.02961,
+    "B11": 0.009921
+   },
+   "toa_10m_max_of_2x2": {
+    "B04": 0.035,
+    "B08": 0.0351
+   },
+   "toa_20m": {
+    "B04": 0.03292,
+    "B06": 0.0249,
+    "B08": 0.03142,
+    "B11": 0.0106
+   },
+   "red_above_bg_p999": false,
+   "nir_above_bg_p999": false,
+   "cluster_px_above_bg_p999": 6,
+   "dist_to_cloud_m": 141.42135620117188,
+   "scl": "water",
+   "bg_pixels_as_extreme": 39,
+   "bg_pixels": 2000338,
+   "target_pixels": 30324,
+   "looks_like": "dim; NIR > red (NDVI 0.39); 6-pixel cluster above the background p99.9; 141 m from a Sen2Cor cloud/shadow/cirrus pixel → next to a cloud (adjacency)"
+  },
+  {
+   "pair": "aerial:Aerial survey row 35 @ S2B_6SWD_20210809_1_L1C",
+   "lat": 34.83332,
+   "lon": -145.88132,
+   "dist_from_point_m": 1502,
+   "fdi": 0.0424514,
+   "fdi_excess_units": 1.91,
+   "fdi_bg_median": 0.000711607,
+   "fdi_bg_p999": 0.0225693,
+   "fai": 0.0118661,
+   "ndvi": 0.01712,
+   "rhos": {
+    "B04": 0.1282,
+    "B06": 0.08182,
+    "B08": 0.1327,
+    "B11": 0.08653
+   },
+   "toa_10m_max_of_2x2": {
+    "B04": 0.1374,
+    "B08": 0.1332
+   },
+   "toa_20m": {
+    "B04": 0.1143,
+    "B06": 0.0933,
+    "B08": 0.1203,
+    "B11": 0.0875
+   },
+   "red_above_bg_p999": false,
+   "nir_above_bg_p999": false,
+   "cluster_px_above_bg_p999": 5,
+   "dist_to_cloud_m": 100.0,
+   "scl": "water",
+   "bg_pixels_as_extreme": 423,
+   "bg_pixels": 3485674,
+   "target_pixels": 30967,
+   "looks_like": "bright; spectrally flat red≈NIR (|NDVI| < 0.15); 5-pixel cluster above the background p99.9; 100 m from a Sen2Cor cloud/shadow/cirrus pixel → cloud fringe / cloudlet Sen2Cor called water"
+  },
+  {
+   "pair": "aerial:Aerial survey row 33 @ S2A_6SXD_20210804_1_L1C",
+   "lat": 34.83714,
+   "lon": -145.9038,
+   "dist_from_point_m": 1748,
+   "fdi": 0.0207742,
+   "fdi_excess_units": 1.9,
+   "fdi_bg_median": 0.00395065,
+   "fdi_bg_p999": 0.0128058,
+   "fai": 0.00325459,
+   "ndvi": 0.001389,
+   "rhos": {
+    "B04": 0.02527,
+    "B06": 0.01085,
+    "B08": 0.02534,
+    "B11": 0.007303
+   },
+   "toa_10m_max_of_2x2": {
+    "B04": 0.0446,
+    "B08": 0.0321
+   },
+   "toa_20m": {
+    "B04": 0.03755,
+    "B06": 0.0228,
+    "B08": 0.02782,
+    "B11": 0.0081
+   },
+   "red_above_bg_p999": false,
+   "nir_above_bg_p999": false,
+   "cluster_px_above_bg_p999": 9,
+   "dist_to_cloud_m": 60.0,
+   "scl": "water",
+   "bg_pixels_as_extreme": 70,
+   "bg_pixels": 2000338,
+   "target_pixels": 30324,
+   "looks_like": "dim; spectrally flat red≈NIR (|NDVI| < 0.15); 9-pixel cluster above the background p99.9; 60 m from a Sen2Cor cloud/shadow/cirrus pixel → cloud fringe / cloudlet Sen2Cor called water"
+  }
+ ],
+ "best_pair": "aerial:Aerial survey row 52 @ S2B_6SXD_20210829_1_L1C",
+ "figure": "ml/family1/probes/colocation_gpgp_2021.png",
+ "bytes_downloaded_this_run": 0,
+ "bytes_in_cache": {
+  "safe": 3022392255,
+  "scl": 152672328,
+  "stac": 5998242,
+  "insitu": 967980,
+  "l1c_meta": 8377
+ },
+ "bytes_acolite_luts": 794739760,
+ "wall_s": 243
+}

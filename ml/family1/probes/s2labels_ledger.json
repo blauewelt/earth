@@ -1,0 +1,304 @@
+{
+ "store": "s2labels",
+ "family": "family1_3",
+ "plan": "ml/plans/E092_family13_plastic.md \u00a74, \u00a76",
+ "measured_at": "2026-10-11T20:56:55Z",
+ "builder_git_sha": "20f4cb0a860e3b2c543c42b3c0565bf596181b1d",
+ "working_tree": "uncommitted adapter ml/family1/adapters/s2labels.py",
+ "window": [
+  "2015-01-01",
+  "2022-12-31"
+ ],
+ "stages": "index,fetch,assemble,check (not published)",
+ "N": 837964,
+ "bin_first": 2477,
+ "bin_last": 2853,
+ "sources": {
+  "MARIDA": {
+   "zenodo": "5151941",
+   "file": "MARIDA.zip",
+   "bytes": 1164612748,
+   "md5": "9bf32266f6e3711c9dfa3699b856c76f",
+   "md5_verified": true
+  },
+  "MADOS": {
+   "zenodo": "10664073",
+   "file": "MADOS.zip",
+   "bytes": 4038418740,
+   "md5": "1076b25d2797be3095d82a61105c7380",
+   "md5_verified": true
+  }
+ },
+ "rows_by_dataset": {
+  "MADOS only": 587,
+  "MARIDA only": 129794,
+  "both (MADOS label)": 707583
+ },
+ "read": {
+  "marida_patches": 1381,
+  "marida_scenes": 63,
+  "marida_labelled_pixels": 837377,
+  "mados_crops": 2803,
+  "mados_scenes": 174,
+  "mados_labelled_pixels": 1481155
+ },
+ "marida_by_class": {
+  "Cloud Shadows": 11728,
+  "Clouds": 117400,
+  "Dense Sargassum": 2797,
+  "Foam": 1225,
+  "Marine Debris": 3399,
+  "Marine Water": 129159,
+  "Mixed Water": 410,
+  "Natural Organic Material": 864,
+  "Sediment-Laden Water": 372937,
+  "Shallow Water": 17369,
+  "Ship": 5803,
+  "Sparse Sargassum": 2357,
+  "Turbid Water": 157612,
+  "Wakes": 8490,
+  "Waves": 5827
+ },
+ "mados_by_class": {
+  "Dense Sargassum": 4308,
+  "Foam": 1225,
+  "Jellyfish": 2541,
+  "Marine Debris": 4696,
+  "Marine Water": 496702,
+  "Natural Organic Material": 1454,
+  "Oil Platform": 15701,
+  "Oil Spill": 234568,
+  "Sea snot": 12272,
+  "Sediment-Laden Water": 376061,
+  "Shallow Water": 122753,
+  "Ship": 13222,
+  "Sparse Floating Algae": 4972,
+  "Turbid Water": 170306,
+  "Waves & Wakes": 20374
+ },
+ "mados_location": {
+  "mados_crops_located": 1488,
+  "mados_crops_unlocated": 1315,
+  "mados_scenes_located": 63,
+  "mados_unlocated_labelled_pixels": 772971,
+  "mados_unlocated_by_class": {
+   "Dense Sargassum": 1511,
+   "Jellyfish": 2541,
+   "Marine Debris": 1297,
+   "Marine Water": 367198,
+   "Natural Organic Material": 590,
+   "Oil Platform": 15701,
+   "Oil Spill": 234568,
+   "Sea snot": 12272,
+   "Sediment-Laden Water": 3124,
+   "Shallow Water": 105384,
+   "Ship": 7419,
+   "Sparse Floating Algae": 2615,
+   "Turbid Water": 12694,
+   "Waves & Wakes": 6057
+  },
+  "mados_unlocated_best_vote_at_least": {
+   "0": 0,
+   "1": 1041,
+   "10": 0,
+   "2": 274,
+   "20": 0,
+   "5": 0,
+   "50": 0
+  },
+  "max_unlocated_best_vote": 3,
+  "match_min_votes_located": 54,
+  "match_median_votes_located": 6196.0,
+  "match_satellite_checked": 1488,
+  "match_min_r_by_band": {
+   "rho_B01": 0.500144,
+   "rho_B02": 0.984818,
+   "rho_B03": 0.991888,
+   "rho_B04": 0.996868,
+   "rho_B05": 0.997196,
+   "rho_B06": 0.997727,
+   "rho_B07": 0.999119,
+   "rho_B08": 0.998937,
+   "rho_B11": 0.999971,
+   "rho_B12": 0.999975,
+   "rho_B8A": 0.999421
+  },
+  "match_crops_r_10_20m_below_0_99": 6
+ },
+ "overlap": {
+  "overlap_pixels": 707583,
+  "overlap_label_changed": 17076,
+  "overlap_labels": {
+   "Dense Sargassum -> Dense Sargassum": 2797,
+   "Foam -> Foam": 1225,
+   "Marine Debris -> Marine Debris": 3399,
+   "Marine Water -> Marine Water": 129059,
+   "Mixed Water -> Marine Water": 410,
+   "Natural Organic Material -> Natural Organic Material": 864,
+   "Sediment-Laden Water -> Sediment-Laden Water": 372937,
+   "Shallow Water -> Shallow Water": 16816,
+   "Ship -> Ship": 5798,
+   "Sparse Sargassum -> Sparse Floating Algae": 2357,
+   "Turbid Water -> Turbid Water": 157612,
+   "Wakes -> Waves & Wakes": 8482,
+   "Waves -> Waves & Wakes": 5827
+  },
+  "overlap_confidence_changed": 0,
+  "overlap_median_abs_band_diff": {
+   "rho_B01": 0.003592,
+   "rho_B02": 0.000745,
+   "rho_B03": 0.000722,
+   "rho_B04": 0.000363,
+   "rho_B05": 0.000765,
+   "rho_B06": 0.000461,
+   "rho_B07": 0.000575,
+   "rho_B08": 0.00033,
+   "rho_B11": 3e-06,
+   "rho_B12": 5e-06,
+   "rho_B8A": 0.000203
+  },
+  "marida_unlabelled_by_covering_mados_crop": {
+   "Cloud Shadows": 7767,
+   "Clouds": 46669,
+   "Marine Water": 65
+  }
+ },
+ "label_changes": {
+  "Mixed Water -> Marine Water": 410,
+  "Sparse Sargassum -> Sparse Floating Algae": 2357,
+  "Wakes -> Waves & Wakes": 8482,
+  "Waves -> Waves & Wakes": 5827
+ },
+ "mados_only": {
+  "mados_only_rows": 587,
+  "mados_duplicate_pixels": 14,
+  "mados_duplicate_pixels_class_differs": 2,
+  "mados_only_inside_marida_patch_split": {
+   "inside a MARIDA val patch, MADOS train": 3
+  }
+ },
+ "marida_same_ground_two_tiles": 50,
+ "marida_same_ground_two_tiles_class_differs": 2,
+ "catalogue": {
+  "catalogue_products_per_scene": {
+   "1": 60,
+   "2": 3
+  },
+  "catalogue_scenes_timed": 63,
+  "catalogue_scenes_untimed": 0
+ },
+ "rows_by_class": {
+  "Cloud Shadows": 11728,
+  "Clouds": 117400,
+  "Dense Sargassum": 2797,
+  "Foam": 1225,
+  "Marine Debris": 3399,
+  "Marine Water": 129599,
+  "Natural Organic Material": 864,
+  "Sediment-Laden Water": 372937,
+  "Shallow Water": 17922,
+  "Ship": 5804,
+  "Sparse Floating Algae": 2357,
+  "Turbid Water": 157612,
+  "Wakes": 8,
+  "Waves & Wakes": 14312
+ },
+ "rows_by_split": {
+  "MADOS train": 587,
+  "MARIDA test": 194863,
+  "MARIDA train": 429412,
+  "MARIDA val": 213102
+ },
+ "rows_by_year": {
+  "2015": 122,
+  "2016": 87154,
+  "2017": 61328,
+  "2018": 308486,
+  "2019": 58101,
+  "2020": 322007,
+  "2021": 766
+ },
+ "rows_by_satellite": {
+  "S2A": 502642,
+  "S2B": 335322
+ },
+ "channel_rows_filled": {
+  "confidence": 837964,
+  "rho_B01": 837964,
+  "rho_B02": 837964,
+  "rho_B03": 837964,
+  "rho_B04": 837964,
+  "rho_B05": 837964,
+  "rho_B06": 837964,
+  "rho_B07": 837964,
+  "rho_B08": 837964,
+  "rho_B11": 837964,
+  "rho_B12": 837964,
+  "rho_B8A": 837964,
+  "s2_unit": 837964,
+  "split": 837964
+ },
+ "out_of_bounds": {},
+ "falsifier": {
+  "what": "plan \u00a76 baseline: FDI = R8 - (R6 + (R11 - R6) * coef), coef 1.7722 (S2A) / 1.7770 (S2B) per scene's satellite (catalogue); threshold = the 95th percentile of FDI over MARIDA-TRAIN pixels of class Marine Water; debris = FDI > threshold; scored Marine Debris vs everything else on MARIDA's TEST split; a NaN FDI counts as not debris",
+  "on_the_store": {
+   "threshold_fdi": 0.017398016357421876,
+   "train_water_pixels": 87101,
+   "test_pixels": 194863,
+   "test_debris_pixels": 381,
+   "tp": 376,
+   "fp": 118427,
+   "fn": 5,
+   "precision": 0.0031649032431840946,
+   "recall": 0.9868766404199475,
+   "f1": 0.006309571754597933,
+   "fdi_nan_in_test": 0,
+   "note": "bands and labels as stored: float16, and MADOS's label where both sets label a pixel (Marine Debris is unchanged on every overlap pixel); rows in MARIDA (qc bit 128 clear, or bit 64 set) with MARIDA's split"
+  },
+  "on_marida_archive": {
+   "f1": 0.006216445323537723,
+   "fdi_nan_in_test": 0,
+   "fn": 7,
+   "fp": 119571,
+   "precision": 0.0031180957939055402,
+   "recall": 0.9816272965879265,
+   "test_debris_pixels": 381,
+   "test_pixels": 194863,
+   "threshold_fdi": 0.016543006945736707,
+   "tp": 374,
+   "train_water_pixels": 86877,
+   "note": "MARIDA's own files: float32 bands, MARIDA's labels, before any MADOS label"
+  },
+  "context": {
+   "debris_vs_marine_water_only": {
+    "tp": 376,
+    "fp": 170,
+    "fn": 5,
+    "precision": 0.6886446886446886,
+    "recall": 0.9868766404199475,
+    "f1": 0.8112189859762675,
+    "test_pixels": 23916,
+    "note": "the same threshold, scored only on TEST pixels labelled Marine Debris or Marine Water \u2014 not the plan's metric, recorded to show where the false positives come from"
+   },
+   "false_positives_on_test_by_class": {
+    "Dense Sargassum": 760,
+    "Natural Organic Material": 45,
+    "Ship": 839,
+    "Clouds": 12686,
+    "Marine Water": 170,
+    "Sediment-Laden Water": 93037,
+    "Foam": 387,
+    "Turbid Water": 8562,
+    "Shallow Water": 97,
+    "Cloud Shadows": 103,
+    "Sparse Floating Algae": 875,
+    "Waves & Wakes": 866
+   }
+  }
+ },
+ "excluded_sources": {
+  "plastic_litter_project_2021": "Zenodo 7085112: 23 files, 159,536,880,691 B; per acquisition date an L1C product, an ACOLITE NetCDF, drone orthophotos and target photographs \u2014 no per-pixel label file (record text read 2026-10-11)",
+  "plastic_litter_project_2019": "Zenodo 3752719: one 68,887,501 B rar holding point vectors of percentage plastic per Sentinel-2 pixel \u2014 not in this build; a candidate",
+  "floating_objects": "Mifdal et al. 2021: 16.6 GB of line annotations on 26 scenes (plan \u00a72b; not re-measured here)"
+ }
+}

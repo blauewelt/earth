@@ -36,6 +36,17 @@ Two opt-in widenings, each for one named reason:
                  qc policy, probe, estimate) may; those are held to equality
                  exactly as in a strict publish. Repeatable.
 
+  --allow-group added_<name>
+                 E-092: store <name> was built and published for the FIRST
+                 time into a registry that already exists (family 1.3's
+                 `s2labels` beside `mplastic` and `mobjects`). The group
+                 <name> must be ABSENT from the published registry and
+                 present in the rebuilt one; it is set aside, and every
+                 other group is then held to equality as in a strict
+                 publish. The top-level build state (`built`, `not_built`,
+                 `n_built`, `n_groups`) and `description` may change, since
+                 they count and describe the stores. Repeatable.
+
   --allow-group rebuilt_<code>
                  EVERY store of the registry whose `family_code` is <code>
                  was rebuilt (E-087 §14: family 7.2d's four stores extended
@@ -62,6 +73,7 @@ import sys
 
 ALLOWED_TOP = {"siblings", "generated_utc", "builder_git_sha"}
 REBUILT_TOP = {"built", "not_built", "n_built", "description"}
+ADDED_TOP = {"built", "not_built", "n_built", "n_groups", "description"}
 SPAN_TOP = {"span_rule"}
 SPAN_FIELDS = {"record_span", "record_span_instants", "record_span_basis",
                "requested_window", "date_range"}
@@ -78,7 +90,8 @@ def walk(a, b, path, bad, filled, spans_seen, opts):
         for k in sorted(set(a) | set(b)):
             if not path and (k in ALLOWED_TOP
                              or (opts["spans"] and k in SPAN_TOP)
-                             or (opts["rebuilt"] and k in REBUILT_TOP)):
+                             or (opts["rebuilt"] and k in REBUILT_TOP)
+                             or (opts["added"] and k in ADDED_TOP)):
                 continue
             if opts["spans"] and k in SPAN_FIELDS \
                     and GROUP_PATH.match(path) \
@@ -158,7 +171,27 @@ def main(argv=None):
             != sorted(g.get("name") for g in new.get("groups") or []):
         print("REFUSING: the rebuilt registry does not hold the same stores")
         return 1
+    added = [g[len("added_"):] for g in a.allow_group
+             if g.startswith("added_")]
+    if added:
+        oldn = {g.get("name") for g in old.get("groups") or []}
+        newn = {g.get("name") for g in new.get("groups") or []}
+        wrong = [n for n in added if n in oldn or n not in newn]
+        if wrong:
+            print(f"REFUSING: --allow-group added_{wrong[0]}: the store must "
+                  f"be absent from the published registry and present in the "
+                  f"rebuilt one")
+            return 1
+        new = dict(new)
+        new["groups"] = [g for g in new.get("groups") or []
+                         if g.get("name") not in added]
+        print(f"stores added (first publish): {sorted(added)}")
+        for k in sorted(ADDED_TOP - {"description"}):
+            if old.get(k) != json.load(open(a.rebuilt)).get(k):
+                print(f"  top-level {k}: {old.get(k)} -> "
+                      f"{json.load(open(a.rebuilt)).get(k)}")
     opts = {"spans": a.spans, "allow_group": set(a.allow_group),
+            "added": bool(added),
             "groups_changed": [], "rebuilt": bool(rebuilt),
             "refresh": set(a.refresh), "refreshed": {}}
     if a.refresh:

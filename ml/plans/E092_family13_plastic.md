@@ -139,15 +139,15 @@ choice.
 | **PACE OCI** level 2 | the 2024 hyperspectral ocean-colour instrument at ~1 km | CMR (NASA's catalogue) anonymous; downloads need an Earthdata login (302 → 401); the anonymous OB.DAAC OPeNDAP server holds only level 3 and 4 | NASA open | water-leaving reflectance stops at 719 nm; the only above-level-1 shortwave-infrared is the **surface reflectance product SFREFL, `rhos` at 1038, 1249, 1618, 2131, 2258 nm**; **no band sits on plastic's 1,732 nm absorption**; ~89 GB a day at level 2; anonymous only as level-3 2 km / 4 km daily maps |
 | **CYGNSS microplastic L3** (Evans & Ruf 2021) | an empirical index from GPS-reflection radar roughness, fitted to a plastic MODEL | PO.DAAC, Earthdata login | NASA open | 0.25° daily files, but the authors' feature resolution is 1° and 30 days; ±~38° latitude; confounded by natural surfactants and the tropical rain band |
 
-**One window where satellite and nets meet in the open gyre.** The Ocean
-Cleanup's North Pacific missions of 2021 (in Lebreton 2024) flew 22 aerial
-surveys (34.8–35.4° N, 144.4–145.9° W, every few days from 2021-08-05 to
-08-31) and towed 6 manta nets in August, inside the area and the weeks of
-the only Sentinel-2 campaign over the patch: a 0.7° box around the surveys
-has 167 L2A items on 20 dates in August–September 2021, including
-2021-08-11, 08-16, 08-24, 08-26 and 08-31 — days with surveys. It is the one
-place on Earth where an open-gyre plastic measurement and a 20 m multispectral
-image are days apart, and it is cheap to look at (§5, step 2).
+**One window where satellite and nets meet in the open gyre — narrower than
+it first looked.** The Ocean Cleanup's North Pacific missions of 2021 (in
+Lebreton 2024) flew 22 aerial surveys (34.8–35.4° N, 144.4–145.9° W,
+2021-08-05 → 08-31) and towed nets inside the area and the weeks of the only
+Sentinel-2 campaign over the patch: a 0.7° box around the surveys has 167
+L2A items on 20 dates in August–September 2021. **But no acquisition on a
+survey's own day covers its point** (the nearest same-day swath misses by
+19–115 km, measured by the co-location probe); within ±1 day there are 10
+(point, acquisition) pairs. §5 step 2 is what came of them.
 
 ## 3 · Decisions — the planning session's picks, each reversible
 
@@ -252,7 +252,23 @@ a point (`log2_fp` −4, the family's point label); a Sentinel-2 pixel is 20 m.
    holds at most ~13 objects over 50 cm per km² (Lebreton 2018's highest mosaic), of the order of 0.001 % of the surface. A clear signal would be a
    finding worth a paragraph; no signal closes `s2fdi_gpgp` for good, with a
    measured reason.
-3. **Phase B** only on step 2's result: `s2fdi_gpgp` if it showed signal.
+   **RESULT (2026-10-11): no signal. `s2fdi_gpgp` is closed.**
+   `ml/family1/colocation_probe.py`, result and figure in
+   `ml/family1/probes/colocation_gpgp_2021.{json,png}`. Nine usable pairs (6
+   aerial surveys, 3 manta tows; 2 at −1 day, 7 at +1 day — none on the
+   day), L1C corrected with ACOLITE's dark-spectrum fitting (and TOA beside
+   it). The fraction of 2 km-disc pixels above the surrounding water's 99.9th
+   percentile of FDI is 0–0.16 % per pair; against 200 random 2 km discs in
+   the same scene no pair ranks above the 95th percentile (median rank 0.49;
+   Wilcoxon p = 0.16 over pairs and over scenes; TOA p = 0.73); against the
+   aircraft's count of objects > 50 cm, Spearman ρ = −0.06 (n = 6, p = 0.91)
+   — the densest survey (17 objects per km²) reads 0. The ten brightest disc
+   pixels are 3–9-pixel clusters 45–204 m from cloud, with red ≈ NIR: cloud
+   fringes, not debris. The physics says the same: ~0.001 % cover changes FDI
+   by ~1e-6 against scene noise of ~1e-3. A 1.25 TB store over the patch
+   would encode clouds. Cost: ~4.4 GB downloaded, a few minutes of compute.
+3. **Phase B** only on step 2's result — **nothing to build** (`s2fdi_gpgp`
+   closed above).
 4. **Phase C** decisions, each with its own probe first: `s2fdi_coast`,
    `pace_swir`, `cygnss_mss`, `beachlitter`, and AOMI's unique remainder on
    the private track.
@@ -334,6 +350,28 @@ Decisions taken while building, each reversible by one constant:
   its aircraft counts were REPROCESSED and equal 2018's on only 2 of 31
   mosaics (ratio 0.27–7.2, median 0.98).
 
+**`s2labels`: 837,964 labelled Sentinel-2 pixels, 2015-11 → 2021-01**
+(built locally; MARIDA's 837,377 pixels and 3,399 "marine debris" re-measured
+and asserted). Two findings shape it. **MADOS's files carry no location and no
+date** — every GeoTIFF has a placeholder identity georeference — so its crops
+were placed by matching their spatial brightness pattern to MARIDA's: 1,488
+of 2,803 crops located (each with ≥ 54 votes, median 6,196; no unlocated crop
+scored above 3; satellite unit agrees with the Copernicus catalogue on all
+1,488), and they are exactly MARIDA's 63 scenes. MADOS's other 111 scenes
+(772,971 labelled pixels — every oil spill, oil platform, jellyfish and sea
+snot) cannot be placed and are counted and left out. **And MADOS adds almost
+nothing to MARIDA where it can be placed:** 707,583 pixels in both, 587 only
+in MADOS; every label change in the overlap is a class RENAME (Sparse
+Sargassum → Sparse Floating Algae, Waves/Wakes → Waves & Wakes, Mixed Water →
+Marine Water); Marine Debris is unchanged. The producer's later label wins,
+MARIDA's split is kept. **The falsifier's baseline** (§6): FDI above its
+MARIDA-train 95th percentile over clear marine water, scored debris-vs-not on
+MARIDA's test split — **F1 = 0.0063** (precision 0.0032, recall 0.987): the
+index fires on sediment-laden water (93,037 false positives), cloud (12,686)
+and turbid water (8,562). Against clear marine water alone it would score
+0.81, which is why the plan's metric is the harder one. A model reading the 11
+bands has a very low bar to beat; the store's use is to say whether it can.
+
 **`mobjects`: 1,595 objects, 100 % joined, seven types.** The §6 falsifier as
 written ("reproduce Lebreton 2018's megaplastic concentration per mosaic")
 **fails on 29 of 31 mosaics — and the objects reproduce The Ocean Cleanup's
@@ -346,7 +384,7 @@ it needs AOMI's rows, which D4 keeps out. The comparison stays in §2a.
 
 ## 7 · Status
 
-**Phase A `mplastic` and `mobjects` BUILT AND PUBLISHED 2026-10-11** (family1-build #1057 and #1058, hosted runners, $0; registry `tensors/family1_3/family13.json` by family1-registry #7; every file read back from the Hub). `s2labels` and the co-location probe (§5 steps 1–2) are next. Sources measured 2026-10-11 (the raw downloads are
+**Phase A `mplastic` and `mobjects` BUILT AND PUBLISHED 2026-10-11** (family1-build #1057 and #1058, hosted runners, $0; registry `tensors/family1_3/family13.json` by family1-registry #7; every file read back from the Hub). The co-location probe ran the same day and found NO signal — `s2fdi_gpgp` is closed (§5 step 2). `s2labels` built locally, publishing next. Sources measured 2026-10-11 (the raw downloads are
 in the session's scratch space, not committed). Open items, in the order they
 block:
 

@@ -190,7 +190,10 @@ DESCRIPTION = {
         "one row per sample, concentrations stored as log10(1 + value) "
         "because float16 cannot hold a busy tow's pieces per km2) and the "
         "objects identified in The Ocean Cleanup's 2016 aircraft mosaics "
-        "(`mobjects`). Dispatch on `tier`."),
+        "(`mobjects`) — and the human-labelled Sentinel-2 pixels of the "
+        "marine-debris label sets MARIDA and MADOS (`s2labels`, one row per "
+        "labelled pixel with its 11 band reflectances, class, confidence and "
+        "the producer's train/val/test split). Dispatch on `tier`."),
     "72d": (
         "Family 7.2d is family 7.2 — the programme's global input tensor "
         "(family7_global025_pentad_l2: 0.25-degree and 1-degree grids pole "
