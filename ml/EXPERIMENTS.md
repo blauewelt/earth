@@ -71,8 +71,9 @@ are an open question for SEA. Plan:
 [E-092](https://blauewelt.github.io/earth/docs.html?f=ml/plans/E092_family13_plastic.md).
 
 **Built and published the same evening** (hosted runners, $0): `mplastic`,
-18,504 surface samples 1972-04 → 2024-10 — The Ocean Cleanup 4,210, NOAA
-NCEI 13,385, EMODnet 909, one producer per cruise with every copy counted in
+18,504 surface samples 1972-04 → 2024-10 — The Ocean Cleanup's own tows and
+surveys 1,179, the earlier studies Lebreton 2018 compiled (SEA's Pacific tows
+among them) 3,031, NOAA NCEI 13,385, EMODnet 909, one producer per cruise with every copy counted in
 the ledger — stored as log10(1 + value) because float16 stops at 65,504; and
 `mobjects`, 1,595 objects from the 2016 aircraft mosaics, which match the
 producer's 2024 reprocessed counts on 31 of 31 mosaics and the 2018 paper's on
