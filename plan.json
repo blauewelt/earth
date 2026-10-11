@@ -1,0 +1,157 @@
+{
+ "bins": [
+  2410,
+  2921
+ ],
+ "builder_git_sha": "ed3bf6a2698599c3962d0ba92fe6e2200902e6c0",
+ "built_at": "2026-10-11T21:30:14+00:00",
+ "channels": [
+  {
+   "max": 1.7,
+   "min": -0.02,
+   "name": "rho_B01",
+   "unit": "reflectance (ACOLITE Rayleigh-corrected, rhorc; dimensionless)"
+  },
+  {
+   "max": 1.7,
+   "min": -0.02,
+   "name": "rho_B02",
+   "unit": "reflectance (ACOLITE Rayleigh-corrected, rhorc; dimensionless)"
+  },
+  {
+   "max": 1.7,
+   "min": -0.02,
+   "name": "rho_B03",
+   "unit": "reflectance (ACOLITE Rayleigh-corrected, rhorc; dimensionless)"
+  },
+  {
+   "max": 1.7,
+   "min": -0.02,
+   "name": "rho_B04",
+   "unit": "reflectance (ACOLITE Rayleigh-corrected, rhorc; dimensionless)"
+  },
+  {
+   "max": 1.7,
+   "min": -0.02,
+   "name": "rho_B05",
+   "unit": "reflectance (ACOLITE Rayleigh-corrected, rhorc; dimensionless)"
+  },
+  {
+   "max": 1.7,
+   "min": -0.02,
+   "name": "rho_B06",
+   "unit": "reflectance (ACOLITE Rayleigh-corrected, rhorc; dimensionless)"
+  },
+  {
+   "max": 1.7,
+   "min": -0.02,
+   "name": "rho_B07",
+   "unit": "reflectance (ACOLITE Rayleigh-corrected, rhorc; dimensionless)"
+  },
+  {
+   "max": 1.7,
+   "min": -0.02,
+   "name": "rho_B08",
+   "unit": "reflectance (ACOLITE Rayleigh-corrected, rhorc; dimensionless)"
+  },
+  {
+   "max": 1.7,
+   "min": -0.02,
+   "name": "rho_B8A",
+   "unit": "reflectance (ACOLITE Rayleigh-corrected, rhorc; dimensionless)"
+  },
+  {
+   "max": 1.7,
+   "min": -0.02,
+   "name": "rho_B11",
+   "unit": "reflectance (ACOLITE Rayleigh-corrected, rhorc; dimensionless)"
+  },
+  {
+   "max": 1.7,
+   "min": -0.02,
+   "name": "rho_B12",
+   "unit": "reflectance (ACOLITE Rayleigh-corrected, rhorc; dimensionless)"
+  },
+  {
+   "max": 3.0,
+   "min": 1.0,
+   "name": "confidence",
+   "unit": "annotator confidence: 1 high, 2 moderate, 3 low"
+  },
+  {
+   "max": 2.0,
+   "min": 0.0,
+   "name": "split",
+   "unit": "0 train, 1 validation, 2 test (MARIDA's split where the pixel is in MARIDA, else MADOS's)"
+  },
+  {
+   "max": 2.0,
+   "min": 1.0,
+   "name": "s2_unit",
+   "unit": "1 Sentinel-2A, 2 Sentinel-2B"
+  }
+ ],
+ "dataset": "s2labels: MARIDA (Zenodo 5151941) + MADOS (Zenodo 10664073)",
+ "date_range": [
+  "2015-01-01",
+  "2021-12-31"
+ ],
+ "footprint": {
+  "log2_dt": -18.720671786825555,
+  "log2_fp": -11.442425193331607
+ },
+ "joint_classes": {
+  "1": "Marine Debris",
+  "10": "Turbid Water",
+  "11": "Shallow Water",
+  "12": "Waves",
+  "13": "Cloud Shadows",
+  "14": "Wakes",
+  "15": "Mixed Water",
+  "16": "Sparse Floating Algae",
+  "17": "Oil Spill",
+  "18": "Waves & Wakes",
+  "19": "Oil Platform",
+  "2": "Dense Sargassum",
+  "20": "Jellyfish",
+  "21": "Sea snot",
+  "3": "Sparse Sargassum",
+  "4": "Natural Organic Material",
+  "5": "Ship",
+  "6": "Clouds",
+  "7": "Marine Water",
+  "8": "Sediment-Laden Water",
+  "9": "Foam"
+ },
+ "per_year_resume": false,
+ "qc_policy": "qc bits 0-4 = joint class (1 Marine Debris; 2 Dense Sargassum; 3 Sparse Sargassum; 4 Natural Organic Material; 5 Ship; 6 Clouds; 7 Marine Water; 8 Sediment-Laden Water; 9 Foam; 10 Turbid Water; 11 Shallow Water; 12 Waves; 13 Cloud Shadows; 14 Wakes; 15 Mixed Water; 16 Sparse Floating Algae; 17 Oil Spill; 18 Waves & Wakes; 19 Oil Platform; 20 Jellyfish; 21 Sea snot); bit 5 (32): time of day not from the Copernicus catalogue, placed at 12:00 UTC; bit 6 (64): labelled in both MARIDA and MADOS (MADOS's label, MARIDA's split); bit 7 (128): the row's values are MADOS's. Reflectance outside [-0.02, 1.7] -> NaN, counted.",
+ "sources": [
+  "https://zenodo.org/api/records/5151941",
+  "https://zenodo.org/api/records/10664073",
+  "https://raw.githubusercontent.com/marine-debris/marine-debris.github.io/main/utils/assets.py",
+  "https://raw.githubusercontent.com/gkakogeorgiou/mados/master/utils/assets.py",
+  "https://catalogue.dataspace.copernicus.eu/odata/v1/Products"
+ ],
+ "store": "s2labels",
+ "title": "Human-labelled Sentinel-2 pixels of marine debris, Sargassum, foam, ships, oil and water types (MARIDA, MADOS), one row per labelled 10 m pixel",
+ "verified": "2026-10-11 from the sandbox: both Zenodo records (licence, class tables, md5 of both zips), every member of both archives, the producers' assets.py (band order, class names) and stack_patches.py (nearest stacking), MADOS's missing georeferencing (TIFF tags), the MARIDA-MADOS location by neighbour-rank codes (1,488 crops, >= 54 votes each, satellite agreeing on every one) and the CDSE catalogue for all 63 MARIDA scenes",
+ "years": [
+  2015,
+  2016,
+  2017,
+  2018,
+  2019,
+  2020,
+  2021
+ ],
+ "zips": {
+  "MADOS": {
+   "md5": "1076b25d2797be3095d82a61105c7380",
+   "size": 4038418740
+  },
+  "MARIDA": {
+   "md5": "9bf32266f6e3711c9dfa3699b856c76f",
+   "size": 1164612748
+  }
+ }
+}
