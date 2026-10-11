@@ -384,7 +384,7 @@ it needs AOMI's rows, which D4 keeps out. The comparison stays in §2a.
 
 ## 7 · Status
 
-**Phase A `mplastic` and `mobjects` BUILT AND PUBLISHED 2026-10-11** (family1-build #1057 and #1058, hosted runners, $0; registry `tensors/family1_3/family13.json` by family1-registry #7; every file read back from the Hub). The co-location probe ran the same day and found NO signal — `s2fdi_gpgp` is closed (§5 step 2). `s2labels` built locally, publishing next. Sources measured 2026-10-11 (the raw downloads are
+**Phase A `mplastic` and `mobjects` BUILT AND PUBLISHED 2026-10-11** (family1-build #1057 and #1058, hosted runners, $0; registry `tensors/family1_3/family13.json` by family1-registry #7; every file read back from the Hub). The co-location probe ran the same day and found NO signal — `s2fdi_gpgp` is closed (§5 step 2). `s2labels` BUILT AND PUBLISHED the same night (family1-build #1059; registry republished by family1-registry #8). **Phase A is complete: three stores, 858,063 rows.** What remains is phase C — each a decision for Chris (§5 step 4) — and the open questions below. Sources measured 2026-10-11 (the raw downloads are
 in the session's scratch space, not committed). Open items, in the order they
 block:
 
@@ -393,6 +393,7 @@ block:
    resubmitted values (about 3× for 1,027 tows) supersede the published ones
    — a question for SEA, not a blocker (the ledger keeps both);
 2. Isobe 2021's data licence; Eriksen 2023's licence;
+2b. D12 — whether EMODnet's shape-only categories ("fragments" with no polymer) count as plastic (909 samples today, ≈ 3,357 if they do);
 3. whether the repository's Earthdata account (secrets `EARTHDATA_USERNAME` /
    `EARTHDATA_PASSWORD`, working for LP DAAC, GES DISC and PO.DAAC) reads
    OB.DAAC's PACE level 2 — never tried;

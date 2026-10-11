@@ -45,7 +45,7 @@ low-pass).
 ---
 
 <a id="e-090"></a>
-## E-092 · Family 1.3 — family 1.2 plus the stores that could identify plastic in the ocean — PHASE A PUBLISHED 2026-10-11 (`mplastic` 18,504 surface samples, `mobjects` 1,595 aircraft objects)
+## E-092 · Family 1.3 — family 1.2 plus the stores that could identify plastic in the ocean — PHASE A PUBLISHED 2026-10-11 (`mplastic` 18,504 surface samples, `mobjects` 1,595 aircraft objects, `s2labels` 837,964 labelled Sentinel-2 pixels); the Sentinel-2 store over the garbage patch CLOSED by a null co-location probe
 
 TL;DR — a new family whose job is a FIFTH read-out, floating plastic
 concentration at a place and time, on top of family 1.2 (the global fine
@@ -90,7 +90,7 @@ and the debris index does not follow the aircraft's object counts (Spearman
 ρ = −0.06, n = 6). The bright pixels are cloud fringes. The store of
 Sentinel-2 debris indices over the patch (`s2fdi_gpgp`) is closed with that
 measured reason. **`s2labels`** (837,964 human-labelled Sentinel-2 pixels from
-MARIDA and the placeable part of MADOS) built locally; its baseline — a
+MARIDA and the placeable part of MADOS) published the same night; its baseline — a
 debris-index threshold — scores F1 0.0063 on MARIDA's test split.
 
 ## E-091 · Day-of-year climatology — the mean of every calendar day over any span of years, from sums cumulative over the years — BUILT 2026-10-08 for OISST and the four ERA5 stores

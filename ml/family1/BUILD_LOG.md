@@ -2157,3 +2157,13 @@ then built and published on hosted runners from `bae8a54`, no cost:
 
 A green run was not taken as evidence: the store.json, the five arrays and
 the registry were read back from the Hub after each run.
+
+**`s2labels` published (2026-10-11 late evening).** family1-build #1059
+(stage all, 2015 → 2021, `ubuntu-latest`, ~50 min — most of it the 5.2 GB of
+Zenodo downloads) published **837,964 labelled pixels**, 2015-11-29 →
+2021-01-23; `qc.npy` read back from the Hub matches store.json's sha256 and
+holds exactly MARIDA's 3,399 "marine debris" pixels. family1-registry #8
+(families 13, `allow_group: added_s2labels` — the guard's new mode for a
+store published for the first time into an existing registry) republished
+`family13.json` with three built stores. The co-location probe (no signal;
+`s2fdi_gpgp` closed) is in the plan, §5 step 2.
