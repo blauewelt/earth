@@ -40,7 +40,7 @@ rest on a net depth each compiler assumed; and storing an empty net as the obser
 are tested against the nets and against human-labelled pixels before anything large is built: Sentinel-2 does not
 image the open ocean, except in one 2021 campaign over the Great Pacific Garbage Patch that coincides with The Ocean
 Cleanup's aerial surveys, and a one-hour probe there is expected to find nothing above noise. The note gives the
-ledger of sources, the stores, eight decisions, the build ladder, the test that can show each store is not worth
+ledger of sources, the stores, nine decisions, the build ladder, the test that can show each store is not worth
 keeping, and the open items. Nothing has been built, dispatched, rented or uploaded.
 \end{abstract}
 
@@ -177,14 +177,24 @@ SEA tows. Values from different studies are not comparable until that division i
 Lebreton's compiled tows: the net came up empty. A zero is an observation and is stored as one.
 \end{enumerate}
 
-\paragraph{An unresolved conflict, found while checking --- and it affects the live globe layer.} SEA's 2,529
-Pacific tows (Law et al.\ 2014) exist in two published copies: SEA's own submission to NCEI (accession 0211008) and
-the copy inside Lebreton 2018's compilation. They agree on every year-month count (2,529 = 2,529) and on the first
-$\sim 46$ rows, then diverge: only 399 positions and 386 (position, value) pairs match. Both copies are coherent ship
-tracks (median step between consecutive tows 92\,km and 100\,km), so neither is obviously scrambled. The globe's
-``Microplastics, earlier surveys 1972--2015'' option draws Lebreton's copy. \textbf{Which copy is right must be
-settled before the store is built} (\S\ref{sec:ladder}, step 0) --- by asking SEA, or by a third independent copy:
-Eriksen 2023 holds 10,170 SEA rows to 2017.
+\paragraph{The SEA conflict --- found while checking, settled the same day.} SEA's 2,529 Pacific tows
+(Law et al.\ 2014) exist in two published copies: NCEI accession 0211008 (also carried by NCEI's harmonised table
+as 2,530 rows) and the copy inside Lebreton 2018's compilation. They agree on every year-month count and on the
+first $\sim 46$ rows, then diverge: only 399 positions match, although both are coherent ship tracks (median step
+between consecutive tows 92\,km and 100\,km). Two further copies broke the tie. SEA's own submission to AOMI
+(2,485 Pacific tows, 2001-10 $\to$ 2012-12) matches Lebreton's copy at \textbf{all 2,485} year-month-position keys
+and NCEI's at 355; Eriksen 2023 (10,170 SEA rows carrying ship, cruise and station numbers) matches Lebreton's at
+2,485 of 2,487 and NCEI's at 357. \textbf{NCEI accession 0211008 has the wrong positions; Lebreton's copy --- the
+one the globe's ``earlier surveys'' option draws --- is right.} In September 2005, for example, NCEI places the
+tows off Hawaii ($15^\circ$\,N, $160^\circ$\,W) where the other three place them off San Diego ($32.8^\circ$\,N,
+$117.5^\circ$\,W). Only the Pacific accession is affected: NCEI's 6,135 SEA Atlantic tows (Law et al.\ 2010) match
+SEA's own AOMI submission at 5,808 of 5,851 positions.
+
+\textbf{The values are a separate, open question.} Where the positions agree, the published Law 2014 value equals
+SEA's own AOMI value (pieces/km$^2$, $<5$\,mm) for 1,440 of 2,487 tows and is within 5\,\% for 20 more; for the
+other 1,027 SEA's resubmitted value is larger, typically about three times (median ratio 3.0, 10th--90th
+percentile 1.02--5.85). That looks like a later reprocessing by SEA, not a transcription error, and nothing in the
+files says which version SEA now stands by. Decision D9 records the choice.
 
 \section{The ledger, part two --- satellites, and the one window where they meet the nets}
 
@@ -347,7 +357,7 @@ manta tow sweeps $\sim 0.9$\,m $\times$ 1--15\,km: its token's area is the swept
 and its length the tow line; a pump sample is a point (\code{log2\_fp} $= -4$, the family's label for a point); a
 Sentinel-2 pixel is 20\,m.
 
-\section{Decisions D1--D8 --- this note's picks, each reversible}
+\section{Decisions D1--D9 --- this note's picks, each reversible}
 \label{sec:decisions}
 
 \begin{enumerate}\itemsep2pt
@@ -368,7 +378,7 @@ raw value, never in place of it.
 NCEI, and 79 rows with latitude and longitude swapped. The probe measures what it would add; if it is worth it, it
 goes on the \emph{private} track (held for this project's own use, never republished).
 \item[\textbf{D5}] \textbf{Eriksen 2023 stays out until its licence is clear} (there is no licence in the
-repository). It is the third copy that can settle the SEA conflict, and that use needs no redistribution.
+repository). It was one of the two further copies that settled the SEA conflict, a use that needs no redistribution.
 \item[\textbf{D6}] \textbf{No satellite debris store is built at scale in this family's first pass.} Sentinel-2
 cannot see the open ocean, PACE has no band on plastic's absorption, and CYGNSS's index is fitted to a model. What
 IS built is cheap: the labelled pixels (\code{s2labels}) and one probe at the 2021 co-location window. A coastal
@@ -381,15 +391,20 @@ a plastic model, at $1^\circ$ and 30 days. The roughness itself (mean-square slo
 \code{inherits\_block} lists the RESOLVED chain (1.gf's 13 stores under their own paths and 1.2's four), so a reader
 opens one parent list, not a chain. \code{ml/build\_family1\_registry.py} needs that small extension; today it
 resolves one parent.
+\item[\textbf{D9}] \textbf{SEA's Pacific tows come from Lebreton 2018's copy, with the published Law et al.\ 2014
+values.} NCEI's accession 0211008 and its 2,530 ``Law et al.\ 2014'' rows are dropped by name (their positions are
+wrong); SEA's Atlantic tows (Law et al.\ 2010) stay with NCEI. The ledger records, per SEA Pacific tow, whether SEA's
+later AOMI value differs, so the choice can be reversed without rebuilding anything else. Whether SEA's resubmitted
+values supersede the published ones is a question for SEA.
 \end{enumerate}
 
 \section{The ladder --- the order of building}
 \label{sec:ladder}
 
 \begin{enumerate}\itemsep2pt
-\item[\textbf{0}] \textbf{Settle the SEA conflict} (\S3) before any row is written: compare both copies with
-Eriksen 2023's 10,170 SEA rows and, if that does not decide, ask SEA. The answer also decides whether the globe
-layer's ``earlier surveys'' option keeps Lebreton's copy. Cost: an afternoon.
+\item[\textbf{0}] \textbf{Settle the SEA conflict} (\S3) --- \textbf{done 2026-10-11}: SEA's own AOMI submission
+and Eriksen 2023 both agree with Lebreton's copy and not with NCEI's accession 0211008. The globe layer keeps
+Lebreton's copy; \code{mplastic} drops NCEI's SEA Pacific rows (D9). Left open: which values SEA now stands by.
 \item[\textbf{1}] \textbf{Phase A, on a hosted runner (one of GitHub's own build machines), \$0.} Adapters for
 \code{mplastic}, \code{mobjects} and \code{s2labels} against the family-10 point-store builder; a probe that runs
 the whole of each (they are small enough that the probe IS the build); the per-study depth table committed with the
@@ -431,7 +446,7 @@ against false alarms). If the threshold already matches the model, the labels ar
 Status: \textbf{draft --- nothing built.} The sources were measured on 2026-10-11; the raw downloads are in
 scratch space, not committed.
 \begin{enumerate}\itemsep2pt
-\item the SEA Pacific conflict, which blocks \code{mplastic}'s SEA rows and the globe layer's earlier-surveys option;
+\item settled 2026-10-11: the SEA Pacific positions (NCEI's accession is wrong, D9). Still open, and not a blocker: whether SEA's resubmitted values (about $3\times$ for 1,027 tows) supersede the published ones --- a question for SEA;
 \item Isobe 2021's data licence; Eriksen 2023's licence;
 \item whether the repository's Earthdata account (secrets \code{EARTHDATA\_USERNAME} / \code{EARTHDATA\_PASSWORD},
 working for LP DAAC, GES DISC and PO.DAAC) reads OB.DAAC's PACE level 2 --- never tried;

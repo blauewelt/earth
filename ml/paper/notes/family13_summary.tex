@@ -97,7 +97,7 @@ Plastic Litter Project (all CC BY 4.0, on Zenodo). Sentinel-2 is Copernicus ``fr
 ``Contains modified Copernicus Sentinel data [year]''; PACE and CYGNSS are NASA open, downloads behind an Earthdata
 login. \textbf{Left out:} AOMI, Japan's Atlas of Ocean Microplastics --- non-commercial only, out of phase A, and
 private if its unique rows prove worth having; Eriksen 2023's ``plastic smog'' compilation --- no licence in its
-repository (the paper is CC BY 4.0), used only to settle the SEA conflict, which needs no redistribution; CYGNSS's
+repository (the paper is CC BY 4.0), used only to settle the SEA conflict (done: NCEI's copy of SEA's Pacific tows has the wrong positions), which needs no redistribution; CYGNSS's
 microplastic index --- rejected, a roughness anomaly fitted to a plastic model at $1^\circ$ and 30 days. Sizes are
 estimates except MARIDA's 837,377 pixels, which were counted.} \\
 \end{longtable}}
@@ -116,8 +116,9 @@ carries its footprint: a manta tow its swept area and tow line, a pump sample a 
 
 \subsection*{The ladder}
 \begin{tabular}{@{}L{1.2cm}L{16.3cm}@{}}
-\textbf{0} & Settle the SEA conflict: SEA's 2,529 Pacific tows exist in two copies that agree on monthly counts but
-match on only 399 positions; compare both with Eriksen 2023's 10,170 SEA rows, or ask SEA. An afternoon. \\
+\textbf{0} & \textbf{Done 2026-10-11.} SEA's 2,529 Pacific tows had two copies agreeing on only 399 positions; SEA's
+own AOMI submission and Eriksen 2023 both match Lebreton's copy (2,485 positions) and not NCEI's accession 0211008,
+so NCEI's rows are dropped and the globe layer is right. Open for SEA: its later values for 1,027 tows are $\sim 3\times$. \\
 \textbf{A} & \code{mplastic}, \code{mobjects}, \code{s2labels} on a hosted runner, \$0 --- small enough that the
 probe IS the build; the per-study depth table; the de-duplication ledger; the registry. \\
 \textbf{probe} & One hour, \$0: Sentinel-2's only campaign over the patch (summer 2021) coincides with The Ocean
@@ -174,7 +175,7 @@ alphabetical order.
 \gl{cruise}{One ship's voyage; tows from the same cruise are held out together so neighbours cannot leak.}
 \gl{CSV}{Comma-separated values, a plain-text table.}
 \gl{CYGNSS; \code{cygnss\_mss}}{NASA's Cyclone Global Navigation Satellite System, small satellites that measure sea roughness from reflected GPS signals; the phase-C store of that roughness. Its microplastic index (Evans \& Ruf 2021) is rejected (D7).}
-\gl{D1--D8}{The eight decisions of the design note: nets first; one producer per cruise; store what the net measured; AOMI out of phase A; Eriksen 2023 out until licensed; no satellite store at scale yet; CYGNSS's index rejected; family code, root and registry.}
+\gl{D1--D9}{The nine decisions of the design note: nets first; one producer per cruise; store what the net measured; AOMI out of phase A; Eriksen 2023 out until licensed; no satellite store at scale yet; CYGNSS's index rejected; family code, root and registry; SEA's Pacific tows from Lebreton's copy.}
 \gl{de-duplication ledger}{The record, per pair of sources, of rows read, rows dropped as copies, and rows kept.}
 \gl{derived product}{A quantity computed from observations (or a model) rather than measured; admitted only where it carries observations nothing else does.}
 \gl{DOI}{Digital Object Identifier, a permanent link to a dataset or paper (NCEI's: 10.25921/v8gj-k896).}
@@ -219,7 +220,7 @@ alphabetical order.
 \gl{\code{kd\_490}}{The attenuation of light at 490\,nm, a measure of water clarity.}
 \gl{Kikaki et al.\ 2022, 2024}{The MARIDA and MADOS labelled sets.}
 \gl{labelled pixels}{Satellite pixels a person has marked with what they show; the material any detection method is tested on.}
-\gl{Law et al.\ 2014}{SEA's 2,529 Pacific tows, whose two published copies disagree (the SEA conflict).}
+\gl{Law et al.\ 2014}{SEA's 2,529 Pacific tows; NCEI's copy of them (accession 0211008) has the wrong positions, Lebreton 2018's copy is right (the SEA conflict).}
 \gl{Lebreton et al.\ 2018, 2024}{The Ocean Cleanup's survey of the Great Pacific Garbage Patch (683 events, 1,595 aircraft objects, 3,532 compiled tows) and its 2015--2022 follow-up (917 manta tows, 162 large-net tows, 74 aerial surveys).}
 \gl{level 1C, 2A; levels 1--4}{Sentinel-2's top-of-atmosphere and atmospherically corrected products; elsewhere, satellite processing stages: calibrated signals, swath measurements, gridded maps, model-filled products.}
 \gl{light attenuation}{How quickly light dims with depth in the water; high in turbid or bloom water.}
@@ -269,7 +270,7 @@ alphabetical order.
 \gl{\code{s2fdi\_coast}, \code{s2fdi\_gpgp}}{Possible stores of Sentinel-2 debris indices over coastal waters (phase C) and over the Great Pacific Garbage Patch in 2021 (phase B, only if the probe shows signal).}
 \gl{\code{s2labels}}{Phase-A store of human-labelled Sentinel-2 pixels (MARIDA, MADOS, Plastic Litter Project).}
 \gl{\emph{Sargassum}}{A floating brown seaweed, one of the debris index's confusers.}
-\gl{SEA; SEA conflict}{The Sea Education Association, whose cruises towed Law 2014's Pacific nets; the disagreement between SEA's own copy of those 2,529 tows and the copy in Lebreton 2018, to be settled before \code{mplastic} is built.}
+\gl{SEA; SEA conflict}{The Sea Education Association, whose cruises towed Law 2014's Pacific nets; the disagreement between NCEI's copy of those 2,529 tows and Lebreton 2018's, settled on 2026-10-11 against SEA's own AOMI submission and Eriksen 2023: NCEI's positions are wrong.}
 \gl{Sentinel-2, S2A, S2B}{The EU Copernicus optical satellites, 10--20\,m; the two satellites, whose debris-index factor is 1.7722 and 1.7770.}
 \gl{size classes}{The bands of piece size a producer counts separately: 0.05--0.5, 0.5--5, 5--50 and over 50\,cm.}
 \gl{SST}{Sea-surface temperature; one of the four prediction goals.}

@@ -94,17 +94,37 @@ over water. This is the finding of 2026-10-08, confirmed against the adapters
    of AOMI's, 1,506 of Lebreton's compiled tows: the net came up empty. A
    zero is an observation and is stored as one.
 
-**An unresolved conflict, found while checking (affects the live globe
-layer).** SEA's 2,529 Pacific tows (Law et al. 2014) exist in two published
-copies — SEA's own submission to NCEI (accession 0211008) and the copy inside
-Lebreton 2018's compilation. They agree on every year-month count (2,529 =
-2,529) and on the first ~46 rows, then diverge: only 399 positions and 386
-(position, value) pairs match. Both copies are coherent ship tracks (median
-step between consecutive tows 92 km and 100 km), so neither is obviously
-scrambled. The globe's "Microplastics, earlier surveys 1972–2015" option draws
-Lebreton's copy. **Which copy is right must be settled before the store is
-built** (§5, step 0) — by asking SEA, or by a third independent copy (Eriksen
-2023 holds 10,170 SEA rows to 2017).
+**The SEA conflict — found while checking, SETTLED 2026-10-11 (§5 step 0).**
+SEA's 2,529 Pacific tows (Law et al. 2014) exist in two published copies —
+NCEI accession 0211008 (also carried by NCEI's harmonised table as 2,530 rows
+of "Law et al. 2014") and the copy inside Lebreton 2018's compilation. They
+agree on every year-month count and on the first ~46 rows, then diverge: only
+399 positions match. Both are coherent ship tracks (median step 92 km and
+100 km), so the tie was broken with two further copies, measured:
+
+| witness | rows compared | matches Lebreton's copy (year, month, position) | matches NCEI 0211008 |
+|---|---|---|---|
+| **SEA's own submission to AOMI** (organisation "Sea Education Association", 2001-10-12 → 2012-12-20, west of 100° W) | 2,485 | **2,485** | 355 |
+| **Eriksen et al. 2023** (10,170 SEA rows with ship, cruise and station numbers) | 2,487 | **2,485** | 357 |
+
+**NCEI accession 0211008's positions are wrong; Lebreton's copy — the one the
+globe's "earlier surveys" option draws — is right.** In September 2005, for
+example, NCEI puts the tows off Hawaii (15° N, 160° W) where SEA's own record
+and both compilations put them off San Diego (32.8° N, 117.5° W). Only the
+Pacific accession is affected: NCEI's 6,135 SEA Atlantic tows (Law et al.
+2010) match SEA's own AOMI submission at 5,808 of 5,851 positions. (The
+remaining Lebreton rows lie east of 100° W, in the eastern tropical Pacific,
+outside the longitude cut the comparison used — not missing.)
+
+**A second, separate question about the VALUES remains open.** Where the
+positions agree, the published Law 2014 value (Lebreton's copy; Eriksen 2023
+agrees on 2,279 rows) equals SEA's own AOMI value (pieces/km², < 5 mm) for
+1,440 of 2,487 tows and is within 5 % for 20 more; for the other 1,027 SEA's
+resubmitted value is larger, typically about three times (median ratio 3.0;
+10th–90th percentile 1.02–5.85). That looks like a later reprocessing by SEA
+(a different tow area or size cut), not a transcription error, and nothing in
+the files says which version SEA now stands by. **D9** (§3) records the
+choice.
 
 ### 2b · Satellites
 
@@ -174,6 +194,15 @@ image are days apart, and it is cheap to look at (§5, step 2).
   not a chain. `ml/build_family1_registry.py` needs that small extension
   (today it resolves one parent).
 
+- **D9 — SEA's Pacific tows come from Lebreton 2018's copy, with the
+  published Law et al. 2014 values** (settled 2026-10-11, §2a). NCEI's
+  accession 0211008 and its 2,530 "Law et al. 2014" rows are DROPPED by name
+  (their positions are wrong); the Atlantic SEA rows (Law et al. 2010) stay
+  with NCEI. The ledger records, per SEA Pacific tow, whether SEA's later AOMI
+  value differs, so the choice is reversible without a rebuild of anything
+  else. Whether SEA's resubmitted values supersede the published ones is a
+  question for SEA.
+
 ## 4 · The stores
 
 | store | tier | what one row / frame is | channels | rows / size | phase |
@@ -202,10 +231,11 @@ a point (`log2_fp` −4, the family's point label); a Sentinel-2 pixel is 20 m.
 
 ## 5 · The ladder
 
-0. **Settle the SEA conflict** (§2a) before any row is written: compare both
-   copies with Eriksen 2023's 10,170 SEA rows and, if that does not decide,
-   ask SEA. The answer also decides whether the globe layer's "earlier
-   surveys" option keeps Lebreton's copy. Cost: an afternoon.
+0. **Settle the SEA conflict** (§2a) — **DONE 2026-10-11.** SEA's own AOMI
+   submission and Eriksen 2023 both agree with Lebreton's copy (2,485 of
+   2,485 and 2,485 of 2,487 positions) and not with NCEI's accession 0211008
+   (355 and 357). The globe layer keeps Lebreton's copy; `mplastic` drops
+   NCEI's SEA Pacific rows (D9). Left open: which VALUES SEA now stands by.
 1. **Phase A, on a hosted runner, $0**: adapters `mplastic`, `mobjects`,
    `s2labels` against the family-10 point-store builder; a probe that runs
    the whole of each (they are small enough that the probe IS the build); the
@@ -253,8 +283,10 @@ a point (`log2_fp` −4, the family's point label); a Sentinel-2 pixel is 20 m.
 in the session's scratch space, not committed). Open items, in the order they
 block:
 
-1. the SEA Pacific conflict (blocks `mplastic`'s SEA rows and the globe
-   layer's earlier-surveys option);
+1. ~~the SEA Pacific conflict~~ — settled 2026-10-11 (§2a, D9): NCEI's
+   accession 0211008 has the wrong positions. Still open: whether SEA's
+   resubmitted values (about 3× for 1,027 tows) supersede the published ones
+   — a question for SEA, not a blocker (the ledger keeps both);
 2. Isobe 2021's data licence; Eriksen 2023's licence;
 3. whether the repository's Earthdata account (secrets `EARTHDATA_USERNAME` /
    `EARTHDATA_PASSWORD`, working for LP DAAC, GES DISC and PO.DAAC) reads

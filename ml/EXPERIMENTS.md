@@ -62,8 +62,12 @@ caught), with `mobjects` (aircraft-identified objects) and `s2labels`
 open-gyre co-location of tows, aircraft surveys and Sentinel-2 (August 2021)
 decides whether any satellite store is built. **Control** for the read-out:
 the five nearest tows in space and time, and Isobe 2021's climatological map,
-scored on cruises held out. Blocking: two published copies of SEA's 2,529
-Pacific tows disagree on position. Plan:
+scored on cruises held out. The SEA question (two published copies of SEA's 2,529
+Pacific tows disagreeing on position) was SETTLED the same day: SEA's own AOMI
+submission and Eriksen 2023 both match Lebreton's copy (2,485 positions each)
+and not NCEI's accession 0211008 (~355) — NCEI's positions are wrong, the
+globe's copy is right; SEA's later resubmitted values (≈ 3× for 1,027 tows)
+are an open question for SEA. Plan:
 [E-092](https://blauewelt.github.io/earth/docs.html?f=ml/plans/E092_family13_plastic.md).
 
 ## E-091 · Day-of-year climatology — the mean of every calendar day over any span of years, from sums cumulative over the years — BUILT 2026-10-08 for OISST and the four ERA5 stores
