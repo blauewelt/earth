@@ -1,0 +1,287 @@
+{
+ "acquisitions_selected": 577,
+ "bins": [
+  2411,
+  3067
+ ],
+ "builder_git_sha": "c4db882437ee48dd1bbf594bfb845ed4b47034dc",
+ "built_at": "2026-10-13T20:32:35+00:00",
+ "channels": [
+  {
+   "max": 2.0,
+   "min": -2.0,
+   "name": "fdi",
+   "unit": "floating debris index (Biermann 2020), reflectance units"
+  },
+  {
+   "max": 2.0,
+   "min": -2.0,
+   "name": "fai",
+   "unit": "floating algae index (Hu 2009), reflectance units"
+  },
+  {
+   "max": 1.0,
+   "min": -1.0,
+   "name": "ndvi",
+   "unit": "normalised difference vegetation index (B08, B04)"
+  },
+  {
+   "max": 1.0,
+   "min": 0.0,
+   "name": "pi",
+   "unit": "plastic index (Themistocleous 2020) B08/(B08+B04)"
+  },
+  {
+   "max": 1.7,
+   "min": -0.02,
+   "name": "rho_b04",
+   "unit": "surface reflectance rho_s (ACOLITE dark spectrum fitting on Level-1C; dimensionless)"
+  },
+  {
+   "max": 1.7,
+   "min": -0.02,
+   "name": "rho_b06",
+   "unit": "surface reflectance rho_s (ACOLITE dark spectrum fitting on Level-1C; dimensionless)"
+  },
+  {
+   "max": 1.7,
+   "min": -0.02,
+   "name": "rho_b08",
+   "unit": "surface reflectance rho_s (ACOLITE dark spectrum fitting on Level-1C; dimensionless)"
+  },
+  {
+   "max": 1.7,
+   "min": -0.02,
+   "name": "rho_b11",
+   "unit": "surface reflectance rho_s (ACOLITE dark spectrum fitting on Level-1C; dimensionless)"
+  }
+ ],
+ "dataset": "Sentinel-2 L1C (Earth Search) + ACOLITE DSF",
+ "date_range": [
+  "2015-01-01",
+  "2023-12-31"
+ ],
+ "estimated_hours": 60.91,
+ "first_file": {
+  "l1c": "S2A_16PCC_20170112_0_L1C",
+  "tileInfo_product": "S2A_MSIL1C_20170112T161621_N0204_R140_T16PCC_20170112T162845"
+ },
+ "footprint": {
+  "log2_dt": -18.720671786825555,
+  "log2_fp": -10.442425193331607
+ },
+ "groups": {
+  "T16PCC": {
+   "absent": 1,
+   "by_reason": {
+    "marida_scene": 18
+   },
+   "excluded": 1172,
+   "first": "2017-01-12",
+   "last": "2020-12-12",
+   "selected": 18
+  },
+  "T16PDC": {
+   "absent": 1,
+   "by_reason": {
+    "marida_scene": 5
+   },
+   "excluded": 593,
+   "first": "2018-09-19",
+   "last": "2020-09-28",
+   "selected": 5
+  },
+  "T16PEC": {
+   "absent": 1,
+   "by_reason": {
+    "marida_scene": 5
+   },
+   "excluded": 1163,
+   "first": "2017-01-12",
+   "last": "2019-01-12",
+   "selected": 5
+  },
+  "T16QED": {
+   "absent": 0,
+   "by_reason": {
+    "marida_scene": 2
+   },
+   "excluded": 1160,
+   "first": "2018-03-08",
+   "last": "2019-01-27",
+   "selected": 2
+  },
+  "T18QWF": {
+   "absent": 0,
+   "by_reason": {
+    "marida_scene": 1
+   },
+   "excluded": 610,
+   "first": "2020-03-22",
+   "last": "2020-03-22",
+   "selected": 1
+  },
+  "T18QYF": {
+   "absent": 0,
+   "by_reason": {
+    "marida_scene": 13
+   },
+   "excluded": 1198,
+   "first": "2020-03-14",
+   "last": "2021-01-23",
+   "selected": 13
+  },
+  "T18QYG": {
+   "absent": 0,
+   "by_reason": {
+    "marida_scene": 1
+   },
+   "excluded": 1200,
+   "first": "2020-03-07",
+   "last": "2020-03-07",
+   "selected": 1
+  },
+  "T19QDA": {
+   "absent": 0,
+   "by_reason": {
+    "marida_scene": 1
+   },
+   "excluded": 586,
+   "first": "2019-01-11",
+   "last": "2019-01-11",
+   "selected": 1
+  },
+  "T30VWH": {
+   "absent": 0,
+   "by_reason": {
+    "marida_scene": 1
+   },
+   "excluded": 1132,
+   "first": "2018-04-20",
+   "last": "2018-04-20",
+   "selected": 1
+  },
+  "T35SMD": {
+   "absent": 0,
+   "by_reason": {
+    "cloud_lt_20": 486,
+    "plp_campaign_date": 32
+   },
+   "excluded": 622,
+   "first": "2016-11-17",
+   "last": "2023-12-28",
+   "selected": 518
+  },
+  "T36JUN": {
+   "absent": 0,
+   "by_reason": {
+    "marida_scene": 1
+   },
+   "excluded": 1254,
+   "first": "2019-04-24",
+   "last": "2019-04-24",
+   "selected": 1
+  },
+  "T48MXU": {
+   "absent": 0,
+   "by_reason": {
+    "marida_scene": 2
+   },
+   "excluded": 567,
+   "first": "2018-12-06",
+   "last": "2019-05-25",
+   "selected": 2
+  },
+  "T48MYU": {
+   "absent": 0,
+   "by_reason": {
+    "marida_scene": 2
+   },
+   "excluded": 565,
+   "first": "2017-12-06",
+   "last": "2019-12-01",
+   "selected": 2
+  },
+  "T48PZC": {
+   "absent": 0,
+   "by_reason": {
+    "marida_scene": 3
+   },
+   "excluded": 1153,
+   "first": "2018-01-18",
+   "last": "2019-11-24",
+   "selected": 3
+  },
+  "T50LLR": {
+   "absent": 0,
+   "by_reason": {
+    "marida_scene": 1
+   },
+   "excluded": 639,
+   "first": "2018-03-04",
+   "last": "2018-03-04",
+   "selected": 1
+  },
+  "T51PTS": {
+   "absent": 1,
+   "by_reason": {
+    "marida_scene": 1
+   },
+   "excluded": 1173,
+   "first": "2019-05-18",
+   "last": "2019-05-18",
+   "selected": 1
+  },
+  "T51RVQ": {
+   "absent": 0,
+   "by_reason": {
+    "marida_scene": 1
+   },
+   "excluded": 1186,
+   "first": "2017-08-29",
+   "last": "2017-08-29",
+   "selected": 1
+  },
+  "T52SDD": {
+   "absent": 0,
+   "by_reason": {
+    "marida_scene": 1
+   },
+   "excluded": 1147,
+   "first": "2018-10-07",
+   "last": "2018-10-07",
+   "selected": 1
+  }
+ },
+ "l1c_bucket_payer": "BucketOwner",
+ "marida_scenes": 63,
+ "per_year_resume": true,
+ "qc_policy": "a pixel is stored when Sen2Cor's SCL (the matching L2A) calls it water (class 6), it lies more than 1000 m from an SCL cloud shadow, cloud or cirrus pixel (classes 3, 8, 9, 10; buffer MEASURED, see notes), and all four ACOLITE bands are finite and inside [-0.02, 1.7]; everything else is NaN. A band outside its bounds is NaN and counted before any index is formed; an index outside its bounds is NaN and counted",
+ "sources": [
+  "https://earth-search.aws.element84.com/v1/search (sentinel-2-l1c, sentinel-2-l2a)",
+  "https://sentinel-s2-l1c.s3.eu-central-1.amazonaws.com/tiles/<utm>/<band>/<sq>/<y>/<m>/<d>/<seq>/<B>.jp2",
+  "s3://sentinel-cogs (L2A SCL COG)",
+  "https://zenodo.org/records/5151941/files/MARIDA.zip?download=1",
+  "https://github.com/acolite/acolite.git@ca477dd91dfb5f8eb77333824b38cb0bcce5e083"
+ ],
+ "stac": {
+  "stac_items": 39146,
+  "stac_pages": 1234
+ },
+ "store": "s2fdi_coast",
+ "title": "Sentinel-2 floating-debris indices (FDI, FAI, NDVI, PI) and the four ACOLITE surface reflectances they use, 20 m, water pixels only, one frame per acquisition \u2014 PILOT: MARIDA's 63 scenes and tile 35SMD (Gulf of Gera, Lesvos)",
+ "url": "https://earth-search.aws.element84.com/v1/search",
+ "verified": "2026-10-13 from the sandbox: Earth Search STAC for all 63 MARIDA scenes (59 with sentinel-2-l1c and -l2a items, 4 with neither) and for 35SMD 2019-2023 (909 L1C items, 724 datatakes, 415 selected, at most one a day); anonymous GET of https://sentinel-s2-l1c.s3.eu-central-1.amazonaws.com/?requestPayment -> <Payer>BucketOwner</Payer>, and the control usgs-landsat -> 403 requester-pays; CDSE product download -> 401 without a token; every tile grid from two SCL assets; ACOLITE's 20 m L2R xrange/yrange equal to the 35SMD grid and its lat/lon equal to the grid's pixel centres to < 0.2 m; the cloud-buffer curve on six cached 2021 Pacific crops",
+ "version": "ACOLITE ca477dd91dfb5f8eb77333824b38cb0bcce5e083",
+ "years": [
+  2015,
+  2016,
+  2017,
+  2018,
+  2019,
+  2020,
+  2021,
+  2022,
+  2023
+ ]
+}

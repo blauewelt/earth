@@ -1,0 +1,80 @@
+tier G    sharded, groups ['T16PCC', 'T16PDC', 'T16PEC', 'T16QED', 'T18QWF', 'T18QYF', 'T18QYG', 'T19QDA', 'T30VWH', 'T35SMD', 'T36JUN', 'T48MXU', 'T48MYU', 'T48PZC', 'T50LLR', 'T51PTS', 'T51RVQ', 'T52SDD'], F=5 x 86400 s, float16, years (by bin start) 2015..2023
+work      /opt/runner/_work/earth/earth/ml/cache/family1_3
+
+=== stage index (s2fdi_coast) ===
+  [index s2fdi_coast] start (1 items)  0/1  0.0s
+  [index s2fdi_coast] plan.json  1/1  1005.8s
+  index: s2fdi_coast — 9 year(s), C=8 (fdi, fai, ndvi, pi, rho_b04, rho_b06, rho_b08, rho_b11), bins 2411..3067
+=== stage index done in 1005.8s ===
+
+=== stage fetch (s2fdi_coast) ===
+  [pull s2fdi_coast parts] start (9 items)  0/9  0.0s
+  hub: chfrank/earth-tensors with the token from $HF_TOKEN
+HTTP Error 500 thrown while requesting GET https://huggingface.co/api/datasets/chfrank/earth-tensors/tree/main?expand=false&recursive=true&limit=1000&cursor=ZXlKbWFXeGxYMjVoYldVaU9pSjBaVzV6YjNKekwyWmhiV2xzZVRGZmRHWXZjR2hsYm04MU1EQXZhREU1ZGpBNEx6SXdNRFV2WW1sdVh6RTNNVFl1YVdSNExtNXdlU0lzSW5SeVpXVmZiMmxrSWpvaU16VmxNekpqTnpFeVkyVXdOV1poWmpoaVltRmhOalk1WWpKaU1qSXdPVE0wTXpSaE9UWXhNQ0o5OjQyMTAwMA%3D%3D
+Retrying in 1s [Retry 1/5].
+HTTP Error 500 thrown while requesting GET https://huggingface.co/api/datasets/chfrank/earth-tensors/tree/main?expand=false&recursive=true&limit=1000&cursor=ZXlKbWFXeGxYMjVoYldVaU9pSjBaVzV6YjNKekwyWmhiV2xzZVRGZmRHWXZjR2hsYm04MU1EQXZhREl4ZGpFM0x6SXdNVGN2WW1sdVh6STFPVE11YVdSNExtNXdlU0lzSW5SeVpXVmZiMmxrSWpvaU16VmxNekpqTnpFeVkyVXdOV1poWmpoaVltRmhOalk1WWpKaU1qSXdPVE0wTXpSaE9UWXhNQ0o5OjQyMzAwMA%3D%3D
+Retrying in 1s [Retry 1/5].
+HTTP Error 500 thrown while requesting GET https://huggingface.co/api/datasets/chfrank/earth-tensors/tree/main?expand=false&recursive=true&limit=1000&cursor=ZXlKbWFXeGxYMjVoYldVaU9pSjBaVzV6YjNKekwyWmhiV2xzZVRGZmRHWXZjR2hsYm04MU1EQXZhREl4ZGpFM0x6SXdNVGN2WW1sdVh6STFPVE11YVdSNExtNXdlU0lzSW5SeVpXVmZiMmxrSWpvaU16VmxNekpqTnpFeVkyVXdOV1poWmpoaVltRmhOalk1WWpKaU1qSXdPVE0wTXpSaE9UWXhNQ0o5OjQyMzAwMA%3D%3D
+Retrying in 2s [Retry 2/5].
+HTTP Error 500 thrown while requesting GET https://huggingface.co/api/datasets/chfrank/earth-tensors/tree/main?expand=false&recursive=true&limit=1000&cursor=ZXlKbWFXeGxYMjVoYldVaU9pSjBaVzV6YjNKekwyWmhiV2xzZVRGZmRHWXZjR2hsYm04MU1EQXZhREl4ZGpFM0x6SXdNVGN2WW1sdVh6STFPVE11YVdSNExtNXdlU0lzSW5SeVpXVmZiMmxrSWpvaU16VmxNekpqTnpFeVkyVXdOV1poWmpoaVltRmhOalk1WWpKaU1qSXdPVE0wTXpSaE9UWXhNQ0o5OjQyMzAwMA%3D%3D
+Retrying in 4s [Retry 3/5].
+HTTP Error 500 thrown while requesting GET https://huggingface.co/api/datasets/chfrank/earth-tensors/tree/main?expand=false&recursive=true&limit=1000&cursor=ZXlKbWFXeGxYMjVoYldVaU9pSjBaVzV6YjNKekwyWmhiV2xzZVRGZmRHWXZjR2hsYm04MU1EQXZhREl4ZGpFM0x6SXdNVGN2WW1sdVh6STFPVE11YVdSNExtNXdlU0lzSW5SeVpXVmZiMmxrSWpvaU16VmxNekpqTnpFeVkyVXdOV1poWmpoaVltRmhOalk1WWpKaU1qSXdPVE0wTXpSaE9UWXhNQ0o5OjQyMzAwMA%3D%3D
+Retrying in 8s [Retry 4/5].
+HTTP Error 500 thrown while requesting GET https://huggingface.co/api/datasets/chfrank/earth-tensors/tree/main?expand=false&recursive=true&limit=1000&cursor=ZXlKbWFXeGxYMjVoYldVaU9pSjBaVzV6YjNKekwyWmhiV2xzZVRGZmRHWXZjR2hsYm04MU1EQXZhREl4ZGpFM0x6SXdNVGN2WW1sdVh6STFPVE11YVdSNExtNXdlU0lzSW5SeVpXVmZiMmxrSWpvaU16VmxNekpqTnpFeVkyVXdOV1poWmpoaVltRmhOalk1WWpKaU1qSXdPVE0wTXpSaE9UWXhNQ0o5OjQyMzAwMA%3D%3D
+Retrying in 8s [Retry 5/5].
+HTTP Error 500 thrown while requesting GET https://huggingface.co/api/datasets/chfrank/earth-tensors/tree/main?expand=false&recursive=true&limit=1000&cursor=ZXlKbWFXeGxYMjVoYldVaU9pSjBaVzV6YjNKekwyWmhiV2xzZVRGZmRHWXZjR2hsYm04MU1EQXZhREl4ZGpFM0x6SXdNVGN2WW1sdVh6STFPVE11YVdSNExtNXdlU0lzSW5SeVpXVmZiMmxrSWpvaU16VmxNekpqTnpFeVkyVXdOV1poWmpoaVltRmhOalk1WWpKaU1qSXdPVE0wTXpSaE9UWXhNQ0o5OjQyMzAwMA%3D%3D
+Traceback (most recent call last):
+  File "/opt/conda/lib/python3.11/site-packages/huggingface_hub/utils/_http.py", line 836, in hf_raise_for_status
+    response.raise_for_status()
+  File "/opt/conda/lib/python3.11/site-packages/httpx/_models.py", line 829, in raise_for_status
+    raise HTTPStatusError(message, request=request, response=self)
+httpx.HTTPStatusError: Server error '500 Internal Server Error' for url 'https://huggingface.co/api/datasets/chfrank/earth-tensors/tree/main?expand=false&recursive=true&limit=1000&cursor=ZXlKbWFXeGxYMjVoYldVaU9pSjBaVzV6YjNKekwyWmhiV2xzZVRGZmRHWXZjR2hsYm04MU1EQXZhREl4ZGpFM0x6SXdNVGN2WW1sdVh6STFPVE11YVdSNExtNXdlU0lzSW5SeVpXVmZiMmxrSWpvaU16VmxNekpqTnpFeVkyVXdOV1poWmpoaVltRmhOalk1WWpKaU1qSXdPVE0wTXpSaE9UWXhNQ0o5OjQyMzAwMA%3D%3D'
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/500
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/opt/runner/_work/earth/earth/ml/build_family1_stores.py", line 2041, in <module>
+    sys.exit(main())
+             ^^^^^^
+  File "/opt/runner/_work/earth/earth/ml/build_family1_stores.py", line 2036, in main
+    f10b.run_stages(ctx, stages, stage_fn=stage_fns(ad), deps=deps)
+  File "/opt/runner/_work/earth/earth/ml/build_family10_stores.py", line 6007, in run_stages
+    stage_fn[s](ctx)
+  File "/opt/runner/_work/earth/earth/ml/build_family1_stores.py", line 847, in stage_fetch_grid
+    ph.pull(ad.store, ctx.years, ctx.work,
+  File "/opt/runner/_work/earth/earth/ml/family10_parts_hub.py", line 982, in pull
+    listing = _list_files(api, repo, hub_prefix(store, None, partials))
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/runner/_work/earth/earth/ml/family10_parts_hub.py", line 154, in _list_files
+    files = api.list_repo_files(repo, repo_type="dataset")
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/conda/lib/python3.11/site-packages/huggingface_hub/utils/_validators.py", line 89, in _inner_fn
+    return fn(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^
+  File "/opt/conda/lib/python3.11/site-packages/huggingface_hub/hf_api.py", line 3966, in list_repo_files
+    return [
+           ^
+  File "/opt/conda/lib/python3.11/site-packages/huggingface_hub/hf_api.py", line 3966, in <listcomp>
+    return [
+           ^
+  File "/opt/conda/lib/python3.11/site-packages/huggingface_hub/hf_api.py", line 4103, in list_repo_tree
+    for path_info in paginate(path=tree_url, headers=headers, params={"recursive": recursive, "expand": expand}):
+  File "/opt/conda/lib/python3.11/site-packages/huggingface_hub/utils/_pagination.py", line 45, in paginate
+    r = http_backoff("GET", next_page, headers=headers, timeout=timeout)
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/conda/lib/python3.11/site-packages/huggingface_hub/utils/_http.py", line 627, in http_backoff
+    return next(
+           ^^^^^
+  File "/opt/conda/lib/python3.11/site-packages/huggingface_hub/utils/_http.py", line 536, in _http_backoff_base
+    if not _should_retry(response):
+           ^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/conda/lib/python3.11/site-packages/huggingface_hub/utils/_http.py", line 512, in _should_retry
+    hf_raise_for_status(response)  # Will raise uncaught exception
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/conda/lib/python3.11/site-packages/huggingface_hub/utils/_http.py", line 966, in hf_raise_for_status
+    raise _format(HfHubHTTPError, str(e), response) from e
+huggingface_hub.errors.HfHubHTTPError: Server error '500 Internal Server Error' for url 'https://huggingface.co/api/datasets/chfrank/earth-tensors/tree/main?expand=false&recursive=true&limit=1000&cursor=ZXlKbWFXeGxYMjVoYldVaU9pSjBaVzV6YjNKekwyWmhiV2xzZVRGZmRHWXZjR2hsYm04MU1EQXZhREl4ZGpFM0x6SXdNVGN2WW1sdVh6STFPVE11YVdSNExtNXdlU0lzSW5SeVpXVmZiMmxrSWpvaU16VmxNekpqTnpFeVkyVXdOV1poWmpoaVltRmhOalk1WWpKaU1qSXdPVE0wTXpSaE9UWXhNQ0o5OjQyMzAwMA%3D%3D' (Request ID: Root=1-6acea071-7efb1b5d24bb2f5f121cdebe;9d1ba394-db5e-426f-8c12-ce9880210253)
+For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/500
+
+Internal Error - We're working hard to fix this as soon as possible!
