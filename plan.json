@@ -1,0 +1,153 @@
+{
+ "bins": [
+  1972,
+  3287
+ ],
+ "builder_git_sha": "c482f3987494ab825bda23d2e4b742e9dd0a11a6",
+ "built_at": "2026-10-13T11:44:42+00:00",
+ "channels": [
+  {
+   "max": 6.0000004342942646,
+   "min": 0.0,
+   "name": "log_items_100m",
+   "unit": "log10(1 + litter items per 100 m of shoreline)"
+  },
+  {
+   "max": 6.0000004342942646,
+   "min": 0.0,
+   "name": "log_plastic_100m",
+   "unit": "log10(1 + plastic items per 100 m of shoreline)"
+  },
+  {
+   "max": 6.0000004342942646,
+   "min": 0.0,
+   "name": "log_ambig_100m",
+   "unit": "log10(1 + items of undecided material per 100 m)"
+  },
+  {
+   "max": 1.0,
+   "min": 0.0,
+   "name": "plastic_frac",
+   "unit": "plastic items / all items"
+  },
+  {
+   "max": 4.000043427276863,
+   "min": 0.0,
+   "name": "log_items_m2",
+   "unit": "log10(1 + litter items m-2)"
+  },
+  {
+   "max": 3650.0,
+   "min": 1.0,
+   "name": "accum_days",
+   "unit": "days since the previous clearance"
+  },
+  {
+   "max": 20000.0,
+   "min": 1.0,
+   "name": "survey_len_m",
+   "unit": "m of shoreline surveyed"
+  },
+  {
+   "max": 7.000000043429446,
+   "min": 0.0,
+   "name": "log_nurdles_10pmin",
+   "unit": "log10(1 + pellets per 10 person-minutes)"
+  },
+  {
+   "max": 7.000000043429446,
+   "min": 0.0,
+   "name": "log_nurdle_count",
+   "unit": "log10(1 + pellets counted)"
+  },
+  {
+   "max": 1440.0,
+   "min": 1.0,
+   "name": "collect_min",
+   "unit": "minutes searched"
+  },
+  {
+   "max": 1000.0,
+   "min": 1.0,
+   "name": "volunteers",
+   "unit": "people searching"
+  },
+  {
+   "max": 60000.0,
+   "min": 1.0,
+   "name": "effort_pmin",
+   "unit": "person-minutes searched"
+  },
+  {
+   "max": 1.0,
+   "min": 0.0,
+   "name": "new_tide_line",
+   "unit": "1 = the newest tide line was searched"
+  },
+  {
+   "max": 9.000000000434294,
+   "min": 0.0,
+   "name": "log_n_m3_sand",
+   "unit": "log10(1 + microplastic pieces m-3 of beach sand)"
+  }
+ ],
+ "dataset": "beachlitter: NCEI Nurdle Patrol + beach sand, EMODnet beach litter (CB), NOAA MDMAP",
+ "date_range": [
+  "2009-01-01",
+  "2026-12-31"
+ ],
+ "emodnet_data_policy": {
+  "CB": 4444,
+  "LS": 8130,
+  "UN": 4287
+ },
+ "emodnet_surveys": 16861,
+ "footprint": {
+  "log2_dt": -6.906890595608519,
+  "log2_fp": -8.120497098444245
+ },
+ "mdmap_sites": 1271,
+ "mdmap_survey_refs": 8772,
+ "ncei_nurdle_rows": 10615,
+ "ncei_sand_rows": 893,
+ "nurdle_workbook": {
+  "file": "NurdlePatrolDatabase_S2N_v2.xlsx",
+  "version": "2.2"
+ },
+ "per_year_resume": false,
+ "qc_policy": "qc bits 0-3 = protocol (1 EMODnet, OSPAR 100 m list; 2 EMODnet, OSPAR 1 km list (items > 50 cm); 3 EMODnet, MSFD TSG-ML master list; 4 EMODnet, Joint List (J codes); 5 EMODnet, Joint List and TSG-ML in one survey; 6 EMODnet, UNEP/IOC list (incl. MARLIN); 7 EMODnet, Italian national list; 8 MDMAP 2.0; 9 MDMAP standing stock; 10 MDMAP accumulation; 11 Nurdle Patrol (pellets picked by hand); 12 NCEI beach-sand microplastics sample); bit 4 (16): time of day not given, placed at 12:00 UTC (every row); bit 5 (32): freshwater shore (farther than 10 km from the sea coast and nearer a Natural Earth lake or river); bit 6 (64): litter protocols \u2014 survey length not given, the protocol's default assumed; Nurdle Patrol \u2014 NCEI's published standardised rate is neither floor nor ceil of the recomputed one; bit 7 (128): position doubt (farther than 25 km from every mapped shore, fewer than 3 published decimals, EMODnet start > 5 km from the location or a two-coordinate location code, MDMAP ends > 5 km apart). Values outside the bounds -> NaN, counted. A row with no density is dropped.",
+ "sources": [
+  "https://hub.arcgis.com/api/download/v1/items/1b56a456ad8c43889652e62aa25a317e/csv?redirect=true&layers=0",
+  "https://www.ncei.noaa.gov/access/metadata/landing-page/bin/iso?id=gov.noaa.nodc:0259486",
+  "https://nodc.ogs.it/repository/aggregated-datasets/litter/EMODnet_beachLitter_European_2025_unrestricted.zip",
+  "https://portal.diver.orr.noaa.gov/pentaho/mdmap/sites",
+  "https://portal.diver.orr.noaa.gov/pentaho/mdmap/sites/{id}/export",
+  "https://raw.githubusercontent.com/nvkelso/natural-earth-vector/v5.1.2/geojson/ne_10m_coastline.geojson",
+  "https://raw.githubusercontent.com/nvkelso/natural-earth-vector/v5.1.2/geojson/ne_10m_minor_islands_coastline.geojson",
+  "https://raw.githubusercontent.com/nvkelso/natural-earth-vector/v5.1.2/geojson/ne_10m_lakes.geojson",
+  "https://raw.githubusercontent.com/nvkelso/natural-earth-vector/v5.1.2/geojson/ne_10m_rivers_lake_centerlines.geojson"
+ ],
+ "store": "beachlitter",
+ "title": "Litter on beaches and shorelines: one row per survey (NOAA NCEI Nurdle Patrol pellet counts and beach-sand microplastics, EMODnet beach litter under CC BY, NOAA MDMAP)",
+ "verified": "2026-10-13 from the sandbox: the NCEI Hub CSV (29,076 rows; 10,615 Nurdle Patrol, 893 Beach), accession 0259486 v2.2's workbook and data dictionary, the EMODnet beach-litter v2025 European zip (16,861 surveys, 2,084,972 lines; data policy CB 4,444, LS 8,130, UN 4,287), the MDMAP portal's site list (1,271 sites) and every site's export, and Natural Earth v5.1.2's coastline, minor-island coastline, lakes and river centre-lines",
+ "years": [
+  2009,
+  2010,
+  2011,
+  2012,
+  2013,
+  2014,
+  2015,
+  2016,
+  2017,
+  2018,
+  2019,
+  2020,
+  2021,
+  2022,
+  2023,
+  2024,
+  2025,
+  2026
+ ]
+}
