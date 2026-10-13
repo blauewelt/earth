@@ -1,0 +1,80 @@
+tier G    sharded, groups ['cygnss_mss'], F=5 x 86400 s, float16, years (by bin start) 2018..2026
+work      /home/runner/work/earth/earth/ml/cache/family1_3
+
+=== stage index (cygnss_mss) ===
+  [index cygnss_mss] start (1 items)  0/1  0.0s
+  [index cygnss_mss] plan.json  1/1  1.8s
+  index: cygnss_mss — 9 year(s), C=4 (mss, mss_uncertainty, n_mss, wind_speed), bins 2630..3287
+=== stage index done in 1.8s ===
+
+=== stage fetch (cygnss_mss) ===
+  [pull cygnss_mss parts] start (9 items)  0/9  0.0s
+  hub: chfrank/earth-tensors with the token from $HF_TOKEN
+  cygnss_mss 2018: 64 file(s), 154 row(s) -> /home/runner/work/earth/earth/ml/cache/family1_3/cygnss_mss/parts/2018
+  cygnss_mss 2019: 148 file(s), 365 row(s) -> /home/runner/work/earth/earth/ml/cache/family1_3/cygnss_mss/parts/2019
+  cygnss_mss 2020: 148 file(s), 365 row(s) -> /home/runner/work/earth/earth/ml/cache/family1_3/cygnss_mss/parts/2020
+  cygnss_mss 2021: 148 file(s), 365 row(s) -> /home/runner/work/earth/earth/ml/cache/family1_3/cygnss_mss/parts/2021
+  cygnss_mss 2022: 148 file(s), 365 row(s) -> /home/runner/work/earth/earth/ml/cache/family1_3/cygnss_mss/parts/2022
+  cygnss_mss 2023: 148 file(s), 365 row(s) -> /home/runner/work/earth/earth/ml/cache/family1_3/cygnss_mss/parts/2023
+  cygnss_mss 2024: 150 file(s), 370 row(s) -> /home/runner/work/earth/earth/ml/cache/family1_3/cygnss_mss/parts/2024
+  cygnss_mss 2025: 148 file(s), 365 row(s) -> /home/runner/work/earth/earth/ml/cache/family1_3/cygnss_mss/parts/2025
+  cygnss_mss 2026: 114 file(s), 275 row(s) -> /home/runner/work/earth/earth/ml/cache/family1_3/cygnss_mss/parts/2026
+  pull: 9 year(s) present in 9 lane(s) (0 already local), 2,989 row(s), 0 missing
+=== stage fetch done in 679.1s ===
+
+=== stage assemble (cygnss_mss) ===
+  [cygnss_mss store (tier G)] start (1 items)  0/1  0.0s
+  [cygnss_mss store (tier G)] store.json: sha256 200/1200  0.3s
+  [cygnss_mss store (tier G)] store.json: sha256 400/1200  0.4s
+  [cygnss_mss store (tier G)] store.json: sha256 600/1200  0.6s
+  [cygnss_mss store (tier G)] store.json: sha256 800/1200  0.8s
+  [cygnss_mss store (tier G)] store.json: sha256 1000/1200  1.0s
+  [cygnss_mss store (tier G)] store.json: sha256 1200/1200  1.2s
+  [cygnss_mss store (tier G)] check: sha256 200/1200  1.4s
+  [cygnss_mss store (tier G)] check: sha256 400/1200  1.5s
+  [cygnss_mss store (tier G)] check: sha256 600/1200  1.7s
+  [cygnss_mss store (tier G)] check: sha256 800/1200  1.9s
+  [cygnss_mss store (tier G)] check: sha256 1000/1200  2.1s
+  [cygnss_mss store (tier G)] check: sha256 1200/1200  2.2s
+  [cygnss_mss store (tier G)] check: check cygnss_mss 100/599  2.3s
+  [cygnss_mss store (tier G)] check: check cygnss_mss 200/599  2.3s
+  [cygnss_mss store (tier G)] check: check cygnss_mss 300/599  2.3s
+  [cygnss_mss store (tier G)] check: check cygnss_mss 400/599  2.3s
+  [cygnss_mss store (tier G)] check: check cygnss_mss 500/599  2.3s
+  [cygnss_mss store (tier G)] check: check cygnss_mss 599/599  2.3s
+  [cygnss_mss store (tier G)] store  1/1  8.9s
+  store: cygnss_mss — cygnss_mss 599 bin(s), 2989 frame(s), 47824 tile(s), 5781.3 MB -> /home/runner/work/earth/earth/ml/cache/family1_3/cygnss_mss/cygnss_mss
+=== stage assemble done in 8.9s ===
+
+=== stage publish (cygnss_mss) ===
+  [verify cygnss_mss before publish] start  0/0  0.0s
+  [verify cygnss_mss before publish] check: sha256 200/1200  0.2s
+  [verify cygnss_mss before publish] check: sha256 400/1200  0.4s
+  [verify cygnss_mss before publish] check: sha256 600/1200  0.6s
+  [verify cygnss_mss before publish] check: sha256 800/1200  0.7s
+  [verify cygnss_mss before publish] check: sha256 1000/1200  0.9s
+  [verify cygnss_mss before publish] check: sha256 1200/1200  1.1s
+  [verify cygnss_mss before publish] check: check cygnss_mss 100/599  1.1s
+  [verify cygnss_mss before publish] check: check cygnss_mss 200/599  1.1s
+  [verify cygnss_mss before publish] check: check cygnss_mss 300/599  1.1s
+  [verify cygnss_mss before publish] check: check cygnss_mss 400/599  1.2s
+  [verify cygnss_mss before publish] check: check cygnss_mss 500/599  1.2s
+  [verify cygnss_mss before publish] check: check cygnss_mss 599/599  1.2s
+  hub: chfrank/earth-tensors with the token from $HF_TOKEN
+  [publish cygnss_mss] start (1201 items)  0/1201  0.0s
+Upload 0 LFS files: 0it [00:00, ?it/s]Upload 0 LFS files: 0it [00:00, ?it/s]
+Upload 0 LFS files: 0it [00:00, ?it/s]Upload 0 LFS files: 0it [00:00, ?it/s]
+shard_index.npy:   0%|          | 0.00/239k [00:00<?, ?B/s]shard_index.npy: 100%|██████████| 239k/239k [00:00<00:00, 451kB/s]
+  [publish cygnss_mss] cygnss_mss  2/1201  28.6s
+  [publish cygnss_mss] cygnss_mss/2018  64/1201  32.9s
+  [publish cygnss_mss] cygnss_mss/2019  210/1201  42.1s
+  [publish cygnss_mss] cygnss_mss/2020  356/1201  51.4s
+  [publish cygnss_mss] cygnss_mss/2021  502/1201  60.7s
+  [publish cygnss_mss] cygnss_mss/2022  648/1201  70.2s
+  [publish cygnss_mss] cygnss_mss/2023  794/1201  80.6s
+  [publish cygnss_mss] cygnss_mss/2024  942/1201  90.4s
+  [publish cygnss_mss] cygnss_mss/2025  1088/1201  99.9s
+  [publish cygnss_mss] cygnss_mss/2026  1200/1201  107.1s
+  [publish cygnss_mss] store.json  1201/1201  107.3s
+  publish: 1201 file(s) verified by restore, 50 tile(s) decompressed, HTTP range {'checked': 5} -> https://huggingface.co/datasets/chfrank/earth-tensors/tree/main/tensors/family1_3/cygnss_mss
+=== stage publish done in 116.7s ===

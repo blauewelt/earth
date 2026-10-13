@@ -1,0 +1,10 @@
+{
+ "at": "2026-10-13T13:15:44+00:00",
+ "done": 1201,
+ "elapsed_s": 107.3,
+ "eta_s": 0.0,
+ "files": 1201,
+ "item": "store.json",
+ "stage": "publish cygnss_mss",
+ "total": 1201
+}
