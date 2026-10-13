@@ -40,9 +40,9 @@ from family1.adapters import mplastic as mp                     # noqa: E402
 # kept rows: 683 events + the 3,031 compiled tows that are not 'This study'
 # + 16 of the 2024 rows (9 NPM3 manta with a value, 2 NPM5 large net, 3
 # aircraft, 2 cleanup) + 18 NCEI (6 Law 2010, 5 Eriksen back-converted, 3
-# Doyle, 3 Lusher, 1 Egger with no Ocean Cleanup copy) + 4 EMODnet samples
-# (A, C, D, H)
-TRUTH_ROWS = 683 + 3031 + 16 + 18 + 4
+# Doyle, 3 Lusher, 1 Egger with no Ocean Cleanup copy) + 5 EMODnet samples
+# (A, B, C, D, H — B since D12 counts shape-only lines)
+TRUTH_ROWS = 683 + 3031 + 16 + 18 + 5
 
 
 @pytest.fixture(scope="module")
@@ -110,7 +110,7 @@ def test_the_ledger_counts_every_drop_by_name_and_by_pair(smoke):
     assert c["kept_by_source"] == {"lebreton2018": 683,
                                    "lebreton2018_hist": 3031,
                                    "lebreton2024": 16, "ncei": 18,
-                                   "emodnet": 4}
+                                   "emodnet": 5}
     assert c["lebreton2024_excluded_by_name"] == {
         "MEGA Expedition (Manta trawl)": 120,
         "MEGA Expedition (Mega trawl)": 20,
@@ -120,10 +120,11 @@ def test_the_ledger_counts_every_drop_by_name_and_by_pair(smoke):
     assert c["lebreton2024_manta_is_midpoint"] == 1
     assert c["rows_no_value"] == 1                  # the NPM3 row without CD1
     assert c["emodnet_samples_dropped"] == {
-        "ambiguous_line_with_catch": 1, "no_plastic_line": 1,
-        "vor_count_undefined": 1}
-    assert c["emodnet_line_classes"] == {"plastic": 8, "non-plastic": 2,
-                                         "ambiguous": 2}
+        "no_plastic_line": 1, "vor_count_undefined": 1}
+    # D12: the two shape-only lines (B's fragments, C's filaments) are plastic
+    assert c["emodnet_line_classes"] == {"plastic": 10, "non-plastic": 2,
+                                         "ambiguous": 0}
+    assert c["emodnet_shape_samples"] == 1          # B; C's shape line is 0
     assert c["emodnet_date_only"] == 1
     tab = {(e["study"], e["sampling_method"]): e
            for e in c["ncei_depth_table"]}
@@ -273,7 +274,11 @@ def test_emodnet_classification_follows_the_vocabularies():
     assert c("SDN:H01::H0100001 (microplastic items)", "") == "plastic"
     assert c("SDN:H01::H0100002 (fragments)",
              "SDN:H05::H0500001 (polyethylene)") == "plastic"
-    assert c("SDN:H01::H0100002 (fragments)", "") == "ambiguous"
+    # D12 (2026-10-13): a shape line with no polymer type counts as plastic
+    # by default; the strict EMODnet reading is still one argument away
+    assert c("SDN:H01::H0100002 (fragments)", "") == "plastic"
+    assert c("SDN:H01::H0100002 (fragments)", "",
+             shapes_plastic=False) == "ambiguous"
     assert c("SDN:H01::H0100004 (filaments)",
              "SDN:H05::H0500022 (natural fibres)") == "non-plastic"
     assert c("SDN:H01::H0100007 (non-plastic man-made micro-particles)",
@@ -287,7 +292,7 @@ def test_emodnet_classification_follows_the_vocabularies():
              shapes_plastic=True) == "plastic"
     assert c("SDN:H01::H0100010 (Undefined micro-litter items)", "",
              shapes_plastic=True) == "ambiguous"
-    assert mp.EMODNET_SHAPES_ARE_PLASTIC is False
+    assert mp.EMODNET_SHAPES_ARE_PLASTIC is True
 
 
 def test_size_classes_parse_and_tile():

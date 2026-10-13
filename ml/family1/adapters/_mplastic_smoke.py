@@ -676,8 +676,9 @@ def write_emodnet(root, pump_copy):
     """The ODV spreadsheet in its zip, and the truth of the samples kept.
 
     Samples (sampID): A plastic in two classes that tile 0.5-5 mm + a
-    non-plastic line; B ambiguous fragments that caught something (dropped);
-    C fragments of polyethylene + empty ambiguous filaments; D volume only, a
+    non-plastic line; B shape-only fragments that caught something (kept,
+    flagged QC_EMODNET_SHAPE); C fragments of polyethylene + empty shape-only
+    filaments (kept, not flagged: the shape line adds nothing); D volume only, a
     measured zero; E a copy of an NCEI pump sample (dropped); F VOR-coded
     (dropped); G non-plastic only (dropped); H a date-only sample.
     """
@@ -737,11 +738,17 @@ def write_emodnet(root, pump_copy):
       {"log_n_km2": L(30 / area), "log_g_km2": L(0.04 / area),
        "log_n_km2_micro": L(30 / area), "mesh_um": 333.0,
        "net_depth_m": 0.5, "sample_depth_m": 0.0, "wind_ms": 4.0})
-    # B: ambiguous fragments that caught 3 -> no total
+    # B: shape-only fragments that caught 3 + 4 microplastic items. Under
+    # D12 (2026-10-13) the fragments count as plastic: total 7, flagged.
+    # Read strictly (shapes_plastic=False) the sample is dropped as
+    # "ambiguous_line_with_catch".
     line("B", "2014-06-02T10:30:00", 5.5, 43.5, neu, "60", "2", "", "3",
          FRAGMENTS, S03_5)
     line("B", "2014-06-02T10:30:00", 5.5, 43.5, neu, "60", "2", "", "4",
          MICRO_ITEMS, S03_5)
+    T("B", 2014, 6, 2, 10, 30, 43.5, 5.5, 2,
+      {"log_n_km2": L(7 / area), "mesh_um": 333.0, "net_depth_m": 0.5,
+       "sample_depth_m": 0.0, "wind_ms": 4.0}, qc=mp.QC_EMODNET_SHAPE)
     # C: polyethylene fragments + empty ambiguous filaments
     line("C", "2014-06-03T08:00:00", 6.0, 44.0, "plankton nets(22)", "60",
          "2", "", "7", FRAGMENTS, S5_25, poly=PE)

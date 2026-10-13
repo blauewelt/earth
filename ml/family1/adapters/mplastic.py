@@ -113,7 +113,10 @@ WHAT A ROW IS.
             bottle / bucket, 6 aircraft survey line, 7 other net (plankton,
             bongo, ring, seston, ovoid), 8 cleanup-system catch; bit 4 (16):
             time of day not given (placed at 12:00 UTC); bit 5 (32): day not
-            given (placed mid-month).
+            given (placed mid-month); bit 6 (64): an EMODnet sample whose
+            total includes micro-litter SHAPE lines (fragment, pellet,
+            filament, film, foam, granule) with no polymer type — counted as
+            plastic (Chris, 2026-10-13; plan D12), so a user can drop them.
 A row with no concentration value at all is dropped (`rows_no_value`).
 Linear values outside the physical bounds (pieces/km2 0..1e9, g/km2 0..1e8,
 pieces/m3 0..1e7) are NaN and counted by channel (`out_of_bounds`).
@@ -207,6 +210,8 @@ GEAR_CODES = {0: "unknown", 1: "manta net", 2: "neuston net (incl. AVANI)",
               8: "cleanup-system catch (System 002)"}
 QC_NO_TIME = 16
 QC_NO_DAY = 32
+#: EMODnet: the sample's total includes shape-only micro-litter lines (D12)
+QC_EMODNET_SHAPE = 64
 #: NCEI "Sampling Method" -> gear; a method not listed is gear 0 and counted
 NCEI_GEAR = {"Manta net": 1, "Neuston net": 2, "AVANI net": 2,
              "Plankton net": 7, "Bongo net": 7,
@@ -354,9 +359,11 @@ H01_PLASTIC = {"H0100001"}
 H01_NONPLASTIC = {"H0100007", "H0100008"}
 H01_SHAPES = {"H0100002", "H0100003", "H0100004", "H0100005", "H0100006",
               "H0100009", "H0100010"}
-#: the one switch that would read a shape line without a polymer as plastic
-#: (the MSFD protocol's reading). OFF: the instruction is EMODnet's own text.
-EMODNET_SHAPES_ARE_PLASTIC = False
+#: the one switch that reads a shape line without a polymer as plastic (the
+#: MSFD protocol's reading). ON since 2026-10-13 (Chris: "yes" to counting
+#: them; plan D12): such samples carry qc bit QC_EMODNET_SHAPE so the reading
+#: stays separable. "undefined" (H0100010) is not a shape and stays ambiguous.
+EMODNET_SHAPES_ARE_PLASTIC = True
 #: H03 size classes -> (lo, hi) in mm, parsed from the label (never typed)
 H03_RE = re.compile(r"\(([\d.]+)\s*(micrometres|millimetres)?\s*to\s*([\d.]+)"
                     r"\s*(micrometres|millimetres)\)")
@@ -994,6 +1001,7 @@ def emodnet_rows(H, lines, counts):
             if len({g(r, n) for r in rs}) > 1:
                 refuse(f"EMODnet sample {k}: {n} varies within the sample")
         plast = []
+        shape_only = False
         amb_caught = False
         vor = False
         for r in rs:
@@ -1008,6 +1016,10 @@ def emodnet_rows(H, lines, counts):
                 vor = True
             if c == "ambiguous" and (n_ is None or n_ != 0):
                 amb_caught = True
+            if c == "plastic" and _code(tl, "H01") in H01_SHAPES and \
+                    not _code(pl, "H05") and (n_ is None or n_ != 0):
+                # flagged only when the shape line CONTRIBUTES to the total
+                shape_only = True
             if c == "plastic":
                 plast.append((n_, lb.num(g(r, "*Microlitter_weight_water [g]")),
                               h03_bounds(g(r, "Microlitter_size_class_water"))))
@@ -1080,6 +1092,10 @@ def emodnet_rows(H, lines, counts):
         v["wind_ms"] = lb.num(g(r0, "WindSpd [m/s]"))
         study = g(r0, "Cruise name") or g(r0, "Data set name")
         plat = f"emodnet|{study}|{g(r0, 'CSR platform name')}"
+        if shape_only:
+            tq |= QC_EMODNET_SHAPE
+            counts["emodnet_shape_samples"] = \
+                counts.get("emodnet_shape_samples", 0) + 1
         out.append(cand("emodnet", f"sample {'/'.join(k)}", t, tq,
                         lb.num(g(r0, "Latitude [degrees_north]")),
                         lb.num(g(r0, "Longitude [degrees_east]")), plat, gear,
@@ -1620,7 +1636,9 @@ class MPlasticAdapter(f10b.SourceAdapter):
         "qc bits 0-3 = gear (" + "; ".join(f"{k} {v}" for k, v in
                                           GEAR_CODES.items()) +
         "); bit 4 (16): time of day not given, placed at 12:00 UTC; bit 5 "
-        "(32): day not given, placed mid-month. Values outside the physical "
+        "(32): day not given, placed mid-month; bit 6 (64): EMODnet sample "
+        "whose total includes shape-only micro-litter lines (no polymer "
+        "type), counted as plastic. Values outside the physical "
         "bounds -> NaN, counted. A row with no concentration is dropped.")
     sources = (lb.API_FILES, FIG2024_ARTICLE, NCEI_CSV,
                "https://www.ncei.noaa.gov/archive/accession/0306475",

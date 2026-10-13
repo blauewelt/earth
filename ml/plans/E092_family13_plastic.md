@@ -338,11 +338,16 @@ Decisions taken while building, each reversible by one constant:
   match nothing — 2018–2020 tows in no Ocean Cleanup file — are kept, per m³
   (NCEI's value there is the wind-corrected 0.5–5 mm count over 0.075 m, a
   quantity no areal channel holds).
-- **D12 — EMODnet counts only what its own vocabulary calls plastic.** A
-  shape ("fragments") with no polymer type is ambiguous and excluded, which
-  leaves 1,566 samples with a plastic total (909 after removing NCEI copies).
-  Counting shapes as plastic (`EMODNET_SHAPES_ARE_PLASTIC`) would give ≈ 3,357.
-  **A decision for Chris** — conservative by default.
+- **D12 — EMODnet's shape-only lines COUNT as plastic, flagged (Chris,
+  2026-10-13: "yes").** EMODnet's own vocabulary leaves a shape ("fragments",
+  "pellets", "filaments", "films", "foams", "granules") with no polymer type
+  materially undefined; the MSFD sampling protocol reads them as plastic, and
+  so does the store now (`EMODNET_SHAPES_ARE_PLASTIC = True`). A sample whose
+  total includes a shape-only line that caught something carries **qc bit 6
+  (64)**, so the strict reading is one filter away; "undefined micro-litter
+  items" (H0100010) is not a shape and stays ambiguous. Before the switch:
+  1,566 samples with a plastic total (909 after removing NCEI copies);
+  estimated ≈ 3,357 with it — the rebuild's ledger carries the measured count.
 - **The Ocean Cleanup's 2024 file re-uses earlier numbers in specific ways**,
   checked on the shared 2015 tows: its manta values equal 2018's
   wind-CORRECTED midpoints (352 of 352), so its new 2018–22 manta tows fill
@@ -393,7 +398,7 @@ block:
    resubmitted values (about 3× for 1,027 tows) supersede the published ones
    — a question for SEA, not a blocker (the ledger keeps both);
 2. Isobe 2021's data licence; Eriksen 2023's licence;
-2b. D12 — whether EMODnet's shape-only categories ("fragments" with no polymer) count as plastic (909 samples today, ≈ 3,357 if they do);
+2b. ~~D12~~ — settled 2026-10-13: shape-only lines count as plastic, flagged qc bit 6 (rebuild of `mplastic`);
 3. whether the repository's Earthdata account (secrets `EARTHDATA_USERNAME` /
    `EARTHDATA_PASSWORD`, working for LP DAAC, GES DISC and PO.DAAC) reads
    OB.DAAC's PACE level 2 — never tried;
