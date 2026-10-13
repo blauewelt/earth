@@ -1,0 +1,80 @@
+        "max": 4.0
+       }
+      },
+      "wind_info": {
+       "cells_nonempty": 449205,
+       "cells_l2_only": 47,
+       "cells_l3_only": 61,
+       "count_equal_fraction": 0.9991740964593003,
+       "cells_compared": 448834,
+       "mean_within_rel_fraction": 1.0,
+       "mean_rel_error": {
+        "median": 1.6087948946815706e-08,
+        "p99": 5.6578958526200385e-08,
+        "p999": 5.9287419866962565e-08,
+        "max": 5.9604090557210034e-08
+       },
+       "uncertainty_within_rel_fraction": 1.0,
+       "uncertainty_rel_error": {
+        "median": 1.794823189906765e-08,
+        "p99": 4.58714888526917e-08,
+        "p999": 4.979715694663562e-08,
+        "max": 5.85846104872594e-08
+       },
+       "count_abs_diff": {
+        "mean": 0.0008259035406996806,
+        "max": 1.0
+       }
+      },
+      "passed": false
+     }
+    ],
+    "passed": false,
+    "failures": [
+     "2019-01-01 hourly count_equal_fraction = 0.9932014401062602 (needs >= 0.999)",
+     "2019-01-01 daily count_equal_fraction = 0.9949183303085299 (needs >= 0.999)",
+     "2019-01-15 hourly count_equal_fraction = 0.994367327700661 (needs >= 0.999)",
+     "2019-01-15 daily count_equal_fraction = 0.9959375117945973 (needs >= 0.999)",
+     "2019-01-31 hourly count_equal_fraction = 0.9939654448827768 (needs >= 0.999)",
+     "2019-01-31 daily count_equal_fraction = 0.9955233684763688 (needs >= 0.999)"
+    ],
+    "verdict": "FAILED \u2014 the L3 definition differs from the one this store's daily combination assumes; see failures and alternatives (E-092 \u00a76: build the daily grid from L2 instead)",
+    "days_requested": [
+     "2019-01-01",
+     "2019-01-15",
+     "2019-01-31"
+    ],
+    "days_not_available": [],
+    "seconds": 24.0
+   }
+  ],
+  "grid_meta": {
+   "{\"lat_first\": -39.900001525878906, \"lat_last\": 39.900001525878906, \"lon_first\": 0.10000000149011612, \"lon_last\": 359.8999938964844}": 31
+  },
+  "hours_mss_unweightable": 33872,
+  "hours_mss_used": 13553865,
+  "hours_wind_used": 13484370,
+  "mss_uncertainty_subnormal_f16": 1781,
+  "pixels_mss": 9244545,
+  "pixels_wind": 9194182,
+  "files_read": 31,
+  "fetch_seconds": 51.78
+ },
+ "bytes_fetched": 512130937,
+ "bytes_index": 15838729,
+ "bytes_fetched_per_frame": 16520352.8,
+ "wall_seconds": 52.1,
+ "wall_seconds_index": 4.43,
+ "seconds_per_frame": 1.681,
+ "estimate_store_bytes": 6086877275,
+ "note_formula_bytes": 8553911881,
+ "note_estimate": {
+  "bytes": 7000000000.0,
+  "what": "cygnss_mss_measure.json: 400 x 1800 x 4 float16 = 5.76 MB raw a day, 0.6-1.1 GB/yr zstd (compression not measured), 5-9 GB for 2018-08 -> 2026"
+ },
+ "runner": "GitHub Actions 1000008217",
+ "builder_git_sha": "c482f3987494ab825bda23d2e4b742e9dd0a11a6",
+ "at": "2026-10-13T11:41:23+00:00"
+}
+probe -> /home/runner/work/earth/earth/ml/cache/family1_3/probe/cygnss_mss/2019-01.json
+probe cygnss_mss 2019-01: 1 input(s) could not be read — see inputs_not_read
