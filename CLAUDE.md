@@ -419,8 +419,7 @@ A new layer is not done until it has **all** of:
    | Drivers of forest loss (grid) | ✗ | ✗ | categorical AND untimed — one 2001–2025 attribution, and "logging" plus "wildfire" is not a quantity |
    | AMOC eval mask (grid) | ✗ | ✗ | categorical AND untimed — a cell carries the ROLE it plays in an experiment, and an experiment's geometry has no date to average over |
    | Global tensor, family 7 (grid) | ✗ | ✗ | the fields are continuous and would average and difference soundly; the reason is the BYTE COUNT — each frame is one 14.5 MB range read of the archive, so a 12-day window would be three of them per paint and a computed difference doubles whatever the window costs. "What does the model read at this pentad" has no window in it. Its two statics (`sphere`, `elev`) are additionally untimed |
-   | Model climatology, family 7 (grid) | ✗ | ✗ | already a multi-decade average, one calendar month per frame — a window would blend two months' normals into a number no trainer ever subtracted, and a per-pixel difference between two dates is just the seasonal cycle the ±1 month stepper already shows |
-   | Pentad climatology, family 7 (grid) | ✗ | ✗ | already a multi-year mean of one five-day slot of the year — its five days are its window, a window would blend neighbouring slots into a number nobody computed, and a difference of two dates is the seasonal cycle the ±5-day stepper walks; the meaningful comparison (one span of years against another) is the row's own years / leave-out fields |
+   | Global tensor, climatology and anomaly modes (E-093) | ✗ | ✗ | a climatology is already a multi-year mean of one five-day slot (or one calendar month) — its own days are its window, a window would blend neighbouring slots into a number nobody computed, and a difference of two dates is the seasonal cycle the stepper walks; the anomaly IS a computed difference, but against the climatology, and a window over it would multiply the reads; the meaningful comparison (one span of years against another) is the row's years / leave-out fields |
 | Fishing effort, AIS (grid) | ✗ | ✗ | the cell is ALREADY a monthly SUM of vessel-hours: averaging one over a 12-day window produces a number in no unit at all, and differencing two per pixel differences two sums over different numbers of days unless the window happens to land on a month. The family-7 byte-count argument applies unchanged on top of that — each month is one 8.3 MB range read. The month is the window |
    | Loitering vessels (points) | ✗ | ✗ | not a raster at all: each event is an interval with a start and an end, and the layer shows the ones whose interval overlaps the selected day. "The average of an event" is not a thing, and a difference of two days' event sets is a list, not a field |
    | Floating plastic, North Pacific (points) | ✗ | ✗ | points from a closed 2015–16 campaign plus a 1972–2015 compilation: nothing to average over a window, and each dot is a different tow at a different place, so there is no per-pixel series to difference |
@@ -501,8 +500,9 @@ by the frame rather than by the archive, addressed from
 `data/family7_index.json`'s measured header offsets, coalesced through
 `scrubApply` so a held date key costs one read per settled date, and degrading
 to a hint toast and an empty layer on any failure (`docs/FAMILY7_GLOBE.md`).
-Since then the same family-7 path also serves the Model climatology layer
-(one plane per month and channel) and the fishing-effort grid (one month per
+Since then the same family-7 path also serves the tensor layer's climatology
+and anomaly modes (E-093: a pentad slot's sums and counts, or one plane per
+month and channel) and the fishing-effort grid (one month per
 read), and — added 2026-10-05 for E-084 — the **Data tab** reads the family
 1.gf observation stores under `tensors/family1_gf/`, family 1.2's ERA5 stores
 under `tensors/family1_2/`, the family-10 stores
@@ -2095,39 +2095,47 @@ index.
   index is absent until the export publishes — the layer then paints nothing
   and a toast names the chain; `data/family7_clim/fixture/` is what the tests
   serve. `docs/FAMILY7_CLIM.md` explains it and says how to regenerate.
-  **The version selector is gone (2026-10-06, E-086).** Chris: *"No 'paper
-  holdout' or similar anymore, just setting a period is enough."* The row has
-  the channel picker only; the layer paints the `all` file (`CLIM_LAYER_VERSION`)
-  whatever the index lists, and the `dev`/`paper` files stay on the Hub,
-  unlinked. Any other period is the Data tab's "Monthly normals" stores: the
-  downloads fold says so (the paper's split is the period 1982–2020 leaving out
-  2009 and 2017) and its button opens the tab ON that group's store
-  (`dtOpenStore`, `data-dtstore`). The hover card says the versions were
-  retired and how to reproduce them. The tests that covered the selector were
-  replaced: no `select[data-climver]`, `grid.version` is `all`, and the
-  single-plane path is now exercised on a month not yet read.
+  The three fixed versions were retired for a free period (E-086, the Data
+  tab's "Monthly normals" stores; the paper's split is 1982–2020 leaving out
+  2009 and 2017). **Since 2026-10-13 this is not a layer any more but the
+  "per calendar month" kind of the Global tensor's climatology mode** (next
+  item); its planes, LRU, departure read-out, CSV and downloads block are
+  unchanged and live under the tensor row.
 
-- **The exact five-day climatology, beside it (2026-10-13, E-093).** Chris:
-  *"make sure that climatology can also be displayed as a layer (this should
-  be the exact pentad averaged over years data)"*. A third family-7 layer,
-  **"Pentad climatology — each five-day bin averaged over the years (family 7),
-  0.25° / 1°"** (`poy7`): for the date's five-day bin (epoch and length from
-  `data/family7_index.json`, not clamped to the tensor's last bin), its slot
-  `min(72, floor((doy(bin start) − 1)/5))`, and the mean over a span of years
-  (row: channel, years from/to, leave-out; default the group's whole record)
-  composed in float64 from E-093's cumulative `sum_pSS.npy` / `count_pSS.npy`
-  as `(S[b] − S[a−1]) / (N[b] − N[a−1])`, one 206 range read per needed
-  year-plane (whole record: 2 reads, 4.15 + 1.04 MB at 0.25°), LRU per (group,
-  slot, channel, kind, year-plane); count 0 paints nothing. Addressed by
-  `data/gridded_poy_index.json` (base resolved against the index URL); labels,
-  ramps and ranges from the family-7 index, falling back to the store's own.
-  Probe / pixel card: mean, bins behind it, span, slot; `period` stamp = the
-  span. Toast: the day of the date matters, the year doesn't. Downloads fold:
-  the slot's two files and the Data tab on `10/<group>` at step `poy`. Play
-  steps 5 days keyed by slot. No catalog record (§2.6's exception). Tests over
-  `data/poy_layer_fixture/` (`tests/make_poy_layer_fixture.py`, real group
-  names, numpy expected.json); E-093's own exporter fixture is
-  `data/gridded_poy/fixture/`. `docs/FAMILY7_CLIM.md` has the section.
+- **Climatology and anomaly as a MODE of the tensor layer (2026-10-13, E-093).**
+  Chris: *"make sure that climatology can also be displayed as a layer (this
+  should be the exact pentad averaged over years data)"*, then *"not as an
+  extra layer but as a toggle on each available layer"*. The tensor row has a
+  **mode** select — `f7Mode`: **actual** · **climatology** · **anomaly** — and,
+  in the last two, a **kind** (`f7Kind`): **per pentad (exact)**, the default —
+  the date's five-day bin (epoch from `data/family7_index.json`, not clamped),
+  its slot `min(72, floor((doy(bin start) − 1)/5))`, the mean over a span of
+  years (row: years from/to, leave out; default the whole record) composed in
+  float64 from E-093's cumulative `sum_pSS.npy` / `count_pSS.npy`
+  (`data/gridded_poy_index.json`) as `(S[b] − S[a−1]) / (N[b] − N[a−1])`, one
+  206 read per year-plane (whole record: 2 reads, 4.15 + 1.04 MB at 0.25°), LRU
+  per (group, slot, channel, kind, year-plane) — or **per calendar month (the
+  forecaster's)**, E-083's plane above. **Anomaly** = actual − climatology, both
+  physical, ramp `anom` at ± half the channel's sd; its climatology is keyed by
+  the ACTUAL pentad's opening day (`f7ClimDate`; per month = the month the bin
+  opens in), and a climatology of another build (stem) is refused. The block
+  `f7*` in `src/app.js` only chooses and composes (`f7GridFor`, `f7Ensure`,
+  `f7PaintKey` — a date move repaints through `refreshTensorGrids` when the key
+  changes); the `poy*` / `clim*` readers are unchanged. F1Data has no
+  `poyPlane`, so the layer keeps its own poy reader (the Data tab's is
+  `poyPlan` in `src/f1data.js`). The separate rows `clim7` and `poy7` were
+  retired the same day. Read-outs: climatology — mean, bins behind it, span,
+  `period` stamp (kind month: normal, version, departure if the slab is
+  resident); anomaly — Δ in the unit, Δz = Δ/sd, both halves, the trainer's z
+  via `climDeparture` (per-month kind; per pentad only if that month's plane is
+  already in memory), `day` stamp of the pentad. Toasts per mode (climatology:
+  the day matters, the year doesn't). The downloads fold (climatology and
+  anomaly modes) opens the Data tab on `10/<group>` step `poy`, or
+  `derived/normals_<group>` step `normal`. Play: 5 d (slot or bin), 1 mo for
+  the per-month kind. Tests "tensor climatology mode" / "tensor anomaly mode"
+  over `data/poy_layer_fixture/`, `data/family7_clim/fixture/` and
+  `data/family7/fixture/`, expected values computed from the fixtures' bytes
+  in the test. `docs/FAMILY7_CLIM.md` explains it.
 
 **The Data tab — every public store of family 1.gf, family 10 and the derived
 maps, filtered and downloaded in the browser (2026-10-05, E-084).** Chris, on the Model climatology download:
@@ -2338,7 +2346,7 @@ chips on the normals stores (`DT_NORMAL_PRESETS`: paper 1982–2020 less 2009,
 and leave-outs are the split's (any months — one month at a time is how a 0.25°
 whole globe fits under the cap); the exact recipe is in the tab's explainer
 (`#dt-paper-recipe`, with the published clim/{paper,dev,all} files linked from
-the index), in the Model climatology layer's downloads block
+the index), in the tensor layer's climatology-mode downloads block
 (`climRecipeHtml`) and in `docs/DATA_TAB.md`. Verified end to end through the
 tab's Download button against the published planes: g025 SST February in a box,
 paper 1.10e-6 °C, dev 1.09e-6 °C; g100 t2m July, 1.53e-6 / 1.57e-6 °C — inside

@@ -1,16 +1,26 @@
-# The **Model climatology** layer — what the forecaster calls normal
+# The Global tensor's **climatology** and **anomaly** modes — what the forecaster calls normal
 
-Every other layer in this app shows the world, or (the "Global tensor" layer)
-what the forecaster *reads*. This one shows what the forecaster calls
-**normal**: the per-calendar-month average it is trained against and scored
-against, for every channel of family 7, on the globe and as files you can
-download.
+Every other layer in this app shows the world; the "Global tensor" layer shows
+what the forecaster *reads*. Since 2026-10-13 (E-093) the same layer also
+shows that channel's **climatology** and its **anomaly**, through a **mode**
+switch in its row (Chris: *"not as an extra layer but as a toggle on each
+available layer"*). The two climatology layers that used to stand beside it —
+"Model climatology" (`clim7`, below) and "Pentad climatology" (`poy7`, the
+last section) — were retired into that switch; everything below describes
+their machinery, which the switch reuses unchanged.
 
-Switch it on in the layer list ("Model climatology — what the forecaster calls
-normal (family 7), 0.25° / 1°"), pick a **channel** in the row underneath, and
-move the date by months. The layer paints the **all-years normal**
-(1982–2024). Each frame is **one HTTP range read** of a file on the Hugging
-Face Hub.
+| mode | paints | keyed by |
+|---|---|---|
+| **actual** | the pentad's own values | the date's five-day bin |
+| **climatology** · *per pentad (exact)* — the default kind | the bin's slot of the year (0…72), averaged over a span of years (from/to, leave out; default the whole record) | the date's DAY; its year does not matter |
+| **climatology** · *per calendar month (the forecaster's)* | the all-years per-calendar-month normal `anomaly_transform` subtracts | the date's MONTH; its year does not matter |
+| **anomaly** | actual − climatology (either kind), both in the channel's own unit, on the blue–red ramp centred on zero (± half the channel's sd) | the date's five-day bin; its climatology is the one of THAT bin's slot (or the month the bin opens in — the trainer's rule) |
+
+The channel picker is the same in every mode, and so are the colour ramp and
+range of actual and climatology. Switch the layer on, pick a **channel**, a
+**mode** and — in the two climatology modes — a **kind**. The per-calendar-month
+kind paints the **all-years normal** (1982–2024); each frame is **one HTTP
+range read** of a file on the Hugging Face Hub.
 
 **For any other period, use the Data tab.** The layer used to offer three
 fixed versions (all years, a development holdout, the paper's split); they
@@ -28,7 +38,8 @@ average over any years you choose, from per-year monthly sums and counts
 Those reproduce the retired versions' files: E-086's falsifier rebuilt every
 one of them from the sums and counts, every cell, within a rigorous float32
 rounding bound (max 4.8 × 10⁻⁷ in z-units). The row's **⤓ downloads** fold
-has a button that opens the tab on the group of the channel on screen.
+has a button that opens the tab on the group of the channel on screen
+(at the step *Climatology — mean per calendar month over the years*).
 
 The plan behind it is
 [E-083](https://blauewelt.github.io/earth/docs.html?f=ml/plans/E083_model_climatology.md);
@@ -66,8 +77,9 @@ the tensor it is computed from is described in
 
 ### The departure from normal
 
-With the **Global tensor** layer also on (so that pentad's bytes are already
-in the page), the probe and the pixel card add a second row: **departure from
+When that pentad's bytes are already in the page (the layer was in *actual* or
+*anomaly* mode on this date), the per-month kind's probe and pixel card add a
+second row: **departure from
 normal** — the tensor's value minus the normal, in the unit, and as the
 trainer's own z-score `(value − normal − mu) / den`, with `mu` and `den` read
 from the all-years `stats.json`. This is the number the model is actually
@@ -75,9 +87,10 @@ handed. The trainer charges a pentad to the calendar month it *opens* in, so
 the departure uses that month's normal even when the selected date is in the
 next month.
 
-The departure is never a reason to download the tensor: without the Global
-tensor's pentad already in memory, a click prints the normal and a one-line
-hint instead of fetching 14.5 MB.
+The departure is never a reason to download the tensor: without the pentad
+already in memory, a click prints the normal and a one-line hint (pick the
+*anomaly* mode) instead of fetching 14.5 MB. The anomaly mode paints this same
+number over the whole globe — see "The anomaly mode" below.
 
 ---
 
@@ -206,14 +219,15 @@ the sliced bytes and a real 206, so the browser's offset arithmetic is tested
 rather than assumed; `tests/data.spec.js` pins the index against the files and
 against the family-7 fixture index (same stem, channels, grids and norms).
 
-## Beside it: the **Pentad climatology** layer — the exact five-day climatology (E-093)
+## The per-pentad kind — the exact five-day climatology (E-093)
 
 Chris, 2026-10-13: *"Can you make sure that climatology can also be displayed
-as a layer? (This should be the exact pentad averaged over years data)"*. The
-layer **"Pentad climatology — each five-day bin averaged over the years
-(family 7), 0.25° / 1°"** (`poy7`) is the five-day counterpart of the layer
-above: not one calendar month per frame but one of the 73 five-day slots of
-the year, averaged over a span of years you choose.
+as a layer? (This should be the exact pentad averaged over years data)"*, then
+*"It would be better, not as an extra layer but as a toggle on each available
+layer."* It shipped first as its own layer (`poy7`) and was folded into the
+Global tensor's mode switch the same day: **climatology · per pentad (exact)**
+is the default kind. Not one calendar month per frame but one of the 73
+five-day slots of the year, averaged over a span of years you choose.
 
 **Which slot.** Family 7 is a continuous run of five-day bins from 1982-01-01
 (bin *b* covers days [5b, 5b+5)). The globe's date falls in one bin; the bin
@@ -224,8 +238,9 @@ ordinary years and slide by one day at every leap day, so the same calendar
 date can fall one slot over in another year. The year of the date never
 chooses which years are averaged; the toast says so.
 
-**Which years.** The row has a channel picker, a *years* pair (default: the
-group's whole record) and a *leave out* field ("2009, 2017"). The mean is
+**Which years.** In this kind the tensor row shows a *years* pair (default:
+the group's whole record) and a *leave out* field ("2009, 2017") under the
+mode switch. The mean is
 composed in the browser from E-093's files (`data/gridded_poy_index.json`,
 plan [`ml/plans/E093_pentad_climatology.md`](../ml/plans/E093_pentad_climatology.md)):
 per group and slot, `sum_pSS.npy` float32 `[C, Y, H, W]` in physical units and
@@ -246,8 +261,8 @@ blank.
 unit, the number of five-day bins behind it at that cell, the span and the
 slot; the stamp is the span (a fixed period, no age). Labels, units, ramps and
 legend ranges come from `data/family7_index.json`, so a channel looks the same
-here as on the Global tensor and the Model climatology layers. The ⤓ downloads
-fold links the slot's two `.npy` files and the index, and opens the Data tab on
+here as in the actual mode and the per-month kind. The ⤓ downloads
+fold under the row (shown in the climatology and anomaly modes) links the slot's two `.npy` files and the index, and opens the Data tab on
 the same group (`10/<group>`) at the step *Climatology — mean per pentad of
 year over the years* — the same numbers as a file, for any box.
 
@@ -255,6 +270,38 @@ No aggregation window and no computed difference: the field is already a
 multi-year mean of one five-day slot (its five days ARE its window), a
 difference of two dates is the seasonal cycle the ±5-day stepper walks, and
 the comparison that means something — one span of years against another — is
-the row's own years and leave-out fields. Tests: `tests/app.spec.js`
-"Pentad climatology", over `data/poy_layer_fixture/`
-(`tests/make_poy_layer_fixture.py`).
+the row's own years and leave-out fields.
+
+## The anomaly mode
+
+**actual − climatology**, cell by cell on the tensor's own grid. The actual is
+the pentad de-z-scored through `norm` (`raw = z·sd + mean`); E-093's sums are
+physical already, and E-083's planes are de-z-scored the same way, so the
+difference is in the channel's own unit. Its climatology is keyed by the
+actual pentad's opening day rather than the raw date: past the tensor's last
+bin the actual clamps, and both halves must describe the same five days — for
+the per-month kind that is the month the pentad *opens* in, the rule the
+trainer itself uses (`ml/export_family7_clim.py::master_calendar`). A
+climatology computed from another tensor build is refused (stems must match),
+as the departure read-out always did.
+
+A paint costs the actual's one slab read plus the climatology's reads (two for
+the whole record per pentad, one per month), all LRU-cached, so moving between
+the three modes on one date reads nothing new. The colour range is fixed per
+channel at ± half its sd (rounded): that sd includes the seasonal cycle and the
+geography the anomaly removes, so the actual mode's ±2.5 sd would leave every
+departure a pale smear.
+
+The probe and the pixel card print the departure in the unit, the same on the
+tensor's own z scale (Δ / sd — the difference of the two stored z-scores), the
+two numbers it is the difference of (and, per pentad, the bins behind the
+climatology), and — through the per-month kind's departure code
+(`climDeparture`) — the z the trainer is handed, `(x − clim − mu) / den` from
+`stats.json`. With the per-pentad kind that last number needs the month's
+normal, a different plane, which a click never reads; the read-out says to
+switch the kind. The stamp is the pentad's day.
+
+Tests: `tests/app.spec.js` "tensor climatology mode" and "tensor anomaly
+mode", over `data/poy_layer_fixture/` (`tests/make_poy_layer_fixture.py`),
+`data/family7_clim/fixture/` and `data/family7/fixture/`; every expected value
+is computed from the fixtures' own bytes in the test, not by app code.
