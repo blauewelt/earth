@@ -37,7 +37,8 @@ from family1.adapters import pace_swir as ps                    # noqa: E402
 
 pytest.importorskip("netCDF4")
 
-ENV = ("PACE_SWIR_SMOKE_GRID", "PACE_SWIR_LANES")
+ENV = ("PACE_SWIR_SMOKE_GRID", "PACE_SWIR_LANES", "PACE_SWIR_WORKERS",
+       "PACE_SWIR_TIMEOUT")
 
 
 def clear_env(monkeypatch):
@@ -242,19 +243,25 @@ def test_the_plan_records_the_nrt_boundary_and_the_bands(smoke):
     plan = json.load(open(os.path.join(smoke["ctx"].root, "plan.json")))
     nb = plan["nrt_boundary"]
     assert nb["final_last_day"] == str(ps.SMOKE_FINAL_LAST)
-    assert nb["nrt_first_day"] == str(ps.SMOKE_ABSENT)
+    assert nb["nrt_first_day_listed"] == str(ps.SMOKE_ABSENT)
     assert nb["nrt_last_day"] == "2024-03-19"
     assert nb["nrt_days_after_final"] == 2
     assert nb["nrt_after_final_first"] == "2024-03-18"
     assert nb["nrt_only_inside_record"] == [str(ps.SMOKE_ABSENT)]
     assert plan["record"] == ["2024-03-05", str(ps.SMOKE_FINAL_LAST)]
-    assert plan["days_absent_upstream"] == [str(ps.SMOKE_ABSENT)]
+    assert plan["days_absent_upstream_in_window"] == [str(ps.SMOKE_ABSENT)]
     assert plan["bands_match_measurement"] is True
     assert [b["wavelength_nm"] for b in plan["bands"]] == \
         [645, 739, 865, 1038, 1249, 1618, 2131, 2258]
     assert plan["requests_per_day"] == [[56, 1, 56], [84, 1, 84],
                                         [110, 1, 110], [117, 1, 121]]
-    assert plan["first_file"]["pixel_reread_f16_equal"] == 1
+    ic = plan["index_check"]
+    assert ic["pixel_reread_f16_equal"] == 1 and ic["day"] == "2024-03-05"
+    assert ic["rows"] == [ps.SMOKE_H // 2 - 32, ps.SMOKE_H // 2 + 31]
+    assert 0 < ic["bytes"] < 2_000_000            # a band, not the day
+    assert ic["license"] == ps.LICENCE_URL
+    # only the window's year and the edge search are listed, not the record
+    assert nb["listed_years"] == [2024, 2025, 2026]
     spec = json.load(open(os.path.join(smoke["ctx"].store, "pace_swir",
                                        "tile_grid.json")))
     wl = {c["name"]: c["wavelength_nm"] for c in spec["channels"]}
@@ -372,3 +379,117 @@ def test_a_listed_file_that_is_absent_stops_the_year(tmp_path):
         run(ctx, ["index", "fetch"])
     assert "could not be read" in str(e.value)
     assert ctx.absent
+
+
+# ========================================================= the network ====
+class _Resp:
+    def __init__(self, body, length=None):
+        import io
+        self._b = io.BytesIO(body)
+        self.headers = {"Content-Length": str(len(body) if length is None
+                                              else length)}
+
+    def read(self, n=-1):
+        return self._b.read(n)
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *a):
+        return False
+
+
+def _script(monkeypatch, outcomes):
+    """urlopen replaced by a script of outcomes; returns (calls, waits)."""
+    import urllib.error
+    calls, waits = [], []
+    it = iter(outcomes)
+
+    def fake(req, timeout=None):
+        calls.append(timeout)
+        o = next(it)
+        if isinstance(o, BaseException):
+            raise o
+        if isinstance(o, int):
+            raise urllib.error.HTTPError(req.full_url, o, "x", {}, None)
+        return _Resp(*o) if isinstance(o, tuple) else _Resp(o)
+
+    monkeypatch.setattr(ps.urllib.request, "urlopen", fake)
+    monkeypatch.setattr(ps, "SLEEP", waits.append)
+    return calls, waits
+
+
+GOOD = ps.HDF5_MAGIC + b"payload"
+PAGE = b"<!doctype html><title>ERROR @ Ocean Biology DAAC</title>"
+
+
+def test_the_knobs_and_their_defaults(monkeypatch):
+    clear_env(monkeypatch)
+    ad = ps.PaceSwirAdapter()
+    assert (ad.WORKERS, ad.TIMEOUT) == (2, 600.0)
+    monkeypatch.setenv("PACE_SWIR_WORKERS", "1")
+    monkeypatch.setenv("PACE_SWIR_TIMEOUT", "900")
+    ad = ps.PaceSwirAdapter()
+    assert (ad.WORKERS, ad.TIMEOUT) == (1, 900.0)
+    monkeypatch.setenv("PACE_SWIR_WORKERS", "0")
+    with pytest.raises(SystemExit):
+        ps.PaceSwirAdapter()
+    assert [ps.backoff(i) for i in range(6)] == [30, 60, 120, 240, 480, 480]
+
+
+def test_timeouts_and_error_pages_back_off_and_are_counted(tmp_path,
+                                                           monkeypatch):
+    calls, waits = _script(monkeypatch, [TimeoutError("The read operation "
+                                                      "timed out"),
+                                         PAGE, 503, GOOD])
+    c = {}
+    p = str(tmp_path / "x.nc4")
+    assert ps.http_get("https://h/x", p, 6, 600.0, c) == p
+    assert open(p, "rb").read() == GOOD
+    assert calls == [600.0] * 4                # the timeout is EXPLICIT
+    assert waits == [30, 60, 120]
+    assert c["net_retry"] == {"timeout": 1, "error_page": 1, "http_5xx": 1}
+    assert c["net_backoff_seconds"] == 210
+    assert c["net_recovered"] == 1 and c["max_net_attempts"] == 4
+    assert not os.path.exists(p + ".part")
+
+
+def test_a_truncated_body_is_retried_and_exhaustion_raises(tmp_path,
+                                                           monkeypatch):
+    _c, waits = _script(monkeypatch, [(GOOD, 999), PAGE, PAGE])
+    c = {}
+    with pytest.raises(IOError) as e:
+        ps.http_get("https://h/x", str(tmp_path / "x"), 3, 5.0, c)
+    assert "3 attempt(s) failed" in str(e.value)
+    assert waits == [30, 60]                   # no wait after the last
+    assert c["net_retry"] == {"truncated": 1, "error_page": 2}
+    assert c["net_gave_up"] == 1
+
+
+def test_404_is_none_and_400_is_definite(tmp_path, monkeypatch):
+    _c, waits = _script(monkeypatch, [404])
+    assert ps.http_get("https://h/x", str(tmp_path / "x"), 6, 5.0, {}) is None
+    _c, waits = _script(monkeypatch, [400])
+    with pytest.raises(IOError) as e:
+        ps.http_get("https://h/x", str(tmp_path / "x"), 6, 5.0, {})
+    assert "not retried" in str(e.value) and waits == []
+
+
+def test_the_ledger_reaches_the_frame(tmp_path, monkeypatch):
+    """A retry inside a day's download is counted in that frame's counts."""
+    src, _ = small_archive(str(tmp_path))
+    ctx = ctx_for(str(tmp_path), src)
+    real = ps.PaceSwirAdapter.fetch_day
+
+    def noisy(self, ctx, d):
+        paths, nb, tmp = real(self, ctx, d)
+        paths["net"] = {"net_retry": {"timeout": 2},
+                        "net_backoff_seconds": 90.0, "max_net_attempts": 3}
+        return paths, nb, tmp
+
+    monkeypatch.setattr(ps.PaceSwirAdapter, "fetch_day", noisy)
+    run(ctx, ["index", "fetch"])
+    led = json.load(open(os.path.join(ctx.year_dir(2024), "counts.json")))
+    c = led.get("counts", led)
+    assert c["net_retry"]["timeout"] == 2 * 12
+    assert c["max_net_attempts"] == 3

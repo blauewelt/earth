@@ -144,7 +144,9 @@ import shutil
 import sys
 import tempfile
 import time
+import urllib.error
 import urllib.parse
+import urllib.request
 
 import numpy as np
 
@@ -203,6 +205,141 @@ DARK_CHANNEL = "rhos_2258"
 DARK_P50, DARK_P99 = 0.01, 0.03                 # soft: reported
 GROSS_P50, GROSS_P99 = 0.03, 0.10               # gross: refused
 DARK_MIN_PIXELS = 10000
+
+# POLITENESS AND PATIENCE (2026-10-13, after six concurrent monthly lanes of
+# three workers each drove OB.DAAC's Hyrax into timeouts and HTML error pages
+# and were cancelled). Every knob is an environment variable so a dispatch's
+# `adapter_env` can set it; the defaults are for TWO lanes at a time.
+WORKERS_DEFAULT = 2            # PACE_SWIR_WORKERS: download threads per lane
+TIMEOUT_DEFAULT = 600.0        # PACE_SWIR_TIMEOUT: socket read timeout, s
+BACKOFF_BASE = 30.0            # first wait after a retryable failure, s
+BACKOFF_MAX = 480.0            # cap: 30, 60, 120, 240, 480, 480 ...
+HDF5_MAGIC = b"\x89HDF\r\n\x1a\n"
+SLEEP = time.sleep             # the tests replace it
+
+
+def env_int(name, default, lo=1):
+    raw = (os.environ.get(name) or "").strip()
+    if not raw:
+        return default
+    try:
+        v = int(raw)
+    except ValueError:
+        sys.exit(f"{name}={raw!r}: expected an integer")
+    if v < lo:
+        sys.exit(f"{name}={v}: must be at least {lo}")
+    return v
+
+
+def env_float(name, default, lo=1.0):
+    raw = (os.environ.get(name) or "").strip()
+    if not raw:
+        return default
+    try:
+        v = float(raw)
+    except ValueError:
+        sys.exit(f"{name}={raw!r}: expected a number of seconds")
+    if v < lo:
+        sys.exit(f"{name}={v}: must be at least {lo}")
+    return v
+
+
+def backoff(i):
+    """The wait after the (i+1)-th failed attempt: 30, 60, 120 ... capped."""
+    return min(BACKOFF_BASE * (2 ** int(i)), BACKOFF_MAX)
+
+
+def _bump(counts, kind, n=1):
+    sub = counts.setdefault("net_retry", {})
+    sub[kind] = sub.get(kind, 0) + n
+
+
+def merge_net(into, net):
+    """A request's network ledger into a frame's counts (`max_*` is a
+    maximum, the rest add up — `f10b._merge_counts`' rules)."""
+    if net:
+        f10b._merge_counts(into, net)
+
+
+def http_get(url, path, attempts, timeout, counts):
+    """GET `url` -> `path`, with an EXPLICIT read timeout and exponential
+    backoff -> path, or None on a definite 404.
+
+    Its own loop rather than `f10b.fetch_first`, for two reasons measured on
+    hosted runners: `http_to_file`'s timeout is `SOCKET_TIMEOUT` bound as a
+    default argument at definition time (not settable per store), and
+    `fetch_first` retries after a fixed 5 s — which, against a server already
+    timing out, is a retry storm. RETRYABLE, with a wait of `backoff(i)`:
+    a socket timeout, a dropped or truncated transfer, HTTP 429 / 5xx, and
+    an OB.DAAC ERROR PAGE — an HTML body where a netCDF-4 file was asked for
+    (checked by the HDF5 signature, whatever the status code said). DEFINITE,
+    no retry: 404 (None) and any other 4xx (IOError — our own bad request).
+    Every retry, by kind, and every second waited is counted in `counts`
+    (`net_retry`, `net_backoff_seconds`), which reaches the frame's ledger.
+    """
+    os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
+    part = f"{path}.part"
+    errs = []
+    for i in range(max(1, int(attempts))):
+        kind = None
+        try:
+            req = urllib.request.Request(url, headers=f10b.UA)
+            with urllib.request.urlopen(req, timeout=timeout) as r:
+                want = r.headers.get("Content-Length")
+                with open(part, "wb") as fh:
+                    shutil.copyfileobj(r, fh, 1 << 22)
+            got = os.path.getsize(part)
+            if want is not None and got != int(want):
+                kind, why = "truncated", f"{got:,} of {int(want):,} bytes"
+            else:
+                with open(part, "rb") as fh:
+                    head = fh.read(len(HDF5_MAGIC))
+                if head != HDF5_MAGIC:
+                    kind, why = "error_page", (
+                        f"not a netCDF-4 file ({got:,} bytes beginning "
+                        f"{head[:8]!r}) — an OB.DAAC error page")
+                else:
+                    f10b.count_bytes(got)
+                    os.replace(part, path)
+                    if i:
+                        counts["net_recovered"] = \
+                            counts.get("net_recovered", 0) + 1
+                    counts["max_net_attempts"] = max(
+                        counts.get("max_net_attempts", 0), i + 1)
+                    return path
+        except urllib.error.HTTPError as e:
+            if e.code == 404:
+                return None
+            if e.code != 429 and e.code < 500:
+                raise IOError(f"{url}: HTTP {e.code} — a definite refusal of "
+                              f"the request, not retried") from None
+            kind, why = "http_5xx" if e.code >= 500 else "http_429", \
+                f"HTTP {e.code}"
+        except TimeoutError as e:
+            kind, why = "timeout", f"TimeoutError: {e}"
+        except (urllib.error.URLError, OSError) as e:
+            # URLError wraps a socket timeout raised while connecting
+            reason = getattr(e, "reason", None)
+            kind = "timeout" if isinstance(reason, TimeoutError) or \
+                "timed out" in str(e) else "connection"
+            why = f"{type(e).__name__}: {e}"
+        except Exception as e:                              # noqa: BLE001
+            # http.client.IncompleteRead / RemoteDisconnected and friends
+            kind, why = "connection", f"{type(e).__name__}: {e}"
+        finally:
+            if os.path.exists(part):
+                os.remove(part)
+        _bump(counts, kind)
+        errs.append(f"attempt {i + 1}: {why}")
+        if i < int(attempts) - 1:
+            w = backoff(i)
+            counts["net_backoff_seconds"] = round(
+                counts.get("net_backoff_seconds", 0.0) + w, 1)
+            SLEEP(w)
+    counts["net_gave_up"] = counts.get("net_gave_up", 0) + 1
+    waited = ", ".join(f"{backoff(k):g}" for k in range(len(errs) - 1))
+    raise IOError(f"{url}: {len(errs)} attempt(s) failed, backing off "
+                  f"{waited} s between them — {' | '.join(errs[-3:])}")
 
 
 # ================================================================ names ====
@@ -292,9 +429,10 @@ def run_indices(run):
     return list(range(a, b + 1, s))
 
 
-def subset_url(d, run, h=H, w=W, latlon=False):
+def subset_url(d, run, h=H, w=W, latlon=False, rows=None):
     a, s, b = run
-    ce = (f"/rhos[0:1:{h - 1}][0:1:{w - 1}][{a}:{s}:{b}]"
+    r0, r1 = rows if rows is not None else (0, h - 1)
+    ce = (f"/rhos[{r0}:1:{r1}][0:1:{w - 1}][{a}:{s}:{b}]"
           f";/wavelength[{a}:{s}:{b}]") + (";/lat;/lon" if latlon else "")
     return (f"{OPENDAP}{day_dir(d)}{object_name(d)}.dap.nc4?dap4.ce="
             + urllib.parse.quote(ce, safe=";/:"))
@@ -304,6 +442,11 @@ def pixel_url(d, r, c, lo, hi):
     ce = f"/rhos[{r}][{c}][{lo}:1:{hi}];/wavelength[{lo}:1:{hi}]"
     return (f"{OPENDAP}{day_dir(d)}{object_name(d)}.dap.nc4?dap4.ce="
             + urllib.parse.quote(ce, safe=";/:"))
+
+
+def latlon_url(d):
+    return (f"{OPENDAP}{day_dir(d)}{object_name(d)}.dap.nc4?dap4.ce="
+            + urllib.parse.quote("/lat;/lon", safe=";/:"))
 
 
 def axis_url(d):
@@ -413,7 +556,7 @@ def read_subset(path, want_nm, h=H, w=W, need_grid=False):
     return np.concatenate(parts, axis=0), attrs
 
 
-def local_subset(native, out, run, latlon=False):
+def local_subset(native, out, run, latlon=False, rows=None):
     """`--source-dir`: the DAP4 server's answer, emulated from a local native
     file — the SAME constraint semantics (a strided band slice plus its
     wavelengths, lat/lon when asked) written as a netCDF-4 file, so the reader
@@ -423,7 +566,9 @@ def local_subset(native, out, run, latlon=False):
     with netCDF4.Dataset(native) as src:
         v = src.variables["rhos"]
         v.set_auto_maskandscale(False)
-        a = np.asarray(v[:, :, idx[0]:idx[-1] + 1:run[1]], np.float32)
+        r0, r1 = rows if rows is not None else (0, v.shape[0] - 1)
+        a = np.asarray(v[r0:r1 + 1, :, idx[0]:idx[-1] + 1:run[1]],
+                       np.float32)
         wl = np.asarray(src.variables["wavelength"][idx[0]:idx[-1] + 1:run[1]])
         gattrs = {k: src.getncattr(k) for k in src.ncattrs()}
         lat = np.asarray(src.variables["lat"][:]) if latlon else None
@@ -608,21 +753,28 @@ class PaceSwirAdapter(sh.GridAdapter):
         "over the record (ml/family1/probes/pace_swir_probe.json): a frame "
         "is 157.8 MB stored (151.9-161.4 MB, 462-542 of 578 tiles, valid "
         "fraction 0.319-0.338), 367 MB fetched and 38-43 s to encode, and "
-        "167 s a frame from the sandbox with three download workers; the "
+        "167 s a frame from the sandbox with three download workers (the "
+        "default is TWO since 2026-10-13, PACE_SWIR_WORKERS); the "
         "record's 893 final days to 2026-08-31 are ~141 GB stored and "
         "~328 GB read. Built in MONTHLY lanes on hosted runners: a month is "
         "~4.9 GB of shards and ~1.4 h, where a quarter (~14.4 GB) would not "
-        "fit a runner's ~14 GB of disk.")
+        "fit a runner's ~14 GB of disk. Run at most TWO lanes at a time: six "
+        "concurrent lanes of three workers drove OB.DAAC into timeouts and "
+        "error pages (2026-10-13); every request now has an explicit read "
+        "timeout (PACE_SWIR_TIMEOUT, default 600 s) and backs off 30, 60, "
+        "120 ... 480 s between attempts, counted in `net_retry` / "
+        "`net_backoff_seconds`.")
     smoke_window = ("2024-03-05", "2024-03-19")
     smoke_probe_month = "2024-03"
 
-    WORKERS = 3
-
     def __init__(self):
+        self.WORKERS = env_int("PACE_SWIR_WORKERS", WORKERS_DEFAULT)
+        self.TIMEOUT = env_float("PACE_SWIR_TIMEOUT", TIMEOUT_DEFAULT)
         g = (os.environ.get("PACE_SWIR_SMOKE_GRID") or "").split(",")
         self.w, self.h = (int(g[0]), int(g[1])) if len(g) == 2 else (W, H)
         self._listing = {}
         self._bands = None
+        self._net = {}
         if (self.w, self.h) != (W, H):
             self.notes = (f"{self.notes}\nSMOKE GRID: PACE_SWIR_SMOKE_GRID "
                           f"set the grid to {self.w} x {self.h} instead of "
@@ -645,6 +797,10 @@ class PaceSwirAdapter(sh.GridAdapter):
                                "doi": DOI, "variable": "rhos",
                                "aerosol_corrected": False}
         return out
+
+    def http(self, ctx, url, path, counts):
+        """`http_get` with this lane's attempts and read timeout."""
+        return http_get(url, path, ctx.a.attempts, self.TIMEOUT, counts)
 
     # ------------------------------------------------------------ paths ----
     def _src(self, ctx, *parts):
@@ -726,11 +882,24 @@ class PaceSwirAdapter(sh.GridAdapter):
         return list(range(max(min(ys), RECORD_START.year), last + 1))
 
     def all_years(self, ctx):
-        """Every year from the record's start to the later of the window and
-        today: the FINAL EDGE is a property of the whole record, not of one
-        lane's years (a lane ending 12-30 must not call 12-31 after_record
-        because next year's listing was not asked)."""
-        top = max([dt.datetime.now(dt.timezone.utc).year] + self.years(ctx))
+        """The years this context LISTS: the window's own years plus the
+        newest year holding a final granule (walking back from the later of
+        today and the window), because the FINAL EDGE is a property of the
+        record, not of one lane — a lane ending 12-30 must not call 12-31
+        after_record. NOT every year of the record: a monthly lane of 2024
+        has no use for 2025's listing (2026-10-13, the coordinator's ask
+        after six lanes each spent 22 minutes in `index`)."""
+        ys = set(self.years(ctx))
+        y = max([dt.datetime.now(dt.timezone.utc).year] + sorted(ys))
+        while y >= RECORD_START.year:
+            ys.add(y)
+            if self.listing(ctx, y)[0]:
+                break
+            y -= 1
+        return sorted(ys)
+
+    def whole_record_years(self, ctx):
+        top = max(self.all_years(ctx))
         return list(range(RECORD_START.year, top + 1))
 
     def final_days(self, ctx, years=None):
@@ -746,17 +915,18 @@ class PaceSwirAdapter(sh.GridAdapter):
         return out
 
     def record(self, ctx):
-        """(first, last) day of the FINAL record. The first is RECORD_START
-        and the listing must agree; the last is the final collection's live
-        edge over the whole record."""
+        """(first, last) day of the FINAL record: RECORD_START (checked
+        against the listing whenever its year is listed) and the final
+        collection's live edge."""
         days = self.final_days(ctx)
         if not days:
             return None, None
-        lo = min(days)
-        if lo != RECORD_START:
-            raise FormatError(f"the final listing starts {lo}, the product "
-                              f"declares {RECORD_START}")
-        return lo, max(days)
+        first_year = self.listing(ctx, RECORD_START.year)[0] \
+            if RECORD_START.year in self.all_years(ctx) else {}
+        if first_year and min(first_year) != RECORD_START:
+            raise FormatError(f"the final listing starts {min(first_year)}, "
+                              f"the product declares {RECORD_START}")
+        return RECORD_START, max(days)
 
     def nrt_boundary(self, ctx):
         fin = self.final_days(ctx)
@@ -766,9 +936,10 @@ class PaceSwirAdapter(sh.GridAdapter):
         inside = sorted(d for d in nrt if last is not None
                         and RECORD_START <= d <= last and d not in fin)
         return {"final_last_day": str(last) if last else None,
-                "nrt_first_day": str(min(nrt)) if nrt else None,
+                "listed_years": self.all_years(ctx),
+                "nrt_first_day_listed": str(min(nrt)) if nrt else None,
                 "nrt_last_day": str(max(nrt)) if nrt else None,
-                "nrt_days": len(nrt),
+                "nrt_days_listed": len(nrt),
                 "nrt_days_after_final": len(after),
                 "nrt_after_final_first": str(after[0]) if after else None,
                 "nrt_only_inside_record": [str(d) for d in inside],
@@ -777,10 +948,14 @@ class PaceSwirAdapter(sh.GridAdapter):
                            "absent_upstream")}
 
     def record_frames(self, ctx, group):
+        """The probe's extrapolation: the WHOLE record's final days (the one
+        place every year is listed)."""
         lo, hi = self.record(ctx)
         if lo is None:
             return None
-        return sum(1 for d in self.final_days(ctx) if lo <= d <= hi)
+        return sum(1 for d in self.final_days(ctx,
+                                              self.whole_record_years(ctx))
+                   if lo <= d <= hi)
 
     def empty_months(self, ctx, y):
         lo, hi = self.record(ctx)
@@ -839,8 +1014,7 @@ class PaceSwirAdapter(sh.GridAdapter):
             tmp = tempfile.mkdtemp(prefix="swir_axis_", dir=ctx.scratch)
             try:
                 p = os.path.join(tmp, "axis.nc4")
-                if f10b.fetch_first([axis_url(d)], p,
-                                    attempts=ctx.a.attempts) is None:
+                if self.http(ctx, axis_url(d), p, self._net) is None:
                     sys.exit(f"REFUSING pace_swir: {axis_url(d)} is 404 — "
                              f"the listed first day has no file")
                 import netCDF4
@@ -875,8 +1049,7 @@ class PaceSwirAdapter(sh.GridAdapter):
         if empty:
             sys.exit(f"REFUSING pace_swir: a calendar month inside the record "
                      f"has no final granule: {empty}")
-        # the ONE real read: the first final day this context's window holds
-        # (a monthly lane reads a day it fetches anyway), else the record's
+        # the check day: the first final day this context's window holds
         fin_w = sorted(d for d in self.final_days(ctx, self.years(ctx))
                        if ctx.d_lo <= d <= ctx.d_hi)
         first = fin_w[0] if fin_w else lo
@@ -887,8 +1060,11 @@ class PaceSwirAdapter(sh.GridAdapter):
             per[str(y)] = len(files)
             nb += sum(r["bytes_cmr"] for r in files.values())
         fin = self.final_days(ctx)
-        absent, d = [], lo
-        while d <= hi:
+        span = getattr(ctx, "grid_frame_days", None)
+        w_lo = max(lo, ctx.d_lo)
+        w_hi = min(hi, span[1] if span else ctx.d_hi)
+        absent, d = [], w_lo
+        while d <= w_hi:
             if d not in fin:
                 absent.append(str(d))
             d += dt.timedelta(days=1)
@@ -899,11 +1075,11 @@ class PaceSwirAdapter(sh.GridAdapter):
                             "nrt": [SHORT_NRT, CONCEPT_NRT]},
             "access": ("OB.DAAC OPeNDAP (Hyrax) DAP4 server-side subsetting, "
                        "anonymous; plain byte ranges refused (416)"),
-            "days_per_year_final": per,
+            "days_per_year_final_listed": per,
             "bytes_cmr_whole_files": int(nb),
             "record": [str(lo), str(hi)],
             "days_in_record": (hi - lo).days + 1,
-            "days_absent_upstream": absent,
+            "days_absent_upstream_in_window": absent,
             "nrt_boundary": self.nrt_boundary(ctx),
             "bands": [{"channel": n, "index": i, "wavelength_nm": nm,
                        "target_nm": dict(TARGETS)[n]} for n, i, nm in bands],
@@ -920,31 +1096,91 @@ class PaceSwirAdapter(sh.GridAdapter):
                                "mask": ("pace4k's BGC v3.2 chlor_a valid, "
                                         "same day")},
         }
-        out["first_file"] = {"day": str(first),
-                             **self.read_first_day(ctx, first)}
+        out["index_check"] = {"day": str(first),
+                              **self.index_check(ctx, first)}
         return out
 
-    def read_first_day(self, ctx, d):
+    INDEX_ROWS = 64          # the check band: rows straddling the equator
+
+    def index_check(self, ctx, d):
+        """`index`'s real read, kept SMALL: the grid (`/lat;/lon`, ~70 kB),
+        every request's wavelength slice and decode path over a 64-row band
+        at the equator (~3 MB in all), and the pixel re-read on that band.
+        It used to read the whole first day (~375 MB) — which the lane then
+        fetched again — and under six concurrent lanes that took 22 minutes
+        per lane. The full-day path is exercised on every frame anyway."""
+        net, nbytes = {}, 0
+        h, w = self.h, self.w
+        r0 = max(0, h // 2 - self.INDEX_ROWS // 2)
+        r1 = min(h - 1, r0 + self.INDEX_ROWS - 1)
+        n = r1 - r0 + 1
+        bands = self.bands(ctx)
+        chan_of = {i: k for k, (_n, i, _nm) in enumerate(bands)}
+        nm_of = {i: nm for _n, i, nm in bands}
+        band = np.full((n, w, len(CHANNELS)), np.nan, np.float32)
+        tmp = tempfile.mkdtemp(prefix="swir_idx_", dir=ctx.scratch)
+        attrs = {}
         try:
-            arr, counts, oob = self.read_day(ctx, d)
-        except FormatError as e:
-            sys.exit(f"REFUSING pace_swir: the first day {d} does not match "
-                     f"the declared product: {e}")
+            import netCDF4
+            if ctx.source_dir:
+                with NC_LOCK, netCDF4.Dataset(self.native_path(ctx, d)) as ds:
+                    lat = np.asarray(ds.variables["lat"][:], np.float64)
+                    lon = np.asarray(ds.variables["lon"][:], np.float64)
+            else:
+                p = os.path.join(tmp, "latlon.nc4")
+                if self.http(ctx, latlon_url(d), p, net) is None:
+                    sys.exit(f"REFUSING pace_swir: {latlon_url(d)} is 404 — "
+                             f"a listed day has no file")
+                nbytes += os.path.getsize(p)
+                with NC_LOCK, netCDF4.Dataset(p) as ds:
+                    lat = np.asarray(ds.variables["lat"][:], np.float64)
+                    lon = np.asarray(ds.variables["lon"][:], np.float64)
+            try:
+                _check_grid(lat, lon, h, w, f"{d} lat/lon")
+            except FormatError as e:
+                sys.exit(f"REFUSING pace_swir: {e}")
+            for k, run in enumerate(self.requests(ctx)):
+                p = os.path.join(tmp, f"band{k}.nc4")
+                if ctx.source_dir:
+                    with NC_LOCK:
+                        local_subset(self.native_path(ctx, d), p, run,
+                                     rows=(r0, r1))
+                    ctx.count_bytes(os.path.getsize(p))
+                elif self.http(ctx, subset_url(d, run, h, w, rows=(r0, r1)),
+                               p, net) is None:
+                    sys.exit(f"REFUSING pace_swir: the check band of {d} "
+                             f"is 404")
+                nbytes += os.path.getsize(p)
+                idx = run_indices(run)
+                try:
+                    with NC_LOCK:
+                        a, attrs = read_subset(p, [nm_of[i] for i in idx],
+                                               n, w)
+                except FormatError as e:
+                    sys.exit(f"REFUSING pace_swir: {d}: {e}")
+                for j, i in enumerate(idx):
+                    band[:, :, chan_of[i]] = a[:, :, j]
         except (IOError, OSError) as e:
-            sys.exit(f"REFUSING pace_swir: the first day {d} could not be "
+            sys.exit(f"REFUSING pace_swir: the check day {d} could not be "
                      f"read: {e}")
-        out = dict(counts)
-        out["valid_fraction"] = {
-            n: round(float(np.isfinite(arr[:, :, i]).mean()), 6)
-            for i, n in enumerate(self.channel_names)}
-        out["range"] = {}
-        for i, n in enumerate(self.channel_names):
-            g = arr[:, :, i]
-            g = g[np.isfinite(g)]
-            out["range"][n] = [None, None] if not g.size else \
-                [round(float(g.min()), 6), round(float(g.max()), 6)]
-        if oob:
-            out["out_of_bounds"] = oob
+        finally:
+            shutil.rmtree(tmp, ignore_errors=True)
+        out = {"rows": [r0, r1], "bytes": int(nbytes),
+               "license": str(attrs.get("license")),
+               "processing_version": str(attrs.get("processing_version")),
+               "valid_fraction_band": round(
+                   float(np.isfinite(band[:, :, 2]).mean()), 6)}
+        g16 = band.astype(np.float16)
+        px = pick_pixel(g16)
+        if px is not None:
+            # the band's own pixel, re-read at its GLOBAL row
+            self._check_one(ctx, d, px[0] + r0, px[1], g16[px], bands, out)
+            out["pixel_reread_f16_equal"] = 1
+        else:
+            out["pixel_reread_no_valid_pixel"] = 1
+        merge_net(out, net)
+        merge_net(out, self._net)
+        self._net = {}
         return out
 
     # ---------------------------------------------------------- one day ----
@@ -952,7 +1188,7 @@ class PaceSwirAdapter(sh.GridAdapter):
         """The day's subsets (+ the BGC mask) on local disk -> (paths, bytes,
         tmpdir). DOWNLOAD ONLY; the decode is in the main thread."""
         tmpdir = tempfile.mkdtemp(prefix="swir_", dir=ctx.scratch)
-        paths, nbytes = {"runs": []}, 0
+        paths, nbytes = {"runs": [], "net": {}}, 0
         try:
             for k, run in enumerate(self.requests(ctx)):
                 p = os.path.join(tmpdir, f"run{k}.nc4")
@@ -965,8 +1201,7 @@ class PaceSwirAdapter(sh.GridAdapter):
                     ctx.count_bytes(os.path.getsize(p))
                 else:
                     url = subset_url(d, run, self.h, self.w, latlon=(k == 0))
-                    if f10b.fetch_first([url], p,
-                                        attempts=ctx.a.attempts) is None:
+                    if self.http(ctx, url, p, paths["net"]) is None:
                         raise IOError(f"{url}: listed, and 404")
                 paths["runs"].append((run, p))
                 nbytes += os.path.getsize(p)
@@ -979,8 +1214,7 @@ class PaceSwirAdapter(sh.GridAdapter):
             else:
                 bp = os.path.join(tmpdir, "bgc.nc4")
                 url = p4.opendap_url("bgc", d, ("chlor_a",))
-                if f10b.fetch_first([url], bp,
-                                    attempts=ctx.a.attempts) is not None:
+                if self.http(ctx, url, bp, paths["net"]) is not None:
                     paths["bgc"] = bp
                     nbytes += os.path.getsize(bp)
         except BaseException:
@@ -997,7 +1231,7 @@ class PaceSwirAdapter(sh.GridAdapter):
         try:
             p = os.path.join(tmp, "px.nc4")
             url = pixel_url(d, r, c, lo, hi)
-            if f10b.fetch_first([url], p, attempts=ctx.a.attempts) is None:
+            if self.http(ctx, url, p, self._net) is None:
                 raise IOError(f"{url}: 404 on the pixel re-read")
             with NC_LOCK:
                 return read_pixel_response(p)
@@ -1022,6 +1256,7 @@ class PaceSwirAdapter(sh.GridAdapter):
         arr = np.full((self.h, self.w, len(CHANNELS)), np.nan, np.float16)
         counts = {"files_read": len(paths["runs"]), "bytes_files": int(nbytes),
                   "requests": len(paths["runs"])}
+        merge_net(counts, paths.get("net"))
         oob = {}
         for k, (run, p) in enumerate(paths["runs"]):
             idx = run_indices(run)
@@ -1052,6 +1287,8 @@ class PaceSwirAdapter(sh.GridAdapter):
         counts["valid_pixels"] = int(np.isfinite(arr[:, :, 2]).sum())
         self.check_pixel(ctx, d, arr, bands, counts)
         self.check_dark(ctx, d, arr, paths.get("bgc"), counts)
+        merge_net(counts, self._net)          # the axis / pixel requests
+        self._net = {}
         return arr, counts, oob
 
     def check_pixel(self, ctx, d, arr, bands, counts):
@@ -1062,6 +1299,10 @@ class PaceSwirAdapter(sh.GridAdapter):
             counts["pixel_reread_no_valid_pixel"] = 1
             return
         r, c = px
+        self._check_one(ctx, d, r, c, arr[r, c, :], bands, counts)
+
+    def _check_one(self, ctx, d, r, c, stored, bands, counts):
+        """Pixel (r, c) of day d re-read natively vs the `stored` vector."""
         idx = [i for _n, i, _nm in bands]
         lo, hi = min(idx), max(idx)
         vals, wl = self.native_pixel(ctx, d, r, c, lo, hi)
@@ -1075,7 +1316,7 @@ class PaceSwirAdapter(sh.GridAdapter):
             sys.exit(f"REFUSING pace_swir: {d}: the pixel re-read's "
                      f"wavelengths {native_wl} are not the bands "
                      f"{[nm for _n, _i, nm in bands]}")
-        stored = np.asarray(arr[r, c, :], np.float16)
+        stored = np.asarray(stored, np.float16)
         if not np.array_equal(native.astype(np.float16), stored):
             sys.exit(f"REFUSING pace_swir: {d}: pixel (row {r}, col {c}) "
                      f"re-read from the native file is {native.tolist()}, "
