@@ -171,8 +171,11 @@
   // to their stores by `source_store` = the registry's `path`
   var DEFAULT_GRID_MONTHLY = "data/gridded_monthly_index.json";
   var DEFAULT_GRID_DOY = "data/gridded_doy_index.json";
+  // E-093: the pentad-of-year sums of the five-day tensor's bin-major groups,
+  // matched to their stores by `source_file` = the registry's path + file name
+  var DEFAULT_GRID_POY = "data/gridded_poy_index.json";
   var cfg = { base: DEFAULT_BASE, fetch: null, concurrency: MAX_CONCURRENCY,
-    registries: DEFAULT_REGISTRIES.slice(), siteBase: null, gridMonthly: DEFAULT_GRID_MONTHLY, gridDoy: DEFAULT_GRID_DOY };
+    registries: DEFAULT_REGISTRIES.slice(), siteBase: null, gridMonthly: DEFAULT_GRID_MONTHLY, gridDoy: DEFAULT_GRID_DOY, gridPoy: DEFAULT_GRID_POY };
   var cache = new Map();                 // url/key → Promise
   var idxCache = new Map();              // url|off|len → Uint8Array (LRU)
   var idxCacheBytes = 0;
@@ -202,6 +205,9 @@
     // + gridDoy: the E-091 day-of-year index (site-relative or absolute); null = none
     if (o.gridDoy !== undefined) cfg.gridDoy = o.gridDoy;
     else if (o.base != null || o.registries != null) cfg.gridDoy = o.registries != null && o.registries === DEFAULT_REGISTRIES ? DEFAULT_GRID_DOY : null;
+    // + gridPoy: the E-093 pentad-of-year index; null = none
+    if (o.gridPoy !== undefined) cfg.gridPoy = o.gridPoy;
+    else if (o.base != null || o.registries != null) cfg.gridPoy = o.registries != null && o.registries === DEFAULT_REGISTRIES ? DEFAULT_GRID_POY : null;
     else if (o.base != null || o.registries != null) cfg.gridMonthly = o.registries != null && o.registries === DEFAULT_REGISTRIES ? DEFAULT_GRID_MONTHLY : null;
     if (o.fetch !== undefined) cfg.fetch = o.fetch;
     if (o.concurrency != null) {
@@ -1153,6 +1159,7 @@
       }));
       if (cfg.gridMonthly) await attachGridMonthly(out, ctx);
       if (cfg.gridDoy) await attachGridDoy(out, ctx);
+      if (cfg.gridPoy) await attachGridPoy(out, ctx);
       // registry order, then each family's own order
       var order = cfg.registries.map(function (f) { return f.family; });
       out.families.sort(function (a, b) { return order.indexOf(a.family) - order.indexOf(b.family); });
@@ -1388,8 +1395,11 @@
       if (s.step === "doy") {
         if (!d._doy) throw new Error("the climatology per day of year is not published for " + d.name);
         if (s.std) throw new Error("the day-of-year climatology has no standard deviation");
+      } else if (s.step === "poy") {
+        if (!d._poy) throw new Error("the climatology per pentad of year is not published for " + d.name);
+        if (s.std) throw new Error("the pentad-of-year climatology has no standard deviation");
       } else
-      if (["native", "pentad", "month", "all", "normal"].indexOf(s.step) < 0) throw new Error("step must be native, pentad, month, all, normal or doy");
+      if (["native", "pentad", "month", "all", "normal"].indexOf(s.step) < 0) throw new Error("step must be native, pentad, month, all, normal, doy or poy");
       if (s.step === "normal" && d.kind !== "grid") throw new Error("the normal per calendar month is offered for gridded stores only");
       if (s.std && d.kind !== "grid") throw new Error("the standard deviation is offered for gridded stores only");
     }
@@ -2707,6 +2717,160 @@
       stats: { requests: ctx.stats.requests, bytes: ctx.stats.bytes, ms: Date.now() - t0 } };
   }
 
+  // ======================================== PENTAD-OF-YEAR CLIMATOLOGY ====
+  // E-093: per bin-major group of the five-day tensor, 73 files of sums (in
+  // PHYSICAL units — the tensor's z-scores were undone before summing) and
+  // counts, CUMULATIVE over the years ([channel, year, lat, lon]). Slot =
+  // min(72, floor((day of year of the bin's start − 1) / 5)); the mean of a
+  // slot over years a…b is (S[b] − S[a−1]) / (N[b] − N[a−1]), composed by
+  // doyRun from the signed band reads poyPlan lists.
+  var POY_NSLOT = 73;
+  async function attachGridPoy(out, ctx) {
+    var url, ix;
+    try { url = siteUrl(cfg.gridPoy); ix = await readSiteJSON(url, ctx); }
+    catch (e) {
+      if (!/HTTP 404/.test(String(e && e.message))) {
+        out.errors.push({ family: "E-093", title: "Pentad-of-year climatology", store: null,
+          message: "the index (" + cfg.gridPoy + ") could not be read: " + (e && e.message) + " — the climatology per pentad of year is not offered" });
+      }
+      return;
+    }
+    var byFile = {}, stores = ix.stores || {};
+    Object.keys(stores).forEach(function (k) { if (stores[k] && stores[k].source_file) byFile[stores[k].source_file] = stores[k]; });
+    var base = new URL(ix.base || "./", url).href;
+    out.stores.forEach(function (d) {
+      if (d.layout !== "binmajor" || !d._raw || !d._dense) return;
+      var g = d._raw, f = (g.files || [])[0];
+      var key = String(g.path || g.prefix || "").replace(/\/+$/, "") + "/" + (f && f.name);
+      var G = byFile[key];
+      if (!G || !G.complete) return;
+      try {
+        var H = Number(G.H), W = Number(G.W), step = Number(G.dlat), D = d._dense;
+        if (G.group && G.group !== d.name) throw new Error("the pentad-of-year sums are of group " + G.group + ", not " + d.name);
+        if (D.H !== H || D.W !== W || Math.abs(D.lat0 - Number(G.lat0)) > 1e-9 || Math.abs(D.lon0 - Number(G.lon0)) > 1e-9 ||
+            Math.abs(D.step - step) > 1e-12 || Number(G.dlon) !== step || G.south_first === false || !D.southFirst) {
+          throw new Error("the pentad-of-year sums' grid is not the store's");
+        }
+        var chanOf = {};
+        G.chans.forEach(function (c, k) { chanOf[c] = k; });
+        var slots = G.slots || {};
+        for (var s = 0; s < POY_NSLOT; s++) if (!slots["p" + p2(s)]) throw new Error("slot p" + p2(s) + " is missing from the index");
+        hide(d, "_poy", { base: new URL(G.prefix + "/", base).href, slots: slots, C: G.chans.length, Y: Number(G.n_years), H: H, W: W,
+          year0: Number(G.year_first), lat0: Number(G.lat0), lon0: Number(G.lon0), step: step, chanOf: chanOf, index: url,
+          recordFirst: G.record_first || null, recordLast: G.record_last || null });
+        d.poyClimatology = { years: [Number(G.year_first), Number(G.year_first) + Number(G.n_years) - 1],
+          recordFirst: G.record_first || null, recordLast: G.record_last || null };
+        d.steps = (d.steps || ["native", "pentad", "month", "all"]).concat(["poy"]);
+      } catch (e) {
+        out.errors.push({ family: d.family, title: "Pentad-of-year climatology", store: d.name, message: e && e.message ? e.message : String(e) });
+      }
+    });
+  }
+
+  // the first day of slot s in the nominal leap year 2000, and its month
+  function poySlotStart(s) { return daysFromCivil(2000, 1, 1) + 5 * s; }
+  function poySlotMonth(s) { return civil(poySlotStart(s))[1]; }
+
+  function poyPlan(d, sel, opts) {
+    opts = opts || {};
+    var M = d._poy, s = normSel(sel, d);
+    if (!s.bbox) { var e = new Error("a box (bbox) is required for the gridded store " + d.name); e.needBox = true; throw e; }
+    if (s.hours) throw new Error("the pentad-of-year climatology is of whole five-day bins: clear the hours filter");
+    var tg = denseTg({ H: M.H, W: M.W, lat0: M.lat0, lon0: M.lon0, step: M.step, southFirst: true });
+    var geo = boxGeometry(tg, s.bbox, s.res);
+    var rowsT = geo.byTy.get(0) || [], rowOut = new Int32Array(M.H).fill(-1), rmin = Infinity, rmax = -1;
+    for (var a = 0; a < rowsT.length; a += 2) {
+      rowOut[rowsT[a]] = rowsT[a + 1];
+      if (rowsT[a] < rmin) rmin = rowsT[a];
+      if (rowsT[a] > rmax) rmax = rowsT[a];
+    }
+    var colsT = geo.byTx.get(0) || [];
+    var chIdx = s.channels.map(function (c) {
+      var i = M.chanOf[c];
+      if (!(i >= 0)) throw new Error(d.name + ": the pentad-of-year sums have no channel " + c);
+      return i;
+    });
+    var units = s.channels.map(function (c) { var x = d.channels.find(function (z) { return z.name === c; }); return x ? x.unit : ""; });
+    var ya = Math.max(s.yearStart, M.year0), yb = Math.min(s.yearEnd, M.year0 + M.Y - 1);
+    if (yb < ya) throw new Error("the years " + s.yearStart + "–" + s.yearEnd + " are outside the record " + M.year0 + "–" + (M.year0 + M.Y - 1));
+    var sign = {};
+    var add = function (y, v) { if (y >= M.year0) sign[y] = (sign[y] || 0) + v; };
+    add(yb, 1); add(ya - 1, -1);
+    var ex = s.excludeYears.filter(function (y, i, arr) { return y >= ya && y <= yb && arr.indexOf(y) === i; });
+    ex.forEach(function (y) { add(y, -1); add(y - 1, 1); });
+    var planes = Object.keys(sign).map(Number).filter(function (y) { return sign[y] !== 0; }).sort(function (x, y) { return x - y; });
+    var yearsUsed = [];
+    for (var yy = ya; yy <= yb; yy++) if (ex.indexOf(yy) < 0) yearsUsed.push(yy);
+    if (!yearsUsed.length) throw new Error("every year of the period is left out");
+    var monthOk = {};
+    s.months.forEach(function (m) { monthOk[m] = true; });
+    var keys = [];
+    for (var sl = 0; sl < POY_NSLOT; sl++) if (monthOk[poySlotMonth(sl)]) keys.push({ s: sl, k: "p" + p2(sl) });
+    if (opts.first) keys = keys.slice(0, 1);
+    var T = keys.length, Cs = chIdx.length, rows = rmax >= rmin ? rmax - rmin + 1 : 0;
+    var reqs = [], readBytes = 0;
+    keys.forEach(function (key, ti) {
+      var f = M.slots[key.k];
+      [["sum", 4, Number(f.sum_header)], ["count", 1, Number(f.count_header)]].forEach(function (ff) {
+        var isz = ff[1], url = M.base + ff[0] + "_" + key.k + ".npy";
+        chIdx.forEach(function (c, k) {
+          planes.forEach(function (y) {
+            var a0 = ff[2] + ((c * M.Y + (y - M.year0)) * M.H + rmin) * M.W * isz, len = rows * M.W * isz;
+            reqs.push({ url: url, a: a0, len: len, isz: isz, ti: ti, k: k, sign: sign[y] });
+            readBytes += len;
+          });
+        });
+      });
+    });
+    var times = new Float64Array(T), bounds = new Float64Array(2 * T);
+    keys.forEach(function (key, i) {
+      times[i] = poySlotStart(key.s) * 86400;
+      bounds[2 * i] = (daysFromCivil(ya, 1, 1) + 5 * key.s) * 86400;
+      bounds[2 * i + 1] = (key.s === POY_NSLOT - 1 ? daysFromCivil(yb + 1, 1, 1) : daysFromCivil(yb, 1, 1) + 5 * key.s + 5) * 86400;
+    });
+    var HW = geo.Ho * geo.Wo;
+    return { d: d, s: s, M: M, geo: geo, rowOut: rowOut, rmin: rmin, rmax: rmax, colsT: colsT, chIdx: chIdx, units: units,
+      keys: keys, T: T, Cs: Cs, reqs: rows ? reqs : [], readBytes: rows ? readBytes : 0, outBytes: T * Cs * HW * (4 + 2 + 8 + 4),
+      times: times, bounds: bounds, ya: ya, yb: yb, excluded: ex, yearsUsed: yearsUsed, planes: planes, daysIgnored: !!s.days };
+  }
+
+  function poyEstimate(plan) {
+    var y = plan.yearsUsed;
+    return { requests: plan.reqs.length, readBytes: plan.readBytes, outBytes: plan.outBytes, frames: plan.T, exact: true,
+      shape: [plan.T, plan.Cs, plan.geo.Ho, plan.geo.Wo], years: y.length, yearsUsed: y.slice(), path: "poy",
+      pathWhy: "a climatology per pentad of year is read from running totals over the years: " + plan.planes.length + " plane" + (plan.planes.length === 1 ? "" : "s") +
+        " of sums and of counts per five-day slot, whatever the number of years",
+      daysIgnored: plan.daysIgnored,
+      channelsRead: plan.Cs, channelsKept: plan.Cs, channelWord: "channels",
+      why: "Climatology per pentad of year over " + plan.ya + "–" + plan.yb + (plan.excluded.length ? " leaving out " + plan.excluded.join(", ") : "") + " (" + y.length + " year" + (y.length === 1 ? "" : "s") +
+        "): " + plan.T + " five-day slot" + (plan.T === 1 ? "" : "s") + " of the year × " + plan.Cs + " channel" + (plan.Cs === 1 ? "" : "s") + ", read from precomputed running totals — " +
+        plan.reqs.length.toLocaleString("en-US") + " requests, " + fmtMB(plan.readBytes) + " (exact; the box's band of rows, " + plan.planes.length + " year-plane" + (plan.planes.length === 1 ? "" : "s") +
+        " per slot and file). The result is " + plan.T + " × " + plan.Cs + " × " + plan.geo.Ho + " × " + plan.geo.Wo + " (" + fmtMB(plan.outBytes) + ")." +
+        (plan.daysIgnored ? " The days filter does not apply: a slot is chosen by the month its first day falls in." : ""),
+      shrink: "Pick fewer months or channels, shrink the box (a narrower band of LATITUDES is what saves bytes), or take coarser cells." };
+  }
+
+  function poyResult(plan, g, ctx, t0) {
+    var y = plan.yearsUsed, s = plan.s;
+    var notes = ["a CLIMATOLOGY PER PENTAD OF YEAR: each time step is one five-day slot of the year averaged over " + plan.ya + "–" + plan.yb +
+      " (" + y.length + " year" + (y.length === 1 ? "" : "s") + ")" + (plan.excluded.length ? ", leaving out " + plan.excluded.join(", ") : "") +
+      "; slot = min(72, floor((day of year of the bin's start − 1) / 5)), so slot 72 holds the bins starting on days 361–366; the time value is the slot's first day in the year 2000 (a nominal leap year), and climatology_bounds gives the span",
+      "a bin belongs to the slot and year of its own start; the bins slip one day against the calendar in every leap year, so a year gives 0, 1 or 2 bins to a slot — count = the number of finite five-day bins averaged",
+      "read from the store's precomputed pentad-of-year sums and counts, cumulative over the years (E-093), already in physical units: mean = (S[last year] − S[year before the first]) ÷ (N[last] − N[before first]) — the same mean as averaging every native five-day map of that slot, to within float32 rounding of the running totals",
+      "a slot is chosen by the month its first day falls in (in 2000): slot 11, 25–29 February, is a February slot"];
+    if (plan.daysIgnored) notes.push("the days filter does not apply to the pentad-of-year climatology and was ignored");
+    if (s.res !== "native") notes.push("each " + s.res + "° cell POOLS the sums and the counts of every native cell in it — not a mean of means");
+    plan.d.channels.forEach(function (c) { if (s.channels.indexOf(c.name) >= 0 && /log/i.test(c.name + " " + (c.unit || ""))) notes.push(c.name + ": kept as the logarithm the unit names, not converted back"); });
+    if (s.bbox && s.bbox.w > s.bbox.e) notes.push("the box crosses the dateline: longitudes run past 180° (subtract 360 for −180..180)");
+    return { kind: "grid", store: plan.d.name, family: plan.d.family, channels: s.channels.slice(), units: plan.units.slice(),
+      lat: plan.geo.outLat, lon: plan.geo.outLon, time: plan.times, data: g.data, count: g.count, std: null, sel: s, notes: notes,
+      frames: plan.T, group: plan.d.name, source: plan.M.base, title: plan.d.title, licence: plan.d.licence || null,
+      countMeaning: "number of finite five-day bins averaged",
+      climatology: { kind: "pentad", bounds: plan.bounds, period: [plan.ya, plan.yb], excluded: plan.excluded.slice(), yearsUsed: y.slice() },
+      levels: null, path: "poy", excluded: plan.excluded.slice(), period: [plan.ya, plan.yb],
+      stats: { requests: ctx.stats.requests, bytes: ctx.stats.bytes, ms: Date.now() - t0 } };
+  }
+
   // ============================================================== POINTS ===
   function pointStoreJson(d, ctx) {
     return readJSON(d._base + "store.json", ctx);
@@ -3343,6 +3507,18 @@
       }
       return cap(normalsEstimate(np));
     }
+    if (d._poy && sel && sel.step === "poy") {
+      var qp;
+      try { qp = poyPlan(d, sel); }
+      catch (e) {
+        if (e.needBox) {
+          return { requests: 0, readBytes: 0, outBytes: 0, frames: 0, overCap: true, exact: true, shape: null,
+            why: "Draw or type a box first: the climatology is read row band by row band, so a box is required." };
+        }
+        throw e;
+      }
+      return cap(poyEstimate(qp));
+    }
     if (d._dense) {
       var dp;
       try { dp = await densePlan(d, sel, ctx); }
@@ -3447,6 +3623,12 @@
         if (np.outBytes > CAP_OUT) throw new Error("over the cap: the result would be " + fmtMB(np.outBytes) + " of arrays (limit " + fmtMB(CAP_OUT) + ")");
         return normalsResult(np, await normalsRun(np, ctx, runProgress(opts, ctx, np.readBytes, false)), ctx, t0);
       }
+      if (d._poy && sel && sel.step === "poy") {
+        var qp = poyPlan(d, sel);
+        if (qp.readBytes > CAP_READ) throw new Error("over the cap: this selection reads " + fmtMB(qp.readBytes) + " (limit " + fmtMB(CAP_READ) + ")");
+        if (qp.outBytes > CAP_OUT) throw new Error("over the cap: the result would be " + fmtMB(qp.outBytes) + " of arrays (limit " + fmtMB(CAP_OUT) + ")");
+        return poyResult(qp, await doyRun(qp, ctx, runProgress(opts, ctx, qp.readBytes, false)), ctx, t0);
+      }
       if (d._dense) {
         var dp = await densePlan(d, sel, ctx);
         if (dp.readBytes > CAP_READ) throw new Error("over the cap: this selection reads " + fmtMB(dp.readBytes) + " (limit " + fmtMB(CAP_READ) + ")");
@@ -3504,6 +3686,11 @@
         // the first chosen calendar day's climatology
         var y1 = await doyPlan(d, sel, ctx, { first: true });
         return doyResult(y1, await doyRun(y1, ctx, dataProgress(ctx, y1.readBytes, false)), ctx, t0);
+      }
+      if (d._poy && sel && sel.step === "poy") {
+        // the first chosen slot's climatology
+        var q1 = poyPlan(d, sel, { first: true });
+        return poyResult(q1, await doyRun(q1, ctx, dataProgress(ctx, q1.readBytes, false)), ctx, t0);
       }
       if (d._monthly) {
         // the first selected calendar month: its normal over the period (or,
@@ -3785,6 +3972,7 @@
         dims.push(["nv", 2]);
         vars[0].attrs.push(["climatology", "climatology_bounds"]);
         vars[0].attrs[1] = ["long_name", clim.kind === "day" ? "calendar day of the climatology (its value is that day in the nominal leap year 2000)"
+          : clim.kind === "pentad" ? "five-day slot of the year of the climatology (its value is the slot's first day in the nominal leap year 2000)"
           : "calendar month of the climatology (its value is that month in the first year of the period)"];
         vars.push({ name: "climatology_bounds", dims: [0, 3], type: NC.DOUBLE, n: 2 * T,
           attrs: [["long_name", "first and last instant of the years each climatological month averages"], ["units", "seconds since 1970-01-01 00:00:00"]],
@@ -3852,7 +4040,8 @@
         }
       }
       if (result.climatology && result.climatology.period) {
-        extra.push(["climatology", result.climatology.kind === "day" ? "day-of-year climatology: each time step is one calendar day averaged over the years period_start to period_end, leaving out excluded_years (Σ sums ÷ Σ counts)" : "monthly normals: each time step is one calendar month averaged over the years period_start to period_end, leaving out excluded_years (Σ sums ÷ Σ counts)"],
+        extra.push(["climatology", result.climatology.kind === "day" ? "day-of-year climatology: each time step is one calendar day averaged over the years period_start to period_end, leaving out excluded_years (Σ sums ÷ Σ counts)"
+            : result.climatology.kind === "pentad" ? "pentad-of-year climatology: each time step is one five-day slot of the year (slot = min(72, floor((day of year of the bin's start − 1) / 5))) averaged over the years period_start to period_end, leaving out excluded_years (Σ sums ÷ Σ counts)" : "monthly normals: each time step is one calendar month averaged over the years period_start to period_end, leaving out excluded_years (Σ sums ÷ Σ counts)"],
           ["period_start", result.climatology.period[0], NC.INT],
           ["period_end", result.climatology.period[1], NC.INT],
           ["excluded_years", result.climatology.excluded.length ? result.climatology.excluded.join(", ") : "none"],

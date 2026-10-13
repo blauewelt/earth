@@ -41,6 +41,10 @@ const EXPM = JSON.parse(fs.readFileSync(path.join(FIXM, "expected.json"), "utf8"
 // fixture_native/), served as /okg/ — and /okgstale/, whose index claims one
 // month holds a frame fewer than the store does
 const FIXG = path.join(ROOT, "data", "gridded_monthly");
+// E-093: a synthetic bin-major five-day store and its pentad-of-year sums,
+// written by the real exporter (tests/make_gridded_poy_fixture.py), as /okp/
+const FIXP = path.join(ROOT, "data", "gridded_poy", "fixture");
+const EXPP = JSON.parse(fs.readFileSync(path.join(FIXP, "expected.json"), "utf8"));
 const require = createRequire(import.meta.url);
 const F1 = require("../src/f1data.js");
 const EXP = JSON.parse(fs.readFileSync(path.join(FIX, "expected.json"), "utf8"));
@@ -63,9 +67,9 @@ function send206(res, body, mode, rel) {
 
 function serve(req, res) {
   const url = new URL(req.url, "http://x");
-  const m = /^\/(ok|bad200|nozst|ok10|ok12|okm|ok72|okg|okgstale)\/(.*)$/.exec(url.pathname);
+  const m = /^\/(ok|bad200|nozst|ok10|ok12|okm|ok72|okg|okgstale|okp)\/(.*)$/.exec(url.pathname);
   const rel = m ? decodeURIComponent(m[2]) : "";
-  const root = m && m[1] === "ok10" ? FIX10 : m && m[1] === "ok12" ? FIX12 : m && m[1] === "okm" ? FIXM
+  const root = m && m[1] === "okp" ? FIXP : m && m[1] === "ok10" ? FIX10 : m && m[1] === "ok12" ? FIX12 : m && m[1] === "okm" ? FIXM
     : m && (m[1] === "okg" || m[1] === "okgstale") ? FIXG : FIX;
   if (m && m[1] === "okgstale" && rel === "fixture_native/gridded_monthly_index.json") {
     const ix = JSON.parse(fs.readFileSync(path.join(FIXG, rel), "utf8"));
@@ -1234,6 +1238,96 @@ print(json.dumps({"n": len(fs), "mean": np.nanmean(sub, 0).ravel().tolist(), "st
         assert.ok(Math.abs(r.std[i] - out.std[i]) <= IDXG.std_rel_tol * (Math.abs(out.mean[i]) + out.std[i]), `std ${r.std[i]} vs numpy ${out.std[i]}`);
         assert.ok(Math.abs(r.data[i] - out.mean[i]) <= 2 ** -20 * Math.abs(out.mean[i]), `mean ${r.data[i]} vs numpy ${out.mean[i]}`);
       }
+    } finally { F1.configure({ base: base("ok") }); }
+  });
+
+  // ---- E-093: the pentad-of-year climatology of the bin-major stores
+  function multiP(extra) {
+    const b = base("okp");
+    F1.configure(Object.assign({ siteBase: b, registries: [
+      { family: "10", title: "Global tensor and point observations (family 10)", kind: "family10",
+        url: b + "family10.json", root: b, norms: "family7_index.json" }],
+    gridPoy: "gridded_poy_index.json", gridDoy: null, gridMonthly: null }, extra || {}));
+  }
+
+  test("E-093: a bin-major store listed in the pentad-of-year index offers step poy; a missing index is silent", async () => {
+    multiP();
+    try {
+      const reg = await F1.loadRegistry();
+      assert.deepEqual(reg.errors, []);
+      const p = reg.stores.find((d) => d.name === "fxp"), q = reg.stores.find((d) => d.name === "fxq");
+      assert.deepEqual(p.poyClimatology.years, [1982, 1986]);
+      assert.deepEqual(q.poyClimatology.years, [1983, 1986]);
+      assert.ok(p.steps.includes("poy"));
+      multiP({ gridPoy: "no/such/index.json" });
+      const r2 = await F1.loadRegistry();
+      assert.deepEqual(r2.errors, []);
+      assert.ok(!r2.stores.find((d) => d.name === "fxp").poyClimatology);
+      await assert.rejects(F1.run({ family: "10", store: "fxp", channels: ["sst"], yearStart: 1982, yearEnd: 1986, months: [1],
+        bbox: { w: -180, s: -90, e: 180, n: 90 }, res: "native", step: "poy" }), /not published/);
+    } finally { F1.configure({ base: base("ok") }); }
+  });
+
+  test("E-093: the composed mean per slot equals numpy over the native bins (a year left out, two bins in one slot, a partial first year); counts exact; estimate exact", async () => {
+    multiP();
+    try {
+      const reg = await F1.loadRegistry();
+      for (const c of EXPP.cases) {
+        const d = reg.stores.find((x) => x.name === c.group);
+        const sel = { family: "10", store: c.group, channels: d.channels.map((x) => x.name), yearStart: c.ya, yearEnd: c.yb,
+          months: c.months, excludeYears: c.ex, days: [3, 9], bbox: { w: -180, s: -90, e: 180, n: 90 }, res: "native", step: "poy" };
+        log.length = 0;
+        const e = await F1.estimate(sel);
+        const r = await F1.run(sel);
+        const reads = log.filter((x) => /poy\/v1\//.test(x.rel) && x.range);
+        assert.equal(e.path, "poy");
+        assert.equal(e.requests, reads.length, c.name + ": requests");
+        assert.equal(e.readBytes, reads.reduce((t, x) => t + x.bytes, 0), c.name + ": bytes");
+        // planes: +S[yb] −S[ya−1] (when inside the record) and −S[e] +S[e−1] per year left out
+        const [C, H, W] = [c.shape[1], c.shape[2], c.shape[3]];
+        assert.equal(r.time.length, c.slots.length, c.name);
+        assert.deepEqual(Array.from(r.time), c.slots.map((s) => Date.UTC(2000, 0, 1 + 5 * s) / 1000));
+        assert.equal(r.climatology.kind, "pentad");
+        assert.ok(r.notes.some((n) => /days filter does not apply/.test(n)));
+        const HW = r.lat.length * r.lon.length;
+        let checked = 0;
+        for (let t = 0; t < r.time.length; t++) for (let k = 0; k < C; k++) {
+          for (let i = 0; i < r.lat.length; i++) for (let j = 0; j < r.lon.length; j++) {
+            const row = Math.round((r.lat[i] + 90) / 20), col = ((Math.round((r.lon[j] + 180) / 20) % W) + W) % W;
+            const wi = ((t * C + k) * H + row) * W + col, gi = (t * C + k) * HW + i * r.lon.length + j;
+            assert.equal(r.count[gi], c.count[wi], `${c.name}: count t${t} c${k} (${row},${col})`);
+            const w = c.data[wi], g = r.data[gi];
+            if (w === null) assert.ok(Number.isNaN(g), `${c.name}: NaN expected`);
+            else { assert.ok(Math.abs(g - w) <= 1e-5 * Math.max(1, Math.abs(w)), `${c.name}: ${g} vs ${w}`); checked++; }
+          }
+        }
+        assert.ok(checked > 0, c.name);
+      }
+      // the two-bin slot: 1984's slot 72 holds bins starting on days 361 and 366
+      const ix = JSON.parse(fs.readFileSync(path.join(FIXP, "gridded_poy_index.json"), "utf8"));
+      assert.deepEqual(ix.stores["fxp/fxp"].slots.p72.bins_per_year, [1, 1, 2, 1, 0]);
+    } finally { F1.configure({ base: base("ok") }); }
+  });
+
+  test("E-093: an excluded year reads its own two planes; a long span costs what a short one does; the NetCDF is a pentad climatology", async () => {
+    multiP();
+    try {
+      const sel = { family: "10", store: "fxp", channels: ["sst"], yearStart: 1983, yearEnd: 1986, months: [7],
+        bbox: { w: -40, s: -10, e: 40, n: 30 }, res: "native", step: "poy" };
+      const a = await F1.estimate(sel);
+      const b = await F1.estimate(Object.assign({}, sel, { yearStart: 1985 }));
+      const x = await F1.estimate(Object.assign({}, sel, { excludeYears: [1984] }));
+      const slots = a.frames;
+      assert.equal(a.requests, slots * 2 * 2);           // sum and count, S[1986] and S[1982]
+      assert.equal(b.requests, a.requests);
+      assert.equal(x.requests, slots * 2 * 4);           // + S[1984], S[1983]
+      const r = await F1.run(Object.assign({}, sel, { excludeYears: [1984] }));
+      assert.deepEqual(r.climatology.yearsUsed, [1983, 1985, 1986]);
+      const txt = Buffer.from(await F1.toNetCDF(r).arrayBuffer()).toString("latin1");
+      assert.match(txt, /pentad-of-year climatology/);
+      assert.match(txt, /climatology_bounds/);
+      const pv = await F1.preview(sel);
+      assert.equal(pv.time.length, 1);
     } finally { F1.configure({ base: base("ok") }); }
   });
 
