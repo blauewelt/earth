@@ -9843,3 +9843,43 @@ test("Pentad climatology degrades to a toast while its index is unpublished", as
   expect(page.__poyReads.length).toBe(0);
   expect(page.__errors, `page errors: ${page.__errors.join(" | ")}`).toHaveLength(0);
 });
+
+/* E-093: a five-day store with pentad-of-year sums offers "Climatology — mean
+ * per pentad of year over the years", through the REAL reader over the
+ * exporter-written fixture (data/gridded_poy/fixture, tests/make_gridded_poy_fixture.py);
+ * its years-left-out row appears with that step only. */
+test("Data tab: a five-day store offers the pentad-of-year climatology, with years left out, read from running totals",
+     async ({ page }) => {
+  test.setTimeout(120000);
+  const real = await page.evaluate(() =>
+    !!window.F1Data && !window.F1Data.__stub && typeof window.F1Data.configure === "function");
+  test.skip(!real, "src/f1data.js is not in this tree");
+  const path = require("path");
+  await serveFixtureDir(page, "poyfixture", path.join(__dirname, "..", "data", "gridded_poy", "fixture"));
+  await page.evaluate(() => {
+    const o = location.origin + "/poyfixture/";
+    window.F1Data.configure({ siteBase: o, gridPoy: "gridded_poy_index.json", gridDoy: null, gridMonthly: null, registries: [
+      { family: "10", title: "Global tensor and point observations (family 10)", kind: "family10",
+        url: o + "family10.json", root: o, norms: "family7_index.json" }] });
+    try { localStorage.removeItem("dataTabSel"); } catch {}
+  });
+  await dtTap(page, "#tab-data");
+  await expect(page.locator('#dt-store option[value="10/fxp"]')).toHaveCount(1, { timeout: 30000 });
+  await dtSet(page, { "dt-store": "10/fxp" });
+  const settled = () => expect.poll(async () => (await dtState(page)).estimateCurrent, { timeout: 30000 }).toBe(true);
+  await dtSet(page, { "dt-w": "-60", "dt-s": "-30", "dt-e": "40", "dt-n": "50" });
+  await settled();
+  expect(await page.locator("#dt-step option").evaluateAll((os) => os.map((o) => o.value)))
+    .toEqual(["native", "pentad", "month", "all", "poy"]);
+  await expect(page.locator('#dt-step option[value="poy"]')).toHaveText("Climatology — mean per pentad of year over the years");
+  await expect(page.locator("#dt-exclude-row")).toBeHidden();
+  await dtSet(page, { "dt-y0": "1982", "dt-y1": "1986", "dt-step": "poy" });
+  await expect(page.locator("#dt-exclude-row")).toBeVisible();
+  await dtSet(page, { "dt-exclude": "1984" });
+  await settled();
+  const st = await dtState(page);
+  expect(st.sel.step).toBe("poy");
+  expect(st.sel.excludeYears).toEqual([1984]);
+  await expect(page.locator('#dt-estimate .dt-path[data-path="poy"]')).toContainText("Read from precomputed pentad-of-year totals");
+  await expect(page.locator("#dt-estimate")).toContainText("climatology maps (one per pentad of year)");
+});

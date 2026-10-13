@@ -17153,11 +17153,12 @@ function dtReadSel() {
   // mean, the spread as an extra variable, and the check that reads every
   // native map instead
   const gm = !!st.monthlySums;
-  const excludeYears = gm ? dtExcludeYears() : [];
+  // (+ a pentad-of-year climatology, E-093: years left out of its mean)
+  const excludeYears = gm || (st.poyClimatology && dtEl("dt-step").value === "poy") ? dtExcludeYears() : [];
   const step = rows ? "native"
     : (!dtIsGrid(st) && dtEl("dt-step").value === "native") ? "pentad" : dtEl("dt-step").value;
   const std = gm && st.monthlySums.std && dtEl("dt-std").checked && !(step === "native" && res === "native") && step !== "doy";
-  if (step === "doy") hours = null;
+  if (step === "doy" || step === "poy") hours = null;
   return {
     ...(st.family ? { family: st.family } : {}),
     store: st.name,
@@ -17183,7 +17184,7 @@ function dtReadSel() {
  * ranges "2009-2011" too): whole years inside the store's record only. */
 function dtExcludeYears() {
   const st = dt.store, el = dtEl("dt-exclude");
-  if (!st || !(st.normals || st.monthlySums) || !el) return [];
+  if (!st || !(st.normals || st.monthlySums || st.poyClimatology) || !el) return [];
   const [a, b] = dtSpanYears(st), out = new Set();
   for (const part of String(el.value).split(/[,;\s]+/)) {
     const m = /^(\d{4})(?:\s*[-–]\s*(\d{4}))?$/.exec(part.trim());
@@ -17397,12 +17398,16 @@ const DT_GM_STEP_OPTS = [...DT_STEP_OPTS, ["normal", "Climatology — mean per c
 /* + a store with day-of-year sums (E-091): the mean of every calendar day
  * over the years — 366 maps for a whole year. */
 const DT_DOY_STEP_OPTS = [...DT_GM_STEP_OPTS, ["doy", "Climatology — mean per day of year over the years"]];
+/* + a five-day store with pentad-of-year sums (E-093): the mean of every
+ * five-day slot of the year over the years — 73 maps for a whole year. */
+const DT_POY_STEP_OPTS = [...DT_STEP_OPTS, ["poy", "Climatology — mean per pentad of year over the years"]];
 function dtFillStep(st) {
   const sel = dtEl("dt-step");
-  const kind = st && st.normals ? "normals" : st && st.monthlySums ? (st.doyClimatology ? "doy" : "gm") : "plain";
+  const kind = st && st.normals ? "normals" : st && st.monthlySums ? (st.doyClimatology ? "doy" : "gm")
+    : st && st.poyClimatology ? "poy" : "plain";
   if (sel.dataset.kind === kind) return;
   const keep = sel.value;
-  sel.innerHTML = (kind === "normals" ? DT_NORMALS_STEP_OPTS : kind === "doy" ? DT_DOY_STEP_OPTS : kind === "gm" ? DT_GM_STEP_OPTS : DT_STEP_OPTS)
+  sel.innerHTML = (kind === "normals" ? DT_NORMALS_STEP_OPTS : kind === "doy" ? DT_DOY_STEP_OPTS : kind === "poy" ? DT_POY_STEP_OPTS : kind === "gm" ? DT_GM_STEP_OPTS : DT_STEP_OPTS)
     .map(([v, t]) => `<option value="${v}">${esc(t)}</option>`).join("");
   sel.dataset.kind = kind;
   if ([...sel.options].some((o) => o.value === keep)) sel.value = keep;
@@ -17413,6 +17418,11 @@ function dtSyncStepRes() {
   const step = dtEl("dt-step");
   const note = dtEl("dt-step-note");
   dtFillStep(st);
+  // a five-day store's years left out apply to its pentad-of-year climatology only
+  if (st && st.poyClimatology && !st.monthlySums && !st.normals) {
+    dtEl("dt-exclude-row").classList.toggle("hidden", step.value !== "poy");
+    dtEl("dt-exclude-row").querySelector(".dt-inline").textContent = "years left out of the climatology";
+  }
   // the spread needs a mean: off (and said) for native maps at native cells
   const stdBox = dtEl("dt-std");
   if (stdBox) {
@@ -17466,7 +17476,7 @@ function dtApplyStore(st, saved) {
   dtEl("dt-path-row").classList.toggle("hidden", !gm);
   dtEl("dt-std").checked = !!(gm && saved && saved.std);
   dtEl("dt-native").checked = false;
-  if (!st.normals && !gm) dtEl("dt-exclude").value = "";
+  if (!st.normals && !gm && !st.poyClimatology) dtEl("dt-exclude").value = "";
   else if (saved && Array.isArray(saved.excludeYears)) dtEl("dt-exclude").value = saved.excludeYears.join(", ");
   const parts = Array.isArray(st.groups) ? st.groups : [];
   dtEl("dt-group-row").classList.toggle("hidden", parts.length < 2);
@@ -18546,6 +18556,12 @@ function dtPathHtml(est) {
     return `<div class="dt-path" data-path="monthly">Read from precomputed monthly sums — <strong>${dtFmtInt(est.requests)}</strong> ` +
       `requests, <strong>${mb(est.readBytes)}</strong>. ${esc(why)}.${nat}</div>`;
   }
+  if (est.path === "poy") {
+    return `<div class="dt-path" data-path="poy">Read from precomputed pentad-of-year totals — <strong>${dtFmtInt(est.requests)}</strong> ` +
+      `requests, <strong>${mb(est.readBytes)}</strong>. Each five-day slot's mean over ${dtFmtInt(est.years)} ` +
+      `${Number(est.years) === 1 ? "year" : "years"} comes from running totals over the years, so a long span costs no more than a short one.` +
+      `${est.daysIgnored ? " The days filter does not apply: a slot is picked by the month its first day falls in." : ""}</div>`;
+  }
   if (est.path === "doy") {
     return `<div class="dt-path" data-path="doy">Read from precomputed day-of-year totals — <strong>${dtFmtInt(est.requests)}</strong> ` +
       `requests, <strong>${mb(est.readBytes)}</strong>. Each calendar day's mean over ${dtFmtInt(est.years)} ` +
@@ -18598,6 +18614,10 @@ function dtCountHtml(sel, est) {
       `<strong>${dtFmtInt(T)}</strong> ${plural(T, words[0], words[1])} on ${sel.res}° cells`;
   }
   const n = est.frames;
+  if (est.path === "poy") {
+    return `<strong>${dtFmtInt(T)}</strong> ${plural(T, "five-day slot", "five-day slots")} of the year → ` +
+      `<strong>${dtFmtInt(T)}</strong> ${plural(T, "climatology map", "climatology maps (one per pentad of year)")}`;
+  }
   if (est.path === "doy") {
     return `<strong>${dtFmtInt(T)}</strong> ${plural(T, "calendar day", "calendar days")} → ` +
       `<strong>${dtFmtInt(T)}</strong> ${plural(T, "climatology map", "climatology maps (one per day of year)")}`;
