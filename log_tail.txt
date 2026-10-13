@@ -1,0 +1,42 @@
+store     s2fdi_coast — Sentinel-2 floating-debris indices (FDI, FAI, NDVI, PI) and the four ACOLITE surface reflectances they use, 20 m, water pixels only, one frame per acquisition — PILOT: MARIDA's 63 scenes and tile 35SMD (Gulf of Gera, Lesvos)
+family    family1_3 (1.3) · public -> chfrank/earth-tensors:tensors/family1_3/s2fdi_coast
+axis      2018-01-01 .. 2018-12-31  bins 2630..2702 · time_s int32 (schema 2)
+lane      g-d0b97cde — this fetch writes parts/<year>/g-d0b97cde/ and pushes only that folder (9 group(s))
+channels  C=8: fdi, fai, ndvi, pi, rho_b04, rho_b06, rho_b08, rho_b11
+tier G    sharded, groups ['T16PCC', 'T16PDC', 'T16PEC', 'T16QED', 'T30VWH', 'T48MXU', 'T48PZC', 'T50LLR', 'T52SDD'], F=5 x 86400 s, float16, years (by bin start) 2018..2018
+work      /home/runner/work/earth/earth/ml/cache/family1_3
+
+=== stage index (s2fdi_coast) ===
+  [index s2fdi_coast] start (1 items)  0/1  0.0s
+Traceback (most recent call last):
+  File "/home/runner/work/earth/earth/ml/build_family1_stores.py", line 2041, in <module>
+    sys.exit(main())
+             ^^^^^^
+  File "/home/runner/work/earth/earth/ml/build_family1_stores.py", line 2036, in main
+    f10b.run_stages(ctx, stages, stage_fn=stage_fns(ad), deps=deps)
+  File "/home/runner/work/earth/earth/ml/build_family10_stores.py", line 6007, in run_stages
+    stage_fn[s](ctx)
+  File "/home/runner/work/earth/earth/ml/build_family10_stores.py", line 4207, in stage_index
+    plan = ad.index(ctx)
+           ^^^^^^^^^^^^^
+  File "/home/runner/work/earth/earth/ml/family1/adapters/s2fdi_coast.py", line 964, in index
+    plan = self.plan(ctx, wanted, counts)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/work/earth/earth/ml/family1/adapters/s2fdi_coast.py", line 928, in plan
+    out[g] = self.plan_tile(ctx, tile_of(g), sorted(days), counts)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/work/earth/earth/ml/family1/adapters/s2fdi_coast.py", line 913, in plan_tile
+    l2 += self.stac_year(ctx, "sentinel-2-l2a", tile, y, counts)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/work/earth/earth/ml/family1/adapters/s2fdi_coast.py", line 895, in stac_year
+    items = list(st.stac_search(
+            ^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/work/earth/earth/ml/family1/adapters/_stac.py", line 427, in stac_search
+    d, _ = fet.post(url, b)
+           ^^^^^^^^^^^^^^^^
+  File "/home/runner/work/earth/earth/ml/family1/adapters/_stac.py", line 383, in post
+    return self._do("POST", url, body, headers)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/work/earth/earth/ml/family1/adapters/_stac.py", line 377, in _do
+    raise IOError(f"{url}: {err} (after {self.attempts} attempts)")
+OSError: https://earth-search.aws.element84.com/v1/search: HTTP 502 b'{"message": "Internal server error"}' (after 6 attempts)
