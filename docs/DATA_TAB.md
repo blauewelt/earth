@@ -295,6 +295,33 @@ the days slider pick which calendar days. Plan and checks:
 `ml/plans/E091_day_of_year_climatology.md`; index:
 `data/gridded_doy_index.json`.
 
+### Climatology per pentad of year (precomputed pentad-of-year totals)
+
+The five-day global tensor (family 10's `g025`, `g100` and `oc025`) has a
+matching step, *Climatology — mean per pentad of year over the years*. It gives
+one map per five-day slot of the year, 73 for a whole year, averaged over the
+years you set (less any you leave out). Each map comes with the count of
+five-day bins behind it.
+
+A bin belongs to the slot its first day falls in:
+
+    slot = min(72, floor((day of year − 1) / 5))
+
+So slot 72 holds the bins starting on days 361–366. The bins slip one day
+against the calendar in every leap year, so a year can give a slot 0 or 2 bins
+instead of 1, and the count shows it.
+
+The months buttons pick the slots by the month of each slot's first day in
+2000. Slot 11, 25–29 February, is a February slot. The days slider does not
+apply to this step and is ignored, and the estimate and the file both say so.
+The years-left-out field shows up for this step only, because the native
+five-day steps do not use it.
+
+The maps are read the same way as the day-of-year climatology: two small reads
+per slot and file, plus two per year left out. The totals are already in
+physical units, so there is no z-score to undo. Plan and checks:
+`ml/plans/E093_pentad_climatology.md`; index: `data/gridded_poy_index.json`.
+
 ### Derived maps
 
 | store | plain-English name | kind | native space | native time | record |

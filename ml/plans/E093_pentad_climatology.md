@@ -165,3 +165,12 @@ path with the native maps of the same slot's bins.
 
 - 2026-10-13: exporter, fixture, index schema and plan written. The fixture's
   falsifier passes in every chunk.
+- 2026-10-13: **g100 built and published** by gridded-poy run 1 (the g100 build,
+  twelve jobs of 3–4 min): 146 files, 15.3 GB, years 1982–2024.
+  - Falsifier: max |Δmean| 3.9e-3 hPa, on surface pressure. That is a single
+    late year read as S[42] − S[41] from running totals near 46,000 hPa, one
+    float32 ulp. Max Δ/bound is 0.99999997.
+  - Live check through the reader against the native bins (three spans,
+    including slot 72 with a two-bin year and a year left out): counts
+    identical, worst relative difference 2.4e-7.
+- g025 (run 2) and oc025 (run 3) dispatched the same day.

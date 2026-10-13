@@ -2373,6 +2373,30 @@ climatology and E-086's normals are frozen. One status line per store:
 `tensors/refresh/status.json` on the Hub. Plan and inventory:
 `ml/plans/E090_data_refresh.md`.
 
+*Climatology per pentad of year in the Data tab (2026-10-13, E-093).* Chris: *"If it's a pentad
+channel, offer pentad climatology as well."* The five-day tensor's bin-major
+stores (family 10's `g025`, `g100` and `oc025`) that are complete in
+`data/gridded_poy_index.json` (`configure({gridPoy})`) add **"Climatology — mean per
+pentad of year over the years"** (`sel.step = "poy"`). It gives 73 maps, one per
+slot.
+
+- **The slot.** A bin's slot is `min(72, floor((doy(bin start) − 1) / 5))`, and
+  the bin belongs to its start year, so a year gives a slot 0, 1 or 2 bins and
+  the counts show it.
+- **How it is read.** From E-093's cumulative `sum_pSS.npy` / `count_pSS.npy`,
+  `[channel, year, lat, lon]`, already in physical units. `poyPlan` lists the
+  signed band reads exactly like `doyPlan` does, and `doyRun` composes them.
+- **Months and days.** The months filter picks a slot by the month of its first
+  day in 2000. The days filter is ignored, and the result says so.
+- **The store key.** The index matches a store by `source_file`, the registry
+  group's `path` + file name, because all four groups share one `path`.
+- **The tab.** `DT_POY_STEP_OPTS` offers the step, and the years-left-out row
+  shows while the step is chosen.
+- **Build and checks.** Built by `ml/export_gridded_poy.py` (`gridded-poy.yml`,
+  twelve hosted jobs per group, each with a falsifier against numpy on the
+  native bins). Checked live with `scripts/f1data_poy_live_check.mjs` against
+  the native bins of each slot.
+
 *Climatology per day of year, the two-handle sliders, and "whole globe" on map stores (2026-10-08, E-091).*
 Chris: *"Say I want average values for every single day of year, across 20
 years"* and *"please call this 'Climatology'"*. The step once labelled "normal"
@@ -2390,8 +2414,8 @@ day in the nominal leap year 2000 with `climatology_bounds`). Built by
 (`gridded-doy.yml`), each with a falsifier against numpy on the native frames;
 checked live with `scripts/f1data_doy_live_check.mjs` (identical to the native
 path) and `datatab_browser_check.mjs --only=c7`. The daily refresh does not yet update
-these files, the five-day tensor has no pentad-of-year climatology yet, and
-the fine 1.gf maps none at all. The same day: the years and the days of the month are each ONE slider
+these files, and
+the fine 1.gf maps have no climatology per day at all (the five-day tensor got its own, E-093, below). The same day: the years and the days of the month are each ONE slider
 with two handles (`DT_SLIDERS`, `dtSyncYearSlider`; two overlaid range inputs
 whose thumbs alone take the pointer — the number fields stay the truth and
 commit through their own change event), and "whole globe" on a map store

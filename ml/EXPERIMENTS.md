@@ -44,6 +44,48 @@ low-pass).
 
 ---
 
+<a id="e-093"></a>
+## E-093 · Pentad-of-year climatology — the mean of every five-day slot of the year over any span of years, for the five-day global tensor — g100 BUILT 2026-10-13; g025 and oc025 BUILDING
+
+**Why.** Chris: *"Make sure all channels are available at their granularity.
+If it's a pentad channel, offer pentad climatology as well."* E-091 covered the
+daily stores. The five-day tensor (family 7.2, served through family 10's
+registry: g025, g100, oc025) had only the climatology per calendar month.
+
+**What.** It is E-091's construction over five-day bins. A bin is charged to
+slot `min(72, floor((doy(bin start) − 1)/5))` and to its start year, so a year
+can give a slot 0, 1 or 2 bins. Per group and slot there are two files,
+`[channel, year, lat, lon]` and cumulative over the years: sums (float32, in
+PHYSICAL units, de-z-scored with the index's norm) and counts (uint8). The
+source is one HTTP range per whole bin slab of the Hub's bin-major `.npy`.
+There are twelve hosted jobs per group (`.github/workflows/gridded-poy.yml`,
+`ml/export_gridded_poy.py`).
+
+**Falsifier.** It runs in every job, before the upload. For the chunk's first
+and last slot, the composed mean is compared with numpy over the native bins
+on 16 spans: the whole record, 20 years, single years, inner spans, and two
+spans with a year left out. Counts must be equal, and the mean must be within
+the summed ½ ulp of every plane used, divided by n.
+
+**Control.** The reader's own native path over the same bins.
+`scripts/f1data_poy_live_check.mjs` reads each bin of a slot natively and
+averages it with its finite count.
+[Plan](https://blauewelt.github.io/earth/docs.html?f=ml/plans/E093_pentad_climatology.md).
+
+**Result.**
+
+g100 was built by gridded-poy run 1, the g100 build at `4fc014a`: twelve jobs
+of 3–4 min, 73 slots, 15.3 GB, years 1982–2024.
+
+- **Falsifier:** max |Δmean| 3.9e-3 hPa, on surface pressure. That is a single
+  late year read as S[42] − S[41] from running totals near 46,000 hPa, one
+  float32 ulp, 4e-6 relative. The max Δ/bound is 0.99999997, inside the bound
+  everywhere.
+- **Live check through the reader** (10° box, two channels): 17 slots in three
+  cases, namely the last 20 Decembers including slot 72 with one two-bin year,
+  1982–1992 Februaries with 1986 left out, and one July. Counts are identical
+  in every cell, and the worst relative difference is **2.4e-7**.
+
 <a id="e-090"></a>
 ## E-092 · Family 1.3 — family 1.2 plus the stores that could identify plastic in the ocean — PHASE A PUBLISHED 2026-10-11 (`mplastic` 18,504 surface samples, `mobjects` 1,595 aircraft objects, `s2labels` 837,964 labelled Sentinel-2 pixels); the Sentinel-2 store over the garbage patch CLOSED by a null co-location probe
 
