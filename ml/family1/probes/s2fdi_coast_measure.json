@@ -1,0 +1,926 @@
+{
+ "written": "2026-10-13",
+ "experiment": "E-092 phase C, s2fdi_coast \u2014 MEASURED cost, not a build",
+ "sources": {
+  "stac": "earth-search.aws.element84.com/v1 (sentinel-2-l1c, -l2a, -c1-l2a)",
+  "odata": "catalogue.dataspace.copernicus.eu/odata/v1 ($count)",
+  "land_mask": "Natural Earth 10 m land + minor islands, rasterised at 0.02 deg; distance to land by EDT in 5-deg bands"
+ },
+ "counts_2024": {
+  "earth_search_l1c": 4382201,
+  "earth_search_l2a": 4394138,
+  "earth_search_c1_l2a": 4369942,
+  "cdse_odata_S2MSI1C": 4376032,
+  "note": "2021 has 6.79 M L1C / 8.65 M L2A on Earth Search: reprocessed (N0500) copies are listed beside the originals; 2025: 5.03 M L1C (S2C)"
+ },
+ "window_sample": {
+  "jan": {
+   "items": 94948,
+   "items_with_water": 44259,
+   "items_water_ge10pct": 42161,
+   "items_water_ge50pct": 37879,
+   "tiles": 26096,
+   "tiles_with_water": 13708,
+   "frac_cc_lt20_of_water_items": 0.3176980953026503,
+   "frac_cc_lt10_of_water_items": 0.24442486273978173,
+   "cc_quartiles_water_items": [
+    10.598743674716651,
+    60.0860940463813,
+    98.0798272865716
+   ],
+   "water_km2_sum": 276301679.48774064,
+   "water20_km2_sum": 37366910.59444391,
+   "water_km2_sum_cc_lt20": 87020739.60354319,
+   "water20_km2_sum_cc_lt20": 10757256.626423612,
+   "mean_water_frac_of_water_items": 0.8418685337189588
+  },
+  "apr": {
+   "items": 125965,
+   "items_with_water": 66582,
+   "items_water_ge10pct": 61802,
+   "items_water_ge50pct": 53861,
+   "tiles": 27411,
+   "tiles_with_water": 14796,
+   "frac_cc_lt20_of_water_items": 0.3569583370881019,
+   "frac_cc_lt10_of_water_items": 0.2830194346820462,
+   "cc_quartiles_water_items": [
+    6.74628812012257,
+    47.061961181480555,
+    93.7382825843172
+   ],
+   "water_km2_sum": 397200437.74632007,
+   "water20_km2_sum": 65550428.480383664,
+   "water_km2_sum_cc_lt20": 145854773.0625263,
+   "water20_km2_sum_cc_lt20": 20325710.777490698,
+   "mean_water_frac_of_water_items": 0.7979166822255509
+  },
+  "jul": {
+   "items": 125161,
+   "items_with_water": 64028,
+   "items_water_ge10pct": 59288,
+   "items_water_ge50pct": 51473,
+   "tiles": 26825,
+   "tiles_with_water": 14216,
+   "frac_cc_lt20_of_water_items": 0.3057568563753358,
+   "frac_cc_lt10_of_water_items": 0.2425032798150809,
+   "cc_quartiles_water_items": [
+    11.026029737588775,
+    62.872018448391145,
+    97.57228208457202
+   ],
+   "water_km2_sum": 380858635.0717526,
+   "water20_km2_sum": 64155778.36011439,
+   "water_km2_sum_cc_lt20": 113304433.59764394,
+   "water20_km2_sum_cc_lt20": 18112386.127076965,
+   "mean_water_frac_of_water_items": 0.7924621748356604
+  },
+  "oct": {
+   "items": 116797,
+   "items_with_water": 55599,
+   "items_water_ge10pct": 51861,
+   "items_water_ge50pct": 45404,
+   "tiles": 28827,
+   "tiles_with_water": 15328,
+   "frac_cc_lt20_of_water_items": 0.3133149876796345,
+   "frac_cc_lt10_of_water_items": 0.24153312109930034,
+   "cc_quartiles_water_items": [
+    11.0689111737897,
+    59.1002799772429,
+    97.52971347344726
+   ],
+   "water_km2_sum": 331632382.75896955,
+   "water20_km2_sum": 51488890.34195949,
+   "water_km2_sum_cc_lt20": 106966206.63210218,
+   "water20_km2_sum_cc_lt20": 13304870.466658443,
+   "mean_water_frac_of_water_items": 0.805043892547671
+  },
+  "global_4x10d": {
+   "items": 462871,
+   "items_with_water": 230468,
+   "items_water_ge10pct": 215112,
+   "items_water_ge50pct": 188617,
+   "tiles": 29483,
+   "tiles_with_water": 15937,
+   "frac_cc_lt20_of_water_items": 0.3246654633181179,
+   "frac_cc_lt10_of_water_items": 0.2543433361681448,
+   "cc_quartiles_water_items": [
+    9.508972275290622,
+    56.81305801905105,
+    96.85236348147517
+   ],
+   "water_km2_sum": 1385993135.064783,
+   "water20_km2_sum": 218562007.77690145,
+   "water_km2_sum_cc_lt20": 453146152.8958156,
+   "water20_km2_sum_cc_lt20": 62500223.99764972,
+   "mean_water_frac_of_water_items": 0.8065612210022416,
+   "per_year": {
+    "items": 4235269.65,
+    "items_with_water": 2108782.2,
+    "water_km2_sum": 12681837185.842766,
+    "water20_km2_sum": 1999842371.1586485,
+    "water_km2_sum_cc_lt20": 4146287298.996713,
+    "water20_km2_sum_cc_lt20": 571877049.578495
+   },
+   "skipped": {
+    "antimeridian": 1307
+   },
+   "tile_day_pairs_with_2plus_items": 32106
+  },
+  "med_2024": {
+   "items": 106924,
+   "items_with_water": 58059,
+   "items_water_ge10pct": 52845,
+   "items_water_ge50pct": 43195,
+   "tiles": 719,
+   "tiles_with_water": 408,
+   "frac_cc_lt20_of_water_items": 0.5776537659966585,
+   "frac_cc_lt10_of_water_items": 0.4959782290428702,
+   "cc_quartiles_water_items": [
+    0.172210756270826,
+    10.3773179252889,
+    58.962461890769006
+   ],
+   "water_km2_sum": 352286591.99467754,
+   "water20_km2_sum": 74242596.92374593,
+   "water_km2_sum_cc_lt20": 208906591.2089232,
+   "water20_km2_sum_cc_lt20": 41001544.01879446,
+   "mean_water_frac_of_water_items": 0.7288994017613217
+  },
+  "marida_tiles_2024": {
+   "items": 2189,
+   "items_with_water": 2104,
+   "items_water_ge10pct": 2021,
+   "items_water_ge50pct": 1109,
+   "tiles": 17,
+   "tiles_with_water": 17,
+   "frac_cc_lt20_of_water_items": 0.3664448669201521,
+   "frac_cc_lt10_of_water_items": 0.24287072243346008,
+   "cc_quartiles_water_items": [
+    10.583896680127001,
+    40.80249695277935,
+    91.2107040617421
+   ],
+   "water_km2_sum": 10877917.822303502,
+   "water20_km2_sum": 5637315.611590527,
+   "water_km2_sum_cc_lt20": 3909872.8318162966,
+   "water20_km2_sum_cc_lt20": 2044819.1237004115,
+   "mean_water_frac_of_water_items": 0.5917119117582789
+  },
+  "marida_per_tile_2024": {
+   "MGRS-16PCC": {
+    "items": 153,
+    "items_with_water": 153,
+    "items_water_ge10pct": 153,
+    "items_water_ge50pct": 3,
+    "tiles": 1,
+    "tiles_with_water": 1,
+    "frac_cc_lt20_of_water_items": 0.22875816993464052,
+    "frac_cc_lt10_of_water_items": 0.1568627450980392,
+    "cc_quartiles_water_items": [
+     23.3467328122275,
+     54.9082566921429,
+     95.6203746460783
+    ],
+    "water_km2_sum": 538355.3722249761,
+    "water20_km2_sum": 384611.50090525125,
+    "water_km2_sum_cc_lt20": 120317.42919353237,
+    "water20_km2_sum_cc_lt20": 87575.3730228314,
+    "mean_water_frac_of_water_items": 0.4628485545924026
+   },
+   "MGRS-16PDC": {
+    "items": 77,
+    "items_with_water": 77,
+    "items_water_ge10pct": 76,
+    "items_water_ge50pct": 1,
+    "tiles": 1,
+    "tiles_with_water": 1,
+    "frac_cc_lt20_of_water_items": 0.3116883116883117,
+    "frac_cc_lt10_of_water_items": 0.2077922077922078,
+    "cc_quartiles_water_items": [
+     11.8808564006092,
+     43.2085162292096,
+     89.5069127176088
+    ],
+    "water_km2_sum": 415630.650179258,
+    "water20_km2_sum": 243035.6750028875,
+    "water_km2_sum_cc_lt20": 131244.2552201597,
+    "water20_km2_sum_cc_lt20": 76740.57884867428,
+    "mean_water_frac_of_water_items": 0.43809411230219164
+   },
+   "MGRS-16PEC": {
+    "items": 157,
+    "items_with_water": 155,
+    "items_water_ge10pct": 155,
+    "items_water_ge50pct": 4,
+    "tiles": 1,
+    "tiles_with_water": 1,
+    "frac_cc_lt20_of_water_items": 0.4,
+    "frac_cc_lt10_of_water_items": 0.23225806451612904,
+    "cc_quartiles_water_items": [
+     11.6403648373159,
+     33.1621356779747,
+     82.9475686197921
+    ],
+    "water_km2_sum": 484083.57157709135,
+    "water20_km2_sum": 408968.9407764126,
+    "water_km2_sum_cc_lt20": 191580.31115968234,
+    "water20_km2_sum_cc_lt20": 161843.00436666128,
+    "mean_water_frac_of_water_items": 0.38022464404607464
+   },
+   "MGRS-16QED": {
+    "items": 157,
+    "items_with_water": 157,
+    "items_water_ge10pct": 157,
+    "items_water_ge50pct": 157,
+    "tiles": 1,
+    "tiles_with_water": 1,
+    "frac_cc_lt20_of_water_items": 0.42038216560509556,
+    "frac_cc_lt10_of_water_items": 0.3821656050955414,
+    "cc_quartiles_water_items": [
+     2.45032697303592,
+     37.6301472125175,
+     83.5156940031902
+    ],
+    "water_km2_sum": 944596.8588639991,
+    "water20_km2_sum": 265037.8404016622,
+    "water_km2_sum_cc_lt20": 408867.65038472624,
+    "water20_km2_sum_cc_lt20": 114486.57751518126,
+    "mean_water_frac_of_water_items": 0.9943140914864842
+   },
+   "MGRS-18QWF": {
+    "items": 77,
+    "items_with_water": 77,
+    "items_water_ge10pct": 77,
+    "items_water_ge50pct": 77,
+    "tiles": 1,
+    "tiles_with_water": 1,
+    "frac_cc_lt20_of_water_items": 0.4155844155844156,
+    "frac_cc_lt10_of_water_items": 0.19480519480519481,
+    "cc_quartiles_water_items": [
+     12.8732419600466,
+     26.0503907447063,
+     71.3481143061901
+    ],
+    "water_km2_sum": 755386.3300237637,
+    "water20_km2_sum": 289303.1943579643,
+    "water_km2_sum_cc_lt20": 313604.1459296202,
+    "water20_km2_sum_cc_lt20": 119849.5140124672,
+    "mean_water_frac_of_water_items": 0.8281898695209063
+   },
+   "MGRS-18QYF": {
+    "items": 153,
+    "items_with_water": 151,
+    "items_water_ge10pct": 151,
+    "items_water_ge50pct": 75,
+    "tiles": 1,
+    "tiles_with_water": 1,
+    "frac_cc_lt20_of_water_items": 0.5231788079470199,
+    "frac_cc_lt10_of_water_items": 0.33112582781456956,
+    "cc_quartiles_water_items": [
+     8.063801477432559,
+     17.5037366847712,
+     48.2288243891184
+    ],
+    "water_km2_sum": 605444.8371937347,
+    "water20_km2_sum": 566376.2525296255,
+    "water_km2_sum_cc_lt20": 318898.498945419,
+    "water20_km2_sum_cc_lt20": 297851.05540644797,
+    "mean_water_frac_of_water_items": 0.5422920186061263
+   },
+   "MGRS-18QYG": {
+    "items": 153,
+    "items_with_water": 153,
+    "items_water_ge10pct": 153,
+    "items_water_ge50pct": 3,
+    "tiles": 1,
+    "tiles_with_water": 1,
+    "frac_cc_lt20_of_water_items": 0.5359477124183006,
+    "frac_cc_lt10_of_water_items": 0.3006535947712418,
+    "cc_quartiles_water_items": [
+     7.32972286198532,
+     18.4182490873006,
+     60.1886927045171
+    ],
+    "water_km2_sum": 312905.64440097637,
+    "water20_km2_sum": 278100.6139261818,
+    "water_km2_sum_cc_lt20": 168613.2182718634,
+    "water20_km2_sum_cc_lt20": 149605.69490922714,
+    "mean_water_frac_of_water_items": 0.27847074570721997
+   },
+   "MGRS-19QDA": {
+    "items": 78,
+    "items_with_water": 78,
+    "items_water_ge10pct": 74,
+    "items_water_ge50pct": 3,
+    "tiles": 1,
+    "tiles_with_water": 1,
+    "frac_cc_lt20_of_water_items": 0.34615384615384615,
+    "frac_cc_lt10_of_water_items": 0.07692307692307693,
+    "cc_quartiles_water_items": [
+     17.923564453999774,
+     26.6389112843023,
+     66.87319716921975
+    ],
+    "water_km2_sum": 392429.9352857574,
+    "water20_km2_sum": 171763.39660186676,
+    "water_km2_sum_cc_lt20": 137593.48702683585,
+    "water20_km2_sum_cc_lt20": 60062.00046222561,
+    "mean_water_frac_of_water_items": 0.42092031802686225
+   },
+   "MGRS-30VWH": {
+    "items": 149,
+    "items_with_water": 149,
+    "items_water_ge10pct": 149,
+    "items_water_ge50pct": 149,
+    "tiles": 1,
+    "tiles_with_water": 1,
+    "frac_cc_lt20_of_water_items": 0.2214765100671141,
+    "frac_cc_lt10_of_water_items": 0.1342281879194631,
+    "cc_quartiles_water_items": [
+     28.1820299202723,
+     69.8741079160321,
+     96.2628922929917
+    ],
+    "water_km2_sum": 1406566.3318883127,
+    "water20_km2_sum": 511312.76714933343,
+    "water_km2_sum_cc_lt20": 305465.95266742975,
+    "water20_km2_sum_cc_lt20": 110871.35985671518,
+    "mean_water_frac_of_water_items": 0.7870072910090735
+   },
+   "MGRS-36JUN": {
+    "items": 150,
+    "items_with_water": 150,
+    "items_water_ge10pct": 150,
+    "items_water_ge50pct": 150,
+    "tiles": 1,
+    "tiles_with_water": 1,
+    "frac_cc_lt20_of_water_items": 0.5533333333333333,
+    "frac_cc_lt10_of_water_items": 0.46,
+    "cc_quartiles_water_items": [
+     0.6675579954818982,
+     15.71484056268625,
+     70.71624934513572
+    ],
+    "water_km2_sum": 987574.9981004619,
+    "water20_km2_sum": 285041.591117804,
+    "water_km2_sum_cc_lt20": 542778.8186440419,
+    "water20_km2_sum_cc_lt20": 155938.13362150153,
+    "mean_water_frac_of_water_items": 0.8143165962271098
+   },
+   "MGRS-48MXU": {
+    "items": 80,
+    "items_with_water": 80,
+    "items_water_ge10pct": 77,
+    "items_water_ge50pct": 74,
+    "tiles": 1,
+    "tiles_with_water": 1,
+    "frac_cc_lt20_of_water_items": 0.2125,
+    "frac_cc_lt10_of_water_items": 0.1,
+    "cc_quartiles_water_items": [
+     30.05195735913285,
+     89.24739466690555,
+     99.93590432679387
+    ],
+    "water_km2_sum": 538180.1781968639,
+    "water20_km2_sum": 260340.05137429084,
+    "water_km2_sum_cc_lt20": 116749.48767902298,
+    "water20_km2_sum_cc_lt20": 56841.22844560482,
+    "mean_water_frac_of_water_items": 0.5681674250051627
+   },
+   "MGRS-48MYU": {
+    "items": 80,
+    "items_with_water": 79,
+    "items_water_ge10pct": 77,
+    "items_water_ge50pct": 74,
+    "tiles": 1,
+    "tiles_with_water": 1,
+    "frac_cc_lt20_of_water_items": 0.26582278481012656,
+    "frac_cc_lt10_of_water_items": 0.189873417721519,
+    "cc_quartiles_water_items": [
+     17.19710949864135,
+     78.0459553883365,
+     99.92984263489505
+    ],
+    "water_km2_sum": 602135.2511779611,
+    "water20_km2_sum": 200407.39223972667,
+    "water_km2_sum_cc_lt20": 162532.9397858381,
+    "water20_km2_sum_cc_lt20": 54012.477713317145,
+    "mean_water_frac_of_water_items": 0.631524562164078
+   },
+   "MGRS-48PZC": {
+    "items": 151,
+    "items_with_water": 77,
+    "items_water_ge10pct": 77,
+    "items_water_ge50pct": 2,
+    "tiles": 1,
+    "tiles_with_water": 1,
+    "frac_cc_lt20_of_water_items": 0.19480519480519481,
+    "frac_cc_lt10_of_water_items": 0.15584415584415584,
+    "cc_quartiles_water_items": [
+     24.8676580369674,
+     65.6426886440324,
+     91.7891546477948
+    ],
+    "water_km2_sum": 315416.7883396512,
+    "water20_km2_sum": 226620.78252792172,
+    "water_km2_sum_cc_lt20": 62773.70109762607,
+    "water20_km2_sum_cc_lt20": 45121.186312967715,
+    "mean_water_frac_of_water_items": 0.3567026846833869
+   },
+   "MGRS-50LLR": {
+    "items": 94,
+    "items_with_water": 94,
+    "items_water_ge10pct": 94,
+    "items_water_ge50pct": 94,
+    "tiles": 1,
+    "tiles_with_water": 1,
+    "frac_cc_lt20_of_water_items": 0.39361702127659576,
+    "frac_cc_lt10_of_water_items": 0.20212765957446807,
+    "cc_quartiles_water_items": [
+     11.50702713616335,
+     33.23128489951925,
+     85.85587804950877
+    ],
+    "water_km2_sum": 664473.7668578879,
+    "water20_km2_sum": 496186.1937130376,
+    "water_km2_sum_cc_lt20": 264521.1487291705,
+    "water20_km2_sum_cc_lt20": 200231.52136544097,
+    "mean_water_frac_of_water_items": 0.7313763082439836
+   },
+   "MGRS-51PTS": {
+    "items": 166,
+    "items_with_water": 160,
+    "items_water_ge10pct": 88,
+    "items_water_ge50pct": 4,
+    "tiles": 1,
+    "tiles_with_water": 1,
+    "frac_cc_lt20_of_water_items": 0.24375,
+    "frac_cc_lt10_of_water_items": 0.13125,
+    "cc_quartiles_water_items": [
+     20.9211457493505,
+     61.38983494966155,
+     99.65064648093406
+    ],
+    "water_km2_sum": 201473.9853502091,
+    "water20_km2_sum": 200307.18932394552,
+    "water_km2_sum_cc_lt20": 38723.53678311003,
+    "water20_km2_sum_cc_lt20": 38507.46344491306,
+    "mean_water_frac_of_water_items": 0.1629501916479706
+   },
+   "MGRS-51RVQ": {
+    "items": 159,
+    "items_with_water": 159,
+    "items_water_ge10pct": 159,
+    "items_water_ge50pct": 159,
+    "tiles": 1,
+    "tiles_with_water": 1,
+    "frac_cc_lt20_of_water_items": 0.33962264150943394,
+    "frac_cc_lt10_of_water_items": 0.2893081761006289,
+    "cc_quartiles_water_items": [
+     5.154329441425315,
+     76.879319378259,
+     99.94962332749216
+    ],
+    "water_km2_sum": 984102.0435096624,
+    "water20_km2_sum": 395026.292985181,
+    "water_km2_sum_cc_lt20": 337519.8815736359,
+    "water20_km2_sum_cc_lt20": 134087.5573856886,
+    "mean_water_frac_of_water_items": 0.975918041163369
+   },
+   "MGRS-52SDD": {
+    "items": 155,
+    "items_with_water": 155,
+    "items_water_ge10pct": 154,
+    "items_water_ge50pct": 80,
+    "tiles": 1,
+    "tiles_with_water": 1,
+    "frac_cc_lt20_of_water_items": 0.41935483870967744,
+    "frac_cc_lt10_of_water_items": 0.3096774193548387,
+    "cc_quartiles_water_items": [
+     6.970015798253245,
+     34.1923102862643,
+     94.9835020454478
+    ],
+    "water_km2_sum": 729161.2791329345,
+    "water20_km2_sum": 454875.9366574342,
+    "water_km2_sum_cc_lt20": 288088.36872458237,
+    "water20_km2_sum_cc_lt20": 181194.39701054632,
+    "mean_water_frac_of_water_items": 0.5939499475939233
+   }
+  },
+  "lesvos_2024": {
+   "items": 79,
+   "items_with_water": 79,
+   "items_water_ge10pct": 79,
+   "items_water_ge50pct": 79,
+   "tiles": 1,
+   "tiles_with_water": 1,
+   "frac_cc_lt20_of_water_items": 0.620253164556962,
+   "frac_cc_lt10_of_water_items": 0.569620253164557,
+   "cc_quartiles_water_items": [
+    0.03336916599480425,
+    5.75965242318373,
+    52.8436949446087
+   ],
+   "water_km2_sum": 493354.89152300794,
+   "water20_km2_sum": 449788.8866084562,
+   "water_km2_sum_cc_lt20": 306004.93271680234,
+   "water20_km2_sum_cc_lt20": 278982.98030144745,
+   "mean_water_frac_of_water_items": 0.518300571596899
+  }
+ },
+ "ne_vs_scl_water_fraction_35SMD": {
+  "natural_earth": 0.518299874097331,
+  "scl": 0.5202523216578578
+ },
+ "l1c_bytes": {
+  "sample_med_25": {
+   "mean_all13_MB": 438.6,
+   "median_all13_MB": 496.9,
+   "mean_5band_MB": 217.1,
+   "full_tile_equiv_all13_MB": 601.3
+  },
+  "sample_global_25": {
+   "mean_all13_MB": 417.6,
+   "median_all13_MB": 411.6,
+   "mean_5band_MB": 207.6,
+   "full_tile_equiv_all13_MB": 653.9
+  },
+  "five_bands": "B04 B06 B08 B8A B11",
+  "note": "JPEG 2000, not range-readable by window: a band is fetched whole; ACOLITE's DSF reads all 13 bands",
+  "lesvos_fetch": {
+   "safe": "/tmp/claude-0/-home-claude-earth/e3369861-dd35-55bf-addc-816d2b37b228/scratchpad/phaseC/s2coast/dl/S2B_MSIL1C_20240819T085559_N0511_R007_T35SMD_20240819T113026.SAFE",
+   "l1c_band_bytes": {
+    "B01": 3064497,
+    "B02": 96488797,
+    "B03": 96373971,
+    "B04": 99899741,
+    "B05": 27325701,
+    "B06": 27402320,
+    "B07": 28074754,
+    "B08": 100934966,
+    "B8A": 28551726,
+    "B09": 2875512,
+    "B10": 1534912,
+    "B11": 27388534,
+    "B12": 26714697
+   },
+   "l1c_total_bytes": 567777647,
+   "l1c_secs": 34.1,
+   "l2a_id": "S2B_35SMD_20240819_0_L2A",
+   "l2a_bytes": {
+    "red": 183679593,
+    "rededge2": 45281556,
+    "nir": 176476619,
+    "swir16": 46438189,
+    "scl": 2178194
+   },
+   "l2a_secs": 18.3,
+   "l2a_baseline": "05.11",
+   "l2a_offset": [
+    {
+     "nodata": 0,
+     "data_type": "uint16",
+     "bits_per_sample": 15,
+     "spatial_resolution": 10,
+     "scale": 0.0001,
+     "offset": -0.1
+    }
+   ]
+  },
+  "download_MB_per_s_sandbox": 16.7
+ },
+ "acolite": {
+  "full_tile_20m": {
+   "item": "S2B_35SMD_20240819_0_L1C",
+   "wall_s": 298.8,
+   "user_s": 275.2,
+   "sys_s": 32.0,
+   "max_rss_MB": 3456,
+   "conversion_s": 160.4,
+   "lut_load_s": 14.3,
+   "l1r_MB": 849,
+   "l2r_MB": 816,
+   "cores": 2,
+   "aot550": 0.008180007338523865
+  },
+  "probe_crops_2026_10_11": [
+   {
+    "scene": "S2A_6SXD_20210804",
+    "wall_s": 49,
+    "px20": 5341644,
+    "s_per_Mpx": 9.2
+   },
+   {
+    "scene": "S2A_6SXE_20210824",
+    "wall_s": 25,
+    "px20": 5592960,
+    "s_per_Mpx": 4.5
+   },
+   {
+    "scene": "S2B_6SWD_20210809",
+    "wall_s": 54,
+    "px20": 6024140,
+    "s_per_Mpx": 9.0
+   },
+   {
+    "scene": "S2B_6SXD_20210819",
+    "wall_s": 72,
+    "px20": 8123085,
+    "s_per_Mpx": 8.9
+   },
+   {
+    "scene": "S2B_6SXD_20210829 (first LUT download 40.7 s)",
+    "wall_s": 111,
+    "px20": 9828412,
+    "s_per_Mpx": 11.3
+   },
+   {
+    "scene": "S2B_6SXD_20210918",
+    "wall_s": 65,
+    "px20": 7900476,
+    "s_per_Mpx": 8.2
+   }
+  ],
+  "earlier_revlut_run": "aco.log: the first run used RevLUT at ~53 s per band; the StdLUT path (current) is ~6 s per band"
+ },
+ "l2a_over_water_35SMD": {
+  "item": "S2B_35SMD_20240819_0_L2A",
+  "pinning": {
+   "B04": {
+    "min_dn": 1,
+    "frac_at_min": 0.1648336727420086,
+    "frac_boa_le0": 0.0,
+    "offset_used": 0,
+    "frac_boa_le_0p001": 0.23183988732962788,
+    "n": 62718884
+   },
+   "B06": {
+    "min_dn": 1,
+    "frac_at_min": 0.16907766144826009,
+    "frac_boa_le0": 0.0,
+    "offset_used": 0,
+    "frac_boa_le_0p001": 0.22585209091801342,
+    "n": 15680457
+   },
+   "B08": {
+    "min_dn": 1,
+    "frac_at_min": 0.15042413035392196,
+    "frac_boa_le0": 0.0,
+    "offset_used": 0,
+    "frac_boa_le_0p001": 0.20293184492761787,
+    "n": 62719279
+   },
+   "B11": {
+    "min_dn": 1,
+    "frac_at_min": 0.0006202625344401634,
+    "frac_boa_le0": 0.0,
+    "offset_used": 0,
+    "frac_boa_le_0p001": 0.017843229951780105,
+    "n": 15680457
+   }
+  },
+  "frac_water_px_with_any_index_band_pinned": 0.181023805619951,
+  "acolite_le0": {
+   "B04": 8.290574694347238e-07,
+   "B06": 4.4641556046485124e-07,
+   "B08": 2.7422670142840864e-06,
+   "B11": 2.55094605979915e-07
+  },
+  "index_compare": {
+   "FDI": {
+    "n": 15680457,
+    "acolite_p1_p50_p99_p999": [
+     0.007038755342364311,
+     0.01241070032119751,
+     0.018434077501296997,
+     0.05643569678068161
+    ],
+    "l2a_p1_p50_p99_p999": [
+     -0.018658766523003578,
+     -0.003318240400403738,
+     0.002512158825993538,
+     0.02834196761250496
+    ],
+    "pearson_r": 0.7830193201862862,
+    "median_abs_diff": 0.015456128865480423,
+    "frac_water_px_with_a_band_pinned_l2a": 0.181023805619951,
+    "top0.1pct_overlap_frac": 0.6734902110834768
+   },
+   "FAI": {
+    "n": 15680457,
+    "acolite_p1_p50_p99_p999": [
+     -0.004418822005391121,
+     -0.0017320308834314346,
+     0.0016500517958775163,
+     0.027067290619015694
+    ],
+    "l2a_p1_p50_p99_p999": [
+     -0.004886803217232227,
+     -0.00042648607632145286,
+     0.0024425850715488195,
+     0.022796612232923508
+    ],
+    "pearson_r": 0.8397618223389839,
+    "median_abs_diff": 0.001443853136152029
+   },
+   "NDVI": {
+    "n": 15680457,
+    "acolite_p1_p50_p99_p999": [
+     -0.19713662564754486,
+     -0.11022334545850754,
+     0.009029998444020748,
+     0.09788643568754196
+    ],
+    "l2a_p1_p50_p99_p999": [
+     -0.833333432674408,
+     0.0,
+     0.8032786846160889,
+     0.9172413945198059
+    ],
+    "pearson_r": 0.5041794103324899,
+    "median_abs_diff": 0.11676856130361557
+   },
+   "PI": {
+    "n": 15680457,
+    "acolite_p1_p50_p99_p999": [
+     0.40143170952796936,
+     0.44488829374313354,
+     0.5045149922370911,
+     0.5489432215690613
+    ],
+    "l2a_p1_p50_p99_p999": [
+     0.0833333358168602,
+     0.5,
+     0.9016393423080444,
+     0.9586206674575806
+    ],
+    "pearson_r": 0.5041794122651357,
+    "median_abs_diff": 0.05838429927825928
+   }
+  },
+  "trap": "Earth Search sentinel-2-l2a sets earthsearch:boa_offset_applied=true while raster:bands still says offset -0.1; applying it reads 99.8 % of water as <= 0"
+ },
+ "store_bytes_one_acquisition_35SMD": {
+  "20m": {
+   "bytes": 141651054,
+   "tiles_stored": 347,
+   "tiles_total": 484,
+   "raw_bytes_full": 482241600,
+   "water_px": 15680457,
+   "secs": 33.0,
+   "bytes_per_water_px": 9.033604951692416
+  },
+  "60m": {
+   "bytes": 18477321,
+   "tiles_stored": 56,
+   "tiles_total": 64,
+   "raw_bytes_full": 53582400,
+   "water_px": 1749788,
+   "secs": 4.6,
+   "bytes_per_water_px": 10.55974838094672
+  },
+  "100m": {
+   "bytes": 6962106,
+   "tiles_stored": 24,
+   "tiles_total": 25,
+   "raw_bytes_full": 19289664,
+   "water_px": 632430,
+   "secs": 1.7,
+   "bytes_per_water_px": 11.008500545514918
+  }
+ },
+ "scenarios": [
+  {
+   "scenario": "global coastal+enclosed seas, one year (2024)",
+   "acquisitions": 684649,
+   "cloud_cut": "eo:cloud_cover < 20",
+   "water": "all sea water in the tile",
+   "runner_hours": 47257.3,
+   "sec_per_acquisition_mean": 248.5,
+   "gb_read": 281753.1,
+   "water_px_20m": 9808595837264.414,
+   "gb_stored": {
+    "20m": 88607.0,
+    "60m": 11508.5,
+    "100m": 4319.1
+   },
+   "wall_days_at_20_concurrent_jobs": 98.45
+  },
+  {
+   "scenario": "global, water within 20 km of land only (still full-tile ACOLITE)",
+   "acquisitions": 684649,
+   "cloud_cut": "eo:cloud_cover < 20",
+   "water": "sea water within 20 km of land",
+   "runner_hours": 42311.8,
+   "sec_per_acquisition_mean": 222.5,
+   "gb_read": 281753.1,
+   "water_px_20m": 1348788211671.0208,
+   "gb_stored": {
+    "20m": 12184.4,
+    "60m": 1582.5,
+    "100m": 593.9
+   },
+   "wall_days_at_20_concurrent_jobs": 88.15
+  },
+  {
+   "scenario": "Mediterranean, one year (2024)",
+   "acquisitions": 33538,
+   "cloud_cut": "eo:cloud_cover < 20",
+   "water": "all sea water in the tile",
+   "runner_hours": 2495.1,
+   "sec_per_acquisition_mean": 267.8,
+   "gb_read": 13943.6,
+   "water_px_20m": 503763075155.8286,
+   "gb_stored": {
+    "20m": 4550.8,
+    "60m": 591.1,
+    "100m": 221.8
+   },
+   "wall_days_at_20_concurrent_jobs": 5.2
+  },
+  {
+   "scenario": "Mediterranean, 20 km band",
+   "acquisitions": 33538,
+   "cloud_cut": "eo:cloud_cover < 20",
+   "water": "sea water within 20 km of land",
+   "runner_hours": 2258.3,
+   "sec_per_acquisition_mean": 242.4,
+   "gb_read": 13943.6,
+   "water_px_20m": 98683483324.7941,
+   "gb_stored": {
+    "20m": 891.5,
+    "60m": 115.8,
+    "100m": 43.5
+   },
+   "wall_days_at_20_concurrent_jobs": 4.7
+  },
+  {
+   "scenario": "MARIDA's 17 tiles, one year (2024)",
+   "acquisitions": 771,
+   "cloud_cut": "eo:cloud_cover < 20",
+   "water": "all sea water in the tile",
+   "runner_hours": 56.5,
+   "sec_per_acquisition_mean": 263.6,
+   "gb_read": 349.2,
+   "water_px_20m": 9092076797.740597,
+   "gb_stored": {
+    "20m": 82.1,
+    "60m": 10.7,
+    "100m": 4.0
+   },
+   "wall_days_at_20_concurrent_jobs": 0.12
+  },
+  {
+   "scenario": "Gulf of Gera tile 35SMD, one year (2024)",
+   "acquisitions": 49,
+   "cloud_cut": "eo:cloud_cover < 20",
+   "water": "all sea water in the tile",
+   "runner_hours": 5.0,
+   "sec_per_acquisition_mean": 366.6,
+   "gb_read": 29.4,
+   "water_px_20m": 742893388.2358044,
+   "gb_stored": {
+    "20m": 6.7,
+    "60m": 0.9,
+    "100m": 0.3
+   },
+   "wall_days_at_20_concurrent_jobs": 0.01
+  }
+ ],
+ "pilot": {
+  "part_1_marida_scenes": {
+   "what": "the 63 MARIDA scenes (59 on Earth Search L1C; 4 only on CDSE)",
+   "acquisitions": 63,
+   "runner_hours": 6.6,
+   "gb_read": 41.2,
+   "gb_stored_20m": 10.1
+  },
+  "part_2_gulf_of_gera_2019_2023": {
+   "what": "tile 35SMD, every acquisition with cloud < 20 %, 2019-2023 (PLP campaign years)",
+   "acquisitions": 250,
+   "runner_hours": 25.5,
+   "gb_read": 150.0,
+   "gb_stored": {
+    "20m": 34.2,
+    "60m": 4.6,
+    "100m": 1.5
+   }
+  }
+ },
+ "runner": {
+  "disk_GB": 14,
+  "cores": 2,
+  "hours_per_job": 6,
+  "concurrent": 20,
+  "per_acquisition_disk_GB": 2.23,
+  "per_acquisition_rss_GB": 3.5
+ },
+ "not_measured": [
+  "L1C bucket requester-pays status from a GitHub runner (anonymous GET works only through this sandbox's proxy); fallback is CDSE (S3 with free credentials / OData zip)",
+  "runner download rate (sandbox: 16.7 MB/s); per-pixel cloud fraction over water (tile eo:cloud_cover used as the cut and as the clear fraction)",
+  "ACOLITE glint correction cost (not enabled)",
+  "inland lakes (excluded: sea water only)",
+  "ice shelves and sea ice counted as water by the NE mask"
+ ]
+}

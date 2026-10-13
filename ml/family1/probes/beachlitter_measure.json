@@ -1,0 +1,158 @@
+{
+  "store": "beachlitter",
+  "family": "13",
+  "plan": "ml/plans/E092_family13_plastic.md (section 4, phase C row)",
+  "measured": "2026-10-13, from the sandbox (curl for downloads, python3 -I for reading); nothing built, committed or uploaded",
+  "sources": {
+    "ncei_nurdle_patrol": {
+      "what": "NCEI harmonised Global Marine Microplastics table, Marine Setting = 'Nurdle Patrol' (citizen-science plastic-pellet counts, University of Texas Marine Science Institute)",
+      "url": "https://hub.arcgis.com/api/download/v1/items/1b56a456ad8c43889652e62aa25a317e/csv?redirect=true&layers=0",
+      "http": "200 after redirect to a signed Azure blob; 19,537,585 bytes; byte-identical to the 2026-10-11 copy in scratchpad/insitu/ncei/hubcsv/hub.csv",
+      "second_copy": {"url": "https://www.ncei.noaa.gov/data/oceans/archive/arc0207/0259486/2.2/data/0-data/NurdlePatrolDatabase_S2N_v2.xlsx", "http": 200, "bytes": 1001463,
+        "note": "NCEI accession 0259486 v2.2 (published 2026-05-04). Carries the RAW 'Nurdle Amount' and 'New Tide Line' that the harmonised table drops. 10,579 of 10,615 rows match the harmonised table exactly on (date, lat, lon to 4 dp, standardized amount, volunteers, minutes); IDs are renumbered between the two copies, so join on content, never on ID."},
+      "licence_verbatim": "Harmonised table (accession 0306475): CC0 1.0 per plan E-092 section 2a. Accession 0259486's own landing page states no licence, only: 'Cite as: Tunnell, Jace W.; Dunning, Kelly H.; Scheef, Lindsay P.; Swanson, Kathleen M. (2022). Plastic pellet (nurdle) abundance collected by citizen scientists on shorelines across several countries from 2018-11-07 to 2026-04-28 (NCEI Accession 0259486). https://doi.org/10.25921/ccz7-mq57.'",
+      "rows": 10615,
+      "span": "2018-11-07 to 2026-04-28",
+      "years": {"2018": 75, "2019": 2013, "2020": 1239, "2021": 1610, "2022": 1592, "2023": 1109, "2024": 1103, "2025": 1638, "2026": 236},
+      "coverage": "lat -41.29..78.55, lon -159.67..175.94; US 9,042 (Texas 4,259), Mexico 649, Canada 377, Belize 330; Gulf of Mexico 5,818 rows",
+      "units_as_published": "pieces/10 mins ('Standardized Nurdle Amount'); raw count + minutes + volunteers in the accession xlsx",
+      "plastic_separable": "yes by construction: every row is plastic pellets (< 5 mm) only, hand-picked",
+      "protocol_fields": "Volunteers Number (1..105, median 1), Collecting Time min (0..840; 10 min for 7,838 rows), New Tide Line yes/no (accession only)",
+      "zeros": 1940,
+      "gotchas": [
+        "Standardisation is INCONSISTENT: of 10,615 rows 7,275 equal amount*10/minutes, a further 1,721 equal amount*10/(minutes*volunteers), 1,613 match neither (e.g. 47 in 5 min stored as 47) -> recompute from the raw count and effort, never store the published standardised value",
+        "6 rows with Collecting Time 0 (standardised 0 or 1) -> effort undefined, drop and count",
+        "Sample Date is local midnight written as UTC 05:00/06:00 (US Central) -> a DATE, not a time",
+        "Not only sea shores: 485 rows in inland or Great-Lakes US states (Ohio 249, Illinois 65, Pennsylvania 54, ...), 689 rows whose Location names a lake/river/creek/reservoir -> needs a freshwater qc bit from a coastline-distance test, not a state list",
+        "790 rows share date+position with another row (379 groups, 96 with identical values) - multiple patrols at one spot, not copies; keep",
+        "Lat precision varies 1-6 decimals (562 rows 3 dp, 49 rows 2 dp, 7 rows 1 dp)"
+      ]
+    },
+    "ncei_beach_sand": {
+      "what": "NCEI harmonised table, Marine Setting = 'Beach' - microplastics in beach SAND samples, NOT shoreline litter surveys",
+      "url": "same CSV as above",
+      "licence_verbatim": "CC0 1.0 (accession 0306475, per plan)",
+      "rows": 893, "span": "2015-06-04 to 2023-02-12", "studies": 13, "accessions": 13,
+      "units_as_published": "pieces/m3 of sediment (all 893 rows); sampling by PVC cylinder, trowel, scoop, spoon; mesh 0.0012-1.13 mm; sediment depth 0.01-0.2 m where given",
+      "zeros": 210,
+      "gotchas": ["534 rows share date+position with another (replicate cores / points on a transect; 'Sampling Point on Beach' 1..14)", "a different quantity from items per 100 m - store in its own channel or leave to a sediment store"]
+    },
+    "ncei_ocean_sediment": {"rows": 580, "units": "pieces kg-1 d.w.", "note": "seafloor/sediment, out of scope for beachlitter"},
+    "emodnet_beach_litter": {
+      "what": "EMODnet Chemistry European beach litter aggregated dataset v2025 (OSPAR/MSFD-style surveys, one row per survey x litter type)",
+      "url": "https://nodc.ogs.it/repository/aggregated-datasets/litter/EMODnet_beachLitter_European_2025_unrestricted.zip",
+      "http": "200, 21,183,865 bytes; zip holds beach_erddap_surveys_metadata.csv (11.1 MB) and beach_erddap_surveys_litter.csv (443.7 MB). The 2026 name answers 404. Regional v2025 zips (Mediterranean 6.6 MB, Baltic 4.2, NorthSea 9.6, Atlantic 6.8, BlackSea 1.1, Arctic 0.35) sum to 28.7 MB > the European 21.2 MB, i.e. regions overlap -> use the European file only",
+      "catalogue": "https://emodnet.ec.europa.eu/geonetwork/srv/api/records/23f2c658-6880-4429-8809-07a512dc2b00 (found by POST to /geonetwork/srv/api/search/records/_search)",
+      "erddap": "https://erddap.emodnet-chemistry.eu/erddap/tabledap/BEACH_LITTER (same v2025 content)",
+      "licence_verbatim": {
+        "catalogue_record": "CC BY 4.0: https://creativecommons.org/licenses/by/4.0/",
+        "erddap_global": "Usage is subject to mandatory citation: \"This resource was generated in the framework of EMODnet Chemistry, under the support of DG MARE Call for Tender EASME/EMFF/2020/3.1.11/European Marine Observation and Data Network (EMODnet) - Lot 5 - Chemistry\"",
+        "per_survey_data_policy": {"UN": 4287, "CB": 4444, "LS": 8130},
+        "L08_meaning": "UN = 'The data are freely available to anybody and may be used for any purpose. Usage acknowledgement may be required.'; CB = 'The data are available under the Creative Commons Attribution 4.0 International Public License'; LS = 'Access to the data and usage are as specified in the SeaDataNet data policy and licence agreement'",
+        "seadatanet_licence_clause_5": "5. Data Users should not give to third parties any SeaDataNet data or product without prior consent from the source Data Centre.",
+        "conflict": "The file is named 'unrestricted' and the record says CC BY 4.0, but 8,130 of 16,861 surveys (48%) carry LS, whose licence forbids passing data to third parties without consent. mplastic's EMODnet reader refuses any line not CB; the same rule here keeps 4,444 (CB) or 8,731 (CB+UN)."
+      },
+      "rows": {"surveys": 16861, "litter_lines": 2084972, "beaches": 1585, "surveys_with_litter_lines": 16833, "surveys_no_location": 70},
+      "span": "2001-01-01 to 2024-12-30 (date only, YYYY-MM-DD)",
+      "coverage": "lat 28.05..79.68, lon -31.15..48.34; 36 countries, IT 2,275, GB 1,864, FR 1,813, DE 1,709, ES 1,680, SE 1,136",
+      "survey_type": {"MSFD_monitoring": 11364, "Monitoring": 4234, "Cleaning": 1193, "Research": 70},
+      "units_as_published": "abundance = item COUNT per survey per litter type; survey_length in m (100 m: 7,252; 1000 m: 2,078; 33 m: 1,081; null: 3,200; 0: 16); survey_width null for 13,897",
+      "plastic_separable": "yes: every survey lists EVERY type of its reference list with explicit zeros (128 lines per OSPAR survey, 216 TSG-ML, 183 JLIST, 82 UNEP_MARLIN, 77 UNEP, 59 ITA, 25 OSPAR_1000). Material follows from the list's own category blocks (OSPAR 1-48 & 112-117 & 121 plastic/polystyrene; TSG-ML G1-G124 'artificial polymer'; JLIST names say 'plastic'/'foamed'; UNEP PL*/FP*; ITA IT1-IT19). My provisional classifier gives plastic 80.4% of 8,610,855 items, ambiguous 0.99%; per-survey plastic share p10/p50/p90 = 0.43/0.78/0.97. No machine-readable material map was found: https://nodc.ogs.it/marinelitter/vocab (200) lists beach attributes but not litter types -> the adapter must commit its own code->material table and say so",
+      "reference_lists_surveys": {"OSPAR": 6987, "TSG-ML": 3225, "UNEP_MARLIN": 2436, "OSPAR_1000": 1707, "ITA": 1643, "JLIST": 806, "UNEP": 29, "two_lists_in_one_survey": 27},
+      "items_per_100m_per_survey": {"p10": 1.9, "p50": 117.0, "p90": 1233.3, "p99": 4660.0, "max": 75094.0},
+      "zeros": "448 surveys total 0; litter_presence = 'no' on 130",
+      "gotchas": [
+        "ERDDAP stores abundance as SHORT: survey 27140 (Edsvik 2017-05-02, type 32, 153,702 pieces of string) reads NaN from ERDDAP; 5 lines exceed 32,767 -> read the zip, not ERDDAP",
+        "OSPAR + OSPAR_1000 pairs: 1,534 beach-dates carry both a 100 m all-items survey and a 1 km large-items (> 50 cm) survey - different quantities, keep both under distinct protocol qc",
+        "survey_length null on 3,200 (OSPAR 2,599) and 0 on 16 -> per-100 m density needs the protocol default (OSPAR 100 m) under a 'length assumed' qc bit, or the row is dropped",
+        "70 surveys (BE 35, PT 23, DE 12) have no location AND no survey start coordinate -> refuse and count",
+        "survey start vs beach location: median 0.0001 km, 6 > 10 km, max 270 km (survey 17202: location 54.35N 18.84E, start 54.02N 14.73E) -> position from location, flag disagreement > 5 km",
+        "10 location codes carry more than one coordinate",
+        "string 'NULL' for missing values throughout"
+      ]
+    },
+    "noaa_mdmap": {
+      "what": "NOAA Marine Debris Monitoring and Assessment Project shoreline surveys (accumulation, standing stock, MDMAP 2.0)",
+      "url_site_list": "https://portal.diver.orr.noaa.gov/pentaho/mdmap/sites (200, 3,042,339 bytes JSON, 1,271 sites, anonymous)",
+      "url_per_site": "https://portal.diver.orr.noaa.gov/pentaho/mdmap/sites/{id}/export (200, application/zip: MDMAP_<site>_<date>.csv + README.txt [+ _backbarrier.csv]); all 1,271 fetched (41 needed a retry after proxy tunnel drops); 1,013 contain survey rows",
+      "url_not_working": "https://mdmap.orr.noaa.gov/api/spec 500; .../pentaho/mdmap/surveys 400; .../surveys/export 500 - there is no bulk export, one request per site",
+      "licence_verbatim": "No data licence found. The MDMAP 'Disclaimer' (contributor grant, from the app bundle): 'I hereby grant to the National Oceanic and Atmospheric Administration (NOAA), U.S. Department of Commerce lifelong, paid-up, worldwide, non-exclusive permission to reproduce, use for Governmental purposes, and further disseminate the attached image(s) and/or shoreline survey data in all media now existing or to be created in the future, ... I acknowledge that any image(s)/data I upload will be viewable (and therefore downloadable) by other database users and members of the public.' README: 'Contact md.monitoring@noaa.gov with any questions about this dataset.' InPort 73092 (the 2024 national-survey SITE frame, not survey data) says CC0-1.0. Redistribution status of the survey counts: UNRESOLVED - ask md.monitoring@noaa.gov; until then private track",
+      "rows": {"transect_rows": 22515, "surveys": 8771, "sites_with_data": 1013},
+      "by_protocol": {"MDMAP 2.0 Protocol": {"surveys": 3026, "transects": 12977}, "MDMAP Standing Stock Protocol": {"surveys": 1249, "transects": 5042}, "MDMAP Accumulation Protocol": {"surveys": 4496, "transects": 4496}},
+      "span": "2009-07-29 to 2026-09-18 (survey dates; 2025 alone 4,324 transect rows)",
+      "coverage": "lat -18.69..68.87, lon -178.30..175.88; US 20,108 transect rows, Greece 1,045 (Kefalonia 2024-26), Canada 685, Brazil 180, Mexico 121; Great Lakes states Ohio 751 + Michigan 625 + Wisconsin/Pennsylvania/Indiana/Illinois 95 = 1,471 FRESHWATER rows",
+      "units_as_published": "item COUNTS (>= 2.5 cm) per transect. Standing stock & 2.0: transect = beach width x 5 m (transect_width 5 on every row) from water's edge to back barrier; accumulation: transect = whole site (site_length, median 103 m) after the previous clearance (gap between accumulation surveys p10/p50/p90 = 22/30/63 days). README: 'units are not common across sites and protocols. Raw counts ... should be converted into common units'",
+      "plastic_separable": "yes: total_plastic_items, total_metal_items, ... and ~50 material:item columns; sum of the seven material totals equals total_debris_items on all 22,509 transects tested; plastic <= total on all; plastic 84.8% of 1,246,261 items. debris weight columns empty on every row",
+      "densities": {"MDMAP 2.0 items/m2 p50/p90/p99": [0.046, 0.441, 2.07], "Standing stock items/m2": [0.025, 0.240, 1.69], "Accumulation items/100 m p50/p90/p99": [42.6, 370.2, 2793.9]},
+      "zeros": {"MDMAP 2.0": 1861, "Standing stock": 571, "Accumulation": 99},
+      "gotchas": [
+        "beach_width_at_transect 9999 on 8 rows (sentinel) and 0 on 26; site_length 0 on 6",
+        "total_survey_duration negative on 2 rows (-39,600 s: AM/PM swap)",
+        "the literal string 'null' in 4 coordinate cells",
+        "column sets differ by site (custom item columns; 2 of 1,013 files lack total_metal_items) - read by name, never by position",
+        "32 US rows with lon > 0 are real (Buldir Island AK 175.9E, Guam, N. Mariana Is.) - no sign swap found",
+        "no site-date carries two surveys",
+        "accumulation's FIRST survey at a site follows an unrecorded initial clearance; its accumulation interval must come from the previous survey date, and the first row has none"
+      ]
+    },
+    "ocean_conservancy_tides": {"url": "https://www.coastalcleanupdata.org/", "http": 200, "licence_verbatim": "© Copyright 2013-2026 Ocean Conservancy", "status": "excluded: no open licence found; per-location report downloads of cleanup EVENTS (no fixed area/length); not measured further"},
+    "tangaroa_blue_amdi": {"url": "https://www.tangaroablue.org/database/", "http": 200, "licence_verbatim": "Read Tangaroa Blue Foundation's AMDI Data Access Statement or request a custom data request.", "status": "excluded: data by request only"},
+    "ospar_beach_litter": {"status": "not fetched separately: the OSPAR reference list is carried inside EMODnet (6,987 OSPAR + 1,707 OSPAR_1000 surveys); a separate OSPAR download would duplicate them"}
+  },
+  "duplication": {
+    "emodnet_vs_mdmap_same_day_within_0.02deg": 0,
+    "emodnet_vs_nurdle": 0,
+    "mdmap_vs_nurdle_same_day_within_0.02deg": 162,
+    "mdmap_vs_nurdle_note": "same beach and day but different quantities (MDMAP >= 2.5 cm items; Nurdle Patrol < 5 mm pellets) - not copies, keep both",
+    "mdmap_greek_sites_near_emodnet_beach": 0,
+    "nurdle_hub_vs_accession_xlsx": "10,579 of 10,615 identical on content; IDs renumbered",
+    "within_emodnet": "European file is the union of the regional ones (use it alone); 1,534 OSPAR/OSPAR_1000 pairs are complementary surveys"
+  },
+  "proposed_design": {
+    "rows_unit": "one survey (EMODnet survey; MDMAP survey = sum over its transects; one nurdle patrol; one sand sample)",
+    "time": "survey date at 12:00 UTC (all sources are date-only), time_s since 1982-01-01, int32",
+    "position": "EMODnet location_latitude/longitude; MDMAP waters-edge left/right midpoint; NCEI lat/lon",
+    "channels": [
+      ["log_items_100m", "log10(1 + items per 100 m of shoreline, whole beach width, items >= 2.5 cm)", "EMODnet count/length*100; MDMAP 2.0 & standing stock mean(transect count)/5 m*100; accumulation count/site_length*100"],
+      ["log_plastic_100m", "log10(1 + plastic items per 100 m)", "same normalisation, plastic classes only"],
+      ["plastic_frac", "0..1, plastic / all items (NaN when total 0)", ""],
+      ["log_items_m2", "log10(1 + items m-2)", "where beach width is known (all MDMAP; 2,964 EMODnet surveys with survey_width)"],
+      ["accum_days", "days since the previous clearance", "MDMAP accumulation only"],
+      ["survey_len_m", "m of shoreline surveyed", ""],
+      ["log_nurdles_pmin", "log10(1 + pellets per 10 person-minutes), recomputed from the raw count", "Nurdle Patrol"],
+      ["effort_pmin", "person-minutes searched", "Nurdle Patrol"],
+      ["log_n_m3_sand", "log10(1 + microplastic pieces m-3 of beach sand)", "NCEI 'Beach' rows"]
+    ],
+    "qc_uint8": {
+      "bits_0_3_protocol": "1 OSPAR-100m, 2 OSPAR-1km large items, 3 TSG-ML/JLIST (MSFD), 4 UNEP/UNEP_MARLIN, 5 ITA, 6 MDMAP 2.0, 7 MDMAP standing stock, 8 MDMAP accumulation, 9 Nurdle Patrol, 10 sand core",
+      "bit_4": "freshwater shore (coast-distance test, not a state list)",
+      "bit_5": "cleaning-type survey (not a monitoring protocol)",
+      "bit_6": "survey length assumed from protocol default",
+      "bit_7": "position disagreement > 5 km between location and survey start, or coordinate precision < 3 dp"
+    },
+    "platform": "hash of source|beach code (EMODnet location_code, MDMAP shoreline_site_id, nurdle rounded position)",
+    "precedence_dedup": "No cross-source copies were measured, so no precedence drop is needed; within sources: EMODnet European file only; keep OSPAR/OSPAR_1000 pairs as two rows; MDMAP one row per survey_id; drop and count: 70 EMODnet surveys with no position, 16 length-0, 6 zero-minute patrols, 8 width-9999 and 26 width-0 MDMAP transects from area channels. A future second copy of any source (e.g. OSPAR's own database) yields to EMODnet on same beach code + date",
+    "licence_split": "PUBLIC: Nurdle Patrol + sand rows (CC0) and EMODnet CB (+UN if accepted) surveys; PRIVATE until resolved: EMODnet LS surveys (8,130; SeaDataNet licence clause 5) and all MDMAP (no stated licence)",
+    "falsifiable_checks": [
+      "MDMAP: sum of the seven material totals equals total_debris_items and plastic <= total on every transect (measured 22,509 of 22,509 today) - a single failure refuses the store",
+      "EMODnet: every survey of reference list L has exactly len(L) type lines with zeros explicit (measured: 128/216/82/25/59/183/77, except 27 two-list surveys with 399) - refuse on any other count",
+      "Nurdle: recomputing pellets per 10 min as count*10/minutes reproduces the published standardised value on >= 7,275 rows (measured) - if the formula match falls, the source changed its rule",
+      "round trip: the store's de-logged log_items_100m for every EMODnet survey equals sum(abundance)/length*100 from the zip within float16 error (log10 quantisation ~ 1e-3 relative)",
+      "external, measured and NOT reproduced: EEA's EU coastline baseline (287 items/100 m 2015-16, 203 in 2020-21) - the public EMODnet subset gives median-of-beach-medians 124-158 and no 29% fall, so this cannot be a falsifier for this subset; record it, do not use it"
+    ],
+    "estimate": {
+      "rows_public": "about 10,615 nurdle + 893 sand + 4,444-8,731 EMODnet = 16,000-20,200",
+      "rows_all": "16,861 EMODnet + 8,771 MDMAP + 10,615 nurdle + 893 sand = 37,140 before drops",
+      "bytes_per_row": "4 (time) + 8 (lat, lon) + 9 x 2 (float16 channels) + 1 (qc) + 8 (platform) = 39",
+      "bytes": "about 1.45 MB uncompressed for all rows; under 1 MB public"
+    }
+  },
+  "not_measured": [
+    "a machine-readable EMODnet litter-type -> material map (none found; provisional rule-based classifier only)",
+    "EMODnet zip vs ERDDAP for every survey (only the overflow case was queried)",
+    "freshwater share by coastline distance (only state/name proxies)",
+    "MDMAP redistribution terms (no licence published; needs an email to md.monitoring@noaa.gov)",
+    "Ocean Conservancy TIDES and AMDI row counts (excluded on licence)"
+  ],
+  "scratch": "/tmp/claude-0/-home-claude-earth/e3369861-dd35-55bf-addc-816d2b37b228/scratchpad/phaseC/beachlitter/ (downloads in ncei/, ncei_259486_data/, emodnet_eu2025/, mdmap_exports/; scripts in scripts/)"
+}

@@ -203,6 +203,46 @@ survey's own day covers its point** (the nearest same-day swath misses by
   else. Whether SEA's resubmitted values supersede the published ones is a
   question for SEA.
 
+- **D13 — phase C: all four stores are built (Chris, 2026-10-13: "can we
+  add all 4? (the more data, the better)").** Each was measured first
+  (`ml/family1/probes/{beachlitter,cygnss_mss,pace_swir,s2fdi_coast}_measure.json`);
+  the designs below are what the measurements allow, not what the plan first
+  hoped:
+  - **`beachlitter`** (tier P, one row per survey): NCEI's Nurdle Patrol
+    pellet counts (CC0; 10,615 rows, raw count recomputed — the published
+    standardisation is inconsistent on 3,334 rows), NCEI's beach-sand
+    microplastics (893 rows, pieces/m³, their own channel), EMODnet beach
+    litter v2025 — **only surveys under CC BY 4.0 ("CB", 4,444 of 16,861)**;
+    the 8,130 under the SeaDataNet licence (no redistribution without the
+    data centre's consent) and the 4,287 "UN" go to the private track, the
+    mplastic precedent — and NOAA MDMAP (8,771 surveys, 2009 → 2026, a NOAA
+    programme on a NOAA portal; no licence file is posted, so it is taken as
+    US-government public data and recorded as unconfirmed). EMODnet's
+    material per litter code comes from a committed classification table;
+    freshwater shores (Great Lakes, rivers) are kept and flagged.
+  - **`cygnss_mss`** (tier G, the producer's native 0.2° grid, daily): the
+    mean-square slope of the sea surface from CYGNSS L3 V3.2, its
+    uncertainty, the sample count and CYGNSS's own wind (kept to study the
+    confound, never as an independent wind), 2018-08 → present, ±40°. Read
+    on hosted runners only (Earthdata). Not per-sample: L2 rows would cost
+    30–60× the store for a question asked at 1° and 30 days.
+  - **`pace_swir`** (tier G, pace4k's 4 km grid, daily): PACE OCI level-3
+    surface reflectance `rhos` at 645, 740, 865, 1038, 1249, 1618, 2131 and
+    2258 nm — the near/shortwave-infrared bands plus the two baselines a
+    PACE floating-debris or floating-algae index needs — all surfaces, not
+    ocean only (coasts are where floating debris shows), 2024-03-05 →
+    present, anonymous OPeNDAP server-side subsets (≈ 3 min a day).
+  - **`s2fdi_coast`** (tier G-fine, per acquisition, 20 m) — **a PILOT, not
+    the coast**: the 63 MARIDA scenes and every acquisition under 20 % cloud
+    of the Plastic Litter Project's tile (Gulf of Gera, Lesvos, 35SMD)
+    2019–2023 — about 310 acquisitions, ~32 runner-hours, ~190 GB read,
+    ~44 GB stored. L1C corrected by ACOLITE exactly as in the co-location
+    probe; L2A is not usable over water (15–17 % of water pixels pinned at
+    the floor, measured on a Mediterranean tile). The Mediterranean
+    (≈ 2,500 runner-hours and 14 TB read per year) and the global coast
+    (≈ 47,000 runner-hours, 282 TB read per year) are priced, not built: a
+    scale-up waits on the pilot's falsifiers (§6).
+
 ## 4 · The stores
 
 | store | tier | what one row / frame is | channels | rows / size | phase |
@@ -294,6 +334,25 @@ a point (`log2_fp` −4, the family's point label); a Sentinel-2 pixel is 20 m.
   colour beats it on debris-vs-not F1. If the threshold already matches the
   model, the labels are a test set, not a training store.
 - **`s2fdi_gpgp`**: §5 step 2.
+- **`beachlitter`**: MDMAP material totals sum exactly to the total
+  transect count and plastic never exceeds it; every EMODnet survey has as
+  many type lines as its reference list; the recomputed pellet rate equals
+  NCEI's published one on the ≥ 7,275 rows standardised the documented way.
+- **`cygnss_mss`**: re-binning the good L2 samples of three days into the L3
+  cells with weights 1/uncertainty² reproduces `num_mss_samples` in ≥ 99.9 %
+  of cells and the mean to 1e-5 relative; else the daily grid is built from
+  L2. Physics: over 2019, MSS rises with an independent reanalysis 10 m wind
+  (rank correlation ≥ 0.8).
+- **`pace_swir`**: a pixel re-read from the native file equals the store to
+  float16 precision; over clear water `rhos` at 2258 nm has median < 0.01 and
+  99th percentile < 0.03 (measured 0.0052 / 0.0217 on 2025-07-01).
+- **`s2fdi_coast`**: (i) FDI from the store reproduces FDI computed from
+  MARIDA's own corrected bands at its labelled pixels (Spearman ≥ 0.9 over
+  clear water); (ii) the threshold baseline's debris-vs-water F1 on MARIDA's
+  test split from the store's FDI is within 0.05 of the F1 from MARIDA's
+  bands; (iii) on the Lesvos campaign dates the moored plastic targets rank
+  above the 99th percentile of their scene's water. If (i) or (ii) fails the
+  store is not kept.
 
 ## 8 · Phase A, built locally — what the adapters found (2026-10-11)
 

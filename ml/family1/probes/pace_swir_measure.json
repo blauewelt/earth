@@ -1,0 +1,265 @@
+{
+ "store": "pace_swir",
+ "family": "1.3",
+ "measured": "2026-10-13 from the sandbox, anonymously",
+ "day_sampled": "2025-07-01",
+ "q1_level3_sfrefl": {
+  "exists_anonymous": true,
+  "collection": {
+   "short_name": "PACE_OCI_L3M_SFREFL",
+   "concept_id": "C3620140468-OB_CLOUD",
+   "version": "3.1",
+   "doi": "10.5067/PACE/OCI/L3M/SFREFL/3.1",
+   "time_start": "2024-03-05"
+  },
+  "access": {
+   "opendap_dmr": "https://oceandata.sci.gsfc.nasa.gov/opendap/PACE_OCI/L3SMI/2025/0701/PACE_OCI.20250701.L3m.DAY.SFREFL.V3_1.rhos.4km.nc.dmr.xml",
+   "dmr_http": 200,
+   "dap4_subset": "https://oceandata.sci.gsfc.nasa.gov/opendap/PACE_OCI/L3SMI/2025/0701/PACE_OCI.20250701.L3m.DAY.SFREFL.V3_1.rhos.4km.nc.dap.nc4?dap4.ce=/rhos[0:1:4319][0:1:8639][117:1:121]",
+   "dap4_subset_http": 200,
+   "credential": "none",
+   "raw_byte_range_on_opendap_file_path": "HTTP 416 (no plain byte-range read); getfile 416; obdaac-tea cumulus 302 to urs.earthdata.nasa.gov",
+   "subsetting_works": "DAP4 hyperslab constraint on lat/lon/wavelength works anonymously (single pixel, 12 bands: 21.6 kB, 0.6 s)"
+  },
+  "files_per_day_dir": [
+   "DAY 4km",
+   "DAY 2km",
+   "DAY 0p1deg",
+   "plus NRT variants; 8D and MO composites"
+  ],
+  "variables": {
+   "rhos": "float32 [lat, lon, wavelength] (WAVELENGTH LAST), long_name 'Surface reflectance', _FillValue -32767.0, valid_min -0.05, valid_max 1.5, no scale/offset, zlib level 4, chunks [8,1024,5] in the DAP4 response",
+   "wavelength": "int32, 122 bands 346..895 nm (5 nm steps with gaps) + 1038, 1249, 1618, 2131, 2258",
+   "also": "lat, lon, palette"
+  },
+  "swir_kept": true,
+  "band_indices": {
+   "645": 56,
+   "665": 64,
+   "865": 110,
+   "1038": 117,
+   "1249": 118,
+   "1618": 119,
+   "2131": 120,
+   "2258": 121
+  },
+  "dims": {
+   "4km": [
+    4320,
+    8640,
+    122
+   ],
+   "2km": [
+    8640,
+    17280,
+    122
+   ],
+   "0p1deg": [
+    1800,
+    3600,
+    122
+   ]
+  },
+  "grid": "lat descending 89.97917..-89.97917, lon -179.97917..179.97917 (pixel centres) - identical to pace4k/oc4k",
+  "flags_applied_at_binning": "l2_flag_names = ATMFAIL,CLDICE,HIGLINT,HILT,HISATZEN,HISOLZEN; no per-pixel flag variable carried",
+  "whole_file_size_cmr_MB": {
+   "4km_daily_mean_2025": 3937.0,
+   "2km_daily_mean_2025": 13887.8,
+   "0p1deg_daily_mean": 784.8,
+   "8D_4km_mean": 8531.4,
+   "MO_4km_mean": 9187.8
+  },
+  "granules_cmr": {
+   "4km_daily_2024": 289,
+   "4km_daily_2025": 363,
+   "4km_daily_2026_to_date": 241,
+   "first": "2024-03-05",
+   "last_refined": "2026-08-31",
+   "nrt": "V3_1 NRT daily files present on OPeNDAP to 2026-10-10 (directory 2026/1011 exists)",
+   "8D_4km": 114,
+   "MO_4km": 30
+  },
+  "subset_fetch_4km": {
+   "rhos_1038_to_2258_5bands": {
+    "bytes": 215048972,
+    "seconds": 91.6
+   },
+   "rhos_865": {
+    "bytes": 43379380,
+    "seconds": 46.6
+   },
+   "per_day_total_MB": 258.4,
+   "per_day_seconds_sandbox": 138.2
+  },
+  "values_2025_07_01": {
+   "valid_fraction_globe": 0.3189877775634431,
+   "ocean_fraction_grid_f7sphere": 0.6770081018518519,
+   "valid_fraction_of_ocean": 0.2936763866450498,
+   "share_of_valid_on_land": 0.37671187717613286,
+   "ocean_stats": {
+    "865": {
+     "p1": 0.0024496852420270443,
+     "p50": 0.021952839568257332,
+     "p99": 0.6765781044960022,
+     "neg_frac": 3.678766845012744e-05
+    },
+    "1038": {
+     "p1": 0.0019603867549449205,
+     "p50": 0.020648356527090073,
+     "p99": 0.5509042143821716,
+     "neg_frac": 8.758968678601772e-06
+    },
+    "1249": {
+     "p1": 0.0017558016115799546,
+     "p50": 0.018453389406204224,
+     "p99": 0.42909711599349976,
+     "neg_frac": 4.0426009285854334e-07
+    },
+    "1618": {
+     "p1": 0.0011464705457910895,
+     "p50": 0.017056824639439583,
+     "p99": 0.2852960228919983,
+     "neg_frac": 3.3553587707259095e-05
+    },
+    "2131": {
+     "p1": 0.0008095246157608926,
+     "p50": 0.013626732863485813,
+     "p99": 0.2165183424949646,
+     "neg_frac": 1.7517937357203544e-06
+    },
+    "2258": {
+     "p1": 0.0007709101773798466,
+     "p50": 0.013957316987216473,
+     "p99": 0.2530268132686615,
+     "neg_frac": 7.357533690025489e-05
+    }
+   },
+   "note": "rhos is valid on 94% of pixels where BGC chlor_a is valid; chlor_a is valid on only 24.6% of rhos-valid pixels - SFREFL keeps far more (land, bright/turbid, edges)"
+  }
+ },
+ "q1_level2_sfrefl": {
+  "collection": "PACE_OCI_L2_SFREFL C3620139902-OB_CLOUD v3.1 'Level-2 Regional Surface Reflectance'",
+  "granules_2025_07_01": 148,
+  "mean_granule_MB": 680.6,
+  "day_total_GB": 100.7,
+  "year_TB_est": 36.8,
+  "total_granules": 125020,
+  "access": "CMR anonymous; download obdaac-tea 302 -> Earthdata login; not on anonymous OPeNDAP (PACE_OCI/L2 404)",
+  "needed": false
+ },
+ "q2_alternatives": {
+  "RRS": "wavelength 172 bands 346..719 nm - confirmed, no NIR/SWIR",
+  "AOP": "same 172 bands 346..719 (plus aot_865)",
+  "LANDVI": "4320x8640 indices only: ndvi, evi, ndwi, ndii, cci, ndsi, pri, cire, car, mari - no reflectance bands",
+  "flags": "none carried per pixel in L3; masking by the six l2 flags above at binning (HIGLINT removes sun glint)"
+ },
+ "q3_licence": {
+  "license_attr": "https://science.nasa.gov/earth-science/earth-science-data/data-information-policy/",
+  "attribution": "NASA Ocean Biology Processing Group (2024-2026). PACE OCI Level-3 Global Mapped Surface Reflectance Data, version 3.1 (doi:10.5067/PACE/OCI/L3M/SFREFL/3.1). NASA Goddard Space Flight Center, Ocean Ecology Laboratory, Ocean Biology Distributed Active Archive Center."
+ },
+ "design": {
+  "tier": "G sharded, pace4k's grid (4320x8640, 1/24 deg, row 0 north), tile 256, zstd 15, F=5 daily frames per bin",
+  "channels": [
+   "rhos_865",
+   "rhos_1038",
+   "rhos_1249",
+   "rhos_1618",
+   "rhos_2131",
+   "rhos_2258"
+  ],
+  "unit": "1 (dimensionless reflectance)",
+  "bounds": [
+   -0.05,
+   1.5
+  ],
+  "dtype": "float16",
+  "float16_max_abs_err": 0.0004875659942626953,
+  "float16_p99_rel_err": 0.0004324971232563257,
+  "measured_one_frame_ShardWriter": {
+   "all_surfaces": {
+    "shard_bytes": 117358600,
+    "tiles_stored": 462,
+    "tiles_total": 578,
+    "encode_s": 36.7,
+    "raw_f16_bytes": 447897600
+   },
+   "ocean_only": {
+    "shard_bytes": 74625005,
+    "tiles_stored": 415,
+    "tiles_total": 578,
+    "encode_s": 23.5,
+    "raw_f16_bytes": 447897600
+   }
+  },
+  "stored_per_year_GB": {
+   "all_surfaces": 42.8,
+   "ocean_only_f7sphere_mask": 27.2
+  },
+  "stored_record_893_days_GB": {
+   "all_surfaces": 104.8,
+   "ocean_only": 66.6
+  },
+  "fetch": {
+   "per_day_MB": 258.4,
+   "per_year_GB": 94.3,
+   "record_GB": 230.8,
+   "sandbox_s_per_day": 138.2,
+   "hosted_runner": "NOT measured; at the sandbox rate a year is ~14 h serial, ~4.7 h with 3 workers (pace4k's WORKERS); split by year across jobs",
+   "memory": "frame [4320,8640,6] float32 = 0.9 GB; the 5-band response decodes to 0.75 GB float32"
+  },
+  "optional_bands_unmeasured": "645 (FAI baseline) and 739/742 (FDI red-edge baseline) are in the same cube at index 56 and 85/86; each extra single-band request ~43 MB/~47 s by analogy with 865 - not fetched",
+  "falsifiers": {
+   "native_pixel_reread": {
+    "pixel": {
+     "row": 1611,
+     "col": 3040,
+     "lat": 22.85416666666667,
+     "lon": -53.3125,
+     "rhos_865": 0.013818813487887383,
+     "rhos_1038_2258": [
+      0.01248106174170971,
+      0.010876839980483055,
+      0.009743825532495975,
+      0.007636229041963816,
+      0.007161925081163645
+     ],
+     "aot_865": 0.12889999151229858,
+     "chl": 0.02739737741649151
+    },
+    "result": "independent DAP4 single-pixel request returned identical float32 values for all 6 bands (exact)"
+   },
+   "clear_water_dark_swir": {
+    "clearwater_pixels_chl_valid": 2928631,
+    "rhos2258_p50_p99": [
+     0.005238387733697891,
+     0.02166597917675972
+    ],
+    "rhos1618_p50_p99": [
+     0.007017085794359446,
+     0.025310812518000603
+    ],
+    "rhos865_p50_p99": [
+     0.010752921923995018,
+     0.029866458848118782
+    ],
+    "test": "over pixels where BGC chlor_a is valid, median rhos(2258) < 0.01 and p99 < 0.03 (measured 0.0052 / 0.0217)"
+   },
+   "aerosol_consistency": {
+    "corr_rhos865_aot865": 0.4330266725243236,
+    "fit": {
+     "intercept": 0.006713960871823279,
+     "slope": 0.06833480368696539
+    },
+    "note": "only r=0.43 - weak; consistent with rhos being Rayleigh/gas-corrected but NOT aerosol-corrected (aerosol path dominates open-ocean rhos at 865); use as a sign test (slope>0), not a tight check"
+   },
+   "rrs865": "not possible: Rrs stops at 719 nm"
+  }
+ },
+ "not_measured": [
+  "hosted-runner fetch rate",
+  "whether rhos is aerosol-corrected (inferred from data, not read from documentation)",
+  "2 km subset bytes/time",
+  "whether SFREFL V3_1 refined lags ~6 weeks (inferred from last refined 2026-08-31 vs NRT 2026-10-10)",
+  "a multi-day store-size spread (one day only)"
+ ]
+}
