@@ -100,7 +100,7 @@ ocean-colour build: twelve jobs of 2–4 min, 21.2 GB, 1997–2024.
   **1.5e-7** for oc025.
 
 <a id="e-090"></a>
-## E-092 · Family 1.3 — family 1.2 plus the stores that could identify plastic in the ocean — PHASE A PUBLISHED 2026-10-11 (`mplastic` 18,504 surface samples, `mobjects` 1,595 aircraft objects, `s2labels` 837,964 labelled Sentinel-2 pixels); the Sentinel-2 store over the garbage patch CLOSED by a null co-location probe
+## E-092 · Family 1.3 — family 1.2 plus the stores that could identify plastic in the ocean — PHASE A PUBLISHED 2026-10-11 (`mplastic` now 19,974 surface samples, `mobjects` 1,595 aircraft objects, `s2labels` 837,964 labelled Sentinel-2 pixels); PHASE C BUILDING 2026-10-13 (`cygnss_mss` published; `beachlitter` built, private pending a licence call; `pace_swir` and the `s2fdi_coast` pilot in their fetch lanes); the Sentinel-2 store over the garbage patch CLOSED by a null co-location probe
 
 TL;DR — a new family whose job is a FIFTH read-out, floating plastic
 concentration at a place and time, on top of family 1.2 (the global fine
@@ -147,6 +147,48 @@ Sentinel-2 debris indices over the patch (`s2fdi_gpgp`) is closed with that
 measured reason. **`s2labels`** (837,964 human-labelled Sentinel-2 pixels from
 MARIDA and the placeable part of MADOS) published the same night; its baseline — a
 debris-index threshold — scores F1 0.0063 on MARIDA's test split.
+
+
+**Phase C, 2026-10-13 (Chris: "1. yes. 2. can we add all 4? (the more data,
+the better)").** *D12 settled:* EMODnet's shape-only micro-litter lines
+(fragments, pellets, films … with no polymer type) now count as plastic, and a
+sample whose total includes one carries qc bit 6 — family1-build #1060 (the
+`mplastic` rebuild) published 19,974 rows (was 18,504): EMODnet 2,379 samples
+(was 909), 1,511 of them flagged; registry family1-registry #9. *Each phase-C
+store was measured before it was designed* (`ml/family1/probes/*_measure.json`,
+plan D13), then built by an adapter tested on a smoke generator:
+
+- `cygnss_mss` — the sea-surface mean-square slope (the roughness under
+  CYGNSS's microplastic index, not the index) on the producer's 0.2° grid,
+  daily, from L3 V3.2's hourly bins. Probe #1062 (January 2019, with the F1
+  falsifier on three days): re-binning L2 reproduced L3's daily means and
+  uncertainties to ~1e-8 in every cell, but per-cell counts agreed in only
+  99.5 % (the falsifier said 99.9 %; amended to 99 % with the measurement,
+  plan §6). Nine yearly lanes (#1066–#1075, one Earthdata login timeout
+  re-run) and a hosted assembly (#1077) **published 2,989 daily frames,
+  2018-08 → 2026-10, 3 absent upstream**; registry #11 (after the guard
+  learnt to pass NEW not-built placeholder entries, #10 refused).
+- `beachlitter` — one row per shoreline survey: NCEI Nurdle Patrol (rate
+  recomputed; 123 rows flagged where NCEI's published one disagrees), NCEI
+  beach-sand samples, EMODnet beach litter under CC BY only (12,417 SeaDataNet
+  -licensed or "UN" surveys excluded and counted), NOAA MDMAP. #1065 built
+  **24,702 surveys, 2009-07 → 2026-09**, all three source falsifiers holding,
+  into the PRIVATE repository: MDMAP's portal posts no licence. NOAA's InPort
+  record 73092 states CC0; switching to public waits on Chris.
+- `pace_swir` — PACE level-3 surface reflectance at 645–2258 nm, 4 km daily.
+  Probe #1063: 29/31 days, 84 min, 10.9 GB fetched, ~144 GB estimated for the
+  record. Six concurrent monthly lanes (#1078–#1083) overloaded OB.DAAC's
+  OPeNDAP server and were cancelled before pushing anything; the adapter now
+  uses 2 workers, a 600 s timeout and backoff, and two lanes run at a time.
+- `s2fdi_coast` pilot — 20 m ACOLITE-corrected FDI, FAI, NDVI, PI and four
+  bands over water for the MARIDA scenes and the Lesvos plastic-target tile
+  2019–2023 (476 acquisitions, 24 lanes). Lane #1064 failed every tile:
+  Ubuntu's GDAL bindings (numpy 1.x) under pip's numpy 2 — fixed in the
+  workflow and by an adapter preflight. Re-run #1076 pushed 32 acquisitions,
+  2.9 GB; the other 23 lanes are running.
+
+Cost so far: hosted runners only, $0 (one rented box will assemble each of
+`pace_swir` and `s2fdi_coast`).
 
 ## E-091 · Day-of-year climatology — the mean of every calendar day over any span of years, from sums cumulative over the years — BUILT 2026-10-08 for OISST and the four ERA5 stores
 

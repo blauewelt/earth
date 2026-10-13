@@ -455,6 +455,15 @@ it needs AOMI's rows, which D4 keeps out. The comparison stays in §2a.
 
 ## 7 · Status
 
+**Phase C, 2026-10-13** (D13; full record in
+[EXPERIMENTS E-092](https://blauewelt.github.io/earth/docs.html?f=ml/EXPERIMENTS.md#e-092)):
+`mplastic` rebuilt under D12 (19,974 rows); `cygnss_mss` PUBLISHED (2,989
+daily frames); `beachlitter` BUILT, 24,702 surveys, PRIVATE until Chris
+confirms the public switch (MDMAP: CC0 per NOAA InPort 73092); `pace_swir`
+fetching two monthly lanes at a time (OB.DAAC overloads at six), assembly on
+a rented box; `s2fdi_coast` pilot fetching (24 lanes), assembly on a rented
+box, then falsifiers (i)–(iii).
+
 **Phase A `mplastic` and `mobjects` BUILT AND PUBLISHED 2026-10-11** (family1-build #1057 and #1058, hosted runners, $0; registry `tensors/family1_3/family13.json` by family1-registry #7; every file read back from the Hub). The co-location probe ran the same day and found NO signal — `s2fdi_gpgp` is closed (§5 step 2). `s2labels` BUILT AND PUBLISHED the same night (family1-build #1059; registry republished by family1-registry #8). **Phase A is complete: three stores, 858,063 rows.** What remains is phase C — each a decision for Chris (§5 step 4) — and the open questions below. Sources measured 2026-10-11 (the raw downloads are
 in the session's scratch space, not committed). Open items, in the order they
 block:
