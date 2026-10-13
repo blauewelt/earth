@@ -245,6 +245,19 @@ jobs:
           pip install --quiet numpy "huggingface_hub<2" "zstandard==0.23.0" netCDF4 requests rasterio pyhdf scipy pyarrow h5py numcodecs xlrd openpyxl
           python3 -c "import importlib.metadata as m, numpy, huggingface_hub, zstandard, netCDF4, requests, rasterio, scipy, pyhdf.SD, pyarrow, h5py, numcodecs, xlrd, openpyxl; print('deps ok', rasterio.__version__, rasterio.__gdal_version__, 'pyhdf', m.version('pyhdf'), 'scipy', scipy.__version__, 'pyarrow', pyarrow.__version__, 'h5py', h5py.__version__, 'numcodecs', numcodecs.__version__, 'xlrd', xlrd.__version__, 'openpyxl', openpyxl.__version__)"
 
+      - name: Install ACOLITE dependencies (s2fdi_coast fetch lanes only)
+        # ACOLITE (the water-tuned atmospheric correction, cloned at a pinned
+        # commit by the adapter itself) needs GDAL's python bindings matching
+        # the system GDAL, plus pyproj, dateutil, scikit-image and matplotlib.
+        # Only the hosted fetch lanes run ACOLITE; a box assembling from Hub
+        # parts never does (E-092 D13).
+        if: ${{ github.event.inputs.store == 's2fdi_coast' && (github.event.inputs.runner == 'ubuntu-latest' || github.event.inputs.runner == '') }}
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq gdal-bin libgdal-dev
+          pip install --quiet "GDAL==$(gdal-config --version)" pyproj python-dateutil scikit-image matplotlib
+          python3 -c "from osgeo import gdal; import pyproj, skimage, matplotlib; print('acolite deps ok', gdal.__version__)"
+
       - name: Earthdata Login check (hosted runner only)
         if: ${{ github.event.inputs.check_credentials == 'true' }}
         env:

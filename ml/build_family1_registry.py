@@ -193,7 +193,17 @@ DESCRIPTION = {
         "(`mobjects`) — and the human-labelled Sentinel-2 pixels of the "
         "marine-debris label sets MARIDA and MADOS (`s2labels`, one row per "
         "labelled pixel with its 11 band reflectances, class, confidence and "
-        "the producer's train/val/test split). Dispatch on `tier`."),
+        "the producer's train/val/test split). Phase C adds shoreline litter "
+        "surveys (`beachlitter`, one row per survey: NCEI's Nurdle Patrol "
+        "pellet counts and beach-sand samples, EMODnet's CC BY beach-litter "
+        "surveys, NOAA MDMAP), CYGNSS's sea-surface mean-square slope on its "
+        "0.2-degree daily grid (`cygnss_mss`, the roughness under CYGNSS's "
+        "microplastic index, not the index), PACE's level-3 surface "
+        "reflectance at 645-2258 nm on the 4 km grid (`pace_swir`), and a "
+        "PILOT of 20 m Sentinel-2 floating-debris frames (`s2fdi_coast`: "
+        "FDI, FAI, NDVI, PI and four ACOLITE-corrected bands over the water "
+        "of the MARIDA scenes and the Lesvos plastic-target tile). "
+        "Dispatch on `tier`."),
     "72d": (
         "Family 7.2d is family 7.2 — the programme's global input tensor "
         "(family7_global025_pentad_l2: 0.25-degree and 1-degree grids pole "

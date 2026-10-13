@@ -1,0 +1,408 @@
+{
+ "store": "pace_swir",
+ "family": "13",
+ "tier": "G",
+ "layout": "sharded",
+ "kind": "REAL-DAY MEASUREMENT through the adapter's own fetch_frames and the real sharded.ShardWriter, anonymous, from the sandbox \u2014 NOT `--stage probe`",
+ "why_not_stage_probe": "`build_family1_stores.py --stage probe --probe-month 2024-03` was run twice and killed both times by the sandbox's 6 GB memory cgroup (maxrss 5.81 GB and 6.04 GB, dmesg: CONSTRAINT_MEMCG): stage_probe_grid makes `v = np.asarray(arr, np.float64)` of every frame (2.39 GB at 4320 x 8640 x 8) and binds the NEXT frame's copy while the previous one is still referenced, so its own peak is two float64 frames (4.8 GB) plus the frames themselves. The adapter's frame is float16 (0.6 GB). This harness makes the probe's per-frame measurements (stored bytes, tiles, encode time, valid fraction, out-of-bounds count) channel by channel instead. The official month probe is a hosted-runner job",
+ "days_requested": [
+  "2024-03-05",
+  "2024-03-13",
+  "2024-07-15",
+  "2025-01-15",
+  "2025-07-01",
+  "2026-04-15",
+  "2026-08-31"
+ ],
+ "grid": {
+  "H": 4320,
+  "W": 8640,
+  "C": 8,
+  "dtype": "float16",
+  "tiles_per_frame": 578
+ },
+ "bands": [
+  {
+   "channel": "rhos_645",
+   "index": 56,
+   "wavelength_nm": 645,
+   "target_nm": 645
+  },
+  {
+   "channel": "rhos_740",
+   "index": 84,
+   "wavelength_nm": 739,
+   "target_nm": 740
+  },
+  {
+   "channel": "rhos_865",
+   "index": 110,
+   "wavelength_nm": 865,
+   "target_nm": 865
+  },
+  {
+   "channel": "rhos_1038",
+   "index": 117,
+   "wavelength_nm": 1038,
+   "target_nm": 1038
+  },
+  {
+   "channel": "rhos_1249",
+   "index": 118,
+   "wavelength_nm": 1249,
+   "target_nm": 1249
+  },
+  {
+   "channel": "rhos_1618",
+   "index": 119,
+   "wavelength_nm": 1618,
+   "target_nm": 1618
+  },
+  {
+   "channel": "rhos_2131",
+   "index": 120,
+   "wavelength_nm": 2131,
+   "target_nm": 2131
+  },
+  {
+   "channel": "rhos_2258",
+   "index": 121,
+   "wavelength_nm": 2258,
+   "target_nm": 2258
+  }
+ ],
+ "requests_per_day": [
+  [
+   56,
+   1,
+   56
+  ],
+  [
+   84,
+   1,
+   84
+  ],
+  [
+   110,
+   1,
+   110
+  ],
+  [
+   117,
+   1,
+   121
+  ]
+ ],
+ "record": [
+  "2024-03-05",
+  "2026-08-31"
+ ],
+ "nrt_boundary": {
+  "final_last_day": "2026-08-31",
+  "nrt_first_day": "2025-07-01",
+  "nrt_last_day": "2026-10-11",
+  "nrt_days": 466,
+  "nrt_days_after_final": 41,
+  "nrt_after_final_first": "2026-09-01",
+  "nrt_only_inside_record": [],
+  "policy": "final files only: NRT days past the final edge are after_record, NRT-only days inside it are absent_upstream"
+ },
+ "days_absent_upstream": [
+  "2024-03-13",
+  "2024-03-14",
+  "2024-03-26",
+  "2024-03-27",
+  "2024-05-25",
+  "2024-05-26",
+  "2024-05-27",
+  "2024-05-28",
+  "2024-05-29",
+  "2024-09-09",
+  "2024-09-10",
+  "2024-10-17",
+  "2024-12-04",
+  "2025-01-02",
+  "2025-05-08",
+  "2026-02-10",
+  "2026-03-20"
+ ],
+ "days_per_year_final": {
+  "2024": 289,
+  "2025": 363,
+  "2026": 241
+ },
+ "index_first_file": {
+  "day": "2024-03-05",
+  "files_read": 4,
+  "bytes_files": 375690157,
+  "requests": 4,
+  "license": {
+   "https://science.nasa.gov/earth-science/earth-science-data/data-information-policy/": 1
+  },
+  "processing_version": {
+   "3.1": 1
+  },
+  "l2_flag_names": {
+   "ATMFAIL,CLDICE,HIGLINT,HILT,HISATZEN,HISOLZEN": 1
+  },
+  "valid_pixels": 12600966,
+  "pixel_reread_f16_equal": 1,
+  "dark_swir_judged": 1,
+  "dark_swir_days": [
+   [
+    "2024-03-05",
+    3365030,
+    0.006344,
+    0.021332
+   ]
+  ],
+  "max_dark_swir_p50": 0.006344,
+  "max_dark_swir_p99": 0.021332,
+  "valid_fraction": {
+   "rhos_645": 0.337603,
+   "rhos_740": 0.337603,
+   "rhos_865": 0.337603,
+   "rhos_1038": 0.337603,
+   "rhos_1249": 0.337603,
+   "rhos_1618": 0.337603,
+   "rhos_2131": 0.337603,
+   "rhos_2258": 0.337603
+  },
+  "range": {
+   "rhos_645": [
+    -0.001642,
+    1.46582
+   ],
+   "rhos_740": [
+    0.0005,
+    1.484375
+   ],
+   "rhos_865": [
+    0.000827,
+    1.467773
+   ],
+   "rhos_1038": [
+    -0.002831,
+    1.270508
+   ],
+   "rhos_1249": [
+    -0.001789,
+    1.019531
+   ],
+   "rhos_1618": [
+    -0.000169,
+    0.714844
+   ],
+   "rhos_2131": [
+    0.000116,
+    1.099609
+   ],
+   "rhos_2258": [
+    -0.000128,
+    1.350586
+   ]
+  }
+ },
+ "wall_seconds_index": 103.1,
+ "bytes_index": 381528708,
+ "frames": [
+  {
+   "day": "2024-03-05",
+   "seconds_since_previous": 71.1,
+   "stored_bytes": 160902770,
+   "tiles_stored": 542,
+   "tiles_total": 578,
+   "encode_seconds": 38.48,
+   "valid_fraction": 0.337603,
+   "out_of_bounds_stored": 0,
+   "dark_swir": [
+    "2024-03-05",
+    3365030,
+    0.006344,
+    0.021332
+   ],
+   "pixel_reread_f16_equal": 1,
+   "out_of_bounds": {},
+   "bytes_files": 375690157
+  },
+  {
+   "day": "2024-03-13",
+   "seconds_since_previous": 0.0,
+   "missing": "absent_upstream"
+  },
+  {
+   "day": "2024-07-15",
+   "seconds_since_previous": 376.8,
+   "stored_bytes": 160328374,
+   "tiles_stored": 476,
+   "tiles_total": 578,
+   "encode_seconds": 41.12,
+   "valid_fraction": 0.330532,
+   "out_of_bounds_stored": 0,
+   "dark_swir": [
+    "2024-07-15",
+    3109558,
+    0.005501,
+    0.022141
+   ],
+   "pixel_reread_f16_equal": 1,
+   "out_of_bounds": {},
+   "bytes_files": 369222131
+  },
+  {
+   "day": "2025-01-15",
+   "seconds_since_previous": 18.5,
+   "stored_bytes": 151950063,
+   "tiles_stored": 476,
+   "tiles_total": 578,
+   "encode_seconds": 40.75,
+   "valid_fraction": 0.323506,
+   "out_of_bounds_stored": 0,
+   "dark_swir": [
+    "2025-01-15",
+    3389667,
+    0.005901,
+    0.021896
+   ],
+   "pixel_reread_f16_equal": 1,
+   "out_of_bounds": {},
+   "bytes_files": 362589235
+  },
+  {
+   "day": "2025-07-01",
+   "seconds_since_previous": 53.7,
+   "stored_bytes": 155259555,
+   "tiles_stored": 462,
+   "tiles_total": 578,
+   "encode_seconds": 42.7,
+   "valid_fraction": 0.318988,
+   "out_of_bounds_stored": 0,
+   "dark_swir": [
+    "2025-07-01",
+    2928631,
+    0.005238,
+    0.021667
+   ],
+   "pixel_reread_f16_equal": 1,
+   "out_of_bounds": {},
+   "bytes_files": 357384458
+  },
+  {
+   "day": "2026-04-15",
+   "seconds_since_previous": 199.7,
+   "stored_bytes": 161366110,
+   "tiles_stored": 501,
+   "tiles_total": 578,
+   "encode_seconds": 41.09,
+   "valid_fraction": 0.329947,
+   "out_of_bounds_stored": 0,
+   "dark_swir": [
+    "2026-04-15",
+    3685310,
+    0.005867,
+    0.021378
+   ],
+   "pixel_reread_f16_equal": 1,
+   "out_of_bounds": {},
+   "bytes_files": 373543646
+  },
+  {
+   "day": "2026-08-31",
+   "seconds_since_previous": 17.0,
+   "stored_bytes": 156703693,
+   "tiles_stored": 508,
+   "tiles_total": 578,
+   "encode_seconds": 38.12,
+   "valid_fraction": 0.320314,
+   "out_of_bounds_stored": 0,
+   "dark_swir": [
+    "2026-08-31",
+    3507338,
+    0.005775,
+    0.022278
+   ],
+   "pixel_reread_f16_equal": 1,
+   "out_of_bounds": {},
+   "bytes_files": 362204684
+  }
+ ],
+ "frames_fetched": 6,
+ "bytes_fetched": 2200793242,
+ "bytes_fetched_per_frame": 366798873.7,
+ "wall_seconds": 1001.4,
+ "seconds_per_frame": 166.9,
+ "workers": 3,
+ "stored_bytes_per_frame": {
+  "mean": 157751760.8,
+  "min": 151950063,
+  "max": 161366110
+ },
+ "raw_bytes_per_frame": 597196800,
+ "record_frames": 893,
+ "index_bytes_per_bin": 46368,
+ "estimate_store_bytes": 140880603748,
+ "counts": {
+  "files_read": 24,
+  "bytes_files": 2200634311,
+  "requests": 24,
+  "license": {
+   "https://science.nasa.gov/earth-science/earth-science-data/data-information-policy/": 6
+  },
+  "processing_version": {
+   "3.1": 6
+  },
+  "l2_flag_names": {
+   "ATMFAIL,CLDICE,HIGLINT,HILT,HISATZEN,HISOLZEN": 6
+  },
+  "valid_pixels": 73189861,
+  "pixel_reread_f16_equal": 6,
+  "dark_swir_judged": 6,
+  "dark_swir_days": [
+   [
+    "2024-03-05",
+    3365030,
+    0.006344,
+    0.021332
+   ],
+   [
+    "2024-07-15",
+    3109558,
+    0.005501,
+    0.022141
+   ],
+   [
+    "2025-01-15",
+    3389667,
+    0.005901,
+    0.021896
+   ],
+   [
+    "2025-07-01",
+    2928631,
+    0.005238,
+    0.021667
+   ],
+   [
+    "2026-04-15",
+    3685310,
+    0.005867,
+    0.021378
+   ],
+   [
+    "2026-08-31",
+    3507338,
+    0.005775,
+    0.022278
+   ]
+  ],
+  "max_dark_swir_p50": 0.006344,
+  "max_dark_swir_p99": 0.022278,
+  "fetch_seconds": 960.3
+ },
+ "out_of_bounds_stored": 0,
+ "maxrss_kb": 2082968,
+ "runner": "vm",
+ "builder_git_sha": "046361106fa22482d9cc41cd0638f94cf839abc8",
+ "worktree_note": "adapter uncommitted at measurement time",
+ "at": "2026-10-13T11:29:29Z"
+}

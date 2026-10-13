@@ -1,0 +1,244 @@
+{
+ "store": "beachlitter",
+ "family": "13",
+ "plan": "ml/plans/E092_family13_plastic.md (D13, section 6)",
+ "measured_at": "2026-10-13T11:00:13+00:00",
+ "builder_git_sha": "046361106fa22482d9cc41cd0638f94cf839abc8",
+ "working_tree": "uncommitted changes on top of builder_git_sha (beachlitter adapter, smoke, test, materials table)",
+ "window": [
+  "2001-01-01",
+  "2026-12-31"
+ ],
+ "N": 24702,
+ "bin_first": 2014,
+ "bin_last": 3266,
+ "first_row": "2009-07-29 (MDMAP standing stock)",
+ "last_row": "2026-09-18 (MDMAP 2.0; Nurdle Patrol to 2026-04-28)",
+ "source": "live sources from the sandbox, 2026-10-13: NCEI Hub CSV item 1b56a456ad8c43889652e62aa25a317e, NCEI accession 0259486 v2.2 workbook, EMODnet_beachLitter_European_2025_unrestricted.zip, the MDMAP portal's site list and all 1,271 site exports, Natural Earth v5.1.2",
+ "what": "the ledger of every row read, dropped and kept, and the falsifier results, from the full local build (stages index, fetch, assemble, check; not published)",
+ "falsifiers": {
+  "mdmap_material_totals_sum_exactly_and_plastic_le_total": {
+   "transects_tested": 22515,
+   "failures": 0,
+   "result": "pass (enforced as a refusal)"
+  },
+  "emodnet_every_survey_lists_every_code_of_its_reference_list": {
+   "surveys_tested": 4435,
+   "failures": 0,
+   "result": "pass (enforced as a refusal, CB surveys)"
+  },
+  "nurdle_recomputed_rate_equals_published": {
+   "rule": "count*10/(minutes*volunteers), half-up (the accession's data dictionary: per person per 10 minutes)",
+   "rows_equal": 9183,
+   "threshold": 7275,
+   "result": "pass (enforced as a refusal)",
+   "floor_or_ceil_only": 1303,
+   "neither_flagged_qc_bit_6": 123
+  },
+  "round_trip_emodnet_items_per_100m": {
+   "surveys_compared": 2816,
+   "mismatches": 0,
+   "worst_relative_error": 0.0043,
+   "note": "every kept CB survey with a measured length: de-logged store value vs sum(abundance)/length*100 from the zip, re-derived without adapter code"
+  },
+  "round_trip_mdmap_plastic_fraction": {
+   "surveys_compared": 8515,
+   "mismatches": 0
+  }
+ },
+ "mdmap_fetch_timing": {
+  "exports": 1271,
+  "workers": 8,
+  "sandbox_seconds_approx": 760,
+  "note": "about 0.6 s per export with 8 parallel requests (server-bound); the first run was killed at the 10-minute tool limit with ~850 fetched and resumed from the cache; ~30 proxy tunnel drops were retried. Well inside one hosted runner's 6 h."
+ },
+ "protocol_codes": {
+  "1": "EMODnet, OSPAR 100 m list",
+  "2": "EMODnet, OSPAR 1 km list (items > 50 cm)",
+  "3": "EMODnet, MSFD TSG-ML master list",
+  "4": "EMODnet, Joint List (J codes)",
+  "5": "EMODnet, Joint List and TSG-ML in one survey",
+  "6": "EMODnet, UNEP/IOC list (incl. MARLIN)",
+  "7": "EMODnet, Italian national list",
+  "8": "MDMAP 2.0",
+  "9": "MDMAP standing stock",
+  "10": "MDMAP accumulation",
+  "11": "Nurdle Patrol (pellets picked by hand)",
+  "12": "NCEI beach-sand microplastics sample"
+ },
+ "read": {
+  "emodnet": 4444,
+  "mdmap": 8771,
+  "ncei_sand": 893,
+  "nurdle": 10615
+ },
+ "kept_by_source": {
+  "emodnet": 4435,
+  "mdmap": 8765,
+  "ncei_sand": 893,
+  "nurdle": 10609
+ },
+ "kept_by_protocol": {
+  "1": 1876,
+  "10": 4490,
+  "11": 10609,
+  "12": 893,
+  "3": 702,
+  "4": 806,
+  "5": 27,
+  "6": 1024,
+  "8": 3026,
+  "9": 1249
+ },
+ "qc_flags": {
+  "caveat": 1742,
+  "freshwater": 2028,
+  "position_doubt": 348
+ },
+ "rows_kept": 24702,
+ "rows_no_value": 6,
+ "dedup": {},
+ "excluded_licence": {
+  "LS": 8130,
+  "UN": 4287
+ },
+ "emodnet_data_policy": {
+  "CB": 4444,
+  "LS": 8130,
+  "UN": 4287
+ },
+ "emodnet_surveys_total": 16861,
+ "emodnet_dropped": {
+  "no_litter_lines": 9
+ },
+ "emodnet_length_assumed": 1619,
+ "emodnet_kept_by_protocol": {
+  "1": 1876,
+  "3": 702,
+  "4": 806,
+  "5": 27,
+  "6": 1024
+ },
+ "emodnet_location_codes_with_two_coordinates_any_policy": 10,
+ "emodnet_public_litter_lines": 633999,
+ "ncei_rows_total": 29076,
+ "ncei_marine_setting": {
+  "Beach": 893,
+  "Nurdle Patrol": 10615,
+  "Ocean sediment": 580,
+  "Ocean water": 16988
+ },
+ "nurdle_workbook": "2.2/NurdlePatrolDatabase_S2N_v2.xlsx",
+ "nurdle_join": {
+  "exact": 10579,
+  "longitude_sign_differs": 31,
+  "position_rounding": 5,
+  "unmatched": 0
+ },
+ "nurdle_accession_rows": 10615,
+ "nurdle_accession_rows_unjoined": 0,
+ "nurdle_standardisation": {
+  "floor_or_ceil": 1303,
+  "half_up": 9183,
+  "neither": 123,
+  "zero_minutes": 6
+ },
+ "mdmap_sites_listed": 1271,
+ "mdmap_sites_with_surveys": 1013,
+ "mdmap_transects": 22515,
+ "mdmap_kept_by_protocol": {
+  "10": 4496,
+  "8": 3026,
+  "9": 1249
+ },
+ "mdmap_dropped": {
+  "accumulation_site_length_zero": 6,
+  "duplicate_transect_row": 1
+ },
+ "mdmap_backbarrier_files": 583,
+ "mdmap_backbarrier_rows_excluded": 11402,
+ "mdmap_width_not_usable": {
+  "blank": 5,
+  "sentinel_9999": 8,
+  "zero": 26
+ },
+ "mdmap_position_from": {
+  "one_end": 1,
+  "waters_edge": 8770
+ },
+ "mdmap_accumulation_first_survey": 271,
+ "mdmap_files_missing_material_column": {
+  "total_cloth-fabric_items": 2,
+  "total_glass_items": 2,
+  "total_metal_items": 2,
+  "total_other_items": 2,
+  "total_rubber_items": 2
+ },
+ "mdmap_site_list_vs_export": [
+  {
+   "export": 17,
+   "site": 191,
+   "site_list": 18
+  }
+ ],
+ "freshwater_by_source": {
+  "mdmap": 403,
+  "nurdle": 1625
+ },
+ "far_from_any_mapped_shore_by_source": {
+  "mdmap": 2,
+  "ncei_sand": 7,
+  "nurdle": 131
+ },
+ "natural_earth_tag": "v5.1.2",
+ "natural_earth_vertices_densified": {
+  "lake": 917846,
+  "river": 1832573,
+  "sea": 3502110
+ },
+ "channel_rows_filled": {
+  "accum_days": 4220,
+  "collect_min": 10609,
+  "effort_pmin": 10609,
+  "log_ambig_100m": 13200,
+  "log_items_100m": 13200,
+  "log_items_m2": 9985,
+  "log_n_m3_sand": 893,
+  "log_nurdle_count": 10609,
+  "log_nurdles_10pmin": 10609,
+  "log_plastic_100m": 13200,
+  "new_tide_line": 10609,
+  "plastic_frac": 12914,
+  "survey_len_m": 13200,
+  "volunteers": 10609
+ },
+ "out_of_bounds": {},
+ "per_year": {
+  "2001": 0,
+  "2002": 0,
+  "2003": 0,
+  "2004": 0,
+  "2005": 0,
+  "2006": 0,
+  "2007": 0,
+  "2008": 0,
+  "2009": 3,
+  "2010": 9,
+  "2011": 238,
+  "2012": 224,
+  "2013": 583,
+  "2014": 617,
+  "2015": 994,
+  "2016": 1097,
+  "2017": 839,
+  "2018": 1323,
+  "2019": 3059,
+  "2020": 2116,
+  "2021": 3142,
+  "2022": 2969,
+  "2023": 2450,
+  "2024": 1961,
+  "2025": 2629,
+  "2026": 449
+ }
+}

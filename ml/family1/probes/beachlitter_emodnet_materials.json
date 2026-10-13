@@ -1,0 +1,5453 @@
+{
+ "what": "EMODnet beach-litter type codes -> material, for family 1.3's `beachlitter` store (plan E-092 D13). One entry per (reference list, type code) found in EMODnet_beachLitter_European_2025_unrestricted.zip (every data policy). 'plastic' = artificial polymer, including foamed plastic and polystyrene; 'non_plastic' = a material the list states; 'ambiguous' = the list does not decide the material. Ambiguous items are counted in their own channel and NEVER as plastic.",
+ "source_file": "EMODnet_beachLitter_European_2025_unrestricted.zip / beach_erddap_surveys_litter.csv",
+ "written": "2026-10-13, by rule from the reference lists below, every entry reviewed; the adapter REFUSES a (list, code) not in this table or whose name differs",
+ "no_machine_readable_source": "No machine-readable code -> material map was found (https://nodc.ogs.it/marinelitter/vocab lists beach attributes, not litter types); this table is therefore ours, and says so.",
+ "references": {
+  "OSPAR": "OSPAR Commission (2010) Guideline for Monitoring Marine Litter on the Beaches in the OSPAR Maritime Area, Edition 1.0 (100 m survey form and its material sections)",
+  "OSPAR_1000": "OSPAR Commission (2010) Guideline ..., the 1 km survey form for items > 50 cm (item names only; the form's material sections are not in the EMODnet file)",
+  "TSG-ML": "MSFD Technical Subgroup on Marine Litter (2013) Guidance on Monitoring of Marine Litter in European Seas, JRC83985, master list of categories (G codes, by material block)",
+  "JLIST": "Fleet D. et al. (2021) A European Threshold Value and Assessment Method for Macro Litter on Coastlines, JRC121707, the Joint List of Litter Categories (J codes, whose names state the material)",
+  "UNEP": "Cheshire A.C. et al. (2009) UNEP/IOC Guidelines on Survey and Monitoring of Marine Litter, UNEP Regional Seas Reports and Studies 186, IOC Technical Series 83 (codes prefixed by material: PL plastic, FP foamed plastic, CL cloth, GC glass & ceramic, ME metal, PC paper & cardboard, RB rubber, WD wood, OT other)",
+  "UNEP_MARLIN": "Cheshire et al. (2009) UNEP/IOC codes as used by the Baltic MARLIN project (adds OR, organic)",
+  "ITA": "Italian national beach-litter list (ISPRA / MSFD Descriptor 10 national programme), IT1-IT59, ordered by material block as in the TSG-ML master list"
+ },
+ "list_sizes": {
+  "ITA": 59,
+  "JLIST": 183,
+  "OSPAR": 128,
+  "OSPAR_1000": 25,
+  "TSG-ML": 216,
+  "UNEP": 77,
+  "UNEP_MARLIN": 82
+ },
+ "counts": {
+  "ITA": {
+   "plastic": 19,
+   "non_plastic": 32,
+   "ambiguous": 8
+  },
+  "JLIST": {
+   "plastic": 108,
+   "ambiguous": 1,
+   "non_plastic": 74
+  },
+  "OSPAR": {
+   "plastic": 56,
+   "non_plastic": 56,
+   "ambiguous": 16
+  },
+  "OSPAR_1000": {
+   "ambiguous": 7,
+   "plastic": 9,
+   "non_plastic": 9
+  },
+  "TSG-ML": {
+   "plastic": 124,
+   "non_plastic": 90,
+   "ambiguous": 2
+  },
+  "UNEP": {
+   "non_plastic": 45,
+   "plastic": 29,
+   "ambiguous": 3
+  },
+  "UNEP_MARLIN": {
+   "non_plastic": 50,
+   "plastic": 29,
+   "ambiguous": 3
+  }
+ },
+ "codes": [
+  {
+   "list": "ITA",
+   "code": "IT1",
+   "name": "Envelopes, shoppers, garbage bags / small plastic bags, eg, freezer bags / central part tear-off roll of plastic bags",
+   "material": "plastic",
+   "rule": "Italian list plastic/polystyrene block (IT1-IT19)"
+  },
+  {
+   "list": "ITA",
+   "code": "IT2",
+   "name": "Bottles and containers of cosmetic products (sunscreens) / bottles and containers of detergents and detergents",
+   "material": "plastic",
+   "rule": "Italian list plastic/polystyrene block (IT1-IT19)"
+  },
+  {
+   "list": "ITA",
+   "code": "IT3",
+   "name": "Bottles and containers of engine oil",
+   "material": "plastic",
+   "rule": "Italian list plastic/polystyrene block (IT1-IT19)"
+  },
+  {
+   "list": "ITA",
+   "code": "IT4",
+   "name": "Parts of cars and motorcycles",
+   "material": "plastic",
+   "rule": "Italian list plastic/polystyrene block (IT1-IT19)"
+  },
+  {
+   "list": "ITA",
+   "code": "IT5",
+   "name": "Lighters",
+   "material": "plastic",
+   "rule": "Italian list plastic/polystyrene block (IT1-IT19)"
+  },
+  {
+   "list": "ITA",
+   "code": "IT6",
+   "name": "Pens and / or pen lids",
+   "material": "plastic",
+   "rule": "Italian list plastic/polystyrene block (IT1-IT19)"
+  },
+  {
+   "list": "ITA",
+   "code": "IT7",
+   "name": "Straws and stirrers(bars)/plastic cutlery/plates/plastic cups and crisp lids/bags, plastic sweets/rings of bottle caps/caps and lids/food containers(eg hamburgers)/beverage bottles and containers/packaging for cans of 4/6 rings/lolly sticks",
+   "material": "plastic",
+   "rule": "Italian list plastic/polystyrene block (IT1-IT19)"
+  },
+  {
+   "list": "ITA",
+   "code": "IT8",
+   "name": "Gloves (industrial / professional rubber gloves) / household gloves",
+   "material": "plastic",
+   "rule": "Italian list plastic/polystyrene block (IT1-IT19)"
+  },
+  {
+   "list": "ITA",
+   "code": "IT9",
+   "name": "Fenders / floats / buoys",
+   "material": "plastic",
+   "rule": "Italian list plastic/polystyrene block (IT1-IT19)"
+  },
+  {
+   "list": "ITA",
+   "code": "IT10",
+   "name": "Plastic ties for gardening / nurseries / bands and plastic packaging bands",
+   "material": "plastic",
+   "rule": "Italian list plastic/polystyrene block (IT1-IT19)"
+  },
+  {
+   "list": "ITA",
+   "code": "IT11",
+   "name": "Shoes / sandals / glasses / sunglasses / combs / hair brushes",
+   "material": "plastic",
+   "rule": "Italian list plastic/polystyrene block (IT1-IT19)"
+  },
+  {
+   "list": "ITA",
+   "code": "IT12",
+   "name": "Synthetic sponge / helmets / hardhat / glass fibers / industrial packaging, plastic sheeting / mesh bags for vegetables (eg potatoes, oranges) / fertilizer bags / animal feed",
+   "material": "plastic",
+   "rule": "Italian list plastic/polystyrene block (IT1-IT19)"
+  },
+  {
+   "list": "ITA",
+   "code": "IT13",
+   "name": "CD / CD casing / luminous phosphorescent tubes (tubes with liquid) / toys or parts of them",
+   "material": "plastic",
+   "rule": "Italian list plastic/polystyrene block (IT1-IT19)"
+  },
+  {
+   "list": "ITA",
+   "code": "IT14",
+   "name": "Plastic jars / buckets / crates and baskets / jerrycans (plastic containers with handles)",
+   "material": "plastic",
+   "rule": "Italian list plastic/polystyrene block (IT1-IT19)"
+  },
+  {
+   "list": "ITA",
+   "code": "IT15",
+   "name": "Boxes and boxes for fish in polystyrene",
+   "material": "plastic",
+   "rule": "Italian list plastic/polystyrene block (IT1-IT19)"
+  },
+  {
+   "list": "ITA",
+   "code": "IT16",
+   "name": "Plastic containers for lures / fishing lines and fishing line in nylon (fishing) / plastic boxes and boxes for fish / nets and network pieces / ropes and tops",
+   "material": "plastic",
+   "rule": "Italian list plastic/polystyrene block (IT1-IT19)"
+  },
+  {
+   "list": "ITA",
+   "code": "IT17",
+   "name": "Baskets for the cultivation of oysters / nets or bags for mussels or oysters (socks) / plastic plates used in aquaculture or fishing / lobster pots",
+   "material": "plastic",
+   "rule": "Italian list plastic/polystyrene block (IT1-IT19)"
+  },
+  {
+   "list": "ITA",
+   "code": "IT18",
+   "name": "Other polystyrene objects",
+   "material": "plastic",
+   "rule": "Italian list plastic/polystyrene block (IT1-IT19)"
+  },
+  {
+   "list": "ITA",
+   "code": "IT19",
+   "name": "Other plastic objects",
+   "material": "plastic",
+   "rule": "Italian list plastic/polystyrene block (IT1-IT19)"
+  },
+  {
+   "list": "ITA",
+   "code": "IT20",
+   "name": "Inflatable balloons, including valves, ribbons, lanyards / balloons",
+   "material": "non_plastic",
+   "rule": "rubber block (IT20-IT24)"
+  },
+  {
+   "list": "ITA",
+   "code": "IT21",
+   "name": "Rubber boots and overshoes",
+   "material": "non_plastic",
+   "rule": "rubber block (IT20-IT24)"
+  },
+  {
+   "list": "ITA",
+   "code": "IT22",
+   "name": "Tires / inner tubes",
+   "material": "non_plastic",
+   "rule": "rubber block (IT20-IT24)"
+  },
+  {
+   "list": "ITA",
+   "code": "IT23",
+   "name": "Rubber bands (domestic / postal use)",
+   "material": "non_plastic",
+   "rule": "rubber block (IT20-IT24)"
+  },
+  {
+   "list": "ITA",
+   "code": "IT24",
+   "name": "Other pieces of rubber",
+   "material": "non_plastic",
+   "rule": "rubber block (IT20-IT24)"
+  },
+  {
+   "list": "ITA",
+   "code": "IT25",
+   "name": "Upholstery / carpet / jute bags / canvas bags",
+   "material": "non_plastic",
+   "rule": "textile block (IT25-IT27)"
+  },
+  {
+   "list": "ITA",
+   "code": "IT26",
+   "name": "Backpacks and bags / shoes and sandals / clothing (clothing / hats / towel)",
+   "material": "non_plastic",
+   "rule": "textile block (IT25-IT27)"
+  },
+  {
+   "list": "ITA",
+   "code": "IT27",
+   "name": "Other textile products",
+   "material": "non_plastic",
+   "rule": "textile block (IT25-IT27)"
+  },
+  {
+   "list": "ITA",
+   "code": "IT28",
+   "name": "Envelopes / paper bags",
+   "material": "non_plastic",
+   "rule": "paper block (IT28-IT33)"
+  },
+  {
+   "list": "ITA",
+   "code": "IT29",
+   "name": "Cartons / newspapers and magazines / fragments of paper",
+   "material": "non_plastic",
+   "rule": "paper block (IT28-IT33)"
+  },
+  {
+   "list": "ITA",
+   "code": "IT30",
+   "name": "Tetrapack containers / paper cups / cups, food trays",
+   "material": "non_plastic",
+   "rule": "paper block (IT28-IT33)"
+  },
+  {
+   "list": "ITA",
+   "code": "IT31",
+   "name": "Packets of cigarettes or parts",
+   "material": "non_plastic",
+   "rule": "paper block (IT28-IT33)"
+  },
+  {
+   "list": "ITA",
+   "code": "IT32",
+   "name": "Cigarette butts and filters",
+   "material": "ambiguous",
+   "rule": "cigarette butts and filters: paper block, but the filter is cellulose acetate (G27/J27 artificial polymer)"
+  },
+  {
+   "list": "ITA",
+   "code": "IT33",
+   "name": "Other paper articles",
+   "material": "non_plastic",
+   "rule": "paper block (IT28-IT33)"
+  },
+  {
+   "list": "ITA",
+   "code": "IT34",
+   "name": "Corks",
+   "material": "non_plastic",
+   "rule": "wood block (IT34-IT37)"
+  },
+  {
+   "list": "ITA",
+   "code": "IT35",
+   "name": "Boxes",
+   "material": "non_plastic",
+   "rule": "wood block (IT34-IT37)"
+  },
+  {
+   "list": "ITA",
+   "code": "IT36",
+   "name": "Ice-cream sticks",
+   "material": "non_plastic",
+   "rule": "wood block (IT34-IT37)"
+  },
+  {
+   "list": "ITA",
+   "code": "IT37",
+   "name": "Other worked / processed wood / pallets / manufactured goods",
+   "material": "non_plastic",
+   "rule": "wood block (IT34-IT37)"
+  },
+  {
+   "list": "ITA",
+   "code": "IT38",
+   "name": "Spray cans",
+   "material": "non_plastic",
+   "rule": "metal block (IT38-IT47)"
+  },
+  {
+   "list": "ITA",
+   "code": "IT39",
+   "name": "Bottle caps / lids / beverage cans / jars or food cans / Aluminum trays and paper (aluminum foil)",
+   "material": "non_plastic",
+   "rule": "metal block (IT38-IT47)"
+  },
+  {
+   "list": "ITA",
+   "code": "IT40",
+   "name": "Electrical appliances / appliances / car battery / motorcycle / truck / cables",
+   "material": "non_plastic",
+   "rule": "metal block (IT38-IT47)"
+  },
+  {
+   "list": "ITA",
+   "code": "IT41",
+   "name": "Leads / fishing weights / hooks",
+   "material": "non_plastic",
+   "rule": "metal block (IT38-IT47)"
+  },
+  {
+   "list": "ITA",
+   "code": "IT42",
+   "name": "Scrap / industrial waste",
+   "material": "non_plastic",
+   "rule": "metal block (IT38-IT47)"
+  },
+  {
+   "list": "ITA",
+   "code": "IT43",
+   "name": "Drums, cylinders, barrels, drums, oil cans",
+   "material": "non_plastic",
+   "rule": "metal block (IT38-IT47)"
+  },
+  {
+   "list": "ITA",
+   "code": "IT44",
+   "name": "Drums, cylinders, barrels, drums, oil cans",
+   "material": "non_plastic",
+   "rule": "metal block (IT38-IT47)"
+  },
+  {
+   "list": "ITA",
+   "code": "IT45",
+   "name": "Wire, wire mesh, barbed wire",
+   "material": "non_plastic",
+   "rule": "metal block (IT38-IT47)"
+  },
+  {
+   "list": "ITA",
+   "code": "IT46",
+   "name": "Household batteries",
+   "material": "non_plastic",
+   "rule": "metal block (IT38-IT47)"
+  },
+  {
+   "list": "ITA",
+   "code": "IT47",
+   "name": "Other pieces of metal",
+   "material": "non_plastic",
+   "rule": "metal block (IT38-IT47)"
+  },
+  {
+   "list": "ITA",
+   "code": "IT48",
+   "name": "Bottles / plates and cups / jars",
+   "material": "non_plastic",
+   "rule": "glass/ceramic block (IT48-IT51)"
+  },
+  {
+   "list": "ITA",
+   "code": "IT49",
+   "name": "Fluorescent tubes light bulbs",
+   "material": "non_plastic",
+   "rule": "glass/ceramic block (IT48-IT51)"
+  },
+  {
+   "list": "ITA",
+   "code": "IT50",
+   "name": "Construction material (debris, bricks)",
+   "material": "non_plastic",
+   "rule": "glass/ceramic block (IT48-IT51)"
+  },
+  {
+   "list": "ITA",
+   "code": "IT51",
+   "name": "Other glass / ceramic items",
+   "material": "non_plastic",
+   "rule": "glass/ceramic block (IT48-IT51)"
+  },
+  {
+   "list": "ITA",
+   "code": "IT52",
+   "name": "Condoms",
+   "material": "non_plastic",
+   "rule": "condoms: rubber"
+  },
+  {
+   "list": "ITA",
+   "code": "IT53",
+   "name": "Cotton bud sticks",
+   "material": "ambiguous",
+   "rule": "sanitary / medical / bagged faeces: material not stated"
+  },
+  {
+   "list": "ITA",
+   "code": "IT54",
+   "name": "Sanitary napkins slip / linings / support strips / diapers / tampons and tampon applicators",
+   "material": "ambiguous",
+   "rule": "sanitary / medical / bagged faeces: material not stated"
+  },
+  {
+   "list": "ITA",
+   "code": "IT55",
+   "name": "Other sanitary items",
+   "material": "ambiguous",
+   "rule": "sanitary / medical / bagged faeces: material not stated"
+  },
+  {
+   "list": "ITA",
+   "code": "IT56",
+   "name": "Medicinal containers / tubes / blisters",
+   "material": "ambiguous",
+   "rule": "sanitary / medical / bagged faeces: material not stated"
+  },
+  {
+   "list": "ITA",
+   "code": "IT57",
+   "name": "Syringes / needles",
+   "material": "ambiguous",
+   "rule": "sanitary / medical / bagged faeces: material not stated"
+  },
+  {
+   "list": "ITA",
+   "code": "IT58",
+   "name": "Other medical articles (tampons, bandages, etc.)",
+   "material": "ambiguous",
+   "rule": "sanitary / medical / bagged faeces: material not stated"
+  },
+  {
+   "list": "ITA",
+   "code": "IT59",
+   "name": "Dog excrement in bag",
+   "material": "ambiguous",
+   "rule": "sanitary / medical / bagged faeces: material not stated"
+  },
+  {
+   "list": "JLIST",
+   "code": "J1",
+   "name": "plastic 4/6-pack yokes & six-pack rings",
+   "material": "plastic",
+   "rule": "the Joint List name states plastic / foamed plastic / polystyrene"
+  },
+  {
+   "list": "JLIST",
+   "code": "J3",
+   "name": "plastic shopping/carrier/grocery bags",
+   "material": "plastic",
+   "rule": "the Joint List name states plastic / foamed plastic / polystyrene"
+  },
+  {
+   "list": "JLIST",
+   "code": "J4",
+   "name": "small plastic bags",
+   "material": "plastic",
+   "rule": "the Joint List name states plastic / foamed plastic / polystyrene"
+  },
+  {
+   "list": "JLIST",
+   "code": "J5",
+   "name": "the part that remains from tear-off plastic bags",
+   "material": "plastic",
+   "rule": "the Joint List name states plastic / foamed plastic / polystyrene"
+  },
+  {
+   "list": "JLIST",
+   "code": "J7",
+   "name": "plastic drink bottles ≤0.5 l",
+   "material": "plastic",
+   "rule": "the Joint List name states plastic / foamed plastic / polystyrene"
+  },
+  {
+   "list": "JLIST",
+   "code": "J8",
+   "name": "plastic drink bottles >0.5 l",
+   "material": "plastic",
+   "rule": "the Joint List name states plastic / foamed plastic / polystyrene"
+  },
+  {
+   "list": "JLIST",
+   "code": "J9",
+   "name": "plastic bottles and containers of cleaning products",
+   "material": "plastic",
+   "rule": "the Joint List name states plastic / foamed plastic / polystyrene"
+  },
+  {
+   "list": "JLIST",
+   "code": "J11",
+   "name": "plastic beach use related body care and cosmetic bottles and containers",
+   "material": "plastic",
+   "rule": "the Joint List name states plastic / foamed plastic / polystyrene"
+  },
+  {
+   "list": "JLIST",
+   "code": "J12",
+   "name": "plastic non-beach use related body care and cosmetic bottles and containers",
+   "material": "plastic",
+   "rule": "the Joint List name states plastic / foamed plastic / polystyrene"
+  },
+  {
+   "list": "JLIST",
+   "code": "J13",
+   "name": "other plastic bottles & containers (drums)",
+   "material": "plastic",
+   "rule": "the Joint List name states plastic / foamed plastic / polystyrene"
+  },
+  {
+   "list": "JLIST",
+   "code": "J14",
+   "name": "plastic engine oil bottles & containers 2.5 cm ≥ ≤ 50 cm",
+   "material": "plastic",
+   "rule": "the Joint List name states plastic / foamed plastic / polystyrene"
+  },
+  {
+   "list": "JLIST",
+   "code": "J15",
+   "name": "plastic engine oil bottles & containers >50cm",
+   "material": "plastic",
+   "rule": "the Joint List name states plastic / foamed plastic / polystyrene"
+  },
+  {
+   "list": "JLIST",
+   "code": "J16",
+   "name": "plastic jerry cans",
+   "material": "plastic",
+   "rule": "the Joint List name states plastic / foamed plastic / polystyrene"
+  },
+  {
+   "list": "JLIST",
+   "code": "J17",
+   "name": "plastic injection gun containers/cartridges",
+   "material": "plastic",
+   "rule": "the Joint List name states plastic / foamed plastic / polystyrene"
+  },
+  {
+   "list": "JLIST",
+   "code": "J18",
+   "name": "plastic crates, boxes, baskets",
+   "material": "plastic",
+   "rule": "the Joint List name states plastic / foamed plastic / polystyrene"
+  },
+  {
+   "list": "JLIST",
+   "code": "J19",
+   "name": "plastic vehicle parts",
+   "material": "plastic",
+   "rule": "the Joint List name states plastic / foamed plastic / polystyrene"
+  },
+  {
+   "list": "JLIST",
+   "code": "J21",
+   "name": "plastic caps/lids drinks",
+   "material": "plastic",
+   "rule": "the Joint List name states plastic / foamed plastic / polystyrene"
+  },
+  {
+   "list": "JLIST",
+   "code": "J22",
+   "name": "plastic caps/lids chemicals, detergents (non-food)",
+   "material": "plastic",
+   "rule": "the Joint List name states plastic / foamed plastic / polystyrene"
+  },
+  {
+   "list": "JLIST",
+   "code": "J23",
+   "name": "plastic caps/lids unidentified",
+   "material": "plastic",
+   "rule": "the Joint List name states plastic / foamed plastic / polystyrene"
+  },
+  {
+   "list": "JLIST",
+   "code": "J24",
+   "name": "plastic rings from bottle caps/lids",
+   "material": "plastic",
+   "rule": "the Joint List name states plastic / foamed plastic / polystyrene"
+  },
+  {
+   "list": "JLIST",
+   "code": "J25",
+   "name": "plastic tobacco pouches / plastic cigarette packet packaging",
+   "material": "plastic",
+   "rule": "the Joint List name states plastic / foamed plastic / polystyrene"
+  },
+  {
+   "list": "JLIST",
+   "code": "J26",
+   "name": "plastic cigarette lighters",
+   "material": "plastic",
+   "rule": "the Joint List name states plastic / foamed plastic / polystyrene"
+  },
+  {
+   "list": "JLIST",
+   "code": "J27",
+   "name": "tobacco products with filters (cigarette butts with filters)",
+   "material": "plastic",
+   "rule": "Joint List J27, artificial polymer (cellulose-acetate filters)"
+  },
+  {
+   "list": "JLIST",
+   "code": "J28",
+   "name": "plastic pens and pen lids",
+   "material": "plastic",
+   "rule": "the Joint List name states plastic / foamed plastic / polystyrene"
+  },
+  {
+   "list": "JLIST",
+   "code": "J29",
+   "name": "plastic combs/hair brushes/sunglasses",
+   "material": "plastic",
+   "rule": "the Joint List name states plastic / foamed plastic / polystyrene"
+  },
+  {
+   "list": "JLIST",
+   "code": "J30",
+   "name": "plastic crisps packets/sweets wrappers",
+   "material": "plastic",
+   "rule": "the Joint List name states plastic / foamed plastic / polystyrene"
+  },
+  {
+   "list": "JLIST",
+   "code": "J31",
+   "name": "plastic lolly & ice-cream sticks",
+   "material": "plastic",
+   "rule": "the Joint List name states plastic / foamed plastic / polystyrene"
+  },
+  {
+   "list": "JLIST",
+   "code": "J32",
+   "name": "plastic toys and party poppers",
+   "material": "plastic",
+   "rule": "the Joint List name states plastic / foamed plastic / polystyrene"
+  },
+  {
+   "list": "JLIST",
+   "code": "J36",
+   "name": "other plastic heavy-duty sacks",
+   "material": "plastic",
+   "rule": "the Joint List name states plastic / foamed plastic / polystyrene"
+  },
+  {
+   "list": "JLIST",
+   "code": "J40",
+   "name": "plastic gloves (household/dishwashing, gardening)",
+   "material": "plastic",
+   "rule": "the Joint List name states plastic / foamed plastic / polystyrene"
+  },
+  {
+   "list": "JLIST",
+   "code": "J41",
+   "name": "plastic gloves (industrial/professional applications)",
+   "material": "plastic",
+   "rule": "the Joint List name states plastic / foamed plastic / polystyrene"
+  },
+  {
+   "list": "JLIST",
+   "code": "J42",
+   "name": "plastic crab/lobster traps (pots) and tops",
+   "material": "plastic",
+   "rule": "the Joint List name states plastic / foamed plastic / polystyrene"
+  },
+  {
+   "list": "JLIST",
+   "code": "J43",
+   "name": "plastic tags (fishing, shipping, farming and industry)",
+   "material": "plastic",
+   "rule": "the Joint List name states plastic / foamed plastic / polystyrene"
+  },
+  {
+   "list": "JLIST",
+   "code": "J44",
+   "name": "plastic octopus pots",
+   "material": "plastic",
+   "rule": "the Joint List name states plastic / foamed plastic / polystyrene"
+  },
+  {
+   "list": "JLIST",
+   "code": "J45",
+   "name": "plastic mussels/oyster mesh bags, net sack, socks",
+   "material": "plastic",
+   "rule": "the Joint List name states plastic / foamed plastic / polystyrene"
+  },
+  {
+   "list": "JLIST",
+   "code": "J46",
+   "name": "plastic oyster trays",
+   "material": "plastic",
+   "rule": "the Joint List name states plastic / foamed plastic / polystyrene"
+  },
+  {
+   "list": "JLIST",
+   "code": "J47",
+   "name": "plastic sheeting from mussel culture (Tahitians)",
+   "material": "plastic",
+   "rule": "the Joint List name states plastic / foamed plastic / polystyrene"
+  },
+  {
+   "list": "JLIST",
+   "code": "J49",
+   "name": "plastic rope (diameter more than 1cm)",
+   "material": "plastic",
+   "rule": "the Joint List name states plastic / foamed plastic / polystyrene"
+  },
+  {
+   "list": "JLIST",
+   "code": "J53",
+   "name": "plastic nets and pieces of net 2.5 cm ≥ ≤ 50 cm",
+   "material": "plastic",
+   "rule": "the Joint List name states plastic / foamed plastic / polystyrene"
+  },
+  {
+   "list": "JLIST",
+   "code": "J54",
+   "name": "plastic nets and pieces of net > 50cm",
+   "material": "plastic",
+   "rule": "the Joint List name states plastic / foamed plastic / polystyrene"
+  },
+  {
+   "list": "JLIST",
+   "code": "J57",
+   "name": "fish boxes - hard plastic",
+   "material": "plastic",
+   "rule": "the Joint List name states plastic / foamed plastic / polystyrene"
+  },
+  {
+   "list": "JLIST",
+   "code": "J58",
+   "name": "fish boxes - foamed polystyrene",
+   "material": "plastic",
+   "rule": "the Joint List name states plastic / foamed plastic / polystyrene"
+  },
+  {
+   "list": "JLIST",
+   "code": "J59",
+   "name": "plastic fishing line",
+   "material": "plastic",
+   "rule": "the Joint List name states plastic / foamed plastic / polystyrene"
+  },
+  {
+   "list": "JLIST",
+   "code": "J60",
+   "name": "plastic fishing light sticks / fishing glow sticks incl. packaging",
+   "material": "plastic",
+   "rule": "the Joint List name states plastic / foamed plastic / polystyrene"
+  },
+  {
+   "list": "JLIST",
+   "code": "J61",
+   "name": "other plastic fisheries related items not covered by other categories",
+   "material": "plastic",
+   "rule": "the Joint List name states plastic / foamed plastic / polystyrene"
+  },
+  {
+   "list": "JLIST",
+   "code": "J62",
+   "name": "plastic floats for fishing nets",
+   "material": "plastic",
+   "rule": "the Joint List name states plastic / foamed plastic / polystyrene"
+  },
+  {
+   "list": "JLIST",
+   "code": "J63",
+   "name": "plastic floats/buoys other source than fishing or not known",
+   "material": "plastic",
+   "rule": "the Joint List name states plastic / foamed plastic / polystyrene"
+  },
+  {
+   "list": "JLIST",
+   "code": "J64",
+   "name": "plastic fenders",
+   "material": "plastic",
+   "rule": "the Joint List name states plastic / foamed plastic / polystyrene"
+  },
+  {
+   "list": "JLIST",
+   "code": "J65",
+   "name": "plastic buckets",
+   "material": "plastic",
+   "rule": "the Joint List name states plastic / foamed plastic / polystyrene"
+  },
+  {
+   "list": "JLIST",
+   "code": "J66",
+   "name": "plastic strapping bands",
+   "material": "plastic",
+   "rule": "the Joint List name states plastic / foamed plastic / polystyrene"
+  },
+  {
+   "list": "JLIST",
+   "code": "J67",
+   "name": "plastic sheets, industrial packaging, sheeting",
+   "material": "plastic",
+   "rule": "the Joint List name states plastic / foamed plastic / polystyrene"
+  },
+  {
+   "list": "JLIST",
+   "code": "J68",
+   "name": "fibre glass items",
+   "material": "plastic",
+   "rule": "fibre glass (glass-fibre-reinforced plastic), artificial polymer in the Joint List"
+  },
+  {
+   "list": "JLIST",
+   "code": "J69",
+   "name": "plastic hard hats/helmets",
+   "material": "plastic",
+   "rule": "the Joint List name states plastic / foamed plastic / polystyrene"
+  },
+  {
+   "list": "JLIST",
+   "code": "J70",
+   "name": "plastic shotgun cartridges",
+   "material": "plastic",
+   "rule": "the Joint List name states plastic / foamed plastic / polystyrene"
+  },
+  {
+   "list": "JLIST",
+   "code": "J72",
+   "name": "plastic traffic cones",
+   "material": "plastic",
+   "rule": "the Joint List name states plastic / foamed plastic / polystyrene"
+  },
+  {
+   "list": "JLIST",
+   "code": "J79",
+   "name": "fragments of non-foamed plastic 2.5cm ≥ ≤ 50cm",
+   "material": "plastic",
+   "rule": "the Joint List name states plastic / foamed plastic / polystyrene"
+  },
+  {
+   "list": "JLIST",
+   "code": "J80",
+   "name": "fragments of non-foamed plastic > 50cm",
+   "material": "plastic",
+   "rule": "the Joint List name states plastic / foamed plastic / polystyrene"
+  },
+  {
+   "list": "JLIST",
+   "code": "J82",
+   "name": "fragments of foamed polystyrene 2.5 cm ≥ ≤ 50 cm",
+   "material": "plastic",
+   "rule": "the Joint List name states plastic / foamed plastic / polystyrene"
+  },
+  {
+   "list": "JLIST",
+   "code": "J83",
+   "name": "fragments of foamed polystyrene > 50cm",
+   "material": "plastic",
+   "rule": "the Joint List name states plastic / foamed plastic / polystyrene"
+  },
+  {
+   "list": "JLIST",
+   "code": "J84",
+   "name": "plastic CDs & DVDs",
+   "material": "plastic",
+   "rule": "the Joint List name states plastic / foamed plastic / polystyrene"
+  },
+  {
+   "list": "JLIST",
+   "code": "J85",
+   "name": "plastic commercial salt packaging",
+   "material": "plastic",
+   "rule": "the Joint List name states plastic / foamed plastic / polystyrene"
+  },
+  {
+   "list": "JLIST",
+   "code": "J86",
+   "name": "plastic fin trees (from fins for scuba diving)",
+   "material": "plastic",
+   "rule": "the Joint List name states plastic / foamed plastic / polystyrene"
+  },
+  {
+   "list": "JLIST",
+   "code": "J87",
+   "name": "plastic masking/duct/packing tape",
+   "material": "plastic",
+   "rule": "the Joint List name states plastic / foamed plastic / polystyrene"
+  },
+  {
+   "list": "JLIST",
+   "code": "J88",
+   "name": "telephone",
+   "material": "ambiguous",
+   "rule": "telephone: material not stated"
+  },
+  {
+   "list": "JLIST",
+   "code": "J89",
+   "name": "plastic construction waste (not foamed insulation)",
+   "material": "plastic",
+   "rule": "the Joint List name states plastic / foamed plastic / polystyrene"
+  },
+  {
+   "list": "JLIST",
+   "code": "J90",
+   "name": "plastic flower pots",
+   "material": "plastic",
+   "rule": "the Joint List name states plastic / foamed plastic / polystyrene"
+  },
+  {
+   "list": "JLIST",
+   "code": "J91",
+   "name": "plastic biomass holder from sewage treatment plants and aquaculture",
+   "material": "plastic",
+   "rule": "the Joint List name states plastic / foamed plastic / polystyrene"
+  },
+  {
+   "list": "JLIST",
+   "code": "J92",
+   "name": "plastic bait containers/packaging",
+   "material": "plastic",
+   "rule": "the Joint List name states plastic / foamed plastic / polystyrene"
+  },
+  {
+   "list": "JLIST",
+   "code": "J93",
+   "name": "plastic cable ties",
+   "material": "plastic",
+   "rule": "the Joint List name states plastic / foamed plastic / polystyrene"
+  },
+  {
+   "list": "JLIST",
+   "code": "J95",
+   "name": "plastic cotton bud sticks",
+   "material": "plastic",
+   "rule": "the Joint List name states plastic / foamed plastic / polystyrene"
+  },
+  {
+   "list": "JLIST",
+   "code": "J96",
+   "name": "plastic sanitary towels/panty liners/backing strips",
+   "material": "plastic",
+   "rule": "the Joint List name states plastic / foamed plastic / polystyrene"
+  },
+  {
+   "list": "JLIST",
+   "code": "J97",
+   "name": "plastic toilet fresheners",
+   "material": "plastic",
+   "rule": "the Joint List name states plastic / foamed plastic / polystyrene"
+  },
+  {
+   "list": "JLIST",
+   "code": "J98",
+   "name": "plastic diapers/nappies",
+   "material": "plastic",
+   "rule": "the Joint List name states plastic / foamed plastic / polystyrene"
+  },
+  {
+   "list": "JLIST",
+   "code": "J99",
+   "name": "plastic syringes/needles",
+   "material": "plastic",
+   "rule": "the Joint List name states plastic / foamed plastic / polystyrene"
+  },
+  {
+   "list": "JLIST",
+   "code": "J100",
+   "name": "plastic medical/ pharmaceuticals containers/tubes/ packaging",
+   "material": "plastic",
+   "rule": "the Joint List name states plastic / foamed plastic / polystyrene"
+  },
+  {
+   "list": "JLIST",
+   "code": "J101",
+   "name": "plastic dog/pet faeces bag",
+   "material": "plastic",
+   "rule": "the Joint List name states plastic / foamed plastic / polystyrene"
+  },
+  {
+   "list": "JLIST",
+   "code": "J102",
+   "name": "plastic flip-flops",
+   "material": "plastic",
+   "rule": "the Joint List name states plastic / foamed plastic / polystyrene"
+  },
+  {
+   "list": "JLIST",
+   "code": "J125",
+   "name": "rubber balloons",
+   "material": "non_plastic",
+   "rule": "the Joint List name states a non-plastic material"
+  },
+  {
+   "list": "JLIST",
+   "code": "J126",
+   "name": "rubber balls",
+   "material": "non_plastic",
+   "rule": "the Joint List name states a non-plastic material"
+  },
+  {
+   "list": "JLIST",
+   "code": "J127",
+   "name": "rubber boots",
+   "material": "non_plastic",
+   "rule": "the Joint List name states a non-plastic material"
+  },
+  {
+   "list": "JLIST",
+   "code": "J130",
+   "name": "wheels with metal hub",
+   "material": "non_plastic",
+   "rule": "the Joint List name states a non-plastic material"
+  },
+  {
+   "list": "JLIST",
+   "code": "J131",
+   "name": "rubber band (small, for kitchen/household/post use)",
+   "material": "non_plastic",
+   "rule": "the Joint List name states a non-plastic material"
+  },
+  {
+   "list": "JLIST",
+   "code": "J133",
+   "name": "rubber condoms (incl. packaging",
+   "material": "non_plastic",
+   "rule": "the Joint List name states a non-plastic material"
+  },
+  {
+   "list": "JLIST",
+   "code": "J134",
+   "name": "other rubber pieces",
+   "material": "non_plastic",
+   "rule": "the Joint List name states a non-plastic material"
+  },
+  {
+   "list": "JLIST",
+   "code": "J136",
+   "name": "footwear made of plastic - not flip flops",
+   "material": "plastic",
+   "rule": "the Joint List name states plastic / foamed plastic / polystyrene"
+  },
+  {
+   "list": "JLIST",
+   "code": "J137",
+   "name": "clothing",
+   "material": "non_plastic",
+   "rule": "the Joint List name states a non-plastic material"
+  },
+  {
+   "list": "JLIST",
+   "code": "J138",
+   "name": "shoes & sandals made of leather and/or textile",
+   "material": "non_plastic",
+   "rule": "the Joint List name states a non-plastic material"
+  },
+  {
+   "list": "JLIST",
+   "code": "J139",
+   "name": "cloth textile backpacks & textile bags",
+   "material": "non_plastic",
+   "rule": "the Joint List name states a non-plastic material"
+  },
+  {
+   "list": "JLIST",
+   "code": "J140",
+   "name": "hessian sacks/packaging",
+   "material": "non_plastic",
+   "rule": "the Joint List name states a non-plastic material"
+  },
+  {
+   "list": "JLIST",
+   "code": "J141",
+   "name": "cloth textile carpet & furnishing",
+   "material": "non_plastic",
+   "rule": "the Joint List name states a non-plastic material"
+  },
+  {
+   "list": "JLIST",
+   "code": "J143",
+   "name": "sails, canvas",
+   "material": "non_plastic",
+   "rule": "the Joint List name states a non-plastic material"
+  },
+  {
+   "list": "JLIST",
+   "code": "J144",
+   "name": "plastic tampons and tampon applicators",
+   "material": "plastic",
+   "rule": "the Joint List name states plastic / foamed plastic / polystyrene"
+  },
+  {
+   "list": "JLIST",
+   "code": "J145",
+   "name": "other textiles",
+   "material": "non_plastic",
+   "rule": "the Joint List name states a non-plastic material"
+  },
+  {
+   "list": "JLIST",
+   "code": "J147",
+   "name": "paper bags",
+   "material": "non_plastic",
+   "rule": "the Joint List name states a non-plastic material"
+  },
+  {
+   "list": "JLIST",
+   "code": "J148",
+   "name": "cardboard boxes",
+   "material": "non_plastic",
+   "rule": "the Joint List name states a non-plastic material"
+  },
+  {
+   "list": "JLIST",
+   "code": "J150",
+   "name": "paper cartons/Tetrapak milk",
+   "material": "non_plastic",
+   "rule": "the Joint List name states a non-plastic material"
+  },
+  {
+   "list": "JLIST",
+   "code": "J151",
+   "name": "paper cartons/Tetrapak (non-milk)",
+   "material": "non_plastic",
+   "rule": "the Joint List name states a non-plastic material"
+  },
+  {
+   "list": "JLIST",
+   "code": "J152",
+   "name": "paper cigarette packets",
+   "material": "non_plastic",
+   "rule": "the Joint List name states a non-plastic material"
+  },
+  {
+   "list": "JLIST",
+   "code": "J154",
+   "name": "paper newspapers & magazines",
+   "material": "non_plastic",
+   "rule": "the Joint List name states a non-plastic material"
+  },
+  {
+   "list": "JLIST",
+   "code": "J155",
+   "name": "paper tubes and other pieces of fireworks",
+   "material": "non_plastic",
+   "rule": "the Joint List name states a non-plastic material"
+  },
+  {
+   "list": "JLIST",
+   "code": "J156",
+   "name": "paper fragments",
+   "material": "non_plastic",
+   "rule": "the Joint List name states a non-plastic material"
+  },
+  {
+   "list": "JLIST",
+   "code": "J158",
+   "name": "other paper items",
+   "material": "non_plastic",
+   "rule": "the Joint List name states a non-plastic material"
+  },
+  {
+   "list": "JLIST",
+   "code": "J159",
+   "name": "wooden corks",
+   "material": "non_plastic",
+   "rule": "the Joint List name states a non-plastic material"
+  },
+  {
+   "list": "JLIST",
+   "code": "J160",
+   "name": "wooden pallets",
+   "material": "non_plastic",
+   "rule": "the Joint List name states a non-plastic material"
+  },
+  {
+   "list": "JLIST",
+   "code": "J162",
+   "name": "wooden crates, boxes, baskets for packaging",
+   "material": "non_plastic",
+   "rule": "the Joint List name states a non-plastic material"
+  },
+  {
+   "list": "JLIST",
+   "code": "J163",
+   "name": "wooden crab/lobster pots",
+   "material": "non_plastic",
+   "rule": "the Joint List name states a non-plastic material"
+  },
+  {
+   "list": "JLIST",
+   "code": "J164",
+   "name": "wooden fish boxes",
+   "material": "non_plastic",
+   "rule": "the Joint List name states a non-plastic material"
+  },
+  {
+   "list": "JLIST",
+   "code": "J165",
+   "name": "wooden ice-cream sticks, chip forks, chopsticks, toothpicks",
+   "material": "non_plastic",
+   "rule": "the Joint List name states a non-plastic material"
+  },
+  {
+   "list": "JLIST",
+   "code": "J166",
+   "name": "plastic paint brushes",
+   "material": "plastic",
+   "rule": "the Joint List name states plastic / foamed plastic / polystyrene"
+  },
+  {
+   "list": "JLIST",
+   "code": "J167",
+   "name": "wooden fireworks & matches",
+   "material": "non_plastic",
+   "rule": "the Joint List name states a non-plastic material"
+  },
+  {
+   "list": "JLIST",
+   "code": "J171",
+   "name": "other processed wooden items 2.5 cm ≥ ≤ 50 cm",
+   "material": "non_plastic",
+   "rule": "the Joint List name states a non-plastic material"
+  },
+  {
+   "list": "JLIST",
+   "code": "J172",
+   "name": "other processed wooden items > 50cm",
+   "material": "non_plastic",
+   "rule": "the Joint List name states a non-plastic material"
+  },
+  {
+   "list": "JLIST",
+   "code": "J174",
+   "name": "metal aerosol/spray cans",
+   "material": "non_plastic",
+   "rule": "the Joint List name states a non-plastic material"
+  },
+  {
+   "list": "JLIST",
+   "code": "J175",
+   "name": "metal drinks cans",
+   "material": "non_plastic",
+   "rule": "the Joint List name states a non-plastic material"
+  },
+  {
+   "list": "JLIST",
+   "code": "J176",
+   "name": "metal food cans",
+   "material": "non_plastic",
+   "rule": "the Joint List name states a non-plastic material"
+  },
+  {
+   "list": "JLIST",
+   "code": "J177",
+   "name": "metal foil wrappers, aluminium foil",
+   "material": "non_plastic",
+   "rule": "the Joint List name states a non-plastic material"
+  },
+  {
+   "list": "JLIST",
+   "code": "J178",
+   "name": "metal bottle caps, lids & pull tabs from cans",
+   "material": "non_plastic",
+   "rule": "the Joint List name states a non-plastic material"
+  },
+  {
+   "list": "JLIST",
+   "code": "J179",
+   "name": "metal disposable BBQs",
+   "material": "non_plastic",
+   "rule": "the Joint List name states a non-plastic material"
+  },
+  {
+   "list": "JLIST",
+   "code": "J180",
+   "name": "metal appliances (refrigerators, washers, etc.)",
+   "material": "non_plastic",
+   "rule": "the Joint List name states a non-plastic material"
+  },
+  {
+   "list": "JLIST",
+   "code": "J181",
+   "name": "metal tableware (e.g. plates, cups & cutlery)",
+   "material": "non_plastic",
+   "rule": "the Joint List name states a non-plastic material"
+  },
+  {
+   "list": "JLIST",
+   "code": "J182",
+   "name": "metal fisheries related weights/sinkers, and lures",
+   "material": "non_plastic",
+   "rule": "the Joint List name states a non-plastic material"
+  },
+  {
+   "list": "JLIST",
+   "code": "J184",
+   "name": "metal lobster/crab pots",
+   "material": "non_plastic",
+   "rule": "the Joint List name states a non-plastic material"
+  },
+  {
+   "list": "JLIST",
+   "code": "J186",
+   "name": "metal industrial scrap",
+   "material": "non_plastic",
+   "rule": "the Joint List name states a non-plastic material"
+  },
+  {
+   "list": "JLIST",
+   "code": "J187",
+   "name": "metal drums & barrels",
+   "material": "non_plastic",
+   "rule": "the Joint List name states a non-plastic material"
+  },
+  {
+   "list": "JLIST",
+   "code": "J188",
+   "name": "other metal cans",
+   "material": "non_plastic",
+   "rule": "the Joint List name states a non-plastic material"
+  },
+  {
+   "list": "JLIST",
+   "code": "J190",
+   "name": "metal paint tins",
+   "material": "non_plastic",
+   "rule": "the Joint List name states a non-plastic material"
+  },
+  {
+   "list": "JLIST",
+   "code": "J191",
+   "name": "wire, wire mesh, barbed wire",
+   "material": "non_plastic",
+   "rule": "the Joint List name states a non-plastic material"
+  },
+  {
+   "list": "JLIST",
+   "code": "J193",
+   "name": "metal vehicle parts / batteries",
+   "material": "non_plastic",
+   "rule": "the Joint List name states a non-plastic material"
+  },
+  {
+   "list": "JLIST",
+   "code": "J194",
+   "name": "metal cables",
+   "material": "non_plastic",
+   "rule": "the Joint List name states a non-plastic material"
+  },
+  {
+   "list": "JLIST",
+   "code": "J195",
+   "name": "metal household batteries",
+   "material": "non_plastic",
+   "rule": "the Joint List name states a non-plastic material"
+  },
+  {
+   "list": "JLIST",
+   "code": "J198",
+   "name": "other metal pieces 2.5cm ≥ ≤ 50cm",
+   "material": "non_plastic",
+   "rule": "the Joint List name states a non-plastic material"
+  },
+  {
+   "list": "JLIST",
+   "code": "J199",
+   "name": "other metal pieces > 50cm",
+   "material": "non_plastic",
+   "rule": "the Joint List name states a non-plastic material"
+  },
+  {
+   "list": "JLIST",
+   "code": "J200",
+   "name": "glass bottles",
+   "material": "non_plastic",
+   "rule": "the Joint List name states a non-plastic material"
+  },
+  {
+   "list": "JLIST",
+   "code": "J201",
+   "name": "glass jars",
+   "material": "non_plastic",
+   "rule": "the Joint List name states a non-plastic material"
+  },
+  {
+   "list": "JLIST",
+   "code": "J202",
+   "name": "glass light bulbs",
+   "material": "non_plastic",
+   "rule": "the Joint List name states a non-plastic material"
+  },
+  {
+   "list": "JLIST",
+   "code": "J203",
+   "name": "glass and ceramic tableware (plates/cups/glasses)",
+   "material": "non_plastic",
+   "rule": "the Joint List name states a non-plastic material"
+  },
+  {
+   "list": "JLIST",
+   "code": "J204",
+   "name": "glass ceramic construction materials (bricks, tiles, cement)",
+   "material": "non_plastic",
+   "rule": "the Joint List name states a non-plastic material"
+  },
+  {
+   "list": "JLIST",
+   "code": "J205",
+   "name": "glass fluorescent light tube",
+   "material": "non_plastic",
+   "rule": "the Joint List name states a non-plastic material"
+  },
+  {
+   "list": "JLIST",
+   "code": "J207",
+   "name": "ceramic or glass octopus pots",
+   "material": "non_plastic",
+   "rule": "the Joint List name states a non-plastic material"
+  },
+  {
+   "list": "JLIST",
+   "code": "J208",
+   "name": "pieces of glass/ceramic (glass or ceramic fragments ≥ 2.5 cm)",
+   "material": "non_plastic",
+   "rule": "the Joint List name states a non-plastic material"
+  },
+  {
+   "list": "JLIST",
+   "code": "J210",
+   "name": "other glass items",
+   "material": "non_plastic",
+   "rule": "the Joint List name states a non-plastic material"
+  },
+  {
+   "list": "JLIST",
+   "code": "J211",
+   "name": "other plastic medical items (swabs, bandaging, adhesive plasters etc.)",
+   "material": "plastic",
+   "rule": "the Joint List name states plastic / foamed plastic / polystyrene"
+  },
+  {
+   "list": "JLIST",
+   "code": "J215",
+   "name": "food waste",
+   "material": "non_plastic",
+   "rule": "the Joint List name states a non-plastic material"
+  },
+  {
+   "list": "JLIST",
+   "code": "J216",
+   "name": "unidentified generally dark-coloured oil-like chemicals",
+   "material": "non_plastic",
+   "rule": "the Joint List name states a non-plastic material"
+  },
+  {
+   "list": "JLIST",
+   "code": "J217",
+   "name": "unidentified generally light-coloured paraffin-like chemicals",
+   "material": "non_plastic",
+   "rule": "the Joint List name states a non-plastic material"
+  },
+  {
+   "list": "JLIST",
+   "code": "J218",
+   "name": "unidentified chemicals",
+   "material": "non_plastic",
+   "rule": "the Joint List name states a non-plastic material"
+  },
+  {
+   "list": "JLIST",
+   "code": "J219",
+   "name": "other ceramic items",
+   "material": "non_plastic",
+   "rule": "the Joint List name states a non-plastic material"
+  },
+  {
+   "list": "JLIST",
+   "code": "J220",
+   "name": "plastic sheeting from greenhouses",
+   "material": "plastic",
+   "rule": "the Joint List name states plastic / foamed plastic / polystyrene"
+  },
+  {
+   "list": "JLIST",
+   "code": "J221",
+   "name": "plastic irrigation pipes",
+   "material": "plastic",
+   "rule": "the Joint List name states plastic / foamed plastic / polystyrene"
+  },
+  {
+   "list": "JLIST",
+   "code": "J222",
+   "name": "other plastic items from agriculture",
+   "material": "plastic",
+   "rule": "the Joint List name states plastic / foamed plastic / polystyrene"
+  },
+  {
+   "list": "JLIST",
+   "code": "J223",
+   "name": "trays for seedlings of foamed plastic",
+   "material": "plastic",
+   "rule": "the Joint List name states plastic / foamed plastic / polystyrene"
+  },
+  {
+   "list": "JLIST",
+   "code": "J224",
+   "name": "plastic food containers made of foamed polystyrene",
+   "material": "plastic",
+   "rule": "the Joint List name states plastic / foamed plastic / polystyrene"
+  },
+  {
+   "list": "JLIST",
+   "code": "J225",
+   "name": "plastic food containers made of hard non-foamed plastic",
+   "material": "plastic",
+   "rule": "the Joint List name states plastic / foamed plastic / polystyrene"
+  },
+  {
+   "list": "JLIST",
+   "code": "J226",
+   "name": "cups and cup lids of foamed polystyrene",
+   "material": "plastic",
+   "rule": "the Joint List name states plastic / foamed plastic / polystyrene"
+  },
+  {
+   "list": "JLIST",
+   "code": "J227",
+   "name": "cups and lids of hard plastic",
+   "material": "plastic",
+   "rule": "the Joint List name states plastic / foamed plastic / polystyrene"
+  },
+  {
+   "list": "JLIST",
+   "code": "J228",
+   "name": "plastic cutlery",
+   "material": "plastic",
+   "rule": "the Joint List name states plastic / foamed plastic / polystyrene"
+  },
+  {
+   "list": "JLIST",
+   "code": "J229",
+   "name": "plastic plates and trays",
+   "material": "plastic",
+   "rule": "the Joint List name states plastic / foamed plastic / polystyrene"
+  },
+  {
+   "list": "JLIST",
+   "code": "J230",
+   "name": "plastic stirrers",
+   "material": "plastic",
+   "rule": "the Joint List name states plastic / foamed plastic / polystyrene"
+  },
+  {
+   "list": "JLIST",
+   "code": "J231",
+   "name": "plastic straws",
+   "material": "plastic",
+   "rule": "the Joint List name states plastic / foamed plastic / polystyrene"
+  },
+  {
+   "list": "JLIST",
+   "code": "J232",
+   "name": "plastic string and filaments exclusively from dolly ropes",
+   "material": "plastic",
+   "rule": "the Joint List name states plastic / foamed plastic / polystyrene"
+  },
+  {
+   "list": "JLIST",
+   "code": "J233",
+   "name": "other plastic string and filaments exclusively from fishery",
+   "material": "plastic",
+   "rule": "the Joint List name states plastic / foamed plastic / polystyrene"
+  },
+  {
+   "list": "JLIST",
+   "code": "J234",
+   "name": "plastic tangled nets and rope without dolly rope or mixed with dolly rope",
+   "material": "plastic",
+   "rule": "the Joint List name states plastic / foamed plastic / polystyrene"
+  },
+  {
+   "list": "JLIST",
+   "code": "J235",
+   "name": "plastic tangled dolly rope",
+   "material": "plastic",
+   "rule": "the Joint List name states plastic / foamed plastic / polystyrene"
+  },
+  {
+   "list": "JLIST",
+   "code": "J236",
+   "name": "other plastic personal hygiene and care items",
+   "material": "plastic",
+   "rule": "the Joint List name states plastic / foamed plastic / polystyrene"
+  },
+  {
+   "list": "JLIST",
+   "code": "J237",
+   "name": "plastic wet wipes",
+   "material": "plastic",
+   "rule": "the Joint List name states plastic / foamed plastic / polystyrene"
+  },
+  {
+   "list": "JLIST",
+   "code": "J238",
+   "name": "plastic mesh bags for vegetable, fruit and other products",
+   "material": "plastic",
+   "rule": "the Joint List name states plastic / foamed plastic / polystyrene"
+  },
+  {
+   "list": "JLIST",
+   "code": "J239",
+   "name": "other foamed plastic items and fragments not made of foamed polystyrene",
+   "material": "plastic",
+   "rule": "the Joint List name states plastic / foamed plastic / polystyrene"
+  },
+  {
+   "list": "JLIST",
+   "code": "J240",
+   "name": "other identifiable foamed plastic items",
+   "material": "plastic",
+   "rule": "the Joint List name states plastic / foamed plastic / polystyrene"
+  },
+  {
+   "list": "JLIST",
+   "code": "J241",
+   "name": "other identifiable non-foamed plastic items",
+   "material": "plastic",
+   "rule": "the Joint List name states plastic / foamed plastic / polystyrene"
+  },
+  {
+   "list": "JLIST",
+   "code": "J242",
+   "name": "plastic string and cord (diameter less than 1cm) not from dolly ropes or unidentified",
+   "material": "plastic",
+   "rule": "the Joint List name states plastic / foamed plastic / polystyrene"
+  },
+  {
+   "list": "JLIST",
+   "code": "J243",
+   "name": "plastic remains of fireworks",
+   "material": "plastic",
+   "rule": "the Joint List name states plastic / foamed plastic / polystyrene"
+  },
+  {
+   "list": "JLIST",
+   "code": "J244",
+   "name": "paper cups",
+   "material": "non_plastic",
+   "rule": "the Joint List name states a non-plastic material"
+  },
+  {
+   "list": "JLIST",
+   "code": "J245",
+   "name": "paper food trays, food wrappers, drink containers",
+   "material": "non_plastic",
+   "rule": "the Joint List name states a non-plastic material"
+  },
+  {
+   "list": "JLIST",
+   "code": "J246",
+   "name": "paper cotton bud sticks",
+   "material": "non_plastic",
+   "rule": "the Joint List name states a non-plastic material"
+  },
+  {
+   "list": "JLIST",
+   "code": "J247",
+   "name": "other paper containers",
+   "material": "non_plastic",
+   "rule": "the Joint List name states a non-plastic material"
+  },
+  {
+   "list": "JLIST",
+   "code": "J248",
+   "name": "rubber sheet",
+   "material": "non_plastic",
+   "rule": "the Joint List name states a non-plastic material"
+  },
+  {
+   "list": "JLIST",
+   "code": "J249",
+   "name": "rubber belts",
+   "material": "non_plastic",
+   "rule": "the Joint List name states a non-plastic material"
+  },
+  {
+   "list": "JLIST",
+   "code": "J250",
+   "name": "rubber inner-tubes",
+   "material": "non_plastic",
+   "rule": "the Joint List name states a non-plastic material"
+  },
+  {
+   "list": "JLIST",
+   "code": "J251",
+   "name": "rubber tyres",
+   "material": "non_plastic",
+   "rule": "the Joint List name states a non-plastic material"
+  },
+  {
+   "list": "JLIST",
+   "code": "J252",
+   "name": "single-use plastic gloves",
+   "material": "plastic",
+   "rule": "the Joint List name states plastic / foamed plastic / polystyrene"
+  },
+  {
+   "list": "JLIST",
+   "code": "J253",
+   "name": "plastic single-use face-mask",
+   "material": "plastic",
+   "rule": "the Joint List name states plastic / foamed plastic / polystyrene"
+  },
+  {
+   "list": "JLIST",
+   "code": "J256",
+   "name": "foamed plastic insulation, including spray foam",
+   "material": "plastic",
+   "rule": "the Joint List name states plastic / foamed plastic / polystyrene"
+  },
+  {
+   "list": "JLIST",
+   "code": "J257",
+   "name": "foamed plastic packaging",
+   "material": "plastic",
+   "rule": "the Joint List name states plastic / foamed plastic / polystyrene"
+  },
+  {
+   "list": "OSPAR",
+   "code": "1",
+   "name": "4/6-pack yokes",
+   "material": "plastic",
+   "rule": "OSPAR plastic/polystyrene section (items 1-48)"
+  },
+  {
+   "list": "OSPAR",
+   "code": "2",
+   "name": "Bags (e.g. shopping)",
+   "material": "plastic",
+   "rule": "OSPAR plastic/polystyrene section (items 1-48)"
+  },
+  {
+   "list": "OSPAR",
+   "code": "3",
+   "name": "Small plastic bags, e.g., freezer bags",
+   "material": "plastic",
+   "rule": "OSPAR plastic/polystyrene section (items 1-48)"
+  },
+  {
+   "list": "OSPAR",
+   "code": "4",
+   "name": "Drinks (bottles, containers and drums)",
+   "material": "plastic",
+   "rule": "OSPAR plastic/polystyrene section (items 1-48)"
+  },
+  {
+   "list": "OSPAR",
+   "code": "5",
+   "name": "Cleaner (bottles, containers and drums)",
+   "material": "plastic",
+   "rule": "OSPAR plastic/polystyrene section (items 1-48)"
+  },
+  {
+   "list": "OSPAR",
+   "code": "6",
+   "name": "Food containers incl. fast food containers",
+   "material": "plastic",
+   "rule": "OSPAR plastic/polystyrene section (items 1-48)"
+  },
+  {
+   "list": "OSPAR",
+   "code": "7",
+   "name": "Cosmetics (bottles & containers e.g. sun lotion, shampoo, shower gel, deodorant)",
+   "material": "plastic",
+   "rule": "OSPAR plastic/polystyrene section (items 1-48)"
+  },
+  {
+   "list": "OSPAR",
+   "code": "8",
+   "name": "Engine oil containers and drums <50 cm",
+   "material": "plastic",
+   "rule": "OSPAR plastic/polystyrene section (items 1-48)"
+  },
+  {
+   "list": "OSPAR",
+   "code": "9",
+   "name": "Engine oil containers and drums > 50 cm",
+   "material": "plastic",
+   "rule": "OSPAR plastic/polystyrene section (items 1-48)"
+  },
+  {
+   "list": "OSPAR",
+   "code": "10",
+   "name": "Jerry cans (square plastic containers with handle)",
+   "material": "plastic",
+   "rule": "OSPAR plastic/polystyrene section (items 1-48)"
+  },
+  {
+   "list": "OSPAR",
+   "code": "11",
+   "name": "Injection gun containers",
+   "material": "plastic",
+   "rule": "OSPAR plastic/polystyrene section (items 1-48)"
+  },
+  {
+   "list": "OSPAR",
+   "code": "12",
+   "name": "Other bottles, containers and drums",
+   "material": "plastic",
+   "rule": "OSPAR plastic/polystyrene section (items 1-48)"
+  },
+  {
+   "list": "OSPAR",
+   "code": "13",
+   "name": "Crates",
+   "material": "plastic",
+   "rule": "OSPAR plastic/polystyrene section (items 1-48)"
+  },
+  {
+   "list": "OSPAR",
+   "code": "14",
+   "name": "Car parts",
+   "material": "plastic",
+   "rule": "OSPAR plastic/polystyrene section (items 1-48)"
+  },
+  {
+   "list": "OSPAR",
+   "code": "15",
+   "name": "Caps/lids",
+   "material": "plastic",
+   "rule": "OSPAR plastic/polystyrene section (items 1-48)"
+  },
+  {
+   "list": "OSPAR",
+   "code": "16",
+   "name": "Cigarette lighters",
+   "material": "plastic",
+   "rule": "OSPAR plastic/polystyrene section (items 1-48)"
+  },
+  {
+   "list": "OSPAR",
+   "code": "17",
+   "name": "Pens",
+   "material": "plastic",
+   "rule": "OSPAR plastic/polystyrene section (items 1-48)"
+  },
+  {
+   "list": "OSPAR",
+   "code": "18",
+   "name": "Combs/hair brushes",
+   "material": "plastic",
+   "rule": "OSPAR plastic/polystyrene section (items 1-48)"
+  },
+  {
+   "list": "OSPAR",
+   "code": "19",
+   "name": "Crisp/sweet packets and lolly sticks",
+   "material": "plastic",
+   "rule": "OSPAR plastic/polystyrene section (items 1-48)"
+  },
+  {
+   "list": "OSPAR",
+   "code": "20",
+   "name": "Toys & party poppers",
+   "material": "plastic",
+   "rule": "OSPAR plastic/polystyrene section (items 1-48)"
+  },
+  {
+   "list": "OSPAR",
+   "code": "21",
+   "name": "Cups",
+   "material": "plastic",
+   "rule": "OSPAR plastic/polystyrene section (items 1-48)"
+  },
+  {
+   "list": "OSPAR",
+   "code": "22",
+   "name": "Cutlery/trays/straws",
+   "material": "plastic",
+   "rule": "OSPAR plastic/polystyrene section (items 1-48)"
+  },
+  {
+   "list": "OSPAR",
+   "code": "23",
+   "name": "Fertiliser/animal feed bags",
+   "material": "plastic",
+   "rule": "OSPAR plastic/polystyrene section (items 1-48)"
+  },
+  {
+   "list": "OSPAR",
+   "code": "24",
+   "name": "Mesh vegetable bags",
+   "material": "plastic",
+   "rule": "OSPAR plastic/polystyrene section (items 1-48)"
+  },
+  {
+   "list": "OSPAR",
+   "code": "25",
+   "name": "Gloves (typical washing up gloves)",
+   "material": "plastic",
+   "rule": "OSPAR plastic/polystyrene section (items 1-48)"
+  },
+  {
+   "list": "OSPAR",
+   "code": "26",
+   "name": "Crab/lobster pots",
+   "material": "plastic",
+   "rule": "OSPAR plastic/polystyrene section (items 1-48)"
+  },
+  {
+   "list": "OSPAR",
+   "code": "27",
+   "name": "Octopus pots",
+   "material": "plastic",
+   "rule": "OSPAR plastic/polystyrene section (items 1-48)"
+  },
+  {
+   "list": "OSPAR",
+   "code": "28",
+   "name": "Oyster nets or mussel bags including plastic stoppers",
+   "material": "plastic",
+   "rule": "OSPAR plastic/polystyrene section (items 1-48)"
+  },
+  {
+   "list": "OSPAR",
+   "code": "29",
+   "name": "Oyster trays (round from oyster cultures)",
+   "material": "plastic",
+   "rule": "OSPAR plastic/polystyrene section (items 1-48)"
+  },
+  {
+   "list": "OSPAR",
+   "code": "30",
+   "name": "Plastic sheeting from mussel culture (Tahitians)",
+   "material": "plastic",
+   "rule": "OSPAR plastic/polystyrene section (items 1-48)"
+  },
+  {
+   "list": "OSPAR",
+   "code": "31",
+   "name": "Rope (diameter more than 1 cm)",
+   "material": "plastic",
+   "rule": "OSPAR plastic/polystyrene section (items 1-48)"
+  },
+  {
+   "list": "OSPAR",
+   "code": "32",
+   "name": "String and cord (diameter less than 1 cm)",
+   "material": "plastic",
+   "rule": "OSPAR plastic/polystyrene section (items 1-48)"
+  },
+  {
+   "list": "OSPAR",
+   "code": "33",
+   "name": "Tangled nets/cord/rope and string",
+   "material": "plastic",
+   "rule": "OSPAR plastic/polystyrene section (items 1-48)"
+  },
+  {
+   "list": "OSPAR",
+   "code": "34",
+   "name": "Fish boxes",
+   "material": "plastic",
+   "rule": "OSPAR plastic/polystyrene section (items 1-48)"
+  },
+  {
+   "list": "OSPAR",
+   "code": "35",
+   "name": "Fishing line (angling)",
+   "material": "plastic",
+   "rule": "OSPAR plastic/polystyrene section (items 1-48)"
+  },
+  {
+   "list": "OSPAR",
+   "code": "36",
+   "name": "Light sticks (tubes with fluid)",
+   "material": "plastic",
+   "rule": "OSPAR plastic/polystyrene section (items 1-48)"
+  },
+  {
+   "list": "OSPAR",
+   "code": "37",
+   "name": "Floats/Buoys",
+   "material": "plastic",
+   "rule": "OSPAR plastic/polystyrene section (items 1-48)"
+  },
+  {
+   "list": "OSPAR",
+   "code": "38",
+   "name": "Buckets",
+   "material": "plastic",
+   "rule": "OSPAR plastic/polystyrene section (items 1-48)"
+  },
+  {
+   "list": "OSPAR",
+   "code": "39",
+   "name": "Strapping bands",
+   "material": "plastic",
+   "rule": "OSPAR plastic/polystyrene section (items 1-48)"
+  },
+  {
+   "list": "OSPAR",
+   "code": "40",
+   "name": "Industrial packaging, plastic sheeting",
+   "material": "plastic",
+   "rule": "OSPAR plastic/polystyrene section (items 1-48)"
+  },
+  {
+   "list": "OSPAR",
+   "code": "41",
+   "name": "Fibre glass",
+   "material": "plastic",
+   "rule": "OSPAR plastic/polystyrene section (items 1-48)"
+  },
+  {
+   "list": "OSPAR",
+   "code": "42",
+   "name": "Hard hats",
+   "material": "plastic",
+   "rule": "OSPAR plastic/polystyrene section (items 1-48)"
+  },
+  {
+   "list": "OSPAR",
+   "code": "43",
+   "name": "Shotgun cartridges",
+   "material": "plastic",
+   "rule": "OSPAR plastic/polystyrene section (items 1-48)"
+  },
+  {
+   "list": "OSPAR",
+   "code": "44",
+   "name": "Shoes/sandals",
+   "material": "plastic",
+   "rule": "OSPAR plastic/polystyrene section (items 1-48)"
+  },
+  {
+   "list": "OSPAR",
+   "code": "45",
+   "name": "Foam sponge",
+   "material": "plastic",
+   "rule": "OSPAR plastic/polystyrene section (items 1-48)"
+  },
+  {
+   "list": "OSPAR",
+   "code": "46",
+   "name": "Plastic/polystyrene pieces 2,5 cm > < 50 cm",
+   "material": "plastic",
+   "rule": "OSPAR plastic/polystyrene section (items 1-48)"
+  },
+  {
+   "list": "OSPAR",
+   "code": "47",
+   "name": "Plastic/polystyrene pieces > 50 cm",
+   "material": "plastic",
+   "rule": "OSPAR plastic/polystyrene section (items 1-48)"
+  },
+  {
+   "list": "OSPAR",
+   "code": "48",
+   "name": "Other plastic/polystyrene items (please specify in other item box*)",
+   "material": "plastic",
+   "rule": "OSPAR plastic/polystyrene section (items 1-48)"
+  },
+  {
+   "list": "OSPAR",
+   "code": "49",
+   "name": "Balloons, including plastic valves, ribbons, strings etc.",
+   "material": "non_plastic",
+   "rule": "OSPAR rubber section"
+  },
+  {
+   "list": "OSPAR",
+   "code": "50",
+   "name": "Boots",
+   "material": "non_plastic",
+   "rule": "OSPAR rubber section"
+  },
+  {
+   "list": "OSPAR",
+   "code": "52",
+   "name": "Tyres and belts",
+   "material": "non_plastic",
+   "rule": "OSPAR rubber section"
+  },
+  {
+   "list": "OSPAR",
+   "code": "53",
+   "name": "Other rubber pieces (please specify in other item box*)",
+   "material": "non_plastic",
+   "rule": "OSPAR rubber section"
+  },
+  {
+   "list": "OSPAR",
+   "code": "54",
+   "name": "Clothing",
+   "material": "non_plastic",
+   "rule": "OSPAR cloth section"
+  },
+  {
+   "list": "OSPAR",
+   "code": "55",
+   "name": "Furnishing",
+   "material": "non_plastic",
+   "rule": "OSPAR cloth section"
+  },
+  {
+   "list": "OSPAR",
+   "code": "56",
+   "name": "Sacking",
+   "material": "non_plastic",
+   "rule": "OSPAR cloth section"
+  },
+  {
+   "list": "OSPAR",
+   "code": "57",
+   "name": "Shoes (leather)",
+   "material": "non_plastic",
+   "rule": "OSPAR cloth section"
+  },
+  {
+   "list": "OSPAR",
+   "code": "59",
+   "name": "Other textiles (please specify in other item box*)",
+   "material": "non_plastic",
+   "rule": "OSPAR cloth section"
+  },
+  {
+   "list": "OSPAR",
+   "code": "60",
+   "name": "Bags",
+   "material": "non_plastic",
+   "rule": "OSPAR paper/cardboard section"
+  },
+  {
+   "list": "OSPAR",
+   "code": "61",
+   "name": "Cardboard",
+   "material": "non_plastic",
+   "rule": "OSPAR paper/cardboard section"
+  },
+  {
+   "list": "OSPAR",
+   "code": "62",
+   "name": "Cartons e.g. tetrapak (other)",
+   "material": "non_plastic",
+   "rule": "OSPAR paper/cardboard section"
+  },
+  {
+   "list": "OSPAR",
+   "code": "63",
+   "name": "Cigarette packets",
+   "material": "non_plastic",
+   "rule": "OSPAR paper/cardboard section"
+  },
+  {
+   "list": "OSPAR",
+   "code": "64",
+   "name": "Cigarette butts",
+   "material": "ambiguous",
+   "rule": "cigarette butts: OSPAR files them under paper/cardboard, but the filter is cellulose acetate (TSG-ML G27 and the Joint List J27 class it as artificial polymer) - the list does not decide"
+  },
+  {
+   "list": "OSPAR",
+   "code": "65",
+   "name": "Cups",
+   "material": "non_plastic",
+   "rule": "OSPAR paper/cardboard section"
+  },
+  {
+   "list": "OSPAR",
+   "code": "66",
+   "name": "Newspapers & magazines",
+   "material": "non_plastic",
+   "rule": "OSPAR paper/cardboard section"
+  },
+  {
+   "list": "OSPAR",
+   "code": "67",
+   "name": "Other paper items (please specify in other item box*)",
+   "material": "non_plastic",
+   "rule": "OSPAR paper/cardboard section"
+  },
+  {
+   "list": "OSPAR",
+   "code": "68",
+   "name": "Corks",
+   "material": "non_plastic",
+   "rule": "OSPAR wood section"
+  },
+  {
+   "list": "OSPAR",
+   "code": "69",
+   "name": "Pallets",
+   "material": "non_plastic",
+   "rule": "OSPAR wood section"
+  },
+  {
+   "list": "OSPAR",
+   "code": "70",
+   "name": "Crates",
+   "material": "non_plastic",
+   "rule": "OSPAR wood section"
+  },
+  {
+   "list": "OSPAR",
+   "code": "71",
+   "name": "Crab/lobster pots",
+   "material": "non_plastic",
+   "rule": "OSPAR wood section"
+  },
+  {
+   "list": "OSPAR",
+   "code": "72",
+   "name": "Ice lolly sticks / chip forks",
+   "material": "non_plastic",
+   "rule": "OSPAR wood section"
+  },
+  {
+   "list": "OSPAR",
+   "code": "73",
+   "name": "Paint brushes",
+   "material": "non_plastic",
+   "rule": "OSPAR wood section"
+  },
+  {
+   "list": "OSPAR",
+   "code": "74",
+   "name": "Other wood < 50 cm (please specify in other item box*)",
+   "material": "non_plastic",
+   "rule": "OSPAR wood section"
+  },
+  {
+   "list": "OSPAR",
+   "code": "75",
+   "name": "Other wood > 50 cm (please specify in other item box*)",
+   "material": "non_plastic",
+   "rule": "OSPAR wood section"
+  },
+  {
+   "list": "OSPAR",
+   "code": "76",
+   "name": "Aerosol/Spray cans",
+   "material": "non_plastic",
+   "rule": "OSPAR metal section (120 disposable BBQ = TSG-ML G179 metal; 205/206 oil drums)"
+  },
+  {
+   "list": "OSPAR",
+   "code": "77",
+   "name": "Bottle caps",
+   "material": "non_plastic",
+   "rule": "OSPAR metal section (120 disposable BBQ = TSG-ML G179 metal; 205/206 oil drums)"
+  },
+  {
+   "list": "OSPAR",
+   "code": "78",
+   "name": "Drink cans",
+   "material": "non_plastic",
+   "rule": "OSPAR metal section (120 disposable BBQ = TSG-ML G179 metal; 205/206 oil drums)"
+  },
+  {
+   "list": "OSPAR",
+   "code": "79",
+   "name": "Electric appliances",
+   "material": "non_plastic",
+   "rule": "OSPAR metal section (120 disposable BBQ = TSG-ML G179 metal; 205/206 oil drums)"
+  },
+  {
+   "list": "OSPAR",
+   "code": "80",
+   "name": "Fishing weights",
+   "material": "non_plastic",
+   "rule": "OSPAR metal section (120 disposable BBQ = TSG-ML G179 metal; 205/206 oil drums)"
+  },
+  {
+   "list": "OSPAR",
+   "code": "81",
+   "name": "Foil wrappers",
+   "material": "non_plastic",
+   "rule": "OSPAR metal section (120 disposable BBQ = TSG-ML G179 metal; 205/206 oil drums)"
+  },
+  {
+   "list": "OSPAR",
+   "code": "82",
+   "name": "Food cans",
+   "material": "non_plastic",
+   "rule": "OSPAR metal section (120 disposable BBQ = TSG-ML G179 metal; 205/206 oil drums)"
+  },
+  {
+   "list": "OSPAR",
+   "code": "83",
+   "name": "Industrial scrap",
+   "material": "non_plastic",
+   "rule": "OSPAR metal section (120 disposable BBQ = TSG-ML G179 metal; 205/206 oil drums)"
+  },
+  {
+   "list": "OSPAR",
+   "code": "84",
+   "name": "Oil drums",
+   "material": "non_plastic",
+   "rule": "OSPAR metal section (120 disposable BBQ = TSG-ML G179 metal; 205/206 oil drums)"
+  },
+  {
+   "list": "OSPAR",
+   "code": "86",
+   "name": "Paint tins",
+   "material": "non_plastic",
+   "rule": "OSPAR metal section (120 disposable BBQ = TSG-ML G179 metal; 205/206 oil drums)"
+  },
+  {
+   "list": "OSPAR",
+   "code": "87",
+   "name": "Lobster/crab pots and tops",
+   "material": "non_plastic",
+   "rule": "OSPAR metal section (120 disposable BBQ = TSG-ML G179 metal; 205/206 oil drums)"
+  },
+  {
+   "list": "OSPAR",
+   "code": "88",
+   "name": "Wire, wire mesh, barbed wire",
+   "material": "non_plastic",
+   "rule": "OSPAR metal section (120 disposable BBQ = TSG-ML G179 metal; 205/206 oil drums)"
+  },
+  {
+   "list": "OSPAR",
+   "code": "89",
+   "name": "Other metal pieces < 50 cm (please specify in other item box*)",
+   "material": "non_plastic",
+   "rule": "OSPAR metal section (120 disposable BBQ = TSG-ML G179 metal; 205/206 oil drums)"
+  },
+  {
+   "list": "OSPAR",
+   "code": "90",
+   "name": "Other metal pieces > 50 cm (please specify in other item box*)",
+   "material": "non_plastic",
+   "rule": "OSPAR metal section (120 disposable BBQ = TSG-ML G179 metal; 205/206 oil drums)"
+  },
+  {
+   "list": "OSPAR",
+   "code": "91",
+   "name": "Bottles",
+   "material": "non_plastic",
+   "rule": "OSPAR glass section"
+  },
+  {
+   "list": "OSPAR",
+   "code": "92",
+   "name": "Light bulbs/tubes",
+   "material": "non_plastic",
+   "rule": "OSPAR glass section"
+  },
+  {
+   "list": "OSPAR",
+   "code": "93",
+   "name": "Other glass items (please specify in other item box*)",
+   "material": "non_plastic",
+   "rule": "OSPAR glass section"
+  },
+  {
+   "list": "OSPAR",
+   "code": "94",
+   "name": "Construction material e.g. tiles",
+   "material": "non_plastic",
+   "rule": "OSPAR pottery/ceramics section"
+  },
+  {
+   "list": "OSPAR",
+   "code": "95",
+   "name": "Octopus pots",
+   "material": "non_plastic",
+   "rule": "OSPAR pottery/ceramics section"
+  },
+  {
+   "list": "OSPAR",
+   "code": "96",
+   "name": "Other ceramic/pottery items (please specify in other item box*)",
+   "material": "non_plastic",
+   "rule": "OSPAR pottery/ceramics section"
+  },
+  {
+   "list": "OSPAR",
+   "code": "97",
+   "name": "Condoms",
+   "material": "non_plastic",
+   "rule": "condoms: rubber (TSG-ML G133, Joint List J133)"
+  },
+  {
+   "list": "OSPAR",
+   "code": "98",
+   "name": "Cotton bud sticks",
+   "material": "ambiguous",
+   "rule": "OSPAR sanitary section: material not stated (cotton bud sticks are plastic in G95/J95 and paper in J246)"
+  },
+  {
+   "list": "OSPAR",
+   "code": "99",
+   "name": "Sanitary towels/panty liners/backing strips",
+   "material": "ambiguous",
+   "rule": "OSPAR sanitary section: material not stated (cotton bud sticks are plastic in G95/J95 and paper in J246)"
+  },
+  {
+   "list": "OSPAR",
+   "code": "100",
+   "name": "Tampons and tampon applicators",
+   "material": "ambiguous",
+   "rule": "OSPAR sanitary section: material not stated (cotton bud sticks are plastic in G95/J95 and paper in J246)"
+  },
+  {
+   "list": "OSPAR",
+   "code": "101",
+   "name": "Toilet fresheners",
+   "material": "ambiguous",
+   "rule": "OSPAR sanitary section: material not stated (cotton bud sticks are plastic in G95/J95 and paper in J246)"
+  },
+  {
+   "list": "OSPAR",
+   "code": "102",
+   "name": "Other sanitary items (please specify in other item box*)",
+   "material": "ambiguous",
+   "rule": "OSPAR sanitary section: material not stated (cotton bud sticks are plastic in G95/J95 and paper in J246)"
+  },
+  {
+   "list": "OSPAR",
+   "code": "103",
+   "name": "Containers / tubes",
+   "material": "ambiguous",
+   "rule": "OSPAR medical section: material not stated"
+  },
+  {
+   "list": "OSPAR",
+   "code": "104",
+   "name": "Syringes",
+   "material": "ambiguous",
+   "rule": "OSPAR medical section: material not stated"
+  },
+  {
+   "list": "OSPAR",
+   "code": "105",
+   "name": "Other medical items (swabs, bandaging etc.)(please specify in other item box*)",
+   "material": "ambiguous",
+   "rule": "OSPAR medical section: material not stated"
+  },
+  {
+   "list": "OSPAR",
+   "code": "108",
+   "name": "Wax small",
+   "material": "non_plastic",
+   "rule": "paraffin/wax (not a polymer litter material; TSG-ML G213)"
+  },
+  {
+   "list": "OSPAR",
+   "code": "109",
+   "name": "Wax medium",
+   "material": "non_plastic",
+   "rule": "paraffin/wax (not a polymer litter material; TSG-ML G213)"
+  },
+  {
+   "list": "OSPAR",
+   "code": "110",
+   "name": "Wax large",
+   "material": "non_plastic",
+   "rule": "paraffin/wax (not a polymer litter material; TSG-ML G213)"
+  },
+  {
+   "list": "OSPAR",
+   "code": "111",
+   "name": "Other",
+   "material": "ambiguous",
+   "rule": "'Other' / 'Remarks': material not stated"
+  },
+  {
+   "list": "OSPAR",
+   "code": "112",
+   "name": "Plastic bag ends",
+   "material": "plastic",
+   "rule": "OSPAR plastic items added to the plastic/polystyrene section (112-117)"
+  },
+  {
+   "list": "OSPAR",
+   "code": "113",
+   "name": "Gloves (industrial/professional gloves)",
+   "material": "plastic",
+   "rule": "OSPAR plastic items added to the plastic/polystyrene section (112-117)"
+  },
+  {
+   "list": "OSPAR",
+   "code": "114",
+   "name": "Lobster and fish tags",
+   "material": "plastic",
+   "rule": "OSPAR plastic items added to the plastic/polystyrene section (112-117)"
+  },
+  {
+   "list": "OSPAR",
+   "code": "115",
+   "name": "Nets and pieces of net < 50 cm",
+   "material": "plastic",
+   "rule": "OSPAR plastic items added to the plastic/polystyrene section (112-117)"
+  },
+  {
+   "list": "OSPAR",
+   "code": "116",
+   "name": "Nets and pieces of net > 50 cm",
+   "material": "plastic",
+   "rule": "OSPAR plastic items added to the plastic/polystyrene section (112-117)"
+  },
+  {
+   "list": "OSPAR",
+   "code": "117",
+   "name": "Plastic/polystyrene pieces 0 - 2,5 cm",
+   "material": "plastic",
+   "rule": "OSPAR plastic items added to the plastic/polystyrene section (112-117)"
+  },
+  {
+   "list": "OSPAR",
+   "code": "118",
+   "name": "Cartons e.g. tetrapak (milk)",
+   "material": "non_plastic",
+   "rule": "OSPAR paper/cardboard section"
+  },
+  {
+   "list": "OSPAR",
+   "code": "119",
+   "name": "Fish boxes",
+   "material": "ambiguous",
+   "rule": "fish boxes: plastic (G57/G58) or wood (G164) - the name does not say"
+  },
+  {
+   "list": "OSPAR",
+   "code": "120",
+   "name": "Disposable BBQ's",
+   "material": "non_plastic",
+   "rule": "OSPAR metal section (120 disposable BBQ = TSG-ML G179 metal; 205/206 oil drums)"
+  },
+  {
+   "list": "OSPAR",
+   "code": "121",
+   "name": "Bagged dog faeces",
+   "material": "ambiguous",
+   "rule": "bagged dog faeces: the bag's material is not stated"
+  },
+  {
+   "list": "OSPAR",
+   "code": "200",
+   "name": "Old rope small",
+   "material": "ambiguous",
+   "rule": "'old rope' / 'old gloves': material not stated"
+  },
+  {
+   "list": "OSPAR",
+   "code": "201",
+   "name": "Old rope large",
+   "material": "ambiguous",
+   "rule": "'old rope' / 'old gloves': material not stated"
+  },
+  {
+   "list": "OSPAR",
+   "code": "202",
+   "name": "Old plastic pieces",
+   "material": "plastic",
+   "rule": "named plastic ('old plastic pieces', 'pellets')"
+  },
+  {
+   "list": "OSPAR",
+   "code": "203",
+   "name": "Old gloves",
+   "material": "ambiguous",
+   "rule": "'old rope' / 'old gloves': material not stated"
+  },
+  {
+   "list": "OSPAR",
+   "code": "204",
+   "name": "Old cartons",
+   "material": "non_plastic",
+   "rule": "OSPAR paper/cardboard section"
+  },
+  {
+   "list": "OSPAR",
+   "code": "205",
+   "name": "Old oildrums new",
+   "material": "non_plastic",
+   "rule": "OSPAR metal section (120 disposable BBQ = TSG-ML G179 metal; 205/206 oil drums)"
+  },
+  {
+   "list": "OSPAR",
+   "code": "206",
+   "name": "Old oildrums old",
+   "material": "non_plastic",
+   "rule": "OSPAR metal section (120 disposable BBQ = TSG-ML G179 metal; 205/206 oil drums)"
+  },
+  {
+   "list": "OSPAR",
+   "code": "207",
+   "name": "Old human faeces",
+   "material": "non_plastic",
+   "rule": "faeces"
+  },
+  {
+   "list": "OSPAR",
+   "code": "208",
+   "name": "Old animal faeces",
+   "material": "non_plastic",
+   "rule": "faeces"
+  },
+  {
+   "list": "OSPAR",
+   "code": "210",
+   "name": "Old cloth rope",
+   "material": "non_plastic",
+   "rule": "named cloth ('old cloth rope')"
+  },
+  {
+   "list": "OSPAR",
+   "code": "998",
+   "name": "Pellets",
+   "material": "plastic",
+   "rule": "named plastic ('old plastic pieces', 'pellets')"
+  },
+  {
+   "list": "OSPAR",
+   "code": "999",
+   "name": "Remarks",
+   "material": "ambiguous",
+   "rule": "'Other' / 'Remarks': material not stated"
+  },
+  {
+   "list": "OSPAR_1000",
+   "code": "1",
+   "name": "Buoys",
+   "material": "ambiguous",
+   "rule": "buoys: material not stated"
+  },
+  {
+   "list": "OSPAR_1000",
+   "code": "2",
+   "name": "Fish boxes",
+   "material": "ambiguous",
+   "rule": "fish boxes: listed twice (2 and 24) and the file does not say which material each is"
+  },
+  {
+   "list": "OSPAR_1000",
+   "code": "3",
+   "name": "Packaging,  plastic sheeting ",
+   "material": "plastic",
+   "rule": "named 'plastic sheeting'"
+  },
+  {
+   "list": "OSPAR_1000",
+   "code": "4",
+   "name": "Rope (diameter more than 1 cm)",
+   "material": "plastic",
+   "rule": "same item as OSPAR 100 m code 31, in its plastic/polystyrene section"
+  },
+  {
+   "list": "OSPAR_1000",
+   "code": "5",
+   "name": "Jerry cans",
+   "material": "plastic",
+   "rule": "OSPAR 100 m code 10 'Jerry cans (square plastic containers with handle)'"
+  },
+  {
+   "list": "OSPAR_1000",
+   "code": "6",
+   "name": "Nets and pieces of nets (including fishing nets and fishing line)",
+   "material": "plastic",
+   "rule": "nets and fishing line: OSPAR 100 m codes 115/116 and 35, plastic section"
+  },
+  {
+   "list": "OSPAR_1000",
+   "code": "7",
+   "name": "Oil drums",
+   "material": "ambiguous",
+   "rule": "oil drums: listed twice (7 and 10)"
+  },
+  {
+   "list": "OSPAR_1000",
+   "code": "8",
+   "name": "Strapping bands",
+   "material": "plastic",
+   "rule": "same item as OSPAR 100 m code 39, plastic section"
+  },
+  {
+   "list": "OSPAR_1000",
+   "code": "9",
+   "name": "Other large plastic/polystyrene items, (please specify in other item box*)",
+   "material": "plastic",
+   "rule": "named 'plastic/polystyrene'"
+  },
+  {
+   "list": "OSPAR_1000",
+   "code": "10",
+   "name": "Oil drums",
+   "material": "ambiguous",
+   "rule": "oil drums: listed twice (7 and 10)"
+  },
+  {
+   "list": "OSPAR_1000",
+   "code": "11",
+   "name": "Other large metal items (please specify in other item box*)",
+   "material": "non_plastic",
+   "rule": "named metal"
+  },
+  {
+   "list": "OSPAR_1000",
+   "code": "12",
+   "name": "Crab/lobster pots",
+   "material": "ambiguous",
+   "rule": "crab/lobster pots: plastic, wood or metal in the 100 m list (26, 71, 87)"
+  },
+  {
+   "list": "OSPAR_1000",
+   "code": "13",
+   "name": "Crates",
+   "material": "ambiguous",
+   "rule": "crates: plastic or wood in the 100 m list (13, 70)"
+  },
+  {
+   "list": "OSPAR_1000",
+   "code": "14",
+   "name": "Pallets",
+   "material": "non_plastic",
+   "rule": "pallets: OSPAR 100 m code 69, wood section"
+  },
+  {
+   "list": "OSPAR_1000",
+   "code": "15",
+   "name": "Other large wooden items (please specify in other item box*)",
+   "material": "non_plastic",
+   "rule": "named wooden"
+  },
+  {
+   "list": "OSPAR_1000",
+   "code": "17",
+   "name": "Tyres & belts",
+   "material": "non_plastic",
+   "rule": "tyres & belts: OSPAR 100 m code 52, rubber section"
+  },
+  {
+   "list": "OSPAR_1000",
+   "code": "18",
+   "name": "Other large rubber items (please specify in other item box*)",
+   "material": "non_plastic",
+   "rule": "named rubber"
+  },
+  {
+   "list": "OSPAR_1000",
+   "code": "20",
+   "name": "Clothing and shoes",
+   "material": "non_plastic",
+   "rule": "clothing: OSPAR 100 m code 54, cloth section"
+  },
+  {
+   "list": "OSPAR_1000",
+   "code": "21",
+   "name": "Other large cloth/textile items (please specify in other item box*)",
+   "material": "non_plastic",
+   "rule": "named cloth/textile"
+  },
+  {
+   "list": "OSPAR_1000",
+   "code": "22",
+   "name": "Gloves (industrial/professional gloves)",
+   "material": "plastic",
+   "rule": "same item as OSPAR 100 m code 113, plastic section"
+  },
+  {
+   "list": "OSPAR_1000",
+   "code": "23",
+   "name": "String and cord (diameter less than 1 cm)",
+   "material": "plastic",
+   "rule": "same item as OSPAR 100 m code 32, plastic section"
+  },
+  {
+   "list": "OSPAR_1000",
+   "code": "24",
+   "name": "Fish boxes",
+   "material": "ambiguous",
+   "rule": "fish boxes: listed twice (2 and 24)"
+  },
+  {
+   "list": "OSPAR_1000",
+   "code": "90",
+   "name": "Old plastic rope",
+   "material": "plastic",
+   "rule": "named 'plastic rope'"
+  },
+  {
+   "list": "OSPAR_1000",
+   "code": "91",
+   "name": "Old rubber gloves",
+   "material": "non_plastic",
+   "rule": "named rubber"
+  },
+  {
+   "list": "OSPAR_1000",
+   "code": "92",
+   "name": "Old cloth rope",
+   "material": "non_plastic",
+   "rule": "named cloth"
+  },
+  {
+   "list": "TSG-ML",
+   "code": "G1",
+   "name": "4/6-pack yokes, six-pack rings",
+   "material": "plastic",
+   "rule": "TSG-ML artificial polymer materials block (G1-G124)"
+  },
+  {
+   "list": "TSG-ML",
+   "code": "G2",
+   "name": "Bags",
+   "material": "plastic",
+   "rule": "TSG-ML artificial polymer materials block (G1-G124)"
+  },
+  {
+   "list": "TSG-ML",
+   "code": "G3",
+   "name": "Shopping Bags incl. pieces",
+   "material": "plastic",
+   "rule": "TSG-ML artificial polymer materials block (G1-G124)"
+  },
+  {
+   "list": "TSG-ML",
+   "code": "G4",
+   "name": "Small plastic bags, e.g. freezer bags incl. pieces",
+   "material": "plastic",
+   "rule": "TSG-ML artificial polymer materials block (G1-G124)"
+  },
+  {
+   "list": "TSG-ML",
+   "code": "G5",
+   "name": "Plastic bag collective role; what remains from rip-off plastic bags",
+   "material": "plastic",
+   "rule": "TSG-ML artificial polymer materials block (G1-G124)"
+  },
+  {
+   "list": "TSG-ML",
+   "code": "G6",
+   "name": "Bottles",
+   "material": "plastic",
+   "rule": "TSG-ML artificial polymer materials block (G1-G124)"
+  },
+  {
+   "list": "TSG-ML",
+   "code": "G7",
+   "name": "Drink bottles <=0.5l",
+   "material": "plastic",
+   "rule": "TSG-ML artificial polymer materials block (G1-G124)"
+  },
+  {
+   "list": "TSG-ML",
+   "code": "G8",
+   "name": "Drink bottles >0.5l",
+   "material": "plastic",
+   "rule": "TSG-ML artificial polymer materials block (G1-G124)"
+  },
+  {
+   "list": "TSG-ML",
+   "code": "G9",
+   "name": "Cleaner bottles & containers",
+   "material": "plastic",
+   "rule": "TSG-ML artificial polymer materials block (G1-G124)"
+  },
+  {
+   "list": "TSG-ML",
+   "code": "G10",
+   "name": "Food containers incl. fast food containers",
+   "material": "plastic",
+   "rule": "TSG-ML artificial polymer materials block (G1-G124)"
+  },
+  {
+   "list": "TSG-ML",
+   "code": "G11",
+   "name": "Beach use related cosmetic bottles and containers, e.g. Sunblocks",
+   "material": "plastic",
+   "rule": "TSG-ML artificial polymer materials block (G1-G124)"
+  },
+  {
+   "list": "TSG-ML",
+   "code": "G12",
+   "name": "Other cosmetics bottles & containers",
+   "material": "plastic",
+   "rule": "TSG-ML artificial polymer materials block (G1-G124)"
+  },
+  {
+   "list": "TSG-ML",
+   "code": "G13",
+   "name": "Other bottles & containers (drums)",
+   "material": "plastic",
+   "rule": "TSG-ML artificial polymer materials block (G1-G124)"
+  },
+  {
+   "list": "TSG-ML",
+   "code": "G14",
+   "name": "Engine oil bottles & containers <50 cm",
+   "material": "plastic",
+   "rule": "TSG-ML artificial polymer materials block (G1-G124)"
+  },
+  {
+   "list": "TSG-ML",
+   "code": "G15",
+   "name": "Engine oil bottles & containers >50 cm",
+   "material": "plastic",
+   "rule": "TSG-ML artificial polymer materials block (G1-G124)"
+  },
+  {
+   "list": "TSG-ML",
+   "code": "G16",
+   "name": "Jerry cans (square plastic containers with handle)",
+   "material": "plastic",
+   "rule": "TSG-ML artificial polymer materials block (G1-G124)"
+  },
+  {
+   "list": "TSG-ML",
+   "code": "G17",
+   "name": "Injection gun containers",
+   "material": "plastic",
+   "rule": "TSG-ML artificial polymer materials block (G1-G124)"
+  },
+  {
+   "list": "TSG-ML",
+   "code": "G18",
+   "name": "Crates and containers / baskets",
+   "material": "plastic",
+   "rule": "TSG-ML artificial polymer materials block (G1-G124)"
+  },
+  {
+   "list": "TSG-ML",
+   "code": "G19",
+   "name": "Car parts",
+   "material": "plastic",
+   "rule": "TSG-ML artificial polymer materials block (G1-G124)"
+  },
+  {
+   "list": "TSG-ML",
+   "code": "G20",
+   "name": "Plastic caps and lids",
+   "material": "plastic",
+   "rule": "TSG-ML artificial polymer materials block (G1-G124)"
+  },
+  {
+   "list": "TSG-ML",
+   "code": "G21",
+   "name": "Plastic caps/lids drinks",
+   "material": "plastic",
+   "rule": "TSG-ML artificial polymer materials block (G1-G124)"
+  },
+  {
+   "list": "TSG-ML",
+   "code": "G22",
+   "name": "Plastic caps/lids chemicals, detergents (non-food)",
+   "material": "plastic",
+   "rule": "TSG-ML artificial polymer materials block (G1-G124)"
+  },
+  {
+   "list": "TSG-ML",
+   "code": "G23",
+   "name": "Plastic caps/lids unidentified",
+   "material": "plastic",
+   "rule": "TSG-ML artificial polymer materials block (G1-G124)"
+  },
+  {
+   "list": "TSG-ML",
+   "code": "G24",
+   "name": "Plastic rings from bottle caps/lids",
+   "material": "plastic",
+   "rule": "TSG-ML artificial polymer materials block (G1-G124)"
+  },
+  {
+   "list": "TSG-ML",
+   "code": "G25",
+   "name": "Tobacco pouches / plastic cigarette box packaging",
+   "material": "plastic",
+   "rule": "TSG-ML artificial polymer materials block (G1-G124)"
+  },
+  {
+   "list": "TSG-ML",
+   "code": "G26",
+   "name": "Cigarette lighters",
+   "material": "plastic",
+   "rule": "TSG-ML artificial polymer materials block (G1-G124)"
+  },
+  {
+   "list": "TSG-ML",
+   "code": "G27",
+   "name": "Cigarette butts and filters",
+   "material": "plastic",
+   "rule": "TSG-ML artificial polymer materials block (G1-G124)"
+  },
+  {
+   "list": "TSG-ML",
+   "code": "G28",
+   "name": "Pens and pen lids",
+   "material": "plastic",
+   "rule": "TSG-ML artificial polymer materials block (G1-G124)"
+  },
+  {
+   "list": "TSG-ML",
+   "code": "G29",
+   "name": "Combs/hair brushes/sunglasses",
+   "material": "plastic",
+   "rule": "TSG-ML artificial polymer materials block (G1-G124)"
+  },
+  {
+   "list": "TSG-ML",
+   "code": "G30",
+   "name": "Crisps packets/sweets wrappers",
+   "material": "plastic",
+   "rule": "TSG-ML artificial polymer materials block (G1-G124)"
+  },
+  {
+   "list": "TSG-ML",
+   "code": "G31",
+   "name": "Lolly sticks",
+   "material": "plastic",
+   "rule": "TSG-ML artificial polymer materials block (G1-G124)"
+  },
+  {
+   "list": "TSG-ML",
+   "code": "G32",
+   "name": "Toys and party poppers",
+   "material": "plastic",
+   "rule": "TSG-ML artificial polymer materials block (G1-G124)"
+  },
+  {
+   "list": "TSG-ML",
+   "code": "G33",
+   "name": "Cups and cup lids",
+   "material": "plastic",
+   "rule": "TSG-ML artificial polymer materials block (G1-G124)"
+  },
+  {
+   "list": "TSG-ML",
+   "code": "G34",
+   "name": "Cutlery and trays",
+   "material": "plastic",
+   "rule": "TSG-ML artificial polymer materials block (G1-G124)"
+  },
+  {
+   "list": "TSG-ML",
+   "code": "G35",
+   "name": "Straws and stirrers",
+   "material": "plastic",
+   "rule": "TSG-ML artificial polymer materials block (G1-G124)"
+  },
+  {
+   "list": "TSG-ML",
+   "code": "G36",
+   "name": "Fertiliser/animal feed bags",
+   "material": "plastic",
+   "rule": "TSG-ML artificial polymer materials block (G1-G124)"
+  },
+  {
+   "list": "TSG-ML",
+   "code": "G37",
+   "name": "Mesh vegetable bags",
+   "material": "plastic",
+   "rule": "TSG-ML artificial polymer materials block (G1-G124)"
+  },
+  {
+   "list": "TSG-ML",
+   "code": "G38",
+   "name": "Cover / packaging",
+   "material": "plastic",
+   "rule": "TSG-ML artificial polymer materials block (G1-G124)"
+  },
+  {
+   "list": "TSG-ML",
+   "code": "G39",
+   "name": "Gloves",
+   "material": "plastic",
+   "rule": "TSG-ML artificial polymer materials block (G1-G124)"
+  },
+  {
+   "list": "TSG-ML",
+   "code": "G40",
+   "name": "Gloves (washing up)",
+   "material": "plastic",
+   "rule": "TSG-ML artificial polymer materials block (G1-G124)"
+  },
+  {
+   "list": "TSG-ML",
+   "code": "G41",
+   "name": "Gloves (industrial/professional rubber gloves)",
+   "material": "plastic",
+   "rule": "TSG-ML artificial polymer materials block (G1-G124)"
+  },
+  {
+   "list": "TSG-ML",
+   "code": "G42",
+   "name": "Crab/lobster pots and tops",
+   "material": "plastic",
+   "rule": "TSG-ML artificial polymer materials block (G1-G124)"
+  },
+  {
+   "list": "TSG-ML",
+   "code": "G43",
+   "name": "Tags (fishing and industry)",
+   "material": "plastic",
+   "rule": "TSG-ML artificial polymer materials block (G1-G124)"
+  },
+  {
+   "list": "TSG-ML",
+   "code": "G44",
+   "name": "Octopus pots",
+   "material": "plastic",
+   "rule": "TSG-ML artificial polymer materials block (G1-G124)"
+  },
+  {
+   "list": "TSG-ML",
+   "code": "G45",
+   "name": "Mussels nets, Oyster nets",
+   "material": "plastic",
+   "rule": "TSG-ML artificial polymer materials block (G1-G124)"
+  },
+  {
+   "list": "TSG-ML",
+   "code": "G46",
+   "name": "Oyster trays (round from oyster cultures)",
+   "material": "plastic",
+   "rule": "TSG-ML artificial polymer materials block (G1-G124)"
+  },
+  {
+   "list": "TSG-ML",
+   "code": "G47",
+   "name": "Plastic sheeting from mussel culture (Tahitians)",
+   "material": "plastic",
+   "rule": "TSG-ML artificial polymer materials block (G1-G124)"
+  },
+  {
+   "list": "TSG-ML",
+   "code": "G48",
+   "name": "Synthetic rope",
+   "material": "plastic",
+   "rule": "TSG-ML artificial polymer materials block (G1-G124)"
+  },
+  {
+   "list": "TSG-ML",
+   "code": "G49",
+   "name": "Rope (diameter more than 1cm)",
+   "material": "plastic",
+   "rule": "TSG-ML artificial polymer materials block (G1-G124)"
+  },
+  {
+   "list": "TSG-ML",
+   "code": "G50",
+   "name": "String and cord (diameter less than 1cm)",
+   "material": "plastic",
+   "rule": "TSG-ML artificial polymer materials block (G1-G124)"
+  },
+  {
+   "list": "TSG-ML",
+   "code": "G51",
+   "name": "Fishing net",
+   "material": "plastic",
+   "rule": "TSG-ML artificial polymer materials block (G1-G124)"
+  },
+  {
+   "list": "TSG-ML",
+   "code": "G52",
+   "name": "Nets and pieces of net",
+   "material": "plastic",
+   "rule": "TSG-ML artificial polymer materials block (G1-G124)"
+  },
+  {
+   "list": "TSG-ML",
+   "code": "G53",
+   "name": "Nets and pieces of net < 50 cm",
+   "material": "plastic",
+   "rule": "TSG-ML artificial polymer materials block (G1-G124)"
+  },
+  {
+   "list": "TSG-ML",
+   "code": "G54",
+   "name": "Nets and pieces of net > 50 cm",
+   "material": "plastic",
+   "rule": "TSG-ML artificial polymer materials block (G1-G124)"
+  },
+  {
+   "list": "TSG-ML",
+   "code": "G55",
+   "name": "Fishing line (entangled)",
+   "material": "plastic",
+   "rule": "TSG-ML artificial polymer materials block (G1-G124)"
+  },
+  {
+   "list": "TSG-ML",
+   "code": "G56",
+   "name": "Tangled nets/cord",
+   "material": "plastic",
+   "rule": "TSG-ML artificial polymer materials block (G1-G124)"
+  },
+  {
+   "list": "TSG-ML",
+   "code": "G57",
+   "name": "Fish boxes - plastic",
+   "material": "plastic",
+   "rule": "TSG-ML artificial polymer materials block (G1-G124)"
+  },
+  {
+   "list": "TSG-ML",
+   "code": "G58",
+   "name": "Fish boxes - expanded polystyrene",
+   "material": "plastic",
+   "rule": "TSG-ML artificial polymer materials block (G1-G124)"
+  },
+  {
+   "list": "TSG-ML",
+   "code": "G59",
+   "name": "Fishing line/monofilament (angling)",
+   "material": "plastic",
+   "rule": "TSG-ML artificial polymer materials block (G1-G124)"
+  },
+  {
+   "list": "TSG-ML",
+   "code": "G60",
+   "name": "Light sticks (tubes with fluid) incl. packaging",
+   "material": "plastic",
+   "rule": "TSG-ML artificial polymer materials block (G1-G124)"
+  },
+  {
+   "list": "TSG-ML",
+   "code": "G61",
+   "name": "Other fishing related",
+   "material": "plastic",
+   "rule": "TSG-ML artificial polymer materials block (G1-G124)"
+  },
+  {
+   "list": "TSG-ML",
+   "code": "G62",
+   "name": "Floats for fishing nets",
+   "material": "plastic",
+   "rule": "TSG-ML artificial polymer materials block (G1-G124)"
+  },
+  {
+   "list": "TSG-ML",
+   "code": "G63",
+   "name": "Buoys",
+   "material": "plastic",
+   "rule": "TSG-ML artificial polymer materials block (G1-G124)"
+  },
+  {
+   "list": "TSG-ML",
+   "code": "G64",
+   "name": "Fenders",
+   "material": "plastic",
+   "rule": "TSG-ML artificial polymer materials block (G1-G124)"
+  },
+  {
+   "list": "TSG-ML",
+   "code": "G65",
+   "name": "Buckets",
+   "material": "plastic",
+   "rule": "TSG-ML artificial polymer materials block (G1-G124)"
+  },
+  {
+   "list": "TSG-ML",
+   "code": "G66",
+   "name": "Strapping bands",
+   "material": "plastic",
+   "rule": "TSG-ML artificial polymer materials block (G1-G124)"
+  },
+  {
+   "list": "TSG-ML",
+   "code": "G67",
+   "name": "Sheets, industrial packaging, plastic sheeting",
+   "material": "plastic",
+   "rule": "TSG-ML artificial polymer materials block (G1-G124)"
+  },
+  {
+   "list": "TSG-ML",
+   "code": "G68",
+   "name": "Fibre glass/fragments",
+   "material": "plastic",
+   "rule": "TSG-ML artificial polymer materials block (G1-G124)"
+  },
+  {
+   "list": "TSG-ML",
+   "code": "G69",
+   "name": "Hard hats/Helmets",
+   "material": "plastic",
+   "rule": "TSG-ML artificial polymer materials block (G1-G124)"
+  },
+  {
+   "list": "TSG-ML",
+   "code": "G70",
+   "name": "Shotgun cartridges",
+   "material": "plastic",
+   "rule": "TSG-ML artificial polymer materials block (G1-G124)"
+  },
+  {
+   "list": "TSG-ML",
+   "code": "G71",
+   "name": "Shoes/sandals",
+   "material": "plastic",
+   "rule": "TSG-ML artificial polymer materials block (G1-G124)"
+  },
+  {
+   "list": "TSG-ML",
+   "code": "G72",
+   "name": "Traffic cones",
+   "material": "plastic",
+   "rule": "TSG-ML artificial polymer materials block (G1-G124)"
+  },
+  {
+   "list": "TSG-ML",
+   "code": "G73",
+   "name": "Foam sponge",
+   "material": "plastic",
+   "rule": "TSG-ML artificial polymer materials block (G1-G124)"
+  },
+  {
+   "list": "TSG-ML",
+   "code": "G74",
+   "name": "Foam packaging/insulation/polyurethane",
+   "material": "plastic",
+   "rule": "TSG-ML artificial polymer materials block (G1-G124)"
+  },
+  {
+   "list": "TSG-ML",
+   "code": "G75",
+   "name": "Plastic/polystyrene pieces 0 - 2.5 cm",
+   "material": "plastic",
+   "rule": "TSG-ML artificial polymer materials block (G1-G124)"
+  },
+  {
+   "list": "TSG-ML",
+   "code": "G76",
+   "name": "Plastic/polystyrene pieces 2.5 cm > < 50cm",
+   "material": "plastic",
+   "rule": "TSG-ML artificial polymer materials block (G1-G124)"
+  },
+  {
+   "list": "TSG-ML",
+   "code": "G77",
+   "name": "Plastic/polystyrene pieces > 50 cm",
+   "material": "plastic",
+   "rule": "TSG-ML artificial polymer materials block (G1-G124)"
+  },
+  {
+   "list": "TSG-ML",
+   "code": "G78",
+   "name": "Plastic pieces 0 - 2.5 cm",
+   "material": "plastic",
+   "rule": "TSG-ML artificial polymer materials block (G1-G124)"
+  },
+  {
+   "list": "TSG-ML",
+   "code": "G79",
+   "name": "Plastic pieces 2.5 cm > < 50cm",
+   "material": "plastic",
+   "rule": "TSG-ML artificial polymer materials block (G1-G124)"
+  },
+  {
+   "list": "TSG-ML",
+   "code": "G80",
+   "name": "Plastic pieces > 50 cm",
+   "material": "plastic",
+   "rule": "TSG-ML artificial polymer materials block (G1-G124)"
+  },
+  {
+   "list": "TSG-ML",
+   "code": "G81",
+   "name": "Polystyrene pieces 0 - 2.5 cm",
+   "material": "plastic",
+   "rule": "TSG-ML artificial polymer materials block (G1-G124)"
+  },
+  {
+   "list": "TSG-ML",
+   "code": "G82",
+   "name": "Polystyrene pieces 2.5 cm > < 50cm",
+   "material": "plastic",
+   "rule": "TSG-ML artificial polymer materials block (G1-G124)"
+  },
+  {
+   "list": "TSG-ML",
+   "code": "G83",
+   "name": "Polystyrene pieces > 50 cm",
+   "material": "plastic",
+   "rule": "TSG-ML artificial polymer materials block (G1-G124)"
+  },
+  {
+   "list": "TSG-ML",
+   "code": "G84",
+   "name": "CD, CD-box",
+   "material": "plastic",
+   "rule": "TSG-ML artificial polymer materials block (G1-G124)"
+  },
+  {
+   "list": "TSG-ML",
+   "code": "G85",
+   "name": "Salt packaging",
+   "material": "plastic",
+   "rule": "TSG-ML artificial polymer materials block (G1-G124)"
+  },
+  {
+   "list": "TSG-ML",
+   "code": "G86",
+   "name": "Fin trees (from fins for scuba diving)",
+   "material": "plastic",
+   "rule": "TSG-ML artificial polymer materials block (G1-G124)"
+  },
+  {
+   "list": "TSG-ML",
+   "code": "G87",
+   "name": "Masking tape",
+   "material": "plastic",
+   "rule": "TSG-ML artificial polymer materials block (G1-G124)"
+  },
+  {
+   "list": "TSG-ML",
+   "code": "G88",
+   "name": "Telephone (incl. parts)",
+   "material": "plastic",
+   "rule": "TSG-ML artificial polymer materials block (G1-G124)"
+  },
+  {
+   "list": "TSG-ML",
+   "code": "G89",
+   "name": "Plastic construction waste",
+   "material": "plastic",
+   "rule": "TSG-ML artificial polymer materials block (G1-G124)"
+  },
+  {
+   "list": "TSG-ML",
+   "code": "G90",
+   "name": "Plastic flower pots",
+   "material": "plastic",
+   "rule": "TSG-ML artificial polymer materials block (G1-G124)"
+  },
+  {
+   "list": "TSG-ML",
+   "code": "G91",
+   "name": "Biomass holder from sewage treatment plants",
+   "material": "plastic",
+   "rule": "TSG-ML artificial polymer materials block (G1-G124)"
+  },
+  {
+   "list": "TSG-ML",
+   "code": "G92",
+   "name": "Bait containers/packaging",
+   "material": "plastic",
+   "rule": "TSG-ML artificial polymer materials block (G1-G124)"
+  },
+  {
+   "list": "TSG-ML",
+   "code": "G93",
+   "name": "Cable ties",
+   "material": "plastic",
+   "rule": "TSG-ML artificial polymer materials block (G1-G124)"
+  },
+  {
+   "list": "TSG-ML",
+   "code": "G94",
+   "name": "Table cloth",
+   "material": "plastic",
+   "rule": "TSG-ML artificial polymer materials block (G1-G124)"
+  },
+  {
+   "list": "TSG-ML",
+   "code": "G95",
+   "name": "Cotton bud sticks",
+   "material": "plastic",
+   "rule": "TSG-ML artificial polymer materials block (G1-G124)"
+  },
+  {
+   "list": "TSG-ML",
+   "code": "G96",
+   "name": "Sanitary towels/panty liners/backing strips",
+   "material": "plastic",
+   "rule": "TSG-ML artificial polymer materials block (G1-G124)"
+  },
+  {
+   "list": "TSG-ML",
+   "code": "G97",
+   "name": "Toilet fresheners",
+   "material": "plastic",
+   "rule": "TSG-ML artificial polymer materials block (G1-G124)"
+  },
+  {
+   "list": "TSG-ML",
+   "code": "G98",
+   "name": "Diapers/nappies",
+   "material": "plastic",
+   "rule": "TSG-ML artificial polymer materials block (G1-G124)"
+  },
+  {
+   "list": "TSG-ML",
+   "code": "G99",
+   "name": "Syringes/needles",
+   "material": "plastic",
+   "rule": "TSG-ML artificial polymer materials block (G1-G124)"
+  },
+  {
+   "list": "TSG-ML",
+   "code": "G100",
+   "name": "Medical/Pharmaceuticals containers/tubes",
+   "material": "plastic",
+   "rule": "TSG-ML artificial polymer materials block (G1-G124)"
+  },
+  {
+   "list": "TSG-ML",
+   "code": "G101",
+   "name": "Dog faeces bag",
+   "material": "plastic",
+   "rule": "TSG-ML artificial polymer materials block (G1-G124)"
+  },
+  {
+   "list": "TSG-ML",
+   "code": "G102",
+   "name": "Flip-flops",
+   "material": "plastic",
+   "rule": "TSG-ML artificial polymer materials block (G1-G124)"
+  },
+  {
+   "list": "TSG-ML",
+   "code": "G103",
+   "name": "Plastic fragments rounded <5mm",
+   "material": "plastic",
+   "rule": "TSG-ML artificial polymer materials block (G1-G124)"
+  },
+  {
+   "list": "TSG-ML",
+   "code": "G104",
+   "name": "Plastic fragments subrounded <5mm",
+   "material": "plastic",
+   "rule": "TSG-ML artificial polymer materials block (G1-G124)"
+  },
+  {
+   "list": "TSG-ML",
+   "code": "G105",
+   "name": "Plastic fragments subangular <5mm",
+   "material": "plastic",
+   "rule": "TSG-ML artificial polymer materials block (G1-G124)"
+  },
+  {
+   "list": "TSG-ML",
+   "code": "G106",
+   "name": "Plastic fragments angular <5mm",
+   "material": "plastic",
+   "rule": "TSG-ML artificial polymer materials block (G1-G124)"
+  },
+  {
+   "list": "TSG-ML",
+   "code": "G107",
+   "name": "cylindrical pellets <5mm",
+   "material": "plastic",
+   "rule": "TSG-ML artificial polymer materials block (G1-G124)"
+  },
+  {
+   "list": "TSG-ML",
+   "code": "G108",
+   "name": "disks pellets <5mm",
+   "material": "plastic",
+   "rule": "TSG-ML artificial polymer materials block (G1-G124)"
+  },
+  {
+   "list": "TSG-ML",
+   "code": "G109",
+   "name": "flat pellets <5mm",
+   "material": "plastic",
+   "rule": "TSG-ML artificial polymer materials block (G1-G124)"
+  },
+  {
+   "list": "TSG-ML",
+   "code": "G110",
+   "name": "ovoid pellets <5mm",
+   "material": "plastic",
+   "rule": "TSG-ML artificial polymer materials block (G1-G124)"
+  },
+  {
+   "list": "TSG-ML",
+   "code": "G111",
+   "name": "spheruloids pellets <5mm",
+   "material": "plastic",
+   "rule": "TSG-ML artificial polymer materials block (G1-G124)"
+  },
+  {
+   "list": "TSG-ML",
+   "code": "G112",
+   "name": "Industrial pellets",
+   "material": "plastic",
+   "rule": "TSG-ML artificial polymer materials block (G1-G124)"
+  },
+  {
+   "list": "TSG-ML",
+   "code": "G113",
+   "name": "Filament <5mm",
+   "material": "plastic",
+   "rule": "TSG-ML artificial polymer materials block (G1-G124)"
+  },
+  {
+   "list": "TSG-ML",
+   "code": "G114",
+   "name": "Films <5mm",
+   "material": "plastic",
+   "rule": "TSG-ML artificial polymer materials block (G1-G124)"
+  },
+  {
+   "list": "TSG-ML",
+   "code": "G115",
+   "name": "Foamed plastic <5mm",
+   "material": "plastic",
+   "rule": "TSG-ML artificial polymer materials block (G1-G124)"
+  },
+  {
+   "list": "TSG-ML",
+   "code": "G116",
+   "name": "Granules <5mm",
+   "material": "plastic",
+   "rule": "TSG-ML artificial polymer materials block (G1-G124)"
+  },
+  {
+   "list": "TSG-ML",
+   "code": "G117",
+   "name": "Styrofoam <5mm",
+   "material": "plastic",
+   "rule": "TSG-ML artificial polymer materials block (G1-G124)"
+  },
+  {
+   "list": "TSG-ML",
+   "code": "G118",
+   "name": "Small industrial spheres (<5mm)",
+   "material": "plastic",
+   "rule": "TSG-ML artificial polymer materials block (G1-G124)"
+  },
+  {
+   "list": "TSG-ML",
+   "code": "G119",
+   "name": "Sheet like user plastic (>1mm)",
+   "material": "plastic",
+   "rule": "TSG-ML artificial polymer materials block (G1-G124)"
+  },
+  {
+   "list": "TSG-ML",
+   "code": "G120",
+   "name": "Threadlike user plastic (>1mm)",
+   "material": "plastic",
+   "rule": "TSG-ML artificial polymer materials block (G1-G124)"
+  },
+  {
+   "list": "TSG-ML",
+   "code": "G121",
+   "name": "Foamed user plastic (>1mm)",
+   "material": "plastic",
+   "rule": "TSG-ML artificial polymer materials block (G1-G124)"
+  },
+  {
+   "list": "TSG-ML",
+   "code": "G122",
+   "name": "Plastic fragments (>1mm)",
+   "material": "plastic",
+   "rule": "TSG-ML artificial polymer materials block (G1-G124)"
+  },
+  {
+   "list": "TSG-ML",
+   "code": "G123",
+   "name": "Polyurethane granules <5mm",
+   "material": "plastic",
+   "rule": "TSG-ML artificial polymer materials block (G1-G124)"
+  },
+  {
+   "list": "TSG-ML",
+   "code": "G124",
+   "name": "Other plastic/polystyrene items (identifiable)",
+   "material": "plastic",
+   "rule": "TSG-ML artificial polymer materials block (G1-G124)"
+  },
+  {
+   "list": "TSG-ML",
+   "code": "G125",
+   "name": "Balloons and balloon sticks",
+   "material": "non_plastic",
+   "rule": "TSG-ML rubber block (G125-G134)"
+  },
+  {
+   "list": "TSG-ML",
+   "code": "G126",
+   "name": "Balls",
+   "material": "non_plastic",
+   "rule": "TSG-ML rubber block (G125-G134)"
+  },
+  {
+   "list": "TSG-ML",
+   "code": "G127",
+   "name": "Rubber boots",
+   "material": "non_plastic",
+   "rule": "TSG-ML rubber block (G125-G134)"
+  },
+  {
+   "list": "TSG-ML",
+   "code": "G128",
+   "name": "Tyres and belts",
+   "material": "non_plastic",
+   "rule": "TSG-ML rubber block (G125-G134)"
+  },
+  {
+   "list": "TSG-ML",
+   "code": "G129",
+   "name": "Inner-tubes and rubber sheet",
+   "material": "non_plastic",
+   "rule": "TSG-ML rubber block (G125-G134)"
+  },
+  {
+   "list": "TSG-ML",
+   "code": "G130",
+   "name": "Wheels",
+   "material": "non_plastic",
+   "rule": "TSG-ML rubber block (G125-G134)"
+  },
+  {
+   "list": "TSG-ML",
+   "code": "G131",
+   "name": "Rubber bands (small, for kitchen/household/post use)",
+   "material": "non_plastic",
+   "rule": "TSG-ML rubber block (G125-G134)"
+  },
+  {
+   "list": "TSG-ML",
+   "code": "G132",
+   "name": "Bobbins (fishing)",
+   "material": "non_plastic",
+   "rule": "TSG-ML rubber block (G125-G134)"
+  },
+  {
+   "list": "TSG-ML",
+   "code": "G133",
+   "name": "Condoms (incl. packaging)",
+   "material": "non_plastic",
+   "rule": "TSG-ML rubber block (G125-G134)"
+  },
+  {
+   "list": "TSG-ML",
+   "code": "G134",
+   "name": "Other rubber pieces",
+   "material": "non_plastic",
+   "rule": "TSG-ML rubber block (G125-G134)"
+  },
+  {
+   "list": "TSG-ML",
+   "code": "G135",
+   "name": "Clothing (clothes, shoes)",
+   "material": "non_plastic",
+   "rule": "TSG-ML cloth/textile block (G135-G145)"
+  },
+  {
+   "list": "TSG-ML",
+   "code": "G136",
+   "name": "Shoes",
+   "material": "non_plastic",
+   "rule": "TSG-ML cloth/textile block (G135-G145)"
+  },
+  {
+   "list": "TSG-ML",
+   "code": "G137",
+   "name": "Clothing / rags (clothing, hats, towels)",
+   "material": "non_plastic",
+   "rule": "TSG-ML cloth/textile block (G135-G145)"
+  },
+  {
+   "list": "TSG-ML",
+   "code": "G138",
+   "name": "Shoes and sandals (e.g. Leather, cloth)",
+   "material": "non_plastic",
+   "rule": "TSG-ML cloth/textile block (G135-G145)"
+  },
+  {
+   "list": "TSG-ML",
+   "code": "G139",
+   "name": "Backpacks & bags",
+   "material": "non_plastic",
+   "rule": "TSG-ML cloth/textile block (G135-G145)"
+  },
+  {
+   "list": "TSG-ML",
+   "code": "G140",
+   "name": "Sacking (hessian)",
+   "material": "non_plastic",
+   "rule": "TSG-ML cloth/textile block (G135-G145)"
+  },
+  {
+   "list": "TSG-ML",
+   "code": "G141",
+   "name": "Carpet & Furnishing",
+   "material": "non_plastic",
+   "rule": "TSG-ML cloth/textile block (G135-G145)"
+  },
+  {
+   "list": "TSG-ML",
+   "code": "G142",
+   "name": "Rope, string and nets",
+   "material": "non_plastic",
+   "rule": "TSG-ML cloth/textile block (G135-G145)"
+  },
+  {
+   "list": "TSG-ML",
+   "code": "G143",
+   "name": "Sails, canvas",
+   "material": "non_plastic",
+   "rule": "TSG-ML cloth/textile block (G135-G145)"
+  },
+  {
+   "list": "TSG-ML",
+   "code": "G144",
+   "name": "Tampons and tampon applicators",
+   "material": "ambiguous",
+   "rule": "tampons and tampon applicators: cloth block, but applicators are often plastic (Joint List J144 'plastic')"
+  },
+  {
+   "list": "TSG-ML",
+   "code": "G145",
+   "name": "Other textiles (incl. rags)",
+   "material": "non_plastic",
+   "rule": "TSG-ML cloth/textile block (G135-G145)"
+  },
+  {
+   "list": "TSG-ML",
+   "code": "G146",
+   "name": "Paper/Cardboard",
+   "material": "non_plastic",
+   "rule": "TSG-ML paper/cardboard block (G146-G158)"
+  },
+  {
+   "list": "TSG-ML",
+   "code": "G147",
+   "name": "Paper bags",
+   "material": "non_plastic",
+   "rule": "TSG-ML paper/cardboard block (G146-G158)"
+  },
+  {
+   "list": "TSG-ML",
+   "code": "G148",
+   "name": "Cardboard (boxes & fragments)",
+   "material": "non_plastic",
+   "rule": "TSG-ML paper/cardboard block (G146-G158)"
+  },
+  {
+   "list": "TSG-ML",
+   "code": "G149",
+   "name": "Paper packaging",
+   "material": "non_plastic",
+   "rule": "TSG-ML paper/cardboard block (G146-G158)"
+  },
+  {
+   "list": "TSG-ML",
+   "code": "G150",
+   "name": "Cartons/Tetrapack Milk",
+   "material": "non_plastic",
+   "rule": "TSG-ML paper/cardboard block (G146-G158)"
+  },
+  {
+   "list": "TSG-ML",
+   "code": "G151",
+   "name": "Cartons/Tetrapack (others)",
+   "material": "non_plastic",
+   "rule": "TSG-ML paper/cardboard block (G146-G158)"
+  },
+  {
+   "list": "TSG-ML",
+   "code": "G152",
+   "name": "Cigarette packets",
+   "material": "non_plastic",
+   "rule": "TSG-ML paper/cardboard block (G146-G158)"
+  },
+  {
+   "list": "TSG-ML",
+   "code": "G153",
+   "name": "Cups, food trays, food wrappers, drink containers",
+   "material": "non_plastic",
+   "rule": "TSG-ML paper/cardboard block (G146-G158)"
+  },
+  {
+   "list": "TSG-ML",
+   "code": "G154",
+   "name": "Newspapers & magazines",
+   "material": "non_plastic",
+   "rule": "TSG-ML paper/cardboard block (G146-G158)"
+  },
+  {
+   "list": "TSG-ML",
+   "code": "G155",
+   "name": "Tubes for fireworks",
+   "material": "non_plastic",
+   "rule": "TSG-ML paper/cardboard block (G146-G158)"
+  },
+  {
+   "list": "TSG-ML",
+   "code": "G156",
+   "name": "Paper fragments",
+   "material": "non_plastic",
+   "rule": "TSG-ML paper/cardboard block (G146-G158)"
+  },
+  {
+   "list": "TSG-ML",
+   "code": "G157",
+   "name": "Paper",
+   "material": "non_plastic",
+   "rule": "TSG-ML paper/cardboard block (G146-G158)"
+  },
+  {
+   "list": "TSG-ML",
+   "code": "G158",
+   "name": "Other paper items",
+   "material": "non_plastic",
+   "rule": "TSG-ML paper/cardboard block (G146-G158)"
+  },
+  {
+   "list": "TSG-ML",
+   "code": "G159",
+   "name": "Corks",
+   "material": "non_plastic",
+   "rule": "TSG-ML processed/worked wood block (G159-G173)"
+  },
+  {
+   "list": "TSG-ML",
+   "code": "G160",
+   "name": "Pallets",
+   "material": "non_plastic",
+   "rule": "TSG-ML processed/worked wood block (G159-G173)"
+  },
+  {
+   "list": "TSG-ML",
+   "code": "G161",
+   "name": "Processed timber",
+   "material": "non_plastic",
+   "rule": "TSG-ML processed/worked wood block (G159-G173)"
+  },
+  {
+   "list": "TSG-ML",
+   "code": "G162",
+   "name": "Crates",
+   "material": "non_plastic",
+   "rule": "TSG-ML processed/worked wood block (G159-G173)"
+  },
+  {
+   "list": "TSG-ML",
+   "code": "G163",
+   "name": "Crab/lobster pots",
+   "material": "non_plastic",
+   "rule": "TSG-ML processed/worked wood block (G159-G173)"
+  },
+  {
+   "list": "TSG-ML",
+   "code": "G164",
+   "name": "Fish boxes",
+   "material": "non_plastic",
+   "rule": "TSG-ML processed/worked wood block (G159-G173)"
+  },
+  {
+   "list": "TSG-ML",
+   "code": "G165",
+   "name": "Ice-cream sticks, chip forks, chopsticks, toothpicks",
+   "material": "non_plastic",
+   "rule": "TSG-ML processed/worked wood block (G159-G173)"
+  },
+  {
+   "list": "TSG-ML",
+   "code": "G166",
+   "name": "Paint brushes",
+   "material": "non_plastic",
+   "rule": "TSG-ML processed/worked wood block (G159-G173)"
+  },
+  {
+   "list": "TSG-ML",
+   "code": "G167",
+   "name": "Matches & fireworks",
+   "material": "non_plastic",
+   "rule": "TSG-ML processed/worked wood block (G159-G173)"
+  },
+  {
+   "list": "TSG-ML",
+   "code": "G168",
+   "name": "Wood boards",
+   "material": "non_plastic",
+   "rule": "TSG-ML processed/worked wood block (G159-G173)"
+  },
+  {
+   "list": "TSG-ML",
+   "code": "G169",
+   "name": "Beams / Dunnage",
+   "material": "non_plastic",
+   "rule": "TSG-ML processed/worked wood block (G159-G173)"
+  },
+  {
+   "list": "TSG-ML",
+   "code": "G170",
+   "name": "Wood (processed)",
+   "material": "non_plastic",
+   "rule": "TSG-ML processed/worked wood block (G159-G173)"
+  },
+  {
+   "list": "TSG-ML",
+   "code": "G171",
+   "name": "Other wood < 50 cm",
+   "material": "non_plastic",
+   "rule": "TSG-ML processed/worked wood block (G159-G173)"
+  },
+  {
+   "list": "TSG-ML",
+   "code": "G172",
+   "name": "Other wood > 50 cm",
+   "material": "non_plastic",
+   "rule": "TSG-ML processed/worked wood block (G159-G173)"
+  },
+  {
+   "list": "TSG-ML",
+   "code": "G173",
+   "name": "Other (specify)",
+   "material": "non_plastic",
+   "rule": "TSG-ML processed/worked wood block (G159-G173)"
+  },
+  {
+   "list": "TSG-ML",
+   "code": "G174",
+   "name": "Aerosol/Spray cans industry",
+   "material": "non_plastic",
+   "rule": "TSG-ML metal block (G174-G199)"
+  },
+  {
+   "list": "TSG-ML",
+   "code": "G175",
+   "name": "Cans (beverage)",
+   "material": "non_plastic",
+   "rule": "TSG-ML metal block (G174-G199)"
+  },
+  {
+   "list": "TSG-ML",
+   "code": "G176",
+   "name": "Cans (food)",
+   "material": "non_plastic",
+   "rule": "TSG-ML metal block (G174-G199)"
+  },
+  {
+   "list": "TSG-ML",
+   "code": "G177",
+   "name": "Foil wrappers, aluminium foil",
+   "material": "non_plastic",
+   "rule": "TSG-ML metal block (G174-G199)"
+  },
+  {
+   "list": "TSG-ML",
+   "code": "G178",
+   "name": "Bottle caps, lids & pull tabs",
+   "material": "non_plastic",
+   "rule": "TSG-ML metal block (G174-G199)"
+  },
+  {
+   "list": "TSG-ML",
+   "code": "G179",
+   "name": "Disposable BBQ's",
+   "material": "non_plastic",
+   "rule": "TSG-ML metal block (G174-G199)"
+  },
+  {
+   "list": "TSG-ML",
+   "code": "G180",
+   "name": "Appliances (refrigerators, washers, etc.)",
+   "material": "non_plastic",
+   "rule": "TSG-ML metal block (G174-G199)"
+  },
+  {
+   "list": "TSG-ML",
+   "code": "G181",
+   "name": "Tableware (plates, cups & cutlery)",
+   "material": "non_plastic",
+   "rule": "TSG-ML metal block (G174-G199)"
+  },
+  {
+   "list": "TSG-ML",
+   "code": "G182",
+   "name": "Fishing related (weights, sinkers, lures, hooks)",
+   "material": "non_plastic",
+   "rule": "TSG-ML metal block (G174-G199)"
+  },
+  {
+   "list": "TSG-ML",
+   "code": "G183",
+   "name": "Fish hook remains",
+   "material": "non_plastic",
+   "rule": "TSG-ML metal block (G174-G199)"
+  },
+  {
+   "list": "TSG-ML",
+   "code": "G184",
+   "name": "Lobster/crab pots",
+   "material": "non_plastic",
+   "rule": "TSG-ML metal block (G174-G199)"
+  },
+  {
+   "list": "TSG-ML",
+   "code": "G185",
+   "name": "Middle  size containers",
+   "material": "non_plastic",
+   "rule": "TSG-ML metal block (G174-G199)"
+  },
+  {
+   "list": "TSG-ML",
+   "code": "G186",
+   "name": "Industrial scrap",
+   "material": "non_plastic",
+   "rule": "TSG-ML metal block (G174-G199)"
+  },
+  {
+   "list": "TSG-ML",
+   "code": "G187",
+   "name": "Drums, e.g. oil",
+   "material": "non_plastic",
+   "rule": "TSG-ML metal block (G174-G199)"
+  },
+  {
+   "list": "TSG-ML",
+   "code": "G188",
+   "name": "Other cans (< 4 L)",
+   "material": "non_plastic",
+   "rule": "TSG-ML metal block (G174-G199)"
+  },
+  {
+   "list": "TSG-ML",
+   "code": "G189",
+   "name": "Gas bottles, drums & buckets ( > 4 L)",
+   "material": "non_plastic",
+   "rule": "TSG-ML metal block (G174-G199)"
+  },
+  {
+   "list": "TSG-ML",
+   "code": "G190",
+   "name": "Paint tins",
+   "material": "non_plastic",
+   "rule": "TSG-ML metal block (G174-G199)"
+  },
+  {
+   "list": "TSG-ML",
+   "code": "G191",
+   "name": "Wire, wire mesh, barbed wire",
+   "material": "non_plastic",
+   "rule": "TSG-ML metal block (G174-G199)"
+  },
+  {
+   "list": "TSG-ML",
+   "code": "G192",
+   "name": "Barrels",
+   "material": "non_plastic",
+   "rule": "TSG-ML metal block (G174-G199)"
+  },
+  {
+   "list": "TSG-ML",
+   "code": "G193",
+   "name": "Car parts / batteries",
+   "material": "non_plastic",
+   "rule": "TSG-ML metal block (G174-G199)"
+  },
+  {
+   "list": "TSG-ML",
+   "code": "G194",
+   "name": "Cables",
+   "material": "non_plastic",
+   "rule": "TSG-ML metal block (G174-G199)"
+  },
+  {
+   "list": "TSG-ML",
+   "code": "G195",
+   "name": "Household Batteries",
+   "material": "non_plastic",
+   "rule": "TSG-ML metal block (G174-G199)"
+  },
+  {
+   "list": "TSG-ML",
+   "code": "G196",
+   "name": "Large metallic objects",
+   "material": "non_plastic",
+   "rule": "TSG-ML metal block (G174-G199)"
+  },
+  {
+   "list": "TSG-ML",
+   "code": "G197",
+   "name": "Other (metal)",
+   "material": "non_plastic",
+   "rule": "TSG-ML metal block (G174-G199)"
+  },
+  {
+   "list": "TSG-ML",
+   "code": "G198",
+   "name": "Other metal pieces < 50 cm",
+   "material": "non_plastic",
+   "rule": "TSG-ML metal block (G174-G199)"
+  },
+  {
+   "list": "TSG-ML",
+   "code": "G199",
+   "name": "Other metal pieces > 50 cm",
+   "material": "non_plastic",
+   "rule": "TSG-ML metal block (G174-G199)"
+  },
+  {
+   "list": "TSG-ML",
+   "code": "G200",
+   "name": "Bottles incl. pieces",
+   "material": "non_plastic",
+   "rule": "TSG-ML glass/ceramics block (G200-G210)"
+  },
+  {
+   "list": "TSG-ML",
+   "code": "G201",
+   "name": "Jars incl. pieces",
+   "material": "non_plastic",
+   "rule": "TSG-ML glass/ceramics block (G200-G210)"
+  },
+  {
+   "list": "TSG-ML",
+   "code": "G202",
+   "name": "Light bulbs",
+   "material": "non_plastic",
+   "rule": "TSG-ML glass/ceramics block (G200-G210)"
+  },
+  {
+   "list": "TSG-ML",
+   "code": "G203",
+   "name": "Tableware (plates & cups)",
+   "material": "non_plastic",
+   "rule": "TSG-ML glass/ceramics block (G200-G210)"
+  },
+  {
+   "list": "TSG-ML",
+   "code": "G204",
+   "name": "Construction material (brick, cement, pipes)",
+   "material": "non_plastic",
+   "rule": "TSG-ML glass/ceramics block (G200-G210)"
+  },
+  {
+   "list": "TSG-ML",
+   "code": "G205",
+   "name": "Fluorescent light tubes",
+   "material": "non_plastic",
+   "rule": "TSG-ML glass/ceramics block (G200-G210)"
+  },
+  {
+   "list": "TSG-ML",
+   "code": "G206",
+   "name": "Glass buoys",
+   "material": "non_plastic",
+   "rule": "TSG-ML glass/ceramics block (G200-G210)"
+  },
+  {
+   "list": "TSG-ML",
+   "code": "G207",
+   "name": "Octopus pots",
+   "material": "non_plastic",
+   "rule": "TSG-ML glass/ceramics block (G200-G210)"
+  },
+  {
+   "list": "TSG-ML",
+   "code": "G208",
+   "name": "Glass or ceramic fragments >2.5cm",
+   "material": "non_plastic",
+   "rule": "TSG-ML glass/ceramics block (G200-G210)"
+  },
+  {
+   "list": "TSG-ML",
+   "code": "G209",
+   "name": "Large glass objects (specify)",
+   "material": "non_plastic",
+   "rule": "TSG-ML glass/ceramics block (G200-G210)"
+  },
+  {
+   "list": "TSG-ML",
+   "code": "G210",
+   "name": "Other glass items",
+   "material": "non_plastic",
+   "rule": "TSG-ML glass/ceramics block (G200-G210)"
+  },
+  {
+   "list": "TSG-ML",
+   "code": "G211",
+   "name": "Other medical items (swabs, bandaging, adhesive plaster etc.)",
+   "material": "ambiguous",
+   "rule": "other medical items: material not stated"
+  },
+  {
+   "list": "TSG-ML",
+   "code": "G213",
+   "name": "Paraffin/Wax",
+   "material": "non_plastic",
+   "rule": "paraffin/wax, oil/tar, food waste, or named non-plastic materials"
+  },
+  {
+   "list": "TSG-ML",
+   "code": "G214",
+   "name": "Oil/Tar",
+   "material": "non_plastic",
+   "rule": "paraffin/wax, oil/tar, food waste, or named non-plastic materials"
+  },
+  {
+   "list": "TSG-ML",
+   "code": "G215",
+   "name": "Food waste (galley waste)",
+   "material": "non_plastic",
+   "rule": "paraffin/wax, oil/tar, food waste, or named non-plastic materials"
+  },
+  {
+   "list": "TSG-ML",
+   "code": "G216",
+   "name": "various rubbish (worked wood, metal parts)",
+   "material": "non_plastic",
+   "rule": "paraffin/wax, oil/tar, food waste, or named non-plastic materials"
+  },
+  {
+   "list": "TSG-ML",
+   "code": "G217",
+   "name": "Other (glass, metal, tar) <5mm",
+   "material": "non_plastic",
+   "rule": "paraffin/wax, oil/tar, food waste, or named non-plastic materials"
+  },
+  {
+   "list": "UNEP",
+   "code": "CL01",
+   "name": "Clothing, shoes, hats & towels",
+   "material": "non_plastic",
+   "rule": "UNEP/IOC material prefix CL"
+  },
+  {
+   "list": "UNEP",
+   "code": "FP01",
+   "name": "Foam sponge",
+   "material": "plastic",
+   "rule": "UNEP/IOC material prefix FP (plastic / foamed plastic)"
+  },
+  {
+   "list": "UNEP",
+   "code": "GC01",
+   "name": "Construction material (brick, cement, pipes)",
+   "material": "non_plastic",
+   "rule": "UNEP/IOC material prefix GC"
+  },
+  {
+   "list": "UNEP",
+   "code": "ME01",
+   "name": "Tableware (plates, cups & cutlery)",
+   "material": "non_plastic",
+   "rule": "UNEP/IOC material prefix ME"
+  },
+  {
+   "list": "UNEP",
+   "code": "OT01",
+   "name": "Paraffin or wax",
+   "material": "non_plastic",
+   "rule": "paraffin/wax; batteries"
+  },
+  {
+   "list": "UNEP",
+   "code": "PC01",
+   "name": "Paper (including newspapers & magazines)",
+   "material": "non_plastic",
+   "rule": "UNEP/IOC material prefix PC"
+  },
+  {
+   "list": "UNEP",
+   "code": "PL01",
+   "name": "Bottle caps & lids",
+   "material": "plastic",
+   "rule": "UNEP/IOC material prefix PL (plastic / foamed plastic)"
+  },
+  {
+   "list": "UNEP",
+   "code": "RB01",
+   "name": "Balloons, balls & toys",
+   "material": "non_plastic",
+   "rule": "UNEP/IOC material prefix RB"
+  },
+  {
+   "list": "UNEP",
+   "code": "WD01",
+   "name": "Corks",
+   "material": "non_plastic",
+   "rule": "UNEP/IOC material prefix WD"
+  },
+  {
+   "list": "UNEP",
+   "code": "CL02",
+   "name": "Backpacks & bags",
+   "material": "non_plastic",
+   "rule": "UNEP/IOC material prefix CL"
+  },
+  {
+   "list": "UNEP",
+   "code": "FP02",
+   "name": "Cups & food packs",
+   "material": "plastic",
+   "rule": "UNEP/IOC material prefix FP (plastic / foamed plastic)"
+  },
+  {
+   "list": "UNEP",
+   "code": "GC02",
+   "name": "Bottles & jars",
+   "material": "non_plastic",
+   "rule": "UNEP/IOC material prefix GC"
+  },
+  {
+   "list": "UNEP",
+   "code": "ME02",
+   "name": "Bottle caps, lids & pull tabs",
+   "material": "non_plastic",
+   "rule": "UNEP/IOC material prefix ME"
+  },
+  {
+   "list": "UNEP",
+   "code": "OT02",
+   "name": "Sanitary (nappies, cotton buds, tampon applicators, toothbrushes)",
+   "material": "ambiguous",
+   "rule": "UNEP/IOC 'other' (sanitary, appliances, other): material not stated"
+  },
+  {
+   "list": "UNEP",
+   "code": "PC02",
+   "name": "Cardboard boxes & fragments",
+   "material": "non_plastic",
+   "rule": "UNEP/IOC material prefix PC"
+  },
+  {
+   "list": "UNEP",
+   "code": "PL02",
+   "name": "Bottles < 2 L",
+   "material": "plastic",
+   "rule": "UNEP/IOC material prefix PL (plastic / foamed plastic)"
+  },
+  {
+   "list": "UNEP",
+   "code": "RB02",
+   "name": "Footwear (flip-flops)",
+   "material": "non_plastic",
+   "rule": "UNEP/IOC material prefix RB"
+  },
+  {
+   "list": "UNEP",
+   "code": "WD02",
+   "name": "Fishing traps and pots",
+   "material": "non_plastic",
+   "rule": "UNEP/IOC material prefix WD"
+  },
+  {
+   "list": "UNEP",
+   "code": "CL03",
+   "name": "Canvas, sailcloth & sacking (hessian)",
+   "material": "non_plastic",
+   "rule": "UNEP/IOC material prefix CL"
+  },
+  {
+   "list": "UNEP",
+   "code": "FP03",
+   "name": "Foam buoys",
+   "material": "plastic",
+   "rule": "UNEP/IOC material prefix FP (plastic / foamed plastic)"
+  },
+  {
+   "list": "UNEP",
+   "code": "GC03",
+   "name": "Tableware (plates & cups)",
+   "material": "non_plastic",
+   "rule": "UNEP/IOC material prefix GC"
+  },
+  {
+   "list": "UNEP",
+   "code": "ME03",
+   "name": "Aluminium drink cans",
+   "material": "non_plastic",
+   "rule": "UNEP/IOC material prefix ME"
+  },
+  {
+   "list": "UNEP",
+   "code": "OT03",
+   "name": "Appliances & Electronics",
+   "material": "ambiguous",
+   "rule": "UNEP/IOC 'other' (sanitary, appliances, other): material not stated"
+  },
+  {
+   "list": "UNEP",
+   "code": "PC03",
+   "name": "Cups, food trays, food wrappers, cigarette packs, drink containers",
+   "material": "non_plastic",
+   "rule": "UNEP/IOC material prefix PC"
+  },
+  {
+   "list": "UNEP",
+   "code": "PL03",
+   "name": "Bottles, drums, jerrycans & buckets > 2 L",
+   "material": "plastic",
+   "rule": "UNEP/IOC material prefix PL (plastic / foamed plastic)"
+  },
+  {
+   "list": "UNEP",
+   "code": "RB03",
+   "name": "Gloves",
+   "material": "non_plastic",
+   "rule": "UNEP/IOC material prefix RB"
+  },
+  {
+   "list": "UNEP",
+   "code": "WD03",
+   "name": "Ice-cream sticks, chip forks, chopsticks & toothpicks",
+   "material": "non_plastic",
+   "rule": "UNEP/IOC material prefix WD"
+  },
+  {
+   "list": "UNEP",
+   "code": "CL04",
+   "name": "Rope & string",
+   "material": "non_plastic",
+   "rule": "UNEP/IOC material prefix CL"
+  },
+  {
+   "list": "UNEP",
+   "code": "FP04",
+   "name": "Foam (insulation & packaging)",
+   "material": "plastic",
+   "rule": "UNEP/IOC material prefix FP (plastic / foamed plastic)"
+  },
+  {
+   "list": "UNEP",
+   "code": "GC04",
+   "name": "Light globes/bulbs",
+   "material": "non_plastic",
+   "rule": "UNEP/IOC material prefix GC"
+  },
+  {
+   "list": "UNEP",
+   "code": "ME04",
+   "name": "Other cans (< 4 L)",
+   "material": "non_plastic",
+   "rule": "UNEP/IOC material prefix ME"
+  },
+  {
+   "list": "UNEP",
+   "code": "OT04",
+   "name": "Batteries (torch type)",
+   "material": "non_plastic",
+   "rule": "paraffin/wax; batteries"
+  },
+  {
+   "list": "UNEP",
+   "code": "PC04",
+   "name": "Tubes for fireworks",
+   "material": "non_plastic",
+   "rule": "UNEP/IOC material prefix PC"
+  },
+  {
+   "list": "UNEP",
+   "code": "PL04",
+   "name": "Knives, forks, spoons, straws, stirrers, (cutlery)",
+   "material": "plastic",
+   "rule": "UNEP/IOC material prefix PL (plastic / foamed plastic)"
+  },
+  {
+   "list": "UNEP",
+   "code": "RB04",
+   "name": "Tyres",
+   "material": "non_plastic",
+   "rule": "UNEP/IOC material prefix RB"
+  },
+  {
+   "list": "UNEP",
+   "code": "WD04",
+   "name": "Processed timber and pallet crates",
+   "material": "non_plastic",
+   "rule": "UNEP/IOC material prefix WD"
+  },
+  {
+   "list": "UNEP",
+   "code": "CL05",
+   "name": "Carpet & furnishing",
+   "material": "non_plastic",
+   "rule": "UNEP/IOC material prefix CL"
+  },
+  {
+   "list": "UNEP",
+   "code": "FP05",
+   "name": "Other (specify)",
+   "material": "plastic",
+   "rule": "UNEP/IOC material prefix FP (plastic / foamed plastic)"
+  },
+  {
+   "list": "UNEP",
+   "code": "GC05",
+   "name": "Fluorescent light tubes",
+   "material": "non_plastic",
+   "rule": "UNEP/IOC material prefix GC"
+  },
+  {
+   "list": "UNEP",
+   "code": "ME05",
+   "name": "Gas bottles, drums & buckets ( > 4 L)",
+   "material": "non_plastic",
+   "rule": "UNEP/IOC material prefix ME"
+  },
+  {
+   "list": "UNEP",
+   "code": "OT05",
+   "name": "Other (specify)",
+   "material": "ambiguous",
+   "rule": "UNEP/IOC 'other' (sanitary, appliances, other): material not stated"
+  },
+  {
+   "list": "UNEP",
+   "code": "PC05",
+   "name": "Other (specify)",
+   "material": "non_plastic",
+   "rule": "UNEP/IOC material prefix PC"
+  },
+  {
+   "list": "UNEP",
+   "code": "PL05",
+   "name": "Drink package rings, six-pack rings, ring carriers",
+   "material": "plastic",
+   "rule": "UNEP/IOC material prefix PL (plastic / foamed plastic)"
+  },
+  {
+   "list": "UNEP",
+   "code": "RB05",
+   "name": "Inner-tubes and rubber sheet",
+   "material": "non_plastic",
+   "rule": "UNEP/IOC material prefix RB"
+  },
+  {
+   "list": "UNEP",
+   "code": "WD05",
+   "name": "Matches & fireworks",
+   "material": "non_plastic",
+   "rule": "UNEP/IOC material prefix WD"
+  },
+  {
+   "list": "UNEP",
+   "code": "CL06",
+   "name": "Other cloth (including rags)",
+   "material": "non_plastic",
+   "rule": "UNEP/IOC material prefix CL"
+  },
+  {
+   "list": "UNEP",
+   "code": "GC06",
+   "name": "Glass buoys",
+   "material": "non_plastic",
+   "rule": "UNEP/IOC material prefix GC"
+  },
+  {
+   "list": "UNEP",
+   "code": "ME06",
+   "name": "Foil wrappers",
+   "material": "non_plastic",
+   "rule": "UNEP/IOC material prefix ME"
+  },
+  {
+   "list": "UNEP",
+   "code": "PL06",
+   "name": "Food containers (fast food, cups, lunch boxes & similar)",
+   "material": "plastic",
+   "rule": "UNEP/IOC material prefix PL (plastic / foamed plastic)"
+  },
+  {
+   "list": "UNEP",
+   "code": "RB06",
+   "name": "Rubber bands",
+   "material": "non_plastic",
+   "rule": "UNEP/IOC material prefix RB"
+  },
+  {
+   "list": "UNEP",
+   "code": "WD06",
+   "name": "Other (specify)",
+   "material": "non_plastic",
+   "rule": "UNEP/IOC material prefix WD"
+  },
+  {
+   "list": "UNEP",
+   "code": "GC07",
+   "name": "Glass or ceramic fragments",
+   "material": "non_plastic",
+   "rule": "UNEP/IOC material prefix GC"
+  },
+  {
+   "list": "UNEP",
+   "code": "ME07",
+   "name": "Fishing related (sinkers, lures, hooks, traps & pots)",
+   "material": "non_plastic",
+   "rule": "UNEP/IOC material prefix ME"
+  },
+  {
+   "list": "UNEP",
+   "code": "PL07",
+   "name": "Plastic bags (opaque & clear)",
+   "material": "plastic",
+   "rule": "UNEP/IOC material prefix PL (plastic / foamed plastic)"
+  },
+  {
+   "list": "UNEP",
+   "code": "RB07",
+   "name": "Condoms",
+   "material": "non_plastic",
+   "rule": "UNEP/IOC material prefix RB"
+  },
+  {
+   "list": "UNEP",
+   "code": "GC08",
+   "name": "Other (specify)",
+   "material": "non_plastic",
+   "rule": "UNEP/IOC material prefix GC"
+  },
+  {
+   "list": "UNEP",
+   "code": "ME08",
+   "name": "Fragments",
+   "material": "non_plastic",
+   "rule": "UNEP/IOC material prefix ME"
+  },
+  {
+   "list": "UNEP",
+   "code": "PL08",
+   "name": "Toys & party poppers",
+   "material": "plastic",
+   "rule": "UNEP/IOC material prefix PL (plastic / foamed plastic)"
+  },
+  {
+   "list": "UNEP",
+   "code": "RB08",
+   "name": "Other (specify)",
+   "material": "non_plastic",
+   "rule": "UNEP/IOC material prefix RB"
+  },
+  {
+   "list": "UNEP",
+   "code": "ME09",
+   "name": "Wire, wire mesh & barbed wire",
+   "material": "non_plastic",
+   "rule": "UNEP/IOC material prefix ME"
+  },
+  {
+   "list": "UNEP",
+   "code": "PL09",
+   "name": "Gloves",
+   "material": "plastic",
+   "rule": "UNEP/IOC material prefix PL (plastic / foamed plastic)"
+  },
+  {
+   "list": "UNEP",
+   "code": "ME10",
+   "name": "Other (specify), including appliances",
+   "material": "non_plastic",
+   "rule": "UNEP/IOC material prefix ME"
+  },
+  {
+   "list": "UNEP",
+   "code": "PL10",
+   "name": "Cigarette lighters",
+   "material": "plastic",
+   "rule": "UNEP/IOC material prefix PL (plastic / foamed plastic)"
+  },
+  {
+   "list": "UNEP",
+   "code": "PL11",
+   "name": "Cigarettes, butts & filters",
+   "material": "plastic",
+   "rule": "UNEP/IOC material prefix PL (plastic / foamed plastic)"
+  },
+  {
+   "list": "UNEP",
+   "code": "PL12",
+   "name": "Syringes",
+   "material": "plastic",
+   "rule": "UNEP/IOC material prefix PL (plastic / foamed plastic)"
+  },
+  {
+   "list": "UNEP",
+   "code": "PL13",
+   "name": "Baskets, crates & trays",
+   "material": "plastic",
+   "rule": "UNEP/IOC material prefix PL (plastic / foamed plastic)"
+  },
+  {
+   "list": "UNEP",
+   "code": "PL14",
+   "name": "Plastic buoys",
+   "material": "plastic",
+   "rule": "UNEP/IOC material prefix PL (plastic / foamed plastic)"
+  },
+  {
+   "list": "UNEP",
+   "code": "PL15",
+   "name": "Mesh bags (vegetable, oyster nets & mussel bags)",
+   "material": "plastic",
+   "rule": "UNEP/IOC material prefix PL (plastic / foamed plastic)"
+  },
+  {
+   "list": "UNEP",
+   "code": "PL16",
+   "name": "Sheeting (tarpaulin or other woven plastic bags, palette wrap)",
+   "material": "plastic",
+   "rule": "UNEP/IOC material prefix PL (plastic / foamed plastic)"
+  },
+  {
+   "list": "UNEP",
+   "code": "PL17",
+   "name": "Fishing gear (lures, traps & pots)",
+   "material": "plastic",
+   "rule": "UNEP/IOC material prefix PL (plastic / foamed plastic)"
+  },
+  {
+   "list": "UNEP",
+   "code": "PL18",
+   "name": "Monofilament line",
+   "material": "plastic",
+   "rule": "UNEP/IOC material prefix PL (plastic / foamed plastic)"
+  },
+  {
+   "list": "UNEP",
+   "code": "PL19",
+   "name": "Rope",
+   "material": "plastic",
+   "rule": "UNEP/IOC material prefix PL (plastic / foamed plastic)"
+  },
+  {
+   "list": "UNEP",
+   "code": "PL20",
+   "name": "Fishing net",
+   "material": "plastic",
+   "rule": "UNEP/IOC material prefix PL (plastic / foamed plastic)"
+  },
+  {
+   "list": "UNEP",
+   "code": "PL21",
+   "name": "Strapping",
+   "material": "plastic",
+   "rule": "UNEP/IOC material prefix PL (plastic / foamed plastic)"
+  },
+  {
+   "list": "UNEP",
+   "code": "PL22",
+   "name": "Fibreglass fragments",
+   "material": "plastic",
+   "rule": "UNEP/IOC material prefix PL (plastic / foamed plastic)"
+  },
+  {
+   "list": "UNEP",
+   "code": "PL23",
+   "name": "Resin pellets",
+   "material": "plastic",
+   "rule": "UNEP/IOC material prefix PL (plastic / foamed plastic)"
+  },
+  {
+   "list": "UNEP",
+   "code": "PL24",
+   "name": "Other (specify)",
+   "material": "plastic",
+   "rule": "UNEP/IOC material prefix PL (plastic / foamed plastic)"
+  },
+  {
+   "list": "UNEP_MARLIN",
+   "code": "CL01",
+   "name": "Clothing, shoes, hats & towels",
+   "material": "non_plastic",
+   "rule": "UNEP/IOC material prefix CL"
+  },
+  {
+   "list": "UNEP_MARLIN",
+   "code": "FP01",
+   "name": "Foam sponge",
+   "material": "plastic",
+   "rule": "UNEP/IOC material prefix FP (plastic / foamed plastic)"
+  },
+  {
+   "list": "UNEP_MARLIN",
+   "code": "GC01",
+   "name": "Construction material (brick, cement, pipes)",
+   "material": "non_plastic",
+   "rule": "UNEP/IOC material prefix GC"
+  },
+  {
+   "list": "UNEP_MARLIN",
+   "code": "ME01",
+   "name": "Tableware (plates, cups & cutlery)",
+   "material": "non_plastic",
+   "rule": "UNEP/IOC material prefix ME"
+  },
+  {
+   "list": "UNEP_MARLIN",
+   "code": "OR01",
+   "name": "Snuff, swedish snus",
+   "material": "non_plastic",
+   "rule": "UNEP/IOC material prefix OR"
+  },
+  {
+   "list": "UNEP_MARLIN",
+   "code": "OT01",
+   "name": "Paraffin or wax",
+   "material": "non_plastic",
+   "rule": "paraffin/wax; batteries"
+  },
+  {
+   "list": "UNEP_MARLIN",
+   "code": "PC01",
+   "name": "Paper (including newspapers & magazines)",
+   "material": "non_plastic",
+   "rule": "UNEP/IOC material prefix PC"
+  },
+  {
+   "list": "UNEP_MARLIN",
+   "code": "PL01",
+   "name": "Bottle caps & lids",
+   "material": "plastic",
+   "rule": "UNEP/IOC material prefix PL (plastic / foamed plastic)"
+  },
+  {
+   "list": "UNEP_MARLIN",
+   "code": "RB01",
+   "name": "Balloons, balls & toys",
+   "material": "non_plastic",
+   "rule": "UNEP/IOC material prefix RB"
+  },
+  {
+   "list": "UNEP_MARLIN",
+   "code": "WD01",
+   "name": "Corks",
+   "material": "non_plastic",
+   "rule": "UNEP/IOC material prefix WD"
+  },
+  {
+   "list": "UNEP_MARLIN",
+   "code": "CL02",
+   "name": "Backpacks & bags",
+   "material": "non_plastic",
+   "rule": "UNEP/IOC material prefix CL"
+  },
+  {
+   "list": "UNEP_MARLIN",
+   "code": "FP02",
+   "name": "Cups & food packs",
+   "material": "plastic",
+   "rule": "UNEP/IOC material prefix FP (plastic / foamed plastic)"
+  },
+  {
+   "list": "UNEP_MARLIN",
+   "code": "GC02",
+   "name": "Bottles & jars",
+   "material": "non_plastic",
+   "rule": "UNEP/IOC material prefix GC"
+  },
+  {
+   "list": "UNEP_MARLIN",
+   "code": "ME02",
+   "name": "Bottle caps, lids & pull tabs",
+   "material": "non_plastic",
+   "rule": "UNEP/IOC material prefix ME"
+  },
+  {
+   "list": "UNEP_MARLIN",
+   "code": "OR02",
+   "name": "Feces (excrement)",
+   "material": "non_plastic",
+   "rule": "UNEP/IOC material prefix OR"
+  },
+  {
+   "list": "UNEP_MARLIN",
+   "code": "OT02",
+   "name": "Sanitary (nappies, cotton buds, tampon applicators, toothbrushes)",
+   "material": "ambiguous",
+   "rule": "UNEP/IOC 'other' (sanitary, appliances, other): material not stated"
+  },
+  {
+   "list": "UNEP_MARLIN",
+   "code": "PC02",
+   "name": "Cardboard boxes & fragments",
+   "material": "non_plastic",
+   "rule": "UNEP/IOC material prefix PC"
+  },
+  {
+   "list": "UNEP_MARLIN",
+   "code": "PL02",
+   "name": "Bottles < 2 L",
+   "material": "plastic",
+   "rule": "UNEP/IOC material prefix PL (plastic / foamed plastic)"
+  },
+  {
+   "list": "UNEP_MARLIN",
+   "code": "RB02",
+   "name": "Footwear (flip-flops)",
+   "material": "non_plastic",
+   "rule": "UNEP/IOC material prefix RB"
+  },
+  {
+   "list": "UNEP_MARLIN",
+   "code": "WD02",
+   "name": "Fishing traps and pots",
+   "material": "non_plastic",
+   "rule": "UNEP/IOC material prefix WD"
+  },
+  {
+   "list": "UNEP_MARLIN",
+   "code": "CL03",
+   "name": "Canvas, sailcloth & sacking (hessian)",
+   "material": "non_plastic",
+   "rule": "UNEP/IOC material prefix CL"
+  },
+  {
+   "list": "UNEP_MARLIN",
+   "code": "FP03",
+   "name": "Foam buoys",
+   "material": "plastic",
+   "rule": "UNEP/IOC material prefix FP (plastic / foamed plastic)"
+  },
+  {
+   "list": "UNEP_MARLIN",
+   "code": "GC03",
+   "name": "Tableware (plates & cups)",
+   "material": "non_plastic",
+   "rule": "UNEP/IOC material prefix GC"
+  },
+  {
+   "list": "UNEP_MARLIN",
+   "code": "ME03",
+   "name": "Aluminium drink cans",
+   "material": "non_plastic",
+   "rule": "UNEP/IOC material prefix ME"
+  },
+  {
+   "list": "UNEP_MARLIN",
+   "code": "OR03",
+   "name": "Fruit, food, pastry, candy and ice cream",
+   "material": "non_plastic",
+   "rule": "UNEP/IOC material prefix OR"
+  },
+  {
+   "list": "UNEP_MARLIN",
+   "code": "OT03",
+   "name": "Appliances & Electronics",
+   "material": "ambiguous",
+   "rule": "UNEP/IOC 'other' (sanitary, appliances, other): material not stated"
+  },
+  {
+   "list": "UNEP_MARLIN",
+   "code": "PC03",
+   "name": "Cups, food trays, food wrappers, cigarette packs, drink containers",
+   "material": "non_plastic",
+   "rule": "UNEP/IOC material prefix PC"
+  },
+  {
+   "list": "UNEP_MARLIN",
+   "code": "PL03",
+   "name": "Bottles, drums, jerrycans & buckets > 2 L",
+   "material": "plastic",
+   "rule": "UNEP/IOC material prefix PL (plastic / foamed plastic)"
+  },
+  {
+   "list": "UNEP_MARLIN",
+   "code": "RB03",
+   "name": "Gloves",
+   "material": "non_plastic",
+   "rule": "UNEP/IOC material prefix RB"
+  },
+  {
+   "list": "UNEP_MARLIN",
+   "code": "WD03",
+   "name": "Ice-cream sticks, chip forks, chopsticks & toothpicks",
+   "material": "non_plastic",
+   "rule": "UNEP/IOC material prefix WD"
+  },
+  {
+   "list": "UNEP_MARLIN",
+   "code": "CL04",
+   "name": "Rope & string",
+   "material": "non_plastic",
+   "rule": "UNEP/IOC material prefix CL"
+  },
+  {
+   "list": "UNEP_MARLIN",
+   "code": "FP04",
+   "name": "Foam (insulation & packaging)",
+   "material": "plastic",
+   "rule": "UNEP/IOC material prefix FP (plastic / foamed plastic)"
+  },
+  {
+   "list": "UNEP_MARLIN",
+   "code": "GC04",
+   "name": "Light globes/bulbs",
+   "material": "non_plastic",
+   "rule": "UNEP/IOC material prefix GC"
+  },
+  {
+   "list": "UNEP_MARLIN",
+   "code": "ME04",
+   "name": "Other cans (< 4 L)",
+   "material": "non_plastic",
+   "rule": "UNEP/IOC material prefix ME"
+  },
+  {
+   "list": "UNEP_MARLIN",
+   "code": "OR04",
+   "name": "Other (specify)",
+   "material": "non_plastic",
+   "rule": "UNEP/IOC material prefix OR"
+  },
+  {
+   "list": "UNEP_MARLIN",
+   "code": "OT04",
+   "name": "Batteries (torch type)",
+   "material": "non_plastic",
+   "rule": "paraffin/wax; batteries"
+  },
+  {
+   "list": "UNEP_MARLIN",
+   "code": "PC04",
+   "name": "Tubes for fireworks",
+   "material": "non_plastic",
+   "rule": "UNEP/IOC material prefix PC"
+  },
+  {
+   "list": "UNEP_MARLIN",
+   "code": "PL04",
+   "name": "Knives, forks, spoons, straws, stirrers, (cutlery)",
+   "material": "plastic",
+   "rule": "UNEP/IOC material prefix PL (plastic / foamed plastic)"
+  },
+  {
+   "list": "UNEP_MARLIN",
+   "code": "RB04",
+   "name": "Tyres",
+   "material": "non_plastic",
+   "rule": "UNEP/IOC material prefix RB"
+  },
+  {
+   "list": "UNEP_MARLIN",
+   "code": "WD04",
+   "name": "Processed timber and pallet crates",
+   "material": "non_plastic",
+   "rule": "UNEP/IOC material prefix WD"
+  },
+  {
+   "list": "UNEP_MARLIN",
+   "code": "CL05",
+   "name": "Carpet & furnishing",
+   "material": "non_plastic",
+   "rule": "UNEP/IOC material prefix CL"
+  },
+  {
+   "list": "UNEP_MARLIN",
+   "code": "FP05",
+   "name": "Other (specify)",
+   "material": "plastic",
+   "rule": "UNEP/IOC material prefix FP (plastic / foamed plastic)"
+  },
+  {
+   "list": "UNEP_MARLIN",
+   "code": "GC05",
+   "name": "Fluorescent light tubes",
+   "material": "non_plastic",
+   "rule": "UNEP/IOC material prefix GC"
+  },
+  {
+   "list": "UNEP_MARLIN",
+   "code": "ME05",
+   "name": "Gas bottles, drums & buckets ( > 4 L)",
+   "material": "non_plastic",
+   "rule": "UNEP/IOC material prefix ME"
+  },
+  {
+   "list": "UNEP_MARLIN",
+   "code": "OT05",
+   "name": "Other (specify)",
+   "material": "ambiguous",
+   "rule": "UNEP/IOC 'other' (sanitary, appliances, other): material not stated"
+  },
+  {
+   "list": "UNEP_MARLIN",
+   "code": "PC05",
+   "name": "Other (specify)",
+   "material": "non_plastic",
+   "rule": "UNEP/IOC material prefix PC"
+  },
+  {
+   "list": "UNEP_MARLIN",
+   "code": "PL05",
+   "name": "Drink package rings, six-pack rings, ring carriers",
+   "material": "plastic",
+   "rule": "UNEP/IOC material prefix PL (plastic / foamed plastic)"
+  },
+  {
+   "list": "UNEP_MARLIN",
+   "code": "RB05",
+   "name": "Inner-tubes and rubber sheet",
+   "material": "non_plastic",
+   "rule": "UNEP/IOC material prefix RB"
+  },
+  {
+   "list": "UNEP_MARLIN",
+   "code": "WD05",
+   "name": "Matches & fireworks",
+   "material": "non_plastic",
+   "rule": "UNEP/IOC material prefix WD"
+  },
+  {
+   "list": "UNEP_MARLIN",
+   "code": "CL06",
+   "name": "Other cloth (including rags)",
+   "material": "non_plastic",
+   "rule": "UNEP/IOC material prefix CL"
+  },
+  {
+   "list": "UNEP_MARLIN",
+   "code": "GC06",
+   "name": "Glass buoys",
+   "material": "non_plastic",
+   "rule": "UNEP/IOC material prefix GC"
+  },
+  {
+   "list": "UNEP_MARLIN",
+   "code": "ME06",
+   "name": "Foil wrappers",
+   "material": "non_plastic",
+   "rule": "UNEP/IOC material prefix ME"
+  },
+  {
+   "list": "UNEP_MARLIN",
+   "code": "PL06",
+   "name": "Food containers (fast food, cups, lunch boxes & similar)",
+   "material": "plastic",
+   "rule": "UNEP/IOC material prefix PL (plastic / foamed plastic)"
+  },
+  {
+   "list": "UNEP_MARLIN",
+   "code": "RB06",
+   "name": "Rubber bands",
+   "material": "non_plastic",
+   "rule": "UNEP/IOC material prefix RB"
+  },
+  {
+   "list": "UNEP_MARLIN",
+   "code": "WD06",
+   "name": "Other (specify)",
+   "material": "non_plastic",
+   "rule": "UNEP/IOC material prefix WD"
+  },
+  {
+   "list": "UNEP_MARLIN",
+   "code": "GC07",
+   "name": "Glass or ceramic fragments",
+   "material": "non_plastic",
+   "rule": "UNEP/IOC material prefix GC"
+  },
+  {
+   "list": "UNEP_MARLIN",
+   "code": "ME07",
+   "name": "Fishing related (sinkers, lures, hooks, traps & pots)",
+   "material": "non_plastic",
+   "rule": "UNEP/IOC material prefix ME"
+  },
+  {
+   "list": "UNEP_MARLIN",
+   "code": "PL07",
+   "name": "Plastic bags (opaque & clear)",
+   "material": "plastic",
+   "rule": "UNEP/IOC material prefix PL (plastic / foamed plastic)"
+  },
+  {
+   "list": "UNEP_MARLIN",
+   "code": "RB07",
+   "name": "Condoms",
+   "material": "non_plastic",
+   "rule": "UNEP/IOC material prefix RB"
+  },
+  {
+   "list": "UNEP_MARLIN",
+   "code": "GC08",
+   "name": "Other (specify)",
+   "material": "non_plastic",
+   "rule": "UNEP/IOC material prefix GC"
+  },
+  {
+   "list": "UNEP_MARLIN",
+   "code": "ME08",
+   "name": "Fragments",
+   "material": "non_plastic",
+   "rule": "UNEP/IOC material prefix ME"
+  },
+  {
+   "list": "UNEP_MARLIN",
+   "code": "PL08",
+   "name": "Toys & party poppers",
+   "material": "plastic",
+   "rule": "UNEP/IOC material prefix PL (plastic / foamed plastic)"
+  },
+  {
+   "list": "UNEP_MARLIN",
+   "code": "RB08",
+   "name": "Other (specify)",
+   "material": "non_plastic",
+   "rule": "UNEP/IOC material prefix RB"
+  },
+  {
+   "list": "UNEP_MARLIN",
+   "code": "ME09",
+   "name": "Wire, wire mesh & barbed wire",
+   "material": "non_plastic",
+   "rule": "UNEP/IOC material prefix ME"
+  },
+  {
+   "list": "UNEP_MARLIN",
+   "code": "PL09",
+   "name": "Gloves",
+   "material": "plastic",
+   "rule": "UNEP/IOC material prefix PL (plastic / foamed plastic)"
+  },
+  {
+   "list": "UNEP_MARLIN",
+   "code": "ME10",
+   "name": "Other (specify), including appliances",
+   "material": "non_plastic",
+   "rule": "UNEP/IOC material prefix ME"
+  },
+  {
+   "list": "UNEP_MARLIN",
+   "code": "PL10",
+   "name": "Cigarette lighters",
+   "material": "plastic",
+   "rule": "UNEP/IOC material prefix PL (plastic / foamed plastic)"
+  },
+  {
+   "list": "UNEP_MARLIN",
+   "code": "ME11",
+   "name": "Dispensable grill",
+   "material": "non_plastic",
+   "rule": "UNEP/IOC material prefix ME"
+  },
+  {
+   "list": "UNEP_MARLIN",
+   "code": "PL11",
+   "name": "Cigarettes, butts & filters",
+   "material": "plastic",
+   "rule": "UNEP/IOC material prefix PL (plastic / foamed plastic)"
+  },
+  {
+   "list": "UNEP_MARLIN",
+   "code": "PL12",
+   "name": "Syringes",
+   "material": "plastic",
+   "rule": "UNEP/IOC material prefix PL (plastic / foamed plastic)"
+  },
+  {
+   "list": "UNEP_MARLIN",
+   "code": "PL13",
+   "name": "Baskets, crates & trays",
+   "material": "plastic",
+   "rule": "UNEP/IOC material prefix PL (plastic / foamed plastic)"
+  },
+  {
+   "list": "UNEP_MARLIN",
+   "code": "PL14",
+   "name": "Plastic buoys",
+   "material": "plastic",
+   "rule": "UNEP/IOC material prefix PL (plastic / foamed plastic)"
+  },
+  {
+   "list": "UNEP_MARLIN",
+   "code": "PL15",
+   "name": "Mesh bags (vegetable, oyster nets & mussel bags)",
+   "material": "plastic",
+   "rule": "UNEP/IOC material prefix PL (plastic / foamed plastic)"
+  },
+  {
+   "list": "UNEP_MARLIN",
+   "code": "PL16",
+   "name": "Sheeting (tarpaulin or other woven plastic bags, palette wrap)",
+   "material": "plastic",
+   "rule": "UNEP/IOC material prefix PL (plastic / foamed plastic)"
+  },
+  {
+   "list": "UNEP_MARLIN",
+   "code": "PL17",
+   "name": "Fishing gear (lures, traps & pots)",
+   "material": "plastic",
+   "rule": "UNEP/IOC material prefix PL (plastic / foamed plastic)"
+  },
+  {
+   "list": "UNEP_MARLIN",
+   "code": "PL18",
+   "name": "Monofilament line",
+   "material": "plastic",
+   "rule": "UNEP/IOC material prefix PL (plastic / foamed plastic)"
+  },
+  {
+   "list": "UNEP_MARLIN",
+   "code": "PL19",
+   "name": "Rope",
+   "material": "plastic",
+   "rule": "UNEP/IOC material prefix PL (plastic / foamed plastic)"
+  },
+  {
+   "list": "UNEP_MARLIN",
+   "code": "PL20",
+   "name": "Fishing net",
+   "material": "plastic",
+   "rule": "UNEP/IOC material prefix PL (plastic / foamed plastic)"
+  },
+  {
+   "list": "UNEP_MARLIN",
+   "code": "PL21",
+   "name": "Strapping",
+   "material": "plastic",
+   "rule": "UNEP/IOC material prefix PL (plastic / foamed plastic)"
+  },
+  {
+   "list": "UNEP_MARLIN",
+   "code": "PL22",
+   "name": "Fibreglass fragments",
+   "material": "plastic",
+   "rule": "UNEP/IOC material prefix PL (plastic / foamed plastic)"
+  },
+  {
+   "list": "UNEP_MARLIN",
+   "code": "PL23",
+   "name": "Resin pellets",
+   "material": "plastic",
+   "rule": "UNEP/IOC material prefix PL (plastic / foamed plastic)"
+  },
+  {
+   "list": "UNEP_MARLIN",
+   "code": "PL24",
+   "name": "Other (specify)",
+   "material": "plastic",
+   "rule": "UNEP/IOC material prefix PL (plastic / foamed plastic)"
+  }
+ ]
+}
