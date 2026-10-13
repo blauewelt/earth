@@ -842,8 +842,12 @@ footer a { color: var(--fg-dim); }
 .clim-rows .chan-row + .chan-row { margin-top: 3px; }
 .clim-dl { margin: 4px 0 0 24px; font-size: 11px; color: var(--fg-dim); }
 /* the pentad climatology's span: two year fields and a leave-out list (E-093) */
-.poy-rows .chan-row input[type="number"] { width: 5.2em; font-size: 11px; padding: 2px 4px; }
-.poy-rows .chan-row input[type="text"] { flex: 1; min-width: 0; font-size: 11px; padding: 2px 4px; }
+.poy-rows .chan-row input[type="number"], .f7-rows .chan-row input[type="number"] { width: 5.2em; font-size: 11px; padding: 2px 4px; }
+.poy-rows .chan-row input[type="text"], .f7-rows .chan-row input[type="text"] { flex: 1; min-width: 0; font-size: 11px; padding: 2px 4px; }
+/* the Global tensor's mode switch (E-093): the climatology rows only show in
+ * the climatology and anomaly modes, the years only for the per-pentad kind */
+.f7-rows [hidden] { display: none; }
+.f7-rows .chan-row > .alpha-label { min-width: 5.5em; }
 .poy-note { margin: 3px 0 0 24px; font-size: 11px; color: var(--fg-dim); line-height: 1.4; }
 .poy-note:empty { display: none; }
 .clim-dl summary { cursor: pointer; }

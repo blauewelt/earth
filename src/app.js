@@ -913,88 +913,36 @@ const GIBS_LAYERS = [
      * from a baked file. `ramp`, `vmin`, `vmax`, `units` and `classGrid` are
      * REWRITTEN per channel by `tensorApplyChannel` — the seeds here are only
      * what the row shows before the index has landed. */
+    /* THE MODE SWITCH (E-093, Chris 2026-10-13: "not as an extra layer but as
+     * a toggle on each available layer"). `f7Mode` is what the row paints:
+     *   "actual" — the pentad's own values, as above;
+     *   "clim"   — the climatology of that channel for the date's place in the
+     *              year, of kind `f7Kind`: "poy" = the exact five-day slot
+     *              averaged over a span of years (E-093's sums and counts; the
+     *              span is `poyY0`/`poyY1`/`poyEx`, null = the whole record), or
+     *              "month" = the forecaster's per-calendar-month normal (E-083's
+     *              clim.npy, all years) — the two retired layers' machinery;
+     *   "anom"   — actual − climatology, both PHYSICAL, on the diverging ramp
+     *              centred on zero.
+     * AGGREGATION / DIFFERENCE POSTURE in the two new modes: still NEITHER.
+     * A climatology is already a multi-year mean of one five-day slot (or one
+     * calendar month) — its own days are its window, so an N-day window would
+     * blend neighbouring slots into a number nobody computed, and a per-pixel
+     * difference of two dates is a difference of two slots, i.e. the seasonal
+     * cycle the ±5-day stepper already walks. The anomaly IS a computed
+     * difference, but against the climatology rather than another date — the
+     * comparison that means something here — and a window over it would cost
+     * two to four range reads per day in it on top of the tensor's 14.5 MB.
+     * The span comparison (one set of years against another) lives in the
+     * row's years / leave-out fields, not in the Aggregate slider. */
+    f7Mode: "actual", f7Kind: "poy",
+    poyChan: null, poyY0: null, poyY1: null, poyEx: [], climChan: null, climVersion: null,
     grid: true, tensorGrid: true, pentadGrid: true,
     tensorChan: "g025:sst",
     ramp: "sst", vmin: -2, vmax: 32, units: "°C", maxLevel: 7,
     doc: "https://blauewelt.github.io/earth/docs.html?f=ml/plans/E070_family7_build.md",
     title: "Global tensor — what the model reads (family 7), 0.25° / 1°",
-    meta: "One five-day frame of the forecaster's own input, straight out of the archive — pick a channel",
-    on: false,
-  },
-  {
-    id: "clim7",
-    /* WHAT THE FORECASTER CALLS NORMAL (E-083 §4). Every model in this
-     * programme is trained in anomaly space: a channel reaches it as the
-     * departure from its own per-calendar-month climatology, and the rollout
-     * skill `msss_clim` scores forecasts against that same field. This layer
-     * paints it — one (version, group, calendar month, channel) plane of
-     * `clim.npy` on the Hugging Face Hub per frame, addressed by
-     * `data/family7_clim_index.json` (written by
-     * `ml/publish_family7_clim_index.py`). The arithmetic is in the block
-     * above `GridProvider`, and docs/FAMILY7_CLIM.md explains it for a reader.
-     *
-     * NO catalog record (§2.6's exception, as `amoc-eval` and the Global
-     * tensor take it): a picture of our own work, not an open dataset. `doc`
-     * links the plan instead.
-     *
-     * AGGREGATION / DIFFERENCE POSTURE: NEITHER. The field is already a
-     * multi-decade average, one calendar month per frame — averaging it over
-     * an N-day window would blend adjacent months' normals into a number no
-     * trainer ever subtracted, and a per-pixel difference of two dates is a
-     * difference of two MONTHS' normals, i.e. the seasonal cycle, which the
-     * ±1 month stepper already shows frame by frame. (Not `timed`, so
-     * `providersFor` never suppresses it either.)
-     *
-     * `ramp`, `vmin`, `vmax` and `units` are REWRITTEN per channel from the
-     * index by `climApplyChannel` — through the tensor layer's own range
-     * rule, so the two layers paint one channel identically. The seeds here
-     * only fill the row before the index has landed; the channel starts as
-     * the index's first, because no channel name belongs in this file. */
-    grid: true, climGrid: true,
-    climChan: null, climVersion: null,
-    ramp: "sst", vmin: 0, vmax: 1, units: "", maxLevel: 7,
-    doc: "https://blauewelt.github.io/earth/docs.html?f=ml/plans/E083_model_climatology.md",
-    title: "Model climatology — what the forecaster calls normal (family 7), 0.25° / 1°",
-    meta: "The per-calendar-month mean every forecast is scored against — the month of the date matters, the year doesn't",
-    on: false,
-  },
-  {
-    id: "poy7",
-    /* THE EXACT FIVE-DAY CLIMATOLOGY (E-093). Chris, 2026-10-13: "make sure
-     * that climatology can also be displayed as a layer (this should be the
-     * exact pentad averaged over years data)". For the globe's date: the
-     * five-day bin of family 7 it falls in, that bin's pentad-of-year slot
-     * (0…72), and the mean of every bin of that slot over a span of years —
-     * composed in the browser from E-093's cumulative sums and counts
-     * (`data/gridded_poy_index.json`). The arithmetic is in the block above
-     * `GridProvider`; docs/FAMILY7_CLIM.md explains it for a reader.
-     *
-     * NO catalog record (§2.6's exception, as `amoc-eval`, the Global tensor
-     * and the Model climatology take it): a picture of our own work, not an
-     * open dataset. `doc` links E-093's plan.
-     *
-     * AGGREGATION / DIFFERENCE POSTURE: NEITHER. The field is already a
-     * multi-year average of one five-day slot — averaging it over an N-day
-     * window would blend neighbouring slots' means into a number nobody
-     * computed (and the slot's own five days ARE its window), and a per-pixel
-     * difference of two dates is a difference of two slots, i.e. the seasonal
-     * cycle, which ±5 days already walks frame by frame. The comparison that
-     * IS meaningful — one span of years against another — is done in the
-     * row's own years and leave-out fields, not by the Aggregate slider. And
-     * the byte count points the same way: each paint is two to four 4–5 MB
-     * range reads at 0.25°. (Not `timed`, so `providersFor` never
-     * suppresses it either.)
-     *
-     * `ramp`, `vmin`, `vmax` and `units` are REWRITTEN per channel by
-     * `poyApplyChannel` from the family-7 index, through the tensor layer's
-     * own range rule. `poyY0`/`poyY1`/`poyEx` are the row's span: null means
-     * the whole record of the selected group. */
-    grid: true, poyGrid: true,
-    poyChan: null, poyY0: null, poyY1: null, poyEx: [],
-    ramp: "sst", vmin: 0, vmax: 1, units: "", maxLevel: 7,
-    doc: "https://blauewelt.github.io/earth/docs.html?f=ml/plans/E093_pentad_climatology.md",
-    title: "Pentad climatology — each five-day bin averaged over the years (family 7), 0.25° / 1°",
-    meta: "The mean of the date's five-day slot of the year over a span of years — the day of the date matters, the year doesn't",
+    meta: "One five-day frame of the forecaster's own input — or its climatology, or the departure from it — pick a channel and a mode",
     on: false,
   },
   {
@@ -1420,7 +1368,12 @@ function whenOfGrid(cfg, g) {
    * "3 pentads old" — a unit no reader has. The five-day span is stated where
    * it belongs, in the layer's Interval fact and in its toast. The two statics
    * have no date at all and correctly return nothing. */
-  if (cfg.tensorGrid) return g.binStart ? whenAt("day", g.binStart) : null;
+  // The climatology mode's grids carry a `period` instead — the span of years
+  // averaged, a FIXED span (§2.9) — and the anomaly is stamped with its
+  // pentad's day, since that is the observation it departs from.
+  if (cfg.tensorGrid) {
+    return g.binStart ? whenAt("day", g.binStart) : g.period ? whenAt("period", g.period) : null;
+  }
   if (g.period) return whenAt("period", g.period);
   if (cfg.monthlyGrid) return whenAt(g.keyLen === 10 ? "day" : "month", resolveGridMonth(g));
   if (g.month) return whenAt("month", g.month);
@@ -3500,13 +3453,11 @@ async function loadGridMonth(cfg) {
   // the Hub rather than from a baked file, so it answers here instead of going
   // through `loadGrid`. Everything downstream — the painter, the probe, the
   // pixel card, the legend — is unchanged by that.
-  if (cfg.tensorGrid) return tensorGridFor(cfg);
-  // …and for the model's climatology: one (version, group, month, channel)
-  // plane of `clim.npy` on the Hub, read by range.
-  if (cfg.climGrid) return climGridFor(cfg);
-  // …and for the pentad climatology: a slot's mean composed from E-093's
-  // cumulative sums and counts, read by range.
-  if (cfg.poyGrid) return poyGridFor(cfg);
+  // In its climatology and anomaly modes (E-093) the same layer answers with
+  // a pentad-of-year mean composed from E-093's cumulative sums and counts, or
+  // a calendar month's plane of E-083's `clim.npy`, or actual − either — all
+  // read by range, all resolved by `f7GridFor`.
+  if (cfg.tensorGrid) return f7GridFor(cfg);
   // Same arrangement for the fishing grid: a month of it is one range read of
   // the Hub, not a baked file, and everything downstream is unchanged by that.
   if (cfg.fishingGrid) return fishingGridFor(cfg);
@@ -4075,31 +4026,30 @@ function maybeTensorToast(cfg, { replace = false } = {}) {
     { key: "family7-pentad", replace });
 }
 
-/* A date move repaints the tensor layer only when it lands in a DIFFERENT bin
- * — four days in five change nothing, and rebuilding the provider for them
- * would issue a request per keystroke. Called from `applyDateMove`, which is
- * already inside `scrubApply` (docs/TILE_BUDGET.md: a held key must cost one
- * read per settled date, not one per keystroke). */
+/* A date move repaints the tensor layer only when what it should paint
+ * CHANGES — a different bin in the actual and anomaly modes, a different
+ * five-day slot of the year (or calendar month) in the climatology mode. Four
+ * days in five change nothing, and rebuilding the provider for them would issue
+ * a request per keystroke. Called from `applyDateMove`, which is already inside
+ * `scrubApply` (docs/TILE_BUDGET.md: a held key must cost one read per settled
+ * date, not one per keystroke). */
 async function refreshTensorGrids() {
-  const idx = tensorState.index;
   for (const [id, entry] of Object.entries(state.layers)) {
     if (!entry.layer || !entry.cfg.tensorGrid) continue;
-    if (!idx) continue;
-    const spec = tensorChannelSpec(idx, entry.cfg.tensorChan);
-    if (spec && spec.static) continue;             // no date axis at all
-    const bin = tensorBinOfDate(idx, state.date);
-    if (entry.tensorBin === bin) continue;
-    entry.tensorBin = bin;
-    /* A date step is one of the two things that trigger a read, so it owes the
+    const key = f7PaintKey(entry.cfg);
+    if (key == null || entry.f7Key === key) continue;   // index not landed, or nothing moved
+    entry.f7Key = key;
+    /* A date step is one of the things that trigger a read, so it owes the
      * same degrade path the channel switch has: an empty layer AND the hint
      * toast saying why (a failed read, or a pentad before the group's record
      * starts). Without `toast` the step used to announce "Showing <pentad>"
      * over a blank globe instead. */
-    const g = await ensureTensorGrid(entry.cfg, { toast: true });
+    const g = await f7Ensure(entry.cfg, { toast: true });
     if (!state.layers[id] || !state.layers[id].layer) continue;
     removeLayer(id);
     addLayer(entry.cfg);
-    if (g) maybeTensorToast(entry.cfg, { replace: true });
+    if (g) f7Toast(entry.cfg, { replace: true });
+    f7RefreshUi(entry.cfg);
   }
 }
 
@@ -4129,24 +4079,23 @@ function tensorFillChannelSelect(cfg) {
  * provider (the same rule `refreshMonthlyGrids` follows). Terminates: the
  * rebuild calls back in here with the grid already resolved. */
 async function tensorEnsureForLayer(cfg) {
-  const had = tensorGridFor(cfg);
-  const g = await ensureTensorGrid(cfg);
-  tensorFillChannelSelect(cfg);
+  const had = f7GridFor(cfg);
+  const g = await f7Ensure(cfg);
+  f7RefreshUi(cfg);
   const entry = state.layers[cfg.id];
   if (!entry || !entry.layer) return g;
-  entry.tensorBin = g ? g.tensorBin : null;
+  entry.f7Key = g ? f7PaintKey(cfg) : null;
+  // the climatology's own degrade path: an index that has landed but cannot
+  // answer for this channel / slot says so (the actual mode toasts on its own
+  // read paths, and an unpublished index is announced on enable)
+  if (!g && f7ModeOf(cfg) !== "actual") f7MissingToast(cfg, { onlyIfIndexed: true });
   if (g && !had) { removeLayer(cfg.id); addLayer(cfg); }
   else updateLegends();
   return g;
 }
 
 async function tensorSwitchChannel(cfg) {
-  const entry = state.layers[cfg.id];
-  await ensureTensorGrid(cfg, { toast: true });
-  tensorFillChannelSelect(cfg);
-  if (entry && entry.layer) { removeLayer(cfg.id); addLayer(cfg); }
-  updateLegends();
-  maybeTensorToast(cfg, { replace: true });
+  await f7Switch(cfg, { announce: true });
   try { conesOnTensorChannel(cfg); } catch { /* the cone is a follower, never a gate */ }
 }
 
@@ -4155,11 +4104,12 @@ async function tensorSwitchChannel(cfg) {
  * bytes travelled and were un-z-scored, without asserting on a colour. */
 function tensorLayerState() {
   const cfg = GIBS_LAYERS.find((l) => l.id === "family7");
-  const g = tensorGridFor(cfg);
+  const g = f7GridFor(cfg);
   const idx = tensorState.index;
   return {
     hasIndex: !!idx,
-    error: tensorState.error,
+    error: f7ModeOf(cfg) === "actual" ? tensorState.error : f7ErrorOf(cfg),
+    mode: f7ModeOf(cfg), kind: f7KindOf(cfg),
     chan: cfg.tensorChan,
     bin: idx ? tensorBinOfDate(idx, state.date) : null,
     pentad: idx ? tensorPentadLabel(idx, tensorBinOfDate(idx, state.date)) : null,
@@ -4167,7 +4117,8 @@ function tensorLayerState() {
     slabs: [...tensorState.slabs.keys()],
     bytes: tensorState.bytes,
     grid: g ? { nx: g.nx, ny: g.ny, dlon: g.dlon, west: g.west, south: g.south,
-                wrap: !!g.wrap, units: g.units, binStart: g.binStart || null } : null,
+                wrap: !!g.wrap, units: g.units, binStart: g.binStart || null,
+                period: g.period || null, anomaly: !!g.f7anom } : null,
     norm: g && g.tensor ? [g.tensor.mean, g.tensor.sd] : null,
     vmin: cfg.vmin, vmax: cfg.vmax, ramp: cfg.ramp, classGrid: !!cfg.classGrid,
   };
@@ -4176,7 +4127,7 @@ function tensorLayerState() {
  * channel's own unit — the value the probe would print, without a click. */
 function tensorSampleAt(lon, lat) {
   const cfg = GIBS_LAYERS.find((l) => l.id === "family7");
-  const g = tensorGridFor(cfg);
+  const g = f7GridFor(cfg);
   return g ? sampleGrid(g, lon, lat) : null;
 }
 
@@ -4199,11 +4150,17 @@ function tensorResidentZ(group, bin, chan, cell) {
   return Number.isFinite(z) ? z : null;
 }
 
-/* Said on enable: which pentad is on screen, or why nothing is. */
+/* Said on enable: which pentad (or climatology, or anomaly) is on screen, or
+ * why nothing is. */
 async function tensorAnnounce(cfg) {
   const idx = await loadTensorIndex();
   if (!idx) { tensorState.error = "no index"; tensorMissingToast(cfg); return; }
-  maybeTensorToast(cfg);
+  await f7LoadClimIndex(cfg);
+  if (f7ModeOf(cfg) !== "actual" && !f7ClimIndexed(cfg)) { f7MissingToast(cfg); return; }
+  // the anomaly's toast names what it subtracted, so it waits for the paint
+  // (a shared resolution — the reads in flight are deduped, never repeated)
+  if (f7ModeOf(cfg) === "anom" && !(await f7Ensure(cfg))) return;
+  f7Toast(cfg);
 }
 
 /* ==================== fishing effort (AIS), read by the byte (E-081 §3–§4)
@@ -4705,10 +4662,6 @@ function climChannelList(idx) {
   }
   return out;
 }
-function climChannelSpec(idx, key) {
-  const list = climChannelList(idx);
-  return list.find((c) => c.key === key) || list[0] || null;
-}
 function climFiles(idx, ver, group) {
   return (idx && idx.files && idx.files[ver] && idx.files[ver][group]) || null;
 }
@@ -4835,8 +4788,9 @@ function climApplyChannel(cfg, idx, spec, ver) {
   cfg.maxLevel = spec.step < 1 ? 7 : 6;
 }
 
-function climKeyFor(idx, cfg, dateStr = state.date) {
-  const spec = climChannelSpec(idx, cfg.climChan);
+function climKeyFor(idx, cfg, dateStr = f7ClimDate(cfg)) {
+  // the tensor row's channel, EXACTLY — never the list's first as a stand-in
+  const spec = climChannelList(idx).find((c) => c.key === cfg.tensorChan) || null;
   const ver = climVersionOf(idx, cfg);
   if (!spec || !ver) return null;
   return { spec, ver, month: climMonthOf(dateStr),
@@ -4857,7 +4811,14 @@ async function ensureClimGrid(cfg, { toast = false } = {}) {
     return null;
   }
   const at = climKeyFor(idx, cfg);
-  if (!at) return null;
+  if (!at) {
+    const spec = tensorState.index && tensorChannelSpec(tensorState.index, cfg.tensorChan);
+    climState.error = `no per-calendar-month climatology for ${spec ? spec.label : cfg.tensorChan}` +
+      (spec && spec.static ? " — a static of the grid has none" : " — E-083 exported none for this channel");
+    climState.current = null; climState.currentKey = null;
+    if (toast) climMissingToast(cfg);
+    return null;
+  }
   climApplyChannel(cfg, idx, at.spec, at.ver);
   if (climState.currentKey === at.key && climState.current) return climState.current;
   let g = null;
@@ -4901,6 +4862,7 @@ function climMissingToast(cfg) {
       `<code>ml/export_family7_clim.py</code> → ` +
       `<code>ml/publish_family7_clim_index.py upload</code>, and the layer goes live ` +
       `the moment that file lands beside this page, with no change here`
+    : /^no /.test(climState.error || "") ? `its climatology mode has ${esc(climState.error)}`
     : `it could not be read${climState.error ? ` (${esc(climState.error)})` : ""}`;
   showToast(`<strong>${cfg.title}</strong>: ${why}. The normals live on the Hugging ` +
     `Face Hub and are fetched one calendar month at a time; the rest of the globe is ` +
@@ -4920,7 +4882,8 @@ function maybeClimToast(cfg, { replace = false } = {}) {
   const f = climFiles(idx, at.ver.key, at.spec.group);
   const have = f && Array.isArray(f.months_with_data) ? f.months_with_data : null;
   const empty = have && have.length && !have.includes(at.month + 1);
-  showToast(`<strong>${cfg.title}</strong> is a <strong>per-calendar-month ` +
+  showToast(`<strong>${cfg.title}</strong>, in <strong>climatology</strong> mode ` +
+    `(per calendar month — the forecaster's), is a <strong>per-calendar-month ` +
     `average</strong> — <strong>${esc(at.ver.name)}</strong>, the mean over ` +
     `${esc(at.ver.train_span)}. The <strong>month of the date selector matters, the ` +
     `year doesn't</strong>: showing the normal for <strong>${monthName(at.month)}</strong>` +
@@ -4928,70 +4891,6 @@ function maybeClimToast(cfg, { replace = false } = {}) {
     (empty ? ` This group has no training sample in ${monthName(at.month)}, so nothing ` +
              `is painted.` : ""),
     { key: `${cfg.id}-month`, replace });
-}
-
-/* A date move repaints this layer only when it lands in a DIFFERENT calendar
- * month — the month is the key, never the date, so a day step, and a whole
- * year step, cost nothing. Called from `applyDateMove` (inside `scrubApply`:
- * a held key is one read per settled date, not per keystroke). */
-async function refreshClimGrids() {
-  if (!climState.index) return;
-  for (const [id, entry] of Object.entries(state.layers)) {
-    if (!entry.layer || !entry.cfg.climGrid) continue;
-    const month = climMonthOf(state.date);
-    if (entry.climMonth === month) continue;
-    entry.climMonth = month;
-    await ensureClimGrid(entry.cfg);
-    if (!state.layers[id] || !state.layers[id].layer) continue;
-    removeLayer(id);
-    addLayer(entry.cfg);
-    maybeClimToast(entry.cfg, { replace: true });
-    climRefreshUi(entry.cfg);
-  }
-}
-
-/* Resolve the bytes and, if they arrived after the provider was built,
- * rebuild it (Cesium caches rendered tiles — the rule `tensorEnsureForLayer`
- * follows). Terminates: the rebuild comes back here already resolved. */
-async function climEnsureForLayer(cfg) {
-  const had = climGridFor(cfg);
-  const g = await ensureClimGrid(cfg);
-  climRefreshUi(cfg);
-  const entry = state.layers[cfg.id];
-  if (!entry || !entry.layer) return g;
-  entry.climMonth = g ? g.clim.month : null;
-  if (!g && climState.index && climState.error) climMissingToast(cfg);
-  if (g && !had) { removeLayer(cfg.id); addLayer(cfg); }
-  else updateLegends();
-  return g;
-}
-
-/* The channel picker moved. Same layer, same chip, same opacity — only the
- * plane changes (a decode, or one read). */
-async function climSwitch(cfg) {
-  await ensureClimGrid(cfg, { toast: true });
-  climRefreshUi(cfg);
-  const entry = state.layers[cfg.id];
-  if (entry && entry.layer) { removeLayer(cfg.id); addLayer(cfg); }
-  updateLegends();
-}
-
-/* The channel picker, from the INDEX: channels grouped by tensor group (one
- * <optgroup> each, the labels the builder published). */
-function climFillSelects(cfg) {
-  const idx = climState.index;
-  const chSel = document.querySelector(`select[data-climchan="${cfg.id}"]`);
-  if (!chSel) return;
-  const none = `<option value="">— the index has not landed —</option>`;
-  const set = (sel, html) => { if (sel.dataset.sig !== html) { sel.innerHTML = html; sel.dataset.sig = html; } };
-  if (!idx) { set(chSel, none); return; }
-  set(chSel, Object.entries(idx.groups).map(([group, grp]) =>
-    `<optgroup label="${esc(group)} · ${grp.grid.step}°">` +
-    grp.chans.map((c) => `<option value="${esc(`${group}:${c}`)}">` +
-      `${esc((grp.labels && grp.labels[c]) || c)}</option>`).join("") +
-    `</optgroup>`).join(""));
-  const at = climKeyFor(idx, cfg);
-  if (at) chSel.value = at.spec.key;
 }
 
 /* The Downloads block, for the selected version and group: the NetCDF (when
@@ -5032,8 +4931,8 @@ function climDownloadsHtml(cfg, { inTip = false } = {}) {
   const toData = `<div class="clim-to-data">The normal over <strong>any other period</strong> — ` +
     `say 1991–2020, or the paper's split, 1982–2020 leaving out 2009 and 2017 — with months, ` +
     `a box and a resolution: ${inTip ? "the Data tab's “Monthly normals” store for this group"
-      : `<button type="button" class="tag-link" data-opentab="data"${store ? ` data-dtstore="${esc(store)}"` : ""}>` +
-        `this group's monthly normals in the Data tab</button>`}. ` +
+      : `<button type="button" class="tag-link" data-opentab="data"${store ? ` data-dtstore="${esc(store)}" data-dtstep="normal"` : ""}>` +
+        `download this as a file: this group's monthly normals in the Data tab</button>`}. ` +
     `More stores, any period, month, box and resolution: the Data tab.</div>`;
   if (!idx) {
     return `nothing yet — the index <code>data/family7_clim_index.json</code> has not ` +
@@ -5070,8 +4969,7 @@ function climDownloadsHtml(cfg, { inTip = false } = {}) {
 
 /* Everything in the row and the hover card that follows the selection. */
 function climRefreshUi(cfg) {
-  climFillSelects(cfg);
-  const body = document.querySelector(`[data-climdlbody="${cfg.id}"]`);
+  const body = document.querySelector(`[data-f7dlbody="${cfg.id}"]`);
   if (body) body.innerHTML = climDownloadsHtml(cfg);
   const item = document.querySelector(`#layer-list input[data-id="${cfg.id}"]`)?.closest(".layer-item");
   const tip = item && item.querySelector(".layer-tip");
@@ -5097,8 +4995,8 @@ function climRefreshUi(cfg) {
 /* The read-out both the probe and the pixel card print: the normal in the
  * channel's unit and as the tensor stores it, and — only if the Global tensor's
  * slab for this pentad is ALREADY resident — the departure from normal. */
-const CLIM_DEP_HINT = `switch on <em>Global tensor</em> to see the departure from ` +
-  `normal — its 14.5 MB pentad is never read for a click`;
+const CLIM_DEP_HINT = `pick <em>anomaly</em> in the Global tensor's mode switch (or look at ` +
+  `<em>actual</em> first) to see the departure from normal — its 14.5 MB pentad is never read for a click`;
 
 async function climDeparture(g, lon, lat) {
   const cIdx = climState.index, tIdx = tensorState.index;
@@ -5193,16 +5091,9 @@ function climDownloadCsv(cfg) {
   return name;
 }
 
-/* Said on enable: which month and version are on screen, or why nothing is. */
-async function climAnnounce(cfg) {
-  const idx = await loadClimIndex();
-  if (!idx) { climMissingToast(cfg); return; }
-  maybeClimToast(cfg);
-}
-
 /* What the tests read instead of pixels. */
 function climLayerState() {
-  const cfg = GIBS_LAYERS.find((l) => l.climGrid);
+  const cfg = GIBS_LAYERS.find((l) => l.tensorGrid);
   const idx = climState.index;
   const g = climGridFor(cfg);
   return {
@@ -5217,7 +5108,7 @@ function climLayerState() {
   };
 }
 function climSampleAt(lon, lat) {
-  const g = climGridFor(GIBS_LAYERS.find((l) => l.climGrid));
+  const g = climGridFor(GIBS_LAYERS.find((l) => l.tensorGrid));
   return g ? sampleGrid(g, lon, lat) : null;
 }
 
@@ -5320,10 +5211,6 @@ function poyChannelList(idx) {
     });
   }
   return out;
-}
-function poyChannelSpec(idx, key) {
-  const list = poyChannelList(idx);
-  return list.find((c) => c.key === key) || list[0] || null;
 }
 function poyRange(idx, spec) {
   const tIdx = tensorState.index;
@@ -5492,8 +5379,9 @@ function poyApplyChannel(cfg, idx, spec) {
   cfg.maxLevel = spec.step < 1 ? 7 : 6;
 }
 
-function poyKeyFor(idx, cfg, dateStr = state.date) {
-  const spec = poyChannelSpec(idx, cfg.poyChan);
+function poyKeyFor(idx, cfg, dateStr = f7ClimDate(cfg)) {
+  // the tensor row's channel, EXACTLY — never the list's first as a stand-in
+  const spec = poyChannelList(idx).find((c) => c.key === cfg.tensorChan) || null;
   const st = spec && poyStores(idx)[spec.group];
   const bin = poyBinStart(dateStr);
   if (!spec || !st || !bin) return null;
@@ -5515,7 +5403,12 @@ async function ensurePoyGrid(cfg, { toast = false } = {}) {
     return null;
   }
   const at = poyKeyFor(idx, cfg);
-  if (!at) { poyState.error = "the tensor's bin calendar (data/family7_index.json) could not be read"; return null; }
+  if (!at) {
+    poyState.error = f7PoyMissingWhy(cfg);
+    poyState.current = null; poyState.currentKey = null;
+    if (toast) poyMissingToast(cfg);
+    return null;
+  }
   poyApplyChannel(cfg, idx, at.spec);
   if (poyState.currentKey === at.key && poyState.current) return poyState.current;
   let g = null;
@@ -5558,6 +5451,7 @@ function poyMissingToast(cfg) {
     ? `its index <code>${POY_INDEX_URL}</code> has not been published yet (or lists no complete ` +
       `group) — E-093's exporter writes it, and the layer goes live the moment it lands beside ` +
       `this page, with no change here`
+    : /^no /.test(poyState.error || "") ? `its climatology mode has ${esc(poyState.error)}`
     : `it could not be read${poyState.error ? ` (${esc(poyState.error)})` : ""}`;
   showToast(`<strong>${cfg.title}</strong>: ${why}. The sums and counts live on the Hugging ` +
     `Face Hub and are read one five-day slot at a time; the rest of the globe is unaffected. ` +
@@ -5572,66 +5466,13 @@ function maybePoyToast(cfg, { replace = false } = {}) {
   const idx = poyState.index;
   const at = idx && poyKeyFor(idx, cfg);
   if (!at) return;
-  showToast(`<strong>${cfg.title}</strong> is a <strong>per-five-day-bin average over the ` +
+  showToast(`<strong>${cfg.title}</strong>, in <strong>climatology</strong> mode (per ` +
+    `pentad — the exact one), is a <strong>per-five-day-bin average over the ` +
     `years</strong> — ${esc(at.span.text)}${at.span.whole ? " (the whole record)" : ""}. ` +
     `The <strong>year of the date selector doesn't matter, the day does</strong>: it picks the ` +
     `five-day bin of the year. ${state.date} sits in the bin opening ${at.bin}, so this is ` +
-    `slot <strong>${esc(poySlotLabel(at.slot))}</strong>. The years averaged are set in the ` +
-    `layer's own row; step ±5 days to walk the seasonal cycle.`, { key: `${cfg.id}-slot`, replace });
-}
-
-/* A date move repaints only when it lands in a DIFFERENT slot (or the span
- * changed) — four days in five, and a whole-year step, usually cost nothing.
- * Called from every date path inside `scrubApply`, like the tensor's. */
-async function refreshPoyGrids() {
-  if (!poyState.index) return;
-  for (const [id, entry] of Object.entries(state.layers)) {
-    if (!entry.layer || !entry.cfg.poyGrid) continue;
-    const at = poyKeyFor(poyState.index, entry.cfg);
-    if (!at || entry.poyKey === at.key) continue;
-    const slotMoved = entry.poySlot !== at.slot;
-    entry.poyKey = at.key;
-    entry.poySlot = at.slot;
-    await ensurePoyGrid(entry.cfg);
-    if (!state.layers[id] || !state.layers[id].layer) continue;
-    removeLayer(id);
-    addLayer(entry.cfg);
-    if (slotMoved) maybePoyToast(entry.cfg, { replace: true });
-    poyRefreshUi(entry.cfg);
-  }
-}
-
-/* Resolve the bytes and, if they arrived after the provider was built,
- * rebuild it (Cesium caches rendered tiles). Terminates: the rebuild comes back
- * here already resolved. */
-async function poyEnsureForLayer(cfg) {
-  const had = poyGridFor(cfg);
-  const g = await ensurePoyGrid(cfg);
-  poyRefreshUi(cfg);
-  const entry = state.layers[cfg.id];
-  if (!entry || !entry.layer) return g;
-  const at = poyState.index && poyKeyFor(poyState.index, cfg);
-  entry.poyKey = g && at ? at.key : null;
-  entry.poySlot = g && at ? at.slot : null;
-  if (!g && poyState.index && poyState.error) poyMissingToast(cfg);
-  if (g && !had) { removeLayer(cfg.id); addLayer(cfg); }
-  else updateLegends();
-  return g;
-}
-
-/* A control in the row moved (channel, years, leave-out). Same layer, chip and
- * opacity — only the composed plane changes. */
-async function poySwitch(cfg) {
-  const g = await ensurePoyGrid(cfg, { toast: true });
-  poyRefreshUi(cfg);
-  const entry = state.layers[cfg.id];
-  if (entry && entry.layer) {
-    const at = poyState.index && poyKeyFor(poyState.index, cfg);
-    entry.poyKey = g && at ? at.key : null;
-    entry.poySlot = g && at ? at.slot : null;
-    removeLayer(cfg.id); addLayer(cfg);
-  }
-  updateLegends();
+    `slot <strong>${esc(poySlotLabel(at.slot))}</strong>. The years averaged (and any left ` +
+    `out) are set in the layer's own row; step ±5 days to walk the seasonal cycle.`, { key: `${cfg.id}-slot`, replace });
 }
 
 /* "2009, 2017" / "2009 2017" / "2009;2017" → [2009, 2017]. */
@@ -5643,23 +5484,16 @@ function poyParseYears(text) {
  * bounded by the selected group's record, the leave-out field as typed. */
 function poyFillControls(cfg) {
   const idx = poyState.index;
-  const chSel = document.querySelector(`select[data-poychan="${cfg.id}"]`);
-  if (!chSel) return;
-  const set = (sel, html) => { if (sel.dataset.sig !== html) { sel.innerHTML = html; sel.dataset.sig = html; } };
-  const stores = idx ? poyStores(idx) : {};
-  if (!Object.keys(stores).length) {
-    set(chSel, `<option value="">— the index has not landed —</option>`);
+  const note = document.querySelector(`[data-poynote="${cfg.id}"]`);
+  const at = idx && poyKeyFor(idx, cfg);
+  if (!at) {
+    if (note) {
+      note.innerHTML = !idx || !Object.keys(poyStores(idx)).length
+        ? `— the index <code>${POY_INDEX_URL}</code> has not landed —`
+        : `<em>${esc(f7PoyMissingWhy(cfg))}</em>`;
+    }
     return;
   }
-  const byGroup = {};
-  for (const s of poyChannelList(idx)) (byGroup[s.group] = byGroup[s.group] || []).push(s);
-  set(chSel, Object.entries(byGroup).map(([group, specs]) =>
-    `<optgroup label="${esc(group)} · ${specs[0].step}°">` +
-    specs.map((s) => `<option value="${esc(s.key)}">${esc(s.label)}</option>`).join("") +
-    `</optgroup>`).join(""));
-  const at = poyKeyFor(idx, cfg);
-  if (!at) return;
-  chSel.value = at.spec.key;
   const y0 = document.querySelector(`input[data-poyy0="${cfg.id}"]`);
   const y1 = document.querySelector(`input[data-poyy1="${cfg.id}"]`);
   const ex = document.querySelector(`input[data-poyex="${cfg.id}"]`);
@@ -5667,7 +5501,6 @@ function poyFillControls(cfg) {
   if (y0) y0.value = at.span.a;
   if (y1) y1.value = at.span.b;
   if (ex && document.activeElement !== ex) ex.value = at.span.ex.join(", ");
-  const note = document.querySelector(`[data-poynote="${cfg.id}"]`);
   if (note) {
     const lp = poyState.lastPaint;
     const planes = poyPlaneSigns(at.span).length;
@@ -5693,7 +5526,7 @@ function poyDownloadsHtml(cfg, { inTip = false } = {}) {
     (inTip ? `the Data tab's family-10 store for this group (${esc(group || "")}), time step ` +
              `<em>Climatology — mean per pentad of year over the years</em>`
       : `<button type="button" class="tag-link" data-opentab="data"${store ? ` data-dtstore="${esc(store)}"` : ""} ` +
-        `data-dtstep="poy">this group's “Climatology — mean per pentad of year” in the Data tab</button>`) + `.`;
+        `data-dtstep="poy">download this as a file: this group's “Climatology — mean per pentad of year” in the Data tab</button>`) + `.`;
   const a = (url, text) => `<a href="${esc(url)}" target="_blank" rel="noopener">${text}</a>`;
   if (!at) {
     return `<div class="clim-to-data">nothing yet — the index <code>${POY_INDEX_URL}</code> has not been ` +
@@ -5733,7 +5566,7 @@ function poyOpenDtStep(storeKey, step) {
 /* Everything in the row and the hover card that follows the selection. */
 function poyRefreshUi(cfg) {
   poyFillControls(cfg);
-  const body = document.querySelector(`[data-poydlbody="${cfg.id}"]`);
+  const body = document.querySelector(`[data-f7dlbody="${cfg.id}"]`);
   if (body) body.innerHTML = poyDownloadsHtml(cfg);
   const item = document.querySelector(`#layer-list input[data-id="${cfg.id}"]`)?.closest(".layer-item");
   const tip = item && item.querySelector(".layer-tip");
@@ -5767,16 +5600,9 @@ function poyReadout(g, lon, lat) {
   };
 }
 
-/* Said on enable: which slot and span are on screen, or why nothing is. */
-async function poyAnnounce(cfg) {
-  const idx = await loadPoyIndex();
-  if (!idx || !Object.keys(poyStores(idx)).length) { poyMissingToast(cfg); return; }
-  maybePoyToast(cfg);
-}
-
 /* What the tests read instead of pixels. */
 function poyLayerState() {
-  const cfg = GIBS_LAYERS.find((l) => l.poyGrid);
+  const cfg = GIBS_LAYERS.find((l) => l.tensorGrid);
   const idx = poyState.index;
   const g = poyGridFor(cfg);
   const at = idx && poyKeyFor(idx, cfg);
@@ -5792,10 +5618,407 @@ function poyLayerState() {
   };
 }
 function poySampleAt(lon, lat) {
-  const g = poyGridFor(GIBS_LAYERS.find((l) => l.poyGrid));
+  const g = poyGridFor(GIBS_LAYERS.find((l) => l.tensorGrid));
   if (!g) return null;
   const i = gridCellIndex(g, lon, lat);
   return { v: sampleGrid(g, lon, lat), n: i >= 0 ? g.counts[i] : null };
+}
+
+/* ===================== the Global tensor's MODE switch (E-093, 2026-10-13)
+ *
+ * Chris: "Can you make sure that climatology can also be displayed as a layer?
+ * (This should be the exact pentad averaged over years data)", and then: "It
+ * would be better, not as an extra layer but as a toggle on each available
+ * layer." So the two climatology layers that stood beside the tensor (the
+ * per-calendar-month "Model climatology", E-083, and the per-pentad "Pentad
+ * climatology", E-093) were retired INTO the tensor's own row: one channel
+ * picker, and a mode —
+ *
+ *   actual       the pentad's own values (the tensor read by the byte, above);
+ *   climatology  the same channel's climatology for the date's place in the
+ *                year, of one of two KINDS:
+ *                  per pentad (exact) — the date's five-day bin → its slot of
+ *                    the year → that slot's mean over a span of years, from
+ *                    E-093's cumulative sums and counts (`poy*` above): the
+ *                    whole record by default, with from/to years and a
+ *                    leave-out field;
+ *                  per calendar month (the forecaster's) — the all-years
+ *                    normal `anomaly_transform` subtracts (`clim*` above);
+ *   anomaly      actual − climatology, BOTH PHYSICAL (the tensor is de-z-scored
+ *                through `norm`; E-093's sums are physical already; E-083's
+ *                planes are de-z-scored by `climMakeGrid`), on the diverging
+ *                ramp centred on zero. Its climatology is keyed by the ACTUAL
+ *                pentad's opening day, not the raw date: past the tensor's last
+ *                bin the actual clamps, and the two halves of a difference must
+ *                describe the same five days. For the per-month kind that is the
+ *                month the pentad OPENS in — the trainer's own rule
+ *                (`master_calendar`), the one `climDeparture` follows.
+ *
+ * One mutable config, as for the channel: a mode switch must not be a
+ * different LAYER, or the chip, the opacity slider and the hover card would be
+ * replaced under the reader's hand. The two readers stay exactly as they were;
+ * this block only chooses between them, composes the anomaly, and keeps the
+ * row, the legend, the toasts and the hover card saying which is on screen. */
+const F7_MODES = [["actual", "actual"], ["clim", "climatology"], ["anom", "anomaly"]];
+const F7_KINDS = [["poy", "per pentad (exact)"], ["month", "per calendar month (the forecaster's)"]];
+/* The anomaly's colour range: ± half the channel's spread (its sd over the
+ * whole tensor, rounded). That sd includes the seasonal cycle and the geography
+ * the anomaly removes, so ±2.5 sd — the actual mode's range — would leave every
+ * anomaly a pale smear around zero; half of it is where real departures live
+ * (≈ ±5 °C for SST, ±10 °C for 2 m air). Fixed per channel, never fitted to the
+ * frame, so a colour keeps its meaning as the date moves. */
+const F7_ANOM_SD = 0.5;
+
+function f7ModeOf(cfg) {
+  return cfg && (cfg.f7Mode === "clim" || cfg.f7Mode === "anom") ? cfg.f7Mode : "actual";
+}
+function f7KindOf(cfg) {
+  return cfg && cfg.f7Kind === "month" ? "month" : "poy";
+}
+/* The date a climatology is keyed by: the date itself in climatology mode,
+ * the actual pentad's opening day in anomaly mode (see the block comment). */
+function f7ClimDate(cfg, dateStr = state.date) {
+  if (!cfg || !cfg.tensorGrid || f7ModeOf(cfg) !== "anom") return dateStr;
+  const idx = tensorState.index;
+  return idx ? tensorDateOfBin(idx, tensorBinOfDate(idx, dateStr)) : dateStr;
+}
+function f7LoadClimIndex(cfg) {
+  if (f7ModeOf(cfg) === "actual") return loadTensorIndex();
+  return Promise.all([loadTensorIndex(), f7KindOf(cfg) === "poy" ? loadPoyIndex() : loadClimIndex()]);
+}
+function f7ClimIndexed(cfg) {
+  return f7KindOf(cfg) === "poy"
+    ? !!poyState.index && Object.keys(poyStores(poyState.index)).length > 0
+    : !!climState.index;
+}
+function f7PoyMissingWhy(cfg) {
+  const tIdx = tensorState.index;
+  if (!tIdx) return "the tensor's bin calendar (data/family7_index.json) could not be read";
+  const spec = tensorChannelSpec(tIdx, cfg.tensorChan);
+  if (spec && spec.static) return `no climatology for ${spec.label} — a static of the grid has none`;
+  return `no pentad climatology for ${spec ? spec.label : cfg.tensorChan} — E-093 exported none for this channel`;
+}
+
+/* The anomaly's own resolution state — the same shape as the two readers'. */
+const f7AnomState = { current: null, currentKey: null, seq: 0, error: null };
+
+function f7ErrorOf(cfg) {
+  const mode = f7ModeOf(cfg);
+  if (mode === "actual") return tensorState.error;
+  if (mode === "anom") return f7AnomState.error;
+  return f7KindOf(cfg) === "poy" ? poyState.error : climState.error;
+}
+
+/* A string naming what the layer should paint NOW — or null while an index it
+ * needs has not landed. A date move repaints only when this changes. */
+function f7ClimKey(cfg) {
+  if (f7KindOf(cfg) === "poy") {
+    if (!poyState.index) return null;
+    const at = poyKeyFor(poyState.index, cfg);
+    return at ? `poy:${at.key}` : `poy:none:${cfg.tensorChan}`;
+  }
+  if (!climState.index) return null;
+  const at = climKeyFor(climState.index, cfg);
+  return at ? `month:${at.key}` : `month:none:${cfg.tensorChan}`;
+}
+function f7PaintKey(cfg) {
+  const tIdx = tensorState.index;
+  if (!tIdx) return null;
+  const spec = tensorChannelSpec(tIdx, cfg.tensorChan);
+  if (!spec) return null;
+  const actual = spec.static ? `static:${spec.chan}` : `${spec.key}:${tensorBinOfDate(tIdx, state.date)}`;
+  const mode = f7ModeOf(cfg);
+  if (mode === "actual") return actual;
+  const ck = f7ClimKey(cfg);
+  if (ck == null) return null;
+  return mode === "clim" ? `clim|${ck}` : `anom|${actual}|${ck}`;
+}
+
+/* Synchronous view for the painter, whatever the mode. */
+function f7GridFor(cfg) {
+  const mode = f7ModeOf(cfg);
+  if (mode === "actual") return tensorGridFor(cfg);
+  if (mode === "clim") return f7KindOf(cfg) === "poy" ? poyGridFor(cfg) : climGridFor(cfg);
+  const k = f7PaintKey(cfg);
+  return k && f7AnomState.currentKey === k ? f7AnomState.current : null;
+}
+
+/* The anomaly's presentation: the diverging ramp, symmetric about zero. */
+function f7ApplyAnom(cfg) {
+  const tIdx = tensorState.index;
+  const spec = tIdx && tensorChannelSpec(tIdx, cfg.tensorChan);
+  if (!spec || spec.static) return;
+  const grp = tIdx.groups[spec.group];
+  const sd = grp.norm[grp.chans.indexOf(spec.chan)][1];
+  const m = tensorNiceRound(F7_ANOM_SD * sd) || F7_ANOM_SD * sd || 1;
+  cfg.units = spec.units;
+  cfg.ramp = "anom";
+  cfg.classGrid = false;
+  cfg.vmin = -m; cfg.vmax = m;
+  cfg.maxLevel = spec.group === "g025" ? 7 : 6;
+}
+
+/* actual − climatology over the tensor's own grid. The two grids are the same
+ * cells for the published groups (both 0.25° or both 1°, point-aligned from
+ * −90/−180) and are then subtracted cell by cell; any other pairing — the
+ * decimated test fixtures — samples the climatology at each tensor cell's
+ * point, so the difference is always defined on the grid the model reads. A
+ * cell missing on either side is NaN and paints nothing. */
+function f7ComposeAnom(a, c, A) {
+  const n = a.nx * a.ny, vals = new Float32Array(n);
+  const same = c.nx === a.nx && c.ny === a.ny && Math.abs(c.west - a.west) < 1e-9 &&
+    Math.abs(c.south - a.south) < 1e-9 && Math.abs(c.dlon - a.dlon) < 1e-12;
+  for (let iy = 0; iy < a.ny; iy++) {
+    const lat = a.south + (iy + 0.5) * a.dlat;
+    for (let ix = 0; ix < a.nx; ix++) {
+      const p = iy * a.nx + ix, x = a.values[p];
+      let cv;
+      if (same) cv = c.values[p];
+      else { const s = sampleGrid(c, a.west + (ix + 0.5) * a.dlon, lat); cv = s == null ? NaN : s; }
+      vals[p] = Number.isFinite(x) && Number.isFinite(cv) ? x - cv : NaN;
+    }
+  }
+  return {
+    west: a.west, east: a.east, south: a.south, north: a.north,
+    dlon: a.dlon, dlat: a.dlat, nx: a.nx, ny: a.ny, wrap: a.wrap,
+    values: vals, units: a.units,
+    // stamped with the PENTAD's day (§2.9): the anomaly is that observation's departure
+    binStart: a.binStart, tensorBin: a.tensorBin, tensorSpec: a.tensorSpec,
+    f7anom: A,
+  };
+}
+
+async function ensureF7AnomGrid(cfg, { toast = false } = {}) {
+  const my = ++f7AnomState.seq;
+  await f7LoadClimIndex(cfg);
+  const tIdx = tensorState.index;
+  const fail = (why) => {
+    if (my !== f7AnomState.seq) return f7AnomState.current;
+    f7AnomState.error = why;
+    f7AnomState.current = null; f7AnomState.currentKey = null;
+    return null;
+  };
+  if (!tIdx) return fail("no index");
+  const spec = tensorChannelSpec(tIdx, cfg.tensorChan);
+  f7ApplyAnom(cfg);
+  if (!spec) return fail("no channel");
+  if (spec.static) return fail(`no anomaly for ${spec.label} — a static of the grid has no climatology`);
+  const key = f7PaintKey(cfg);
+  if (key && f7AnomState.currentKey === key && f7AnomState.current) return f7AnomState.current;
+  const kind = f7KindOf(cfg);
+  const [a, c] = await Promise.all([
+    ensureTensorGrid(cfg, { toast }),
+    kind === "poy" ? ensurePoyGrid(cfg, { toast }) : ensureClimGrid(cfg, { toast }),
+  ]);
+  f7ApplyAnom(cfg);              // the two readers each wrote THEIR presentation
+  if (my !== f7AnomState.seq) return f7AnomState.current;               // superseded
+  const bin = tensorBinOfDate(tIdx, state.date);
+  if (!a || a.tensorBin !== bin || a.tensorSpec?.key !== spec.key) {
+    return fail(tensorState.error || "the pentad could not be read");
+  }
+  if (!c) return fail((kind === "poy" ? poyState.error : climState.error) || "the climatology could not be read");
+  // The climatology must be computed FROM this tensor build, or the difference
+  // is between two different archives (the rule `climDeparture` keeps).
+  const cStem = kind === "poy" ? (poyStores(poyState.index)[spec.group] || {}).stem : climState.index && climState.index.stem;
+  if (cStem && tIdx.stem && cStem !== tIdx.stem) {
+    return fail(`no anomaly: the climatology was computed from ${cStem}, the tensor on this page is ${tIdx.stem}`);
+  }
+  const grp = tIdx.groups[spec.group];
+  const ci = grp.chans.indexOf(spec.chan);
+  const [mean, sd] = grp.norm[ci];
+  const A = {
+    kind, actual: a, clim: c, mean, sd, group: spec.group, chan: spec.chan, label: spec.label,
+    pentad: tensorPentadLabel(tIdx, bin),
+    climWhat: kind === "poy"
+      ? `its per-pentad climatology, slot ${poySlotLabel(c.poy.slot, { short: true })} averaged over ${c.poy.span.text}`
+      : `the forecaster's normal for ${monthName(c.clim.month)} (${((climState.index.versions || []).find((v) => v.key === c.clim.version) || {}).name || c.clim.version})`,
+  };
+  const g = f7ComposeAnom(a, c, A);
+  f7AnomState.error = null;
+  f7AnomState.current = g;
+  f7AnomState.currentKey = f7PaintKey(cfg);
+  gridsLoaded.set(cfg.id, g);
+  return g;
+}
+
+/* Resolve whatever the mode paints, reading what is not in the LRUs. */
+function f7Ensure(cfg, opts = {}) {
+  const mode = f7ModeOf(cfg);
+  if (mode === "actual") return ensureTensorGrid(cfg, opts);
+  if (mode === "anom") return ensureF7AnomGrid(cfg, opts);
+  return loadTensorIndex().then(() =>
+    f7KindOf(cfg) === "poy" ? ensurePoyGrid(cfg, opts) : ensureClimGrid(cfg, opts));
+}
+
+function f7MissingToast(cfg, { onlyIfIndexed = false } = {}) {
+  if (onlyIfIndexed && !f7ClimIndexed(cfg)) return;
+  if (f7ModeOf(cfg) === "anom" && f7AnomState.error && f7ClimIndexed(cfg)) {
+    showToast(`<strong>${cfg.title}</strong>, in <strong>anomaly</strong> mode: ` +
+      `${esc(f7AnomState.error)}. The rest of the globe is unaffected.`,
+      { key: `${cfg.id}-missing`, replace: true });
+    return;
+  }
+  if (f7KindOf(cfg) === "poy") poyMissingToast(cfg); else climMissingToast(cfg);
+}
+
+/* §4b, per mode: which pentad (actual), which slot or month and span — with
+ * "the YEAR of the date doesn't matter, the DAY does" (climatology) — or what
+ * is subtracted from what (anomaly). */
+function f7Toast(cfg, opts = {}) {
+  const mode = f7ModeOf(cfg);
+  if (mode === "actual") return maybeTensorToast(cfg, opts);
+  if (mode === "clim") return f7KindOf(cfg) === "poy" ? maybePoyToast(cfg, opts) : maybeClimToast(cfg, opts);
+  const g = f7GridFor(cfg);
+  if (!g || !g.f7anom) return;
+  const A = g.f7anom;
+  showToast(`<strong>${cfg.title}</strong>, in <strong>anomaly</strong> mode: the pentad ` +
+    `<strong>${esc(A.pentad)}</strong> minus ${esc(A.climWhat)} — in the channel's own unit, ` +
+    `<strong>blue below normal, red above</strong>, centred on zero (±${fmtVal(cfg.vmax)} ` +
+    `${esc(cfg.units || "")}, half the channel's spread). The date picks the pentad, as in ` +
+    `actual mode.`, { key: `${cfg.id}-anom`, replace: !!opts.replace });
+}
+
+/* The legend's title names the climatology on screen. */
+function f7LegendSuffix(cfg) {
+  const mode = f7ModeOf(cfg);
+  if (mode === "actual") return "";
+  let what = "";
+  if (f7KindOf(cfg) === "poy") {
+    const at = poyState.index && poyKeyFor(poyState.index, cfg);
+    if (at) what = `pentad ${esc(poySlotLabel(at.slot, { short: true }))} · mean ${esc(at.span.text)}`;
+  } else {
+    const at = climState.index && climKeyFor(climState.index, cfg);
+    if (at) what = `normal for ${monthName(at.month)} · ${esc(at.ver.name)}`;
+  }
+  if (mode === "clim") return what ? ` — climatology, ${what}` : " — climatology";
+  return what ? ` — anomaly vs ${what}` : " — anomaly";
+}
+
+/* Everything in the row and the hover card that follows the mode. */
+function f7RefreshUi(cfg) {
+  tensorFillChannelSelect(cfg);
+  const mode = f7ModeOf(cfg), kind = f7KindOf(cfg);
+  const q = (sel) => document.querySelector(sel);
+  const mSel = q(`select[data-f7mode="${cfg.id}"]`);
+  if (mSel) mSel.value = mode;
+  const kSel = q(`select[data-f7kind="${cfg.id}"]`);
+  if (kSel) kSel.value = kind;
+  const climRows = q(`[data-f7clim="${cfg.id}"]`);
+  if (climRows) climRows.hidden = mode === "actual";
+  const poyRows = q(`[data-f7poy="${cfg.id}"]`);
+  if (poyRows) poyRows.hidden = kind !== "poy";
+  const item = q(`#layer-list input[data-id="${cfg.id}"]`)?.closest(".layer-item");
+  const tip = item && item.querySelector(".layer-tip");
+  const F = LAYER_FACTS[cfg.id] || {};
+  const setTip = (k, label, html) => {
+    const el = tip && tip.querySelector(`[data-tip="${k}"]`);
+    if (el) el.innerHTML = `<span>${label}</span>${html}`;
+  };
+  // the actual mode's facts first; the climatology's refreshers overwrite theirs
+  setTip("rec", "Recorded", F.rec);
+  setTip("int", "Interval", F.int);
+  setTip("sp", "Spatial", F.sp);
+  const tdl = tip && tip.querySelector(".tip-dl-body");
+  if (tdl) tdl.innerHTML = F.dl || "";
+  const body = q(`[data-f7dlbody="${cfg.id}"]`);
+  if (body && mode === "actual") body.innerHTML = "";
+  const note = q(`[data-f7note="${cfg.id}"]`);
+  if (mode === "actual") { if (note) note.innerHTML = ""; return; }
+  if (kind === "poy") poyRefreshUi(cfg); else climRefreshUi(cfg);
+  setTip("int", "Interval", mode === "anom"
+    ? `5-day pentad, as in actual mode — each pentad minus the climatology of its own ` +
+      (kind === "poy" ? `five-day slot of the year` : `calendar month (the month it opens in)`)
+    : kind === "poy"
+      ? `one five-day slot of the year — 73 slots; the date's DAY picks the slot, the year of ` +
+        `the date does not matter (a whole-year step lands on the same slot, give or take the ` +
+        `one-day slide at a leap day)`
+      : `one calendar month; the year does not matter — twelve frames, one per month, and the ` +
+        `date selector's month picks which`);
+  if (mode === "anom") {
+    const rec = tip && tip.querySelector('[data-tip="rec"]');
+    const span = rec ? rec.innerHTML.replace(/^<span>Recorded<\/span>/, "") : "";
+    setTip("rec", "Recorded", `the pentad's own five days (${esc(F.rec || "")}) minus a climatology — ${span}`);
+  }
+  if (note) {
+    let t = "";
+    if (mode === "anom") {
+      const g = f7GridFor(cfg);
+      t = g && g.f7anom
+        ? `anomaly = the pentad ${esc(g.f7anom.pentad)} minus ${esc(g.f7anom.climWhat)} · ` +
+          `colours ±${fmtVal(cfg.vmax)} ${esc(cfg.units || "")} (half the channel's spread)`
+        : "anomaly = actual − climatology, both in the channel's own unit";
+    } else if (kind === "month") {
+      const at = climState.index && climKeyFor(climState.index, cfg);
+      t = at ? `normal for ${monthName(at.month)} · ${esc(at.ver.name)} — one range read per ` +
+        `calendar month (the whole month of a 1° group; one 4 MB plane at 0.25°)` : "";
+    }
+    const err = f7ErrorOf(cfg);
+    if (err && !(mode === "clim" && kind === "poy")) t += `${t ? " · " : ""}<em>${esc(err)}</em>`;
+    note.innerHTML = t;
+  }
+}
+
+/* A control in the row moved (channel, mode, kind, years, leave-out). Same
+ * layer, chip and opacity — only what is painted changes. */
+async function f7Switch(cfg, { announce = false } = {}) {
+  f7RefreshUi(cfg);                       // show / hide the rows at once
+  const on = state.layers[cfg.id] && state.layers[cfg.id].layer;
+  // A climatology for a layer that is OFF is not read: enabling it will.
+  // (The actual mode keeps its old habit of resolving the channel at once —
+  // the Cones tab's live mode reads through the same slabs.)
+  if (!on && f7ModeOf(cfg) !== "actual") return;
+  await f7Ensure(cfg, { toast: true });
+  f7RefreshUi(cfg);
+  const entry = state.layers[cfg.id];
+  if (entry && entry.layer) { removeLayer(cfg.id); addLayer(cfg); }
+  updateLegends();
+  if (announce) f7Toast(cfg, { replace: true });
+}
+
+/* The anomaly read-out, for the probe and the pixel card: the departure in the
+ * unit and on the tensor's own z scale (Δ/sd — the difference of the two stored
+ * z-scores), the two numbers it is the difference of, and the z the TRAINER is
+ * handed, (x − clim − mu)/den, from the Model climatology's departure code
+ * (`climDeparture`). With the per-month kind that normal is the one on screen;
+ * with the per-pentad kind the trainer's normal is still the calendar month's,
+ * and it is used only when its plane is already in memory — a click never
+ * reads one. */
+async function f7AnomReadout(g, lon, lat) {
+  const v = sampleGrid(g, lon, lat);
+  if (v == null) return null;
+  const A = g.f7anom;
+  const r = { v, x: sampleGrid(A.actual, lon, lat), c: sampleGrid(A.clim, lon, lat),
+              units: g.units, label: A.label, kind: A.kind, sd: A.sd, dz: v / A.sd,
+              pentad: A.pentad, climWhat: A.climWhat, binDate: g.binStart, n: null, trainer: null };
+  if (A.kind === "poy") {
+    const i = gridCellIndex(A.clim, lon, lat);
+    r.n = i >= 0 && A.clim.counts ? A.clim.counts[i] : null;
+  }
+  try {
+    if (A.kind === "month") {
+      r.trainer = await climDeparture(A.clim, lon, lat);
+    } else {
+      const cIdx = await loadClimIndex();
+      const gm = cIdx && climState.planes.get(`${CLIM_LAYER_VERSION}:${A.group}:${climMonthOf(g.binStart)}:${A.chan}`);
+      r.trainer = gm ? await climDeparture(gm, lon, lat)
+        : cIdx ? { hint: `the trainer's z is printed with the “per calendar month” climatology — ` +
+                   `its normal is a different plane, never read for a click` } : null;
+    }
+  } catch { r.trainer = null; }
+  return r;
+}
+function f7AnomText(r, { card = false } = {}) {
+  const sg = (x) => `${x >= 0 ? "+" : "−"}${fmtVal(Math.abs(x))}`;
+  let t = `${card ? "" : `${esc(r.label)} — `}anomaly <strong>${sg(r.v)} ${esc(r.units || "")}</strong>` +
+    ` · Δz = ${sg(r.dz)} on the tensor's scale (Δ / sd, sd ${fmtVal(r.sd)})` +
+    `<br/>actual ${fmtVal(r.x)} vs climatology ${fmtVal(r.c)}` +
+    (r.n != null ? ` (the mean of ${r.n} five-day bin${r.n === 1 ? "" : "s"})` : "");
+  if (r.trainer && r.trainer.dz != null) {
+    t += `<br/>z = ${sg(r.trainer.dz)} as the trainer sees it (against its normal for ${monthName(r.trainer.month)})`;
+  } else if (r.trainer && r.trainer.hint) {
+    t += `<br/><em>${r.trainer.hint}</em>`;
+  }
+  return t;
 }
 
 class GridProvider {
@@ -6014,8 +6237,6 @@ function addLayer(cfg) {
     state.layers[cfg.id] = entry;
     if (cfg.tensorGrid) tensorEnsureForLayer(cfg);
     if (cfg.fishingGrid) fishingEnsureForLayer(cfg);
-    if (cfg.climGrid) climEnsureForLayer(cfg);
-    if (cfg.poyGrid) poyEnsureForLayer(cfg);
     if (cfg.monthlyGrid) {
       // remember which month rendered, so a date change knows when to repaint
       loadGrid(cfg).then((g) => {
@@ -6386,10 +6607,8 @@ function applyDateMove() {
     refreshTimedLayers({ hold: true });
     refreshYearlyLayers();
     refreshMonthlyGrids();
-    refreshTensorGrids();     // one 14.5 MB range read per SETTLED date, not per keystroke
+    refreshTensorGrids();     // one 14.5 MB range read per SETTLED date (its climatology modes: per slot or month)
     refreshFishingGrids();    // …and one 8.3 MB read per settled MONTH
-    refreshClimGrids();       // …and one plane per settled CALENDAR month (the year never counts)
-    refreshPoyGrids();        // …and one composed mean per settled five-day SLOT of the year
     refreshLoitering();       // …and the events whose drift overlaps the new day
     if (sstEnsembleLayer) updateEnsembleLayer();
   });
@@ -6446,8 +6665,6 @@ function syncDateMax() {
     refreshMonthlyGrids();
     refreshTensorGrids();
     refreshFishingGrids();
-    refreshClimGrids();
-    refreshPoyGrids();
   }
   // The comparison lives on the same axis: when the axis shortens, a pinned
   // date past the new end has to come back with it, or the comparison would
@@ -7384,26 +7601,11 @@ function gridLegendEl(cfg) {
     // cannot: one layer paints twenty-three different quantities.
     const spec = tensorState.index
       ? tensorChannelSpec(tensorState.index, cfg.tensorChan) : null;
+    // …and, in the climatology and anomaly modes, WHICH climatology: the
+    // slot of the year and the span averaged, or the calendar month's normal.
     if (spec) {
       div.innerHTML = `<div class="legend-title">${esc(spec.label)}` +
-        `${spec.step ? ` · ${spec.step}°` : ""}</div>`;
-    }
-  }
-  if (cfg.climGrid && climState.index) {
-    // Same shape as the tensor's: the channel, its grid, and — because this
-    // layer is keyed by it — which month's normal and which version.
-    const at = climKeyFor(climState.index, cfg);
-    if (at) {
-      div.innerHTML = `<div class="legend-title">${esc(at.spec.label)} · ${at.spec.step}° ` +
-        `— normal for ${monthName(at.month)} · ${esc(at.ver.name)}</div>`;
-    }
-  }
-  if (cfg.poyGrid && poyState.index) {
-    // The channel, its grid, the slot of the year and the span averaged.
-    const at = poyKeyFor(poyState.index, cfg);
-    if (at) {
-      div.innerHTML = `<div class="legend-title">${esc(at.spec.label)} · ${at.spec.step}° ` +
-        `— pentad ${esc(poySlotLabel(at.slot, { short: true }))} · mean ${esc(at.span.text)}</div>`;
+        `${spec.step ? ` · ${spec.step}°` : ""}${f7LegendSuffix(cfg)}</div>`;
     }
   }
   if (cfg.classGrid) {
@@ -7642,12 +7844,6 @@ function datelessToast(id) {
     // Month-aware: date-driven, with its own toast naming the month showing
     // and the archive wording at either end of the record (maybeFishingToast).
     if (cfg.fishingGrid) return null;
-    // Month-aware, year-blind: a per-calendar-month normal, with its own toast
-    // saying the date's MONTH matters and its year doesn't (maybeClimToast).
-    if (cfg.climGrid) return null;
-    // Slot-aware, year-blind: the date's DAY picks the five-day slot of the
-    // year, its year does not choose the years averaged (maybePoyToast).
-    if (cfg.poyGrid) return null;
     if (cfg.grid) {
       if (cfg.classGrid) {
         // Each categorical grid is dateless for its OWN reason and must say
@@ -8200,53 +8396,15 @@ const LAYER_FACTS = {
          "its temperature from `skt`, `t2m` and `tsoil`, never from `sst`. " +
          "The archive stores every channel " +
          "z-scored; the numbers shown here are multiplied back into their own " +
-         "units, and the probe prints the stored σ beside them. What the " +
-         "forecaster calls NORMAL for each channel — the per-calendar-month mean " +
-         "it is trained against — is the “Model climatology” layer just below.",
-  },
-  "clim7": {
-    rec: "average of all the years 1982–2024 (the per-calendar-month mean over them, " +
-         "not one date) — the span is filled in from the index",
-    int: "one calendar month; the year does not matter — twelve frames, one per " +
-         "month, and the date selector's month picks which",
-    sp: "0.25° or 1° — each channel group keeps the tensor's own grid (0.25° for " +
-        "the ocean-surface and ocean-colour groups, 1° for the atmosphere-and-land " +
-        "and Argo groups)",
-    sum: "What the forecaster calls NORMAL. Every model here is trained on " +
-         "departures from a per-calendar-month climatology — the mean of each " +
-         "channel, at each cell, over every training-year five-day frame that " +
-         "opens in that month — and every forecast skill number is scored against " +
-         "the same field. This layer paints it, from the family-7 global tensor, " +
-         "averaged over all the years 1982–2024. The three fixed versions it used " +
-         "to offer were retired in favour of a free period: the Data tab's " +
-         "“Monthly normals” stores average over any years you choose, so the " +
-         "paper's split is simply 1982–2020 leaving out 2009 and 2017, and the " +
-         "development holdout 1982–2024 leaving out 2009, 2017 and 2023. Values are in " +
-         "the channel's own unit, with the stored z beside them; with the Global " +
-         "tensor on, the probe also prints today's departure from normal — the " +
-         "number the model is actually handed.",
-    dl: "for this group's all-years normal: clim.nc (NetCDF, physical units), " +
-        "clim.npy ([12, C, H, W] float32, z-scored — see stats.json), stats.json, " +
-        "the index, and this channel and month as CSV — listed here once the " +
-        "index has landed",
-  },
-  "poy7": {
-    rec: "average of the years of the record (each five-day slot's mean over them, not one " +
-         "date) — the span is yours to set in the layer's row, and is filled in from the index",
-    int: "one five-day bin per step; the date picks the bin of the year — 73 slots, the year " +
-         "of the date does not matter",
-    sp: "0.25° or 1° — each channel group keeps the tensor's own grid (0.25° for the " +
-        "ocean-surface and ocean-colour groups, 1° for the atmosphere-and-land group)",
-    sum: "The exact five-day climatology of the family-7 global tensor. The tensor is a run " +
-         "of five-day bins; each bin belongs to one of 73 slots of the year by the day it " +
-         "opens on, and this layer paints, for the selected date's slot, the mean of every " +
-         "bin of that slot over a span of years — the whole record by default, or any years " +
-         "you set, with years left out. It is finer than the Model climatology above (one " +
-         "calendar month per frame) and is computed from published sums and counts in each " +
-         "channel's own unit, so a cell with no bin in the span is blank. The probe prints " +
-         "the mean, how many five-day bins it rests on, and the span.",
-    dl: "the slot's sums and counts on the Hugging Face Hub, the index, and the same " +
-        "numbers for any span and box from the Data tab — listed here once the index has landed",
+         "units, and the probe prints the stored σ beside them. The MODE switch " +
+         "in the row paints the same channel's CLIMATOLOGY instead — the date's " +
+         "five-day slot of the year averaged over a span of years you choose " +
+         "(per pentad, the exact one), or the per-calendar-month normal the " +
+         "forecaster is trained and scored against — or the ANOMALY, the pentad " +
+         "minus that climatology, in blue and red around zero.",
+    dl: "in the climatology and anomaly modes: the climatology's own files on the " +
+        "Hugging Face Hub and the same numbers as a file from the Data tab — listed " +
+        "here once a climatology mode is picked",
   },
   "fishing": {
     rec: "2012-01 → 2024-12 · the date's MONTH picks the map; 2024 is provisional " +
@@ -8303,49 +8461,55 @@ function buildLayerPanel() {
       </div>
       <div class="meta">${cfg.meta}</div>
       ${cfg.fine ? `<div class="fine-hint" data-finehint="${cfg.id}" hidden></div>` : ""}
-      ${cfg.tensorGrid ? `<div class="chan-row" data-chanrow="${cfg.id}"
-              ${cfg.on ? "" : "style='display:none'"}>
-        <label class="alpha-label" for="chan-${cfg.id}">channel</label>
-        <select id="chan-${cfg.id}" data-chan="${cfg.id}"
-                title="Which channel of the tensor to paint"></select>
-      </div>` : ""}
-      ${cfg.climGrid ? `<div class="clim-rows" data-chanrow="${cfg.id}"
+      ${cfg.tensorGrid ? `<div class="clim-rows f7-rows" data-chanrow="${cfg.id}"
               ${cfg.on ? "" : "style='display:none'"}>
         <div class="chan-row">
-          <label class="alpha-label" for="climchan-${cfg.id}">channel</label>
-          <select id="climchan-${cfg.id}" data-climchan="${cfg.id}"
-                  title="Which channel's normal to paint"></select>
-        </div>
-        <details class="clim-dl" data-climdl="${cfg.id}">
-          <summary>⤓ downloads</summary>
-          <div class="clim-dl-body" data-climdlbody="${cfg.id}"></div>
-        </details>
-      </div>` : ""}
-      ${cfg.poyGrid ? `<div class="clim-rows poy-rows" data-chanrow="${cfg.id}"
-              ${cfg.on ? "" : "style='display:none'"}>
-        <div class="chan-row">
-          <label class="alpha-label" for="poychan-${cfg.id}">channel</label>
-          <select id="poychan-${cfg.id}" data-poychan="${cfg.id}"
-                  title="Which channel's five-day climatology to paint"></select>
-        </div>
-        <div class="chan-row poy-years">
-          <label class="alpha-label" for="poyy0-${cfg.id}">years</label>
-          <input type="number" id="poyy0-${cfg.id}" data-poyy0="${cfg.id}" step="1"
-                 title="First year averaged (default: the record's first)"/>
-          <span>–</span>
-          <input type="number" id="poyy1-${cfg.id}" data-poyy1="${cfg.id}" step="1"
-                 title="Last year averaged (default: the record's last)"/>
+          <label class="alpha-label" for="chan-${cfg.id}">channel</label>
+          <select id="chan-${cfg.id}" data-chan="${cfg.id}"
+                  title="Which channel of the tensor to paint"></select>
         </div>
         <div class="chan-row">
-          <label class="alpha-label" for="poyex-${cfg.id}">leave out</label>
-          <input type="text" id="poyex-${cfg.id}" data-poyex="${cfg.id}" inputmode="numeric"
-                 placeholder="e.g. 2009, 2017" title="Years inside the span to leave out of the mean"/>
+          <label class="alpha-label" for="f7mode-${cfg.id}">mode</label>
+          <select id="f7mode-${cfg.id}" data-f7mode="${cfg.id}"
+                  title="actual: the pentad's own values · climatology: that slot of the year averaged over the years · anomaly: actual minus climatology">
+            ${F7_MODES.map(([v, t]) => `<option value="${v}">${t}</option>`).join("")}
+          </select>
         </div>
-        <div class="poy-note" data-poynote="${cfg.id}"></div>
-        <details class="clim-dl" data-poydl="${cfg.id}">
-          <summary>⤓ downloads</summary>
-          <div class="clim-dl-body" data-poydlbody="${cfg.id}"></div>
-        </details>
+        <div class="f7-climrows" data-f7clim="${cfg.id}" hidden>
+          <div class="chan-row">
+            <label class="alpha-label" for="f7kind-${cfg.id}">climatology</label>
+            <select id="f7kind-${cfg.id}" data-f7kind="${cfg.id}"
+                    title="per pentad: the exact five-day slot of the year (E-093) · per calendar month: the normal the forecaster is trained against (E-083)">
+              ${F7_KINDS.map(([v, t]) => `<option value="${v}">${t}</option>`).join("")}
+            </select>
+          </div>
+          <div class="poy-note"><a class="f7-doc" target="_blank" rel="noopener"
+               href="https://blauewelt.github.io/earth/docs.html?f=ml/plans/E093_pentad_climatology.md"
+               title="What the climatology and anomaly modes are">what these modes are</a>
+            · <a class="f7-doc" target="_blank" rel="noopener"
+               href="https://blauewelt.github.io/earth/docs.html?f=docs/FAMILY7_CLIM.md">how they are read</a></div>
+          <div class="f7-poyrows" data-f7poy="${cfg.id}">
+            <div class="chan-row poy-years">
+              <label class="alpha-label" for="poyy0-${cfg.id}">years</label>
+              <input type="number" id="poyy0-${cfg.id}" data-poyy0="${cfg.id}" step="1"
+                     title="First year averaged (default: the record's first)"/>
+              <span>–</span>
+              <input type="number" id="poyy1-${cfg.id}" data-poyy1="${cfg.id}" step="1"
+                     title="Last year averaged (default: the record's last)"/>
+            </div>
+            <div class="chan-row">
+              <label class="alpha-label" for="poyex-${cfg.id}">leave out</label>
+              <input type="text" id="poyex-${cfg.id}" data-poyex="${cfg.id}" inputmode="numeric"
+                     placeholder="e.g. 2009, 2017" title="Years inside the span to leave out of the mean"/>
+            </div>
+            <div class="poy-note" data-poynote="${cfg.id}"></div>
+          </div>
+          <div class="poy-note" data-f7note="${cfg.id}"></div>
+          <details class="clim-dl" data-f7dl="${cfg.id}">
+            <summary>⤓ downloads</summary>
+            <div class="clim-dl-body" data-f7dlbody="${cfg.id}"></div>
+          </details>
+        </div>
       </div>` : ""}
       <div class="sup-note" data-suppressed="${cfg.id}" hidden></div>
       <div class="alpha-row" data-alpharow="${cfg.id}" ${cfg.on ? "" : "style='display:none'"}>
@@ -8373,26 +8537,22 @@ function buildLayerPanel() {
       tensorSwitchChannel(ccfg);
       return;
     }
-    // The model climatology's two pickers, likewise in its own row.
-    const climId = e.target.getAttribute("data-climchan");
-    if (climId) {
-      const ccfg = GIBS_LAYERS.find((l) => l.id === climId);
-      ccfg.climChan = e.target.value;
-      climSwitch(ccfg);
-      return;
-    }
-    // The pentad climatology's channel, years and leave-out, in its own row.
-    // Number fields commit on `change` (Enter, blur, spinner), never per key.
-    const poyId = ["data-poychan", "data-poyy0", "data-poyy1", "data-poyex"]
+    // …and its MODE switch (actual · climatology · anomaly), the climatology's
+    // kind, and the pentad climatology's years and leave-out (E-093), all in
+    // the same row. Number fields commit on `change` (Enter, blur, spinner),
+    // never per keystroke.
+    const f7Id = ["data-f7mode", "data-f7kind", "data-poyy0", "data-poyy1", "data-poyex"]
       .map((a) => e.target.getAttribute(a)).find(Boolean);
-    if (poyId) {
-      const pcfg = GIBS_LAYERS.find((l) => l.id === poyId);
+    if (f7Id) {
+      const fcfg = GIBS_LAYERS.find((l) => l.id === f7Id);
       const t = e.target, v = t.value;
-      if (t.hasAttribute("data-poychan")) pcfg.poyChan = v;
-      if (t.hasAttribute("data-poyy0")) pcfg.poyY0 = v === "" ? null : Math.round(Number(v));
-      if (t.hasAttribute("data-poyy1")) pcfg.poyY1 = v === "" ? null : Math.round(Number(v));
-      if (t.hasAttribute("data-poyex")) pcfg.poyEx = poyParseYears(v);
-      poySwitch(pcfg);
+      const announce = t.hasAttribute("data-f7mode") || t.hasAttribute("data-f7kind");
+      if (t.hasAttribute("data-f7mode")) fcfg.f7Mode = v;
+      if (t.hasAttribute("data-f7kind")) fcfg.f7Kind = v;
+      if (t.hasAttribute("data-poyy0")) fcfg.poyY0 = v === "" ? null : Math.round(Number(v));
+      if (t.hasAttribute("data-poyy1")) fcfg.poyY1 = v === "" ? null : Math.round(Number(v));
+      if (t.hasAttribute("data-poyex")) fcfg.poyEx = poyParseYears(v);
+      f7Switch(fcfg, { announce });
       return;
     }
     const id = e.target.getAttribute("data-id");
@@ -8408,8 +8568,6 @@ function buildLayerPanel() {
       maybeMonthlyGridToast(cfg);
       if (cfg.tensorGrid) tensorAnnounce(cfg);
       if (cfg.fishingGrid) fishingAnnounce(cfg);
-      if (cfg.climGrid) climAnnounce(cfg);
-      if (cfg.poyGrid) poyAnnounce(cfg);
       maybeArchiveToast(cfg);
       maybeAnnualToast(cfg);
       maybeFineToast(cfg);
@@ -8507,8 +8665,6 @@ function buildLayerPanel() {
         refreshMonthlyGrids();       // crossing midnight can cross a month
         refreshTensorGrids();        // …and a pentad boundary
         refreshFishingGrids();       // …and the fishing grid's month
-        refreshClimGrids();          // …and the climatology's calendar month
-        refreshPoyGrids();           // …and the pentad climatology's slot
         refreshLoitering();          // …and which loitering events overlap the day
       });
     } else {
@@ -9856,22 +10012,34 @@ async function probeEntryValue(entry, carto) {
     /* The model climatology prints the normal in the unit AND as stored, names
      * the month and the version, and adds the DEPARTURE from normal when — and
      * only when — the Global tensor's slab for this pentad is already resident. */
-    if (cfg.climGrid && g.clim) {
+    /* Those two are the tensor layer's CLIMATOLOGY mode now (E-093): its
+     * "per calendar month" and "per pentad" kinds paint these grids. */
+    if (cfg.tensorGrid && g.clim) {
       const r = await climReadout(g, lon, lat);
       if (!r) return { ...base, noData: true };
-      return { ...base, value: r.v, departure: r.dep,
-               extra: `${esc(r.label)} — ${esc(r.what)} · z = ${fmtVal(r.z)} as the tensor stores it` +
+      return { ...base, value: r.v, departure: r.dep, mode: "clim",
+               extra: `${esc(r.label)} — climatology, ${esc(r.what)} · z = ${fmtVal(r.z)} as the tensor stores it` +
                       `<br/>` + (r.dep.dv != null
                         ? `departure from normal: ${climDepText(r.dep, r.units)}`
                         : `<em>${r.dep.hint}</em>`) };
     }
     /* The pentad climatology prints the mean in the channel's unit, how many
      * five-day bins it rests on at THIS cell, the span and the slot. */
-    if (cfg.poyGrid && g.poy) {
+    if (cfg.tensorGrid && g.poy) {
       const r = poyReadout(g, lon, lat);
       if (r.v == null) return { ...base, noData: true };
-      return { ...base, value: r.v, count: r.n,
-               extra: `${esc(r.label)} — ${esc(r.what)}` };
+      return { ...base, value: r.v, count: r.n, mode: "clim",
+               extra: `${esc(r.label)} — climatology, ${esc(r.what)}` };
+    }
+    /* The anomaly mode: the departure in the channel's unit, the same on the
+     * tensor's own z scale (Δ/sd), the two numbers it is the difference of,
+     * and — through the Model climatology's departure code — the z the
+     * trainer is handed, (x − clim − mu)/den from stats.json. */
+    if (cfg.tensorGrid && g.f7anom) {
+      const r = await f7AnomReadout(g, lon, lat);
+      if (!r) return { ...base, noData: true };
+      return { ...base, value: r.v, mode: "anom", anomaly: r, departure: r.trainer,
+               extra: f7AnomText(r) };
     }
     if (cfg.tensorGrid && g.tensor) {
       const z = (v - g.tensor.mean) / g.tensor.sd;
@@ -10962,10 +11130,13 @@ async function showPixelState(carto) {
      * that volunteered it on every click would be answering a question nobody
      * asked with a 14.5 MB range read. */
     ["global tensor", (() => {
+      // the ACTUAL pentad, or its ANOMALY (the climatology mode answers in
+      // the two jobs below, under the headings the retired layers had)
       const e = state.layers.family7;
-      if (!e || !e.layer) return Promise.resolve(null);
+      if (!e || !e.layer || f7ModeOf(e.cfg) === "clim") return Promise.resolve(null);
       return loadGridMonth(e.cfg)
-        .then((g) => (g ? { g, cfg: e.cfg, v: sampleGrid(g, lon, lat) } : null))
+        .then(async (g) => (g ? { g, cfg: e.cfg, v: sampleGrid(g, lon, lat),
+                                  r: g.f7anom ? await f7AnomReadout(g, lon, lat) : null } : null))
         .catch(() => null);
     })()],
     /* Fishing effort, on the same terms as the tensor above and for the same
@@ -10984,8 +11155,8 @@ async function showPixelState(carto) {
      * above: only while its layer is on, so the plane is already paid for. The
      * departure inside it never reads a tensor slab (see climDeparture). */
     ["model climatology", (() => {
-      const e = Object.values(state.layers).find((x) => x.cfg.climGrid && x.layer);
-      if (!e) return Promise.resolve(null);
+      const e = state.layers.family7;
+      if (!e || !e.layer || f7ModeOf(e.cfg) !== "clim" || f7KindOf(e.cfg) !== "month") return Promise.resolve(null);
       return loadGridMonth(e.cfg)
         .then(async (g) => (g ? { g, cfg: e.cfg, r: await climReadout(g, lon, lat) } : null))
         .catch(() => null);
@@ -10993,8 +11164,8 @@ async function showPixelState(carto) {
     /* The exact five-day climatology here — only while its layer is on, so
      * the slot's mean is already composed and costs no request. */
     ["pentad climatology", (() => {
-      const e = Object.values(state.layers).find((x) => x.cfg.poyGrid && x.layer);
-      if (!e) return Promise.resolve(null);
+      const e = state.layers.family7;
+      if (!e || !e.layer || f7ModeOf(e.cfg) !== "clim" || f7KindOf(e.cfg) !== "poy") return Promise.resolve(null);
       return loadGridMonth(e.cfg)
         .then((g) => (g ? { g, cfg: e.cfg, r: poyReadout(g, lon, lat) } : null))
         .catch(() => null);
@@ -11258,7 +11429,15 @@ async function showPixelState(carto) {
      * and the z-score the tensor actually stores. The stamp is the pentad's
      * opening day; the five-day span is named in the row itself, since a bare
      * date would read as a daily measurement. */
-    if (tensorHit && tensorHit.v != null) {
+    if (tensorHit && tensorHit.r) {
+      /* The anomaly mode: the departure, stamped with its pentad's day. */
+      const { g, cfg, r } = tensorHit;
+      sec.push(`<div class="px-sec"><div class="px-sec-title">What the model reads, minus ` +
+        `its climatology <span class="px-src">family 7</span></div>` +
+        pixelRow(`${r.label} — anomaly`, f7AnomText(r, { card: true }), whenOfGrid(cfg, g)) +
+        `<div class="px-note">The pentad ${esc(r.pentad)} minus ${esc(r.climWhat)}, both in the ` +
+        `channel's own unit.</div></div>`);
+    } else if (tensorHit && tensorHit.v != null) {
       const { g, cfg, v } = tensorHit;
       const spec = g.tensorSpec;
       const idx = tensorState.index;
@@ -16094,7 +16273,7 @@ const sleepMs = (ms) => new Promise((r) => setTimeout(r, ms));
 function playbackLayers() {
   return Object.values(state.layers).filter(
     (e) => (e.layer || e.suppressed) &&
-           (e.cfg.timed || e.cfg.monthlyGrid || e.cfg.pentadGrid || e.cfg.climGrid || e.cfg.poyGrid));
+           (e.cfg.timed || e.cfg.monthlyGrid || e.cfg.pentadGrid));
 }
 
 // Stable identity of the CURRENT layer set, so a toggle mid-play is detectable
@@ -16110,9 +16289,9 @@ function playbackStepOf(cfg) {
   if (cfg.annual) return "1y";
   if (cfg.monthly) return "1mo";
   if (cfg.snap5d) return "5d";
-  if (cfg.pentadGrid) return "5d";       // fixed five-day bins, so five-day frames
-  if (cfg.climGrid) return "1mo";        // one normal per calendar month
-  if (cfg.poyGrid) return "5d";          // one mean per five-day slot of the year
+  // the tensor's climatology mode, per calendar month: one normal per month
+  if (cfg.tensorGrid && f7ModeOf(cfg) === "clim" && f7KindOf(cfg) === "month") return "1mo";
+  if (cfg.pentadGrid) return "5d";       // five-day bins (or slots of the year), five-day frames
   if (cfg.monthlyGrid) {
     // keyLen 10 = day-keyed (the GFS forecast grids); anything else is monthly.
     const g = gridsLoaded.get(cfg.id);
@@ -16167,18 +16346,18 @@ function playbackSignature(dateStr, layers) {
   const parts = [];
   for (const e of layers) {
     const cfg = e.cfg;
-    if (cfg.pentadGrid) {
-      // The bin, not the date: the signature dedupe is what collapses the four
-      // days in five that request nothing new into one frame.
-      const idx = tensorState.index;
-      if (idx) parts.push(`${cfg.id}=${tensorBinOfDate(idx, dateStr)}`);
-    } else if (cfg.climGrid) {
-      // The calendar MONTH, never the year: a twelve-frame cycle.
+    if (cfg.pentadGrid && f7ModeOf(cfg) === "clim" && f7KindOf(cfg) === "month") {
+      // The climatology per calendar MONTH, never the year: a twelve-frame cycle.
       parts.push(`${cfg.id}=${climMonthOf(dateStr)}`);
-    } else if (cfg.poyGrid) {
+    } else if (cfg.pentadGrid && f7ModeOf(cfg) === "clim") {
       // The SLOT of the year: a 73-frame cycle (the span does not move with the date).
       const b = poyBinStart(dateStr);
       if (b) parts.push(`${cfg.id}=${poySlotOf(b)}`);
+    } else if (cfg.pentadGrid) {
+      // The bin, not the date (actual and anomaly alike): the signature dedupe
+      // is what collapses the four days in five that request nothing new.
+      const idx = tensorState.index;
+      if (idx) parts.push(`${cfg.id}=${tensorBinOfDate(idx, dateStr)}`);
     } else if (cfg.grid) {
       const g = gridsLoaded.get(cfg.id);
       if (g) parts.push(`${cfg.id}=${resolveGridMonth(g, dateStr)}`);
@@ -16318,8 +16497,6 @@ async function playbackShowFrame(i) {
   if (!promoted) refreshTimedLayers({ hold: true, keepPreload: true });
   await refreshMonthlyGrids();
   await refreshTensorGrids();
-  await refreshClimGrids();
-  await refreshPoyGrids();
   await refreshYearlyLayers();
   if (sstEnsembleLayer) updateEnsembleLayer();
   playbackRender();
@@ -19662,6 +19839,12 @@ window.__earth = {
   climCsvName,
   climGridFor,
   climDownloadsHtml,
+  // the tensor's mode switch (E-093): actual · climatology · anomaly
+  f7GridFor,
+  f7ModeOf,
+  f7KindOf,
+  f7PaintKey,
+  f7AnomState,
   // the Data tab (E-084 §3): the tests drive the box and read the estimate
   // through these, because a preset flies the camera (CLAUDE.md §4)
   loadDataTab,
