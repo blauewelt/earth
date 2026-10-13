@@ -183,7 +183,13 @@ from family1.adapters import _stac as st
 # ================================================================ sources ==
 STAC = "https://earth-search.aws.element84.com/v1"
 STAC_SEARCH = STAC + "/search"
-STAC_LIMIT = 200
+# 50, not 200: Earth Search answers 502 "Internal server error" on EVERY
+# attempt for a 200-item page of some sentinel-2-l2a tile-years (2019 16PCC,
+# 16PEC, 36JUN; measured 2026-10-13) -- its response is too large for the
+# service's gateway (100 items = 4.6 MB, under the ~6 MB limit only just).
+# Lanes #1087/#1088 and their re-runs #1109/#1110 died on it, six attempts
+# each. 50 items = 3.3 MB on the same query.
+STAC_LIMIT = 50
 L1C_HTTP = "https://sentinel-s2-l1c.s3.eu-central-1.amazonaws.com/"
 L1C_PAYMENT = L1C_HTTP + "?requestPayment"
 ACOLITE_GIT = "https://github.com/acolite/acolite.git"
