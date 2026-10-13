@@ -343,6 +343,13 @@ a point (`log2_fp` −4, the family's point label); a Sentinel-2 pixel is 20 m.
   of cells and the mean to 1e-5 relative; else the daily grid is built from
   L2. Physics: over 2019, MSS rises with an independent reanalysis 10 m wind
   (rank correlation ≥ 0.8).
+  *Amended 2026-10-13 after the first hosted probe (family1-build #1062, the
+  `cygnss_mss` probe of January 2019):* the re-binned L2 reproduced L3's daily
+  means and uncertainties in every compared cell to ~1e-8, but the sample
+  counts agreed in only 99.49–99.59 % of cells (mean |difference| 0.007,
+  at most 5) — the producer's count is not exactly "good L2 samples". The
+  stored values are unaffected; the count criterion is now 99 %, which still
+  refuses a wrong flag selection or cell rule.
 - **`pace_swir`**: a pixel re-read from the native file equals the store to
   float16 precision; over clear water `rhos` at 2258 nm has median < 0.01 and
   99th percentile < 0.03 (measured 0.0052 / 0.0217 on 2025-07-01).
