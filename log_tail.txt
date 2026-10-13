@@ -1,0 +1,80 @@
+pace_swir__bin_3086.zst:  58%|█████▊    | 416M/721M [00:07<00:05, 59.3MB/s][A
+
+pace_swir__bin_3081.zst:  93%|█████████▎| 720M/773M [00:13<00:00, 59.8MB/s][A[A
+
+
+
+
+pace_swir__bin_3083.zst:  82%|████████▏ | 656M/798M [00:13<00:02, 61.8MB/s][A[A[A[A[Apace_swir__bin_3084.zst: 100%|██████████| 632M/632M [00:12<00:00, 49.8MB/s]
+
+
+pace_swir__bin_3081.zst:  95%|█████████▌| 736M/773M [00:14<00:00, 57.5MB/s][A[A
+
+
+
+
+pace_swir__bin_3083.zst:  84%|████████▍ | 672M/798M [00:13<00:02, 62.2MB/s][A[A[A[A[A
+pace_swir__bin_3086.zst:  60%|█████▉    | 432M/721M [00:07<00:06, 47.9MB/s][A
+
+pace_swir__bin_3081.zst:  97%|█████████▋| 752M/773M [00:14<00:00, 57.3MB/s][A[AUpload 15 LFS files:  80%|████████  | 12/15 [00:14<00:07,  2.58s/it]
+
+
+
+
+pace_swir__bin_3083.zst:  86%|████████▌ | 688M/798M [00:14<00:01, 61.7MB/s][A[A[A[A[A
+pace_swir__bin_3086.zst:  62%|██████▏   | 448M/721M [00:08<00:05, 47.9MB/s][A
+
+
+
+
+pace_swir__bin_3083.zst:  88%|████████▊ | 704M/798M [00:14<00:01, 58.9MB/s][A[A[A[A[A
+
+pace_swir__bin_3081.zst:  99%|█████████▉| 768M/773M [00:14<00:00, 50.3MB/s][A[A
+pace_swir__bin_3086.zst:  64%|██████▍   | 464M/721M [00:08<00:05, 49.2MB/s][Apace_swir__bin_3081.zst: 100%|██████████| 773M/773M [00:15<00:00, 51.1MB/s]
+
+
+
+
+
+pace_swir__bin_3083.zst:  90%|█████████ | 720M/798M [00:14<00:01, 57.9MB/s][A[A[A[A[A
+pace_swir__bin_3086.zst:  67%|██████▋   | 480M/721M [00:08<00:04, 53.2MB/s][AUpload 15 LFS files:  87%|████████▋ | 13/15 [00:15<00:04,  2.06s/it]
+
+
+
+
+pace_swir__bin_3083.zst:  92%|█████████▏| 736M/798M [00:14<00:01, 57.3MB/s][A[A[A[A[A
+pace_swir__bin_3086.zst:  69%|██████▉   | 496M/721M [00:09<00:04, 55.0MB/s][A
+
+
+
+
+pace_swir__bin_3083.zst:  94%|█████████▍| 752M/798M [00:15<00:00, 56.9MB/s][A[A[A[A[A
+pace_swir__bin_3086.zst:  71%|███████   | 512M/721M [00:09<00:03, 56.5MB/s][A
+pace_swir__bin_3086.zst:  73%|███████▎  | 528M/721M [00:09<00:03, 57.8MB/s][A
+
+
+
+
+pace_swir__bin_3083.zst:  96%|█████████▌| 768M/798M [00:15<00:00, 48.3MB/s][A[A[A[A[A
+pace_swir__bin_3086.zst:  75%|███████▌  | 544M/721M [00:09<00:03, 55.5MB/s][A
+
+
+
+
+pace_swir__bin_3083.zst:  98%|█████████▊| 784M/798M [00:15<00:00, 50.8MB/s][A[A[A[A[A
+pace_swir__bin_3086.zst:  78%|███████▊  | 560M/721M [00:10<00:03, 52.9MB/s][Apace_swir__bin_3083.zst: 100%|██████████| 798M/798M [00:16<00:00, 49.1MB/s]
+
+pace_swir__bin_3086.zst:  80%|███████▉  | 576M/721M [00:10<00:02, 55.1MB/s][AUpload 15 LFS files:  93%|█████████▎| 14/15 [00:17<00:01,  1.94s/it]
+pace_swir__bin_3086.zst:  82%|████████▏ | 592M/721M [00:10<00:02, 57.7MB/s][A
+pace_swir__bin_3086.zst:  84%|████████▍ | 608M/721M [00:11<00:02, 52.7MB/s][A
+pace_swir__bin_3086.zst:  86%|████████▋ | 624M/721M [00:11<00:01, 55.2MB/s][A
+pace_swir__bin_3086.zst:  89%|████████▊ | 640M/721M [00:11<00:01, 56.1MB/s][A
+pace_swir__bin_3086.zst:  91%|█████████ | 656M/721M [00:11<00:01, 55.1MB/s][A
+pace_swir__bin_3086.zst:  93%|█████████▎| 672M/721M [00:12<00:00, 52.1MB/s][A
+pace_swir__bin_3086.zst:  95%|█████████▌| 688M/721M [00:12<00:00, 54.5MB/s][A
+pace_swir__bin_3086.zst:  98%|█████████▊| 704M/721M [00:12<00:00, 55.8MB/s][A
+pace_swir__bin_3086.zst: 100%|█████████▉| 720M/721M [00:13<00:00, 57.8MB/s][Apace_swir__bin_3086.zst: 100%|██████████| 721M/721M [00:13<00:00, 54.8MB/s]
+Upload 15 LFS files: 100%|██████████| 15/15 [00:20<00:00,  2.26s/it]Upload 15 LFS files: 100%|██████████| 15/15 [00:20<00:00,  1.34s/it]
+  pace_swir: 1 year(s) pushed and verified in 1 part commit(s), done.json written last (0 already present)
+  push-parts: 1 year(s) on the Hub under partials/family1_3/pace_swir/<year>/m03/
+=== stage fetch done in 6311.6s ===
