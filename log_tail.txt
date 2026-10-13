@@ -1,0 +1,80 @@
+    0.005592,
+    0.021851
+   ],
+   [
+    "2025-07-22",
+    3312992,
+    0.005337,
+    0.02211
+   ],
+   [
+    "2025-07-23",
+    3349640,
+    0.005257,
+    0.021805
+   ],
+   [
+    "2025-07-24",
+    3417704,
+    0.005222,
+    0.022141
+   ],
+   [
+    "2025-07-25",
+    3332089,
+    0.005573,
+    0.021469
+   ],
+   [
+    "2025-07-26",
+    3277922,
+    0.005787,
+    0.021835
+   ],
+   [
+    "2025-07-27",
+    3135541,
+    0.005684,
+    0.021866
+   ],
+   [
+    "2025-07-28",
+    3142287,
+    0.00552,
+    0.022263
+   ],
+   [
+    "2025-07-29",
+    2996689,
+    0.0056,
+    0.021774
+   ],
+   [
+    "2025-07-30",
+    3028983,
+    0.005619,
+    0.022156
+   ]
+  ],
+  "max_dark_swir_p50": 0.005898,
+  "max_dark_swir_p99": 0.022263,
+  "fetch_seconds": 5004.91
+ },
+ "bytes_fetched": 10887967336,
+ "bytes_index": 363223014,
+ "bytes_fetched_per_frame": 375447149.5,
+ "wall_seconds": 5012.88,
+ "wall_seconds_index": 194.74,
+ "seconds_per_frame": 172.858,
+ "estimate_store_bytes": 144197824993,
+ "note_formula_bytes": 212125917180,
+ "note_estimate": {
+  "bytes": 57066666666.666664,
+  "what": "pace_swir_measure.json: one real frame of the six SWIR/NIR bands through the ShardWriter was 117.4 MB (all surfaces) -> 42.8 GB a year; scaled by 8/6 for the two added baselines"
+ },
+ "runner": "GitHub Actions 1000008218",
+ "builder_git_sha": "c482f3987494ab825bda23d2e4b742e9dd0a11a6",
+ "at": "2026-10-13T13:06:50+00:00"
+}
+probe -> /home/runner/work/earth/earth/ml/cache/family1_3/probe/pace_swir/2025-07.json
+probe pace_swir 2025-07: 2 input(s) could not be read — see inputs_not_read
