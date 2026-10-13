@@ -1,0 +1,80 @@
+
+cygnss_mss__bin_3131.zst:   0%|          | 0.00/9.63M [00:00<?, ?B/s][A[A[A[A[Acygnss_mss__bin_3130.idx.npy: 100%|██████████| 1.41k/1.41k [00:00<00:00, 15.1kB/s]
+cygnss_mss__bin_3129.zst: 100%|██████████| 8.43M/8.43M [00:00<00:00, 46.7MB/s]
+cygnss_mss__bin_3131.idx.npy: 100%|██████████| 1.41k/1.41k [00:00<00:00, 13.4kB/s]
+Upload 149 LFS files:  83%|████████▎ | 124/149 [00:08<00:01, 17.71it/s]
+cygnss_mss__bin_3132.idx.npy:   0%|          | 0.00/1.41k [00:00<?, ?B/s][A
+
+cygnss_mss__bin_3132.zst:   0%|          | 0.00/9.73M [00:00<?, ?B/s][A[Acygnss_mss__bin_3130.zst: 100%|██████████| 8.47M/8.47M [00:00<00:00, 34.2MB/s]
+cygnss_mss__bin_3132.idx.npy: 100%|██████████| 1.41k/1.41k [00:00<00:00, 13.5kB/s]
+Upload 149 LFS files:  85%|████████▍ | 126/149 [00:08<00:01, 17.74it/s]
+cygnss_mss__bin_3133.idx.npy:   0%|          | 0.00/1.41k [00:00<?, ?B/s][A
+
+
+cygnss_mss__bin_3133.zst:   0%|          | 0.00/9.76M [00:00<?, ?B/s][A[A[Acygnss_mss__bin_3133.idx.npy: 100%|██████████| 1.41k/1.41k [00:00<00:00, 14.5kB/s]
+cygnss_mss__bin_3131.zst: 100%|██████████| 9.63M/9.63M [00:00<00:00, 26.2MB/s]
+Upload 149 LFS files:  86%|████████▌ | 128/149 [00:08<00:01, 15.20it/s]
+cygnss_mss__bin_3134.idx.npy:   0%|          | 0.00/1.41k [00:00<?, ?B/s][Acygnss_mss__bin_3132.zst: 100%|██████████| 9.73M/9.73M [00:00<00:00, 45.5MB/s]
+
+
+cygnss_mss__bin_3134.zst:   0%|          | 0.00/9.65M [00:00<?, ?B/s][A[Acygnss_mss__bin_3134.idx.npy: 100%|██████████| 1.41k/1.41k [00:00<00:00, 15.9kB/s]
+Upload 149 LFS files:  87%|████████▋ | 130/149 [00:08<00:01, 15.59it/s]
+cygnss_mss__bin_3135.idx.npy:   0%|          | 0.00/1.41k [00:00<?, ?B/s][A
+
+
+
+cygnss_mss__bin_3135.zst:   0%|          | 0.00/9.69M [00:00<?, ?B/s][A[A[A[Acygnss_mss__bin_3133.zst: 100%|██████████| 9.76M/9.76M [00:00<00:00, 39.3MB/s]
+
+
+
+cygnss_mss__bin_3136.idx.npy:   0%|          | 0.00/1.41k [00:00<?, ?B/s][A[A[Acygnss_mss__bin_3135.idx.npy: 100%|██████████| 1.41k/1.41k [00:00<00:00, 15.1kB/s]
+cygnss_mss__bin_3136.idx.npy: 100%|██████████| 1.41k/1.41k [00:00<00:00, 13.4kB/s]
+Upload 149 LFS files:  89%|████████▉ | 133/149 [00:08<00:00, 16.12it/s]
+cygnss_mss__bin_3136.zst:   0%|          | 0.00/9.57M [00:00<?, ?B/s][A
+
+
+cygnss_mss__bin_3137.idx.npy:   0%|          | 0.00/1.41k [00:00<?, ?B/s][A[A[Acygnss_mss__bin_3134.zst: 100%|██████████| 9.65M/9.65M [00:00<00:00, 40.6MB/s]
+cygnss_mss__bin_3135.zst: 100%|██████████| 9.69M/9.69M [00:00<00:00, 40.8MB/s]
+cygnss_mss__bin_3137.idx.npy: 100%|██████████| 1.41k/1.41k [00:00<00:00, 18.9kB/s]
+Upload 149 LFS files:  91%|█████████ | 135/149 [00:08<00:00, 16.53it/s]
+
+cygnss_mss__bin_3137.zst:   0%|          | 0.00/9.11M [00:00<?, ?B/s][A[A
+
+
+cygnss_mss__bin_3138.idx.npy:   0%|          | 0.00/1.41k [00:00<?, ?B/s][A[A[A
+
+
+
+cygnss_mss__bin_3138.zst:   0%|          | 0.00/8.26M [00:00<?, ?B/s][A[A[A[AUpload 149 LFS files:  93%|█████████▎| 138/149 [00:09<00:00, 18.66it/s]
+
+
+
+
+cygnss_mss__bin_3139.idx.npy:   0%|          | 0.00/1.41k [00:00<?, ?B/s][A[A[A[A[Acygnss_mss__bin_3136.zst: 100%|██████████| 9.57M/9.57M [00:00<00:00, 35.7MB/s]
+cygnss_mss__bin_3138.idx.npy: 100%|██████████| 1.41k/1.41k [00:00<00:00, 14.4kB/s]
+cygnss_mss__bin_3139.idx.npy: 100%|██████████| 1.41k/1.41k [00:00<00:00, 15.0kB/s]
+
+cygnss_mss__bin_3139.zst:   0%|          | 0.00/8.67M [00:00<?, ?B/s][AUpload 149 LFS files:  94%|█████████▍| 140/149 [00:09<00:00, 16.30it/s]
+
+
+cygnss_mss__bin_3140.idx.npy:   0%|          | 0.00/1.41k [00:00<?, ?B/s][A[A[Acygnss_mss__bin_3138.zst: 100%|██████████| 8.26M/8.26M [00:00<00:00, 35.0MB/s]
+
+
+
+
+cygnss_mss__bin_3140.zst:   0%|          | 0.00/8.99M [00:00<?, ?B/s][A[A[A[Acygnss_mss__bin_3137.zst: 100%|██████████| 9.11M/9.11M [00:00<00:00, 22.5MB/s]
+
+
+cygnss_mss__bin_3141.idx.npy:   0%|          | 0.00/1.41k [00:00<?, ?B/s][A[AUpload 149 LFS files:  95%|█████████▌| 142/149 [00:09<00:00, 16.60it/s]cygnss_mss__bin_3139.zst: 100%|██████████| 8.67M/8.67M [00:00<00:00, 34.4MB/s]
+cygnss_mss__bin_3140.idx.npy: 100%|██████████| 1.41k/1.41k [00:00<00:00, 7.19kB/s]
+
+cygnss_mss__bin_3141.zst:   0%|          | 0.00/9.74M [00:00<?, ?B/s][Acygnss_mss__bin_3141.idx.npy: 100%|██████████| 1.41k/1.41k [00:00<00:00, 13.0kB/s]
+cygnss_mss__bin_3140.zst: 100%|██████████| 8.99M/8.99M [00:00<00:00, 44.0MB/s]
+Upload 149 LFS files:  97%|█████████▋| 144/149 [00:09<00:00, 13.86it/s]
+
+cygnss_mss__shard_index.npy:   0%|          | 0.00/29.8k [00:00<?, ?B/s][A[Acygnss_mss__shard_index.npy: 100%|██████████| 29.8k/29.8k [00:00<00:00, 291kB/s]
+cygnss_mss__bin_3141.zst: 100%|██████████| 9.74M/9.74M [00:00<00:00, 42.6MB/s]
+Upload 149 LFS files:  99%|█████████▊| 147/149 [00:09<00:00, 16.69it/s]Upload 149 LFS files: 100%|██████████| 149/149 [00:09<00:00, 16.46it/s]Upload 149 LFS files: 100%|██████████| 149/149 [00:09<00:00, 15.19it/s]
+  cygnss_mss: 1 year(s) pushed and verified in 1 part commit(s), done.json written last (0 already present)
+  push-parts: 1 year(s) on the Hub under partials/family1_3/cygnss_mss/
+=== stage fetch done in 1087.5s ===
