@@ -1,0 +1,80 @@
+  File "/home/runner/work/earth/earth/ml/cache/family1_3/s2fdi_coast/src/acolite_src/acolite/shared/read_band.py", line 114, in read_band
+    data = ds.ReadAsArray()
+           ^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3/dist-packages/osgeo/gdal.py", line 379
+  ::warning::s2fdi_coast: 2019 — S2A_35SMD_20191003_1_L1C: OSError: ACOLITE rc 1, 0 L2R file(s):      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/work/earth/earth/ml/cache/family1_3/s2fdi_coast/src/acolite_src/acolite/sentinel2/l1_convert.py", line 365, in l1_convert
+    dfoo = ac.shared.read_band(jp2_files[0], warp_to=warp_to_geom)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/work/earth/earth/ml/cache/family1_3/s2fdi_coast/src/acolite_src/acolite/shared/read_band.py", line 114, in read_band
+    data = ds.ReadAsArray()
+           ^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3/dist-packages/osgeo/gdal.py", line 379
+  ::warning::2019: NOT MARKED — 32 input(s) could not be read (2019; 2019; 2019; 2019 …); the retry clears the year and fetches it whole
+stage fetch (s2fdi_coast): 32 input(s) could not be read, and every one of them is a hole nothing downstream can see — a store of point observations has no empty cell to look at, so a month, a dataset-year or a mission-year that did not arrive is indistinguishable from an ocean nobody sampled. REFUSING to mark the stage.
+  2019: S2A_35SMD_20190702_1_L1C: OSError: ACOLITE rc 1, 0 L2R file(s):      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/work/earth/earth/ml/cache/family1_3/s2fdi_coast/src/acolite_src/acolite/sentinel2/l1_convert.py", line 365, in l1_convert
+    dfoo = ac.shared.read_band(jp2_files[0], warp_to=warp_to_geom)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/work/earth/earth/ml/cache/family1_3/s2fdi_coast/src/acolite_src/acolite/shared/read_band.py", line 114, in read_band
+    data = ds.ReadAsArray()
+           ^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3/dist-packages/osgeo/gdal.py", line 379
+  2019: S2A_35SMD_20190705_1_L1C: OSError: ACOLITE rc 1, 0 L2R file(s):      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/work/earth/earth/ml/cache/family1_3/s2fdi_coast/src/acolite_src/acolite/sentinel2/l1_convert.py", line 365, in l1_convert
+    dfoo = ac.shared.read_band(jp2_files[0], warp_to=warp_to_geom)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/work/earth/earth/ml/cache/family1_3/s2fdi_coast/src/acolite_src/acolite/shared/read_band.py", line 114, in read_band
+    data = ds.ReadAsArray()
+           ^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3/dist-packages/osgeo/gdal.py", line 379
+  2019: S2B_35SMD_20190707_1_L1C: OSError: ACOLITE rc 1, 0 L2R file(s):      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/work/earth/earth/ml/cache/family1_3/s2fdi_coast/src/acolite_src/acolite/sentinel2/l1_convert.py", line 365, in l1_convert
+    dfoo = ac.shared.read_band(jp2_files[0], warp_to=warp_to_geom)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/work/earth/earth/ml/cache/family1_3/s2fdi_coast/src/acolite_src/acolite/shared/read_band.py", line 114, in read_band
+    data = ds.ReadAsArray()
+           ^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3/dist-packages/osgeo/gdal.py", line 379
+  2019: S2B_35SMD_20190710_1_L1C: OSError: ACOLITE rc 1, 0 L2R file(s):      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/work/earth/earth/ml/cache/family1_3/s2fdi_coast/src/acolite_src/acolite/sentinel2/l1_convert.py", line 365, in l1_convert
+    dfoo = ac.shared.read_band(jp2_files[0], warp_to=warp_to_geom)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/work/earth/earth/ml/cache/family1_3/s2fdi_coast/src/acolite_src/acolite/shared/read_band.py", line 114, in read_band
+    data = ds.ReadAsArray()
+           ^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3/dist-packages/osgeo/gdal.py", line 379
+  2019: S2A_35SMD_20190712_1_L1C: OSError: ACOLITE rc 1, 0 L2R file(s):      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/work/earth/earth/ml/cache/family1_3/s2fdi_coast/src/acolite_src/acolite/sentinel2/l1_convert.py", line 365, in l1_convert
+    dfoo = ac.shared.read_band(jp2_files[0], warp_to=warp_to_geom)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/work/earth/earth/ml/cache/family1_3/s2fdi_coast/src/acolite_src/acolite/shared/read_band.py", line 114, in read_band
+    data = ds.ReadAsArray()
+           ^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3/dist-packages/osgeo/gdal.py", line 379
+  2019: S2B_35SMD_20190720_1_L1C: OSError: ACOLITE rc 1, 0 L2R file(s):      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/work/earth/earth/ml/cache/family1_3/s2fdi_coast/src/acolite_src/acolite/sentinel2/l1_convert.py", line 365, in l1_convert
+    dfoo = ac.shared.read_band(jp2_files[0], warp_to=warp_to_geom)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/work/earth/earth/ml/cache/family1_3/s2fdi_coast/src/acolite_src/acolite/shared/read_band.py", line 114, in read_band
+    data = ds.ReadAsArray()
+           ^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3/dist-packages/osgeo/gdal.py", line 379
+  2019: S2A_35SMD_20190722_1_L1C: OSError: ACOLITE rc 1, 0 L2R file(s):      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/work/earth/earth/ml/cache/family1_3/s2fdi_coast/src/acolite_src/acolite/sentinel2/l1_convert.py", line 365, in l1_convert
+    dfoo = ac.shared.read_band(jp2_files[0], warp_to=warp_to_geom)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/work/earth/earth/ml/cache/family1_3/s2fdi_coast/src/acolite_src/acolite/shared/read_band.py", line 114, in read_band
+    data = ds.ReadAsArray()
+           ^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3/dist-packages/osgeo/gdal.py", line 379
+  2019: S2A_35SMD_20190725_1_L1C: OSError: ACOLITE rc 1, 0 L2R file(s):      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/work/earth/earth/ml/cache/family1_3/s2fdi_coast/src/acolite_src/acolite/sentinel2/l1_convert.py", line 365, in l1_convert
+    dfoo = ac.shared.read_band(jp2_files[0], warp_to=warp_to_geom)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/work/earth/earth/ml/cache/family1_3/s2fdi_coast/src/acolite_src/acolite/shared/read_band.py", line 114, in read_band
+    data = ds.ReadAsArray()
+           ^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3/dist-packages/osgeo/gdal.py", line 379
+  … and 24 more
+The year(s) [2019] carry no `parts/<year>.done` marker and no counts.json, so nothing will assemble or publish them and a re-run with the SAME --work value retries exactly those — the years that DID land are marked and skipped. Two ways on: (1) fix the source (a moved ERDDAP dataset id, a short mirror, a filter that does not match the remote layout) and re-run; or (2) pass --allow-missing-years if a store with those inputs missing is genuinely what you want.
