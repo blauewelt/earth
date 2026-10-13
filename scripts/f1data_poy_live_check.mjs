@@ -3,7 +3,11 @@
 // src/f1data.js against the REAL Hub, compared with the reader's own native
 // path over the same bins.
 //
-//     node scripts/f1data_poy_live_check.mjs [group] [--index URL-or-path] [--box w,s,e,n]
+//     node scripts/f1data_poy_live_check.mjs [group] [--index URL-or-path] [--box w,s,e,n] [--chans a,b]
+//
+// --chans defaults to the group's first and last channel; pick channels that
+// exist over the whole record (g025's currents start in 1993) so the early
+// and left-out-year cases compare real cells, not empty ones.
 //
 // For each case: step "poy" for one month's slots over a span of years (some
 // with a year left out), against the native bins of each slot — every bin
@@ -38,7 +42,7 @@ if (!d) throw new Error("no family-10 store " + group);
 if (!d.poyClimatology) throw new Error(group + ": no pentad-of-year climatology offered (" + JSON.stringify(reg.errors) + ")");
 const [Y0, Y1] = d.poyClimatology.years;
 console.log(group, "poy years", Y0, Y1, "channels", d.channels.map((c) => c.name).join(","));
-const chans = [d.channels[0].name, d.channels[d.channels.length - 1].name];
+const chans = opt("--chans", null) ? opt("--chans").split(",") : [d.channels[0].name, d.channels[d.channels.length - 1].name];
 const bbox = { w: bw, e: be, s: bs, n: bn };
 const EPOCH = Date.UTC(1982, 0, 1);
 const slotOf = (ms) => {
@@ -53,7 +57,7 @@ const cases = [
   { yearStart: Y0, yearEnd: Y0 + 10, months: [2], excludeYears: [Y0 + 4] },                   // a year left out, February incl. slot 11
   { yearStart: Y0 + 2, yearEnd: Y0 + 2, months: [7], excludeYears: [] },                      // one year
 ];
-let worst = 0, bad = 0;
+let worst = 0, bad = 0, empty = 0;
 for (const c of cases) {
   const base = { family: d.family, store: d.name, channels: chans, bbox, res: "native", ...c };
   const t0 = Date.now();
@@ -88,8 +92,10 @@ for (const c of cases) {
     const rel = scale ? md / scale : 0;
     worst = Math.max(worst, rel);
     if (cd || rel > 1e-5) bad++;
+    if (!n) empty++;
     console.log(`    slot ${slot}: ${nb} native bins, ${n} cells, max |Δ| ${md.toExponential(2)} (rel ${rel.toExponential(2)}), count mismatches ${cd}; native ${req} req ${(bytes / 1e6).toFixed(2)} MB ${Date.now() - t1} ms`);
   }
 }
+if (empty) console.log(`note: ${empty} slot(s) compared no finite cell — choose --chans that exist in those years`);
 console.log(bad ? `FAILED: ${bad} slot(s) differ` : `OK — worst relative difference ${worst.toExponential(2)}`);
 process.exit(bad ? 1 : 0);

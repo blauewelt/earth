@@ -173,4 +173,21 @@ path with the native maps of the same slot's bins.
   - Live check through the reader against the native bins (three spans,
     including slot 72 with a two-bin year and a year left out): counts
     identical, worst relative difference 2.4e-7.
-- g025 (run 2) and oc025 (run 3) dispatched the same day.
+- 2026-10-13: **g025 and oc025 built and published** the same day — all three
+  groups complete in `data/gridded_poy_index.json`, so the Data tab offers the
+  step on every five-day gridded store.
+  - g025 by gridded-poy run 2 (the 0.25° ocean-surface build, twelve jobs of
+    3–6 min): 146 files, 114.1 GB, years 1982–2024. Falsifier: max |Δmean|
+    1.22e-4, which is one float32 ulp of a running total between 1,024 and
+    2,048; max Δ/bound 0.9999997.
+  - oc025 by gridded-poy run 3 (the ocean-colour build, twelve jobs of 2–4 min):
+    146 files, 21.2 GB, years 1997–2024 (ocean colour starts in September 1997,
+    so slots before it count 0 in 1997). Falsifier: max |Δmean| 3.8e-6, max
+    Δ/bound 0.999996.
+  - Live check through the reader against the native bins, same three spans as
+    g100 (the last 20 Decembers incl. slot 72; eleven Februaries with one year
+    left out; one July): counts identical in every cell; worst relative
+    difference 2.4e-7 for g025 (sea-surface temperature and mixed-layer depth —
+    the currents start in 1993, so the early spans need channels that exist
+    then: `--chans sst,log_mld`) and 1.5e-7 for oc025 (chlorophyll and its
+    coverage).

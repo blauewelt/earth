@@ -45,7 +45,7 @@ low-pass).
 ---
 
 <a id="e-093"></a>
-## E-093 · Pentad-of-year climatology — the mean of every five-day slot of the year over any span of years, for the five-day global tensor — g100 BUILT 2026-10-13; g025 and oc025 BUILDING
+## E-093 · Pentad-of-year climatology — the mean of every five-day slot of the year over any span of years, for the five-day global tensor — ALL THREE GROUPS BUILT 2026-10-13 (g100 15.3 GB, g025 114.1 GB, oc025 21.2 GB)
 
 **Why.** Chris: *"Make sure all channels are available at their granularity.
 If it's a pentad channel, offer pentad climatology as well."* E-091 covered the
@@ -85,6 +85,19 @@ of 3–4 min, 73 slots, 15.3 GB, years 1982–2024.
   cases, namely the last 20 Decembers including slot 72 with one two-bin year,
   1982–1992 Februaries with 1986 left out, and one July. Counts are identical
   in every cell, and the worst relative difference is **2.4e-7**.
+
+g025 was built by gridded-poy run 2, the 0.25° ocean-surface build (currents,
+mixed layer, sea-surface height and temperature, sea ice): twelve jobs of
+3–6 min, 114.1 GB, 1982–2024. oc025 was built by gridded-poy run 3, the
+ocean-colour build: twelve jobs of 2–4 min, 21.2 GB, 1997–2024.
+
+- **Falsifier:** g025 max |Δmean| 1.22e-4 (one float32 ulp of a running total
+  between 1,024 and 2,048), max Δ/bound 0.9999997; oc025 3.8e-6, max Δ/bound
+  0.999996. Inside the bound in all 24 jobs.
+- **Live check through the reader**, the same three spans: counts identical in
+  every cell; worst relative difference **2.4e-7** for g025 (sea-surface
+  temperature and mixed-layer depth, because the currents start in 1993) and
+  **1.5e-7** for oc025.
 
 <a id="e-090"></a>
 ## E-092 · Family 1.3 — family 1.2 plus the stores that could identify plastic in the ocean — PHASE A PUBLISHED 2026-10-11 (`mplastic` 18,504 surface samples, `mobjects` 1,595 aircraft objects, `s2labels` 837,964 labelled Sentinel-2 pixels); the Sentinel-2 store over the garbage patch CLOSED by a null co-location probe
