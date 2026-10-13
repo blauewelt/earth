@@ -253,10 +253,17 @@ jobs:
         # parts never does (E-092 D13).
         if: ${{ github.event.inputs.store == 's2fdi_coast' && (github.event.inputs.runner == 'ubuntu-latest' || github.event.inputs.runner == '') }}
         run: |
+          # libgdal-dev only: gdal-bin pulls Ubuntu's python3-gdal, built for
+          # numpy 1.x, which pip's numpy 2 then breaks at the first array
+          # read (osgeo.gdal_array: "numpy.core.multiarray failed to import"
+          # -- every acquisition of the first lane, family1-build #1064). The
+          # bindings are built here against the installed numpy, without
+          # build isolation (isolation yields an osgeo without _gdal_array).
           sudo apt-get update -qq
-          sudo apt-get install -y -qq gdal-bin libgdal-dev
-          pip install --quiet "GDAL==$(gdal-config --version)" pyproj python-dateutil scikit-image matplotlib
-          python3 -c "from osgeo import gdal; import pyproj, skimage, matplotlib; print('acolite deps ok', gdal.__version__)"
+          sudo apt-get install -y -qq --no-install-recommends libgdal-dev
+          pip install --quiet setuptools wheel pyproj python-dateutil scikit-image matplotlib
+          pip install --quiet --no-build-isolation --no-cache-dir --force-reinstall --no-deps "GDAL==$(gdal-config --version)"
+          python3 -c "from osgeo import gdal, gdal_array; a = gdal.GetDriverByName('MEM').Create('', 2, 2, 1).ReadAsArray(); import pyproj, skimage, matplotlib; print('acolite deps ok', gdal.__version__, a.shape)"
 
       - name: Earthdata Login check (hosted runner only)
         if: ${{ github.event.inputs.check_credentials == 'true' }}

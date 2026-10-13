@@ -618,6 +618,118 @@ def select(tile, l1c_items, l2a_items, days=None, marida_days=(),
     return sel, excl, absent
 
 
+# ====================================================== ACOLITE's runtime ==
+# THE CHECK ACOLITE NEEDS BEFORE ITS FIRST BYTE (measured 2026-10-13 on
+# family1-build run 38391739842, the first 35SMD lane: all 32 acquisitions
+# failed inside ACOLITE's l1_convert at `ds.ReadAsArray()`). Ubuntu's
+# `python3-gdal` (pulled in by `gdal-bin`) is built against numpy 1.26
+# (`python3-numpy-abi9`), the workflow's pip installs numpy 2.x ahead of it on
+# sys.path, and `pip install GDAL==3.8.4` is then "already satisfied" by the
+# apt copy — so `osgeo.gdal` imports fine and `osgeo.gdal_array` does not:
+# `ImportError: numpy.core.multiarray failed to import` (`_ARRAY_API not
+# found`) at osgeo/gdal.py:3791, the first ReadAsArray ACOLITE makes (the
+# detector footprints, l1_convert.py:363 for GML / :365 for JP2). Reproduced
+# here with the extracted Ubuntu 3.8.4+dfsg-3ubuntu3 package under Python
+# 3.12 + numpy 2.5.4; the same bindings built from source against numpy 2
+# (`pip install --no-build-isolation GDAL==3.8.4`) read the array.
+ACOLITE_RUNTIME_CHECK = (
+    "import numpy\n"
+    "from osgeo import gdal, ogr, gdal_array\n"
+    "gdal.UseExceptions()\n"
+    "assert gdal.GetDriverByName('JP2OpenJPEG') is not None, 'no JP2OpenJPEG'\n"
+    "assert ogr.GetDriverByName('GML') is not None, 'no OGR GML driver'\n"
+    "gdal.GetDriverByName('MEM').Create('', 2, 2, 1).ReadAsArray()\n"
+    "import netCDF4, pyproj, scipy.ndimage, dateutil.parser\n"
+    "print(numpy.__version__, gdal.__version__, gdal.__file__)\n")
+GDAL_FIX = ("Fix (hosted runner): install libgdal-dev WITHOUT gdal-bin "
+            "(`sudo apt-get install -y --no-install-recommends libgdal-dev`) "
+            "and build the bindings against the pip numpy: `pip install "
+            "--no-build-isolation --no-cache-dir --force-reinstall --no-deps "
+            "\"GDAL==$(gdal-config --version)\"`")
+
+
+def acolite_python_check(python=None, env=None):
+    """(ok, detail): can `python` read a GDAL raster into numpy, open GML and
+    JP2, and import ACOLITE's other modules? Runs in a SUBPROCESS, because
+    that is how ACOLITE runs and an import here can be satisfied by a
+    different copy than the child gets."""
+    r = subprocess.run([python or sys.executable, "-c", ACOLITE_RUNTIME_CHECK],
+                       capture_output=True, text=True, env=env)
+    if r.returncode == 0:
+        return True, r.stdout.strip()
+    return False, last_exception(r.stdout + "\n" + r.stderr)
+
+
+def last_exception(text, frames=1):
+    """The END of the last Python traceback in `text`: the exception line(s)
+    and the `frames` innermost `File …` frames with their source lines. A
+    traceback's head is the outermost call; what went wrong is at its tail."""
+    lines = [l.rstrip() for l in (text or "").splitlines()]
+    starts = [i for i, l in enumerate(lines) if l.startswith("Traceback ")]
+    if not starts:
+        tail = [l for l in lines if l.strip()][-3:]
+        return " | ".join(tail) or "(no output)"
+    block = lines[starts[-1] + 1:]
+    k = None
+    for i, l in enumerate(block):
+        if l and not l.startswith(" "):      # the first unindented line ends
+            k = i                            # the frames: the exception
+            break
+    if k is None:
+        return " | ".join(l.strip() for l in block[-3:] if l.strip())
+    exc = [l.strip() for l in block[k:] if l.strip()]
+    fr = [i for i, l in enumerate(block[:k]) if l.lstrip().startswith("File ")]
+    where = []
+    for i in fr[-frames:]:
+        where.append(block[i].strip())
+        if i + 1 < k and not block[i + 1].lstrip().startswith(("File ", "^")):
+            where.append(block[i + 1].strip())
+    return " | ".join(exc[:4]) + " — at " + " / ".join(where)
+
+
+def build_private_gdal(python, target):
+    """Build the GDAL Python bindings for the SYSTEM libgdal (`gdal-config`)
+    into `target`, against whatever numpy pip's build isolation brings (a
+    numpy-2 build runs under any numpy 2.x). Returns (ok, detail). Needs
+    libgdal-dev and a compiler, which a hosted runner has."""
+    try:
+        ver = subprocess.run(["gdal-config", "--version"], capture_output=True,
+                             text=True, check=True).stdout.strip()
+    except (OSError, subprocess.CalledProcessError) as e:
+        return False, f"no gdal-config ({e}) — install libgdal-dev"
+    os.makedirs(target, exist_ok=True)
+    # NO build isolation: GDAL's setup builds `_gdal_array` only when numpy
+    # imports at BUILD time, and an isolated build has no numpy (measured:
+    # an isolated build of 3.8.4 installs osgeo without _gdal_array). The
+    # build tools go in their own --target so the interpreter is not touched.
+    tools = target + "_buildtools"
+    r = subprocess.run([python, "-m", "pip", "install", "--quiet",
+                        "--no-cache-dir", "--target", tools, "setuptools",
+                        "wheel"], capture_output=True, text=True)
+    if r.returncode != 0:
+        return False, "pip could not fetch setuptools/wheel: " + \
+            last_exception(r.stdout + "\n" + r.stderr)
+    env = dict(os.environ)
+    env["PYTHONPATH"] = tools + (os.pathsep + env["PYTHONPATH"]
+                                 if env.get("PYTHONPATH") else "")
+    r = subprocess.run([python, "-m", "pip", "install", "--quiet",
+                        "--no-cache-dir", "--no-deps", "--no-build-isolation",
+                        "--target", target, f"GDAL=={ver}"],
+                       capture_output=True, text=True, env=env)
+    if r.returncode != 0:
+        return False, f"pip build of GDAL=={ver} failed: " + \
+            last_exception(r.stdout + "\n" + r.stderr)
+    return True, f"GDAL=={ver} bindings built into {target}"
+
+
+def acolite_failure(log_path):
+    try:
+        with open(log_path, errors="replace") as fh:
+            return last_exception(fh.read(), frames=2)
+    except OSError as e:
+        return f"(no ACOLITE log: {e})"
+
+
 # ============================================================== adapter ===
 class S2FdiCoastAdapter(sh.GridAdapter):
     store = "s2fdi_coast"
@@ -708,6 +820,10 @@ class S2FdiCoastAdapter(sh.GridAdapter):
         self.npx = int(os.environ.get("S2FDI_SMOKE_PX") or NPX)
         self.cache = os.environ.get("S2FDI_CACHE") or ""
         self.acolite = os.environ.get("S2FDI_ACOLITE_DIR") or ""
+        self.acolite_python = (os.environ.get("S2FDI_ACOLITE_PYTHON")
+                               or sys.executable)
+        self.acolite_env = None          # set by ensure_acolite_runtime
+        self.runtime = {}
         self.max_hours = float(os.environ.get("S2FDI_MAX_LANE_HOURS")
                                or MAX_LANE_HOURS)
         self._stac = {}
@@ -894,13 +1010,37 @@ class S2FdiCoastAdapter(sh.GridAdapter):
             sys.exit(f"REFUSING s2fdi_coast: {free / 1e9:.1f} GB free under "
                      f"{ctx.scratch}; one acquisition needs ~2.3 GB "
                      f"(SAFE 0.6 + ACOLITE L1R 0.85 + L2R 0.8)")
-        for mod in ("osgeo.gdal", "netCDF4", "pyproj", "scipy", "dateutil"):
-            try:
-                __import__(mod)
-            except ImportError:
-                sys.exit(f"REFUSING s2fdi_coast: ACOLITE needs `{mod}` and it "
-                         f"does not import — see the adapter's install steps")
+        self.ensure_acolite_runtime(ctx)
         return None
+
+    def ensure_acolite_runtime(self, ctx):
+        """Check ACOLITE's interpreter; when its GDAL bindings cannot read an
+        array (Ubuntu's python3-gdal under pip's numpy 2 — the failure of
+        family1-build run 38391739842), build matching bindings privately and
+        put them first on ACOLITE's PYTHONPATH. Refuses if that fails too."""
+        ok, why = acolite_python_check(self.acolite_python)
+        self.runtime = {"python": self.acolite_python, "first_check": why}
+        if ok:
+            return why
+        target = os.path.join(ctx.scratch, "gdal_py")
+        built, how = build_private_gdal(self.acolite_python, target)
+        self.runtime["private_build"] = how
+        if built:
+            env = dict(os.environ)
+            env["PYTHONPATH"] = target + (os.pathsep + env["PYTHONPATH"]
+                                          if env.get("PYTHONPATH") else "")
+            ok2, why2 = acolite_python_check(self.acolite_python, env)
+            if ok2:
+                self.acolite_env = env
+                self.runtime["second_check"] = why2
+                print(f"  ::warning::s2fdi_coast: ACOLITE's GDAL could not "
+                      f"read an array ({why}); {how}, and ACOLITE runs with "
+                      f"it first on PYTHONPATH ({why2})", flush=True)
+                return why2
+            how = f"{how}, but the check still fails: {why2}"
+        sys.exit(f"REFUSING s2fdi_coast: the interpreter ACOLITE would run "
+                 f"under ({self.acolite_python}) cannot do what ACOLITE does "
+                 f"first — {why}; {how}. {GDAL_FIX}")
 
     # ------------------------------------------------------------ L1C -----
     def _l1c_tile_path(self, a):
@@ -1039,14 +1179,16 @@ class S2FdiCoastAdapter(sh.GridAdapter):
                               + ACOLITE_SETTINGS + ("",)))
         t0 = time.time()
         with open(os.path.join(out, "acolite.log"), "w") as lf:
-            rc = subprocess.run([sys.executable, "launch_acolite.py", "--cli",
+            rc = subprocess.run([self.acolite_python, "launch_acolite.py",
+                                 "--cli",
                                  f"--settings={stp}"], cwd=aco, stdout=lf,
-                                stderr=subprocess.STDOUT).returncode
+                                stderr=subprocess.STDOUT,
+                                env=self.acolite_env).returncode
         done = [f for f in os.listdir(out) if f.endswith("_L2R.nc")]
         if rc != 0 or len(done) != 1:
-            tail = open(os.path.join(out, "acolite.log")).read()[-1500:]
             raise IOError(f"ACOLITE rc {rc}, {len(done)} L2R file(s): "
-                          f"{tail}")
+                          + acolite_failure(os.path.join(out,
+                                                         "acolite.log")))
         for f in os.listdir(out):
             if f.endswith("_L1R.nc"):
                 os.remove(os.path.join(out, f))
@@ -1102,6 +1244,8 @@ class S2FdiCoastAdapter(sh.GridAdapter):
                 {"download_s": 0.0, "acolite_s": 0.0}, \
                 {"bytes": int(os.path.getsize(p)), "reused": False,
                  "bucket_quirk": False, "acolite_commit": "stub"}
+        if not self.runtime:              # the probe skips fetch_preflight
+            self.ensure_acolite_runtime(ctx)
         t0 = time.time()
         sf = self.fetch_safe(ctx, a, workdir)
         t_dl = time.time() - t0
@@ -1155,7 +1299,7 @@ class S2FdiCoastAdapter(sh.GridAdapter):
             except (IOError, OSError, st.Refusal) as e:
                 ctx.note_absent(str(sh.bin_year(b)),
                                 f"{a['l1c']}: {type(e).__name__}: "
-                                f"{str(e)[:600]}")
+                                f"{str(e)[:1500]}")
                 continue
             t1 = time.time()
             frame, mc, oob = make_frame(self, R, scl, a["satellite"])
@@ -1168,6 +1312,7 @@ class S2FdiCoastAdapter(sh.GridAdapter):
                        acolite_model=attrs.get("ac_model"),
                        acolite_version=attrs.get("acolite_version"),
                        acolite_commit=src["acolite_commit"],
+                       acolite_private_gdal=bool(self.acolite_env),
                        l1c_bytes=src["bytes"], safe_reused=src["reused"],
                        l1c_href_in_l2a_bucket=src["bucket_quirk"],
                        seconds=dict(tim, mask_s=round(time.time() - t1, 1),

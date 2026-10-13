@@ -389,3 +389,92 @@ def test_plp2019_points_reader(tmp_path):
     pts = s2f.plp2019_targets(str(tmp_path))
     assert list(pts) == ["2019-04-18"]
     assert pts["2019-04-18"][1][:3] == (462495.0, 4328875.0, 30.0)
+
+
+# ============================================== ACOLITE's runtime (#1064) ==
+RUNNER_TRACEBACK = """Running ACOLITE processing - Generic GitHub Clone
+Traceback (most recent call last):
+  File "/acolite/launch_acolite.py", line 81, in <module>
+    launch_acolite()
+  File "/acolite/acolite/sentinel2/l1_convert.py", line 365, in l1_convert
+    dfoo = ac.shared.read_band(jp2_files[0], warp_to=warp_to_geom)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/acolite/acolite/shared/read_band.py", line 114, in read_band
+    data = ds.ReadAsArray()
+           ^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3/dist-packages/osgeo/gdal.py", line 3791, in ReadAsArray
+    from osgeo import gdal_array
+  File "/usr/lib/python3/dist-packages/osgeo/gdal_array.py", line 10, in <module>
+    from . import _gdal_array
+ImportError: numpy.core.multiarray failed to import
+"""
+
+
+def test_last_exception_names_the_exception_not_the_head():
+    """Run 38391739842's message was the traceback's HEAD cut at 600
+    characters — "gdal.py, line 379" was 3791 cut short and the exception
+    itself was gone. The message now LEADS with the exception."""
+    m = s2f.last_exception(RUNNER_TRACEBACK, frames=2)
+    assert m.startswith("ImportError: numpy.core.multiarray failed to import")
+    assert "gdal.py\", line 3791, in ReadAsArray" in m
+    assert "from . import _gdal_array" in m
+    assert "launch_acolite()" not in m
+    assert s2f.last_exception("no traceback\nlast words") == \
+        "no traceback | last words"
+
+
+def test_acolite_failure_carries_the_exception(tmp_path, monkeypatch):
+    clear_env(monkeypatch)
+    fake = tmp_path / "aco"
+    fake.mkdir()
+    (fake / "launch_acolite.py").write_text(
+        "def f():\n    raise RuntimeError('detector footprint unreadable')\n"
+        "print('Running ACOLITE'); f()\n")
+    monkeypatch.setenv("S2FDI_ACOLITE_DIR", str(fake))
+    ad = s2f.S2FdiCoastAdapter()
+
+    class C:
+        scratch = str(tmp_path)
+    with pytest.raises(IOError) as e:
+        ad.run_acolite(C, "/x/y.SAFE", str(tmp_path / "out"))
+    assert "RuntimeError: detector footprint unreadable" in str(e.value)
+    assert str(e.value).index("RuntimeError") < 60
+
+
+def test_runtime_check_repairs_or_refuses(tmp_path, monkeypatch):
+    clear_env(monkeypatch)
+    ad = s2f.S2FdiCoastAdapter()
+
+    class C:
+        scratch = str(tmp_path)
+    calls = []
+
+    def check(py, env=None):
+        calls.append(env)
+        if env is None:
+            return False, "ImportError: numpy.core.multiarray failed"
+        return True, "2.5 3.8.4 private"
+    monkeypatch.setattr(s2f, "acolite_python_check", check)
+    monkeypatch.setattr(s2f, "build_private_gdal",
+                        lambda py, t: (True, f"built into {t}"))
+    assert ad.ensure_acolite_runtime(C) == "2.5 3.8.4 private"
+    assert ad.acolite_env["PYTHONPATH"].startswith(
+        os.path.join(str(tmp_path), "gdal_py"))
+    assert "private_build" in ad.runtime
+    # the build fails -> a refusal naming the exception and the fix
+    ad = s2f.S2FdiCoastAdapter()
+    monkeypatch.setattr(s2f, "build_private_gdal",
+                        lambda py, t: (False, "no gdal-config"))
+    with pytest.raises(SystemExit) as e:
+        ad.ensure_acolite_runtime(C)
+    msg = str(e.value)
+    assert "numpy.core.multiarray" in msg and "no gdal-config" in msg
+    assert "--no-build-isolation" in msg
+
+
+def test_the_runtime_check_passes_here():
+    """This interpreter (the sandbox's, pip-built GDAL against numpy 2)
+    passes; a failure here means ACOLITE would fail too."""
+    pytest.importorskip("osgeo")
+    ok, why = s2f.acolite_python_check()
+    assert ok, why
