@@ -1,0 +1,139 @@
+{
+ "cases": [
+  {
+   "name": "whole record",
+   "group": "g100",
+   "chan": "t2m",
+   "date": "2011-03-03",
+   "bin_start": "2011-02-28",
+   "slot": 11,
+   "years": [
+    2010,
+    2013
+   ],
+   "exclude": [],
+   "iy": 4,
+   "ix": 7,
+   "lat": 30.0,
+   "lon": 30.0,
+   "mean": 16.082073211669922,
+   "count": 4
+  },
+  {
+   "name": "same slot, another year",
+   "group": "g100",
+   "chan": "t2m",
+   "date": "2013-03-01",
+   "bin_start": "2013-02-27",
+   "slot": 11,
+   "years": [
+    2010,
+    2013
+   ],
+   "exclude": [],
+   "iy": 4,
+   "ix": 7,
+   "lat": 30.0,
+   "lon": 30.0,
+   "mean": 16.082073211669922,
+   "count": 4
+  },
+  {
+   "name": "a shorter span",
+   "group": "g100",
+   "chan": "t2m",
+   "date": "2011-03-03",
+   "bin_start": "2011-02-28",
+   "slot": 11,
+   "years": [
+    2011,
+    2012
+   ],
+   "exclude": [],
+   "iy": 4,
+   "ix": 7,
+   "lat": 30.0,
+   "lon": 30.0,
+   "mean": 16.044729709625244,
+   "count": 2
+  },
+  {
+   "name": "a year left out",
+   "group": "g100",
+   "chan": "t2m",
+   "date": "2011-03-03",
+   "bin_start": "2011-02-28",
+   "slot": 11,
+   "years": [
+    2010,
+    2013
+   ],
+   "exclude": [
+    2012
+   ],
+   "iy": 4,
+   "ix": 7,
+   "lat": 30.0,
+   "lon": 30.0,
+   "mean": 16.04952112833659,
+   "count": 3
+  },
+  {
+   "name": "g025 sst whole record",
+   "group": "g025",
+   "chan": "sst",
+   "date": "2011-07-20",
+   "bin_start": "2011-07-18",
+   "slot": 39,
+   "years": [
+    2010,
+    2013
+   ],
+   "exclude": [],
+   "iy": 8,
+   "ix": 4,
+   "lat": 30.0,
+   "lon": -120.0,
+   "mean": 10.31807804107666,
+   "count": 4
+  },
+  {
+   "name": "g025 sst over land",
+   "group": "g025",
+   "chan": "sst",
+   "date": "2011-07-20",
+   "bin_start": "2011-07-18",
+   "slot": 39,
+   "years": [
+    2010,
+    2013
+   ],
+   "exclude": [],
+   "iy": 8,
+   "ix": 13,
+   "lat": 30.0,
+   "lon": 15.0,
+   "mean": null,
+   "count": 0
+  },
+  {
+   "name": "last slot",
+   "group": "g100",
+   "chan": "t2m",
+   "date": "2012-12-31",
+   "bin_start": "2012-12-29",
+   "slot": 72,
+   "years": [
+    2010,
+    2013
+   ],
+   "exclude": [],
+   "iy": 4,
+   "ix": 7,
+   "lat": 30.0,
+   "lon": 30.0,
+   "mean": 20.789907455444336,
+   "count": 4
+  }
+ ]
+}

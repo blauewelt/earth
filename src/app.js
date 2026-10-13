@@ -959,6 +959,45 @@ const GIBS_LAYERS = [
     on: false,
   },
   {
+    id: "poy7",
+    /* THE EXACT FIVE-DAY CLIMATOLOGY (E-093). Chris, 2026-10-13: "make sure
+     * that climatology can also be displayed as a layer (this should be the
+     * exact pentad averaged over years data)". For the globe's date: the
+     * five-day bin of family 7 it falls in, that bin's pentad-of-year slot
+     * (0…72), and the mean of every bin of that slot over a span of years —
+     * composed in the browser from E-093's cumulative sums and counts
+     * (`data/gridded_poy_index.json`). The arithmetic is in the block above
+     * `GridProvider`; docs/FAMILY7_CLIM.md explains it for a reader.
+     *
+     * NO catalog record (§2.6's exception, as `amoc-eval`, the Global tensor
+     * and the Model climatology take it): a picture of our own work, not an
+     * open dataset. `doc` links E-093's plan.
+     *
+     * AGGREGATION / DIFFERENCE POSTURE: NEITHER. The field is already a
+     * multi-year average of one five-day slot — averaging it over an N-day
+     * window would blend neighbouring slots' means into a number nobody
+     * computed (and the slot's own five days ARE its window), and a per-pixel
+     * difference of two dates is a difference of two slots, i.e. the seasonal
+     * cycle, which ±5 days already walks frame by frame. The comparison that
+     * IS meaningful — one span of years against another — is done in the
+     * row's own years and leave-out fields, not by the Aggregate slider. And
+     * the byte count points the same way: each paint is two to four 4–5 MB
+     * range reads at 0.25°. (Not `timed`, so `providersFor` never
+     * suppresses it either.)
+     *
+     * `ramp`, `vmin`, `vmax` and `units` are REWRITTEN per channel by
+     * `poyApplyChannel` from the family-7 index, through the tensor layer's
+     * own range rule. `poyY0`/`poyY1`/`poyEx` are the row's span: null means
+     * the whole record of the selected group. */
+    grid: true, poyGrid: true,
+    poyChan: null, poyY0: null, poyY1: null, poyEx: [],
+    ramp: "sst", vmin: 0, vmax: 1, units: "", maxLevel: 7,
+    doc: "https://blauewelt.github.io/earth/docs.html?f=ml/plans/E093_pentad_climatology.md",
+    title: "Pentad climatology — each five-day bin averaged over the years (family 7), 0.25° / 1°",
+    meta: "The mean of the date's five-day slot of the year over a span of years — the day of the date matters, the year doesn't",
+    on: false,
+  },
+  {
     id: "fishing",
     /* Global Fishing Watch's apparent fishing effort, summed per 0.25° cell
      * per month, read the same way the family-7 tensor is read: ONE HTTP range
@@ -3465,6 +3504,9 @@ async function loadGridMonth(cfg) {
   // …and for the model's climatology: one (version, group, month, channel)
   // plane of `clim.npy` on the Hub, read by range.
   if (cfg.climGrid) return climGridFor(cfg);
+  // …and for the pentad climatology: a slot's mean composed from E-093's
+  // cumulative sums and counts, read by range.
+  if (cfg.poyGrid) return poyGridFor(cfg);
   // Same arrangement for the fishing grid: a month of it is one range read of
   // the Hub, not a baked file, and everything downstream is unchanged by that.
   if (cfg.fishingGrid) return fishingGridFor(cfg);
@@ -5179,6 +5221,583 @@ function climSampleAt(lon, lat) {
   return g ? sampleGrid(g, lon, lat) : null;
 }
 
+/* ============ the PENTAD climatology (family 7) on the globe — E-093 ========
+ *
+ * Chris, 2026-10-13: "Can you make sure that climatology can also be displayed
+ * as a layer? (This should be the exact pentad averaged over years data)".
+ * The Model climatology above is per CALENDAR MONTH; this layer is the exact
+ * five-day one: for the globe's date, the five-day bin of the tensor that date
+ * falls in, the pentad-of-year SLOT that bin belongs to, and the mean of every
+ * bin of that slot over a span of years (default: the whole record).
+ *
+ * THE SLOT. Family 7's bins run continuously from the tensor's epoch
+ * (`data/family7_index.json` `epoch`, `pentad_days`): bin b covers days
+ * [5b, 5b+5). A bin belongs to slot floor((day_of_year(bin start, UTC) − 1)/5),
+ * 0…72, day 366 of a leap year folded into 72 (E-093's contract). Because
+ * 365 is a multiple of five the bins keep their place against the calendar in
+ * ordinary years and slide one day at each leap day — so the same calendar
+ * date can land one slot over in another year. The DAY decides; the year only
+ * through that one-day slide, and never which years are averaged.
+ *
+ * THE READ. Per group and slot, E-093 publishes `sum_pSS.npy` float32
+ * [C, Y, H, W] in PHYSICAL units and `count_pSS.npy` uint8, both CUMULATIVE
+ * over the years: plane (c, y) holds every bin of that slot opening in years
+ * year_first … year_first + y. The mean over a…b is
+ *
+ *     (S[b] − S[a−1]) / (N[b] − N[a−1]),   S[a−1] = N[a−1] = 0 at the first year
+ *
+ * and a year e left out subtracts (S[e] − S[e−1]) and (N[e] − N[e−1]). Each
+ * plane is one contiguous range — offset header_len + (c·Y + y)·H·W·itemsize,
+ * length H·W·itemsize (4.15 MB of sums and 1.04 MB of counts at 0.25°; 0.26 and
+ * 0.07 MB at 1°) — so the whole record is TWO reads, a span that starts later
+ * four, and each year left out two or four more. Every plane is read through
+ * `hubRangeRead` (206 or nothing) and kept in an LRU keyed (group, slot,
+ * channel, kind, year-plane), so a span change re-reads only the planes it
+ * did not have, and a date that stays in its slot reads nothing. The mean is
+ * composed in float64; a cell with no bin (count 0) is NaN and paints nothing.
+ *
+ * Every number comes from `data/gridded_poy_index.json` (E-093's exporter, in
+ * the shape of `data/gridded_doy_index.json` with `slots` p00…p72); the channel
+ * labels, units, ramps and legend ranges come from the family-7 index through
+ * `f7ChannelSpec` / `tensorRange`, the same rule the tensor and the Model
+ * climatology layers use, so one channel looks identical on all three. The
+ * values are physical: no de-z-scoring here. An index that has not landed (a
+ * 404) is a STATE: the layer stays on, paints nothing and a toast says why. */
+const POY_INDEX_URL = "data/gridded_poy_index.json";
+const POY_LAST_SLOT = 72;            // E-093's contract: 73 slots, day 366 folded into the last
+const POY_LRU_PLANES = 24;           // ~60 MB of 0.25° sum/count planes; a 1° plane is 16× smaller
+const poyState = {
+  index: null, indexPromise: null, unpublished: false, error: null,
+  planes: new Map(),       // "<group>:<slot>:<chan>:<sum|count>:<y>" -> typed array, insertion-ordered
+  inflight: new Map(),     // one promise per range read in flight
+  current: null, currentKey: null, seq: 0,
+  reads: 0, bytes: 0,      // range reads issued and bytes received, for tests and the row's note
+  lastPaint: null,         // { reads, bytes } the last composed paint needed
+};
+
+function loadPoyIndex() {
+  if (!poyState.indexPromise) {
+    poyState.indexPromise = Promise.all([
+      fetch(POY_INDEX_URL).then((r) => {
+        if (r.status === 404) { poyState.unpublished = true; return null; }
+        return r.ok ? r.json() : null;
+      }).catch(() => null),
+      loadTensorIndex(),          // the bin calendar and every channel's presentation
+    ]).then(([j]) => (poyState.index = j));
+  }
+  return poyState.indexPromise;
+}
+
+/* Group → its store block. Only COMPLETE groups are offered: a half-exported
+ * group would paint some slots and not others, which reads as a broken layer. */
+function poyStores(idx) {
+  const out = {};
+  for (const [key, st] of Object.entries((idx && idx.stores) || {})) {
+    if (!st || !st.complete || !st.slots) continue;
+    const group = st.group || key.split("/").pop();
+    out[group] = { ...st, group, key };
+  }
+  return out;
+}
+
+/* One channel's presentation: the family-7 index's, when the group and the
+ * channel are there (they always are for the real groups); else what the
+ * store itself says, so a group the tensor index does not describe still
+ * paints with its own unit and a range from its own `norm`. */
+function poyChannelList(idx) {
+  const tIdx = tensorState.index, out = [];
+  for (const [group, st] of Object.entries(poyStores(idx))) {
+    const tg = tIdx && tIdx.groups && tIdx.groups[group];
+    st.chans.forEach((c, i) => {
+      const unit = (st.units && !Array.isArray(st.units) && st.units[c]) ||
+        (st.channels && st.channels[i] && st.channels[i].unit) || "";
+      const label = (st.labels && st.labels[c]) || c;
+      const spec = tg && tg.chans.includes(c) ? f7ChannelSpec(group, tg, c)
+        : { key: `${group}:${c}`, group, chan: c, label, units: unit, sign: "seq", ramp: "precip" };
+      spec.step = Number(st.dlat) > 0 ? Number(st.dlat) : Math.abs(Number(st.dlat));   // the grid actually read
+      spec.ci = i;
+      out.push(spec);
+    });
+  }
+  return out;
+}
+function poyChannelSpec(idx, key) {
+  const list = poyChannelList(idx);
+  return list.find((c) => c.key === key) || list[0] || null;
+}
+function poyRange(idx, spec) {
+  const tIdx = tensorState.index;
+  const tg = tIdx && tIdx.groups && tIdx.groups[spec.group];
+  if (tg && tg.chans.includes(spec.chan)) return tensorRange(tIdx, spec);
+  const st = poyStores(idx)[spec.group];
+  const nm = st && Array.isArray(st.norm) ? st.norm[spec.ci] : null;
+  if (!nm) return [0, 1];
+  const [mean, sd] = nm;
+  if (spec.sign === "div") { const m = tensorNiceRound(Math.abs(mean) + 2.5 * sd); return [-m, m]; }
+  return [tensorNiceRound(mean - 2.5 * sd), tensorNiceRound(mean + 2.5 * sd)];
+}
+
+/* The date → the opening day of its five-day bin (NOT clamped to the tensor's
+ * last bin: the climatology has a slot for every date) → the slot. */
+function poyBinStart(dateStr = state.date) {
+  const tIdx = tensorState.index;
+  if (!tIdx || !tIdx.epoch || !tIdx.pentad_days) return null;
+  const days = Math.round((Date.parse(dateStr + "T00:00:00Z") - Date.parse(tIdx.epoch + "T00:00:00Z")) / 864e5);
+  return addDays(tIdx.epoch, Math.floor(days / tIdx.pentad_days) * tIdx.pentad_days);
+}
+function poyDayOfYear(dateStr) {
+  const t = Date.parse(dateStr + "T00:00:00Z");
+  return Math.round((t - Date.UTC(Number(dateStr.slice(0, 4)), 0, 1)) / 864e5) + 1;
+}
+function poySlotOf(binStart) {
+  return Math.min(POY_LAST_SLOT, Math.floor((poyDayOfYear(binStart) - 1) / 5));
+}
+const poySlotKey = (s) => `p${String(s).padStart(2, "0")}`;
+/* "p11 · days 56–60 of the year (about 25 Feb – 1 Mar)". The "about" is the
+ * non-leap calendar: after 29 February a leap year's day 60 is 29 Feb itself. */
+function poySlotLabel(s, { short = false } = {}) {
+  const d0 = 5 * s + 1, d1 = s === POY_LAST_SLOT ? 366 : 5 * s + 5;
+  if (short) return `${poySlotKey(s)} (days ${d0}–${d1})`;
+  const cal = (d) => new Date(Date.UTC(2001, 0, Math.min(d, 365)))
+    .toLocaleString("en-GB", { day: "numeric", month: "short", timeZone: "UTC" });
+  return `${poySlotKey(s)} · days ${d0}–${d1} of the year (about ${cal(d0)} – ${cal(d1)})`;
+}
+
+/* The span the controls ask for, clamped to the store's record. `ex` keeps
+ * only years inside the span; an empty span or one with every year left out
+ * is an error the row states rather than a blank map. */
+function poySpanOf(cfg, st) {
+  const y0 = Number(st.year_first), yL = y0 + Number(st.n_years) - 1;
+  const a = Math.max(y0, Math.min(yL, Number.isFinite(cfg.poyY0) ? cfg.poyY0 : y0));
+  const b = Math.max(y0, Math.min(yL, Number.isFinite(cfg.poyY1) ? cfg.poyY1 : yL));
+  const lo = Math.min(a, b), hi = Math.max(a, b);
+  const ex = [...new Set((cfg.poyEx || []).filter((y) => y >= lo && y <= hi))].sort((p, q) => p - q);
+  const n = hi - lo + 1 - ex.length;
+  const text = `${lo}–${hi}` + (ex.length ? ` without ${ex.join(", ")}` : "");
+  return { a: lo, b: hi, ex, n, y0, yL, text, whole: lo === y0 && hi === yL && !ex.length };
+}
+/* The signed year-planes: +[b] −[a−1], and per year e left out −[e] +[e−1];
+ * planes before the first year are zero and drop out. As (year-plane index, sign). */
+function poyPlaneSigns(span) {
+  const sign = new Map();
+  const add = (y, v) => { if (y >= span.y0) sign.set(y, (sign.get(y) || 0) + v); };
+  add(span.b, 1); add(span.a - 1, -1);
+  for (const e of span.ex) { add(e, -1); add(e - 1, 1); }
+  return [...sign.entries()].filter(([, v]) => v !== 0).sort((p, q) => p[0] - q[0])
+    .map(([y, v]) => [y - span.y0, v]);
+}
+
+/* base + prefix + "/" + name. `base` may be relative ("./" in a fixture), and
+ * is then resolved against the index's own URL, never against the page. */
+function poyFileUrl(idx, st, name) {
+  const b = String(idx.base || "./");
+  const base = new URL(b.endsWith("/") ? b : b + "/", new URL(POY_INDEX_URL, location.href));
+  return new URL(`${st.prefix}/${name}`, base).href;
+}
+
+function poyStorePlane(key, arr) {
+  poyState.planes.delete(key);
+  poyState.planes.set(key, arr);
+  while (poyState.planes.size > POY_LRU_PLANES) {
+    poyState.planes.delete(poyState.planes.keys().next().value);   // oldest first
+  }
+}
+
+/* One (group, slot, channel, kind, year-plane). The ONLY network call in this
+ * block: one range read of exactly one H·W plane. */
+function poyPlane(idx, st, slot, ci, kind, yi) {
+  const key = `${st.group}:${slot}:${st.chans[ci]}:${kind}:${yi}`;
+  if (poyState.planes.has(key)) {
+    const arr = poyState.planes.get(key);
+    poyStorePlane(key, arr);                               // touch
+    return Promise.resolve({ arr, read: 0 });
+  }
+  if (poyState.inflight.has(key)) return poyState.inflight.get(key).then((arr) => ({ arr, read: 0 }));
+  const f = st.slots[poySlotKey(slot)];
+  if (!f) return Promise.resolve({ arr: null, read: 0 });
+  const H = Number(st.H), W = Number(st.W), Y = Number(st.n_years), C = st.chans.length;
+  const isz = kind === "sum" ? 4 : 1;
+  const header = kind === "sum" ? f.sum_header : f.count_header;
+  const total = kind === "sum" ? f.sum_bytes : f.count_bytes;
+  const len = H * W * isz;
+  if (Number.isFinite(total) && total !== header + C * Y * len) {
+    return Promise.reject(new Error(`${kind}_${poySlotKey(slot)}.npy is ${total} bytes, the index's shape says ${header + C * Y * len}`));
+  }
+  const url = poyFileUrl(idx, st, `${kind}_${poySlotKey(slot)}.npy`);
+  poyState.reads++;
+  const p = hubRangeRead(url, header + (ci * Y + yi) * len, len)
+    .then((buf) => {
+      poyState.bytes += buf.byteLength;
+      const arr = kind === "sum" ? f32leCopy(buf, 0, H * W) : new Uint8Array(buf);
+      poyStorePlane(key, arr);
+      return arr;
+    })
+    .finally(() => poyState.inflight.delete(key));
+  poyState.inflight.set(key, p);
+  return p.then((arr) => ({ arr, read: len }));
+}
+
+/* The mean for one (group, slot, channel, span) as the grid object the
+ * painter, the probe and the pixel card understand: composed in float64,
+ * south-first (a north-first store is flipped once here), point-aligned and
+ * wrapping at the dateline, with the COUNT of bins behind every cell beside
+ * the value. */
+async function poyCompose(idx, st, spec, slot, span) {
+  const H = Number(st.H), W = Number(st.W), n = H * W;
+  const signs = poyPlaneSigns(span);
+  const got = await Promise.all(signs.flatMap(([yi]) =>
+    ["sum", "count"].map((kind) => poyPlane(idx, st, slot, spec.ci, kind, yi))));
+  if (got.some((x) => !x.arr)) return null;
+  const S = new Float64Array(n), N = new Int32Array(n);
+  signs.forEach(([, sg], k) => {
+    const s = got[2 * k].arr, c = got[2 * k + 1].arr;
+    for (let p = 0; p < n; p++) { S[p] += sg * s[p]; N[p] += sg * c[p]; }
+  });
+  const dlat = Number(st.dlat), step = Math.abs(dlat), lon0 = Number(st.lon0);
+  // row 0 at the north (`south_first: false`, or a negative dlat): flip to south-first
+  const north = st.south_first === false || dlat < 0;
+  const lat0 = Math.min(Number(st.lat0), Number(st.lat0) + dlat * (H - 1));   // the southernmost row
+  const vals = new Float32Array(n), counts = new Uint16Array(n);
+  for (let r = 0; r < H; r++) {
+    const src = (north ? H - 1 - r : r) * W, dst = r * W;
+    for (let x = 0; x < W; x++) {
+      const k = N[src + x];
+      counts[dst + x] = k > 0 ? k : 0;
+      vals[dst + x] = k > 0 ? S[src + x] / k : NaN;
+    }
+  }
+  poyState.lastPaint = { reads: got.filter((x) => x.read).length, planes: got.length,
+                         bytes: got.reduce((t, x) => t + (x.read || 0), 0),
+                         planeBytes: signs.length * n * 5 };
+  const wraps = Math.abs(W * Number(st.dlon) - 360) < 1e-6;
+  return {
+    west: lon0 - step / 2, east: lon0 + (W - 0.5) * step,
+    south: lat0 - step / 2, north: lat0 + (H - 0.5) * step,
+    dlon: Number(st.dlon), dlat: step, nx: W, ny: H, wrap: wraps,
+    values: vals, counts, units: spec.units,
+    // `period` is what `whenOfGrid` stamps every read-out with (§2.9): the span
+    // of years averaged — a FIXED span, so it never prints an age.
+    period: span.text,
+    poy: { group: st.group, chan: spec.chan, slot, span, years: span.n },
+  };
+}
+
+function poyApplyChannel(cfg, idx, spec) {
+  cfg.poyChan = spec.key;
+  cfg.units = spec.units;
+  cfg.ramp = spec.ramp;
+  cfg.classGrid = false;
+  const [lo, hi] = poyRange(idx, spec);
+  cfg.vmin = lo; cfg.vmax = hi;
+  cfg.maxLevel = spec.step < 1 ? 7 : 6;
+}
+
+function poyKeyFor(idx, cfg, dateStr = state.date) {
+  const spec = poyChannelSpec(idx, cfg.poyChan);
+  const st = spec && poyStores(idx)[spec.group];
+  const bin = poyBinStart(dateStr);
+  if (!spec || !st || !bin) return null;
+  const slot = poySlotOf(bin);
+  const span = poySpanOf(cfg, st);
+  return { spec, st, bin, slot, span,
+           key: `${spec.group}:${slot}:${spec.chan}:${span.a}-${span.b}:${span.ex.join(",")}` };
+}
+
+/* Resolve what the layer should paint NOW, reading what is not in the LRU.
+ * `seq` supersedes a resolution nobody is waiting for. */
+async function ensurePoyGrid(cfg, { toast = false } = {}) {
+  const my = ++poyState.seq;
+  const idx = await loadPoyIndex();
+  if (!idx || !Object.keys(poyStores(idx)).length) {
+    poyState.error = poyState.unpublished ? "not published yet" : idx ? "no complete group yet" : "no index";
+    poyState.current = null; poyState.currentKey = null;
+    if (toast) poyMissingToast(cfg);
+    return null;
+  }
+  const at = poyKeyFor(idx, cfg);
+  if (!at) { poyState.error = "the tensor's bin calendar (data/family7_index.json) could not be read"; return null; }
+  poyApplyChannel(cfg, idx, at.spec);
+  if (poyState.currentKey === at.key && poyState.current) return poyState.current;
+  let g = null;
+  if (at.span.n < 1) {
+    poyState.error = "every year of the span is left out";
+  } else {
+    try {
+      g = await poyCompose(idx, at.st, at.spec, at.slot, at.span);
+      poyState.error = g ? null : `no ${at.spec.group} sums for ${poySlotKey(at.slot)}`;
+    } catch (err) {
+      poyState.error = String((err && err.message) || err);
+      g = null;
+    }
+  }
+  if (my !== poyState.seq) return poyState.current;          // superseded
+  if (!g) {
+    poyState.current = null; poyState.currentKey = null;
+    if (toast) poyMissingToast(cfg);
+    return null;
+  }
+  g.poySpec = at.spec;
+  g.poy.bin = at.bin;
+  poyState.current = g;
+  poyState.currentKey = at.key;
+  gridsLoaded.set(cfg.id, g);
+  return g;
+}
+
+/* Synchronous view for the painter: `GridProvider` asks per TILE and must
+ * never issue a request of its own. */
+function poyGridFor(cfg) {
+  const idx = poyState.index;
+  if (!idx || !cfg) return null;
+  const at = poyKeyFor(idx, cfg);
+  return at && poyState.currentKey === at.key ? poyState.current : null;
+}
+
+function poyMissingToast(cfg) {
+  const why = poyState.unpublished || poyState.error === "no complete group yet"
+    ? `its index <code>${POY_INDEX_URL}</code> has not been published yet (or lists no complete ` +
+      `group) — E-093's exporter writes it, and the layer goes live the moment it lands beside ` +
+      `this page, with no change here`
+    : `it could not be read${poyState.error ? ` (${esc(poyState.error)})` : ""}`;
+  showToast(`<strong>${cfg.title}</strong>: ${why}. The sums and counts live on the Hugging ` +
+    `Face Hub and are read one five-day slot at a time; the rest of the globe is unaffected. ` +
+    `<a href="https://blauewelt.github.io/earth/docs.html?f=docs/FAMILY7_CLIM.md" target="_blank" ` +
+    `rel="noopener">what this layer is</a>.`, { key: `${cfg.id}-missing`, replace: true });
+}
+
+/* Said on enable and whenever the slot or the span moves — §4b's announcement:
+ * the YEAR of the date selector does not choose the years averaged; the DAY
+ * picks the five-day bin of the year. */
+function maybePoyToast(cfg, { replace = false } = {}) {
+  const idx = poyState.index;
+  const at = idx && poyKeyFor(idx, cfg);
+  if (!at) return;
+  showToast(`<strong>${cfg.title}</strong> is a <strong>per-five-day-bin average over the ` +
+    `years</strong> — ${esc(at.span.text)}${at.span.whole ? " (the whole record)" : ""}. ` +
+    `The <strong>year of the date selector doesn't matter, the day does</strong>: it picks the ` +
+    `five-day bin of the year. ${state.date} sits in the bin opening ${at.bin}, so this is ` +
+    `slot <strong>${esc(poySlotLabel(at.slot))}</strong>. The years averaged are set in the ` +
+    `layer's own row; step ±5 days to walk the seasonal cycle.`, { key: `${cfg.id}-slot`, replace });
+}
+
+/* A date move repaints only when it lands in a DIFFERENT slot (or the span
+ * changed) — four days in five, and a whole-year step, usually cost nothing.
+ * Called from every date path inside `scrubApply`, like the tensor's. */
+async function refreshPoyGrids() {
+  if (!poyState.index) return;
+  for (const [id, entry] of Object.entries(state.layers)) {
+    if (!entry.layer || !entry.cfg.poyGrid) continue;
+    const at = poyKeyFor(poyState.index, entry.cfg);
+    if (!at || entry.poyKey === at.key) continue;
+    const slotMoved = entry.poySlot !== at.slot;
+    entry.poyKey = at.key;
+    entry.poySlot = at.slot;
+    await ensurePoyGrid(entry.cfg);
+    if (!state.layers[id] || !state.layers[id].layer) continue;
+    removeLayer(id);
+    addLayer(entry.cfg);
+    if (slotMoved) maybePoyToast(entry.cfg, { replace: true });
+    poyRefreshUi(entry.cfg);
+  }
+}
+
+/* Resolve the bytes and, if they arrived after the provider was built,
+ * rebuild it (Cesium caches rendered tiles). Terminates: the rebuild comes back
+ * here already resolved. */
+async function poyEnsureForLayer(cfg) {
+  const had = poyGridFor(cfg);
+  const g = await ensurePoyGrid(cfg);
+  poyRefreshUi(cfg);
+  const entry = state.layers[cfg.id];
+  if (!entry || !entry.layer) return g;
+  const at = poyState.index && poyKeyFor(poyState.index, cfg);
+  entry.poyKey = g && at ? at.key : null;
+  entry.poySlot = g && at ? at.slot : null;
+  if (!g && poyState.index && poyState.error) poyMissingToast(cfg);
+  if (g && !had) { removeLayer(cfg.id); addLayer(cfg); }
+  else updateLegends();
+  return g;
+}
+
+/* A control in the row moved (channel, years, leave-out). Same layer, chip and
+ * opacity — only the composed plane changes. */
+async function poySwitch(cfg) {
+  const g = await ensurePoyGrid(cfg, { toast: true });
+  poyRefreshUi(cfg);
+  const entry = state.layers[cfg.id];
+  if (entry && entry.layer) {
+    const at = poyState.index && poyKeyFor(poyState.index, cfg);
+    entry.poyKey = g && at ? at.key : null;
+    entry.poySlot = g && at ? at.slot : null;
+    removeLayer(cfg.id); addLayer(cfg);
+  }
+  updateLegends();
+}
+
+/* "2009, 2017" / "2009 2017" / "2009;2017" → [2009, 2017]. */
+function poyParseYears(text) {
+  return [...new Set((String(text || "").match(/\d{4}/g) || []).map(Number))].sort((a, b) => a - b);
+}
+
+/* The row's controls, from the INDEX: channels grouped by group, the years
+ * bounded by the selected group's record, the leave-out field as typed. */
+function poyFillControls(cfg) {
+  const idx = poyState.index;
+  const chSel = document.querySelector(`select[data-poychan="${cfg.id}"]`);
+  if (!chSel) return;
+  const set = (sel, html) => { if (sel.dataset.sig !== html) { sel.innerHTML = html; sel.dataset.sig = html; } };
+  const stores = idx ? poyStores(idx) : {};
+  if (!Object.keys(stores).length) {
+    set(chSel, `<option value="">— the index has not landed —</option>`);
+    return;
+  }
+  const byGroup = {};
+  for (const s of poyChannelList(idx)) (byGroup[s.group] = byGroup[s.group] || []).push(s);
+  set(chSel, Object.entries(byGroup).map(([group, specs]) =>
+    `<optgroup label="${esc(group)} · ${specs[0].step}°">` +
+    specs.map((s) => `<option value="${esc(s.key)}">${esc(s.label)}</option>`).join("") +
+    `</optgroup>`).join(""));
+  const at = poyKeyFor(idx, cfg);
+  if (!at) return;
+  chSel.value = at.spec.key;
+  const y0 = document.querySelector(`input[data-poyy0="${cfg.id}"]`);
+  const y1 = document.querySelector(`input[data-poyy1="${cfg.id}"]`);
+  const ex = document.querySelector(`input[data-poyex="${cfg.id}"]`);
+  for (const el of [y0, y1]) { if (el) { el.min = at.span.y0; el.max = at.span.yL; } }
+  if (y0) y0.value = at.span.a;
+  if (y1) y1.value = at.span.b;
+  if (ex && document.activeElement !== ex) ex.value = at.span.ex.join(", ");
+  const note = document.querySelector(`[data-poynote="${cfg.id}"]`);
+  if (note) {
+    const lp = poyState.lastPaint;
+    const planes = poyPlaneSigns(at.span).length;
+    const mb = (planes * Number(at.st.H) * Number(at.st.W) * 5 / 1e6).toFixed(planes * Number(at.st.H) * Number(at.st.W) * 5 >= 1e6 ? 1 : 2);
+    note.innerHTML = `slot ${esc(poySlotLabel(at.slot))} · mean of ${at.span.n} year${at.span.n === 1 ? "" : "s"}` +
+      ` (${esc(at.span.text)}) · ${2 * planes} range reads of sums and counts, ${mb} MB` +
+      (lp && poyState.currentKey === at.key && lp.reads < lp.planes
+        ? ` — ${lp.planes - lp.reads} of them already in memory` : "") +
+      (poyState.error ? ` · <em>${esc(poyState.error)}</em>` : "");
+  }
+}
+
+/* The Downloads fold: the Data tab's matching step, so the layer and the file
+ * agree (dtOpenStore, as the Model climatology's fold does), plus the index. */
+function poyDownloadsHtml(cfg, { inTip = false } = {}) {
+  const idx = poyState.index;
+  const at = idx && poyKeyFor(idx, cfg);
+  const group = at ? at.spec.group : null;
+  // The Data tab lists the tensor's groups as family 10's bin-major stores
+  // ("10/g025"), and E-093's reader offers the step `poy` on exactly those.
+  const store = group ? `10/${group}` : "";
+  const toData = `The same numbers as a file — any span, years left out, a box, NetCDF or CSV: ` +
+    (inTip ? `the Data tab's family-10 store for this group (${esc(group || "")}), time step ` +
+             `<em>Climatology — mean per pentad of year over the years</em>`
+      : `<button type="button" class="tag-link" data-opentab="data"${store ? ` data-dtstore="${esc(store)}"` : ""} ` +
+        `data-dtstep="poy">this group's “Climatology — mean per pentad of year” in the Data tab</button>`) + `.`;
+  const a = (url, text) => `<a href="${esc(url)}" target="_blank" rel="noopener">${text}</a>`;
+  if (!at) {
+    return `<div class="clim-to-data">nothing yet — the index <code>${POY_INDEX_URL}</code> has not been ` +
+      `published (E-093's exporter writes it).</div><div class="clim-to-data">${toData}</div>`;
+  }
+  const k = poySlotKey(at.slot);
+  const items = [
+    `${a(poyFileUrl(idx, at.st, `sum_${k}.npy`), `sum_${k}.npy`)} — [C, Y, H, W] = ` +
+      `[${at.st.chans.length}, ${at.st.n_years}, ${at.st.H}, ${at.st.W}] float32 in physical units, cumulative over the years`,
+    `${a(poyFileUrl(idx, at.st, `count_${k}.npy`), `count_${k}.npy`)} — the same shape, uint8: ` +
+      `how many five-day bins each sum holds`,
+    `${a(POY_INDEX_URL, "the index")} — every group and slot, with sizes and header lengths`,
+  ];
+  return `<div class="clim-dl-head">${esc(group)} (${at.spec.step}°) · slot ${esc(poySlotLabel(at.slot, { short: true }))}</div>` +
+    `<ul>${items.map((x) => `<li>${x}</li>`).join("")}</ul><div class="clim-to-data">${toData}</div>`;
+}
+
+/* After `dtOpenStore`, put the tab's time step on the pentad climatology too.
+ * The store applies asynchronously (the registry may still be loading) and the
+ * step list follows the store, so wait — briefly, bounded — until both are
+ * there; a step the store does not offer is left alone. */
+function poyOpenDtStep(storeKey, step) {
+  let tries = 0;
+  const go = () => {
+    const sel = document.getElementById("dt-step");
+    const ready = typeof dt !== "undefined" && dt.store && dtStoreKey(dt.store) === storeKey && sel &&
+      [...sel.options].some((o) => o.value === step);
+    if (ready) {
+      if (sel.value !== step) { sel.value = step; sel.dispatchEvent(new Event("change", { bubbles: true })); }
+      return;
+    }
+    if (++tries < 40) setTimeout(go, 250);
+  };
+  go();
+}
+
+/* Everything in the row and the hover card that follows the selection. */
+function poyRefreshUi(cfg) {
+  poyFillControls(cfg);
+  const body = document.querySelector(`[data-poydlbody="${cfg.id}"]`);
+  if (body) body.innerHTML = poyDownloadsHtml(cfg);
+  const item = document.querySelector(`#layer-list input[data-id="${cfg.id}"]`)?.closest(".layer-item");
+  const tip = item && item.querySelector(".layer-tip");
+  if (!tip) return;
+  const tdl = tip.querySelector(".tip-dl-body");
+  if (tdl) tdl.innerHTML = poyDownloadsHtml(cfg, { inTip: true });
+  const idx = poyState.index;
+  const at = idx && poyKeyFor(idx, cfg);
+  if (!at) return;
+  const rec = tip.querySelector('[data-tip="rec"]');
+  if (rec) {
+    rec.innerHTML = `<span>Recorded</span>average of the years ${esc(at.span.text)} — one five-day ` +
+      `slot's mean over those years, not one date (this group's record: ${at.span.y0}–${at.span.yL})`;
+  }
+  const sp = tip.querySelector('[data-tip="sp"]');
+  if (sp) {
+    const all = Object.values(poyStores(idx)).map((s) => `${esc(s.group)} ${Math.abs(Number(s.dlat))}°`).join(" · ");
+    sp.innerHTML = `<span>Spatial</span>${at.spec.step}° — this channel's group (${esc(at.spec.group)}); ` +
+      `each group keeps the tensor's own grid: ${all}`;
+  }
+}
+
+/* The read-out both the probe and the pixel card print. */
+function poyReadout(g, lon, lat) {
+  const v = sampleGrid(g, lon, lat);
+  const i = gridCellIndex(g, lon, lat);
+  const n = i >= 0 ? g.counts[i] : 0;
+  return {
+    v, n, units: g.units, label: g.poySpec ? g.poySpec.label : g.poy.chan,
+    what: `mean of ${n} five-day bin${n === 1 ? "" : "s"} over ${g.poy.span.text} · slot ${poySlotLabel(g.poy.slot, { short: true })}`,
+  };
+}
+
+/* Said on enable: which slot and span are on screen, or why nothing is. */
+async function poyAnnounce(cfg) {
+  const idx = await loadPoyIndex();
+  if (!idx || !Object.keys(poyStores(idx)).length) { poyMissingToast(cfg); return; }
+  maybePoyToast(cfg);
+}
+
+/* What the tests read instead of pixels. */
+function poyLayerState() {
+  const cfg = GIBS_LAYERS.find((l) => l.poyGrid);
+  const idx = poyState.index;
+  const g = poyGridFor(cfg);
+  const at = idx && poyKeyFor(idx, cfg);
+  return {
+    hasIndex: !!idx, unpublished: poyState.unpublished, error: poyState.error,
+    chan: cfg.poyChan, slot: at ? at.slot : null, bin: at ? at.bin : null,
+    span: at ? { a: at.span.a, b: at.span.b, ex: at.span.ex, n: at.span.n, text: at.span.text } : null,
+    ready: !!g, reads: poyState.reads, bytes: poyState.bytes, lastPaint: poyState.lastPaint,
+    planes: [...poyState.planes.keys()],
+    grid: g ? { nx: g.nx, ny: g.ny, west: g.west, south: g.south, wrap: g.wrap, units: g.units,
+                period: g.period, slot: g.poy.slot, group: g.poy.group, chan: g.poy.chan } : null,
+    vmin: cfg.vmin, vmax: cfg.vmax, ramp: cfg.ramp, units: cfg.units,
+  };
+}
+function poySampleAt(lon, lat) {
+  const g = poyGridFor(GIBS_LAYERS.find((l) => l.poyGrid));
+  if (!g) return null;
+  const i = gridCellIndex(g, lon, lat);
+  return { v: sampleGrid(g, lon, lat), n: i >= 0 ? g.counts[i] : null };
+}
+
 class GridProvider {
   constructor(cfg) {
     this._cfg = cfg;
@@ -5396,6 +6015,7 @@ function addLayer(cfg) {
     if (cfg.tensorGrid) tensorEnsureForLayer(cfg);
     if (cfg.fishingGrid) fishingEnsureForLayer(cfg);
     if (cfg.climGrid) climEnsureForLayer(cfg);
+    if (cfg.poyGrid) poyEnsureForLayer(cfg);
     if (cfg.monthlyGrid) {
       // remember which month rendered, so a date change knows when to repaint
       loadGrid(cfg).then((g) => {
@@ -5769,6 +6389,7 @@ function applyDateMove() {
     refreshTensorGrids();     // one 14.5 MB range read per SETTLED date, not per keystroke
     refreshFishingGrids();    // …and one 8.3 MB read per settled MONTH
     refreshClimGrids();       // …and one plane per settled CALENDAR month (the year never counts)
+    refreshPoyGrids();        // …and one composed mean per settled five-day SLOT of the year
     refreshLoitering();       // …and the events whose drift overlaps the new day
     if (sstEnsembleLayer) updateEnsembleLayer();
   });
@@ -5826,6 +6447,7 @@ function syncDateMax() {
     refreshTensorGrids();
     refreshFishingGrids();
     refreshClimGrids();
+    refreshPoyGrids();
   }
   // The comparison lives on the same axis: when the axis shortens, a pinned
   // date past the new end has to come back with it, or the comparison would
@@ -6776,6 +7398,14 @@ function gridLegendEl(cfg) {
         `— normal for ${monthName(at.month)} · ${esc(at.ver.name)}</div>`;
     }
   }
+  if (cfg.poyGrid && poyState.index) {
+    // The channel, its grid, the slot of the year and the span averaged.
+    const at = poyKeyFor(poyState.index, cfg);
+    if (at) {
+      div.innerHTML = `<div class="legend-title">${esc(at.spec.label)} · ${at.spec.step}° ` +
+        `— pentad ${esc(poySlotLabel(at.slot, { short: true }))} · mean ${esc(at.span.text)}</div>`;
+    }
+  }
   if (cfg.classGrid) {
     // Same swatch legend as the classification rasters, fed from the grid file
     // instead of a GIBS colormap — one shape for "the value is a category".
@@ -7015,6 +7645,9 @@ function datelessToast(id) {
     // Month-aware, year-blind: a per-calendar-month normal, with its own toast
     // saying the date's MONTH matters and its year doesn't (maybeClimToast).
     if (cfg.climGrid) return null;
+    // Slot-aware, year-blind: the date's DAY picks the five-day slot of the
+    // year, its year does not choose the years averaged (maybePoyToast).
+    if (cfg.poyGrid) return null;
     if (cfg.grid) {
       if (cfg.classGrid) {
         // Each categorical grid is dateless for its OWN reason and must say
@@ -7597,6 +8230,24 @@ const LAYER_FACTS = {
         "the index, and this channel and month as CSV — listed here once the " +
         "index has landed",
   },
+  "poy7": {
+    rec: "average of the years of the record (each five-day slot's mean over them, not one " +
+         "date) — the span is yours to set in the layer's row, and is filled in from the index",
+    int: "one five-day bin per step; the date picks the bin of the year — 73 slots, the year " +
+         "of the date does not matter",
+    sp: "0.25° or 1° — each channel group keeps the tensor's own grid (0.25° for the " +
+        "ocean-surface and ocean-colour groups, 1° for the atmosphere-and-land group)",
+    sum: "The exact five-day climatology of the family-7 global tensor. The tensor is a run " +
+         "of five-day bins; each bin belongs to one of 73 slots of the year by the day it " +
+         "opens on, and this layer paints, for the selected date's slot, the mean of every " +
+         "bin of that slot over a span of years — the whole record by default, or any years " +
+         "you set, with years left out. It is finer than the Model climatology above (one " +
+         "calendar month per frame) and is computed from published sums and counts in each " +
+         "channel's own unit, so a cell with no bin in the span is blank. The probe prints " +
+         "the mean, how many five-day bins it rests on, and the span.",
+    dl: "the slot's sums and counts on the Hugging Face Hub, the index, and the same " +
+        "numbers for any span and box from the Data tab — listed here once the index has landed",
+  },
   "fishing": {
     rec: "2012-01 → 2024-12 · the date's MONTH picks the map; 2024 is provisional " +
          "and may be revised",
@@ -7670,6 +8321,32 @@ function buildLayerPanel() {
           <div class="clim-dl-body" data-climdlbody="${cfg.id}"></div>
         </details>
       </div>` : ""}
+      ${cfg.poyGrid ? `<div class="clim-rows poy-rows" data-chanrow="${cfg.id}"
+              ${cfg.on ? "" : "style='display:none'"}>
+        <div class="chan-row">
+          <label class="alpha-label" for="poychan-${cfg.id}">channel</label>
+          <select id="poychan-${cfg.id}" data-poychan="${cfg.id}"
+                  title="Which channel's five-day climatology to paint"></select>
+        </div>
+        <div class="chan-row poy-years">
+          <label class="alpha-label" for="poyy0-${cfg.id}">years</label>
+          <input type="number" id="poyy0-${cfg.id}" data-poyy0="${cfg.id}" step="1"
+                 title="First year averaged (default: the record's first)"/>
+          <span>–</span>
+          <input type="number" id="poyy1-${cfg.id}" data-poyy1="${cfg.id}" step="1"
+                 title="Last year averaged (default: the record's last)"/>
+        </div>
+        <div class="chan-row">
+          <label class="alpha-label" for="poyex-${cfg.id}">leave out</label>
+          <input type="text" id="poyex-${cfg.id}" data-poyex="${cfg.id}" inputmode="numeric"
+                 placeholder="e.g. 2009, 2017" title="Years inside the span to leave out of the mean"/>
+        </div>
+        <div class="poy-note" data-poynote="${cfg.id}"></div>
+        <details class="clim-dl" data-poydl="${cfg.id}">
+          <summary>⤓ downloads</summary>
+          <div class="clim-dl-body" data-poydlbody="${cfg.id}"></div>
+        </details>
+      </div>` : ""}
       <div class="sup-note" data-suppressed="${cfg.id}" hidden></div>
       <div class="alpha-row" data-alpharow="${cfg.id}" ${cfg.on ? "" : "style='display:none'"}>
         <span class="alpha-label">opacity</span>
@@ -7704,6 +8381,20 @@ function buildLayerPanel() {
       climSwitch(ccfg);
       return;
     }
+    // The pentad climatology's channel, years and leave-out, in its own row.
+    // Number fields commit on `change` (Enter, blur, spinner), never per key.
+    const poyId = ["data-poychan", "data-poyy0", "data-poyy1", "data-poyex"]
+      .map((a) => e.target.getAttribute(a)).find(Boolean);
+    if (poyId) {
+      const pcfg = GIBS_LAYERS.find((l) => l.id === poyId);
+      const t = e.target, v = t.value;
+      if (t.hasAttribute("data-poychan")) pcfg.poyChan = v;
+      if (t.hasAttribute("data-poyy0")) pcfg.poyY0 = v === "" ? null : Math.round(Number(v));
+      if (t.hasAttribute("data-poyy1")) pcfg.poyY1 = v === "" ? null : Math.round(Number(v));
+      if (t.hasAttribute("data-poyex")) pcfg.poyEx = poyParseYears(v);
+      poySwitch(pcfg);
+      return;
+    }
     const id = e.target.getAttribute("data-id");
     if (!id) return;
     const cfg = GIBS_LAYERS.find((l) => l.id === id);
@@ -7718,6 +8409,7 @@ function buildLayerPanel() {
       if (cfg.tensorGrid) tensorAnnounce(cfg);
       if (cfg.fishingGrid) fishingAnnounce(cfg);
       if (cfg.climGrid) climAnnounce(cfg);
+      if (cfg.poyGrid) poyAnnounce(cfg);
       maybeArchiveToast(cfg);
       maybeAnnualToast(cfg);
       maybeFineToast(cfg);
@@ -7762,6 +8454,9 @@ function buildLayerPanel() {
       const want = e.target.getAttribute("data-dtstore");
       if (want) dtOpenStore(want);
       document.getElementById(`tab-${toTab}`)?.click();
+      // …and, from the pentad climatology, onto that store's matching time step
+      const step = e.target.getAttribute("data-dtstep");
+      if (step && want) poyOpenDtStep(want, step);
       return;
     }
     const id = e.target.getAttribute?.("data-alphahalf");
@@ -7813,6 +8508,7 @@ function buildLayerPanel() {
         refreshTensorGrids();        // …and a pentad boundary
         refreshFishingGrids();       // …and the fishing grid's month
         refreshClimGrids();          // …and the climatology's calendar month
+        refreshPoyGrids();           // …and the pentad climatology's slot
         refreshLoitering();          // …and which loitering events overlap the day
       });
     } else {
@@ -9169,6 +9865,14 @@ async function probeEntryValue(entry, carto) {
                         ? `departure from normal: ${climDepText(r.dep, r.units)}`
                         : `<em>${r.dep.hint}</em>`) };
     }
+    /* The pentad climatology prints the mean in the channel's unit, how many
+     * five-day bins it rests on at THIS cell, the span and the slot. */
+    if (cfg.poyGrid && g.poy) {
+      const r = poyReadout(g, lon, lat);
+      if (r.v == null) return { ...base, noData: true };
+      return { ...base, value: r.v, count: r.n,
+               extra: `${esc(r.label)} — ${esc(r.what)}` };
+    }
     if (cfg.tensorGrid && g.tensor) {
       const z = (v - g.tensor.mean) / g.tensor.sd;
       const spec = g.tensorSpec;
@@ -10286,6 +10990,15 @@ async function showPixelState(carto) {
         .then(async (g) => (g ? { g, cfg: e.cfg, r: await climReadout(g, lon, lat) } : null))
         .catch(() => null);
     })()],
+    /* The exact five-day climatology here — only while its layer is on, so
+     * the slot's mean is already composed and costs no request. */
+    ["pentad climatology", (() => {
+      const e = Object.values(state.layers).find((x) => x.cfg.poyGrid && x.layer);
+      if (!e) return Promise.resolve(null);
+      return loadGridMonth(e.cfg)
+        .then((g) => (g ? { g, cfg: e.cfg, r: poyReadout(g, lon, lat) } : null))
+        .catch(() => null);
+    })()],
   ];
   const values = jobs.map(([, , empty]) => (empty === undefined ? null : empty));
   const done = new Array(jobs.length).fill(false);
@@ -10361,7 +11074,7 @@ async function showPixelState(carto) {
   await new Promise((r) => setTimeout(r, PIXEL_REDRAW_MS + 20));
 
   function drawPixelCard(values, missing, final) {
-    const [rasters, trueAnomRaw, grids, meteo, air, river, marine, climNow, climFut, oceanCol, oceanSurf, stations, trace, argo, driversGrid, tensorHit, fishingHit, climHit] = values;
+    const [rasters, trueAnomRaw, grids, meteo, air, river, marine, climNow, climFut, oceanCol, oceanSurf, stations, trace, argo, driversGrid, tensorHit, fishingHit, climHit, poyHit] = values;
     const trueAnom = trueAnomRaw && !trueAnomRaw.none ? trueAnomRaw : null;
     if (pixelCardEl.classList.contains("hidden")) return;   // closed while loading
 
@@ -10583,6 +11296,19 @@ async function showPixelState(carto) {
         : `<div class="px-note">${r.dep.hint}.</div>`;
       sec.push(`<div class="px-sec"><div class="px-sec-title">What the forecaster calls ` +
         `normal <span class="px-src">family 7</span></div>${rows}</div>`);
+    }
+
+    /* -- the exact five-day climatology here (E-093) ------------------------ */
+    /* Stamped with the span of years — a fixed span, so no age. */
+    if (poyHit && poyHit.r) {
+      const { g, cfg, r } = poyHit;
+      const rows = r.v != null
+        ? pixelRow("Pentad climatology", `${fmtVal(r.v)} ${esc(r.units || "")} — ${esc(r.label)}, ` +
+            `${esc(r.what)}`, whenOfGrid(cfg, g))
+        : `<div class="px-note">No five-day bin of ${esc(r.label)} in ${esc(g.poy.span.text)} at this ` +
+          `cell for slot ${esc(poySlotLabel(g.poy.slot, { short: true }))}.</div>`;
+      sec.push(`<div class="px-sec"><div class="px-sec-title">This five-day slot, averaged over ` +
+        `the years <span class="px-src">family 7</span></div>${rows}</div>`);
     }
 
     /* -- the fishing fleet at this cell (AIS) -------------------------------- */
@@ -15368,7 +16094,7 @@ const sleepMs = (ms) => new Promise((r) => setTimeout(r, ms));
 function playbackLayers() {
   return Object.values(state.layers).filter(
     (e) => (e.layer || e.suppressed) &&
-           (e.cfg.timed || e.cfg.monthlyGrid || e.cfg.pentadGrid || e.cfg.climGrid));
+           (e.cfg.timed || e.cfg.monthlyGrid || e.cfg.pentadGrid || e.cfg.climGrid || e.cfg.poyGrid));
 }
 
 // Stable identity of the CURRENT layer set, so a toggle mid-play is detectable
@@ -15386,6 +16112,7 @@ function playbackStepOf(cfg) {
   if (cfg.snap5d) return "5d";
   if (cfg.pentadGrid) return "5d";       // fixed five-day bins, so five-day frames
   if (cfg.climGrid) return "1mo";        // one normal per calendar month
+  if (cfg.poyGrid) return "5d";          // one mean per five-day slot of the year
   if (cfg.monthlyGrid) {
     // keyLen 10 = day-keyed (the GFS forecast grids); anything else is monthly.
     const g = gridsLoaded.get(cfg.id);
@@ -15448,6 +16175,10 @@ function playbackSignature(dateStr, layers) {
     } else if (cfg.climGrid) {
       // The calendar MONTH, never the year: a twelve-frame cycle.
       parts.push(`${cfg.id}=${climMonthOf(dateStr)}`);
+    } else if (cfg.poyGrid) {
+      // The SLOT of the year: a 73-frame cycle (the span does not move with the date).
+      const b = poyBinStart(dateStr);
+      if (b) parts.push(`${cfg.id}=${poySlotOf(b)}`);
     } else if (cfg.grid) {
       const g = gridsLoaded.get(cfg.id);
       if (g) parts.push(`${cfg.id}=${resolveGridMonth(g, dateStr)}`);
@@ -15588,6 +16319,7 @@ async function playbackShowFrame(i) {
   await refreshMonthlyGrids();
   await refreshTensorGrids();
   await refreshClimGrids();
+  await refreshPoyGrids();
   await refreshYearlyLayers();
   if (sstEnsembleLayer) updateEnsembleLayer();
   playbackRender();
@@ -18900,6 +19632,12 @@ window.__earth = {
   climLayerState,
   climSampleAt,
   climState,
+  poyLayerState,
+  poySampleAt,
+  poyGridFor,
+  poyState,
+  poySlotOf,
+  poyBinStart,
   climCsvParts,
   climCsvName,
   climGridFor,

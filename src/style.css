@@ -841,6 +841,11 @@ footer a { color: var(--fg-dim); }
    takes no pointer events, so the CSV button lives in the row). */
 .clim-rows .chan-row + .chan-row { margin-top: 3px; }
 .clim-dl { margin: 4px 0 0 24px; font-size: 11px; color: var(--fg-dim); }
+/* the pentad climatology's span: two year fields and a leave-out list (E-093) */
+.poy-rows .chan-row input[type="number"] { width: 5.2em; font-size: 11px; padding: 2px 4px; }
+.poy-rows .chan-row input[type="text"] { flex: 1; min-width: 0; font-size: 11px; padding: 2px 4px; }
+.poy-note { margin: 3px 0 0 24px; font-size: 11px; color: var(--fg-dim); line-height: 1.4; }
+.poy-note:empty { display: none; }
 .clim-dl summary { cursor: pointer; }
 .clim-dl ul, .layer-tip .tip-dl-body ul { margin: 3px 0 0; padding-left: 16px; }
 .clim-dl li, .layer-tip .tip-dl-body li { margin: 1px 0; line-height: 1.45; }

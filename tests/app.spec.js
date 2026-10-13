@@ -9591,3 +9591,255 @@ test("Data tab: the years and the days of the month are each one slider with two
   const st2 = await dtState(page);
   if (st2.sel.bbox) expect(st2.sel.bbox).toEqual({ w: -180, s: -90, e: 180, n: 90 });
 });
+
+/* ============ the PENTAD climatology (family 7) on the globe — E-093 =========
+ *
+ * Chris, 2026-10-13: "make sure that climatology can also be displayed as a
+ * layer (this should be the exact pentad averaged over years data)". The layer
+ * paints, for the date's five-day bin, the mean of that bin's slot of the year
+ * over a span of years, composed from E-093's CUMULATIVE sums and counts. These
+ * tests serve `data/poy_layer_fixture/` (tests/make_poy_layer_fixture.py: the
+ * real bin calendar over 2010–2013, family 7's real group names so the channel
+ * metadata comes from data/family7_index.json) — the index is swapped in, and
+ * every sum/count plane is answered with the SLICED bytes and a real 206, so
+ * the plane-offset arithmetic is what is tested. `expected.json` holds means
+ * numpy composed in float64 from the files' own float32 planes. */
+const POY_DIR = require("path").join(__dirname, "..", "data", "poy_layer_fixture");
+const poyExpected = () => JSON.parse(require("fs").readFileSync(
+  require("path").join(POY_DIR, "expected.json"), "utf8")).cases;
+const poyCase = (name) => poyExpected().find((c) => c.name === name);
+
+async function servePoy(page, opts = {}) {
+  const fs = require("fs"), path = require("path");
+  const index = JSON.parse(fs.readFileSync(path.join(POY_DIR, "gridded_poy_index.json"), "utf8"));
+  page.__poyReads = [];
+  page.__poyFull = 0;
+  await page.route(/\/data\/gridded_poy_index\.json(\?.*)?$/, (route) => {
+    if (opts.noIndex) return route.fulfill({ status: 404, body: "" });
+    return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(index) });
+  });
+  // base "./" resolves against the index's URL: /data/ + prefix + /sum_pSS.npy
+  await page.route(/\/data\/(tensors\/[^?]*\/(sum|count)_p\d\d\.npy)$/, (route) => {
+    const rel = /\/data\/(tensors\/[^?]*\.npy)$/.exec(route.request().url())[1];
+    const buf = fs.readFileSync(path.join(POY_DIR, rel));
+    const range = route.request().headers()["range"];
+    const m = range && /bytes=(\d+)-(\d+)/.exec(range);
+    if (!m) { page.__poyFull++; return route.fulfill({ status: 200, body: buf }); }
+    const a = Number(m[1]), b = Number(m[2]);
+    page.__poyReads.push([rel, a, b]);
+    return route.fulfill({
+      status: 206,
+      headers: { "content-range": `bytes ${a}-${b}/${buf.length}`, "accept-ranges": "bytes",
+                 "content-type": "application/octet-stream" },
+      body: buf.slice(a, b + 1),
+    });
+  });
+  return index;
+}
+
+async function enablePoy(page) {
+  await page.evaluate(() => {
+    const el = document.querySelector('#layer-list input[data-id="poy7"]');
+    el.checked = true;
+    el.dispatchEvent(new Event("change", { bubbles: true }));
+  });
+  await expect.poll(() => page.evaluate(() => window.__earth.poyLayerState().ready),
+                    { timeout: 20000 }).toBe(true);
+}
+
+async function poySet(page, attr, value) {
+  await page.evaluate(([attr, value]) => {
+    const el = document.querySelector(`[${attr}="poy7"]`);
+    el.value = value;
+    el.dispatchEvent(new Event("change", { bubbles: true }));
+  }, [attr, value]);
+}
+
+async function poyWait(page, key) {
+  await expect.poll(() => page.evaluate((k) => {
+    const s = window.__earth.poyLayerState();
+    return s.ready && s.grid && `${s.grid.group}:${s.grid.chan}:${s.slot}:${s.span.text}` === k;
+  }, key), { timeout: 20000 }).toBe(true);
+}
+
+test("Pentad climatology: the date's slot, painted as the fixture's own sums ÷ counts — reads, probe, chip, toast",
+     async ({ page }) => {
+  test.setTimeout(120000);
+  const index = await servePoy(page);
+  const toasts = await recordToasts(page);
+  const c = poyCase("whole record");
+  await setAppDate(page, c.date);
+  await enablePoy(page);
+
+  // the first channel is the index's first; the slot is the BIN's, not the date's
+  const st = await page.evaluate(() => window.__earth.poyLayerState());
+  expect(st.error).toBe(null);
+  expect(st.bin).toBe(c.bin_start);
+  expect(st.slot).toBe(c.slot);
+  expect(st.span).toEqual({ a: 2010, b: 2013, ex: [], n: 4, text: "2010–2013" });
+  // the whole record is TWO reads — the last year-plane of the sums and of the counts
+  expect(page.__poyFull).toBe(0);
+  expect(page.__poyReads.length).toBe(2);
+
+  await poySet(page, "data-poychan", "g100:t2m");
+  await poyWait(page, `g100:t2m:${c.slot}:2010–2013`);
+  const g = index.stores["family7_global025_pentad_l2/g100"];
+  const f = g.slots[`p${String(c.slot).padStart(2, "0")}`];
+  const HW = g.H * g.W, Y = g.n_years, ci = g.chans.indexOf("t2m");
+  const reads = page.__poyReads.slice(2);
+  expect(reads.length).toBe(2);
+  const sumR = reads.find((r) => r[0].endsWith(`sum_p${String(c.slot).padStart(2, "0")}.npy`));
+  const cntR = reads.find((r) => r[0].endsWith(`count_p${String(c.slot).padStart(2, "0")}.npy`));
+  // plane (c, y) at header_len + (c·Y + y)·H·W·itemsize, exactly H·W·itemsize long
+  expect(sumR[1]).toBe(f.sum_header + (ci * Y + (Y - 1)) * HW * 4);
+  expect(sumR[2] - sumR[1] + 1).toBe(HW * 4);
+  expect(cntR[1]).toBe(f.count_header + (ci * Y + (Y - 1)) * HW);
+  expect(cntR[2] - cntR[1] + 1).toBe(HW);
+
+  // the value under a known cell is numpy's (S[b] − S[a−1]) / (N[b] − N[a−1])
+  const got = await page.evaluate(([lon, lat]) => window.__earth.poySampleAt(lon, lat), [c.lon, c.lat]);
+  expect(Math.abs(got.v - c.mean)).toBeLessThan(1e-4);
+  expect(got.n).toBe(c.count);
+
+  // the legend: the family-7 channel's label and unit, the slot and the span
+  const t2 = await page.evaluate(() => window.__earth.poyLayerState());
+  expect(t2.units).toBe("°C");
+  expect(t2.grid.period).toBe("2010–2013");
+  const legend = page.locator("#legend-panel .legend-item", { hasText: "pentad p11" });
+  await expect(legend).toContainText("Air temperature at 2 m");
+  await expect(legend).toContainText("mean 2010–2013");
+
+  // the probe: value, unit, the number of bins behind it, the span; a period stamp
+  const probe = await page.evaluate(async ([lon, lat]) =>
+    await window.__earth.probeValueAt(Cesium.Cartographic.fromDegrees(lon, lat)), [c.lon, c.lat]);
+  expect(probe.title).toContain("Pentad climatology");
+  expect(Math.abs(probe.value - c.mean)).toBeLessThan(1e-4);
+  expect(probe.units).toBe("°C");
+  expect(probe.count).toBe(c.count);
+  expect(probe.extra).toContain(`mean of ${c.count} five-day bins over 2010–2013`);
+  expect(probe.extra).toContain("p11 (days 56–60)");
+  expect(probe.when).toEqual({ kind: "period", t: "2010–2013" });
+  expect(probe.cell.east - probe.cell.west).toBeCloseTo(g.dlon, 6);
+
+  // §4b: the toast says the year doesn't matter and the day does
+  await expect.poll(toasts).toContain("year of the date selector doesn't matter, the day does");
+  await expect.poll(toasts).toContain(`bin opening ${c.bin_start}`);
+  expect(await page.evaluate(() => window.__earth.datelessToast("poy7"))).toBeNull();
+  // the chip; the row's note says what the paint read
+  await expect(page.locator("#active-layers")).toContainText("Pentad climatology");
+  await expect(page.locator('[data-poynote="poy7"]')).toContainText("2 range reads");
+  // the downloads fold hands over to the Data tab's matching step
+  const btn = page.locator('[data-poydlbody="poy7"] button[data-opentab="data"]');
+  await expect(btn).toHaveAttribute("data-dtstore", "10/g100");
+  await expect(btn).toHaveAttribute("data-dtstep", "poy");
+  // no catalog record (§2.6's exception), and the title link is E-093's plan
+  const cat = await page.evaluate(() => fetch("data/catalog.json").then((r) => r.json()));
+  expect(JSON.stringify(cat)).not.toContain("poy7");
+  const href = await page.locator('#layer-list input[data-id="poy7"]').locator("xpath=..")
+    .locator("a.title-link").getAttribute("href");
+  expect(href).toContain("E093_pentad_climatology.md");
+
+  expect(page.__errors, `page errors: ${page.__errors.join(" | ")}`).toHaveLength(0);
+});
+
+test("Pentad climatology: another year in the same slot paints the same; the span and a left-out year change it",
+     async ({ page }) => {
+  test.setTimeout(120000);
+  await servePoy(page);
+  const c = poyCase("whole record");
+  await setAppDate(page, c.date);
+  await enablePoy(page);
+  await poySet(page, "data-poychan", "g100:t2m");
+  await poyWait(page, `g100:t2m:${c.slot}:2010–2013`);
+  const at = () => page.evaluate(([lon, lat]) => window.__earth.poySampleAt(lon, lat), [c.lon, c.lat]);
+  const v0 = await at();
+  const n0 = page.__poyReads.length;
+
+  // a different YEAR and a different calendar day, the same slot: same value, no read
+  const o = poyCase("same slot, another year");
+  expect(o.slot).toBe(c.slot);
+  expect(o.date.slice(0, 4)).not.toBe(c.date.slice(0, 4));
+  await setAppDate(page, o.date);
+  await expect.poll(() => page.evaluate(() => window.__earth.poyLayerState().bin)).toBe(o.bin_start);
+  await poyWait(page, `g100:t2m:${c.slot}:2010–2013`);
+  expect((await at()).v).toBe(v0.v);
+  expect(page.__poyReads.length).toBe(n0);
+
+  // a shorter span: +[2012] −[2010], four new planes
+  const s = poyCase("a shorter span");
+  await poySet(page, "data-poyy0", "2011");
+  await poySet(page, "data-poyy1", "2012");
+  await poyWait(page, `g100:t2m:${c.slot}:2011–2012`);
+  const v1 = await at();
+  expect(Math.abs(v1.v - s.mean)).toBeLessThan(1e-4);
+  expect(v1.n).toBe(s.count);
+  expect(Math.abs(v1.v - v0.v)).toBeGreaterThan(1e-3);
+
+  // the whole record leaving 2012 out: +[2013] −[2012] +[2011]
+  const x = poyCase("a year left out");
+  await poySet(page, "data-poyy0", "2010");
+  await poySet(page, "data-poyy1", "2013");
+  await poySet(page, "data-poyex", "2012");
+  await poyWait(page, `g100:t2m:${c.slot}:2010–2013 without 2012`);
+  const v2 = await at();
+  expect(Math.abs(v2.v - x.mean)).toBeLessThan(1e-4);
+  expect(v2.n).toBe(x.count);
+  const probe = await page.evaluate(async ([lon, lat]) =>
+    await window.__earth.probeValueAt(Cesium.Cartographic.fromDegrees(lon, lat)), [c.lon, c.lat]);
+  expect(probe.when).toEqual({ kind: "period", t: "2010–2013 without 2012" });
+  await expect(page.locator('[data-poynote="poy7"]')).toContainText("mean of 3 years");
+
+  // the last slot of a leap year folds day 366's bins into p72
+  const l = poyCase("last slot");
+  await poySet(page, "data-poyex", "");
+  await setAppDate(page, l.date);
+  await poyWait(page, `g100:t2m:72:2010–2013`);
+  const v3 = await at();
+  expect(Math.abs(v3.v - l.mean)).toBeLessThan(1e-4);
+  expect(v3.n).toBe(l.count);
+
+  expect(page.__errors, `page errors: ${page.__errors.join(" | ")}`).toHaveLength(0);
+});
+
+test("Pentad climatology: a cell with no bin is blank and the probe falls through; the pixel card has its row",
+     async ({ page }) => {
+  test.setTimeout(150000);
+  await servePoy(page);
+  const sea = poyCase("g025 sst whole record"), land = poyCase("g025 sst over land");
+  await setAppDate(page, sea.date);
+  await enablePoy(page);
+  await poyWait(page, `g025:sst:${sea.slot}:2010–2013`);
+  const s = await page.evaluate(([lon, lat]) => window.__earth.poySampleAt(lon, lat), [sea.lon, sea.lat]);
+  expect(Math.abs(s.v - sea.mean)).toBeLessThan(1e-4);
+  expect(land.mean).toBe(null);
+  const l = await page.evaluate(([lon, lat]) => window.__earth.poySampleAt(lon, lat), [land.lon, land.lat]);
+  expect(l.v).toBe(null);
+  expect(l.n).toBe(0);
+  const probe = await page.evaluate(async ([lon, lat]) =>
+    await window.__earth.probeValueAt(Cesium.Cartographic.fromDegrees(lon, lat)), [land.lon, land.lat]);
+  expect(!probe || probe.noData || !String(probe.title).includes("Pentad")).toBe(true);
+
+  await page.evaluate(([lon, lat]) => {
+    window.__earth.showPixelState(Cesium.Cartographic.fromDegrees(lon, lat));
+  }, [sea.lon, sea.lat]);
+  const card = page.locator("#pixel-card");
+  await expect(card).toContainText("This five-day slot, averaged over the years", { timeout: 30000 });
+  await expect(card).toContainText("mean of 4 five-day bins over 2010–2013");
+  expect(page.__errors, `page errors: ${page.__errors.join(" | ")}`).toHaveLength(0);
+});
+
+test("Pentad climatology degrades to a toast while its index is unpublished", async ({ page }) => {
+  test.setTimeout(90000);
+  await servePoy(page, { noIndex: true });
+  const toasts = await recordToasts(page);
+  await page.evaluate(() => {
+    const el = document.querySelector('#layer-list input[data-id="poy7"]');
+    el.checked = true;
+    el.dispatchEvent(new Event("change", { bubbles: true }));
+  });
+  await expect.poll(toasts).toContain("gridded_poy_index.json");
+  expect(await page.evaluate(() => !!window.__earth.state.layers.poy7?.layer)).toBe(true);
+  await expect(page.locator('select[data-poychan="poy7"]')).toContainText("the index has not landed");
+  expect(page.__poyReads.length).toBe(0);
+  expect(page.__errors, `page errors: ${page.__errors.join(" | ")}`).toHaveLength(0);
+});

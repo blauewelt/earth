@@ -1,0 +1,1499 @@
+{
+ "_source": "tests/make_poy_layer_fixture.py — the globe layer's test fixture, not the published index",
+ "base": "./",
+ "combine": "mean of a slot over years a…b = (S[b] − S[a−1]) / (N[b] − N[a−1])",
+ "generated_utc": "fixture",
+ "layout": "sum_pSS.npy [channel, year, lat, lon] float32 PHYSICAL, count_pSS.npy uint8, cumulative over the years",
+ "n_slots": 73,
+ "plan": "https://blauewelt.github.io/earth/docs.html?f=ml/plans/E093_pentad_climatology.md",
+ "slot_rule": "slot = min(72, floor((day_of_year(bin start, UTC) − 1) / 5)); bin b starts on 1982-01-01 + 5·b days",
+ "slot_table": {
+  "p00": {
+   "slot": 0,
+   "start_doy": 1,
+   "days": 5
+  },
+  "p01": {
+   "slot": 1,
+   "start_doy": 6,
+   "days": 5
+  },
+  "p02": {
+   "slot": 2,
+   "start_doy": 11,
+   "days": 5
+  },
+  "p03": {
+   "slot": 3,
+   "start_doy": 16,
+   "days": 5
+  },
+  "p04": {
+   "slot": 4,
+   "start_doy": 21,
+   "days": 5
+  },
+  "p05": {
+   "slot": 5,
+   "start_doy": 26,
+   "days": 5
+  },
+  "p06": {
+   "slot": 6,
+   "start_doy": 31,
+   "days": 5
+  },
+  "p07": {
+   "slot": 7,
+   "start_doy": 36,
+   "days": 5
+  },
+  "p08": {
+   "slot": 8,
+   "start_doy": 41,
+   "days": 5
+  },
+  "p09": {
+   "slot": 9,
+   "start_doy": 46,
+   "days": 5
+  },
+  "p10": {
+   "slot": 10,
+   "start_doy": 51,
+   "days": 5
+  },
+  "p11": {
+   "slot": 11,
+   "start_doy": 56,
+   "days": 5
+  },
+  "p12": {
+   "slot": 12,
+   "start_doy": 61,
+   "days": 5
+  },
+  "p13": {
+   "slot": 13,
+   "start_doy": 66,
+   "days": 5
+  },
+  "p14": {
+   "slot": 14,
+   "start_doy": 71,
+   "days": 5
+  },
+  "p15": {
+   "slot": 15,
+   "start_doy": 76,
+   "days": 5
+  },
+  "p16": {
+   "slot": 16,
+   "start_doy": 81,
+   "days": 5
+  },
+  "p17": {
+   "slot": 17,
+   "start_doy": 86,
+   "days": 5
+  },
+  "p18": {
+   "slot": 18,
+   "start_doy": 91,
+   "days": 5
+  },
+  "p19": {
+   "slot": 19,
+   "start_doy": 96,
+   "days": 5
+  },
+  "p20": {
+   "slot": 20,
+   "start_doy": 101,
+   "days": 5
+  },
+  "p21": {
+   "slot": 21,
+   "start_doy": 106,
+   "days": 5
+  },
+  "p22": {
+   "slot": 22,
+   "start_doy": 111,
+   "days": 5
+  },
+  "p23": {
+   "slot": 23,
+   "start_doy": 116,
+   "days": 5
+  },
+  "p24": {
+   "slot": 24,
+   "start_doy": 121,
+   "days": 5
+  },
+  "p25": {
+   "slot": 25,
+   "start_doy": 126,
+   "days": 5
+  },
+  "p26": {
+   "slot": 26,
+   "start_doy": 131,
+   "days": 5
+  },
+  "p27": {
+   "slot": 27,
+   "start_doy": 136,
+   "days": 5
+  },
+  "p28": {
+   "slot": 28,
+   "start_doy": 141,
+   "days": 5
+  },
+  "p29": {
+   "slot": 29,
+   "start_doy": 146,
+   "days": 5
+  },
+  "p30": {
+   "slot": 30,
+   "start_doy": 151,
+   "days": 5
+  },
+  "p31": {
+   "slot": 31,
+   "start_doy": 156,
+   "days": 5
+  },
+  "p32": {
+   "slot": 32,
+   "start_doy": 161,
+   "days": 5
+  },
+  "p33": {
+   "slot": 33,
+   "start_doy": 166,
+   "days": 5
+  },
+  "p34": {
+   "slot": 34,
+   "start_doy": 171,
+   "days": 5
+  },
+  "p35": {
+   "slot": 35,
+   "start_doy": 176,
+   "days": 5
+  },
+  "p36": {
+   "slot": 36,
+   "start_doy": 181,
+   "days": 5
+  },
+  "p37": {
+   "slot": 37,
+   "start_doy": 186,
+   "days": 5
+  },
+  "p38": {
+   "slot": 38,
+   "start_doy": 191,
+   "days": 5
+  },
+  "p39": {
+   "slot": 39,
+   "start_doy": 196,
+   "days": 5
+  },
+  "p40": {
+   "slot": 40,
+   "start_doy": 201,
+   "days": 5
+  },
+  "p41": {
+   "slot": 41,
+   "start_doy": 206,
+   "days": 5
+  },
+  "p42": {
+   "slot": 42,
+   "start_doy": 211,
+   "days": 5
+  },
+  "p43": {
+   "slot": 43,
+   "start_doy": 216,
+   "days": 5
+  },
+  "p44": {
+   "slot": 44,
+   "start_doy": 221,
+   "days": 5
+  },
+  "p45": {
+   "slot": 45,
+   "start_doy": 226,
+   "days": 5
+  },
+  "p46": {
+   "slot": 46,
+   "start_doy": 231,
+   "days": 5
+  },
+  "p47": {
+   "slot": 47,
+   "start_doy": 236,
+   "days": 5
+  },
+  "p48": {
+   "slot": 48,
+   "start_doy": 241,
+   "days": 5
+  },
+  "p49": {
+   "slot": 49,
+   "start_doy": 246,
+   "days": 5
+  },
+  "p50": {
+   "slot": 50,
+   "start_doy": 251,
+   "days": 5
+  },
+  "p51": {
+   "slot": 51,
+   "start_doy": 256,
+   "days": 5
+  },
+  "p52": {
+   "slot": 52,
+   "start_doy": 261,
+   "days": 5
+  },
+  "p53": {
+   "slot": 53,
+   "start_doy": 266,
+   "days": 5
+  },
+  "p54": {
+   "slot": 54,
+   "start_doy": 271,
+   "days": 5
+  },
+  "p55": {
+   "slot": 55,
+   "start_doy": 276,
+   "days": 5
+  },
+  "p56": {
+   "slot": 56,
+   "start_doy": 281,
+   "days": 5
+  },
+  "p57": {
+   "slot": 57,
+   "start_doy": 286,
+   "days": 5
+  },
+  "p58": {
+   "slot": 58,
+   "start_doy": 291,
+   "days": 5
+  },
+  "p59": {
+   "slot": 59,
+   "start_doy": 296,
+   "days": 5
+  },
+  "p60": {
+   "slot": 60,
+   "start_doy": 301,
+   "days": 5
+  },
+  "p61": {
+   "slot": 61,
+   "start_doy": 306,
+   "days": 5
+  },
+  "p62": {
+   "slot": 62,
+   "start_doy": 311,
+   "days": 5
+  },
+  "p63": {
+   "slot": 63,
+   "start_doy": 316,
+   "days": 5
+  },
+  "p64": {
+   "slot": 64,
+   "start_doy": 321,
+   "days": 5
+  },
+  "p65": {
+   "slot": 65,
+   "start_doy": 326,
+   "days": 5
+  },
+  "p66": {
+   "slot": 66,
+   "start_doy": 331,
+   "days": 5
+  },
+  "p67": {
+   "slot": 67,
+   "start_doy": 336,
+   "days": 5
+  },
+  "p68": {
+   "slot": 68,
+   "start_doy": 341,
+   "days": 5
+  },
+  "p69": {
+   "slot": 69,
+   "start_doy": 346,
+   "days": 5
+  },
+  "p70": {
+   "slot": 70,
+   "start_doy": 351,
+   "days": 5
+  },
+  "p71": {
+   "slot": 71,
+   "start_doy": 356,
+   "days": 5
+  },
+  "p72": {
+   "slot": 72,
+   "start_doy": 361,
+   "days": "5 or 6"
+  }
+ },
+ "stores": {
+  "family7_global025_pentad_l2/g025": {
+   "group": "g025",
+   "stem": "family7_global025_pentad_l2",
+   "prefix": "tensors/family7_global025_pentad_l2/poy/v1/g025",
+   "H": 13,
+   "W": 24,
+   "lat0": -90.0,
+   "dlat": 15.0,
+   "lon0": -180.0,
+   "dlon": 15.0,
+   "south_first": true,
+   "chans": [
+    "sst",
+    "ssh"
+   ],
+   "units": {
+    "sst": "°C",
+    "ssh": "m"
+   },
+   "labels": {
+    "sst": "Sea-surface temperature",
+    "ssh": "Sea surface height"
+   },
+   "norm": [
+    [
+     15.0,
+     3.0
+    ],
+    [
+     0.0,
+     0.15
+    ]
+   ],
+   "zscored_source": true,
+   "n_years": 4,
+   "year_first": 2010,
+   "year_last": 2013,
+   "years": [
+    2010,
+    2011,
+    2012,
+    2013
+   ],
+   "record_first": "2010-01-01",
+   "record_last": "2013-12-31",
+   "slots": {
+    "p00": {
+     "sum_bytes": 10112,
+     "count_bytes": 2624,
+     "sum_header": 128,
+     "count_header": 128,
+     "start_doy": 1
+    },
+    "p01": {
+     "sum_bytes": 10112,
+     "count_bytes": 2624,
+     "sum_header": 128,
+     "count_header": 128,
+     "start_doy": 6
+    },
+    "p02": {
+     "sum_bytes": 10112,
+     "count_bytes": 2624,
+     "sum_header": 128,
+     "count_header": 128,
+     "start_doy": 11
+    },
+    "p03": {
+     "sum_bytes": 10112,
+     "count_bytes": 2624,
+     "sum_header": 128,
+     "count_header": 128,
+     "start_doy": 16
+    },
+    "p04": {
+     "sum_bytes": 10112,
+     "count_bytes": 2624,
+     "sum_header": 128,
+     "count_header": 128,
+     "start_doy": 21
+    },
+    "p05": {
+     "sum_bytes": 10112,
+     "count_bytes": 2624,
+     "sum_header": 128,
+     "count_header": 128,
+     "start_doy": 26
+    },
+    "p06": {
+     "sum_bytes": 10112,
+     "count_bytes": 2624,
+     "sum_header": 128,
+     "count_header": 128,
+     "start_doy": 31
+    },
+    "p07": {
+     "sum_bytes": 10112,
+     "count_bytes": 2624,
+     "sum_header": 128,
+     "count_header": 128,
+     "start_doy": 36
+    },
+    "p08": {
+     "sum_bytes": 10112,
+     "count_bytes": 2624,
+     "sum_header": 128,
+     "count_header": 128,
+     "start_doy": 41
+    },
+    "p09": {
+     "sum_bytes": 10112,
+     "count_bytes": 2624,
+     "sum_header": 128,
+     "count_header": 128,
+     "start_doy": 46
+    },
+    "p10": {
+     "sum_bytes": 10112,
+     "count_bytes": 2624,
+     "sum_header": 128,
+     "count_header": 128,
+     "start_doy": 51
+    },
+    "p11": {
+     "sum_bytes": 10112,
+     "count_bytes": 2624,
+     "sum_header": 128,
+     "count_header": 128,
+     "start_doy": 56
+    },
+    "p12": {
+     "sum_bytes": 10112,
+     "count_bytes": 2624,
+     "sum_header": 128,
+     "count_header": 128,
+     "start_doy": 61
+    },
+    "p13": {
+     "sum_bytes": 10112,
+     "count_bytes": 2624,
+     "sum_header": 128,
+     "count_header": 128,
+     "start_doy": 66
+    },
+    "p14": {
+     "sum_bytes": 10112,
+     "count_bytes": 2624,
+     "sum_header": 128,
+     "count_header": 128,
+     "start_doy": 71
+    },
+    "p15": {
+     "sum_bytes": 10112,
+     "count_bytes": 2624,
+     "sum_header": 128,
+     "count_header": 128,
+     "start_doy": 76
+    },
+    "p16": {
+     "sum_bytes": 10112,
+     "count_bytes": 2624,
+     "sum_header": 128,
+     "count_header": 128,
+     "start_doy": 81
+    },
+    "p17": {
+     "sum_bytes": 10112,
+     "count_bytes": 2624,
+     "sum_header": 128,
+     "count_header": 128,
+     "start_doy": 86
+    },
+    "p18": {
+     "sum_bytes": 10112,
+     "count_bytes": 2624,
+     "sum_header": 128,
+     "count_header": 128,
+     "start_doy": 91
+    },
+    "p19": {
+     "sum_bytes": 10112,
+     "count_bytes": 2624,
+     "sum_header": 128,
+     "count_header": 128,
+     "start_doy": 96
+    },
+    "p20": {
+     "sum_bytes": 10112,
+     "count_bytes": 2624,
+     "sum_header": 128,
+     "count_header": 128,
+     "start_doy": 101
+    },
+    "p21": {
+     "sum_bytes": 10112,
+     "count_bytes": 2624,
+     "sum_header": 128,
+     "count_header": 128,
+     "start_doy": 106
+    },
+    "p22": {
+     "sum_bytes": 10112,
+     "count_bytes": 2624,
+     "sum_header": 128,
+     "count_header": 128,
+     "start_doy": 111
+    },
+    "p23": {
+     "sum_bytes": 10112,
+     "count_bytes": 2624,
+     "sum_header": 128,
+     "count_header": 128,
+     "start_doy": 116
+    },
+    "p24": {
+     "sum_bytes": 10112,
+     "count_bytes": 2624,
+     "sum_header": 128,
+     "count_header": 128,
+     "start_doy": 121
+    },
+    "p25": {
+     "sum_bytes": 10112,
+     "count_bytes": 2624,
+     "sum_header": 128,
+     "count_header": 128,
+     "start_doy": 126
+    },
+    "p26": {
+     "sum_bytes": 10112,
+     "count_bytes": 2624,
+     "sum_header": 128,
+     "count_header": 128,
+     "start_doy": 131
+    },
+    "p27": {
+     "sum_bytes": 10112,
+     "count_bytes": 2624,
+     "sum_header": 128,
+     "count_header": 128,
+     "start_doy": 136
+    },
+    "p28": {
+     "sum_bytes": 10112,
+     "count_bytes": 2624,
+     "sum_header": 128,
+     "count_header": 128,
+     "start_doy": 141
+    },
+    "p29": {
+     "sum_bytes": 10112,
+     "count_bytes": 2624,
+     "sum_header": 128,
+     "count_header": 128,
+     "start_doy": 146
+    },
+    "p30": {
+     "sum_bytes": 10112,
+     "count_bytes": 2624,
+     "sum_header": 128,
+     "count_header": 128,
+     "start_doy": 151
+    },
+    "p31": {
+     "sum_bytes": 10112,
+     "count_bytes": 2624,
+     "sum_header": 128,
+     "count_header": 128,
+     "start_doy": 156
+    },
+    "p32": {
+     "sum_bytes": 10112,
+     "count_bytes": 2624,
+     "sum_header": 128,
+     "count_header": 128,
+     "start_doy": 161
+    },
+    "p33": {
+     "sum_bytes": 10112,
+     "count_bytes": 2624,
+     "sum_header": 128,
+     "count_header": 128,
+     "start_doy": 166
+    },
+    "p34": {
+     "sum_bytes": 10112,
+     "count_bytes": 2624,
+     "sum_header": 128,
+     "count_header": 128,
+     "start_doy": 171
+    },
+    "p35": {
+     "sum_bytes": 10112,
+     "count_bytes": 2624,
+     "sum_header": 128,
+     "count_header": 128,
+     "start_doy": 176
+    },
+    "p36": {
+     "sum_bytes": 10112,
+     "count_bytes": 2624,
+     "sum_header": 128,
+     "count_header": 128,
+     "start_doy": 181
+    },
+    "p37": {
+     "sum_bytes": 10112,
+     "count_bytes": 2624,
+     "sum_header": 128,
+     "count_header": 128,
+     "start_doy": 186
+    },
+    "p38": {
+     "sum_bytes": 10112,
+     "count_bytes": 2624,
+     "sum_header": 128,
+     "count_header": 128,
+     "start_doy": 191
+    },
+    "p39": {
+     "sum_bytes": 10112,
+     "count_bytes": 2624,
+     "sum_header": 128,
+     "count_header": 128,
+     "start_doy": 196
+    },
+    "p40": {
+     "sum_bytes": 10112,
+     "count_bytes": 2624,
+     "sum_header": 128,
+     "count_header": 128,
+     "start_doy": 201
+    },
+    "p41": {
+     "sum_bytes": 10112,
+     "count_bytes": 2624,
+     "sum_header": 128,
+     "count_header": 128,
+     "start_doy": 206
+    },
+    "p42": {
+     "sum_bytes": 10112,
+     "count_bytes": 2624,
+     "sum_header": 128,
+     "count_header": 128,
+     "start_doy": 211
+    },
+    "p43": {
+     "sum_bytes": 10112,
+     "count_bytes": 2624,
+     "sum_header": 128,
+     "count_header": 128,
+     "start_doy": 216
+    },
+    "p44": {
+     "sum_bytes": 10112,
+     "count_bytes": 2624,
+     "sum_header": 128,
+     "count_header": 128,
+     "start_doy": 221
+    },
+    "p45": {
+     "sum_bytes": 10112,
+     "count_bytes": 2624,
+     "sum_header": 128,
+     "count_header": 128,
+     "start_doy": 226
+    },
+    "p46": {
+     "sum_bytes": 10112,
+     "count_bytes": 2624,
+     "sum_header": 128,
+     "count_header": 128,
+     "start_doy": 231
+    },
+    "p47": {
+     "sum_bytes": 10112,
+     "count_bytes": 2624,
+     "sum_header": 128,
+     "count_header": 128,
+     "start_doy": 236
+    },
+    "p48": {
+     "sum_bytes": 10112,
+     "count_bytes": 2624,
+     "sum_header": 128,
+     "count_header": 128,
+     "start_doy": 241
+    },
+    "p49": {
+     "sum_bytes": 10112,
+     "count_bytes": 2624,
+     "sum_header": 128,
+     "count_header": 128,
+     "start_doy": 246
+    },
+    "p50": {
+     "sum_bytes": 10112,
+     "count_bytes": 2624,
+     "sum_header": 128,
+     "count_header": 128,
+     "start_doy": 251
+    },
+    "p51": {
+     "sum_bytes": 10112,
+     "count_bytes": 2624,
+     "sum_header": 128,
+     "count_header": 128,
+     "start_doy": 256
+    },
+    "p52": {
+     "sum_bytes": 10112,
+     "count_bytes": 2624,
+     "sum_header": 128,
+     "count_header": 128,
+     "start_doy": 261
+    },
+    "p53": {
+     "sum_bytes": 10112,
+     "count_bytes": 2624,
+     "sum_header": 128,
+     "count_header": 128,
+     "start_doy": 266
+    },
+    "p54": {
+     "sum_bytes": 10112,
+     "count_bytes": 2624,
+     "sum_header": 128,
+     "count_header": 128,
+     "start_doy": 271
+    },
+    "p55": {
+     "sum_bytes": 10112,
+     "count_bytes": 2624,
+     "sum_header": 128,
+     "count_header": 128,
+     "start_doy": 276
+    },
+    "p56": {
+     "sum_bytes": 10112,
+     "count_bytes": 2624,
+     "sum_header": 128,
+     "count_header": 128,
+     "start_doy": 281
+    },
+    "p57": {
+     "sum_bytes": 10112,
+     "count_bytes": 2624,
+     "sum_header": 128,
+     "count_header": 128,
+     "start_doy": 286
+    },
+    "p58": {
+     "sum_bytes": 10112,
+     "count_bytes": 2624,
+     "sum_header": 128,
+     "count_header": 128,
+     "start_doy": 291
+    },
+    "p59": {
+     "sum_bytes": 10112,
+     "count_bytes": 2624,
+     "sum_header": 128,
+     "count_header": 128,
+     "start_doy": 296
+    },
+    "p60": {
+     "sum_bytes": 10112,
+     "count_bytes": 2624,
+     "sum_header": 128,
+     "count_header": 128,
+     "start_doy": 301
+    },
+    "p61": {
+     "sum_bytes": 10112,
+     "count_bytes": 2624,
+     "sum_header": 128,
+     "count_header": 128,
+     "start_doy": 306
+    },
+    "p62": {
+     "sum_bytes": 10112,
+     "count_bytes": 2624,
+     "sum_header": 128,
+     "count_header": 128,
+     "start_doy": 311
+    },
+    "p63": {
+     "sum_bytes": 10112,
+     "count_bytes": 2624,
+     "sum_header": 128,
+     "count_header": 128,
+     "start_doy": 316
+    },
+    "p64": {
+     "sum_bytes": 10112,
+     "count_bytes": 2624,
+     "sum_header": 128,
+     "count_header": 128,
+     "start_doy": 321
+    },
+    "p65": {
+     "sum_bytes": 10112,
+     "count_bytes": 2624,
+     "sum_header": 128,
+     "count_header": 128,
+     "start_doy": 326
+    },
+    "p66": {
+     "sum_bytes": 10112,
+     "count_bytes": 2624,
+     "sum_header": 128,
+     "count_header": 128,
+     "start_doy": 331
+    },
+    "p67": {
+     "sum_bytes": 10112,
+     "count_bytes": 2624,
+     "sum_header": 128,
+     "count_header": 128,
+     "start_doy": 336
+    },
+    "p68": {
+     "sum_bytes": 10112,
+     "count_bytes": 2624,
+     "sum_header": 128,
+     "count_header": 128,
+     "start_doy": 341
+    },
+    "p69": {
+     "sum_bytes": 10112,
+     "count_bytes": 2624,
+     "sum_header": 128,
+     "count_header": 128,
+     "start_doy": 346
+    },
+    "p70": {
+     "sum_bytes": 10112,
+     "count_bytes": 2624,
+     "sum_header": 128,
+     "count_header": 128,
+     "start_doy": 351
+    },
+    "p71": {
+     "sum_bytes": 10112,
+     "count_bytes": 2624,
+     "sum_header": 128,
+     "count_header": 128,
+     "start_doy": 356
+    },
+    "p72": {
+     "sum_bytes": 10112,
+     "count_bytes": 2624,
+     "sum_header": 128,
+     "count_header": 128,
+     "start_doy": 361
+    }
+   },
+   "complete": true
+  },
+  "family7_global025_pentad_l2/g100": {
+   "group": "g100",
+   "stem": "family7_global025_pentad_l2",
+   "prefix": "tensors/family7_global025_pentad_l2/poy/v1/g100",
+   "H": 7,
+   "W": 12,
+   "lat0": -90.0,
+   "dlat": 30.0,
+   "lon0": -180.0,
+   "dlon": 30.0,
+   "south_first": true,
+   "chans": [
+    "t2m",
+    "skt"
+   ],
+   "units": {
+    "t2m": "°C",
+    "skt": "°C"
+   },
+   "labels": {
+    "t2m": "Air temperature at 2 m",
+    "skt": "Skin temperature"
+   },
+   "norm": [
+    [
+     10.0,
+     6.0
+    ],
+    [
+     12.0,
+     7.0
+    ]
+   ],
+   "zscored_source": true,
+   "n_years": 4,
+   "year_first": 2010,
+   "year_last": 2013,
+   "years": [
+    2010,
+    2011,
+    2012,
+    2013
+   ],
+   "record_first": "2010-01-01",
+   "record_last": "2013-12-31",
+   "slots": {
+    "p00": {
+     "sum_bytes": 2816,
+     "count_bytes": 800,
+     "sum_header": 128,
+     "count_header": 128,
+     "start_doy": 1
+    },
+    "p01": {
+     "sum_bytes": 2816,
+     "count_bytes": 800,
+     "sum_header": 128,
+     "count_header": 128,
+     "start_doy": 6
+    },
+    "p02": {
+     "sum_bytes": 2816,
+     "count_bytes": 800,
+     "sum_header": 128,
+     "count_header": 128,
+     "start_doy": 11
+    },
+    "p03": {
+     "sum_bytes": 2816,
+     "count_bytes": 800,
+     "sum_header": 128,
+     "count_header": 128,
+     "start_doy": 16
+    },
+    "p04": {
+     "sum_bytes": 2816,
+     "count_bytes": 800,
+     "sum_header": 128,
+     "count_header": 128,
+     "start_doy": 21
+    },
+    "p05": {
+     "sum_bytes": 2816,
+     "count_bytes": 800,
+     "sum_header": 128,
+     "count_header": 128,
+     "start_doy": 26
+    },
+    "p06": {
+     "sum_bytes": 2816,
+     "count_bytes": 800,
+     "sum_header": 128,
+     "count_header": 128,
+     "start_doy": 31
+    },
+    "p07": {
+     "sum_bytes": 2816,
+     "count_bytes": 800,
+     "sum_header": 128,
+     "count_header": 128,
+     "start_doy": 36
+    },
+    "p08": {
+     "sum_bytes": 2816,
+     "count_bytes": 800,
+     "sum_header": 128,
+     "count_header": 128,
+     "start_doy": 41
+    },
+    "p09": {
+     "sum_bytes": 2816,
+     "count_bytes": 800,
+     "sum_header": 128,
+     "count_header": 128,
+     "start_doy": 46
+    },
+    "p10": {
+     "sum_bytes": 2816,
+     "count_bytes": 800,
+     "sum_header": 128,
+     "count_header": 128,
+     "start_doy": 51
+    },
+    "p11": {
+     "sum_bytes": 2816,
+     "count_bytes": 800,
+     "sum_header": 128,
+     "count_header": 128,
+     "start_doy": 56
+    },
+    "p12": {
+     "sum_bytes": 2816,
+     "count_bytes": 800,
+     "sum_header": 128,
+     "count_header": 128,
+     "start_doy": 61
+    },
+    "p13": {
+     "sum_bytes": 2816,
+     "count_bytes": 800,
+     "sum_header": 128,
+     "count_header": 128,
+     "start_doy": 66
+    },
+    "p14": {
+     "sum_bytes": 2816,
+     "count_bytes": 800,
+     "sum_header": 128,
+     "count_header": 128,
+     "start_doy": 71
+    },
+    "p15": {
+     "sum_bytes": 2816,
+     "count_bytes": 800,
+     "sum_header": 128,
+     "count_header": 128,
+     "start_doy": 76
+    },
+    "p16": {
+     "sum_bytes": 2816,
+     "count_bytes": 800,
+     "sum_header": 128,
+     "count_header": 128,
+     "start_doy": 81
+    },
+    "p17": {
+     "sum_bytes": 2816,
+     "count_bytes": 800,
+     "sum_header": 128,
+     "count_header": 128,
+     "start_doy": 86
+    },
+    "p18": {
+     "sum_bytes": 2816,
+     "count_bytes": 800,
+     "sum_header": 128,
+     "count_header": 128,
+     "start_doy": 91
+    },
+    "p19": {
+     "sum_bytes": 2816,
+     "count_bytes": 800,
+     "sum_header": 128,
+     "count_header": 128,
+     "start_doy": 96
+    },
+    "p20": {
+     "sum_bytes": 2816,
+     "count_bytes": 800,
+     "sum_header": 128,
+     "count_header": 128,
+     "start_doy": 101
+    },
+    "p21": {
+     "sum_bytes": 2816,
+     "count_bytes": 800,
+     "sum_header": 128,
+     "count_header": 128,
+     "start_doy": 106
+    },
+    "p22": {
+     "sum_bytes": 2816,
+     "count_bytes": 800,
+     "sum_header": 128,
+     "count_header": 128,
+     "start_doy": 111
+    },
+    "p23": {
+     "sum_bytes": 2816,
+     "count_bytes": 800,
+     "sum_header": 128,
+     "count_header": 128,
+     "start_doy": 116
+    },
+    "p24": {
+     "sum_bytes": 2816,
+     "count_bytes": 800,
+     "sum_header": 128,
+     "count_header": 128,
+     "start_doy": 121
+    },
+    "p25": {
+     "sum_bytes": 2816,
+     "count_bytes": 800,
+     "sum_header": 128,
+     "count_header": 128,
+     "start_doy": 126
+    },
+    "p26": {
+     "sum_bytes": 2816,
+     "count_bytes": 800,
+     "sum_header": 128,
+     "count_header": 128,
+     "start_doy": 131
+    },
+    "p27": {
+     "sum_bytes": 2816,
+     "count_bytes": 800,
+     "sum_header": 128,
+     "count_header": 128,
+     "start_doy": 136
+    },
+    "p28": {
+     "sum_bytes": 2816,
+     "count_bytes": 800,
+     "sum_header": 128,
+     "count_header": 128,
+     "start_doy": 141
+    },
+    "p29": {
+     "sum_bytes": 2816,
+     "count_bytes": 800,
+     "sum_header": 128,
+     "count_header": 128,
+     "start_doy": 146
+    },
+    "p30": {
+     "sum_bytes": 2816,
+     "count_bytes": 800,
+     "sum_header": 128,
+     "count_header": 128,
+     "start_doy": 151
+    },
+    "p31": {
+     "sum_bytes": 2816,
+     "count_bytes": 800,
+     "sum_header": 128,
+     "count_header": 128,
+     "start_doy": 156
+    },
+    "p32": {
+     "sum_bytes": 2816,
+     "count_bytes": 800,
+     "sum_header": 128,
+     "count_header": 128,
+     "start_doy": 161
+    },
+    "p33": {
+     "sum_bytes": 2816,
+     "count_bytes": 800,
+     "sum_header": 128,
+     "count_header": 128,
+     "start_doy": 166
+    },
+    "p34": {
+     "sum_bytes": 2816,
+     "count_bytes": 800,
+     "sum_header": 128,
+     "count_header": 128,
+     "start_doy": 171
+    },
+    "p35": {
+     "sum_bytes": 2816,
+     "count_bytes": 800,
+     "sum_header": 128,
+     "count_header": 128,
+     "start_doy": 176
+    },
+    "p36": {
+     "sum_bytes": 2816,
+     "count_bytes": 800,
+     "sum_header": 128,
+     "count_header": 128,
+     "start_doy": 181
+    },
+    "p37": {
+     "sum_bytes": 2816,
+     "count_bytes": 800,
+     "sum_header": 128,
+     "count_header": 128,
+     "start_doy": 186
+    },
+    "p38": {
+     "sum_bytes": 2816,
+     "count_bytes": 800,
+     "sum_header": 128,
+     "count_header": 128,
+     "start_doy": 191
+    },
+    "p39": {
+     "sum_bytes": 2816,
+     "count_bytes": 800,
+     "sum_header": 128,
+     "count_header": 128,
+     "start_doy": 196
+    },
+    "p40": {
+     "sum_bytes": 2816,
+     "count_bytes": 800,
+     "sum_header": 128,
+     "count_header": 128,
+     "start_doy": 201
+    },
+    "p41": {
+     "sum_bytes": 2816,
+     "count_bytes": 800,
+     "sum_header": 128,
+     "count_header": 128,
+     "start_doy": 206
+    },
+    "p42": {
+     "sum_bytes": 2816,
+     "count_bytes": 800,
+     "sum_header": 128,
+     "count_header": 128,
+     "start_doy": 211
+    },
+    "p43": {
+     "sum_bytes": 2816,
+     "count_bytes": 800,
+     "sum_header": 128,
+     "count_header": 128,
+     "start_doy": 216
+    },
+    "p44": {
+     "sum_bytes": 2816,
+     "count_bytes": 800,
+     "sum_header": 128,
+     "count_header": 128,
+     "start_doy": 221
+    },
+    "p45": {
+     "sum_bytes": 2816,
+     "count_bytes": 800,
+     "sum_header": 128,
+     "count_header": 128,
+     "start_doy": 226
+    },
+    "p46": {
+     "sum_bytes": 2816,
+     "count_bytes": 800,
+     "sum_header": 128,
+     "count_header": 128,
+     "start_doy": 231
+    },
+    "p47": {
+     "sum_bytes": 2816,
+     "count_bytes": 800,
+     "sum_header": 128,
+     "count_header": 128,
+     "start_doy": 236
+    },
+    "p48": {
+     "sum_bytes": 2816,
+     "count_bytes": 800,
+     "sum_header": 128,
+     "count_header": 128,
+     "start_doy": 241
+    },
+    "p49": {
+     "sum_bytes": 2816,
+     "count_bytes": 800,
+     "sum_header": 128,
+     "count_header": 128,
+     "start_doy": 246
+    },
+    "p50": {
+     "sum_bytes": 2816,
+     "count_bytes": 800,
+     "sum_header": 128,
+     "count_header": 128,
+     "start_doy": 251
+    },
+    "p51": {
+     "sum_bytes": 2816,
+     "count_bytes": 800,
+     "sum_header": 128,
+     "count_header": 128,
+     "start_doy": 256
+    },
+    "p52": {
+     "sum_bytes": 2816,
+     "count_bytes": 800,
+     "sum_header": 128,
+     "count_header": 128,
+     "start_doy": 261
+    },
+    "p53": {
+     "sum_bytes": 2816,
+     "count_bytes": 800,
+     "sum_header": 128,
+     "count_header": 128,
+     "start_doy": 266
+    },
+    "p54": {
+     "sum_bytes": 2816,
+     "count_bytes": 800,
+     "sum_header": 128,
+     "count_header": 128,
+     "start_doy": 271
+    },
+    "p55": {
+     "sum_bytes": 2816,
+     "count_bytes": 800,
+     "sum_header": 128,
+     "count_header": 128,
+     "start_doy": 276
+    },
+    "p56": {
+     "sum_bytes": 2816,
+     "count_bytes": 800,
+     "sum_header": 128,
+     "count_header": 128,
+     "start_doy": 281
+    },
+    "p57": {
+     "sum_bytes": 2816,
+     "count_bytes": 800,
+     "sum_header": 128,
+     "count_header": 128,
+     "start_doy": 286
+    },
+    "p58": {
+     "sum_bytes": 2816,
+     "count_bytes": 800,
+     "sum_header": 128,
+     "count_header": 128,
+     "start_doy": 291
+    },
+    "p59": {
+     "sum_bytes": 2816,
+     "count_bytes": 800,
+     "sum_header": 128,
+     "count_header": 128,
+     "start_doy": 296
+    },
+    "p60": {
+     "sum_bytes": 2816,
+     "count_bytes": 800,
+     "sum_header": 128,
+     "count_header": 128,
+     "start_doy": 301
+    },
+    "p61": {
+     "sum_bytes": 2816,
+     "count_bytes": 800,
+     "sum_header": 128,
+     "count_header": 128,
+     "start_doy": 306
+    },
+    "p62": {
+     "sum_bytes": 2816,
+     "count_bytes": 800,
+     "sum_header": 128,
+     "count_header": 128,
+     "start_doy": 311
+    },
+    "p63": {
+     "sum_bytes": 2816,
+     "count_bytes": 800,
+     "sum_header": 128,
+     "count_header": 128,
+     "start_doy": 316
+    },
+    "p64": {
+     "sum_bytes": 2816,
+     "count_bytes": 800,
+     "sum_header": 128,
+     "count_header": 128,
+     "start_doy": 321
+    },
+    "p65": {
+     "sum_bytes": 2816,
+     "count_bytes": 800,
+     "sum_header": 128,
+     "count_header": 128,
+     "start_doy": 326
+    },
+    "p66": {
+     "sum_bytes": 2816,
+     "count_bytes": 800,
+     "sum_header": 128,
+     "count_header": 128,
+     "start_doy": 331
+    },
+    "p67": {
+     "sum_bytes": 2816,
+     "count_bytes": 800,
+     "sum_header": 128,
+     "count_header": 128,
+     "start_doy": 336
+    },
+    "p68": {
+     "sum_bytes": 2816,
+     "count_bytes": 800,
+     "sum_header": 128,
+     "count_header": 128,
+     "start_doy": 341
+    },
+    "p69": {
+     "sum_bytes": 2816,
+     "count_bytes": 800,
+     "sum_header": 128,
+     "count_header": 128,
+     "start_doy": 346
+    },
+    "p70": {
+     "sum_bytes": 2816,
+     "count_bytes": 800,
+     "sum_header": 128,
+     "count_header": 128,
+     "start_doy": 351
+    },
+    "p71": {
+     "sum_bytes": 2816,
+     "count_bytes": 800,
+     "sum_header": 128,
+     "count_header": 128,
+     "start_doy": 356
+    },
+    "p72": {
+     "sum_bytes": 2816,
+     "count_bytes": 800,
+     "sum_header": 128,
+     "count_header": 128,
+     "start_doy": 361
+    }
+   },
+   "complete": true
+  }
+ }
+}
