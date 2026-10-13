@@ -1,0 +1,316 @@
+{
+ "H": 10,
+ "W": 18,
+ "_source": "ml/export_gridded_poy.py",
+ "bin_first": 0,
+ "bin_last": 364,
+ "bins_read": 30,
+ "bytes_read": 25696,
+ "chans": [
+  "sst",
+  "ssh"
+ ],
+ "chunk": 2,
+ "dlat": 20.0,
+ "dlon": 20.0,
+ "falsifier": {
+  "max_abs_mean": 9.5367431640625e-07,
+  "max_mean_over_bound": 0.9999703795349972,
+  "slots_sampled": [
+   12,
+   17
+  ],
+  "spans": 14
+ },
+ "files": {
+  "count_p12.npy": {
+   "bytes": 1928,
+   "dtype": "|u1",
+   "header_len": 128,
+   "sha256": "eca0015d95888c98062e2b045f9c1efa2b20019d1608dc445459254919f96eb9",
+   "shape": [
+    2,
+    5,
+    10,
+    18
+   ]
+  },
+  "count_p13.npy": {
+   "bytes": 1928,
+   "dtype": "|u1",
+   "header_len": 128,
+   "sha256": "0b655c07598815b79cc963ae3162221470fd4be90bf4a22ab6bac0d00dba73c8",
+   "shape": [
+    2,
+    5,
+    10,
+    18
+   ]
+  },
+  "count_p14.npy": {
+   "bytes": 1928,
+   "dtype": "|u1",
+   "header_len": 128,
+   "sha256": "22520c9438af40685c5d2e2bf40dea8f8361a8cde5781548bb3e4b442c15a93f",
+   "shape": [
+    2,
+    5,
+    10,
+    18
+   ]
+  },
+  "count_p15.npy": {
+   "bytes": 1928,
+   "dtype": "|u1",
+   "header_len": 128,
+   "sha256": "1cd6a802fbbbfa4222a81065d21f5b91e5e1faba6d7401491d618ab01d534cfb",
+   "shape": [
+    2,
+    5,
+    10,
+    18
+   ]
+  },
+  "count_p16.npy": {
+   "bytes": 1928,
+   "dtype": "|u1",
+   "header_len": 128,
+   "sha256": "b5e799a8cc1a2e89c17530967ce003266130ecf1d3b69fc8efcd97a35ef301e3",
+   "shape": [
+    2,
+    5,
+    10,
+    18
+   ]
+  },
+  "count_p17.npy": {
+   "bytes": 1928,
+   "dtype": "|u1",
+   "header_len": 128,
+   "sha256": "2e382eb8fa22d69b35a23530065368bb9f3851919d81f395c954d937e72e9b5f",
+   "shape": [
+    2,
+    5,
+    10,
+    18
+   ]
+  },
+  "sum_p12.npy": {
+   "bytes": 7328,
+   "dtype": "<f4",
+   "header_len": 128,
+   "sha256": "e5e5ce857eafd50fd59b80b5b86ac3c77fa23e833444700c4e7f34b34cd1b6b5",
+   "shape": [
+    2,
+    5,
+    10,
+    18
+   ]
+  },
+  "sum_p13.npy": {
+   "bytes": 7328,
+   "dtype": "<f4",
+   "header_len": 128,
+   "sha256": "67cf83941856c58ef8a78368f905c856e7b43e97f1f09aa32042d6c0e84ecf61",
+   "shape": [
+    2,
+    5,
+    10,
+    18
+   ]
+  },
+  "sum_p14.npy": {
+   "bytes": 7328,
+   "dtype": "<f4",
+   "header_len": 128,
+   "sha256": "2524adbb9bacac94036778e6013120d676fe2d6df5390cca5578630318ffd4a6",
+   "shape": [
+    2,
+    5,
+    10,
+    18
+   ]
+  },
+  "sum_p15.npy": {
+   "bytes": 7328,
+   "dtype": "<f4",
+   "header_len": 128,
+   "sha256": "5239d613c63afa97331b05d170a326e22c24c2a68e3604afe843a349b6189da7",
+   "shape": [
+    2,
+    5,
+    10,
+    18
+   ]
+  },
+  "sum_p16.npy": {
+   "bytes": 7328,
+   "dtype": "<f4",
+   "header_len": 128,
+   "sha256": "10b1aae82a49230dd1b7ab70d3c12bab027b0817ccefc304d3d5125e66be778f",
+   "shape": [
+    2,
+    5,
+    10,
+    18
+   ]
+  },
+  "sum_p17.npy": {
+   "bytes": 7328,
+   "dtype": "<f4",
+   "header_len": 128,
+   "sha256": "07de02e1ab1fde10b52a73f7b176b675a78bf1ae97f1e17deb8c168e6a331531",
+   "shape": [
+    2,
+    5,
+    10,
+    18
+   ]
+  }
+ },
+ "generated_utc": "fixture",
+ "git_sha": "fixture",
+ "group": "fxp",
+ "labels": {
+  "ssh": "Sea surface height",
+  "sst": "Sea-surface temperature"
+ },
+ "lat0": -90.0,
+ "lon0": -180.0,
+ "n_years": 5,
+ "norm": [
+  [
+   15.0,
+   8.0
+  ],
+  [
+   -0.2,
+   0.7
+  ]
+ ],
+ "plan": "ml/plans/E093_pentad_climatology.md",
+ "prefix": "tensors/fxp/poy/v1/fxp",
+ "record_first": "1982-01-01",
+ "record_last": "1986-12-30",
+ "seconds": 0,
+ "slot_bins": {
+  "p12": {
+   "bins_per_year": [
+    1,
+    1,
+    1,
+    1,
+    1
+   ],
+   "day_2000": 1,
+   "days": 5,
+   "month_2000": 3,
+   "n_bins": 5,
+   "slot": 12,
+   "start_doy": 61
+  },
+  "p13": {
+   "bins_per_year": [
+    1,
+    1,
+    1,
+    1,
+    1
+   ],
+   "day_2000": 6,
+   "days": 5,
+   "month_2000": 3,
+   "n_bins": 5,
+   "slot": 13,
+   "start_doy": 66
+  },
+  "p14": {
+   "bins_per_year": [
+    1,
+    1,
+    1,
+    1,
+    1
+   ],
+   "day_2000": 11,
+   "days": 5,
+   "month_2000": 3,
+   "n_bins": 5,
+   "slot": 14,
+   "start_doy": 71
+  },
+  "p15": {
+   "bins_per_year": [
+    1,
+    1,
+    1,
+    1,
+    1
+   ],
+   "day_2000": 16,
+   "days": 5,
+   "month_2000": 3,
+   "n_bins": 5,
+   "slot": 15,
+   "start_doy": 76
+  },
+  "p16": {
+   "bins_per_year": [
+    1,
+    1,
+    1,
+    1,
+    1
+   ],
+   "day_2000": 21,
+   "days": 5,
+   "month_2000": 3,
+   "n_bins": 5,
+   "slot": 16,
+   "start_doy": 81
+  },
+  "p17": {
+   "bins_per_year": [
+    1,
+    1,
+    1,
+    1,
+    1
+   ],
+   "day_2000": 26,
+   "days": 5,
+   "month_2000": 3,
+   "n_bins": 5,
+   "slot": 17,
+   "start_doy": 86
+  }
+ },
+ "slot_rule": "slot = min(72, floor((day_of_year(bin start, UTC) \u2212 1) / 5)); bin b starts on 1982-01-01 + 5\u00b7b days; slot s holds the bins starting on days 5s+1 \u2026 5s+5 of their year, slot 72 those starting on days 361 \u2026 366; a bin belongs to the year of its start",
+ "slots": [
+  12,
+  13,
+  14,
+  15,
+  16,
+  17
+ ],
+ "source_bytes": 262928,
+ "source_file": "tensors/fxp/fxp_X_fxp.npy",
+ "source_sha256": "abb4c79f9c153db0502b631d5144b47bc68e29464f80537de3d6c17558c59f6e",
+ "south_first": true,
+ "stem": "fxp",
+ "units": {
+  "ssh": "m",
+  "sst": "\u00b0C"
+ },
+ "year_first": 1982,
+ "year_last": 1986,
+ "years": [
+  1982,
+  1983,
+  1984,
+  1985,
+  1986
+ ],
+ "zscored_source": true
+}

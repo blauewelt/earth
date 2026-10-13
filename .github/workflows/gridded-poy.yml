@@ -1,0 +1,51 @@
+# E-093: PENTAD-OF-YEAR CLIMATOLOGY sums of one group of the five-day global
+# tensor, cumulative over the years (ml/export_gridded_poy.py, plan
+# ml/plans/E093_pentad_climatology.md). Twelve hosted jobs, one per chunk of
+# slots (six slots each, the last seven): each reads that chunk's bins of every
+# year from the Hub by HTTP range, writes the slot files, runs the falsifier
+# (composed means against numpy on the native bins), and only then commits the
+# files to the Hub and reads their sizes and sha256 back.
+#
+# workflow_dispatch ONLY, ubuntu-latest ONLY (ml/CLAUDE.md §6). HF_TOKEN is the
+# only secret; nothing here can reach a rented box.
+name: gridded-poy
+on:
+  workflow_dispatch:
+    inputs:
+      group:
+        description: "tensor group: g025, g100 or oc025"
+        required: true
+      chunks:
+        description: "JSON list of slot chunks 0..11"
+        default: "[0,1,2,3,4,5,6,7,8,9,10,11]"
+permissions:
+  contents: read
+concurrency:
+  group: gridded-poy-${{ github.event.inputs.group }}
+  cancel-in-progress: false
+jobs:
+  chunk:
+    runs-on: ubuntu-latest
+    timeout-minutes: 340
+    strategy:
+      fail-fast: false
+      max-parallel: 6
+      matrix:
+        chunk: ${{ fromJSON(github.event.inputs.chunks) }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install
+        run: pip install --quiet numpy requests huggingface_hub
+      - name: Free disk
+        run: |
+          sudo rm -rf /usr/share/dotnet /opt/ghc /usr/local/lib/android || true
+          df -h /
+      - name: Export, check, upload
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+          HF_HUB_DISABLE_PROGRESS_BARS: "1"
+          GROUP: ${{ github.event.inputs.group }}
+          CHUNK: ${{ matrix.chunk }}
+        run: |
+          python3 -u ml/export_gridded_poy.py chunk --group "${GROUP}" \
+              --chunk "${CHUNK}" --out "${RUNNER_TEMP}/poy" --upload

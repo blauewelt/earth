@@ -1,0 +1,103 @@
+{
+ "epoch": "1982-01-01",
+ "family": "family10",
+ "family_version": "10.2",
+ "generated_utc": "fixture",
+ "groups": [
+  {
+   "C": 2,
+   "bin_first": 0,
+   "cadence": "pentad",
+   "channels": [
+    {
+     "label": "Sea-surface temperature",
+     "name": "sst",
+     "unit": "\u00b0C"
+    },
+    {
+     "label": "Sea surface height",
+     "name": "ssh",
+     "unit": "m"
+    }
+   ],
+   "dtype": "<f2",
+   "files": [
+    {
+     "bytes": 262928,
+     "name": "fxp_X_fxp.npy"
+    }
+   ],
+   "grid": {
+    "lat0": -90.0,
+    "lon0": -180.0,
+    "nx": 18,
+    "ny": 10,
+    "south_first": true,
+    "step": 20.0,
+    "wrap": true
+   },
+   "header_len": 128,
+   "live_bins_only": false,
+   "n_bins": 365,
+   "name": "fxp",
+   "normalisation": "z-scored at build time",
+   "path": "tensors/fxp",
+   "prefix": "tensors/fxp",
+   "repo": "fixture",
+   "shape": [
+    365,
+    10,
+    18,
+    2
+   ],
+   "slab_bytes": 720,
+   "tier": "G"
+  },
+  {
+   "C": 1,
+   "bin_first": 100,
+   "cadence": "pentad",
+   "channels": [
+    {
+     "label": "log10 chlorophyll-a (mg/m\u00b3)",
+     "name": "log_chl",
+     "unit": "log\u2081\u2080 mg/m\u00b3"
+    }
+   ],
+   "dtype": "<f2",
+   "files": [
+    {
+     "bytes": 95528,
+     "name": "fxp_X_fxq.npy"
+    }
+   ],
+   "grid": {
+    "lat0": -90.0,
+    "lon0": -180.0,
+    "nx": 18,
+    "ny": 10,
+    "south_first": true,
+    "step": 20.0,
+    "wrap": true
+   },
+   "header_len": 128,
+   "live_bins_only": false,
+   "n_bins": 265,
+   "name": "fxq",
+   "normalisation": "z-scored at build time",
+   "path": "tensors/fxp",
+   "prefix": "tensors/fxp",
+   "repo": "fixture",
+   "shape": [
+    265,
+    10,
+    18,
+    1
+   ],
+   "slab_bytes": 360,
+   "tier": "G"
+  }
+ ],
+ "pentad_days": 5,
+ "repo": "fixture"
+}

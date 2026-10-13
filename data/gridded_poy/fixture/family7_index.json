@@ -1,0 +1,94 @@
+{
+ "_source": "tests/make_gridded_poy_fixture.py",
+ "base": "./tensors/fxp/",
+ "groups": {
+  "fxp": {
+   "bin_first": 0,
+   "bytes": 262928,
+   "chans": [
+    "sst",
+    "ssh"
+   ],
+   "dtype": "<f2",
+   "file": "fxp_X_fxp.npy",
+   "grid": {
+    "lat0": -90.0,
+    "lon0": -180.0,
+    "nx": 18,
+    "ny": 10,
+    "south_first": true,
+    "step": 20.0,
+    "wrap": true
+   },
+   "header_len": 128,
+   "labels": {
+    "ssh": "Sea surface height",
+    "sst": "Sea-surface temperature"
+   },
+   "n_bins": 365,
+   "norm": [
+    [
+     15.0,
+     8.0
+    ],
+    [
+     -0.2,
+     0.7
+    ]
+   ],
+   "sha256": "abb4c79f9c153db0502b631d5144b47bc68e29464f80537de3d6c17558c59f6e",
+   "shape": [
+    365,
+    10,
+    18,
+    2
+   ],
+   "slab_bytes": 720,
+   "units": {
+    "ssh": "m",
+    "sst": "\u00b0C"
+   }
+  },
+  "fxq": {
+   "bin_first": 100,
+   "bytes": 95528,
+   "chans": [
+    "log_chl"
+   ],
+   "dtype": "<f2",
+   "file": "fxp_X_fxq.npy",
+   "grid": {
+    "lat0": -90.0,
+    "lon0": -180.0,
+    "nx": 18,
+    "ny": 10,
+    "south_first": true,
+    "step": 20.0,
+    "wrap": true
+   },
+   "header_len": 128,
+   "labels": {
+    "log_chl": "log10 chlorophyll-a (mg/m\u00b3)"
+   },
+   "n_bins": 265,
+   "norm": [
+    [
+     -0.78,
+     0.46
+    ]
+   ],
+   "sha256": "bc47df586ad23ed9478ccef055cebffc25b518f3c3e8a68e877e3464be1cc1a9",
+   "shape": [
+    265,
+    10,
+    18,
+    1
+   ],
+   "slab_bytes": 360,
+   "units": {
+    "log_chl": "log\u2081\u2080 mg/m\u00b3"
+   }
+  }
+ },
+ "stem": "fxp"
+}
