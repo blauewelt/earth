@@ -420,7 +420,8 @@ A new layer is not done until it has **all** of:
    | AMOC eval mask (grid) | ✗ | ✗ | categorical AND untimed — a cell carries the ROLE it plays in an experiment, and an experiment's geometry has no date to average over |
    | Global tensor, family 7 (grid) | ✗ | ✗ | the fields are continuous and would average and difference soundly; the reason is the BYTE COUNT — each frame is one 14.5 MB range read of the archive, so a 12-day window would be three of them per paint and a computed difference doubles whatever the window costs. "What does the model read at this pentad" has no window in it. Its two statics (`sphere`, `elev`) are additionally untimed |
    | Model climatology, family 7 (grid) | ✗ | ✗ | already a multi-decade average, one calendar month per frame — a window would blend two months' normals into a number no trainer ever subtracted, and a per-pixel difference between two dates is just the seasonal cycle the ±1 month stepper already shows |
-   | Fishing effort, AIS (grid) | ✗ | ✗ | the cell is ALREADY a monthly SUM of vessel-hours: averaging one over a 12-day window produces a number in no unit at all, and differencing two per pixel differences two sums over different numbers of days unless the window happens to land on a month. The family-7 byte-count argument applies unchanged on top of that — each month is one 8.3 MB range read. The month is the window |
+   | Pentad climatology, family 7 (grid) | ✗ | ✗ | already a multi-year mean of one five-day slot of the year — its five days are its window, a window would blend neighbouring slots into a number nobody computed, and a difference of two dates is the seasonal cycle the ±5-day stepper walks; the meaningful comparison (one span of years against another) is the row's own years / leave-out fields |
+| Fishing effort, AIS (grid) | ✗ | ✗ | the cell is ALREADY a monthly SUM of vessel-hours: averaging one over a 12-day window produces a number in no unit at all, and differencing two per pixel differences two sums over different numbers of days unless the window happens to land on a month. The family-7 byte-count argument applies unchanged on top of that — each month is one 8.3 MB range read. The month is the window |
    | Loitering vessels (points) | ✗ | ✗ | not a raster at all: each event is an interval with a start and an end, and the layer shows the ones whose interval overlaps the selected day. "The average of an event" is not a thing, and a difference of two days' event sets is a list, not a field |
    | Floating plastic, North Pacific (points) | ✗ | ✗ | points from a closed 2015–16 campaign plus a 1972–2015 compilation: nothing to average over a window, and each dot is a different tow at a different place, so there is no per-pixel series to difference |
 6. **Catalog consistency** — the dataset exists in `data/catalog.json`; set
@@ -2105,6 +2106,28 @@ index.
   retired and how to reproduce them. The tests that covered the selector were
   replaced: no `select[data-climver]`, `grid.version` is `all`, and the
   single-plane path is now exercised on a month not yet read.
+
+- **The exact five-day climatology, beside it (2026-10-13, E-093).** Chris:
+  *"make sure that climatology can also be displayed as a layer (this should
+  be the exact pentad averaged over years data)"*. A third family-7 layer,
+  **"Pentad climatology — each five-day bin averaged over the years (family 7),
+  0.25° / 1°"** (`poy7`): for the date's five-day bin (epoch and length from
+  `data/family7_index.json`, not clamped to the tensor's last bin), its slot
+  `min(72, floor((doy(bin start) − 1)/5))`, and the mean over a span of years
+  (row: channel, years from/to, leave-out; default the group's whole record)
+  composed in float64 from E-093's cumulative `sum_pSS.npy` / `count_pSS.npy`
+  as `(S[b] − S[a−1]) / (N[b] − N[a−1])`, one 206 range read per needed
+  year-plane (whole record: 2 reads, 4.15 + 1.04 MB at 0.25°), LRU per (group,
+  slot, channel, kind, year-plane); count 0 paints nothing. Addressed by
+  `data/gridded_poy_index.json` (base resolved against the index URL); labels,
+  ramps and ranges from the family-7 index, falling back to the store's own.
+  Probe / pixel card: mean, bins behind it, span, slot; `period` stamp = the
+  span. Toast: the day of the date matters, the year doesn't. Downloads fold:
+  the slot's two files and the Data tab on `10/<group>` at step `poy`. Play
+  steps 5 days keyed by slot. No catalog record (§2.6's exception). Tests over
+  `data/poy_layer_fixture/` (`tests/make_poy_layer_fixture.py`, real group
+  names, numpy expected.json); E-093's own exporter fixture is
+  `data/gridded_poy/fixture/`. `docs/FAMILY7_CLIM.md` has the section.
 
 **The Data tab — every public store of family 1.gf, family 10 and the derived
 maps, filtered and downloaded in the browser (2026-10-05, E-084).** Chris, on the Model climatology download:

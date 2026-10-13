@@ -205,3 +205,56 @@ byte-identical. `tests/app.spec.js` routes the Hub URLs to it and answers with
 the sliced bytes and a real 206, so the browser's offset arithmetic is tested
 rather than assumed; `tests/data.spec.js` pins the index against the files and
 against the family-7 fixture index (same stem, channels, grids and norms).
+
+## Beside it: the **Pentad climatology** layer — the exact five-day climatology (E-093)
+
+Chris, 2026-10-13: *"Can you make sure that climatology can also be displayed
+as a layer? (This should be the exact pentad averaged over years data)"*. The
+layer **"Pentad climatology — each five-day bin averaged over the years
+(family 7), 0.25° / 1°"** (`poy7`) is the five-day counterpart of the layer
+above: not one calendar month per frame but one of the 73 five-day slots of
+the year, averaged over a span of years you choose.
+
+**Which slot.** Family 7 is a continuous run of five-day bins from 1982-01-01
+(bin *b* covers days [5b, 5b+5)). The globe's date falls in one bin; the bin
+belongs to slot `min(72, floor((day_of_year(bin start) − 1) / 5))` — slot 0 is
+the bins opening on days 1–5, slot 72 those opening on days 361–366. Because
+365 is a multiple of five, the bins keep their place against the calendar in
+ordinary years and slide by one day at every leap day, so the same calendar
+date can fall one slot over in another year. The year of the date never
+chooses which years are averaged; the toast says so.
+
+**Which years.** The row has a channel picker, a *years* pair (default: the
+group's whole record) and a *leave out* field ("2009, 2017"). The mean is
+composed in the browser from E-093's files (`data/gridded_poy_index.json`,
+plan [`ml/plans/E093_pentad_climatology.md`](../ml/plans/E093_pentad_climatology.md)):
+per group and slot, `sum_pSS.npy` float32 `[C, Y, H, W]` in physical units and
+`count_pSS.npy` uint8, both cumulative over the years, so
+
+    mean over a…b = (S[b] − S[a−1]) / (N[b] − N[a−1])
+
+and a year *e* left out subtracts `(S[e] − S[e−1])` and `(N[e] − N[e−1])`.
+Each year-plane is one `Range:` read at
+`header_len + (c·Y + y)·H·W·itemsize` — 4.15 MB of sums plus 1.04 MB of counts
+at 0.25°, 0.26 + 0.07 MB at 1°. The whole record is two reads; a span starting
+later is four; each year left out adds up to four. Planes are cached per
+(group, slot, channel, kind, year-plane), so a date that stays in its slot, and
+a span change that reuses planes, read nothing new. A cell with count 0 is
+blank.
+
+**Read-outs.** The probe and the pixel card print the mean in the channel's
+unit, the number of five-day bins behind it at that cell, the span and the
+slot; the stamp is the span (a fixed period, no age). Labels, units, ramps and
+legend ranges come from `data/family7_index.json`, so a channel looks the same
+here as on the Global tensor and the Model climatology layers. The ⤓ downloads
+fold links the slot's two `.npy` files and the index, and opens the Data tab on
+the same group (`10/<group>`) at the step *Climatology — mean per pentad of
+year over the years* — the same numbers as a file, for any box.
+
+No aggregation window and no computed difference: the field is already a
+multi-year mean of one five-day slot (its five days ARE its window), a
+difference of two dates is the seasonal cycle the ±5-day stepper walks, and
+the comparison that means something — one span of years against another — is
+the row's own years and leave-out fields. Tests: `tests/app.spec.js`
+"Pentad climatology", over `data/poy_layer_fixture/`
+(`tests/make_poy_layer_fixture.py`).
