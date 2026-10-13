@@ -1,0 +1,353 @@
+{
+ "bins": [
+  3215,
+  3287
+ ],
+ "builder_git_sha": "fdb6bccaf855161cdf721a2eb7f4d6cc73041754",
+ "built_at": "2026-10-13T11:46:50+00:00",
+ "bytes_declared": 3736637375,
+ "bytes_declared_note": "CMR granule_size; LOWER bound \u2014 real day files are declared ~100 B",
+ "channels": [
+  {
+   "max": 1.0,
+   "min": 0.0,
+   "name": "mss",
+   "unit": "1"
+  },
+  {
+   "max": 1.0,
+   "min": 0.0,
+   "name": "mss_uncertainty",
+   "unit": "1"
+  },
+  {
+   "max": 2048.0,
+   "min": 1.0,
+   "name": "n_mss",
+   "unit": "L2 samples"
+  },
+  {
+   "max": 99.0,
+   "min": 0.0,
+   "name": "wind_speed",
+   "unit": "m s-1"
+  }
+ ],
+ "collection": "C2832196567-POCLOUD",
+ "dataset": "CYGNSS_L3_V3.2 (CYGNSS L3 V3.2 hourly 0.2 degree)",
+ "date_range": [
+  "2026-01-01",
+  "2026-12-31"
+ ],
+ "days_absent_in_window": [
+  "2026-06-13",
+  "2026-06-14",
+  "2026-06-15"
+ ],
+ "days_absent_n": 3,
+ "doi": "10.5067/CYGNS-L3X32",
+ "files": 279,
+ "files_per_year": {
+  "2026": 279
+ },
+ "first_file": {
+  "date": "2026-01-01",
+  "dimensions": {
+   "lat": 400,
+   "lon": 1800,
+   "time": 24
+  },
+  "global_attributes": {
+   "Conventions": "CF-1.6, ACDD-1.3, ISO-8601",
+   "NCO": "4.4.4",
+   "ShortName": "CYGNSS_L3_V3.2",
+   "comment": "This Level 3 gridded product combines all 8 x 4 = 32 wind speed and mean square slope (MSS) measurements made by the CYGNSS constellation each second, uniformly sampled in latitude, longitude and time",
+   "creator_name": "CYGNSS Science Operations Center",
+   "creator_type": "institution",
+   "date_created": "2026-01-04T11:46:00Z",
+   "date_issued": "2026-01-04T11:46:00Z",
+   "geospatial_lat_max": "39.9N",
+   "geospatial_lat_min": "-39.9N",
+   "geospatial_lon_max": "359.9E",
+   "geospatial_lon_min": "0.1E",
+   "history": "Sun Jan  4 11:46:00 2026: ncks -O -L1 -a /tmp/qt_temp.TJ3881 /tmp/qt_temp.XM3881\n../../src/produce-L3-files/produce-L3-files --dstore production_1@cygnss-data-1.engin.umich.edu --day 2026-01-01",
+   "id": "PODAAC-CYGNS-L3X32",
+   "institution": "University of Michigan Space Physics Research Lab (SPRL)",
+   "l3_algorithm_version": "3.2",
+   "l3_data_version": "3.3",
+   "netcdf_version_id": "4.3.3.1 of Dec 10 2015 16:44:18 $",
+   "platform": "Observatory References: cyg1, cyg2, cyg3, cyg4, cyg5, cyg7, cyg8",
+   "processing_level": "3",
+   "program": "CYGNSS",
+   "project": "CYGNSS",
+   "publisher_email": "podaac@podaac.jpl.nasa.gov",
+   "publisher_name": "PO.DAAC",
+   "publisher_url": "\u200bhttp://podaac.jpl.nasa.gov",
+   "references": "Ruf, C., P. Chang, M.P. Clarizia, S. Gleason, Z. Jelenak, J. Murray, M. Morris, S. Musko, D. Posselt, D. Provost, D. Starkenburg, V. Zavorotny, CYGNSS Handbook, Ann Arbor, MI, Michigan Pub., ISBN 978-",
+   "sensor": "Delay Doppler Mapping Instrument (DDMI)",
+   "source": "cyg.ddmi.s20260101-000000-e20260101-235959.l2.wind-mss.a32.d33.nc",
+   "standard_name_vocabulary": "CF Standard Name Table v30",
+   "summary": "CYGNSS is a NASA Earth Venture mission, managed by the Earth System Science Pathfinder Program. The mission consists of a constellation of eight small satellites. The eight observatories comprise a co",
+   "time_coverage_duration": "P1DT00H00M00S",
+   "time_coverage_end": "2026-01-01T23:30:00Z",
+   "time_coverage_resolution": "P0DT1H0M0S",
+   "time_coverage_start": "2026-01-01T00:30:00Z",
+   "title": "CYGNSS Level 3 Science Data Record Version 3.2",
+   "version_id": "3.2"
+  },
+  "grid_checked": {
+   "lat_first": -39.900001525878906,
+   "lat_last": 39.900001525878906,
+   "lon_first": 0.10000000149011612,
+   "lon_last": 359.8999938964844
+  },
+  "inventory": {
+   "epoch_time": {
+    "add_offset": null,
+    "dims": [
+     "time"
+    ],
+    "dtype": "int32",
+    "fill": null,
+    "long_name": "Time Centering of Data Based on Epoch Reference",
+    "scale_factor": null,
+    "shape": [
+     24
+    ],
+    "units": "hours since 2018-08-01 00:30:00.000000000"
+   },
+   "fds_rcg": {
+    "add_offset": null,
+    "dims": [
+     "time",
+     "lat",
+     "lon"
+    ],
+    "dtype": "float32",
+    "fill": -9999.0,
+    "long_name": "FDS range corrected gain",
+    "scale_factor": null,
+    "shape": [
+     24,
+     400,
+     1800
+    ],
+    "units": "1e-27 dBi meter-4"
+   },
+   "lat": {
+    "add_offset": null,
+    "dims": [
+     "lat"
+    ],
+    "dtype": "float32",
+    "fill": null,
+    "long_name": "Latitude",
+    "scale_factor": null,
+    "shape": [
+     400
+    ],
+    "units": "degrees_north"
+   },
+   "lon": {
+    "add_offset": null,
+    "dims": [
+     "lon"
+    ],
+    "dtype": "float32",
+    "fill": null,
+    "long_name": "Longitude",
+    "scale_factor": null,
+    "shape": [
+     1800
+    ],
+    "units": "degrees_east"
+   },
+   "mean_square_slope": {
+    "add_offset": null,
+    "dims": [
+     "time",
+     "lat",
+     "lon"
+    ],
+    "dtype": "float32",
+    "fill": -9999.0,
+    "long_name": "Mean square slope",
+    "scale_factor": null,
+    "shape": [
+     24,
+     400,
+     1800
+    ],
+    "units": "1"
+   },
+   "mean_square_slope_rcg": {
+    "add_offset": null,
+    "dims": [
+     "time",
+     "lat",
+     "lon"
+    ],
+    "dtype": "float32",
+    "fill": -9999.0,
+    "long_name": "MSS range corrected gain",
+    "scale_factor": null,
+    "shape": [
+     24,
+     400,
+     1800
+    ],
+    "units": "1e-27 dBi meter-4"
+   },
+   "mean_square_slope_uncertainty": {
+    "add_offset": null,
+    "dims": [
+     "time",
+     "lat",
+     "lon"
+    ],
+    "dtype": "float32",
+    "fill": -9999.0,
+    "long_name": "Mean square slope uncertainty",
+    "scale_factor": null,
+    "shape": [
+     24,
+     400,
+     1800
+    ],
+    "units": "1"
+   },
+   "num_mss_samples": {
+    "add_offset": null,
+    "dims": [
+     "time",
+     "lat",
+     "lon"
+    ],
+    "dtype": "int32",
+    "fill": -99.0,
+    "long_name": "Number of mean square slope samples",
+    "scale_factor": null,
+    "shape": [
+     24,
+     400,
+     1800
+    ],
+    "units": "1"
+   },
+   "num_wind_speed_samples": {
+    "add_offset": null,
+    "dims": [
+     "time",
+     "lat",
+     "lon"
+    ],
+    "dtype": "int32",
+    "fill": -99.0,
+    "long_name": "Number of wind speed samples",
+    "scale_factor": null,
+    "shape": [
+     24,
+     400,
+     1800
+    ],
+    "units": "1"
+   },
+   "time": {
+    "add_offset": null,
+    "dims": [
+     "time"
+    ],
+    "dtype": "int8",
+    "fill": null,
+    "long_name": "Reference time of file",
+    "scale_factor": null,
+    "shape": [
+     24
+    ],
+    "units": "hours since 2026-01-01 00:30:00.000000000"
+   },
+   "wind_speed": {
+    "add_offset": null,
+    "dims": [
+     "time",
+     "lat",
+     "lon"
+    ],
+    "dtype": "float32",
+    "fill": -9999.0,
+    "long_name": "Wind speed",
+    "scale_factor": null,
+    "shape": [
+     24,
+     400,
+     1800
+    ],
+    "units": "m s-1"
+   },
+   "wind_speed_uncertainty": {
+    "add_offset": null,
+    "dims": [
+     "time",
+     "lat",
+     "lon"
+    ],
+    "dtype": "float32",
+    "fill": -9999.0,
+    "long_name": "Wind speed uncertainty",
+    "scale_factor": null,
+    "shape": [
+     24,
+     400,
+     1800
+    ],
+    "units": "m s-1"
+   }
+  },
+  "lat_descending": false,
+  "name": "cyg.ddmi.s20260101-003000-e20260101-233000.l3.grid-wind.a32.d33"
+ },
+ "footprint": {
+  "log2_dt": -2.321928094887362,
+  "log2_fp": -0.3219347044467971
+ },
+ "grid": {
+  "H": 400,
+  "W": 1800,
+  "col_order": "col 0 is 180 W (centre -179.9): the producer's 0.1 .. 359.9 E columns ROTATED by W/2, a lossless permutation; the pixels are the producer's own",
+  "coordinates": "lon = x0 + (col + 0.5) * dx, lat = y0 + (row + 0.5) * dy; x0/y0 are the grid's WEST and SOUTH edges",
+  "crs": "EPSG:4326",
+  "dx": 0.2,
+  "dy": 0.2,
+  "extent": [
+   -180.0,
+   -40.0,
+   180.0,
+   40.0
+  ],
+  "extent_note": "[west, south, east, north] in degrees; +-40 latitude",
+  "no_tile_corners": "a plain geographic grid: the affine rule above IS the lat/lon of every pixel and tile corner",
+  "pixel_deg": 0.2,
+  "pixel_km_equator": 22.2639,
+  "proj4": "+proj=longlat +datum=WGS84 +no_defs",
+  "row_order": "row 0 is the SOUTHERNMOST row (bin centre -39.9) \u2014 the order of the L3 file's ascending `lat`",
+  "x0": -180.0,
+  "y0": -40.0
+ },
+ "per_year_resume": true,
+ "qc_policy": "The PRODUCER's QC is inherited, not redone: an L3 hourly bin is the inverse-variance mean of the L2 samples the producer kept (fatal_composite_mss clear). A day-cell combines the hours whose value is finite, whose uncertainty is finite and > 0 and whose sample count is > 0 \u2014 per quantity, so the wind and the MSS keep their own valid hours; an hour that has a value but cannot be weighted is excluded and counted (`hours_*_unweightable`). Values outside the channel bounds (mss and its uncertainty in [0, 1], n_mss in [1, 2048], wind in [0, 99] m/s) become NaN and are counted, never clipped. A file that will not open or whose axes do not match the declared grid is `ctx.note_absent`, never a smaller frame. No independent-wind filter and no rain or slick mask is applied: those are the confounders the consumer must model (cygnss_mss_measure.json, `confounders`).",
+ "record": [
+  "2018-08-01",
+  "2026-10-09"
+ ],
+ "sources": [
+  "https://cmr.earthdata.nasa.gov/search/granules.json?collection_concept_id=C2832196567-POCLOUD (CYGNSS_L3_V3.2, anonymous listing; data Earthdata-protected at PO.DAAC)",
+  "https://cmr.earthdata.nasa.gov/search/granules.json?collection_concept_id=C2832196001-POCLOUD (CYGNSS_L2_V3.2, F1 only)"
+ ],
+ "store": "cygnss_mss",
+ "title": "CYGNSS sea-surface mean-square slope (GPS-reflection roughness) and its own wind, daily on the producer's 0.2-degree grid, +-40 latitude, 2018-08 ->",
+ "url": "https://cmr.earthdata.nasa.gov/search/granules.json?collection_concept_id=C2832196567-POCLOUD",
+ "verified": "2026-10-13 from the sandbox (anonymous CMR only): the L3 V3.2 collection's 12 UMM-Var records \u2014 mean_square_slope, mean_square_slope_uncertainty, wind_speed, wind_speed_uncertainty float (time 24, lat 400, lon 1800) fill -9999.0; num_mss_samples, num_wind_speed_samples int fill -99; lat 400, lon 1800 \u2014 the L2 V3.2 sample variables and the mss_sample_flags bits from data dictionary 148-0348-13 (bit 1 = fatal_composite_mss), the granule titles and protected https links of 2019-01-15/16 for both levels, and CMR granule_size values of ~1e-4 MB for real day files (so per-year CMR totals are LOWER bounds). NOT measured, and what the hosted probe settles: the files' own layout (inventoried into plan.json at index), the lat axis order, the zstd ratio, and F1.",
+ "years": [
+  2026
+ ]
+}
