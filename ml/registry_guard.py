@@ -182,10 +182,22 @@ def main(argv=None):
                   f"be absent from the published registry and present in the "
                   f"rebuilt one")
             return 1
+        # Stores whose adapters exist but which are NOT YET BUILT appear in the
+        # rebuilt registry as `built: false` entries (E-092 phase C: four
+        # adapters landed together, published one at a time). Such an entry
+        # carries no data a reader could open, so a new one is listed and
+        # passed; a not-built entry already published is compared as usual.
+        pending = sorted(g.get("name") for g in new.get("groups") or []
+                         if g.get("name") not in oldn
+                         and g.get("name") not in added
+                         and g.get("built") is False)
         new = dict(new)
         new["groups"] = [g for g in new.get("groups") or []
-                         if g.get("name") not in added]
+                         if g.get("name") not in added
+                         and g.get("name") not in pending]
         print(f"stores added (first publish): {sorted(added)}")
+        if pending:
+            print(f"stores listed as not yet built (no data): {pending}")
         for k in sorted(ADDED_TOP - {"description"}):
             if old.get(k) != json.load(open(a.rebuilt)).get(k):
                 print(f"  top-level {k}: {old.get(k)} -> "

@@ -88,3 +88,16 @@ def test_added_store_holds_other_top_level_fields(tmp_path):
     old = _reg(n_groups=2)
     assert _run(tmp_path, old, _added(repo="y"),
                 "--allow-group", "added_c") == 1
+
+
+def test_added_store_may_bring_new_not_built_placeholders(tmp_path):
+    # E-092 phase C: adapters for several stores land together and are
+    # published one at a time, so the rebuilt registry also lists the others
+    # as `built: false`. A NEW not-built entry holds no data and passes; a
+    # new entry that claims to be built does not.
+    old = _reg(n_groups=2)
+    new = _added(n_groups=4)
+    new["groups"].append({"name": "d", "built": False})
+    assert _run(tmp_path, old, new, "--allow-group", "added_c") == 0
+    new["groups"][-1]["built"] = True
+    assert _run(tmp_path, old, new, "--allow-group", "added_c") == 1
