@@ -1,0 +1,80 @@
+  [index beachlitter] start (1 items)  0/1  0.0s
+  [index beachlitter] plan.json  1/1  17.8s
+  index: beachlitter — 18 year(s), C=14 (log_items_100m, log_plastic_100m, log_ambig_100m, plastic_frac, log_items_m2, accum_days, survey_len_m, log_nurdles_10pmin …), bins 1972..3287
+=== stage index done in 17.8s ===
+
+=== stage fetch (beachlitter) ===
+  [fetch beachlitter (one stream)] start  0/0  0.0s
+  [fetch beachlitter (one stream)] beachlitter MDMAP exports 100/1275  64.3s
+  [fetch beachlitter (one stream)] beachlitter MDMAP exports 200/1275  112.3s
+  [fetch beachlitter (one stream)] beachlitter MDMAP exports 300/1275  157.2s
+  [fetch beachlitter (one stream)] beachlitter MDMAP exports 400/1275  221.3s
+  [fetch beachlitter (one stream)] beachlitter MDMAP exports 500/1275  311.4s
+  [fetch beachlitter (one stream)] beachlitter MDMAP exports 600/1275  379.3s
+  [fetch beachlitter (one stream)] beachlitter MDMAP exports 700/1275  446.3s
+  [fetch beachlitter (one stream)] beachlitter MDMAP exports 800/1275  510.3s
+  [fetch beachlitter (one stream)] beachlitter MDMAP exports 900/1275  569.9s
+  [fetch beachlitter (one stream)] beachlitter MDMAP exports 1000/1275  639.6s
+  [fetch beachlitter (one stream)] beachlitter MDMAP exports 1100/1275  685.0s
+  [fetch beachlitter (one stream)] beachlitter MDMAP exports 1200/1275  714.0s
+  beachlitter: 24,702 row(s) over 18 year(s) in one pass (741.4s)
+=== stage fetch done in 741.4s ===
+
+=== stage assemble (beachlitter) ===
+  assemble: auto -> memory (24,702 part row(s) by the per-year ledgers, threshold 50,000,000)
+  store: 24,702 row(s), C=14, bins 2014..3266 (1,086 live) -> /home/runner/work/earth/earth/ml/cache/family1_3/beachlitter/beachlitter
+  assemble: memory done, peak RSS 0.72 GB
+  [fetch beachlitter (one stream)] store  1/0  741.4s
+=== stage assemble done in 0.0s ===
+
+=== stage publish (beachlitter) ===
+  restore: the largest file is values.npy at 0.00 GB; 89.81 GB free under /home/runner/work/earth/earth/ml/cache/family1_3/beachlitter/src; 1.1x margin wants 0.00 GB
+  hub: chfrank/earth-tensors with the token from $HF_TOKEN
+  [publish beachlitter] start (10 items)  0/10  0.0s
+Upload 3 LFS files:   0%|          | 0/3 [00:00<?, ?it/s]
+bin.npy:   0%|          | 0.00/49.5k [00:00<?, ?B/s][A
+
+bin_offsets.npy:   0%|          | 0.00/10.2k [00:00<?, ?B/s][A[A
+
+
+fp.npy:   0%|          | 0.00/98.9k [00:00<?, ?B/s][A[A[Abin_offsets.npy: 100%|██████████| 10.2k/10.2k [00:00<00:00, 65.9kB/s]
+bin.npy: 100%|██████████| 49.5k/49.5k [00:00<00:00, 301kB/s]
+fp.npy: 100%|██████████| 98.9k/98.9k [00:00<00:00, 565kB/s]
+Upload 3 LFS files:  33%|███▎      | 1/3 [00:00<00:00,  4.14it/s]Upload 3 LFS files: 100%|██████████| 3/3 [00:00<00:00,  9.67it/s]
+Upload 3 LFS files:   0%|          | 0/3 [00:00<?, ?it/s]
+lon.npy:   0%|          | 0.00/98.9k [00:00<?, ?B/s][A
+
+lat.npy:   0%|          | 0.00/98.9k [00:00<?, ?B/s][A[A
+
+
+platform.npy:   0%|          | 0.00/198k [00:00<?, ?B/s][A[A[Alon.npy: 100%|██████████| 98.9k/98.9k [00:00<00:00, 854kB/s]
+lat.npy: 100%|██████████| 98.9k/98.9k [00:00<00:00, 582kB/s]
+Upload 3 LFS files:  33%|███▎      | 1/3 [00:00<00:00,  5.67it/s]platform.npy: 100%|██████████| 198k/198k [00:00<00:00, 681kB/s]
+Upload 3 LFS files: 100%|██████████| 3/3 [00:00<00:00,  8.61it/s]Upload 3 LFS files: 100%|██████████| 3/3 [00:00<00:00,  8.18it/s]
+Upload 3 LFS files:   0%|          | 0/3 [00:00<?, ?it/s]
+time_s.npy:   0%|          | 0.00/98.9k [00:00<?, ?B/s][A
+
+qc.npy:   0%|          | 0.00/24.8k [00:00<?, ?B/s][A[A
+
+
+values.npy:   0%|          | 0.00/692k [00:00<?, ?B/s][A[A[Aqc.npy: 100%|██████████| 24.8k/24.8k [00:00<00:00, 206kB/s]
+Upload 3 LFS files:  33%|███▎      | 1/3 [00:00<00:00,  5.35it/s]time_s.npy: 100%|██████████| 98.9k/98.9k [00:00<00:00, 491kB/s]
+values.npy: 100%|██████████| 692k/692k [00:00<00:00, 2.77MB/s]
+Upload 3 LFS files: 100%|██████████| 3/3 [00:00<00:00, 10.02it/s]Upload 3 LFS files: 100%|██████████| 3/3 [00:00<00:00,  9.20it/s]
+  [publish beachlitter] bin.npy  1/10  37.6s
+  [publish beachlitter] bin_offsets.npy  2/10  37.8s
+  [publish beachlitter] fp.npy  3/10  37.9s
+  [publish beachlitter] lat.npy  4/10  38.0s
+  [publish beachlitter] lon.npy  5/10  38.2s
+  [publish beachlitter] platform.npy  6/10  38.4s
+  [publish beachlitter] qc.npy  7/10  38.6s
+  [publish beachlitter] time_s.npy  8/10  38.7s
+  [publish beachlitter] values.npy  9/10  38.8s
+  [publish beachlitter] store.json  10/10  38.9s
+  publish: 10 file(s) verified by restore -> https://huggingface.co/datasets/chfrank/earth-tensors/tree/main/tensors/family1_3/beachlitter
+=== stage publish done in 48.4s ===
+
+=== stage check (beachlitter) ===
+  hub: chfrank/earth-tensors with the token from $HF_TOKEN
+  check: beachlitter — 9 file(s) verified, N=24,702, schema 2, Hub chfrank/earth-tensors:tensors/family1_3/beachlitter agrees
+=== stage check done in 0.2s ===
