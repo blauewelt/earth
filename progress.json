@@ -1,0 +1,10 @@
+{
+ "at": "2026-10-14T03:48:13+00:00",
+ "done": 731,
+ "elapsed_s": 280.7,
+ "eta_s": 0.0,
+ "files": 731,
+ "item": "store.json",
+ "stage": "publish s2fdi_coast",
+ "total": 731
+}

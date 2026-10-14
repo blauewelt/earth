@@ -1,0 +1,80 @@
+Upload 5 LFS files:  20%|██        | 1/5 [00:00<00:00,  4.37it/s]Upload 5 LFS files: 100%|██████████| 5/5 [00:00<00:00, 15.22it/s]
+Upload 5 LFS files:   0%|          | 0/5 [00:00<?, ?it/s]
+shard_index.npy:   0%|          | 0.00/127k [00:00<?, ?B/s][A
+
+shard_index.npy:   0%|          | 0.00/1.28k [00:00<?, ?B/s][A[A
+
+
+shard_index.npy:   0%|          | 0.00/1.72k [00:00<?, ?B/s][A[A[A
+
+
+
+shard_index.npy:   0%|          | 0.00/1.28k [00:00<?, ?B/s][A[A[A[A
+
+
+
+
+shard_index.npy:   0%|          | 0.00/1.28k [00:00<?, ?B/s][A[A[A[A[Ashard_index.npy: 100%|██████████| 1.28k/1.28k [00:00<00:00, 15.5kB/s]
+shard_index.npy: 100%|██████████| 1.28k/1.28k [00:00<00:00, 15.8kB/s]
+shard_index.npy: 100%|██████████| 1.72k/1.72k [00:00<00:00, 20.4kB/s]
+shard_index.npy: 100%|██████████| 127k/127k [00:00<00:00, 1.33MB/s]
+shard_index.npy: 100%|██████████| 1.28k/1.28k [00:00<00:00, 9.00kB/s]
+Upload 5 LFS files:  20%|██        | 1/5 [00:00<00:01,  3.82it/s]Upload 5 LFS files: 100%|██████████| 5/5 [00:00<00:00, 14.12it/s]
+  [publish s2fdi_coast] T16PCC  2/731  51.9s
+  [publish s2fdi_coast] T16PCC/2016  4/731  52.2s
+  [publish s2fdi_coast] T16PCC/2017  10/731  54.5s
+  [publish s2fdi_coast] T16PCC/2018  24/731  57.9s
+  [publish s2fdi_coast] T16PCC/2019  28/731  59.3s
+  [publish s2fdi_coast] T16PCC/2020  40/731  62.7s
+  [publish s2fdi_coast] T16PDC  42/731  63.0s
+  [publish s2fdi_coast] T16PDC/2016  44/731  63.3s
+  [publish s2fdi_coast] T16PDC/2018  50/731  66.1s
+  [publish s2fdi_coast] T16PDC/2020  54/731  69.3s
+  [publish s2fdi_coast] T16PEC  56/731  69.6s
+  [publish s2fdi_coast] T16PEC/2015  58/731  69.9s
+  [publish s2fdi_coast] T16PEC/2017  62/731  71.1s
+  [publish s2fdi_coast] T16PEC/2018  66/731  73.7s
+  [publish s2fdi_coast] T16PEC/2019  68/731  76.2s
+  [publish s2fdi_coast] T16QED  70/731  76.5s
+  [publish s2fdi_coast] T16QED/2018  72/731  80.7s
+  [publish s2fdi_coast] T16QED/2019  74/731  84.4s
+  [publish s2fdi_coast] T18QWF  76/731  84.7s
+  [publish s2fdi_coast] T18QWF/2020  78/731  89.2s
+  [publish s2fdi_coast] T18QYF  80/731  89.4s
+  [publish s2fdi_coast] T18QYF/2020  102/731  94.3s
+  [publish s2fdi_coast] T18QYF/2021  106/731  95.9s
+  [publish s2fdi_coast] T18QYG  108/731  96.1s
+  [publish s2fdi_coast] T18QYG/2020  110/731  97.1s
+  [publish s2fdi_coast] T19QDA  112/731  97.4s
+  [publish s2fdi_coast] T19QDA/2019  114/731  98.7s
+  [publish s2fdi_coast] T30VWH  116/731  99.0s
+  [publish s2fdi_coast] T30VWH/2018  118/731  101.7s
+  [publish s2fdi_coast] T35SMD  120/731  102.0s
+  [publish s2fdi_coast] T35SMD/2019  238/731  133.4s
+  [publish s2fdi_coast] T35SMD/2020  356/731  167.1s
+  [publish s2fdi_coast] T35SMD/2021  468/731  199.0s
+  [publish s2fdi_coast] T35SMD/2022  586/731  232.8s
+  [publish s2fdi_coast] T35SMD/2023  688/731  261.5s
+  [publish s2fdi_coast] T36JUN  690/731  261.9s
+  [publish s2fdi_coast] T36JUN/2019  692/731  262.6s
+  [publish s2fdi_coast] T48MXU  694/731  263.0s
+  [publish s2fdi_coast] T48MXU/2018  696/731  264.0s
+  [publish s2fdi_coast] T48MXU/2019  698/731  265.9s
+  [publish s2fdi_coast] T48MYU  700/731  266.1s
+  [publish s2fdi_coast] T48MYU/2017  702/731  266.9s
+  [publish s2fdi_coast] T48MYU/2019  704/731  268.3s
+  [publish s2fdi_coast] T48PZC  706/731  268.5s
+  [publish s2fdi_coast] T48PZC/2018  710/731  269.8s
+  [publish s2fdi_coast] T48PZC/2019  712/731  270.5s
+  [publish s2fdi_coast] T50LLR  714/731  270.7s
+  [publish s2fdi_coast] T50LLR/2018  716/731  273.1s
+  [publish s2fdi_coast] T51PTS  718/731  273.4s
+  [publish s2fdi_coast] T51PTS/2016  720/731  273.7s
+  [publish s2fdi_coast] T51PTS/2019  722/731  274.7s
+  [publish s2fdi_coast] T51RVQ  724/731  275.1s
+  [publish s2fdi_coast] T51RVQ/2017  726/731  276.9s
+  [publish s2fdi_coast] T52SDD  728/731  277.1s
+  [publish s2fdi_coast] T52SDD/2018  730/731  279.8s
+  [publish s2fdi_coast] store.json  731/731  280.7s
+  publish: 731 file(s) verified by restore, 50 tile(s) decompressed, HTTP range {'checked': 5} -> https://huggingface.co/datasets/chfrank/earth-tensors/tree/main/tensors/family1_3/s2fdi_coast
+=== stage publish done in 311.8s ===
