@@ -180,6 +180,11 @@ TARGETS = (("rhos_645", 645), ("rhos_740", 740), ("rhos_865", 865),
            ("rhos_1038", 1038), ("rhos_1249", 1249), ("rhos_1618", 1618),
            ("rhos_2131", 2131), ("rhos_2258", 2258))
 BAND_TOLERANCE_NM = 2.5
+# a file's band must lie within this of the band chosen for the lane: the
+# producer's axis changed from integers to exact centres on 2026-02-01
+# (measured largest move 0.45 nm over the eight bands: 645 -> 644.716
+# is 0.28, 739 -> 739.287 0.29, 2131 -> 2130.593 0.41, 1249 -> 1248.55 0.45)
+WAVELENGTH_MATCH_NM = 1.0
 # MEASURED 2026-10-13 on 2025-07-01's axis: channel -> (index, wavelength nm)
 MEASURED_BANDS = {"rhos_645": (56, 645), "rhos_740": (84, 739),
                   "rhos_865": (110, 865), "rhos_1038": (117, 1038),
@@ -517,7 +522,12 @@ def iter_subset(path, want_nm, h=H, w=W, need_grid=False, block=ROW_BLOCK):
                 raise FormatError(f"{where}: no variable {k!r} "
                                   f"({sorted(ds.variables)})")
         wl = np.asarray(ds.variables["wavelength"][:]).ravel()
-        if [int(x) for x in wl] != [int(x) for x in want_nm]:
+        # the same band, written as an integer (files to 2026-01-31) or as
+        # its exact centre (from 2026-02-01: 644.716 for 645, 739.287 for
+        # 739 ...) -- measured on the two axes, every band moves < 1 nm
+        if len(wl) != len(want_nm) or np.any(
+                np.abs(wl.astype(np.float64) -
+                       np.asarray(want_nm, np.float64)) > WAVELENGTH_MATCH_NM):
             raise FormatError(f"{where}: wavelengths {wl.tolist()} where "
                               f"{list(want_nm)} were asked for")
         if need_grid:
@@ -1019,7 +1029,12 @@ class PaceSwirAdapter(sh.GridAdapter):
                              f"the listed first day has no file")
                 import netCDF4
                 with NC_LOCK, netCDF4.Dataset(p) as ds:
-                    axis = [int(x) for x in
+                    # FLOAT, never int(): from 2026-02-01 the producer
+                    # writes the exact band centres (644.716, 739.287,
+                    # 741.785 ...) where earlier files carry integers; int()
+                    # truncated 741.785 to 741 and invented a tie with 739
+                    # (family1-build #1163)
+                    axis = [float(x) for x in
                             np.asarray(ds.variables["wavelength"][:])]
             finally:
                 shutil.rmtree(tmp, ignore_errors=True)

@@ -493,3 +493,19 @@ def test_the_ledger_reaches_the_frame(tmp_path, monkeypatch):
     c = led.get("counts", led)
     assert c["net_retry"]["timeout"] == 2 * 12
     assert c["max_net_attempts"] == 3
+
+
+def test_bands_chosen_the_same_on_the_2026_float_axis():
+    # from 2026-02-01 the producer writes exact band centres instead of
+    # integers (family1-build #1162/#1163 refused on it): the same indices
+    # must be chosen, and no tie invented by truncation
+    from family1.adapters import pace_swir as ps
+    ax = [float(x) for x in ps.MEASURED_AXIS]
+    ax[54:58] = [639.791, 642.255, 644.716, 647.188]
+    ax[83:88] = [734.281, 739.287, 741.785, 744.286, 746.789]
+    ax[108:112] = [854.586, 859.594, 864.61, 869.613]
+    ax[-6:] = [894.601, 1038.317, 1248.55, 1618.034, 2130.593, 2258.429]
+    old = {n: i for n, i, _nm in ps.choose_bands(ps.MEASURED_AXIS)}
+    new = {n: i for n, i, _nm in ps.choose_bands(ax)}
+    assert new == old
+    assert new["rhos_740"] == 84 and new["rhos_645"] == 56
