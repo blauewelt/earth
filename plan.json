@@ -1,0 +1,256 @@
+{
+ "access": "OB.DAAC OPeNDAP (Hyrax) DAP4 server-side subsetting, anonymous; plain byte ranges refused (416)",
+ "bands": [
+  {
+   "channel": "rhos_645",
+   "index": 56,
+   "target_nm": 645,
+   "wavelength_nm": 645
+  },
+  {
+   "channel": "rhos_740",
+   "index": 84,
+   "target_nm": 740,
+   "wavelength_nm": 739
+  },
+  {
+   "channel": "rhos_865",
+   "index": 110,
+   "target_nm": 865,
+   "wavelength_nm": 865
+  },
+  {
+   "channel": "rhos_1038",
+   "index": 117,
+   "target_nm": 1038,
+   "wavelength_nm": 1038
+  },
+  {
+   "channel": "rhos_1249",
+   "index": 118,
+   "target_nm": 1249,
+   "wavelength_nm": 1249
+  },
+  {
+   "channel": "rhos_1618",
+   "index": 119,
+   "target_nm": 1618,
+   "wavelength_nm": 1618
+  },
+  {
+   "channel": "rhos_2131",
+   "index": 120,
+   "target_nm": 2131,
+   "wavelength_nm": 2131
+  },
+  {
+   "channel": "rhos_2258",
+   "index": 121,
+   "target_nm": 2258,
+   "wavelength_nm": 2258
+  }
+ ],
+ "bands_match_measurement": true,
+ "bins": [
+  3245,
+  3250
+ ],
+ "builder_git_sha": "b18b9e605e26205cad9428c04f560659fdb0cef8",
+ "built_at": "2026-10-14T20:54:21+00:00",
+ "bytes_cmr_whole_files": 996279450365,
+ "channels": [
+  {
+   "max": 1.5,
+   "min": -0.05,
+   "name": "rhos_645",
+   "unit": "1 (dimensionless surface reflectance, rhos)"
+  },
+  {
+   "max": 1.5,
+   "min": -0.05,
+   "name": "rhos_740",
+   "unit": "1 (dimensionless surface reflectance, rhos)"
+  },
+  {
+   "max": 1.5,
+   "min": -0.05,
+   "name": "rhos_865",
+   "unit": "1 (dimensionless surface reflectance, rhos)"
+  },
+  {
+   "max": 1.5,
+   "min": -0.05,
+   "name": "rhos_1038",
+   "unit": "1 (dimensionless surface reflectance, rhos)"
+  },
+  {
+   "max": 1.5,
+   "min": -0.05,
+   "name": "rhos_1249",
+   "unit": "1 (dimensionless surface reflectance, rhos)"
+  },
+  {
+   "max": 1.5,
+   "min": -0.05,
+   "name": "rhos_1618",
+   "unit": "1 (dimensionless surface reflectance, rhos)"
+  },
+  {
+   "max": 1.5,
+   "min": -0.05,
+   "name": "rhos_2131",
+   "unit": "1 (dimensionless surface reflectance, rhos)"
+  },
+  {
+   "max": 1.5,
+   "min": -0.05,
+   "name": "rhos_2258",
+   "unit": "1 (dimensionless surface reflectance, rhos)"
+  }
+ ],
+ "collections": {
+  "final": [
+   "PACE_OCI_L3M_SFREFL",
+   "C3620140468-OB_CLOUD"
+  ],
+  "nrt": [
+   "PACE_OCI_L3M_SFREFL_NRT",
+   "C3620140454-OB_CLOUD"
+  ]
+ },
+ "dark_swir_rule": {
+  "channel": "rhos_2258",
+  "gross": [
+   0.03,
+   0.1
+  ],
+  "mask": "pace4k's BGC v3.2 chlor_a valid, same day",
+  "min_pixels": 10000,
+  "soft": [
+   0.01,
+   0.03
+  ]
+ },
+ "dataset": "PACE OCI L3M SFREFL v3.1 daily 4 km rhos",
+ "date_range": [
+  "2026-06-01",
+  "2026-06-30"
+ ],
+ "days_absent_upstream_in_window": [],
+ "days_in_record": 910,
+ "days_per_year_final_listed": {
+  "2026": 241
+ },
+ "doi": "10.5067/PACE/OCI/L3M/SFREFL/3.1",
+ "footprint": {
+  "log2_dt": -2.321928094887362,
+  "log2_fp": -2.584969110280591
+ },
+ "frame_seconds": 86400,
+ "frames_per_bin": 5,
+ "grid": {
+  "H": 4320,
+  "W": 8640,
+  "coordinates": "lon = x0 + (col + 0.5) * dx, lat = y0 + (row + 0.5) * dy with dy NEGATIVE; x0/y0 are the grid's WEST and NORTH edges, and the source's `lat`/`lon` are the pixel CENTRES those edges imply",
+  "crs": "EPSG:4326",
+  "dx": 0.041666666666666664,
+  "dy": -0.041666666666666664,
+  "extent": [
+   -180.0,
+   -90.0,
+   180.0,
+   90.0
+  ],
+  "extent_note": "[west, south, east, north] in degrees; ALL surfaces \u2014 land, ice, inland and coastal water and the open ocean \u2014 no land mask",
+  "no_tile_corners": "a plain geographic grid: the affine rule above IS the lat/lon of every pixel and every tile corner, so no corner table is stored",
+  "pixel_deg": 0.041666666666666664,
+  "pixel_km_equator": 4.6383,
+  "proj4": "+proj=longlat +datum=WGS84 +no_defs",
+  "projection": {
+   "grid_mapping_name": "latitude_longitude",
+   "inverse_flattening": 298.257223563,
+   "semi_major_axis": 6378137.0
+  },
+  "row_order": "row 0 is the NORTHERNMOST row (the source netCDF's DESCENDING `lat` axis, 89.97917 .. -89.97917, checked on the real 2025-07-01 files); col 0 is the westernmost, lon -179.97917",
+  "same_grid_as": "pace4k and oc4k \u2014 the ocean-colour stores share this grid exactly, so one tile scheme reads all three",
+  "source_variables": "rhos (float32 [lat, lon, wavelength], _FillValue -32767, dimensionless) of PACE_OCI_L3M_SFREFL v3.1, eight bands of its 122, on this grid with no resampling",
+  "x0": -180.0,
+  "y0": 90.0
+ },
+ "index_check": {
+  "bytes": 6724560,
+  "day": "2026-06-01",
+  "license": "https://science.nasa.gov/earth-science/earth-science-data/data-information-policy/",
+  "max_net_attempts": 1,
+  "pixel_reread_f16_equal": 1,
+  "processing_version": "3.1",
+  "rows": [
+   2128,
+   2191
+  ],
+  "valid_fraction_band": 0.403224
+ },
+ "lanes_expected": {
+  "2026": [
+   "m01",
+   "m02",
+   "m03",
+   "m04",
+   "m05",
+   "m06"
+  ]
+ },
+ "nrt_boundary": {
+  "final_last_day": "2026-08-31",
+  "listed_years": [
+   2026
+  ],
+  "nrt_after_final_first": "2026-09-01",
+  "nrt_days_after_final": 42,
+  "nrt_days_listed": 283,
+  "nrt_first_day_listed": "2026-01-01",
+  "nrt_last_day": "2026-10-12",
+  "nrt_only_inside_record": [],
+  "policy": "final files only: NRT days past the final edge are after_record, NRT-only days inside it are absent_upstream"
+ },
+ "per_year_resume": true,
+ "qc_policy": "FINAL (refined) files only; NRT files are never stored \u2014 a day past the final edge is `after_record` (counted `nrt_after_final` where an NRT file exists) and a day inside the record with only an NRT file is `absent_upstream` (counted `nrt_only_inside_record`). The producer masked ATMFAIL, CLDICE, HIGLINT, HILT, HISATZEN and HISOLZEN at binning and no per-pixel flag reaches level 3; the store applies nothing further. The fill (-32767) and any non-finite value become NaN; a value outside -0.05..1.5 (the producer's own valid range) becomes NaN and is counted (`out_of_bounds`), never clipped. ALL SURFACES are kept \u2014 no land mask. `rhos` is corrected for Rayleigh scattering and gases, NOT for aerosol. Every frame passes two checks (E-092 \u00a76): an independent single-pixel re-read equal to the frame to float16 precision (refused otherwise), and the dark-water test on rhos_2258 over the BGC product's clear-water pixels (soft failures kept and named, a gross failure refused)",
+ "record": [
+  "2024-03-05",
+  "2026-08-31"
+ ],
+ "requests_per_day": [
+  [
+   56,
+   1,
+   56
+  ],
+  [
+   84,
+   1,
+   84
+  ],
+  [
+   110,
+   1,
+   110
+  ],
+  [
+   117,
+   1,
+   121
+  ]
+ ],
+ "sources": [
+  "https://oceandata.sci.gsfc.nasa.gov/opendap/PACE_OCI/L3SMI/<YYYY>/<MMDD>/PACE_OCI.<YYYYMMDD>.L3m.DAY.SFREFL.V3_1.rhos.4km.nc",
+  "https://cmr.earthdata.nasa.gov/search/granules.json"
+ ],
+ "store": "pace_swir",
+ "title": "PACE OCI daily 4 km surface reflectance in the red edge, near and shortwave infrared (SFREFL v3.1 rhos at 645, 739, 865, 1038, 1249, 1618, 2131 and 2258 nm) \u2014 the bands a floating-debris or floating-algae index needs, all surfaces",
+ "url": "https://oceandata.sci.gsfc.nasa.gov/opendap/PACE_OCI/",
+ "verified": "2026-10-13 from the sandbox, anonymously: CMR's collections PACE_OCI_L3M_SFREFL (C3620140468) and PACE_OCI_L3M_SFREFL_NRT (C3620140454), both version 3.1, time_start 2024-03-05; the daily 4 km final granules listed by name pattern \u2014 289 in 2024 (2024-03-05..12-31), 363 in 2025, 241 in 2026 to 2026-08-31 \u2014 and the NRT ones, 184 in 2025 (from 2025-07-01) and 282 in 2026 to 2026-10-11; CMR's `title` prefixed `<SHORT>_..._3.1` in 2024-25 and bare in 2026, `producer_granule_id` bare throughout; the DMR of 2025-07-01 (rhos float32 [4320, 8640, 122], fill -32767, valid -0.05..1.5, wavelength int32 x 122); a plain byte range refused (416); DAP4 subsets with a wavelength stride ([56:28:84] -> 645, 739 nm) and a wavelength slice in the same expression, and two projections of rhos refused (400); the six SWIR/NIR bands of 2025-07-01 fetched (258 MB, 138 s), a single-pixel re-read equal in float32, and clear-water rhos(2258) median 0.0052, p99 0.0217; then SIX REAL DAYS (2024-03-05, 2024-07-15, 2025-01-15, 2025-07-01, 2026-04-15, 2026-08-31) through this adapter's own fetch_frames and the real ShardWriter: four contiguous requests a day, the pixel re-read equal on all six, clear-water rhos(2258) median 0.0052-0.0063 and p99 0.0213-0.0223 (2025-07-01 reproducing the earlier 0.0052 / 0.0217), no value out of bounds, 2024-03-13 absent upstream as the listing says",
+ "version": "3.1",
+ "years": [
+  2026
+ ]
+}
