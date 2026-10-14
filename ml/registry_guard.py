@@ -202,9 +202,19 @@ def main(argv=None):
                          and g.get("name") not in pending]
         # a not-built placeholder being replaced is compared nowhere: it held
         # no data, and its new entry is the store being added
+        # a placeholder that is not built on EITHER side holds no data, so its
+        # text (notes, licence, channels) may change with its adapter
+        still = {g.get("name") for g in new["groups"]
+                 if g.get("built") is False} & \
+            {g.get("name") for g in old.get("groups") or []
+             if g.get("built") is False}
+        new["groups"] = [g for g in new["groups"] if g.get("name") not in still]
         old = dict(old)
         old["groups"] = [g for g in old.get("groups") or []
-                         if g.get("name") not in added]
+                         if g.get("name") not in added
+                         and g.get("name") not in still]
+        if still:
+            print(f"not-built placeholders not compared: {sorted(still)}")
         print(f"stores added (first publish): {sorted(added)}")
         if pending:
             print(f"stores listed as not yet built (no data): {pending}")
