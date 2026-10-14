@@ -1,0 +1,11 @@
+store     pace_swir — PACE OCI daily 4 km surface reflectance in the red edge, near and shortwave infrared (SFREFL v3.1 rhos at 645, 739, 865, 1038, 1249, 1618, 2131 and 2258 nm) — the bands a floating-debris or floating-algae index needs, all surfaces
+family    family1_3 (1.3) · public -> chfrank/earth-tensors:tensors/family1_3/pace_swir
+axis      2026-02-01 .. 2026-02-28  bins 3221..3225 · time_s int32 (schema 2)
+lane      m02 — this fetch writes parts/<year>/m02/ and pushes only that folder
+channels  C=8: rhos_645, rhos_740, rhos_865, rhos_1038, rhos_1249, rhos_1618, rhos_2131, rhos_2258
+tier G    sharded, groups ['pace_swir'], F=5 x 86400 s, float16, years (by bin start) 2026..2026
+work      /home/runner/work/earth/earth/ml/cache/family1_3
+
+=== stage index (pace_swir) ===
+  [index pace_swir] start (1 items)  0/1  0.0s
+REFUSING pace_swir: 2026-02-01: rhos_740: two wavelengths are equally near 740 nm ([739.0, 741.0])
