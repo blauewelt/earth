@@ -2167,3 +2167,19 @@ holds exactly MARIDA's 3,399 "marine debris" pixels. family1-registry #8
 store published for the first time into an existing registry) republished
 `family13.json` with three built stores. The co-location probe (no signal;
 `s2fdi_gpgp` closed) is in the plan, §5 step 2.
+
+### E-092 phase C (2026-10-13 → 14): `mplastic` rebuilt, four new stores
+
+Plan D12/D13 ([E-092](https://blauewelt.github.io/earth/docs.html?f=ml/plans/E092_family13_plastic.md)).
+All on hosted runners ($0) except the two assemblies on rented Vast boxes.
+
+| run(s) | store | what | result |
+|---|---|---|---|
+| #1060 | `mplastic` | stage all 1972 → 2025 (D12: EMODnet shape-only lines count as plastic, qc bit 6) | **19,974 rows** (was 18,504); EMODnet 2,379 samples, 1,511 flagged; registry #9 |
+| #1062 | `cygnss_mss` | probe 2019-01 with falsifier F1 on three days | means/uncertainties = L3 to ~1e-8; counts 99.5 % → F1 count bar amended 99.9 → 99 % |
+| #1066–#1075 | `cygnss_mss` | nine yearly fetch lanes (#1071 re-run as #1075 after an Earthdata login timeout) | parts pushed |
+| #1077 | `cygnss_mss` | hosted assembly | **2,989 daily frames**, 2018-08 → 2026-10, 3 absent upstream; 1,201 files restore-verified; registry #11 (#10 refused: guard taught to pass not-built placeholders) |
+| #1065 → #1152 | `beachlitter` | stage all 2009 → 2026; private first, public after Chris confirmed (MDMAP CC0, NOAA InPort 73092) | **24,702 surveys**; registry #15 |
+| #1064 → #1076, #1086–#1116, then #1124–#1147 | `s2fdi_coast` | 24 lanes; #1064 failed on Ubuntu's GDAL bindings under numpy 2; #1087/#1088/#1109/#1110 on Earth Search 502s for 200-item L2A pages (STAC_LIMIT → 50); all 24 RE-RUN after the B04/B08 JPEG 2000 overview bug | parts pushed (476 acquisitions, all `band_read_path` full-resolution) |
+| #1120 → #1151 | `s2fdi_coast` | assembly on Vast 55854675 (Quebec, 350 GB, ~$0.08/h; #1120 on 55804957 died on a Hub 500 outage, that box later could not restart and was destroyed) | **published** 2026-10-14T03:40Z; falsifier (i) 0.859 pooled (fails as written), kept by Chris; registry #15 (after #12–#14 refused on placeholder diffs; `allow_group` now takes a comma list) |
+| #1063, #1078–#1083 (cancelled), #1084 → | `pace_swir` | probe 2025-07, then monthly lanes; six concurrent lanes overloaded OB.DAAC and were cancelled; 2 workers, 600 s timeout and backoff since f464142 | months 2024-03 → 2025-05 pushed; continuing three at a time; assembly on a box |
