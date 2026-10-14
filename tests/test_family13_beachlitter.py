@@ -69,9 +69,10 @@ def test_registered():
         "log_nurdles_10pmin", "log_nurdle_count", "collect_min", "volunteers",
         "effort_pmin", "new_tide_line", "log_n_m3_sand"]
     assert ad.licence["redistribution"] == "attribution"
-    # MDMAP has no posted licence (plan D13): a public publish is refused
-    # unless the unconfirmed licence is explicitly allowed
-    assert ad.licence["redistribution_confirmed"] is False
+    # every part is open: NCEI CC0, EMODnet CB = CC BY 4.0, MDMAP CC0 per
+    # NOAA InPort item 73092 (plan D13)
+    assert ad.licence["redistribution_confirmed"] is True
+    assert "73092" in ad.licence["licence_sources"]
     for who in ("NCEI", "0259486", "EMODnet", "MDMAP", "Natural Earth"):
         assert who in ad.licence["attribution"]
     lay = b1.layout_for(ad)

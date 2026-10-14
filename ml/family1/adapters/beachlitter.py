@@ -49,9 +49,11 @@ SOURCES, IN PRECEDENCE ORDER (plan D13), all keyless, measured 2026-10-13:
     protocols (MDMAP 2.0, standing stock, accumulation), from the portal's
     site list (`MDMAP_SITES`) and one export zip per site (`MDMAP_EXPORT`;
     there is no bulk export — measured: the survey endpoints answer 400/500).
-    A NOAA programme on a NOAA portal; no licence file is posted, so it is
-    taken as US-government public data and recorded as UNCONFIRMED
-    (`licence["redistribution_confirmed"] = False`, plan D13).
+    The portal posts no licence, but NOAA's own metadata record for the
+    dataset (InPort item 73092, "NOAA Marine Debris Monitoring and Assessment
+    Project (MDMAP) National Survey") gives it: CC0-1.0, "These data were
+    produced by NOAA and are not subject to copyright protection in the
+    United States." (read 2026-10-13; plan D13).
 
 Natural Earth 1:10m (public domain, release v5.1.2, pinned): the coastline, the
 minor-islands coastline, the lakes and the river centre-lines, used ONLY to
@@ -1063,16 +1065,15 @@ class BeachLitterAdapter(f10b.SourceAdapter):
     distribution = "public"
     licence = {
         "name": "CC0 1.0 (NOAA NCEI), CC BY 4.0 (EMODnet Chemistry, the "
-                "surveys whose data policy is CB), US-government public data "
-                "(NOAA MDMAP, no licence posted — unconfirmed)",
+                "surveys whose data policy is CB), CC0 1.0 (NOAA MDMAP, per "
+                "NOAA InPort item 73092)",
         "redistribution": "attribution", "derived_works": "free",
-        "redistribution_confirmed": False,
-        "unconfirmed_part": (
-            "NOAA MDMAP: no data licence is posted; the portal's contributor "
-            "disclaimer grants NOAA the right to 'further disseminate' and "
-            "says uploads are 'viewable (and therefore downloadable) by ... "
-            "members of the public'. Ask md.monitoring@noaa.gov before a "
-            "public publish (plan E-092 D13)."),
+        "redistribution_confirmed": True,
+        "licence_sources": (
+            "MDMAP: https://www.fisheries.noaa.gov/inport/item/73092 — "
+            "'CC0-1.0 ... These data were produced by NOAA and are not "
+            "subject to copyright protection in the United States.' "
+            "(read 2026-10-13)"),
         "attribution": (
             "NOAA NCEI Global Marine Microplastics, accession 0306475, "
             "doi:10.25921/v8gj-k896 (CC0 1.0), and Nurdle Patrol, NCEI "

@@ -215,9 +215,10 @@ survey's own day covers its point** (the nearest same-day swath misses by
     litter v2025 — **only surveys under CC BY 4.0 ("CB", 4,444 of 16,861)**;
     the 8,130 under the SeaDataNet licence (no redistribution without the
     data centre's consent) and the 4,287 "UN" go to the private track, the
-    mplastic precedent — and NOAA MDMAP (8,771 surveys, 2009 → 2026, a NOAA
-    programme on a NOAA portal; no licence file is posted, so it is taken as
-    US-government public data and recorded as unconfirmed). EMODnet's
+    mplastic precedent — and NOAA MDMAP (8,771 surveys, 2009 → 2026; the
+    portal posts no licence, but NOAA's metadata record, InPort item 73092,
+    states CC0-1.0, "not subject to copyright protection in the United
+    States"). EMODnet's
     material per litter code comes from a committed classification table;
     freshwater shores (Great Lakes, rivers) are kept and flagged.
   - **`cygnss_mss`** (tier G, the producer's native 0.2° grid, daily): the
@@ -455,6 +456,15 @@ it needs AOMI's rows, which D4 keeps out. The comparison stays in §2a.
 
 ## 7 · Status
 
+**Decisions, 2026-10-14 (Chris: "yes noaa can go public. and let's keep the
+sentinel 2 pilot").** `beachlitter` goes PUBLIC: MDMAP is CC0 per NOAA InPort
+item 73092, so every source in it is open. `s2fdi_coast` is KEPT although
+falsifier (i) failed as written (pooled 0.859 < 0.9): **an amendment made
+after the result** — the pilot is kept on its within-scene agreement (median
+0.952, offset-removed 0.991), the pooled gap being the per-scene offset between
+aerosol-corrected and Rayleigh-only reflectance. Its scale-up stays unpriced
+into any plan: (ii) shows the index alone barely separates debris.
+
 **`s2fdi_coast` PUBLISHED and its falsifiers read (2026-10-14).** The 24
 lanes re-ran on the full-resolution read path (5d9adcc) and family1-build #1151
 assembled and published the pilot: 476 acquisitions (59 MARIDA scenes, 417 of
@@ -502,7 +512,7 @@ from their own site (Mann–Whitney p = 7e-7).
 [EXPERIMENTS E-092](https://blauewelt.github.io/earth/docs.html?f=ml/EXPERIMENTS.md#e-092)):
 `mplastic` rebuilt under D12 (19,974 rows); `cygnss_mss` PUBLISHED (2,989
 daily frames); `beachlitter` BUILT, 24,702 surveys, PRIVATE until Chris
-confirms the public switch (MDMAP: CC0 per NOAA InPort 73092); `pace_swir`
+confirms the public switch (MDMAP: CC0 per NOAA InPort 73092 — public since 2026-10-14); `pace_swir`
 fetching two monthly lanes at a time (OB.DAAC overloads at six), assembly on
 a rented box; `s2fdi_coast` pilot fetching (24 lanes), assembly on a rented
 box, then falsifiers (i)–(iii).
