@@ -1,0 +1,67 @@
+{
+ "written": "2026-10-14",
+ "what": "the full-resolution read path (ml/family1/acolite_full_res.py) measured end to end, local sandbox, 2 cores",
+ "lesvos_T35SMD_bin_3114": {
+  "acquisitions": [
+   {
+    "l1c": "S2B_35SMD_20240819_0_L1C",
+    "l1c_bytes": 567777647,
+    "safe_reused": true,
+    "seconds": {
+     "acolite_s": 352.2,
+     "download_s": 0.5,
+     "mask_s": 9.4,
+     "total_s": 368.0
+    },
+    "stored_px": 15051048
+   },
+   {
+    "l1c": "S2B_35SMD_20240822_0_L1C",
+    "l1c_bytes": 275768761,
+    "safe_reused": false,
+    "seconds": {
+     "acolite_s": 205.1,
+     "download_s": 39.9,
+     "mask_s": 7.7,
+     "total_s": 256.6
+    },
+    "stored_px": 7944291
+   }
+  ],
+  "wall_s_fetch_and_assemble": 710.7,
+  "peak_child_rss_gb": 4.17,
+  "peak_work_dir_gb": 1.76,
+  "cached_safe_outside_work_gb": 0.57,
+  "store": "1 bin, 2 frames, 515 tiles, 168.3 MB",
+  "band_read_path": "gdal.Warp overviewLevel=NONE (full-resolution JPEG 2000 reads)"
+ },
+ "marida_16PCC_2018_06_11_fresh": {
+  "l1c": "S2B_16PCC_20180611_0_L1C",
+  "wall_s": 356.7,
+  "peak_child_rss_gb": 3.68,
+  "peak_work_dir_gb": 2.23,
+  "falsifier_i": {
+   "marine_water_px": 9295,
+   "with_store_value": 9129,
+   "spearman_pooled": 0.9546404046152804,
+   "pass_threshold": 0.9,
+   "spearman_per_20m_cell": 0.9972947944766485,
+   "cells": 2421,
+   "per_scene_20m_cell": {
+    "S2_11-6-18_16PCC": {
+     "cells": 2421,
+     "spearman": 0.9972947944766485
+    }
+   },
+   "spearman_per_20m_cell_scene_median": 0.9972947944766485,
+   "spearman_per_20m_cell_pooled_after_removing_each_scenes_median_offset": 0.9972947944766485,
+   "spearman_per_scene_median": 0.9546404046152804,
+   "verdict_on": "spearman_per_20m_cell",
+   "pass": true
+  },
+  "published_store_same_scene": {
+   "spearman_per_10m": 0.9305,
+   "spearman_20m_water_cells_diagnosis": 0.9696
+  }
+ }
+}

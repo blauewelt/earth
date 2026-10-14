@@ -1,0 +1,933 @@
+{
+ "written": "2026-10-14",
+ "question": "why falsifier (i) reads 0.833 (bar 0.9): pipeline or method",
+ "a_registration": {
+  "S2_11-6-18_16PCC": {
+   "best_shift_20m": "0,0",
+   "spearman_20m_at_0_0": {
+    "all_cells": 0.9588,
+    "water_cells": 0.9696
+   },
+   "spearman_20m_next_best": [
+    0.8092,
+    "1,1"
+   ],
+   "best_shift_10m": "0,0",
+   "spearman_10m_at_0_0": 0.8974,
+   "transform_offsets_mod20_m_(x,y,a,e,same_crs,patches)": [
+    [
+     0.0,
+     0.0,
+     10.0,
+     -10.0,
+     true,
+     53
+    ]
+   ],
+   "acquisition": {
+    "l1c": "S2B_16PCC_20180611_0_L1C",
+    "processing_baseline": "02.06",
+    "satellite": "sentinel-2b",
+    "aot550": 0.06359749287366867,
+    "group": "T16PCC",
+    "bin": 2662,
+    "frame": 0
+   },
+   "cells_20m": 868352,
+   "water_cells_20m": 2176
+  },
+  "S2_18-9-20_16PCC": {
+   "best_shift_20m": "0,0",
+   "spearman_20m_at_0_0": {
+    "all_cells": 0.9767,
+    "water_cells": 0.981
+   },
+   "spearman_20m_next_best": [
+    0.9032,
+    "1,0"
+   ],
+   "best_shift_10m": "0,0",
+   "spearman_10m_at_0_0": 0.9551,
+   "transform_offsets_mod20_m_(x,y,a,e,same_crs,patches)": [
+    [
+     0.0,
+     0.0,
+     10.0,
+     -10.0,
+     true,
+     79
+    ]
+   ],
+   "acquisition": {
+    "l1c": "S2B_16PCC_20200918_0_L1C",
+    "processing_baseline": "02.09",
+    "satellite": "sentinel-2b",
+    "aot550": 0.04188688099384308,
+    "group": "T16PCC",
+    "bin": 2828,
+    "frame": 0
+   },
+   "cells_20m": 1294336,
+   "water_cells_20m": 498
+  },
+  "S2_28-9-20_16PDC": {
+   "best_shift_20m": "0,0",
+   "spearman_20m_at_0_0": {
+    "all_cells": 0.9457,
+    "water_cells": 0.8239
+   },
+   "spearman_20m_next_best": [
+    0.8426,
+    "1,0"
+   ],
+   "best_shift_10m": "0,0",
+   "spearman_10m_at_0_0": 0.8962,
+   "transform_offsets_mod20_m_(x,y,a,e,same_crs,patches)": [
+    [
+     0.0,
+     0.0,
+     10.0,
+     -10.0,
+     true,
+     30
+    ]
+   ],
+   "acquisition": {
+    "l1c": "S2B_16PDC_20200928_0_L1C",
+    "processing_baseline": "02.09",
+    "satellite": "sentinel-2b",
+    "aot550": 0.023624250665307045,
+    "group": "T16PDC",
+    "bin": 2830,
+    "frame": 0
+   },
+   "cells_20m": 491520,
+   "water_cells_20m": 393
+  },
+  "S2_12-1-17_16PEC": {
+   "best_shift_20m": "0,0",
+   "spearman_20m_at_0_0": {
+    "all_cells": 0.9003,
+    "water_cells": 0.8245
+   },
+   "spearman_20m_next_best": [
+    0.5722,
+    "1,0"
+   ],
+   "best_shift_10m": "0,0",
+   "spearman_10m_at_0_0": 0.811,
+   "transform_offsets_mod20_m_(x,y,a,e,same_crs,patches)": [
+    [
+     0.0,
+     0.0,
+     10.0,
+     -10.0,
+     true,
+     40
+    ]
+   ],
+   "acquisition": {
+    "l1c": "S2A_16PEC_20170112_1_L1C",
+    "processing_baseline": "02.04",
+    "satellite": "sentinel-2a",
+    "aot550": 0.12582305073738098,
+    "group": "T16PEC",
+    "bin": 2559,
+    "frame": 0
+   },
+   "cells_20m": 655360,
+   "water_cells_20m": 168
+  },
+  "S2_19-9-18_16PCC": {
+   "best_shift_20m": "0,0",
+   "spearman_20m_at_0_0": {
+    "all_cells": 0.9911,
+    "water_cells": 0.9646
+   },
+   "spearman_20m_next_best": [
+    0.9365,
+    "1,0"
+   ],
+   "best_shift_10m": "0,0",
+   "spearman_10m_at_0_0": 0.9798,
+   "transform_offsets_mod20_m_(x,y,a,e,same_crs,patches)": [
+    [
+     0.0,
+     0.0,
+     10.0,
+     -10.0,
+     true,
+     38
+    ]
+   ],
+   "acquisition": {
+    "l1c": "S2B_16PCC_20180919_0_L1C",
+    "processing_baseline": "02.06",
+    "satellite": "sentinel-2b",
+    "aot550": 0.09215551614761353,
+    "group": "T16PCC",
+    "bin": 2682,
+    "frame": 0
+   },
+   "cells_20m": 622592,
+   "water_cells_20m": 238
+  }
+ },
+ "b_resampling": {
+  "marida": "MARIDA's paper: Rayleigh reflectance at 10 m from ACOLITE, 20 m bands put on the 10 m grid by pixel replication; measured: B06 2x2 blocks all equal in 100 % of blocks aligned with the tile's 20 m grid (phase 0), 0.1 % at the other phase, so MARIDA's 20 m blocks coincide with the store's cells",
+  "replication_by_scene": {
+   "S2_11-6-18_16PCC": {
+    "phase_0": {
+     "B06_2x2_blocks_all_equal": 1.0,
+     "B04_2x2_blocks_all_equal": 0.00025450508549528303,
+     "blocks": 868352
+    },
+    "phase_1": {
+     "B06_2x2_blocks_all_equal": 0.0014213235973641759,
+     "B04_2x2_blocks_all_equal": 0.00022694385011411532,
+     "blocks": 854837
+    }
+   },
+   "S2_18-9-20_16PCC": {
+    "phase_0": {
+     "B06_2x2_blocks_all_equal": 0.9864749184137658,
+     "B04_2x2_blocks_all_equal": 0.0016695819323575948,
+     "blocks": 1294336
+    },
+    "phase_1": {
+     "B06_2x2_blocks_all_equal": 0.008234244316589898,
+     "B04_2x2_blocks_all_equal": 0.0016324083281077954,
+     "blocks": 1274191
+    }
+   },
+   "S2_28-9-20_16PDC": {
+    "phase_0": {
+     "B06_2x2_blocks_all_equal": 1.0,
+     "B04_2x2_blocks_all_equal": 0.002020263671875,
+     "blocks": 491520
+    },
+    "phase_1": {
+     "B06_2x2_blocks_all_equal": 0.0023456713580093827,
+     "B04_2x2_blocks_all_equal": 0.0017876702420071507,
+     "blocks": 483870
+    }
+   },
+   "S2_12-1-17_16PEC": {
+    "phase_0": {
+     "B06_2x2_blocks_all_equal": 1.0,
+     "B04_2x2_blocks_all_equal": 0.00049591064453125,
+     "blocks": 655360
+    },
+    "phase_1": {
+     "B06_2x2_blocks_all_equal": 0.0018507037014074028,
+     "B04_2x2_blocks_all_equal": 0.0004588009176018352,
+     "blocks": 645160
+    }
+   },
+   "S2_19-9-18_16PCC": {
+    "phase_0": {
+     "B06_2x2_blocks_all_equal": 1.0,
+     "B04_2x2_blocks_all_equal": 0.0012994063527960527,
+     "blocks": 622592
+    },
+    "phase_1": {
+     "B06_2x2_blocks_all_equal": 0.009394650368248105,
+     "B04_2x2_blocks_all_equal": 0.0014651608250584923,
+     "blocks": 612902
+    }
+   }
+  },
+  "fdi_store_way_from_marida_vs_mean_of_marida_fdi_max_abs_diff": {
+   "S2_11-6-18_16PCC": 1.323968179534063e-08,
+   "S2_18-9-20_16PCC": 1.323968179534063e-08,
+   "S2_28-9-20_16PDC": 1.323968179534063e-08,
+   "S2_12-1-17_16PEC": 2.640783780538669e-08,
+   "S2_19-9-18_16PCC": 2.647936359068126e-08
+  },
+  "store_10_to_20m": "ACOLITE (acolite/sentinel2/l1_convert.py, read_band) warps each band to the 20 m grid with gdal.Warp(resampleAlg='average') and GDAL's default overviewLevel AUTO, so for the 10 m bands B02 B03 B04 B08 it reads the JPEG 2000 file's own 20 m resolution level (the wavelet low-pass), NOT the 2x2 mean. Measured on S2B_16PCC_20180611 B08 (full tile): ACOLITE's read_band output equals JP2 overview 0 exactly (median |diff to 2x2 mean| 20 DN, max 5868; to the NW sub-pixel 9 DN); gdal.Warp with overviewLevel='NONE' gives the 2x2 mean to 0.5 DN (uint16 rounding). Fitted kernel of the store's rho_b08 on the 10 m DN (59,377 cells, R2 0.992): 0.635 on the NW sub-pixel, 0.21/0.17/0.13/0.07 on its E/S/W/N neighbours, negative lobes; centre of mass ~7 m north-west of the cell centre. B06/B11 are native 20 m and untouched (Spearman store vs MARIDA = 1.000)."
+ },
+ "c_correction": {
+  "marida_documented": "Rayleigh-corrected reflectance (rhorc), ACOLITE, 10 m; ACOLITE version not stated in the paper",
+  "S2_11-6-18_16PCC": {
+   "scene": "S2_11-6-18_16PCC",
+   "l1c": "S2B_16PCC_20180611_0_L1C",
+   "marine_water": {
+    "store": {
+     "spearman": 0.9696,
+     "n": 2164
+    },
+    "orig_rhos": {
+     "spearman": 0.9642,
+     "n": 2176
+    },
+    "orig_rhos_vs_store": {
+     "spearman": 0.9978,
+     "n": 2164
+    },
+    "orig_rhorc": {
+     "spearman": 0.9701,
+     "n": 2176
+    },
+    "orig_rhot": {
+     "spearman": 0.9706,
+     "n": 2176
+    },
+    "noovr_rhos": {
+     "spearman": 0.9992,
+     "n": 2176
+    },
+    "noovr_rhorc": {
+     "spearman": 0.9996,
+     "n": 2176
+    },
+    "noovr_rhot": {
+     "spearman": 0.9993,
+     "n": 2176
+    }
+   },
+   "all_patch_cells": {
+    "store": {
+     "spearman": 0.9588,
+     "n": 478982
+    },
+    "orig_rhos": {
+     "spearman": 0.9516,
+     "n": 868352
+    },
+    "orig_rhorc": {
+     "spearman": 0.9701,
+     "n": 868352
+    },
+    "orig_rhot": {
+     "spearman": 0.971,
+     "n": 868352
+    },
+    "noovr_rhos": {
+     "spearman": 0.9986,
+     "n": 868352
+    },
+    "noovr_rhorc": {
+     "spearman": 1.0,
+     "n": 868352
+    },
+    "noovr_rhot": {
+     "spearman": 0.9977,
+     "n": 868352
+    }
+   }
+  },
+  "S2_12-1-17_16PEC": {
+   "scene": "S2_12-1-17_16PEC",
+   "l1c": "S2A_16PEC_20170112_1_L1C",
+   "marine_water": {
+    "store": {
+     "spearman": 0.8245,
+     "n": 94
+    },
+    "orig_rhos": {
+     "spearman": 0.8477,
+     "n": 101
+    },
+    "orig_rhos_vs_store": {
+     "spearman": 1.0,
+     "n": 94
+    },
+    "orig_rhorc": {
+     "spearman": 0.8515,
+     "n": 101
+    },
+    "orig_rhot": {
+     "spearman": 0.852,
+     "n": 101
+    },
+    "noovr_rhos": {
+     "spearman": 0.9743,
+     "n": 101
+    },
+    "noovr_rhorc": {
+     "spearman": 0.9754,
+     "n": 101
+    },
+    "noovr_rhot": {
+     "spearman": 0.9737,
+     "n": 101
+    }
+   },
+   "all_patch_cells": {
+    "store": {
+     "spearman": 0.9003,
+     "n": 185864
+    },
+    "orig_rhos": {
+     "spearman": 0.9171,
+     "n": 220346
+    },
+    "orig_rhorc": {
+     "spearman": 0.9216,
+     "n": 220346
+    },
+    "orig_rhot": {
+     "spearman": 0.9246,
+     "n": 220346
+    },
+    "noovr_rhos": {
+     "spearman": 0.9901,
+     "n": 220339
+    },
+    "noovr_rhorc": {
+     "spearman": 0.9912,
+     "n": 220339
+    },
+    "noovr_rhot": {
+     "spearman": 0.9895,
+     "n": 220339
+    }
+   }
+  },
+  "note": "ACOLITE re-run on a crop around each scene's MARIDA patches (limit set; the crop's fixed aerosol differs from the full-tile one), output_rhorc=True, L1R kept for TOA; 'orig' = the store's settings, 'noovr' = the same with gdal.Warp(overviewLevel='NONE')"
+ },
+ "d_bands_20m": {
+  "S2_11-6-18_16PCC": {
+   "B04": {
+    "all": 0.9798,
+    "water": 0.9393
+   },
+   "B06": {
+    "all": 1.0,
+    "water": 1.0
+   },
+   "B08": {
+    "all": 0.9795,
+    "water": 0.933
+   },
+   "B11": {
+    "all": 1.0,
+    "water": 1.0
+   }
+  },
+  "S2_18-9-20_16PCC": {
+   "B04": {
+    "all": 0.9946,
+    "water": 0.9683
+   },
+   "B06": {
+    "all": 1.0,
+    "water": 1.0
+   },
+   "B08": {
+    "all": 0.9925,
+    "water": 0.9711
+   },
+   "B11": {
+    "all": 1.0,
+    "water": 1.0
+   }
+  },
+  "S2_28-9-20_16PDC": {
+   "B04": {
+    "all": 0.9825,
+    "water": 0.9564
+   },
+   "B06": {
+    "all": 0.999,
+    "water": 1.0
+   },
+   "B08": {
+    "all": 0.9782,
+    "water": 0.961
+   },
+   "B11": {
+    "all": 0.9992,
+    "water": 1.0
+   }
+  },
+  "S2_12-1-17_16PEC": {
+   "B04": {
+    "all": 0.926,
+    "water": 0.7701
+   },
+   "B06": {
+    "all": 0.996,
+    "water": 0.9869
+   },
+   "B08": {
+    "all": 0.9093,
+    "water": 0.7438
+   },
+   "B11": {
+    "all": 0.9968,
+    "water": 0.9912
+   }
+  },
+  "S2_19-9-18_16PCC": {
+   "B04": {
+    "all": 0.9953,
+    "water": 0.984
+   },
+   "B06": {
+    "all": 1.0,
+    "water": 1.0
+   },
+   "B08": {
+    "all": 0.9916,
+    "water": 0.9821
+   },
+   "B11": {
+    "all": 1.0,
+    "water": 1.0
+   }
+  }
+ },
+ "d_bands_with_toa_S2_11-6-18_16PCC": {
+  "scene": "S2_11-6-18_16PCC",
+  "l1c": "S2B_16PCC_20180611_0_L1C",
+  "water_cells": 2176,
+  "bands": {
+   "B04": {
+    "store_vs_marida_mean": {
+     "spearman": 0.9394,
+     "pearson": 0.9753,
+     "n": 2164
+    },
+    "store_vs_toa": {
+     "spearman": 0.9392,
+     "pearson": 0.9753,
+     "n": 2164
+    },
+    "marida_mean_vs_toa": {
+     "spearman": 0.9999,
+     "pearson": 1.0,
+     "n": 2176
+    },
+    "sub0": {
+     "spearman": 0.9691,
+     "pearson": 0.987,
+     "n": 2164
+    },
+    "sub1": {
+     "spearman": 0.8247,
+     "pearson": 0.915,
+     "n": 2164
+    },
+    "sub2": {
+     "spearman": 0.8379,
+     "pearson": 0.9311,
+     "n": 2164
+    },
+    "sub3": {
+     "spearman": 0.7876,
+     "pearson": 0.9069,
+     "n": 2164
+    },
+    "water_range": {
+     "store_p5_p95": [
+      0.0190582275390625,
+      0.023436736315488815
+     ],
+     "toa_p5_p95": [
+      0.039425,
+      0.0432
+     ]
+    }
+   },
+   "B06": {
+    "store_vs_marida_mean": {
+     "spearman": 1.0,
+     "pearson": 1.0,
+     "n": 2164
+    },
+    "store_vs_toa": {
+     "spearman": 1.0,
+     "pearson": 1.0,
+     "n": 2164
+    },
+    "marida_mean_vs_toa": {
+     "spearman": 1.0,
+     "pearson": 1.0,
+     "n": 2176
+    },
+    "sub0": {
+     "spearman": 1.0,
+     "pearson": 1.0,
+     "n": 2164
+    },
+    "sub1": {
+     "spearman": 1.0,
+     "pearson": 1.0,
+     "n": 2164
+    },
+    "sub2": {
+     "spearman": 1.0,
+     "pearson": 1.0,
+     "n": 2164
+    },
+    "sub3": {
+     "spearman": 1.0,
+     "pearson": 1.0,
+     "n": 2164
+    },
+    "water_range": {
+     "store_p5_p95": [
+      0.01422882080078125,
+      0.02142333984375
+     ],
+     "toa_p5_p95": [
+      0.0287,
+      0.0354
+     ]
+    }
+   },
+   "B08": {
+    "store_vs_marida_mean": {
+     "spearman": 0.933,
+     "pearson": 0.9904,
+     "n": 2164
+    },
+    "store_vs_toa": {
+     "spearman": 0.933,
+     "pearson": 0.9904,
+     "n": 2164
+    },
+    "marida_mean_vs_toa": {
+     "spearman": 0.9999,
+     "pearson": 1.0,
+     "n": 2176
+    },
+    "sub0": {
+     "spearman": 0.968,
+     "pearson": 0.9946,
+     "n": 2164
+    },
+    "sub1": {
+     "spearman": 0.8256,
+     "pearson": 0.9701,
+     "n": 2164
+    },
+    "sub2": {
+     "spearman": 0.8416,
+     "pearson": 0.9701,
+     "n": 2164
+    },
+    "sub3": {
+     "spearman": 0.788,
+     "pearson": 0.9639,
+     "n": 2164
+    },
+    "water_range": {
+     "store_p5_p95": [
+      0.01282501220703125,
+      0.01947021484375
+     ],
+     "toa_p5_p95": [
+      0.023075000000000002,
+      0.02903125
+     ]
+    }
+   },
+   "B11": {
+    "store_vs_marida_mean": {
+     "spearman": 1.0,
+     "pearson": 1.0,
+     "n": 2164
+    },
+    "store_vs_toa": {
+     "spearman": 1.0,
+     "pearson": 1.0,
+     "n": 2164
+    },
+    "marida_mean_vs_toa": {
+     "spearman": 1.0,
+     "pearson": 1.0,
+     "n": 2176
+    },
+    "sub0": {
+     "spearman": 1.0,
+     "pearson": 1.0,
+     "n": 2164
+    },
+    "sub1": {
+     "spearman": 1.0,
+     "pearson": 1.0,
+     "n": 2164
+    },
+    "sub2": {
+     "spearman": 1.0,
+     "pearson": 1.0,
+     "n": 2164
+    },
+    "sub3": {
+     "spearman": 1.0,
+     "pearson": 1.0,
+     "n": 2164
+    },
+    "water_range": {
+     "store_p5_p95": [
+      0.00801849365234375,
+      0.01190185546875
+     ],
+     "toa_p5_p95": [
+      0.011,
+      0.0148
+     ]
+    }
+   }
+  },
+  "fdi": {
+   "store_vs_marida": {
+    "spearman": 0.9696,
+    "pearson": 0.9892,
+    "n": 2164
+   },
+   "store_vs_toa": {
+    "spearman": 0.9683,
+    "pearson": 0.9883,
+    "n": 2164
+   },
+   "marida_vs_toa": {
+    "spearman": 0.9996,
+    "pearson": 0.9995,
+    "n": 2176
+   }
+  }
+ },
+ "within_vs_across_scene_all_58": {
+  "spearman_per_20m_cell": 0.8332242962892542,
+  "spearman_per_20m_cell_scene_median": 0.9068920081383232,
+  "spearman_per_20m_cell_pooled_after_removing_each_scenes_median_offset": 0.9755866229593587,
+  "cells": 30553
+ },
+ "per_scene_20m": {
+  "S2_1-12-19_48MYU": {
+   "cells": 102,
+   "spearman": 0.7525473565288529
+  },
+  "S2_11-1-19_19QDA": {
+   "cells": 39,
+   "spearman": 0.9570850202429151
+  },
+  "S2_11-6-18_16PCC": {
+   "cells": 2421,
+   "spearman": 0.9691003145407753
+  },
+  "S2_12-1-17_16PCC": {
+   "cells": 137,
+   "spearman": 0.9071324145292617
+  },
+  "S2_12-1-17_16PEC": {
+   "cells": 136,
+   "spearman": 0.8468151491249443
+  },
+  "S2_12-1-19_16PEC": {
+   "cells": 713,
+   "spearman": 0.8728118286394966
+  },
+  "S2_12-12-20_16PCC": {
+   "cells": 894,
+   "spearman": 0.9406619151994621
+  },
+  "S2_13-12-18_16PCC": {
+   "cells": 2871,
+   "spearman": 0.9179910970209512
+  },
+  "S2_14-11-18_48PZC": {
+   "cells": 152,
+   "spearman": 0.8579529824958417
+  },
+  "S2_14-12-20_18QYF": {
+   "cells": 48,
+   "spearman": 0.8806926137926496
+  },
+  "S2_14-3-20_18QYF": {
+   "cells": 70,
+   "spearman": 0.8938928693620798
+  },
+  "S2_14-9-18_16PCC": {
+   "cells": 386,
+   "spearman": 0.9068920081383232
+  },
+  "S2_15-10-20_18QYF": {
+   "cells": 29,
+   "spearman": 0.94679802955665
+  },
+  "S2_15-11-20_16PCC": {
+   "cells": 322,
+   "spearman": 0.9585202994693656
+  },
+  "S2_15-9-20_18QYF": {
+   "cells": 26,
+   "spearman": 0.9068216921729148
+  },
+  "S2_16-2-18_16PEC": {
+   "cells": 1270,
+   "spearman": 0.9247712446242504
+  },
+  "S2_18-1-18_48PZC": {
+   "cells": 225,
+   "spearman": 0.8967213263549693
+  },
+  "S2_18-5-19_51PTS": {
+   "cells": 14,
+   "spearman": 0.7186813186813187
+  },
+  "S2_18-9-20_16PCC": {
+   "cells": 833,
+   "spearman": 0.9675452108938466
+  },
+  "S2_18-9-20_16PDC": {
+   "cells": 135,
+   "spearman": 0.8464327130313918
+  },
+  "S2_19-3-20_18QYF": {
+   "cells": 65,
+   "spearman": 0.8539239916073973
+  },
+  "S2_19-9-18_16PCC": {
+   "cells": 382,
+   "spearman": 0.9718433066775783
+  },
+  "S2_19-9-18_16PDC": {
+   "cells": 976,
+   "spearman": 0.950285051976652
+  },
+  "S2_20-10-20_18QYF": {
+   "cells": 22,
+   "spearman": 0.9040090344438172
+  },
+  "S2_20-4-18_30VWH": {
+   "cells": 6237,
+   "spearman": 0.9468761001778361
+  },
+  "S2_21-2-17_16PCC": {
+   "cells": 1028,
+   "spearman": 0.9267190216211346
+  },
+  "S2_21-2-18_16PCC": {
+   "cells": 319,
+   "spearman": 0.9193158160386615
+  },
+  "S2_22-3-20_18QWF": {
+   "cells": 129,
+   "spearman": 0.841177999718178
+  },
+  "S2_23-1-21_18QYF": {
+   "cells": 25,
+   "spearman": 0.7906083943912892
+  },
+  "S2_23-9-20_16PCC": {
+   "cells": 1700,
+   "spearman": 0.9369220171518203
+  },
+  "S2_24-10-18_16PDC": {
+   "cells": 176,
+   "spearman": 0.8729117346326274
+  },
+  "S2_24-11-19_48PZC": {
+   "cells": 237,
+   "spearman": 0.836450718121089
+  },
+  "S2_24-3-20_18QYF": {
+   "cells": 10,
+   "spearman": 0.9151515151515152
+  },
+  "S2_24-4-19_36JUN": {
+   "cells": 95,
+   "spearman": 0.9041061389332572
+  },
+  "S2_24-8-20_16PCC": {
+   "cells": 1557,
+   "spearman": 0.8810812484616731
+  },
+  "S2_25-5-19_48MXU": {
+   "cells": 12,
+   "spearman": 0.9160839160839163
+  },
+  "S2_26-2-18_16PCC": {
+   "cells": 175,
+   "spearman": 0.9117437961618231
+  },
+  "S2_27-1-19_16PCC": {
+   "cells": 172,
+   "spearman": 0.9154701710616973
+  },
+  "S2_27-1-19_16QED": {
+   "cells": 101,
+   "spearman": 0.841417389101697
+  },
+  "S2_28-9-20_16PCC": {
+   "cells": 104,
+   "spearman": 0.9354041972600792
+  },
+  "S2_28-9-20_16PDC": {
+   "cells": 537,
+   "spearman": 0.8218128699094744
+  },
+  "S2_29-11-20_18QYF": {
+   "cells": 49,
+   "spearman": 0.7356310112345542
+  },
+  "S2_29-12-20_18QYF": {
+   "cells": 59,
+   "spearman": 0.8071364912704002
+  },
+  "S2_29-8-17_51RVQ": {
+   "cells": 41,
+   "spearman": 0.9522191742121777
+  },
+  "S2_3-1-21_18QYF": {
+   "cells": 33,
+   "spearman": 0.9481951871657754
+  },
+  "S2_3-11-18_16PDC": {
+   "cells": 1128,
+   "spearman": 0.9485519131470791
+  },
+  "S2_30-8-17_16PCC": {
+   "cells": 111,
+   "spearman": 0.8742217562413538
+  },
+  "S2_30-8-18_16PCC": {
+   "cells": 677,
+   "spearman": 0.9181919406061619
+  },
+  "S2_4-12-20_18QYF": {
+   "cells": 45,
+   "spearman": 0.7801567972658644
+  },
+  "S2_4-3-18_50LLR": {
+   "cells": 153,
+   "spearman": 0.9076187477360512
+  },
+  "S2_4-9-19_16PCC": {
+   "cells": 2,
+   "spearman": null
+  },
+  "S2_6-12-17_48MYU": {
+   "cells": 7,
+   "spearman": 0.3571428571428572
+  },
+  "S2_6-12-18_48MXU": {
+   "cells": 66,
+   "spearman": 0.9011450107228728
+  },
+  "S2_7-10-18_52SDD": {
+   "cells": 662,
+   "spearman": 0.903159291065111
+  },
+  "S2_7-3-20_18QYG": {
+   "cells": 105,
+   "spearman": 0.7902508054158016
+  },
+  "S2_8-3-18_16PEC": {
+   "cells": 615,
+   "spearman": 0.9084604303891435
+  },
+  "S2_8-3-18_16QED": {
+   "cells": 319,
+   "spearman": 0.9088270654709305
+  },
+  "S2_9-10-17_16PEC": {
+   "cells": 1599,
+   "spearman": 0.9287164847318143
+  }
+ }
+}

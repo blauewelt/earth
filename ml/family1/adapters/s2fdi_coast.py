@@ -59,6 +59,17 @@ public repository at the pinned commit `ACOLITE_COMMIT`. `tests/test_family13_
 s2fdi_coast.py` asserts the settings, the wavelengths and the FDI factors are
 the probe's.
 
+FULL-RESOLUTION READS (`ml/family1/acolite_full_res.py`, 2026-10-14). ACOLITE
+is never started directly: the adapter runs that launcher, which makes
+`gdal.Warp` default to `overviewLevel='NONE'` and then runs ACOLITE unchanged.
+Without it GDAL answers ACOLITE's 10 m -> 20 m "average" warp from the JPEG
+2000 file's own 20 m wavelet level, not from the 2x2 mean of the 10 m pixels,
+so B04/B08 sit on a footprint shifted ~7 m from B06/B11 and FDI decorrelates
+within a scene (falsifier (i): 16PCC 2018-06-11 Spearman 0.970 -> 0.999;
+`probes/s2fdi_coast_diagnosis_i.json`). The launcher prints a marker the
+adapter requires in acolite.log, and every acquisition record carries
+`band_read_path`, so a frame made without it is identifiable.
+
 THE INDICES (plan §4, with each satellite's own centre wavelengths `WAVE`):
   FDI  = R8 - [R6 + (R11 - R6) * 10 (l8 - l4)/(l11 - l4)]   factor 1.7722 S2A,
                                                                     1.7770 S2B
@@ -177,6 +188,7 @@ import numpy as np
 
 import build_family10_stores as f10b
 from family1 import sharded as sh
+from family1 import acolite_full_res as acr
 from family1.adapters import _common as cm
 from family1.adapters import _stac as st
 
@@ -193,6 +205,10 @@ STAC_LIMIT = 50
 L1C_HTTP = "https://sentinel-s2-l1c.s3.eu-central-1.amazonaws.com/"
 L1C_PAYMENT = L1C_HTTP + "?requestPayment"
 ACOLITE_GIT = "https://github.com/acolite/acolite.git"
+# the launcher every ACOLITE run goes through, and what it records
+ACOLITE_LAUNCHER = os.path.join(os.path.dirname(os.path.dirname(
+    os.path.abspath(__file__))), "acolite_full_res.py")
+BAND_READ_PATH = acr.READ_PATH
 # the commit the co-location probe and the 2026-10-13 measurement ran
 ACOLITE_COMMIT = "ca477dd91dfb5f8eb77333824b38cb0bcce5e083"
 MARIDA_ZIP = "https://zenodo.org/records/5151941/files/MARIDA.zip?download=1"
@@ -1184,17 +1200,26 @@ class S2FdiCoastAdapter(sh.GridAdapter):
             f.write("\n".join((f"inputfile={safe}", f"output={out}")
                               + ACOLITE_SETTINGS + ("",)))
         t0 = time.time()
-        with open(os.path.join(out, "acolite.log"), "w") as lf:
-            rc = subprocess.run([self.acolite_python, "launch_acolite.py",
-                                 "--cli",
-                                 f"--settings={stp}"], cwd=aco, stdout=lf,
-                                stderr=subprocess.STDOUT,
+        log = os.path.join(out, "acolite.log")
+        with open(log, "w") as lf:
+            # ACOLITE runs through `ml/family1/acolite_full_res.py`, which
+            # makes gdal.Warp read full-resolution JPEG 2000 data
+            # (overviewLevel='NONE'): without it the 10 m bands B04/B08 come
+            # from the file's own wavelet 20 m level, not the 2x2 mean
+            # (ml/family1/probes/s2fdi_coast_diagnosis_i.json).
+            rc = subprocess.run([self.acolite_python, ACOLITE_LAUNCHER, aco,
+                                 "--cli", f"--settings={stp}"], cwd=aco,
+                                stdout=lf, stderr=subprocess.STDOUT,
                                 env=self.acolite_env).returncode
         done = [f for f in os.listdir(out) if f.endswith("_L2R.nc")]
         if rc != 0 or len(done) != 1:
             raise IOError(f"ACOLITE rc {rc}, {len(done)} L2R file(s): "
-                          + acolite_failure(os.path.join(out,
-                                                         "acolite.log")))
+                          + acolite_failure(log))
+        with open(log, errors="replace") as fh:
+            if acr.READ_PATH_MARKER not in fh.read(4096):
+                raise IOError(f"ACOLITE ran without the full-resolution read "
+                              f"path (no {acr.READ_PATH_MARKER!r} in {log}); "
+                              f"refusing its output")
         for f in os.listdir(out):
             if f.endswith("_L1R.nc"):
                 os.remove(os.path.join(out, f))
@@ -1249,7 +1274,8 @@ class S2FdiCoastAdapter(sh.GridAdapter):
                        "acolite_version": "smoke stub"}, \
                 {"download_s": 0.0, "acolite_s": 0.0}, \
                 {"bytes": int(os.path.getsize(p)), "reused": False,
-                 "bucket_quirk": False, "acolite_commit": "stub"}
+                 "bucket_quirk": False, "acolite_commit": "stub",
+                 "read_path": "smoke stub (no ACOLITE)"}
         if not self.runtime:              # the probe skips fetch_preflight
             self.ensure_acolite_runtime(ctx)
         t0 = time.time()
@@ -1267,7 +1293,8 @@ class S2FdiCoastAdapter(sh.GridAdapter):
         return R, attrs, {"download_s": round(t_dl, 1),
                           "acolite_s": round(t_aco, 1)}, \
             {"bytes": sf["bytes"], "reused": sf["reused"],
-             "bucket_quirk": sf["bucket_quirk"], "acolite_commit": sha}
+             "bucket_quirk": sf["bucket_quirk"], "acolite_commit": sha,
+             "read_path": BAND_READ_PATH}
 
     # ------------------------------------------------------ the contract --
     def fetch_frames(self, ctx, wanted):
@@ -1319,6 +1346,7 @@ class S2FdiCoastAdapter(sh.GridAdapter):
                        acolite_version=attrs.get("acolite_version"),
                        acolite_commit=src["acolite_commit"],
                        acolite_private_gdal=bool(self.acolite_env),
+                       band_read_path=src["read_path"],
                        l1c_bytes=src["bytes"], safe_reused=src["reused"],
                        l1c_href_in_l2a_bucket=src["bucket_quirk"],
                        seconds=dict(tim, mask_s=round(time.time() - t1, 1),
@@ -1415,26 +1443,193 @@ def _spearman(a, b):
     return None if not np.isfinite(r) else float(r)
 
 
-def _store_reader(store):
-    """{group: ShardedGroup} and the acquisition index of a built store."""
-    with open(os.path.join(store, "store.json")) as fh:
-        meta = json.load(fh)
-    grp = {g: sh.ShardedGroup(os.path.join(store, g)) for g in meta["groups"]}
+HUB_STORE = ("https://huggingface.co/datasets/chfrank/earth-tensors/resolve/"
+             "main/tensors/family1_3/s2fdi_coast")
+
+
+HUB_PARTS = ("https://huggingface.co/datasets/chfrank/earth-tensors/resolve/"
+             "main/partials/family1_3/s2fdi_coast")
+HUB_TREE = ("https://huggingface.co/api/datasets/chfrank/earth-tensors/tree/"
+            "main/partials/family1_3/s2fdi_coast")
+
+
+class _PartsSource:
+    """The `sharded._Source` interface over the LANE PARTS on the Hub
+    (`partials/family1_3/s2fdi_coast/<year>/<lane>/<group>__bin_NNNN.*`) —
+    the bytes the assembler links into the store unchanged, so a falsifier
+    read here reads what the store will hold. `rel` is the store's own
+    `<yyyy>/bin_<NNNN>.(zst|idx.npy)`; the bin picks the lane."""
+
+    def __init__(self, group, lane_of_bin):
+        self.group, self.lane_of_bin = group, dict(lane_of_bin)
+        self.url = True
+        self.ranges = 0
+
+    def _url(self, rel):
+        m = re.fullmatch(r"\d{4}/bin_(\d+)\.(zst|idx\.npy)", rel)
+        if not m:
+            raise sh.ShardError(f"parts: no mapping for {rel}")
+        base = self.lane_of_bin[int(m.group(1))]
+        return f"{base}/{self.group}__bin_{m.group(1)}.{m.group(2)}"
+
+    def get(self, rel):
+        return f10b.http_bytes(self._url(rel))
+
+    def read_at(self, rel, off, n):
+        self.ranges += 1
+        b = cm.range_reader(self._url(rel))(off, n)
+        if len(b) != n:
+            raise sh.ShardError(f"{self._url(rel)}: {len(b)} of {n} bytes")
+        return b
+
+
+def _parts_reader(tree=HUB_TREE, base=HUB_PARTS):
+    """(pseudo store.json, {group: ShardedGroup over _PartsSource},
+    acquisitions) from every lane's counts.json on the Hub."""
+    def ls(url):
+        return json.loads(f10b.http_bytes(url))
+    acq, specs, lanes, bins = [], {}, [], {}
+    for y in ls(tree):
+        if y["type"] != "directory":
+            continue
+        yr = y["path"].rsplit("/", 1)[-1]
+        for ln in ls(tree + "/" + yr):
+            if ln["type"] != "directory":
+                continue
+            lane = ln["path"].rsplit("/", 1)[-1]
+            lb = f"{base}/{yr}/{lane}"
+            led = json.loads(f10b.http_bytes(lb + "/counts.json"))
+            lanes.append(f"{yr}/{lane}")
+            for g, sp in (led.get("grids") or {}).items():
+                specs.setdefault(g, sp)
+            for a in (led.get("counts") or {}).get("acquisitions") or []:
+                acq.append(a)
+                bins.setdefault(a["group"], {})[int(a["bin"])] = lb
+    grp = {}
+    for g, sp in specs.items():
+        o = sh.ShardedGroup.__new__(sh.ShardedGroup)
+        o.src = _PartsSource(g, bins.get(g, {}))
+        o.spec = sp
+        o._dctx = sh.zstd().ZstdDecompressor()
+        o._index = None
+        grp[g] = o
+    meta = {"groups": {g: {} for g in specs}, "lanes": lanes,
+            "counts": {"acquisitions": acq}, "source": "lane parts"}
     return meta, grp, acquisitions(meta)
 
 
-def _cell_values(grp, b, f, rows, cols, ch, tile_cache):
-    """Channel `ch` at 20 m cells (rows, cols); NaN where not stored."""
+def _store_reader(store):
+    """(store.json, {group: ShardedGroup}, acquisition index) of a built
+    store, on a local directory OR the Hub (`HUB_STORE`, or any URL prefix):
+    on the Hub only store.json and each group's tile_grid.json are fetched
+    here; tiles come later by range reads (`_FrameReader`)."""
+    if store in ("parts", HUB_PARTS):
+        return _parts_reader()
+    if sh._is_url(store):
+        meta = json.loads(f10b.http_bytes(store.rstrip("/") + "/store.json"))
+        grp = {g: sh.ShardedGroup(store.rstrip("/") + "/" + g)
+               for g in meta["groups"]}
+    else:
+        with open(os.path.join(store, "store.json")) as fh:
+            meta = json.load(fh)
+        grp = {g: sh.ShardedGroup(os.path.join(store, g))
+               for g in meta["groups"]}
+    return meta, grp, acquisitions(meta)
+
+
+class _FrameReader:
+    """One (group, bin, frame) read with as few requests as the question
+    needs: the bin's .idx.npy whole (a few kB, ONE read), then either single
+    tiles (one range read each) or the whole frame as ONE range read — a
+    frame's stored tiles are contiguous in the shard (frames ascending,
+    tiles row-major), so its span is [first offset, last offset + length).
+    Counts requests and bytes, so a report can say what it cost."""
+
+    def __init__(self, grp, b, f, stats=None):
+        self.g, self.b, self.f = grp, int(b), int(f)
+        self.sp = grp.spec
+        self._dctx = sh.zstd().ZstdDecompressor()
+        self.stats = stats if stats is not None else {"requests": 0,
+                                                      "bytes": 0}
+        raw = grp.src.get(sh.index_relpath(self.b))
+        self._count(len(raw))
+        idx = np.load(io.BytesIO(raw))
+        if idx.shape[0] <= self.f:
+            raise sh.ShardError(f"bin {b}: index has {idx.shape[0]} frames")
+        self.idx = idx[self.f]                     # [nty, ntx, 2]
+        self.present = not (self.idx[..., 0] == sh.FRAME_ABSENT).all()
+
+    def _count(self, n):
+        self.stats["requests"] += 1
+        self.stats["bytes"] += int(n)
+
+    def _decode(self, blob, ty, tx):
+        # its OWN decompressor: a zstd context is not thread-safe, and the
+        # site control reads frames of one group on several threads
+        sp = self.sp
+        dt_ = sh.DTYPES[sp["dtype"]]
+        want = sp["tile"] * sp["tile"] * sp["C"] * dt_.itemsize
+        raw = self._dctx.decompress(blob, max_output_size=want)
+        if len(raw) != want:
+            raise sh.ShardError(f"a tile decompressed to {len(raw)} bytes, "
+                                f"the declared tile is {want}")
+        t = np.frombuffer(raw, dt_).reshape(sp["tile"], sp["tile"], sp["C"])
+        r0, r1 = self.sp["row_extents"][ty]
+        c0, c1 = self.sp["col_extents"][tx]
+        return sh.decode(t[:r1 - r0, :c1 - c0], self.sp["dtype"])
+
+    def tile(self, ty, tx):
+        """float32 [rows, cols, C] cropped, NaN-filled for an empty tile;
+        None if the frame is absent."""
+        if not self.present:
+            return None
+        o, n = (int(v) for v in self.idx[ty, tx])
+        r0, r1 = self.sp["row_extents"][ty]
+        c0, c1 = self.sp["col_extents"][tx]
+        if n == 0:
+            return np.full((r1 - r0, c1 - c0, self.sp["C"]), np.nan,
+                           np.float32)
+        blob = self.g.src.read_at(sh.shard_relpath(self.b), o, n)
+        self._count(n)
+        return self._decode(blob, ty, tx)
+
+    def frame(self, ch):
+        """[H, W] float32 of channel `ch`, the whole frame in ONE read."""
+        sp = self.sp
+        out = np.full((sp["H"], sp["W"]), np.nan, np.float32)
+        if not self.present:
+            return None
+        st = self.idx[..., 1] > 0
+        if not st.any():
+            return out
+        offs, lens = self.idx[..., 0][st], self.idx[..., 1][st]
+        lo, hi = int(offs.min()), int((offs + lens).max())
+        span = self.g.src.read_at(sh.shard_relpath(self.b), lo, hi - lo)
+        self._count(hi - lo)
+        for ty, tx in zip(*np.nonzero(st)):
+            o, n = (int(v) for v in self.idx[ty, tx])
+            t = self._decode(span[o - lo:o - lo + n], ty, tx)
+            r0, r1 = sp["row_extents"][ty]
+            c0, c1 = sp["col_extents"][tx]
+            out[r0:r1, c0:c1] = t[..., ch]
+        del span
+        return out
+
+
+def _cell_values(fr, rows, cols, ch, tile_cache):
+    """Channel `ch` at 20 m cells (rows, cols) of one `_FrameReader`; NaN
+    where not stored."""
     T = sh.TILE
     out = np.full(len(rows), np.nan, np.float32)
+    ok = (rows >= 0) & (cols >= 0) & (rows < fr.sp["H"]) & \
+        (cols < fr.sp["W"])
     ty, tx = rows // T, cols // T
-    for key in sorted(set(zip(ty.tolist(), tx.tolist()))):
-        k = (id(grp), b, f) + key
-        if k not in tile_cache:
-            t = grp.read_tile(b, f, key[0], key[1])
-            tile_cache[k] = None if t is None else t[..., ch].copy()
-        t = tile_cache[k]
-        m = (ty == key[0]) & (tx == key[1])
+    for key in sorted(set(zip(ty[ok].tolist(), tx[ok].tolist()))):
+        if key not in tile_cache:
+            t = fr.tile(*key)
+            tile_cache[key] = None if t is None else t[..., ch].copy()
+        t = tile_cache[key]
+        m = ok & (ty == key[0]) & (tx == key[1])
         if t is not None:
             out[m] = t[rows[m] - key[0] * T, cols[m] - key[1] * T]
     return out
@@ -1468,12 +1663,13 @@ def check_marida(store, marida_zip, out=None):
                                 "cell")}
     per_scene = {}
     tile_cache = {}
+    stats = {"requests": 0, "bytes": 0}
     for (tile, day), a in sorted(by_scene.items()):
         d = dt.date.fromisoformat(day)
         tag = f"S2_{d.day}-{d.month}-{d.year % 100}_{tile}"
-        g = grid_of(tile)
         sat = 1 if a["satellite"] == "sentinel-2a" else 2
-        gr = grp[a["group"]]
+        fr = _FrameReader(grp[a["group"]], a["bin"], a["frame"], stats)
+        g = fr.sp["grid"]
         pat = re.compile(rf"^patches/{tag}/{tag}_(\d+)\.tif$")
         n0 = len(cols_all["scene"])
         for nm in names:
@@ -1497,19 +1693,24 @@ def check_marida(store, marida_zip, out=None):
             c20 = np.floor((x - g["x0"]) / PX).astype(np.int64)
             v = bands[:, rr, cc].T
             fm = s2l.fdi(v, np.full(len(rr), sat))
-            fs = _cell_values(gr, a["bin"], a["frame"], r20, c20, COL["fdi"],
-                              tile_cache)
+            fs = _cell_values(fr, r20, c20, COL["fdi"], tile_cache)
             cols_all["scene"] += [tag] * len(rr)
             cols_all["cls"] += cl[rr, cc].astype(int).tolist()
             cols_all["split"] += [split_of.get(pid, "none")] * len(rr)
             cols_all["fdi_m"] += fm.tolist()
             cols_all["fdi_s"] += fs.tolist()
-            cols_all["cell"] += (r20 * NPX + c20).tolist()
+            cols_all["cell"] += (r20 * fr.sp["W"] + c20).tolist()
         tile_cache.clear()
         per_scene[tag] = {"labelled_px": len(cols_all["scene"]) - n0}
     A = {k: np.array(v) for k, v in cols_all.items()}
     res = {"store": store, "marida_zip": str(marida_zip),
-           "scenes_in_store": len(by_scene), "labelled_px": int(len(A["cls"]))}
+           "scenes_in_store": len(by_scene),
+           "scenes_scored": sorted(f"{t} {d}" for t, d in by_scene),
+           "marida_scenes_not_in_store": sorted(
+               f"{t} {d}" for t, d in MARIDA_SCENES
+               if (t, d) not in by_scene),
+           "labelled_px": int(len(A["cls"])),
+           "hub_reads": stats}
     if not len(A["cls"]):
         res["note"] = "no MARIDA scene in this store"
         _dump(res, out)
@@ -1529,6 +1730,25 @@ def check_marida(store, marida_zip, out=None):
     ss = np.bincount(inv, A["fdi_s"][both]) / np.bincount(inv)
     res["i"]["spearman_per_20m_cell"] = _spearman(mm, ss)
     res["i"]["cells"] = int(len(u))
+    # WITHIN-scene vs ACROSS-scene: a per-scene additive offset (the store's
+    # aerosol correction against MARIDA's Rayleigh-only one) leaves a
+    # within-scene rank untouched and lowers only the pooled one
+    cscene = np.array([k.split("|", 1)[0] for k in u])
+    per20 = {}
+    adj = ss.copy()
+    for tg in np.unique(cscene):
+        mk = cscene == tg
+        per20[tg] = {"cells": int(mk.sum()), "spearman": _spearman(mm[mk],
+                                                                   ss[mk])}
+        if mk.any():
+            adj[mk] = ss[mk] - np.median(ss[mk] - mm[mk])
+    vals = [v["spearman"] for v in per20.values()
+            if v["spearman"] is not None]
+    res["i"]["per_scene_20m_cell"] = per20
+    res["i"]["spearman_per_20m_cell_scene_median"] = (
+        float(np.median(vals)) if vals else None)
+    res["i"]["spearman_per_20m_cell_pooled_after_removing_each_scenes_"
+             "median_offset"] = _spearman(mm, adj)
     for tag in per_scene:
         m = both & (A["scene"] == tag)
         per_scene[tag].update(marine_water_with_store=int(m.sum()),
@@ -1640,39 +1860,87 @@ def plp2019_targets(vector_dir):
     return out
 
 
-def report_plp(store, vector_dir=None, box=PLP_BOX_2022, out=None, seed=0):
+def _box_rank(fdi, w, rc_box, rng, n_null=200):
+    """The maximum FDI inside a row/col box [r0, r1) x [c0, c1), as a
+    percentile of the scene's stored water `w`, and ranked against the same
+    statistic over `n_null` equal boxes placed at random over the frame
+    (a box is used when at least half of it is stored water). The max of
+    many pixels is biased upward against a single-pixel percentile; the
+    random boxes carry the same bias, which is why both are reported."""
+    r0, r1, c0, c1 = rc_box
+    H, W = fdi.shape
+    r0, c0 = max(r0, 0), max(c0, 0)
+    r1, c1 = min(r1, H), min(c1, W)
+    sub = fdi[r0:r1, c0:c1]
+    ok = np.isfinite(sub)
+    out = {"rows": [int(r0), int(r1)], "cols": [int(c0), int(c1)],
+           "box_px": int(sub.size), "box_water_px": int(ok.sum())}
+    if not ok.any():
+        out["box_max_fdi"] = None
+        return out
+    bx = float(np.nanmax(sub))
+    hh, ww = r1 - r0, c1 - c0
+    null, tries = [], 0
+    while len(null) < n_null and tries < n_null * 50:
+        tries += 1
+        rr = int(rng.integers(0, H - hh + 1))
+        cc = int(rng.integers(0, W - ww + 1))
+        q = fdi[rr:rr + hh, cc:cc + ww]
+        if np.isfinite(q).mean() >= 0.5:
+            null.append(float(np.nanmax(q)))
+    out.update(box_max_fdi=bx,
+               box_max_percentile_in_scene_water=(
+                   float((w < bx).mean() * 100) if w.size else None),
+               null_boxes=len(null),
+               box_max_rank_among_random_boxes=(
+                   float((np.array(null) < bx).mean()) if null else None))
+    return out
+
+
+def report_plp(store, vector_dir=None, box=PLP_BOX_2022, out=None, seed=0,
+               boxes_2021=None):
     """Falsifier (iii), as a REPORT: on each Plastic Litter Project date in
     the store, where do the moored targets rank in their scene's water FDI?
+    The bar (plan §6): above the 99th percentile of the scene's water.
 
     2019 dates: the producer's per-pixel points (10 m centres with their
     plastic fraction) mapped to 20 m cells; each target cell's FDI as a
-    percentile of the frame's stored water FDI; pass if the best target cell
-    is above the 99th. 2022-23 dates: only the producer's ACOLITE box is
-    published, so the box's maximum FDI is ranked against equal boxes placed
-    at random over the frame's water. 2021 dates: positions exist only as
-    orthophotos (the GeoTIFF directory sits 332 MB into a deflated zip member)
-    and are named as missing.
-    """
+    percentile of the frame's stored water FDI (and of water within 2 km);
+    pass if the best target cell is above the 99th. 2022-23 dates: only the
+    producer's ACOLITE box is published, so the box's maximum FDI is ranked
+    in the scene's water and against random equal boxes. 2021 dates: a box
+    per date only if `boxes_2021` ({date: [S, W, N, E]}, e.g. the orthophoto
+    footprints) is given; otherwise named as missing. Each frame is read from
+    the store in ONE range request (`_FrameReader.frame`)."""
     from rasterio.warp import transform
     meta, grp, acq = _store_reader(store)
     rng = np.random.default_rng(seed)
     pts = plp2019_targets(vector_dir) if vector_dir else {}
-    res = {"store": store, "dates": {}}
-    g = grid_of(LESVOS)
+    stats = {"requests": 0, "bytes": 0}
+    res = {"store": store, "dates": {}, "hub_reads": stats,
+           "rule": "pass = the best target pixel (or the box maximum) above "
+                   "the 99th percentile of the frame's stored water FDI"}
+
+    def lonlat_box(g, bb):
+        s_, w_, n_, e_ = bb
+        xs, ys = transform("EPSG:4326", g["crs"], [w_, e_, w_, e_],
+                           [s_, s_, n_, n_])
+        return (int((g["y0"] - max(ys)) // PX),
+                int((g["y0"] - min(ys)) // PX) + 1,
+                int((min(xs) - g["x0"]) // PX),
+                int((max(xs) - g["x0"]) // PX) + 1)
+
     for a in acq:
         if a["tile"] != LESVOS or a["day"] not in PLP_DATES:
             continue
-        gr = grp[a["group"]]
-        fdi = np.full((NPX, NPX), np.nan, np.float32)
-        lay = sh.tile_layout(NPX, NPX)
-        for ty in range(lay["n_tiles_y"]):
-            for tx in range(lay["n_tiles_x"]):
-                t = gr.read_tile(a["bin"], a["frame"], ty, tx, crop=True)
-                if t is not None:
-                    fdi[ty * 256:ty * 256 + t.shape[0],
-                        tx * 256:tx * 256 + t.shape[1]] = t[..., COL["fdi"]]
+        fr = _FrameReader(grp[a["group"]], a["bin"], a["frame"], stats)
+        g = fr.sp["grid"]
+        fdi = fr.frame(COL["fdi"])
         w = fdi[np.isfinite(fdi)]
-        rec = {"l1c": a["l1c"], "water_px": int(w.size),
+        rec = {"l1c": a["l1c"], "processing_baseline":
+               a.get("processing_baseline"), "cloud_cover":
+               a.get("cloud_cover"), "selection": a.get("selection"),
+               "water_px": int(w.size),
                "p99": float(np.percentile(w, 99)) if w.size else None}
         y = a["day"][:4]
         if a["day"] in pts:
@@ -1713,45 +1981,231 @@ def report_plp(store, vector_dir=None, box=PLP_BOX_2022, out=None, seed=0):
                     if r["percentile_in_scene_water"] is not None]
             bl = [r["percentile_in_water_within_2km"] for r in rows
                   if r["percentile_in_water_within_2km"] is not None]
+            rr_ = rc[:, 0]
+            cc_ = rc[:, 1]
             rec.update(kind="2019 per-pixel points", cells=rows,
+                       target_cells=len(rows),
                        best_percentile=max(best) if best else None,
                        best_percentile_local=max(bl) if bl else None,
                        cells_with_value=len(best),
+                       target_bbox=_box_rank(
+                           fdi, w, (int(rr_.min()), int(rr_.max()) + 1,
+                                    int(cc_.min()), int(cc_.max()) + 1), rng),
                        pass_p99=(bool(max(best) > 99) if best else None))
-        elif y in ("2022", "2023"):
-            s, wl, n, e = box
-            xs, ys = transform("EPSG:4326", g["crs"], [wl, e, wl, e],
-                               [s, s, n, n])
-            c0 = int((min(xs) - g["x0"]) // PX)
-            c1 = int((max(xs) - g["x0"]) // PX) + 1
-            r0 = int((g["y0"] - max(ys)) // PX)
-            r1 = int((g["y0"] - min(ys)) // PX) + 1
-            sub = fdi[r0:r1, c0:c1]
-            bx = float(np.nanmax(sub)) if np.isfinite(sub).any() else None
-            hh, ww = r1 - r0, c1 - c0
-            null = []
-            for _ in range(2000):
-                rr = rng.integers(0, NPX - hh)
-                c = rng.integers(0, NPX - ww)
-                q = fdi[rr:rr + hh, c:c + ww]
-                if np.isfinite(q).mean() >= 0.5:
-                    null.append(float(np.nanmax(q)))
-                if len(null) >= 200:
-                    break
-            rec.update(kind="2022-23 producer ACOLITE box", box=list(box),
-                       box_px=int(np.isfinite(sub).sum()), box_max_fdi=bx,
-                       null_boxes=len(null),
-                       box_rank=(float((np.array(null) < bx).mean())
-                                 if null and bx is not None else None))
+        elif y in ("2022", "2023") or (boxes_2021 and a["day"] in
+                                       boxes_2021):
+            bb = box if y in ("2022", "2023") else boxes_2021[a["day"]]
+            br = _box_rank(fdi, w, lonlat_box(g, bb), rng)
+            pc = br.get("box_max_percentile_in_scene_water")
+            rec.update(kind=("2022-23 producer ACOLITE box"
+                             if y in ("2022", "2023")
+                             else "2021 orthophoto footprint box"),
+                       box=list(bb), **br,
+                       pass_p99=(None if pc is None else bool(pc > 99)))
         else:
-            rec.update(kind="2021", missing=(
+            rec.update(kind="2021", pass_p99=None, missing=(
                 "target positions are published only as orthophotos inside "
-                "per-date zips of 5-10 GB (Zenodo 7085112); the GeoTIFF "
-                "directory sits 332 MB into the deflated member, so reading "
-                "the 22 footprints costs ~7 GB — not done here"))
+                "per-date zips of 5-10 GB (Zenodo 7085112); no footprint "
+                "box was given for this date"))
+        del fdi
         res["dates"][a["day"]] = rec
     res["plp_dates_not_in_store"] = sorted(set(PLP_DATES)
                                            - set(res["dates"]))
+    sc = [d for d, r in res["dates"].items() if r.get("pass_p99") is not None]
+    res["summary"] = {"dates_in_store": len(res["dates"]),
+                      "dates_scored": len(sc),
+                      "dates_pass_p99": sum(1 for d in sc
+                                            if res["dates"][d]["pass_p99"]),
+                      "dates_unscored": sorted(set(res["dates"]) - set(sc))}
+    _dump(res, out)
+    return res
+
+
+def _rc_box(g, bb):
+    from rasterio.warp import transform
+    s_, w_, n_, e_ = bb
+    xs, ys = transform("EPSG:4326", g["crs"], [w_, e_, w_, e_],
+                       [s_, s_, n_, n_])
+    return (int((g["y0"] - max(ys)) // PX), int((g["y0"] - min(ys)) // PX) + 1,
+            int((min(xs) - g["x0"]) // PX), int((max(xs) - g["x0"]) // PX) + 1)
+
+
+def site_summary(rows, sites):
+    """Campaign dates against every other acquisition, per site box, and
+    the campaign dates split by YEAR — the 2019, 2021 and 2022-23 targets
+    were moored at different places, so a site box is only a target box in
+    its own campaign year(s)."""
+    from scipy.stats import mannwhitneyu
+    summ = {}
+    for name in sites:
+        def vals(pred):
+            return [r["sites"][name]["box_max_percentile_in_background"]
+                    for r in rows if pred(r)
+                    and "box_max_percentile_in_background" in r["sites"][name]]
+
+        def desc(v):
+            return ({"n": len(v), "median": float(np.median(v)),
+                     "p90": float(np.percentile(v, 90)),
+                     "frac_above_99": float(np.mean(np.array(v) > 99))}
+                    if v else {"n": 0})
+        c = vals(lambda r: r["campaign"])
+        o = vals(lambda r: not r["campaign"])
+        sm = {"campaign_n": len(c), "other_n": len(o),
+              "campaign": desc(c), "other": desc(o),
+              "other_june_october": desc(vals(
+                  lambda r: not r["campaign"]
+                  and r["day"][5:7] in ("06", "07", "08", "09", "10"))),
+              "campaign_by_year": {}}
+        for yrs in (("2019",), ("2021",), ("2022", "2023")):
+            v = vals(lambda r, yrs=yrs: r["campaign"] and r["day"][:4] in yrs)
+            d = desc(v)
+            if len(v) >= 3 and len(o) >= 3:
+                d["mann_whitney_p_vs_other"] = float(
+                    mannwhitneyu(v, o, alternative="greater").pvalue)
+            sm["campaign_by_year"]["-".join(yrs)] = d
+        if len(c) >= 3 and len(o) >= 3:
+            sm["mann_whitney_p_campaign_greater"] = float(
+                mannwhitneyu(c, o, alternative="greater").pvalue)
+        summ[name] = sm
+    return summ
+
+
+def site_control(store, sites, pad_m=3000.0, workers=4):
+    """THE CONTROL (iii) needs: is a target box bright because of the
+    TARGETS or because of the SITE? For every Lesvos acquisition in the
+    store — campaign dates and the ~385 others alike — the maximum FDI in
+    each site box, as a percentile of the stored water within `pad_m` of the
+    box (the box itself excluded). Read tile by tile (the window is a few
+    tiles), never the whole frame. `sites` = {name: [S, W, N, E]}."""
+    from concurrent.futures import ThreadPoolExecutor
+    meta, grp, acq = _store_reader(store)
+    les = [a for a in acq if a["tile"] == LESVOS]
+    stats = {"requests": 0, "bytes": 0}
+    T = sh.TILE
+
+    def one(a):
+        cnt = {"requests": 0, "bytes": 0}
+        fr = _FrameReader(grp[a["group"]], a["bin"], a["frame"], cnt)
+        g = fr.sp["grid"]
+        k = int(pad_m / PX)
+        cache = {}
+        out = {"day": a["day"], "campaign": a["day"] in PLP_DATES,
+               "cloud_cover": a.get("cloud_cover"), "sites": {}}
+        for name, bb in sites.items():
+            r0, r1, c0, c1 = _rc_box(g, bb)
+            R0, R1 = max(r0 - k, 0), min(r1 + k, fr.sp["H"])
+            C0, C1 = max(c0 - k, 0), min(c1 + k, fr.sp["W"])
+            win = np.full((R1 - R0, C1 - C0), np.nan, np.float32)
+            for ty in range(R0 // T, (R1 - 1) // T + 1):
+                for tx in range(C0 // T, (C1 - 1) // T + 1):
+                    if (ty, tx) not in cache:
+                        t = fr.tile(ty, tx)
+                        cache[(ty, tx)] = None if t is None else \
+                            t[..., COL["fdi"]]
+                    t = cache[(ty, tx)]
+                    if t is None:
+                        continue
+                    a0, a1 = max(R0, ty * T), min(R1, ty * T + t.shape[0])
+                    b0, b1 = max(C0, tx * T), min(C1, tx * T + t.shape[1])
+                    win[a0 - R0:a1 - R0, b0 - C0:b1 - C0] = \
+                        t[a0 - ty * T:a1 - ty * T, b0 - tx * T:b1 - tx * T]
+            inb = np.zeros(win.shape, bool)
+            inb[r0 - R0:r1 - R0, c0 - C0:c1 - C0] = True
+            box = win[inb]
+            bg = win[~inb & np.isfinite(win)]
+            ok = np.isfinite(box)
+            rec = {"box_water_px": int(ok.sum()), "box_px": int(box.size),
+                   "background_water_px": int(bg.size)}
+            if ok.any() and bg.size >= 1000:
+                mx = float(np.nanmax(box))
+                rec.update(box_max_fdi=mx,
+                           box_max_percentile_in_background=float(
+                               (bg < mx).mean() * 100),
+                           background_p99=float(np.percentile(bg, 99)))
+            out["sites"][name] = rec
+        return out, cnt
+    rows = []
+    with ThreadPoolExecutor(workers) as ex:
+        for r, cnt in ex.map(one, les):
+            rows.append(r)
+            stats["requests"] += cnt["requests"]
+            stats["bytes"] += cnt["bytes"]
+    rows.sort(key=lambda r: r["day"])
+    summ = site_summary(rows, sites)
+    return {"what": ("max FDI in each site box as a percentile of stored "
+                     f"water within {pad_m:.0f} m of it (box excluded), on "
+                     "every 35SMD acquisition; campaign = a PLP date"),
+            "sites": sites, "summary": summ, "acquisitions": rows,
+            "hub_reads": stats}
+
+
+def falsifiers(store, marida_zip, vector_dir=None, boxes_2021=None,
+               out=None):
+    """(i), (ii) and (iii) against a built store — local or the Hub — written
+    as ONE file. Reports what was measured against each falsifier's bar;
+    decides nothing beyond that comparison."""
+    t0 = time.time()
+    m = check_marida(store, marida_zip)
+    p = report_plp(store, vector_dir, boxes_2021=boxes_2021)
+    sites = {"plp2022_23_producer_box": list(PLP_BOX_2022)}
+    if boxes_2021:
+        bx = np.array(list(boxes_2021.values()), np.float64)
+        sites["plp2021_median_ortho_footprint"] = [
+            round(float(v), 6) for v in np.median(bx, axis=0)]
+    if vector_dir:
+        from rasterio.warp import transform as _tr
+        allp = [q for v in plp2019_targets(vector_dir).values() for q in v]
+        lo, la = _tr("EPSG:32635", "EPSG:4326", [q[0] for q in allp],
+                     [q[1] for q in allp])
+        sites["plp2019_target_points_bbox"] = [
+            min(la) - 1e-4, min(lo) - 1e-4, max(la) + 1e-4, max(lo) + 1e-4]
+    sc = site_control(store, sites)
+    i_ = m.get("i") or {}
+    ii = m.get("ii") or {}
+    s3 = p["summary"]
+    res = {
+        "written": dt.datetime.now(dt.timezone.utc).strftime(
+            "%Y-%m-%dT%H:%M:%SZ"),
+        "experiment": "E-092 s2fdi_coast falsifiers (plan §6)",
+        "store": store, "marida_zip": str(marida_zip),
+        "verdicts": {
+            "i": {"bar": "Spearman >= 0.9 between the store's FDI and FDI "
+                         "from MARIDA's own bands, MARIDA 'Marine Water' "
+                         "pixels, per 20 m cell",
+                  "measured": i_.get("spearman_per_20m_cell"),
+                  "n_cells": i_.get("cells"),
+                  "per_10m_pixel": i_.get("spearman_pooled"),
+                  "pass": i_.get("pass")},
+            "ii": {"bar": "|F1(store FDI) - F1(MARIDA FDI)| <= 0.05, "
+                          "threshold = 95th percentile of TRAIN Marine Water "
+                          "FDI, debris-vs-not on MARIDA's TEST split",
+                   "f1_store": (ii.get("store") or {}).get("f1"),
+                   "f1_marida": (ii.get("marida") or {}).get("f1"),
+                   "f1_abs_diff": ii.get("f1_abs_diff"),
+                   "pass": ii.get("pass")},
+            "iii": {"bar": "moored targets above the 99th percentile of "
+                           "their scene's water FDI, per campaign date",
+                    **s3,
+                    "site_control": sc["summary"],
+                    "site_control_note": (
+                        "the same boxes on every NON-campaign acquisition: "
+                        "if they rank as high there, the brightness belongs "
+                        "to the site (shore, shallows), not to the targets")}},
+        "inputs": {
+            "marida": "Zenodo 5151941 MARIDA.zip (patches, _cl masks, "
+                      "splits); FDI from its bands with s2labels.fdi",
+            "plp2019": "Zenodo 3752719 PLP2019_dataset.rar, Vector_Points "
+                       "(10 m target pixels with plastic %)",
+            "plp2021_boxes": ("the georeferenced footprint of each date's "
+                              "UAS orthophoto in Zenodo 7085112, read from "
+                              "the GeoTIFF header by a streaming inflate of "
+                              "the zip member "
+                              "(ml/family1/probes/s2fdi_coast_plp2021_boxes"
+                              ".json); 17 of 22 dates have one"
+                              if boxes_2021 else None),
+            "plp2022_23_box": list(PLP_BOX_2022)},
+        "i_ii": m, "iii": p, "iii_site_control": sc,
+        "wall_s": round(time.time() - t0, 1)}
     _dump(res, out)
     return res
 
@@ -1762,24 +2216,26 @@ def main(argv=None):
     sub = ap.add_subparsers(dest="cmd", required=True)
     sub.add_parser("lanes")
     c = sub.add_parser("check")
-    c.add_argument("--store", required=True)
+    c.add_argument("--store", default=HUB_STORE,
+                   help="a local store directory, a URL prefix (default: "
+                        "the published store on the Hub), or `parts` — the "
+                        "lane parts on the Hub before assembly")
     c.add_argument("--marida-zip", default=MARIDA_ZIP)
     c.add_argument("--plp2019-vectors", default="")
+    c.add_argument("--plp2021-boxes", default="",
+                   help="JSON {date: [S, W, N, E]} target boxes for 2021")
     c.add_argument("--out", default="")
     a = ap.parse_args(argv)
     if a.cmd == "lanes":
         print(json.dumps(plan_lanes(), indent=1))
         return
-    r1 = check_marida(a.store, a.marida_zip,
-                      out=(a.out + ".marida.json") if a.out else None)
-    r2 = report_plp(a.store, a.plp2019_vectors or None,
-                    out=(a.out + ".plp.json") if a.out else None)
-    print(json.dumps({"i": r1.get("i"), "ii": r1.get("ii"),
-                      "plp": {k: {kk: v.get(kk) for kk in
-                                  ("kind", "best_percentile", "box_rank",
-                                   "pass_p99")}
-                              for k, v in r2["dates"].items()}}, indent=1,
-                     default=float))
+    boxes = None
+    if a.plp2021_boxes:
+        with open(a.plp2021_boxes) as fh:
+            boxes = json.load(fh)
+    r = falsifiers(a.store, a.marida_zip, a.plp2019_vectors or None, boxes,
+                   out=a.out or None)
+    print(json.dumps(r["verdicts"], indent=1, default=float))
 
 
 if __name__ == "__main__":

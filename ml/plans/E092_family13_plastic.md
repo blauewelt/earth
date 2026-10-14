@@ -455,6 +455,26 @@ it needs AOMI's rows, which D4 keeps out. The comparison stays in §2a.
 
 ## 7 · Status
 
+**`s2fdi_coast` falsifier (i), first reading and its diagnosis (2026-10-13/14).**
+Read from the 24 lanes' parts on the Hub (the assembly #1120 failed on a Hub
+outage): pooled Spearman 0.833 (n = 30,553 cells, 58 scenes) against the bar
+of 0.9 — FAIL as written. Diagnosed before any verdict
+(`ml/family1/probes/s2fdi_coast_diagnosis_i.json`): registration is exact
+(best shift (0,0) on 5 scenes); most of the pooled shortfall is a per-scene
+additive offset (the store removes aerosol, MARIDA only Rayleigh: 0.976 pooled
+after removing each scene's median offset); the within-scene loss was a BUG —
+ACOLITE's `gdal.Warp(resampleAlg='average')` read the JPEG 2000 file's own
+20 m wavelet level for B04 and B08 instead of averaging the 10 m pixels, a
+footprint ~7 m north-west of the cell and sharpened. Fixed by
+`ml/family1/acolite_full_res.py` (overviewLevel NONE; a test fails on the old
+behaviour): 16PCC 2018-06-11 goes from 0.970 to 0.997. All 24 lanes are being
+re-run; the verdict waits on them. The co-location probe that closed
+`s2fdi_gpgp` read B08 the same way — its null rests on a 1e-6 vs 1e-3
+signal-to-noise argument the bug does not touch, but the measured numbers
+carry this caveat. (ii) passed (F1 0.0044 vs 0.0052); (iii) as written passed
+on 22 of 24 dates, and a site control shows only the 2021 targets stand out
+from their own site (Mann–Whitney p = 7e-7).
+
 **Phase C, 2026-10-13** (D13; full record in
 [EXPERIMENTS E-092](https://blauewelt.github.io/earth/docs.html?f=ml/EXPERIMENTS.md#e-092)):
 `mplastic` rebuilt under D12 (19,974 rows); `cygnss_mss` PUBLISHED (2,989

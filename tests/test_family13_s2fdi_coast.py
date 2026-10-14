@@ -478,3 +478,241 @@ def test_the_runtime_check_passes_here():
     pytest.importorskip("osgeo")
     ok, why = s2f.acolite_python_check()
     assert ok, why
+
+
+# ======================================== the falsifiers over HTTP ranges ==
+
+def _serve(root):
+    import http.server
+    import threading
+
+    class H(http.server.SimpleHTTPRequestHandler):
+        def __init__(self, *a, **k):
+            super().__init__(*a, directory=root, **k)
+
+        def log_message(self, *a):
+            pass
+
+        def do_GET(self):
+            rng = self.headers.get("Range")
+            p = self.translate_path(self.path)
+            if not os.path.isfile(p):
+                self.send_error(404)
+                return
+            data = open(p, "rb").read()
+            if rng:
+                lo, hi = rng.split("=")[1].split("-")
+                lo, hi = int(lo), min(int(hi), len(data) - 1)
+                body = data[lo:hi + 1]
+                self.send_response(206)
+                self.send_header("Content-Range",
+                                 f"bytes {lo}-{hi}/{len(data)}")
+            else:
+                body = data
+                self.send_response(200)
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+    srv = http.server.ThreadingHTTPServer(("127.0.0.1", 0), H)
+    threading.Thread(target=srv.serve_forever, daemon=True).start()
+    return srv, f"http://127.0.0.1:{srv.server_address[1]}"
+
+
+def test_frame_reader_matches_the_group_reader_over_http(smoke):
+    _, meta, d, _ = smoke
+    srv, base = _serve(d)
+    try:
+        m, grp, acq = s2f._store_reader(base)
+        assert m["groups"].keys() == meta["groups"].keys()
+        for a in acq:
+            stats = {"requests": 0, "bytes": 0}
+            fr = s2f._FrameReader(grp[a["group"]], a["bin"], a["frame"],
+                                  stats)
+            want = sh.ShardedGroup(os.path.join(d, a["group"])).read_frame(
+                a["bin"], a["frame"])
+            got = fr.frame(s2f.COL["fdi"])
+            np.testing.assert_array_equal(got, want[..., s2f.COL["fdi"]])
+            # the index whole + at most ONE span read for the frame
+            assert stats["requests"] <= 2
+            t = fr.tile(0, 0)
+            np.testing.assert_array_equal(
+                t, want[:t.shape[0], :t.shape[1]])
+    finally:
+        srv.shutdown()
+
+
+def test_report_plp_on_the_smoke_store(smoke, monkeypatch):
+    """(iii) on a smoke date made a campaign date: the box around the
+    synthetic bright patch (rows 250-253, cols 20-23) must rank at the top
+    of its scene's water, a box of plain water must not."""
+    _, meta, d, _ = smoke
+    monkeypatch.setattr(s2f, "PLP_DATES", ("2018-08-28", "2018-09-17"))
+    g = s2f.grid_of("35SMD", 300)
+    from rasterio.warp import transform
+
+    def bb(r0, r1, c0, c1):
+        xs = [g["x0"] + c0 * 20 + 1, g["x0"] + c1 * 20 - 1]
+        ys = [g["y0"] - r1 * 20 + 1, g["y0"] - r0 * 20 - 1]
+        lon, lat = transform(g["crs"], "EPSG:4326", xs, ys)
+        return [min(lat), min(lon), max(lat), max(lon)]
+    boxes = {"2018-08-28": bb(250, 254, 20, 24),
+             "2018-09-17": bb(150, 154, 100, 104)}
+    srv, base = _serve(d)
+    try:
+        r = s2f.report_plp(base, boxes_2021=boxes)
+    finally:
+        srv.shutdown()
+    hot, cold = r["dates"]["2018-08-28"], r["dates"]["2018-09-17"]
+    assert hot["kind"] == "2021 orthophoto footprint box"
+    assert hot["box_max_percentile_in_scene_water"] > 99.9
+    assert hot["pass_p99"] is True
+    assert cold["box_max_percentile_in_scene_water"] < 99.9
+    assert r["summary"]["dates_scored"] == 2
+    assert r["hub_reads"]["requests"] <= 4
+
+
+def test_site_control_on_the_smoke_store(smoke, monkeypatch):
+    """The box around the synthetic bright patch ranks at the top of its
+    surroundings on every 35SMD frame that stores water there; the frame
+    with no water reports no rank."""
+    _, meta, d, _ = smoke
+    monkeypatch.setattr(s2f, "PLP_DATES", ("2018-08-28",))
+    g = s2f.grid_of("35SMD", 300)
+    from rasterio.warp import transform
+    xs = [g["x0"] + 20 * 20 + 1, g["x0"] + 24 * 20 - 1]
+    ys = [g["y0"] - 254 * 20 + 1, g["y0"] - 250 * 20 - 1]
+    lon, lat = transform(g["crs"], "EPSG:4326", xs, ys)
+    sc = s2f.site_control(d, {"hot": [min(lat), min(lon), max(lat),
+                                      max(lon)]}, pad_m=1500.0, workers=2)
+    rows = {r["day"]: r for r in sc["acquisitions"]}
+    assert len(rows) == 4 and rows["2018-08-28"]["campaign"]
+    for day, r in rows.items():
+        h = r["sites"]["hot"]
+        if day == "2018-09-12":
+            assert "box_max_percentile_in_background" not in h
+        else:
+            assert h["box_max_percentile_in_background"] > 99.9
+    assert sc["summary"]["hot"]["campaign_n"] == 1
+    assert sc["summary"]["hot"]["other_n"] == 2
+
+
+# ===================== full-resolution JPEG 2000 reads (2026-10-14 bug) ==
+FAKE_WARP_ACOLITE = (
+    "import sys, os, numpy as np, netCDF4\n"
+    "from osgeo import gdal\n"
+    "gdal.UseExceptions()\n"
+    "st = [a for a in sys.argv if a.startswith('--settings=')][0][11:]\n"
+    "kv = dict(l.split('=', 1) for l in open(st).read().split() if '=' in l)\n"
+    "src, out = os.environ['FAKE_SRC'], kv['output']\n"
+    "n = int(os.environ['FAKE_N'])\n"
+    "x0, y0 = 399960.0, 4400040.0\n"
+    "# what acolite/shared/read_band.py does: warp to the 20 m grid, average\n"
+    "w = gdal.Warp('', src, xRes=20, yRes=20, outputBounds=[x0, y0 - 20 * n,"
+    " x0 + 20 * n, y0], format='VRT', resampleAlg='average').ReadAsArray()\n"
+    "d = netCDF4.Dataset(os.path.join(out, 'S2B_MSI_X_T35SMD_L2R.nc'), 'w')\n"
+    "d.createDimension('y', n); d.createDimension('x', n)\n"
+    "d.setncattr('xrange', np.array([x0, x0 + 20 * n]))\n"
+    "d.setncattr('yrange', np.array([y0, y0 - 20 * n]))\n"
+    "d.setncattr('pixel_size', np.array([20., -20.]))\n"
+    "for b in ('665', '739', '833', '1610'):\n"
+    "    v = d.createVariable('rhos_' + b, 'f4', ('y', 'x'))\n"
+    "    v[:] = w.astype(np.float32)\n"
+    "d.close()\n")
+
+
+def _overview_tif(path, n20):
+    """A 10 m GeoTIFF on the 35SMD grid with an INTERNAL 2x overview whose
+    values are NOT the 2x2 means (a constant 7000), the way a JPEG 2000
+    file's 20 m resolution level is not."""
+    from osgeo import gdal
+    gdal.UseExceptions()
+    rng = np.random.default_rng(3)
+    a = rng.integers(100, 3000, (2 * n20, 2 * n20)).astype(np.uint16)
+    ds = gdal.GetDriverByName("GTiff").Create(str(path), 2 * n20, 2 * n20, 1,
+                                             gdal.GDT_UInt16)
+    ds.SetGeoTransform((399960.0, 10, 0, 4400040.0, 0, -10))
+    from osgeo import osr
+    sr = osr.SpatialReference()
+    sr.ImportFromEPSG(32635)
+    ds.SetProjection(sr.ExportToWkt())
+    ds.GetRasterBand(1).WriteArray(a)
+    ds.BuildOverviews("AVERAGE", [2])
+    ov = ds.GetRasterBand(1).GetOverview(0)
+    ov.WriteArray(np.full((n20, n20), 7000, np.uint16))
+    ds = None
+    return a.reshape(n20, 2, n20, 2).astype(np.float64).mean(axis=(1, 3))
+
+
+def test_the_launcher_makes_warp_read_full_resolution(tmp_path):
+    """FAILS on the old behaviour: plain gdal.Warp(average) answers a 2x
+    downsample from the file's overview; patched, it is the 2x2 mean."""
+    pytest.importorskip("osgeo")
+    from osgeo import gdal
+    from family1 import acolite_full_res as acr
+    mean = _overview_tif(tmp_path / "b08.tif", 16)
+    kw = dict(xRes=20, yRes=20, outputBounds=[399960.0, 4400040.0 - 320,
+                                              399960.0 + 320, 4400040.0],
+              format="VRT", resampleAlg="average")
+    orig = getattr(gdal.Warp, "_orig", gdal.Warp)
+    old = orig("", str(tmp_path / "b08.tif"), **kw).ReadAsArray()
+    assert (old == 7000).all()            # the overview, not the pixels
+    acr.patch_gdal()
+    try:
+        new = gdal.Warp("", str(tmp_path / "b08.tif"), **kw).ReadAsArray()
+    finally:
+        gdal.Warp = orig
+    assert np.abs(new.astype(np.float64) - mean).max() <= 0.5
+
+
+def test_adapter_bands_are_2x2_means_through_acolite(tmp_path, monkeypatch):
+    """The adapter's real ACOLITE path, a fake launch_acolite.py that warps
+    the way ACOLITE's read_band does: the 20 m band the adapter reads is the
+    2x2 mean of the 10 m pixels, and every acquisition records the path."""
+    pytest.importorskip("osgeo")
+    pytest.importorskip("netCDF4")
+    clear_env(monkeypatch)
+    mean = _overview_tif(tmp_path / "b08.tif", 16)
+    fake = tmp_path / "aco"
+    fake.mkdir()
+    (fake / "launch_acolite.py").write_text(FAKE_WARP_ACOLITE)
+    monkeypatch.setenv("S2FDI_ACOLITE_DIR", str(fake))
+    monkeypatch.setenv("S2FDI_SMOKE_PX", "16")
+    monkeypatch.setenv("FAKE_SRC", str(tmp_path / "b08.tif"))
+    monkeypatch.setenv("FAKE_N", "16")
+    ad = s2f.S2FdiCoastAdapter()
+
+    class C:
+        scratch = str(tmp_path)
+    l2r, _, _ = ad.run_acolite(C, "/x/y.SAFE", str(tmp_path / "out"))
+    R, _ = ad.read_l2r(l2r, "35SMD")
+    assert np.abs(R["B08"].astype(np.float64) - mean).max() <= 0.5
+    assert s2f.BAND_READ_PATH == \
+        "gdal.Warp overviewLevel=NONE (full-resolution JPEG 2000 reads)"
+    log = open(tmp_path / "out" / "acolite.log").read()
+    assert log.startswith("s2fdi_coast read path: ")
+
+
+def test_an_acolite_run_without_the_read_path_is_refused(tmp_path,
+                                                         monkeypatch):
+    pytest.importorskip("netCDF4")
+    clear_env(monkeypatch)
+    mean = _overview_tif(tmp_path / "b08.tif", 16)
+    del mean
+    fake = tmp_path / "aco"
+    fake.mkdir()
+    (fake / "launch_acolite.py").write_text(FAKE_WARP_ACOLITE)
+    bare = tmp_path / "bare_launcher.py"
+    bare.write_text("import os, sys, runpy\nos.chdir(sys.argv[1])\n"
+                    "sys.argv = ['launch_acolite.py'] + sys.argv[2:]\n"
+                    "runpy.run_path('launch_acolite.py', run_name='__main__')\n")
+    monkeypatch.setattr(s2f, "ACOLITE_LAUNCHER", str(bare))
+    monkeypatch.setenv("S2FDI_ACOLITE_DIR", str(fake))
+    monkeypatch.setenv("S2FDI_SMOKE_PX", "16")
+    monkeypatch.setenv("FAKE_SRC", str(tmp_path / "b08.tif"))
+    monkeypatch.setenv("FAKE_N", "16")
+    ad = s2f.S2FdiCoastAdapter()
+
+    class C:
+        scratch = str(tmp_path)
+    with pytest.raises(IOError, match="full-resolution read path"):
+        ad.run_acolite(C, "/x/y.SAFE", str(tmp_path / "out"))
