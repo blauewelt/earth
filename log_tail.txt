@@ -1,0 +1,80 @@
+pace_swir__bin_3159.zst:  59%|█████▊    | 384M/654M [00:07<00:04, 61.8MB/s][A[A[A
+pace_swir__bin_3158.zst:  47%|████▋     | 368M/782M [00:07<00:06, 60.5MB/s][A
+
+
+pace_swir__bin_3159.zst:  61%|██████    | 400M/654M [00:08<00:04, 61.4MB/s][A[A[A
+pace_swir__bin_3158.zst:  49%|████▉     | 384M/782M [00:08<00:06, 62.1MB/s][A
+
+
+pace_swir__bin_3159.zst:  64%|██████▎   | 416M/654M [00:08<00:03, 61.4MB/s][A[A[A
+pace_swir__bin_3158.zst:  51%|█████     | 400M/782M [00:08<00:06, 59.6MB/s][A
+
+
+pace_swir__bin_3159.zst:  66%|██████▌   | 432M/654M [00:08<00:03, 61.6MB/s][A[A[A
+pace_swir__bin_3158.zst:  53%|█████▎    | 416M/782M [00:08<00:06, 59.8MB/s][A
+
+
+pace_swir__bin_3159.zst:  69%|██████▊   | 448M/654M [00:08<00:03, 61.5MB/s][A[A[A
+pace_swir__bin_3158.zst:  55%|█████▌    | 432M/782M [00:09<00:05, 60.5MB/s][A
+
+
+pace_swir__bin_3159.zst:  71%|███████   | 464M/654M [00:09<00:03, 62.5MB/s][A[A[A
+pace_swir__bin_3158.zst:  57%|█████▋    | 448M/782M [00:09<00:05, 61.4MB/s][A
+
+
+pace_swir__bin_3159.zst:  73%|███████▎  | 480M/654M [00:09<00:02, 62.9MB/s][A[A[A
+pace_swir__bin_3158.zst:  59%|█████▉    | 464M/782M [00:09<00:05, 61.7MB/s][A
+
+
+pace_swir__bin_3159.zst:  76%|███████▌  | 496M/654M [00:09<00:02, 63.0MB/s][A[A[A
+pace_swir__bin_3158.zst:  61%|██████▏   | 480M/782M [00:09<00:04, 60.5MB/s][A
+
+
+pace_swir__bin_3159.zst:  78%|███████▊  | 512M/654M [00:10<00:02, 57.7MB/s][A[A[A
+pace_swir__bin_3158.zst:  63%|██████▎   | 496M/782M [00:10<00:04, 60.0MB/s][A
+
+
+pace_swir__bin_3159.zst:  81%|████████  | 528M/654M [00:10<00:02, 59.5MB/s][A[A[A
+pace_swir__bin_3158.zst:  65%|██████▌   | 512M/782M [00:10<00:04, 58.9MB/s][A
+
+
+pace_swir__bin_3159.zst:  83%|████████▎ | 544M/654M [00:10<00:01, 60.9MB/s][A[A[A
+pace_swir__bin_3158.zst:  68%|██████▊   | 528M/782M [00:10<00:04, 60.9MB/s][A
+
+
+pace_swir__bin_3159.zst:  86%|████████▌ | 560M/654M [00:10<00:01, 57.2MB/s][A[A[A
+pace_swir__bin_3158.zst:  70%|██████▉   | 544M/782M [00:10<00:03, 60.8MB/s][A
+
+
+pace_swir__bin_3159.zst:  88%|████████▊ | 576M/654M [00:11<00:01, 58.4MB/s][A[A[A
+pace_swir__bin_3158.zst:  72%|███████▏  | 560M/782M [00:11<00:03, 58.8MB/s][A
+
+
+pace_swir__bin_3159.zst:  91%|█████████ | 592M/654M [00:11<00:01, 58.7MB/s][A[A[A
+pace_swir__bin_3158.zst:  74%|███████▎  | 576M/782M [00:11<00:03, 55.3MB/s][A
+
+
+pace_swir__bin_3159.zst:  93%|█████████▎| 608M/654M [00:11<00:00, 59.5MB/s][A[A[A
+pace_swir__bin_3158.zst:  76%|███████▌  | 592M/782M [00:11<00:03, 57.7MB/s][A
+
+
+pace_swir__bin_3159.zst:  95%|█████████▌| 624M/654M [00:11<00:00, 60.4MB/s][A[A[A
+pace_swir__bin_3158.zst:  78%|███████▊  | 608M/782M [00:11<00:02, 59.9MB/s][A
+
+
+pace_swir__bin_3159.zst:  98%|█████████▊| 640M/654M [00:12<00:00, 59.5MB/s][A[A[A
+pace_swir__bin_3158.zst:  80%|███████▉  | 624M/782M [00:12<00:02, 61.9MB/s][Apace_swir__bin_3159.zst: 100%|██████████| 654M/654M [00:12<00:00, 52.6MB/s]
+
+pace_swir__bin_3158.zst:  82%|████████▏ | 640M/782M [00:12<00:02, 59.7MB/s][AUpload 4 LFS files:  75%|███████▌  | 3/4 [00:12<00:05,  5.67s/it]
+pace_swir__bin_3158.zst:  84%|████████▍ | 656M/782M [00:12<00:02, 56.2MB/s][A
+pace_swir__bin_3158.zst:  86%|████████▌ | 672M/782M [00:13<00:01, 57.6MB/s][A
+pace_swir__bin_3158.zst:  88%|████████▊ | 688M/782M [00:13<00:01, 59.1MB/s][A
+pace_swir__bin_3158.zst:  90%|█████████ | 704M/782M [00:13<00:01, 55.8MB/s][A
+pace_swir__bin_3158.zst:  92%|█████████▏| 720M/782M [00:13<00:01, 54.6MB/s][A
+pace_swir__bin_3158.zst:  94%|█████████▍| 736M/782M [00:14<00:00, 57.0MB/s][A
+pace_swir__bin_3158.zst:  96%|█████████▌| 752M/782M [00:14<00:00, 59.8MB/s][A
+pace_swir__bin_3158.zst:  98%|█████████▊| 768M/782M [00:14<00:00, 61.4MB/s][Apace_swir__bin_3158.zst: 100%|██████████| 782M/782M [00:14<00:00, 52.3MB/s]
+Upload 4 LFS files: 100%|██████████| 4/4 [00:15<00:00,  4.44s/it]Upload 4 LFS files: 100%|██████████| 4/4 [00:15<00:00,  3.80s/it]
+  pace_swir: 1 year(s) pushed and verified in 2 part commit(s), done.json written last (0 already present)
+  push-parts: 1 year(s) on the Hub under partials/family1_3/pace_swir/<year>/m03/
+=== stage fetch done in 10478.3s ===
