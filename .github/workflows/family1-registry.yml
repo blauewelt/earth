@@ -51,7 +51,7 @@ on:
         options: [strict, spans]
         default: strict
       allow_group:
-        description: "one rebuilt store whose whole entry may change (e.g. era5_q), or empty"
+        description: "rebuilt store(s) whose whole entry may change (e.g. era5_q), a comma list, or empty"
         default: ""
 
 permissions:
@@ -85,10 +85,15 @@ jobs:
         run: |
           set -euo pipefail
           [ -n "${HF_TOKEN}" ] || { echo "::error::HF_TOKEN is not set"; exit 1; }
-          [[ "${ALLOW_GROUP}" =~ ^[a-z0-9_]*$ ]] || { echo "::error::allow_group must match ^[a-z0-9_]*$"; exit 1; }
+          # a comma list names several stores (E-092 phase C: two first
+          # publishes whose placeholders sit in the same registry)
+          [[ "${ALLOW_GROUP}" =~ ^[a-z0-9_]*(,[a-z0-9_]+)*$ ]] || { echo "::error::allow_group must be a comma list of [a-z0-9_]+"; exit 1; }
           gargs=()
           [ "${GUARD}" = "spans" ] && gargs+=(--spans)
-          [ -n "${ALLOW_GROUP}" ] && gargs+=(--allow-group "${ALLOW_GROUP}")
+          if [ -n "${ALLOW_GROUP}" ]; then
+            IFS=, read -ra ag <<< "${ALLOW_GROUP}"
+            for g in "${ag[@]}"; do gargs+=(--allow-group "$g"); done
+          fi
           out="${RUNNER_TEMP}/registries"
           pub="${RUNNER_TEMP}/published"
           mkdir -p "${pub}"
