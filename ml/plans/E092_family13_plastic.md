@@ -455,6 +455,29 @@ it needs AOMI's rows, which D4 keeps out. The comparison stays in §2a.
 
 ## 7 · Status
 
+**`s2fdi_coast` PUBLISHED and its falsifiers read (2026-10-14).** The 24
+lanes re-ran on the full-resolution read path (5d9adcc) and family1-build #1151
+assembled and published the pilot: 476 acquisitions (59 MARIDA scenes, 417 of
+tile 35SMD; 4 MARIDA scenes absent upstream), every one with
+`band_read_path` = full-resolution. Falsifiers on the PUBLISHED store
+(`probes/s2fdi_coast_falsifiers.json`; the pre-fix reading kept as
+`…_pre_fix.json`):
+- **(i) FAILS AS WRITTEN: pooled Spearman 0.859** (bar 0.9; 30,553 cells, 59
+  scenes; pre-fix 0.833). Within a scene the store now reproduces MARIDA: median
+  per-scene 0.952 (pre-fix 0.907), pooled after removing each scene's median
+  offset 0.991, and 16PCC 2018-06-11 0.997. The remaining pooled gap is the
+  per-scene offset between the store's aerosol-corrected reflectance and
+  MARIDA's Rayleigh-only one — a difference of METHOD that the bar, as written,
+  compares across scenes. The rule said a failed (i) means the store is not
+  kept; whether to keep it under an amended within-scene bar is Chris's
+  decision, and it is recorded as an amendment made AFTER the result if taken.
+- **(ii) passes:** F1 0.00459 from the store vs 0.00516 from MARIDA's bands.
+- **(iii) as written 22 of 24 dates pass; the site control** shows the 2021
+  campaign dates at the very top of their own box (median 100.0, p = 7.5e-7
+  against other dates), but after the fix the same box ranks above p99 on 76 %
+  of non-campaign dates too — the contrast is in the extreme rank only; the
+  2019 and 2022–23 boxes carry no signal.
+
 **`s2fdi_coast` falsifier (i), first reading and its diagnosis (2026-10-13/14).**
 Read from the 24 lanes' parts on the Hub (the assembly #1120 failed on a Hub
 outage): pooled Spearman 0.833 (n = 30,553 cells, 58 scenes) against the bar
