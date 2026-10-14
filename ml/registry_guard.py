@@ -176,7 +176,12 @@ def main(argv=None):
     if added:
         oldn = {g.get("name") for g in old.get("groups") or []}
         newn = {g.get("name") for g in new.get("groups") or []}
-        wrong = [n for n in added if n in oldn or n not in newn]
+        # "absent" includes a published NOT-BUILT placeholder: since the
+        # E-092 phase-C adapters landed, a store is listed `built: false`
+        # before its first publish, so its first publish flips that entry.
+        oldbuilt = {g.get("name") for g in old.get("groups") or []
+                    if g.get("built") is not False}
+        wrong = [n for n in added if n in oldbuilt or n not in newn]
         if wrong:
             print(f"REFUSING: --allow-group added_{wrong[0]}: the store must "
                   f"be absent from the published registry and present in the "
@@ -195,6 +200,11 @@ def main(argv=None):
         new["groups"] = [g for g in new.get("groups") or []
                          if g.get("name") not in added
                          and g.get("name") not in pending]
+        # a not-built placeholder being replaced is compared nowhere: it held
+        # no data, and its new entry is the store being added
+        old = dict(old)
+        old["groups"] = [g for g in old.get("groups") or []
+                         if g.get("name") not in added]
         print(f"stores added (first publish): {sorted(added)}")
         if pending:
             print(f"stores listed as not yet built (no data): {pending}")

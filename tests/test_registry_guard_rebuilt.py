@@ -101,3 +101,14 @@ def test_added_store_may_bring_new_not_built_placeholders(tmp_path):
     assert _run(tmp_path, old, new, "--allow-group", "added_c") == 0
     new["groups"][-1]["built"] = True
     assert _run(tmp_path, old, new, "--allow-group", "added_c") == 1
+
+
+def test_added_store_may_replace_its_own_not_built_placeholder(tmp_path):
+    # the published registry already lists the store as `built: false`
+    old = _reg(n_groups=3,
+               groups=[{"name": "a", "built": True, "record_span": ["1", "2"]},
+                       {"name": "b", "built": False},
+                       {"name": "c", "built": False}])
+    assert _run(tmp_path, old, _added(), "--allow-group", "added_c") == 0
+    # but a store already BUILT in the published registry is not "added"
+    assert _run(tmp_path, old, _added(), "--allow-group", "added_a") == 1
