@@ -1,0 +1,80 @@
+
+pace_swir__bin_3256.zst:  29%|██▊       | 240M/839M [00:03<00:08, 71.0MB/s][A[A
+
+pace_swir__bin_3256.zst:  31%|███       | 256M/839M [00:03<00:08, 72.4MB/s][A[A
+
+pace_swir__bin_3256.zst:  32%|███▏      | 272M/839M [00:03<00:07, 72.0MB/s][A[A
+
+pace_swir__bin_3256.zst:  34%|███▍      | 288M/839M [00:03<00:07, 69.6MB/s][A[A
+
+pace_swir__bin_3256.zst:  36%|███▌      | 304M/839M [00:04<00:07, 68.3MB/s][A[A
+
+pace_swir__bin_3256.zst:  38%|███▊      | 320M/839M [00:04<00:07, 71.6MB/s][A[A
+
+pace_swir__bin_3256.zst:  40%|████      | 336M/839M [00:04<00:06, 74.5MB/s][A[A
+
+pace_swir__bin_3256.zst:  42%|████▏     | 352M/839M [00:04<00:06, 76.6MB/s][A[A
+
+pace_swir__bin_3256.zst:  44%|████▍     | 368M/839M [00:05<00:06, 75.7MB/s][A[A
+
+pace_swir__bin_3256.zst:  46%|████▌     | 384M/839M [00:05<00:05, 76.4MB/s][A[A
+
+pace_swir__bin_3256.zst:  48%|████▊     | 400M/839M [00:05<00:05, 73.5MB/s][A[A
+
+pace_swir__bin_3256.zst:  50%|████▉     | 416M/839M [00:05<00:05, 74.2MB/s][A[A
+
+pace_swir__bin_3256.zst:  52%|█████▏    | 432M/839M [00:05<00:05, 71.4MB/s][A[A
+
+pace_swir__bin_3256.zst:  53%|█████▎    | 448M/839M [00:06<00:05, 70.5MB/s][A[A
+
+pace_swir__bin_3256.zst:  55%|█████▌    | 464M/839M [00:06<00:05, 72.3MB/s][A[A
+
+pace_swir__bin_3256.zst:  57%|█████▋    | 480M/839M [00:06<00:04, 74.9MB/s][A[A
+
+pace_swir__bin_3256.zst:  59%|█████▉    | 496M/839M [00:06<00:04, 72.6MB/s][A[A
+
+pace_swir__bin_3256.zst:  61%|██████    | 512M/839M [00:07<00:04, 73.9MB/s][A[A
+
+pace_swir__bin_3256.zst:  63%|██████▎   | 528M/839M [00:07<00:04, 73.7MB/s][A[A
+
+pace_swir__bin_3256.zst:  65%|██████▍   | 544M/839M [00:07<00:04, 72.7MB/s][A[A
+
+pace_swir__bin_3256.zst:  67%|██████▋   | 560M/839M [00:07<00:04, 69.7MB/s][A[A
+
+pace_swir__bin_3256.zst:  69%|██████▊   | 576M/839M [00:07<00:03, 71.9MB/s][A[A
+
+pace_swir__bin_3256.zst:  71%|███████   | 592M/839M [00:08<00:03, 65.1MB/s][A[A
+
+pace_swir__bin_3256.zst:  72%|███████▏  | 608M/839M [00:08<00:03, 67.4MB/s][A[A
+
+pace_swir__bin_3256.zst:  74%|███████▍  | 624M/839M [00:08<00:03, 64.0MB/s][A[A
+
+pace_swir__bin_3256.zst:  76%|███████▋  | 640M/839M [00:08<00:02, 67.2MB/s][A[A
+
+pace_swir__bin_3256.zst:  78%|███████▊  | 656M/839M [00:09<00:02, 70.7MB/s][A[A
+
+pace_swir__bin_3256.zst:  80%|████████  | 672M/839M [00:09<00:02, 69.9MB/s][A[A
+
+pace_swir__bin_3256.zst:  82%|████████▏ | 688M/839M [00:09<00:02, 73.0MB/s][A[A
+
+pace_swir__bin_3256.zst:  84%|████████▍ | 704M/839M [00:09<00:01, 73.7MB/s][A[A
+
+pace_swir__bin_3256.zst:  86%|████████▌ | 720M/839M [00:09<00:01, 74.9MB/s][A[A
+
+pace_swir__bin_3256.zst:  88%|████████▊ | 736M/839M [00:10<00:01, 72.6MB/s][A[A
+
+pace_swir__bin_3256.zst:  90%|████████▉ | 752M/839M [00:10<00:01, 71.1MB/s][A[A
+
+pace_swir__bin_3256.zst:  92%|█████████▏| 768M/839M [00:10<00:01, 70.3MB/s][A[A
+
+pace_swir__bin_3256.zst:  93%|█████████▎| 784M/839M [00:10<00:00, 70.7MB/s][A[A
+
+pace_swir__bin_3256.zst:  95%|█████████▌| 800M/839M [00:11<00:00, 73.1MB/s][A[A
+
+pace_swir__bin_3256.zst:  97%|█████████▋| 816M/839M [00:11<00:00, 73.6MB/s][A[A
+
+pace_swir__bin_3256.zst:  99%|█████████▉| 832M/839M [00:11<00:00, 66.1MB/s][A[Apace_swir__bin_3256.zst: 100%|██████████| 839M/839M [00:11<00:00, 71.5MB/s]
+Upload 2 LFS files: 100%|██████████| 2/2 [00:12<00:00,  7.02s/it]Upload 2 LFS files: 100%|██████████| 2/2 [00:12<00:00,  6.01s/it]
+  pace_swir: 1 year(s) pushed and verified in 2 part commit(s), done.json written last (0 already present)
+  push-parts: 1 year(s) on the Hub under partials/family1_3/pace_swir/<year>/m07/
+=== stage fetch done in 3554.3s ===
