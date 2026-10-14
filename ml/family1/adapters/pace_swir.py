@@ -614,7 +614,8 @@ def local_pixel(native, r, c, lo, hi):
 def local_axis(native):
     import netCDF4
     with netCDF4.Dataset(native) as src:
-        return [int(x) for x in np.asarray(src.variables["wavelength"][:])]
+        # float, never int(): see WAVELENGTH_MATCH_NM (2026-02-01 axis)
+        return [float(x) for x in np.asarray(src.variables["wavelength"][:])]
 
 
 def read_pixel_response(path):
@@ -1326,8 +1327,9 @@ class PaceSwirAdapter(sh.GridAdapter):
             sys.exit(f"REFUSING pace_swir: {d}: the pixel re-read returned "
                      f"{len(vals)} values for {len(want_wl)} bands")
         native = np.array([vals[i - lo] for i in idx], np.float32)
-        native_wl = [int(wl[i - lo]) for i in idx]
-        if native_wl != [nm for _n, _i, nm in bands]:
+        native_wl = [float(wl[i - lo]) for i in idx]
+        if any(abs(a - float(nm)) > WAVELENGTH_MATCH_NM
+               for a, (_n, _i, nm) in zip(native_wl, bands)):
             sys.exit(f"REFUSING pace_swir: {d}: the pixel re-read's "
                      f"wavelengths {native_wl} are not the bands "
                      f"{[nm for _n, _i, nm in bands]}")

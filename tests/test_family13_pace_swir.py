@@ -509,3 +509,15 @@ def test_bands_chosen_the_same_on_the_2026_float_axis():
     new = {n: i for n, i, _nm in ps.choose_bands(ax)}
     assert new == old
     assert new["rhos_740"] == 84 and new["rhos_645"] == 56
+
+
+def test_no_wavelength_is_truncated_to_an_integer():
+    # the 2026-02-01 float axis broke three integer comparisons in turn
+    # (#1162/#1163 band choice, then #1164/#1165 the pixel re-read); none may
+    # remain anywhere a wavelength is read
+    import inspect
+    from family1.adapters import pace_swir as ps
+    src = inspect.getsource(ps)
+    assert "int(wl[" not in src
+    assert 'int(x) for x in np.asarray(src.variables["wavelength"]' not in src
+    assert 'int(x) for x in\n' not in src
