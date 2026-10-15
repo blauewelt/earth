@@ -535,3 +535,7 @@ bit. The one path still unmeasured is a fresh CEDA stream of a colour year
 (§10.3). Full stage timings, the verify table and the account of what would
 have happened without `0d737cf`'s partials-prefix fix: **RESULT 3** in
 [the experiment log](https://blauewelt.github.io/earth/docs.html?f=ml/EXPERIMENTS.md#e-077).
+
+### 10.6 · Deprecation of `f7l1` — DONE 2026-10-15
+
+Decided 2026-09-15: the `f7l1` folder is deleted one month after `f7l2` replaced it. Done on 2026-10-15 in Hub commit [`2fa890a`](https://huggingface.co/datasets/chfrank/earth-tensors/commit/2fa890a45dc417343cd6abbf40593df9c7e3c700): `tensors/family7_global025_pentad_l1/` (the 5.4 MB npz, `X_g025` 45.67 GB, `X_g100` 6.14 GB, `X_oc025` 8.29 GB, `X_rg100` 1.05 GB, manifest; 61.16 GB in all) is gone and its manifest answers 404. `family7_global025_pentad_l0` (the original) and `_l2` (current) are untouched. `partials/f7l1/occci/` stays on purpose: those per-year ocean-colour partials are what `oc_partial_read_prefixes` falls back to in every `f7l2` rebuild (§10.5). The `f7l1` entry in `ml/publish_family7_index.py` and the test fixtures that name `_l1` URLs are history/served locally and were left as they are.

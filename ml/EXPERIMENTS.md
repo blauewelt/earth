@@ -1555,6 +1555,8 @@ Code: `ml/build_family7.py` (stage `occci`), `tests/test_build_family7.py`,
 `.github/workflows/family7-build.yml` (input `seed_from`).
 Reader contract: `docs/FAMILY7_DATA_HANDOVER.md` §10.
 
+**2026-10-15 — `f7l1` DELETED from the Hub** as announced (one month after `f7l2` replaced it): `tensors/family7_global025_pentad_l1/`, 6 files, 61.16 GB, Hub commit [`2fa890a`](https://huggingface.co/datasets/chfrank/earth-tensors/commit/2fa890a45dc417343cd6abbf40593df9c7e3c700); its manifest now answers 404, the `l0` and `l2` manifests 307; `partials/f7l1/occci/` (28 entries, folded by every `f7l2` rebuild) kept.
+
 ---
 
 <a id="e-076b"></a>

@@ -18,8 +18,7 @@ shipped an **empty elevation static** — every one of its
 it. **That workaround is gone: take `f7l2` (19:58Z) and nothing is missing.**
 If you already ingested `f7l1`, §1.1 says exactly what to re-fetch (the 5.4 MB
 small file, and the 1° atmosphere group only if you key caches by hash).
-**`f7l1` will be deleted from the Hub on 2026-10-15** (its folder is still
-there on 2026-09-22); `f7l2` is the current family-7 tensor, and this
+**`f7l1` was deleted from the Hub on 2026-10-15** ([Hub commit `2fa890a`](https://huggingface.co/datasets/chfrank/earth-tensors/commit/2fa890a45dc417343cd6abbf40593df9c7e3c700); its URLs now answer 404); `f7l2` is the current family-7 tensor, and this
 document with `docs/FAMILY7_DATA_HANDOVER.md` is the pair to read. §1's sizes
 and hashes and §6's items 1–5 were re-measured against the Hub on 2026-09-22
 and all hold.
