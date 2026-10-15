@@ -456,6 +456,13 @@ it needs AOMI's rows, which D4 keeps out. The comparison stays in §2a.
 
 ## 7 · Status
 
+**PHASE C COMPLETE 2026-10-15.** `pace_swir` published (893 daily frames,
+2024-03-05 → 2026-08-31); family1-registry #16 lists all seven family-1.3
+stores built: `mplastic`, `mobjects`, `s2labels`, `beachlitter`, `cygnss_mss`,
+`pace_swir`, `s2fdi_coast`. Open items that remain are the questions to
+others (§7 below: SEA's values, Isobe and Eriksen licences — emails drafted
+2026-10-13) and the read-out falsifiers of §6, which need a model.
+
 **Decisions, 2026-10-14 (Chris: "yes noaa can go public. and let's keep the
 sentinel 2 pilot").** `beachlitter` goes PUBLIC: MDMAP is CC0 per NOAA InPort
 item 73092, so every source in it is open. `s2fdi_coast` is KEPT although

@@ -100,7 +100,7 @@ ocean-colour build: twelve jobs of 2–4 min, 21.2 GB, 1997–2024.
   **1.5e-7** for oc025.
 
 <a id="e-090"></a>
-## E-092 · Family 1.3 — family 1.2 plus the stores that could identify plastic in the ocean — PHASE A PUBLISHED 2026-10-11 (`mplastic` now 19,974 surface samples, `mobjects` 1,595 aircraft objects, `s2labels` 837,964 labelled Sentinel-2 pixels); PHASE C BUILDING 2026-10-13 (`cygnss_mss` published; `beachlitter` built, private pending a licence call; `pace_swir` and the `s2fdi_coast` pilot in their fetch lanes); the Sentinel-2 store over the garbage patch CLOSED by a null co-location probe
+## E-092 · Family 1.3 — family 1.2 plus the stores that could identify plastic in the ocean — COMPLETE 2026-10-15: seven stores published (`mplastic` 19,974 surface samples, `mobjects` 1,595 aircraft objects, `s2labels` 837,964 labelled Sentinel-2 pixels, `beachlitter` 24,702 shoreline surveys, `cygnss_mss` 2,989 daily sea-surface roughness maps, `pace_swir` 893 daily PACE reflectance maps, `s2fdi_coast` a 476-acquisition Sentinel-2 debris pilot); the Sentinel-2 store over the garbage patch CLOSED by a null co-location probe
 
 TL;DR — a new family whose job is a FIFTH read-out, floating plastic
 concentration at a place and time, on top of family 1.2 (the global fine
@@ -187,8 +187,28 @@ plan D13), then built by an adapter tested on a smoke generator:
   workflow and by an adapter preflight. Re-run #1076 pushed 32 acquisitions,
   2.9 GB; the other 23 lanes are running.
 
-Cost so far: hosted runners only, $0 (one rented box will assemble each of
-`pace_swir` and `s2fdi_coast`).
+**Finished 2026-10-14/15.** `beachlitter` PUBLIC (#1152; Chris confirmed;
+MDMAP CC0 per NOAA InPort 73092). `s2fdi_coast` re-run on the full-resolution
+read path and published (#1151; 476 acquisitions); falsifier (i) still fails
+as written at 0.859 pooled (within-scene median 0.952, offset-removed 0.991),
+(ii) passes (F1 0.0046 vs 0.0052), (iii) 22 of 24 dates with a weak site
+control — KEPT by Chris, recorded as an amendment made after the result.
+`pace_swir` PUBLISHED (#1174 on Vast 56015476): **893 daily frames**,
+2024-03-05 → 2026-08-31, 17 days absent upstream; the pixel re-read equals the
+store to float16 on all 893 frames, the dark-water check at 2258 nm judged 891
+days (one soft failure, 2025-01-31, p99 0.053). Its last months met a producer
+change: from 2026-02-01 the SFREFL files write each band's exact centre
+(644.716 nm) instead of an integer (645), same processing_version 3.1 and
+same band indices — three integer comparisons in the adapter refused it in
+turn (#1162/#1163, #1164/#1165) until 59233e8 and b18b9e6. 145 network
+retries over the record (135 OB.DAAC 5xx), 111 recovered after backoff.
+Registry family1-registry #16 lists all seven stores built.
+
+Cost: hosted runners $0; two Vast assembly boxes ≈ 2.5 h at $0.08–0.20/h
+(< $1), plus ~$0.3 of a box parked while stopped. Dead time: one Hub outage,
+two boxes that could not restart, three rounds of Earth Search page-size and
+GDAL fixes for the Sentinel-2 lanes, one full re-run of those lanes for the
+JPEG 2000 overview bug.
 
 ## E-091 · Day-of-year climatology — the mean of every calendar day over any span of years, from sums cumulative over the years — BUILT 2026-10-08 for OISST and the four ERA5 stores
 
