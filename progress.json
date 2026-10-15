@@ -1,0 +1,10 @@
+{
+ "at": "2026-10-15T01:19:16+00:00",
+ "done": 369,
+ "elapsed_s": 649.6,
+ "eta_s": 0.0,
+ "files": 369,
+ "item": "store.json",
+ "stage": "publish pace_swir",
+ "total": 369
+}

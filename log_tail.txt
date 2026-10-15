@@ -1,0 +1,79 @@
+  stage all (tier G): index, fetch, assemble, publish — the full-decode `check` stage runs only when named
+store     pace_swir — PACE OCI daily 4 km surface reflectance in the red edge, near and shortwave infrared (SFREFL v3.1 rhos at 645, 739, 865, 1038, 1249, 1618, 2131 and 2258 nm) — the bands a floating-debris or floating-algae index needs, all surfaces
+family    family1_3 (1.3) · public -> chfrank/earth-tensors:tensors/family1_3/pace_swir
+axis      2024-03-01 .. 2026-08-31  bins 3080..3262 · time_s int32 (schema 2)
+lane      (unnamed) — whole calendar year(s), no group subset: the year folder's own files, as every store on the Hub holds them
+channels  C=8: rhos_645, rhos_740, rhos_865, rhos_1038, rhos_1249, rhos_1618, rhos_2131, rhos_2258
+tier G    sharded, groups ['pace_swir'], F=5 x 86400 s, float16, years (by bin start) 2024..2026
+work      /opt/runner/_work/earth/earth/ml/cache/family1_3
+
+=== stage index (pace_swir) ===
+  [index pace_swir] start (1 items)  0/1  0.0s
+  [index pace_swir] plan.json  1/1  142.4s
+  index: pace_swir — 3 year(s), C=8 (rhos_645, rhos_740, rhos_865, rhos_1038, rhos_1249, rhos_1618, rhos_2131, rhos_2258), bins 3080..3262, lanes expected per year: m03, m04, m05, m06, m07, m08, m09, m10, m11, m12
+=== stage index done in 142.4s ===
+
+=== stage fetch (pace_swir) ===
+  [pull pace_swir parts] start (3 items)  0/3  0.0s
+  hub: chfrank/earth-tensors with the token from $HF_TOKEN
+  pace_swir 2024 lane m03: 16 file(s), 27 row(s) -> /opt/runner/_work/earth/earth/ml/cache/family1_3/pace_swir/parts/2024/m03
+  pace_swir 2024 lane m04: 14 file(s), 30 row(s) -> /opt/runner/_work/earth/earth/ml/cache/family1_3/pace_swir/parts/2024/m04
+  pace_swir 2024 lane m05: 14 file(s), 25 row(s) -> /opt/runner/_work/earth/earth/ml/cache/family1_3/pace_swir/parts/2024/m05
+  pace_swir 2024 lane m06: 14 file(s), 30 row(s) -> /opt/runner/_work/earth/earth/ml/cache/family1_3/pace_swir/parts/2024/m06
+  pace_swir 2024 lane m07: 14 file(s), 30 row(s) -> /opt/runner/_work/earth/earth/ml/cache/family1_3/pace_swir/parts/2024/m07
+  pace_swir 2024 lane m08: 14 file(s), 30 row(s) -> /opt/runner/_work/earth/earth/ml/cache/family1_3/pace_swir/parts/2024/m08
+  pace_swir 2024 lane m09: 14 file(s), 28 row(s) -> /opt/runner/_work/earth/earth/ml/cache/family1_3/pace_swir/parts/2024/m09
+  pace_swir 2024 lane m10: 14 file(s), 29 row(s) -> /opt/runner/_work/earth/earth/ml/cache/family1_3/pace_swir/parts/2024/m10
+  pace_swir 2024 lane m11: 14 file(s), 30 row(s) -> /opt/runner/_work/earth/earth/ml/cache/family1_3/pace_swir/parts/2024/m11
+  pace_swir 2024 lane m12: 16 file(s), 33 row(s) -> /opt/runner/_work/earth/earth/ml/cache/family1_3/pace_swir/parts/2024/m12
+  pace_swir 2025 lane m01: 14 file(s), 30 row(s) -> /opt/runner/_work/earth/earth/ml/cache/family1_3/pace_swir/parts/2025/m01
+  pace_swir 2025 lane m02: 12 file(s), 25 row(s) -> /opt/runner/_work/earth/earth/ml/cache/family1_3/pace_swir/parts/2025/m02
+  pace_swir 2025 lane m03: 16 file(s), 35 row(s) -> /opt/runner/_work/earth/earth/ml/cache/family1_3/pace_swir/parts/2025/m03
+  pace_swir 2025 lane m04: 14 file(s), 30 row(s) -> /opt/runner/_work/earth/earth/ml/cache/family1_3/pace_swir/parts/2025/m04
+  pace_swir 2025 lane m05: 14 file(s), 29 row(s) -> /opt/runner/_work/earth/earth/ml/cache/family1_3/pace_swir/parts/2025/m05
+  pace_swir 2025 lane m06: 14 file(s), 30 row(s) -> /opt/runner/_work/earth/earth/ml/cache/family1_3/pace_swir/parts/2025/m06
+  pace_swir 2025 lane m07: 14 file(s), 30 row(s) -> /opt/runner/_work/earth/earth/ml/cache/family1_3/pace_swir/parts/2025/m07
+  pace_swir 2025 lane m08: 14 file(s), 30 row(s) -> /opt/runner/_work/earth/earth/ml/cache/family1_3/pace_swir/parts/2025/m08
+  pace_swir 2025 lane m09: 14 file(s), 30 row(s) -> /opt/runner/_work/earth/earth/ml/cache/family1_3/pace_swir/parts/2025/m09
+  pace_swir 2025 lane m10: 14 file(s), 30 row(s) -> /opt/runner/_work/earth/earth/ml/cache/family1_3/pace_swir/parts/2025/m10
+  pace_swir 2025 lane m11: 14 file(s), 30 row(s) -> /opt/runner/_work/earth/earth/ml/cache/family1_3/pace_swir/parts/2025/m11
+  pace_swir 2025 lane m12: 16 file(s), 35 row(s) -> /opt/runner/_work/earth/earth/ml/cache/family1_3/pace_swir/parts/2025/m12
+  pace_swir 2026 lane m01: 14 file(s), 30 row(s) -> /opt/runner/_work/earth/earth/ml/cache/family1_3/pace_swir/parts/2026/m01
+  pace_swir 2026 lane m02: 12 file(s), 24 row(s) -> /opt/runner/_work/earth/earth/ml/cache/family1_3/pace_swir/parts/2026/m02
+  pace_swir 2026 lane m03: 16 file(s), 34 row(s) -> /opt/runner/_work/earth/earth/ml/cache/family1_3/pace_swir/parts/2026/m03
+  pace_swir 2026 lane m04: 14 file(s), 30 row(s) -> /opt/runner/_work/earth/earth/ml/cache/family1_3/pace_swir/parts/2026/m04
+  pace_swir 2026 lane m05: 14 file(s), 30 row(s) -> /opt/runner/_work/earth/earth/ml/cache/family1_3/pace_swir/parts/2026/m05
+  pace_swir 2026 lane m06: 14 file(s), 30 row(s) -> /opt/runner/_work/earth/earth/ml/cache/family1_3/pace_swir/parts/2026/m06
+  pace_swir 2026 lane m07: 14 file(s), 30 row(s) -> /opt/runner/_work/earth/earth/ml/cache/family1_3/pace_swir/parts/2026/m07
+  pace_swir 2026 lane m08: 14 file(s), 29 row(s) -> /opt/runner/_work/earth/earth/ml/cache/family1_3/pace_swir/parts/2026/m08
+  pull: 3 year(s) present in 30 lane(s) (0 already local), 893 row(s), 0 missing
+=== stage fetch done in 1007.2s ===
+
+=== stage assemble (pace_swir) ===
+  [pace_swir store (tier G)] start (1 items)  0/1  0.0s
+  [pace_swir store (tier G)] store.json: sha256 200/368  131.8s
+  [pace_swir store (tier G)] store.json: sha256 368/368  168.0s
+  [pace_swir store (tier G)] check: sha256 200/368  212.0s
+  [pace_swir store (tier G)] check: sha256 368/368  316.4s
+  [pace_swir store (tier G)] check: check pace_swir 100/183  316.5s
+  [pace_swir store (tier G)] check: check pace_swir 183/183  316.5s
+  [pace_swir store (tier G)] store  1/1  332.4s
+  store: pace_swir — pace_swir 183 bin(s), 893 frame(s), 419428 tile(s), 134380.1 MB -> /opt/runner/_work/earth/earth/ml/cache/family1_3/pace_swir/pace_swir
+=== stage assemble done in 332.4s ===
+
+=== stage publish (pace_swir) ===
+  [verify pace_swir before publish] start  0/0  0.0s
+  [verify pace_swir before publish] check: sha256 200/368  37.4s
+  [verify pace_swir before publish] check: sha256 368/368  75.8s
+  [verify pace_swir before publish] check: check pace_swir 100/183  75.9s
+  [verify pace_swir before publish] check: check pace_swir 183/183  75.9s
+  hub: chfrank/earth-tensors with the token from $HF_TOKEN
+  [publish pace_swir] start (369 items)  0/369  0.0s
+shard_index.npy:   0%|          | 0.00/82.0k [00:00<?, ?B/s]shard_index.npy: 100%|██████████| 82.0k/82.0k [00:00<00:00, 672kB/s]
+  [publish pace_swir] pace_swir  2/369  155.7s
+  [publish pace_swir] pace_swir/2024  126/369  313.5s
+  [publish pace_swir] pace_swir/2025  272/369  512.2s
+  [publish pace_swir] pace_swir/2026  368/369  648.2s
+  [publish pace_swir] store.json  369/369  649.6s
+  publish: 369 file(s) verified by restore, 50 tile(s) decompressed, HTTP range {'checked': 5} -> https://huggingface.co/datasets/chfrank/earth-tensors/tree/main/tensors/family1_3/pace_swir
+=== stage publish done in 733.3s ===
