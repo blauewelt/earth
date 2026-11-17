@@ -320,6 +320,27 @@ A new layer is not done until it has **all** of:
    "the box appears on top of the tap"), and the coverage test in
    `ensureMarkVisible` inflates panel rects by 16px for the same reason: a
    mark hugging a panel edge is as unreadable under a thumb as one under it.
+   **A PHOTOGRAPH answers the probe too — with its age** (2026-11-17, Chris,
+   showing true colour to a friend to find where the sun was shining: "when I
+   tap a single point it does not show me how old the data is (but it
+   should)"). A raster with no colormap, classes or grid has no value to
+   invert, but it has an observation time, and until then a tap on it either
+   did nothing or read the colormapped layer hidden UNDER the opaque picture.
+   `isPhotoLayer` / `probePhotoValue` put photographs on the same top-down walk
+   (`probeLayersTopDown`; the tap/dwell gate is `topProbeLayer`, which replaced
+   `topColormapLayer` at those call sites): the headline is the AGE, the line
+   under it the date shown, and a pixel nothing photographed — transparent in a
+   PNG swath, pure black in a JPEG mosaic (measured: unfilled is exactly 0,
+   real imagery essentially never ≤ 3) — reads "no image here" and falls
+   through like any blank. A union of swaths walks its window newest-first, as
+   the class probe does. A layer qualifies only if it has an honest time
+   (§2.9): the hillshade has none and stays silent. Where the orbit is known
+   (`overpass: {ltan, inclination, swathKm}` — currently true colour only)
+   `overpassOf` estimates the pass time to the half hour from the
+   sun-synchronous geometry and PRINTS its ± (the swath is 3,060 km wide), and
+   gives no figure poleward of 60°, where overlapping orbits make it a guess.
+   The age is counted from that estimate because a tile date alone cannot say
+   whether "yesterday" was 11 or 47 hours ago, and clouds move in hours.
 5. **An explicit aggregation/difference decision.** Every timed raster layer
    must declare one of these postures, and the choice must be justified in a
    code comment next to the flag:
@@ -1476,6 +1497,25 @@ worth keeping in front of a frontend reader:
   the chip. 5-day products
   (`snap5d: [epoch1, epoch2]`) serve only exact epoch dates — floor to the
   nearest valid epoch; MEaSUREs SSH was re-anchored in 2017, hence two epochs.
+- **A satellite can be switched off, and a "daily" layer then freezes without
+  any error.** Suomi NPP — the spacecraft whose VIIRS camera drew the true
+  colour layer — was decommissioned by NOAA on 2026-11-02 (data delivery ended
+  15:40 UTC, permanently). GIBS kept serving its archive, the app snapped to
+  the newest served day exactly as designed, the "NASA hasn't published X yet"
+  toast came and went in eight seconds, and for two weeks the globe showed
+  2 November's clouds under every later date. Found 2026-11-17 only because
+  the tap read-out was being built. The layer is now served by **NOAA-20**
+  (the same instrument in the same orbit plane, GIBS id
+  `VIIRS_NOAA20_CorrectedReflectance_TrueColor`, same 250 m matrix, measured
+  current through the previous day; NOAA-21 is equally current but its record
+  only starts 2023). NOAA-20's record begins 2018-01-05, so the config carries
+  `earlier: { before, layer }` and **`gibsLayerName(cfg, time)` is the one
+  place a GIBS layer id enters a request URL** — Cesium's template, the
+  window/delta reads and the probe all go through it — while `loadGibsDomain`
+  joins the two measured archives at the handover (`mergeEraDomains`), so
+  "10 years ago" still shows Suomi NPP's 2016. When a layer goes quiet, check
+  the mission's status before assuming a lag: NESDIS and Earthdata both post
+  cessation notices months ahead.
 - **Three reasons a date isn't shown, three different sentences.** From the
   outside a closed archive, a lagging one, and a hole all look identical: a blank
   globe. `maybeArchiveToast` (which replaced `maybeClampToast`) tells them apart —

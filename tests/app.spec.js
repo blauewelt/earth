@@ -1380,6 +1380,96 @@ test("catch-all colormap bins probe as bounds, not invented midpoints", async ({
   expect(page.__errors).toEqual([]);
 });
 
+test("a photograph answers a tap with how old it is", async ({ page }) => {
+  // True colour has no colormap, so a tap on it used to read NOTHING — or the
+  // colormapped layer hidden underneath the opaque photograph. That is how a
+  // cloud field frozen at 2026-11-02 (the day Suomi NPP was switched off) was
+  // read as the day's weather on 2026-11-17. A photograph now answers the
+  // probe with its date and age, and the layer is served by NOAA-20, with
+  // Suomi NPP kept for the years before NOAA-20's record begins.
+  test.setTimeout(240000);
+  await page.check('#layer-list input[data-id="viirs-truecolor"]');
+  const r = await page.evaluate(async () => {
+    const E = window.__earth;
+    const cfg = E.GIBS_LAYERS.find((l) => l.id === "viirs-truecolor");
+    const dom = await E.loadGibsDomain(cfg);
+    const shown = E.gibsTime(cfg, E.state.date);
+    // SST is still on UNDER the photograph: the visible layer must answer
+    const rome = await E.probeValueAt(Cesium.Cartographic.fromDegrees(12.5, 41.9));
+    // a pole in its winter night is not photographed at all — only asserted
+    // in the months where that is certain, so the test has no season
+    const month = Number(shown.slice(5, 7));
+    const darkLat = [11, 12, 1].includes(month) ? 88 : [5, 6, 7].includes(month) ? -88 : null;
+    const dark = darkLat == null ? null
+      : await E.probeValueAt(Cesium.Cartographic.fromDegrees(0, darkLat));
+    const day = Date.parse(`${shown}T00:00:00Z`);
+    return {
+      shown, rome, dark, dom,
+      top: E.topProbeLayer()?.cfg.id,
+      before: cfg.earlier.before,
+      now: E.gibsLayerName(cfg, shown), old: E.gibsLayerName(cfg, "2016-06-15"),
+      oldSnap: E.gibsTime(cfg, "2016-06-15"),
+      // pure geometry: 13:25 local solar time on the equator at Greenwich,
+      // earlier in local time further north, and no figure poleward of 60°
+      eq: (E.overpassOf(cfg, 0, 0, shown).ms - day) / 36e5,
+      east: (E.overpassOf(cfg, 90, 0, shown).ms - day) / 36e5,
+      north: E.overpassOf(cfg, 0, 50, shown).local,
+      polar: E.overpassOf(cfg, 0, 61, shown),
+    };
+  });
+  expect(r.top).toBe("viirs-truecolor");
+  expect(r.rome.photo).toBe(true);
+  expect(r.rome.title).toContain("True color");
+  expect(r.rome.noData).toBeFalsy();
+  expect(r.rome.when).toEqual({ kind: "day", t: r.shown });
+  expect(r.rome.craft).toBe("NOAA-20");
+  expect(r.rome.cell).toBeTruthy();
+  // Rome is photographed around noon UTC, on the tile's own date
+  const romeHour = (r.rome.seen.ms - Date.parse(`${r.shown}T00:00:00Z`)) / 36e5;
+  expect(romeHour).toBeGreaterThan(11);
+  expect(romeHour).toBeLessThan(13);
+  expect(r.rome.seen.pm).toBeGreaterThanOrEqual(1);
+  expect(r.rome.seen.pm).toBeLessThanOrEqual(2);
+  if (r.dark) {
+    expect(r.dark.photo).toBe(true);
+    expect(r.dark.noData).toBe(true);
+  }
+  // two spacecraft, one record: Suomi NPP before the handover, NOAA-20 after,
+  // and the measured domain is the two archives joined at that date
+  expect(r.now).toBe("VIIRS_NOAA20_CorrectedReflectance_TrueColor");
+  expect(r.old).toBe("VIIRS_SNPP_CorrectedReflectance_TrueColor");
+  expect(r.oldSnap).toBe("2016-06-15");                 // not snapped up to NOAA-20's first day
+  expect(r.dom[0].s < r.before).toBe(true);
+  const straddlers = r.dom.filter((iv) => iv.s < r.before && iv.e >= r.before).length;
+  expect(straddlers).toBe(0);
+  expect(r.eq).toBe(13.5);
+  expect(r.east).toBe(7.5);
+  expect(r.north).toBeLessThan(13.42);
+  expect(r.polar).toBeNull();
+
+  // the read-out itself: the age is the headline, the date and the estimated
+  // pass time sit under it, and nothing claims "no data" about a photograph
+  await page.evaluate(async () => {
+    const c = window.__earth.viewer.scene.canvas;
+    await window.__runProbe(c.clientWidth / 2, c.clientHeight / 2, false);
+  });
+  const probe = page.locator("#value-probe");
+  await expect(probe).toBeVisible();
+  const text = await probe.innerText();
+  expect(text).toMatch(/photographed \d{4}-\d{2}-\d{2}|nothing photographed here on \d{4}-\d{2}-\d{2}/);
+  expect(text).not.toContain("no data");
+
+  // the same tap years back is answered by the predecessor
+  await setAppDate(page, "2016-06-15");
+  const past = await page.evaluate(() =>
+    window.__earth.probeValueAt(Cesium.Cartographic.fromDegrees(12.5, 41.9)));
+  expect(past.photo).toBe(true);
+  expect(past.noData).toBeFalsy();
+  expect(past.when).toEqual({ kind: "day", t: "2016-06-15" });
+  expect(past.craft).toBe("Suomi NPP");
+  expect(page.__errors).toEqual([]);
+});
+
 test("the probe draws the source cell it read on the globe", async ({ page }) => {
   // A tap's read-out floats OFFSET from the finger, so nothing said which
   // pixel the number came from. Every probe now returns the source cell's

@@ -85,11 +85,29 @@ const GIBS_LAYERS = [
   {
     id: "viirs-truecolor",
     doc: "https://www.earthdata.nasa.gov/data/instruments/viirs",
-    layer: "VIIRS_SNPP_CorrectedReflectance_TrueColor",
+    /* The satellite behind this layer CHANGED on 2026-11-17. It was Suomi NPP,
+     * which NOAA decommissioned on 2026-11-02 (data delivery ended 15:40 UTC
+     * that day, permanently) — so the "daily" photograph had silently frozen
+     * at 2 November, and Chris was reading fifteen-day-old clouds as today's
+     * weather. NOAA-20 carries the same VIIRS instrument in the same orbit
+     * plane (half an orbit, ~50 min, apart) and GIBS serves it at the same
+     * 250 m tile matrix, measured current through yesterday. Its record only
+     * begins 2018-01-05, so `earlier` keeps Suomi NPP for the dates before
+     * that: one layer, one record, two spacecraft (gibsLayerName). */
+    layer: "VIIRS_NOAA20_CorrectedReflectance_TrueColor", craft: "NOAA-20",
+    earlier: { before: "2018-01-05", layer: "VIIRS_SNPP_CorrectedReflectance_TrueColor",
+               craft: "Suomi NPP" },
+    /* When the picture was taken, to the hour. Both spacecraft fly the same
+     * sun-synchronous afternoon orbit: they cross the equator northbound at
+     * 13:25 local solar time (`ltan`, hours), inclined 98.7 degrees, imaging a
+     * swath 3,060 km wide. That is enough to say WHEN a daytime pixel was
+     * seen — see overpassOf — which the tile date alone cannot: "yesterday"
+     * is anything from 11 to 47 hours ago, and clouds move in hours. */
+    overpass: { ltan: 13.42, inclination: 98.7, swathKm: 3060 },
     title: "True color (VIIRS, 250 m, daily)",
     ext: "jpg", tms: "250m", maxLevel: 8,
     start: "2015-11-24", timed: true, on: false,
-    meta: "Daily global mosaic, ~3 h latency",
+    meta: "Daily global mosaic (NOAA-20), photographed about 13:30 local time — tap for its age",
   },
   {
     id: "sst",
@@ -993,6 +1011,8 @@ const GIBS_LAYERS = [
     title: "Night lights (Black Marble, 500 m)",
     ext: "png", tms: "500m", maxLevel: 7,
     start: "2016-01-01", timed: false, fixedTime: "2016-01-01", on: false,
+    // the 2016 annual composite: a year, not the day its tile date names
+    fixedWhen: { kind: "year", t: "2016" },
     meta: "VIIRS annual composite",
   },
 ];
@@ -1027,8 +1047,35 @@ const GIBS_DOMAIN_URL =
   "https://gibs.earthdata.nasa.gov/wmts/epsg4326/best/1.0.0/" +
   "{layer}/default/{tms}/all/all.xml";
 
-function gibsDomainUrl(cfg) {
-  return GIBS_DOMAIN_URL.replace("{layer}", cfg.layer).replace("{tms}", cfg.tms);
+function gibsDomainUrl(cfg, layer = cfg.layer) {
+  return GIBS_DOMAIN_URL.replace("{layer}", layer).replace("{tms}", cfg.tms);
+}
+
+/* Which GIBS layer id serves this layer AT a given tile time. One name for
+ * every layer but those whose record spans two spacecraft: `earlier:
+ * { before, layer }` names the predecessor that serves every instant before
+ * `before` (true colour: Suomi NPP until NOAA-20's record begins). Every
+ * request that puts a layer id in a URL goes through here — the Cesium
+ * template, the window/delta reads and the probe — so the picture and the
+ * read-out can never come from different satellites. */
+function gibsLayerName(cfg, time) {
+  return cfg.earlier && String(time) < cfg.earlier.before ? cfg.earlier.layer : cfg.layer;
+}
+
+/* The measured domain of a two-spacecraft layer: the predecessor's intervals
+ * cut off just before the handover, then the successor's own. If the
+ * predecessor will not answer, the successor's domain alone is still right
+ * for every date it covers (older dates snap to its first day). */
+function mergeEraDomains(older, newer, before) {
+  if (!newer) return null;
+  if (!older) return newer;
+  const cut = domainMs(before) - 1;
+  const kept = [];
+  for (const iv of older) {
+    const e = domainFloor(iv, cut);
+    if (e != null) kept.push({ ...iv, e });
+  }
+  return kept.concat(newer.filter((iv) => domainMs(iv.e) > cut));
 }
 
 // Domain instants come in two granularities — bare dates ("2026-06-01") for
@@ -1179,9 +1226,13 @@ function loadGibsDomain(cfg) {
   if (!cfg?.timed || !cfg.layer) return Promise.resolve(null);
   if (gibsDomains.has(cfg.id)) return Promise.resolve(gibsDomains.get(cfg.id));
   if (gibsDomainPending.has(cfg.id)) return gibsDomainPending.get(cfg.id);
-  const p = fetch(gibsDomainUrl(cfg))
+  const ask = (layer) => fetch(gibsDomainUrl(cfg, layer))
     .then((r) => (r.ok ? r.text() : Promise.reject(new Error(`HTTP ${r.status}`))))
-    .then(parseGibsDomain)
+    .then(parseGibsDomain);
+  const p = (cfg.earlier
+    ? Promise.all([ask(cfg.earlier.layer).catch(() => null), ask(cfg.layer)])
+      .then(([older, newer]) => mergeEraDomains(older, newer, cfg.earlier.before))
+    : ask(cfg.layer))
     .then((v) => (cfg.domainOverdeclares ? trimDomainEnd(v, cfg.domainOverdeclares) : v))
     .catch(() => null)
     .then((v) => {
@@ -1465,9 +1516,10 @@ function whenStamp(w) {
  * layer at alpha 0 building its own URLs through this template. See the
  * preload ring. */
 function gibsUrlTemplate(cfg, dateStr) {
+  const time = gibsTime(cfg, dateStr);
   return GIBS_URL
-    .replace("{layer}", cfg.layer)
-    .replace("{time}", gibsTime(cfg, dateStr))
+    .replace("{layer}", gibsLayerName(cfg, time))
+    .replace("{time}", time)
     .replace("{tms}", cfg.tms)
     .replace("{ext}", cfg.ext);
 }
@@ -2806,8 +2858,9 @@ function getSstLUT() {
 
 /* Shared helpers for the client-side aggregate/delta providers below. */
 function sstFetchUrl(cfg, date, x, y, level) {
+  const time = gibsTime(cfg, date);
   return GIBS_URL
-    .replace("{layer}", cfg.layer).replace("{time}", gibsTime(cfg, date))
+    .replace("{layer}", gibsLayerName(cfg, time)).replace("{time}", time)
     .replace("{tms}", cfg.tms).replace("{ext}", cfg.ext)
     .replace("{TileMatrix}", level).replace("{TileRow}", y).replace("{TileCol}", x);
 }
@@ -8036,11 +8089,13 @@ function maybeArchiveToast(cfg, { replace = false } = {}) {
  * shown as a hover card on the layer entry. "Recorded" is the span of the
  * underlying measurement record (≠ the date currently displayed). */
 const LAYER_FACTS = {
-  "viirs-truecolor": { rec: "2015-11 → present", int: "daily (mosaic of ~14 orbits)", sp: "250 m/pixel",
+  "viirs-truecolor": { rec: "2015-11 → present (Suomi NPP until 2018-01-04, NOAA-20 since — Suomi NPP was switched off on 2026-11-02)",
+    int: "daily (mosaic of ~14 orbits, each point photographed about 13:30 local solar time)", sp: "250 m/pixel",
     sum: "What Earth actually looked like on the chosen day, stitched from the VIIRS " +
          "imager's ~14 daily orbits. Clouds, dust storms, wildfire smoke, algal blooms " +
          "and snow appear exactly as photographed — the visual ground truth under all " +
-         "the other layers." },
+         "the other layers. It is one early-afternoon snapshot per day, not live: " +
+         "tap any point to see how many hours old its picture is." },
   "sst": { rec: "2002-06 → present", int: "daily (gap-free L4 analysis)", sp: "1 km grid",
     sum: "The temperature of the ocean surface, every day, with no gaps: MUR blends " +
          "infrared and microwave satellites plus buoys into a 1 km analysis. The " +
@@ -9777,7 +9832,7 @@ new Cesium.ScreenSpaceEventHandler(viewer.scene.canvas).setInputAction((click) =
   if (!picked && pixelInspectorEngaged()) {
     const cart = viewer.camera.pickEllipsoid(click.position, viewer.scene.globe.ellipsoid);
     if (cart) showPixelState(Cesium.Cartographic.fromCartesian(cart));
-  } else if (!picked && !topColormapLayer() && !tideLive.on && !tideTook) {
+  } else if (!picked && !topProbeLayer() && !tideLive.on && !tideTook) {
     // Nothing armed and nothing colormapped: the tap deliberately does
     // NOTHING — but silence looks broken, so say why, once per sitting.
     const cart = viewer.camera.pickEllipsoid(click.position, viewer.scene.globe.ellipsoid);
@@ -9817,7 +9872,7 @@ function fetchProbeTile(cfg, date, z, x, y) {
   const url = cfg.xyz
     ? xyzUrlTemplate(cfg, date).replace("{z}", z).replace("{x}", x).replace("{y}", y)
     : GIBS_URL
-      .replace("{layer}", cfg.layer).replace("{time}", time)
+      .replace("{layer}", gibsLayerName(cfg, time)).replace("{time}", time)
       .replace("{tms}", cfg.tms).replace("{ext}", cfg.ext)
       .replace("{TileMatrix}", z).replace("{TileRow}", y).replace("{TileCol}", x);
   if (!probeTileCache.has(key)) {
@@ -9926,6 +9981,105 @@ function colormapLayersTopDown() {
     .map(([, e]) => e);
 }
 
+/* A PHOTOGRAPH has no value to invert, but it has the one fact every other
+ * read-out already prints: WHEN it was taken. Until 2026-11-17 a tap on true
+ * colour answered nothing at all (or, worse, read the colormapped layer hidden
+ * UNDER the opaque photograph), which is how a fifteen-day-old cloud field got
+ * shown to a friend as the day's weather — Chris: "when I tap a single point
+ * it does not show me how old the data is (but it should)". So a photographic
+ * raster — no colormap, no classes, no grid — answers the probe with its date
+ * and age, on the same top-down walk and the same transparency rule as the
+ * rest: a swath that did not fly over the point falls through to the layer
+ * below. It qualifies only if it HAS an honest observation time (§2.9); a
+ * hillshade has none and stays silent. */
+function isPhotoLayer(cfg) {
+  return !!cfg && !cfg.grid && !cfg.colormap && !cfg.classmap && !cfg.magnitude &&
+    !!(cfg.layer || cfg.xyz) && !!whenOfGibs(cfg);
+}
+const probeable = (cfg) => !!(cfg.colormap || cfg.classmap || cfg.grid) || isPhotoLayer(cfg);
+
+// Everything the probe can answer for, top of the stack first — the
+// colormapped layers and the photographs among them, shown ones only.
+function probeLayersTopDown() {
+  return Object.values(state.layers)
+    .filter((e) => e.layer && e.layer.show !== false && probeable(e.cfg))
+    .map((e) => [viewer.imageryLayers.indexOf(e.layer), e])
+    .sort((a, b) => b[0] - a[0])
+    .map(([, e]) => e);
+}
+// "Is anything on that a tap can read?" — the click and dwell handlers' gate.
+function topProbeLayer() {
+  return probeLayersTopDown()[0] || null;
+}
+
+/* When a polar orbiter photographed a point, to the hour, from three published
+ * orbit numbers (cfg.overpass). A sun-synchronous satellite crosses the equator
+ * northbound at a fixed LOCAL SOLAR time (`ltan`); because the orbit is tilted
+ * (`inclination`), the track leans west as it climbs, so the pass arrives
+ * EARLIER in local time the further north the point is — asin(tan φ / tan i')
+ * of a turn, with i' the tilt measured from the pole side. Local solar time
+ * minus a twenty-fourth of a day per 15° of longitude is UTC. The swath is
+ * thousands of km wide, so a pixel near its edge was seen up to `pm` hours
+ * off the nadir figure — returned and PRINTED, never hidden: this is an
+ * estimate from geometry, not a timestamp read off the tile. Poleward of 60°
+ * successive orbits overlap so heavily that one figure would be a guess, and
+ * none is given. */
+function overpassOf(cfg, lon, lat, day) {
+  const o = cfg.overpass;
+  if (!o || !day || Math.abs(lat) > 60) return null;
+  const rad = Math.PI / 180;
+  const lean = Math.asin(Math.max(-1, Math.min(1,
+    Math.tan(lat * rad) / Math.tan((180 - o.inclination) * rad))));
+  const local = o.ltan - lean * 12 / Math.PI;                 // hours, at nadir
+  const utc = (((local - lon / 15) % 24) + 24) % 24;
+  // nearest half hour: the estimate is not better than that anywhere
+  const ms = Date.parse(`${day}T00:00:00Z`) + Math.round(utc * 2) * 18e5;
+  if (!Number.isFinite(ms)) return null;
+  const pm = (o.swathKm / 2) / (111.32 * Math.cos(lat * rad)) / 15;
+  return { ms, pm: Math.ceil(pm * 2) / 2, local,          // widened to the half hour, never narrowed
+           when: whenAt("halfhour", new Date(ms).toISOString().slice(0, 16)) };
+}
+
+/* One pixel of a photograph: was anything photographed here at all? A PNG
+ * swath is transparent where the satellite did not fly; a JPEG mosaic has no
+ * alpha and paints those pixels pure black — measured 2026-11-17 on NOAA-20
+ * and MODIS tiles: unfilled areas are exactly 0 (≤ 3 after JPEG ringing),
+ * while real imagery, the darkest night-side ocean included, reached ≤ 3 in
+ * 3 pixels of 262,144. Returns "seen", "blank", or null for no tile. */
+async function probePhotoPixel(cfg, date, z, x, y, px, py) {
+  const img = await fetchProbeTile(cfg, date, z, x, y);
+  if (!img) return null;
+  probeCtx.clearRect(0, 0, 512, 512);
+  probeCtx.drawImage(img, 0, 0);
+  const d = probeCtx.getImageData(px, py, 1, 1).data;
+  if (d[3] === 0) return "blank";
+  if (cfg.ext === "jpg" && Math.max(d[0], d[1], d[2]) <= 3) return "blank";
+  return "seen";
+}
+
+async function probePhotoValue(entry, lon, lat) {
+  const cfg = entry.cfg;
+  const z = cfg.maxLevel;
+  const t = probeTileAt(cfg, lon, lat, z);
+  const base = { title: cfg.title, lon, lat, photo: true, when: whenOfGibs(cfg), cell: t.cell };
+  /* A union of swaths (the Aggregate window over HLS or the radars) paints the
+   * newest pass on top, so the date of THIS pixel is the newest day in the
+   * window that flew over it — walked exactly as the class probe walks it. */
+  const dates = entry.isAggregate && cfg.mosaic
+    ? mosaicDates(cfg, state.date, state.windowDays) : [state.date];
+  for (const d of dates) {
+    const got = await probePhotoPixel(cfg, d, z, t.x, t.y, t.px, t.py);
+    if (got !== "seen") continue;
+    const when = dates.length > 1 ? whenAt("day", d) : base.when;
+    const day = when?.kind === "day" ? when.t : null;
+    const time = cfg.timed ? gibsTime(cfg, d) : "";
+    return { ...base, when, seen: overpassOf(cfg, lon, lat, day),
+             craft: gibsLayerName(cfg, time) === cfg.layer ? cfg.craft : cfg.earlier?.craft };
+  }
+  // Nothing photographed here: a blank layer must not mask the one below it.
+  return { ...base, noData: true };
+}
+
 /* The tide as the value probe sees it, so it behaves like every other layer:
  * the same floating read-out, the same outlined source cell, the same date
  * stamp. The tide is a primitive drawn OVER the imagery layers, so it answers
@@ -9962,7 +10116,7 @@ async function probeValueAt(carto) {
    * beneath. The temperature scene (SST+LST) depends on this. */
   const tide = tideProbeValue(carto);              // drawn on top → asked first
   if (tide) return tide;
-  const entries = colormapLayersTopDown();
+  const entries = probeLayersTopDown();
   if (!entries.length) return null;
   let first = null;
   for (const entry of entries) {
@@ -10067,6 +10221,7 @@ async function probeEntryValue(entry, carto) {
     }
     return { ...base, value: v };
   }
+  if (isPhotoLayer(cfg)) return probePhotoValue(entry, lon, lat);
   if (cfg.magnitude) {
     // Two components → one speed, the same arithmetic the tile painted.
     const z = cfg.maxLevel;
@@ -10383,7 +10538,15 @@ function renderProbe(res, sx, sy) {
                 `${Math.abs(res.lon).toFixed(2)}°${res.lon >= 0 ? "E" : "W"}`;
   let head;
   if (res.noData) {
-    head = `<span class="vp-val vp-nd">no data</span>`;
+    // a photograph's blank is "not photographed", which is not a missing value
+    head = `<span class="vp-val vp-nd">${res.photo ? "no image here" : "no data"}</span>`;
+  } else if (res.photo) {
+    /* A photograph answers with its AGE — the question a tap on a cloud is
+     * asking. From the estimated pass time where the orbit is known (hours
+     * matter: "yesterday" is anything from 11 to 47 hours ago), else from the
+     * tile date; a fixed span has no age and shows itself. */
+    const age = whenAge(res.seen ? res.seen.when : res.when);
+    head = `<span class="vp-val vp-class">${age || whenText(res.when)}</span>`;
   } else if (res.label) {
     // classification layer: the answer is a category, not a number
     head = `<span class="vp-val vp-class">${res.label}</span>`;
@@ -10436,7 +10599,17 @@ function renderProbe(res, sx, sy) {
     : res.aggregated ? ` · ${windowLabel(state.windowDays)} mean` : "";
   // The date line the user asked for: every hovered or tapped value now says
   // when it was observed, at that dataset's own honest granularity.
-  const stamp = whenLabel(res.when);
+  /* A photograph's own line: the date it shows, the estimated pass time with
+   * its honest ± where the orbit is known, and which spacecraft took it. The
+   * age is already the headline, so it is not repeated here. */
+  const hhmm = (ms) => new Date(ms).toISOString().slice(11, 16);
+  const stamp = !res.photo ? whenLabel(res.when)
+    : res.noData
+      ? `nothing photographed here on ${whenText(res.when)} — not flown over in ` +
+        `daylight that day (or polar night)`
+      : `photographed ${whenText(res.when)}` +
+        (res.seen ? ` ≈ ${hhmm(res.seen.ms)} UTC (± ${res.seen.pm} h, estimated from the orbit)` : "") +
+        (res.craft ? ` · ${res.craft}` : "");
   // The value is wrapped so the daily upgrade below has ONE node to rewrite —
   // the read-out is otherwise three sibling spans and a partial replacement
   // would leave the old unit or the old bound standing next to a new number.
@@ -10492,11 +10665,11 @@ new Cesium.ScreenSpaceEventHandler(viewer.scene.canvas).setInputAction((m) => {
         pickCard.classList.remove("hidden");
         return;
       }
-      if (topColormapLayer() || tideLive.on) runProbe(x, y);
+      if (topProbeLayer() || tideLive.on) runProbe(x, y);
     }, PROBE_DWELL);
     return;
   }
-  if (!topColormapLayer() && !tideLive.on) return;
+  if (!topProbeLayer() && !tideLive.on) return;
   probeDwellTimer = setTimeout(() => runProbe(x, y), PROBE_DWELL);
 }, Cesium.ScreenSpaceEventType.MOUSE_MOVE);
 // Clicking reads the top layer's value immediately (no dwell wait) — unless
@@ -10506,7 +10679,7 @@ new Cesium.ScreenSpaceEventHandler(viewer.scene.canvas).setInputAction((c) => {
   if (probeDwellTimer) clearTimeout(probeDwellTimer);
   if (dtDrawBusy()) return;
   if (pixelInspectorEngaged()) return;
-  if ((topColormapLayer() || tideLive.on) &&
+  if ((topProbeLayer() || tideLive.on) &&
       !seeThrough(viewer.scene.pick(c.position))?.id?.kind) {
     runProbe(c.position.x, c.position.y, true);
   }
@@ -19642,6 +19815,7 @@ window.__earth = {
   // provenance: what time a value was actually observed at (gibsTime is
   // already exported below — it is the input to all of these)
   whenOfGibs,
+  gibsLayerName, mergeEraDomains, overpassOf, isPhotoLayer, topProbeLayer,
   whenOfGrid,
   whenOfLayer,
   whenAge,
