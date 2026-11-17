@@ -1470,6 +1470,99 @@ test("a photograph answers a tap with how old it is", async ({ page }) => {
   expect(page.__errors).toEqual([]);
 });
 
+test("the date opens on today and every layer answers with its newest whole data", async ({ page }) => {
+  // The app used to open on, and stop at, "two days ago — safely available on
+  // GIBS": one hand-picked lag for every archive. It now asks for TODAY and
+  // each layer snaps onto the newest instant its own measured archive serves.
+  test.setTimeout(240000);
+  const toasts = await recordToasts(page);
+  const iso = (d) => d.toISOString().slice(0, 10);
+  const today = iso(new Date()), yesterday = iso(new Date(Date.now() - 864e5));
+  const settled = iso(new Date(Date.now() - 2 * 864e5));
+  const first = await page.evaluate(() => ({
+    date: window.__earth.state.date,
+    max: document.getElementById("layer-date").max,
+    value: document.getElementById("layer-date").value,
+  }));
+  // (a run that straddles UTC midnight may have opened on what is now yesterday)
+  expect([today, yesterday]).toContain(first.date);
+  expect(first.max).toBe(first.date);
+  expect(first.value).toBe(first.date);
+
+  await page.check('#layer-list input[data-id="viirs-truecolor"]');
+  await page.check('#layer-list input[data-id="lst"]');
+  await page.check('#layer-list input[data-id="precip-30min"]');
+  const r = await page.evaluate(async () => {
+    const E = window.__earth;
+    const L = (id) => E.GIBS_LAYERS.find((l) => l.id === id);
+    const never = L("aod");                        // never enabled: no domain yet
+    const before = E.gibsTime(never, E.state.date);
+    const out = { before, date: E.state.date };
+    for (const id of ["viirs-truecolor", "lst", "sst", "precip-30min"]) {
+      const dom = await E.loadGibsDomain(L(id));
+      out[id] = { shown: E.gibsTime(L(id), E.state.date), newest: dom[dom.length - 1].e,
+                  whole: E.isWholeDayLayer(L(id)) };
+    }
+    return out;
+  });
+  // a layer whose archive has not answered is asked for a safely published day
+  expect(r.before <= settled).toBe(true);
+  // daily maps: the newest day served that is OVER — never the day in
+  // progress (a fragment), never later than the archive's own end, and no
+  // older than the archive's newest whole day
+  for (const id of ["viirs-truecolor", "lst", "sst"]) {
+    expect(r[id].whole).toBe(true);
+    expect(r[id].shown < r.date || r.date < today).toBe(true);
+    expect(r[id].shown <= r[id].newest.slice(0, 10)).toBe(true);
+    const cap = r[id].newest.slice(0, 10) < r.date ? r[id].newest.slice(0, 10)
+      : iso(new Date(Date.parse(r.date) - 864e5));
+    expect(r[id].shown).toBe(cap);
+  }
+  // the half-hourly layer is not a daily map: it may show today
+  expect(r["precip-30min"].whole).toBe(false);
+  expect(r["precip-30min"].shown.slice(0, 10) <= r.date).toBe(true);
+
+  // the date actually shown is on the globe, on the layer's chip, and the
+  // label beside it is still exactly the layer's title
+  const chip = page.locator("#active-layers .chip", { hasText: "True color" });
+  const shown = r["viirs-truecolor"].shown;
+  await expect(chip.locator(".chip-when"))
+    .toHaveText(shown.slice(0, 4) === r.date.slice(0, 4) ? shown.slice(5) : shown);
+  // and on a phone-width globe the date and the × are not what gets clipped
+  const fit = await chip.evaluate((el) => {
+    const c = el.getBoundingClientRect(), x = el.querySelector(".chip-x").getBoundingClientRect();
+    return x.right <= c.right + 0.5 && c.right <= el.parentElement.getBoundingClientRect().right + 0.5;
+  });
+  expect(fit).toBe(true);
+  await expect(chip.locator(".chip-label")).toHaveText("True color (VIIRS, 250 m, daily)");
+
+  // an ordinary day or two of publication delay raises no toast…
+  await page.waitForTimeout(1500);
+  const lagging = ["viirs-truecolor", "lst", "sst"].filter((id) =>
+    Date.parse(r.date) - Date.parse(r[id].shown) > 2 * 864e5).length;
+  if (!lagging) expect(await toasts()).not.toContain("hasn't published");
+
+  // …and a stale answer is asked again only when the app wants something
+  // newer than it ends at
+  const stale = await page.evaluate(() => {
+    const E = window.__earth;
+    const tc = E.GIBS_LAYERS.find((l) => l.id === "viirs-truecolor");
+    const ice = E.GIBS_LAYERS.find((l) => l.id === "seaice");
+    return { fresh: E.gibsDomainStale(tc), closed: E.gibsDomainStale(ice) };
+  });
+  expect(stale.fresh).toBe(false);
+  expect(stale.closed).toBe(false);
+
+  // Today is today, and +1d cannot pass it
+  await page.click('#date-steps button[data-step="-1m"]');
+  await page.click('#date-steps button[data-step="today"]');
+  const back = await page.evaluate(() => window.__earth.state.date);
+  expect([today, iso(new Date())]).toContain(back);
+  await page.click('#date-steps button[data-step="+1d"]');
+  expect(await page.evaluate(() => window.__earth.state.date)).toBe(back);
+  expect(page.__errors).toEqual([]);
+});
+
 test("the probe draws the source cell it read on the globe", async ({ page }) => {
   // A tap's read-out floats OFFSET from the finger, so nothing said which
   // pixel the number came from. Every probe now returns the source cell's

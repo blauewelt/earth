@@ -21,7 +21,7 @@
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/cesium/1.133.1/Widgets/widgets.min.css" />
-  <link rel="stylesheet" href="src/style.css?v=e62d38e5" />
+  <link rel="stylesheet" href="src/style.css?v=4d739920" />
   <script>window.CESIUM_BASE_URL = "https://cdnjs.cloudflare.com/ajax/libs/cesium/1.133.1/";</script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/cesium/1.133.1/Cesium.js"></script>
 </head>
@@ -79,7 +79,9 @@
         <ul class="hint">
           <li><strong>Date</strong> — every timed layer follows it (±1d/1m/1y steps; a ±30m
             stepper appears for the half-hourly rain layer, so you can watch storms cross a
-            day). Layers that ignore the date say so when switched on.</li>
+            day). It opens on today, and each layer shows the newest data it has on or
+            before the date — when that is an earlier day, the layer's chip on the globe
+            names it. Layers that ignore the date say so when switched on.</li>
           <li><strong>Compare</strong> — any dated layer against another date: pick an offset
             (1–20 years ago, which <em>tracks</em> the date as you scrub, so both sides stay in
             the same season) or <em>a specific date</em>, which gets the same date field and
@@ -166,7 +168,7 @@
         <button data-step="+1d" title="forward one day">+1d</button>
         <button data-step="+1m" title="forward one month">+1m</button>
         <button data-step="+1y" title="forward one year">+1y</button>
-        <button data-step="today" title="jump to the most recent date">Today</button>
+        <button data-step="today" title="jump to today — each layer shows the newest data it has; the chip on the globe names its date">Today</button>
       </div>
       <!-- Time of day: only meaningful for sub-daily layers (IMERG 30-min),
            so the row only appears while one is on. Crossing midnight rolls
@@ -1537,7 +1539,7 @@
            not obvious from the page, and "I reloaded and see no change" is
            indistinguishable from "the change isn't there". This is the sha256
            prefix of src/app.js, the same string as its ?v= stamp. -->
-      <p class="build-line">Build <code id="build-id">d3b52a82</code></p>
+      <p class="build-line">Build <code id="build-id">8179d9c0</code></p>
     </section>
 
     <footer>
@@ -1606,6 +1608,6 @@
        app, and the app copes when they did not (the tab says so). -->
   <script src="lib/fzstd.js?v=207dc305"></script>
   <script src="src/f1data.js?v=a2f40292"></script>
-  <script src="src/app.js?v=d3b52a82"></script>
+  <script src="src/app.js?v=8179d9c0"></script>
 </body>
 </html>

@@ -1221,10 +1221,27 @@ function trimDomainEnd(intervals, days) {
 
 const gibsDomains = new Map();          // layer id → intervals, or null = asked and got nothing
 const gibsDomainPending = new Map();    // layer id → in-flight promise
+const gibsDomainAt = new Map();         // layer id → when it was last measured (ms)
 
-function loadGibsDomain(cfg) {
+/* An archive GROWS, and the answer was cached for the session. That was
+ * harmless while the app stopped two days short of the present; it is not now
+ * that it asks for today: an installed copy left open on a phone (Android
+ * keeps one alive for days) would go on showing the newest day it knew about
+ * when it started. So a measured domain goes stale: once it is half an hour
+ * old AND the app is asking for something newer than it ends at, it is worth
+ * one more small XML. A closed archive (`endTime`) never is. */
+const GIBS_DOMAIN_TTL_MS = 30 * 60 * 1000;
+function gibsDomainStale(cfg) {
+  const dom = gibsDomains.get(cfg.id);
+  if (!dom || cfg.endTime) return false;
+  if (Date.now() - (gibsDomainAt.get(cfg.id) || 0) < GIBS_DOMAIN_TTL_MS) return false;
+  const asked = gibsTimeStatic(cfg, state.date, { clampEnd: false });
+  return domainMs(asked) > domainMs(dom[dom.length - 1].e);
+}
+
+function loadGibsDomain(cfg, { refresh = false } = {}) {
   if (!cfg?.timed || !cfg.layer) return Promise.resolve(null);
-  if (gibsDomains.has(cfg.id)) return Promise.resolve(gibsDomains.get(cfg.id));
+  if (gibsDomains.has(cfg.id) && !refresh) return Promise.resolve(gibsDomains.get(cfg.id));
   if (gibsDomainPending.has(cfg.id)) return gibsDomainPending.get(cfg.id);
   const ask = (layer) => fetch(gibsDomainUrl(cfg, layer))
     .then((r) => (r.ok ? r.text() : Promise.reject(new Error(`HTTP ${r.status}`))))
@@ -1239,8 +1256,13 @@ function loadGibsDomain(cfg) {
       // Cache failures too. If GIBS won't tell us, re-asking on every toggle
       // just spends the user's connection to hear the same silence; the layer
       // falls back to the typed endTime and behaves exactly as it did before.
-      gibsDomains.set(cfg.id, v);
+      // A refresh that fails keeps the answer it already had: an old
+      // measurement is still a measurement, and null would send the layer
+      // back to guessing.
+      if (v || !gibsDomains.get(cfg.id)) gibsDomains.set(cfg.id, v);
+      gibsDomainAt.set(cfg.id, Date.now());
       gibsDomainPending.delete(cfg.id);
+      v = gibsDomains.get(cfg.id);
       if (v) {
         cfg.lastServed = v[v.length - 1].e;
         // A typed endTime means "this archive is closed". Keep that meaning,
@@ -1259,9 +1281,11 @@ function loadGibsDomain(cfg) {
  * one wasted round of tiles on the very first enable of a lagging layer, and
  * buys a globe that never sits blank with no explanation. */
 function ensureGibsDomain(cfg) {
-  if (!cfg?.timed || !cfg.layer || gibsDomains.has(cfg.id)) return;
+  if (!cfg?.timed || !cfg.layer) return;
+  const refresh = gibsDomains.has(cfg.id);
+  if (refresh && !gibsDomainStale(cfg)) return;
   const before = gibsTime(cfg, state.date);
-  loadGibsDomain(cfg).then((dom) => {
+  loadGibsDomain(cfg, { refresh }).then((dom) => {
     if (!dom) return;
     const e = state.layers[cfg.id];
     if (!e || !(e.layer || e.suppressed)) return;      // switched off while we asked
@@ -1293,8 +1317,15 @@ function ensureGibsDomain(cfg) {
 function gibsTimeStatic(cfg, dateStr, { clampEnd = true } = {}) {
   if (!cfg.timed) return cfg.fixedTime || "default";
   // Forecast layers let the date run into the future; observation archives
-  // can't follow. Clamp so GIBS never gets asked for tomorrow's tiles.
-  if (dateStr > defaultDate()) dateStr = defaultDate();
+  // can't follow. Clamp so GIBS never gets asked for tomorrow's tiles. Once
+  // the layer's own archive has answered, today is a fair thing to ask for —
+  // gibsTime snaps it onto what is served. Until then (and for a layer whose
+  // archive never answers) stay on a date that is safely published, so the
+  // first tiles are a picture and not a round of 404s.
+  {
+    const ceil = (!clampEnd || gibsDomains.get(cfg.id)) ? defaultDate() : settledDate();
+    if (dateStr > ceil) dateStr = ceil;
+  }
   // Some archives stop being served as tiles before today (GRACE 2022-07,
   // CERES 2018-10, SSH anomalies 2019-01, AMSR2 soil moisture 2025-09): any
   // later date clamps to the last served one, so the layer shows its final
@@ -1358,11 +1389,25 @@ function annualYearOf(cfg, t) {
   return cfg.annualAnchor ? y + 1 : y;
 }
 
+/* A DAILY map of the UTC day still in progress is a fragment, and GIBS lists
+ * some of them: measured 2026-11-17 14:15 UTC, the land-surface-temperature,
+ * snow and chlorophyll layers all listed that day, and the day's tiles were
+ * 8% filled. Shown as "the newest data" that is a nearly empty globe where
+ * yesterday's complete map was. A day cannot be whole before it ends — that
+ * is a definition, not a tuned lag — so a daily layer is never asked for the
+ * day in progress. Not the half-hourly layer (each frame is whole when it is
+ * listed), nor monthly, 5-day or annual ones (their own rules), nor swath
+ * unions (`mosaic`: every pass is a whole picture of where it flew). */
+function isWholeDayLayer(cfg) {
+  return !!cfg.timed && !cfg.subDaily && !cfg.monthly && !cfg.annual && !cfg.snap5d && !cfg.mosaic;
+}
+
 function gibsTime(cfg, dateStr) {
-  const want = gibsTimeStatic(cfg, dateStr);
+  let want = gibsTimeStatic(cfg, dateStr);
   if (!cfg.timed) return want;
   const dom = gibsDomains.get(cfg.id);
   if (!dom) return want;
+  if (isWholeDayLayer(cfg) && want > lastWholeDay()) want = lastWholeDay();
   return snapToDomain(dom, want) ?? want;
 }
 
@@ -2688,9 +2733,34 @@ const state = {
   layers: {},
 };
 
+/* THREE dates, where there used to be one.
+ *
+ * Until 2026-11-17 the app opened on, and could not be moved past, "two days
+ * ago — safely available on GIBS". That was a hand-picked lag standing in for
+ * every archive at once, and it was wrong in both directions: most daily
+ * layers are served a day sooner, the half-hourly rain within hours, and a
+ * few products weeks later. Chris, after finding the true-colour picture he
+ * was reading as today's weather was 47 hours old at best: "I'd like to have
+ * the most recent data for everything."
+ *
+ *   defaultDate()  TODAY (UTC). Where the app opens, the selector's ceiling
+ *                  and the Today button. It is a REQUEST, not a promise: each
+ *                  layer answers with the newest instant its own measured
+ *                  archive serves on or before it (gibsTime), and says which
+ *                  (the chip's date, the tap read-out).
+ *   lastWholeDay() yesterday (UTC): the newest day that is over. A DAILY map
+ *                  of a day still in progress is a fragment — see gibsTime.
+ *   settledDate()  the old two-days-ago, kept for exactly one job: the first
+ *                  request for a layer whose archive has not answered yet.
+ */
 function defaultDate() {
-  const d = new Date(Date.now() - 2 * 864e5); // two days ago: safely available on GIBS
-  return d.toISOString().slice(0, 10);
+  return new Date().toISOString().slice(0, 10);
+}
+function lastWholeDay() {
+  return new Date(Date.now() - 864e5).toISOString().slice(0, 10);
+}
+function settledDate() {
+  return new Date(Date.now() - 2 * 864e5).toISOString().slice(0, 10);
 }
 
 function addDays(dateStr, n) {
@@ -7190,12 +7260,32 @@ const STATIC_LAYER_CHIPS = [
   ["toggle-gbif", "Biodiversity"],
 ];
 
+/* The date a raster layer is ACTUALLY showing, when that is not the date in
+ * the selector — at the layer's own granularity, so a monthly layer showing
+ * this month says nothing. The selector asks for today and every archive
+ * answers with its own newest day; this is where the answer is always on
+ * screen, on the globe, without a tap (and without a toast to miss). Unions
+ * and means span several days and say so in their legend instead. */
+function chipShownDate(cfg) {
+  const e = state.layers[cfg.id];
+  if (!e || !e.layer || !cfg.timed || !cfg.layer || e.isAggregate) return null;
+  const w = whenOfGibs(cfg);
+  if (!w || !w.t) return null;
+  const len = { year: 4, month: 7 }[w.kind] || 10;
+  if (String(w.t).slice(0, len) === state.date.slice(0, len)) return null;
+  // A day in the selector's own year drops the year: the chip bar is narrow
+  // on a phone, and "11-16" under a selector reading 2026-11-17 is unambiguous.
+  const text = whenText(w);
+  return len === 10 && text.slice(0, 5) === state.date.slice(0, 5) ? text.slice(5) : text;
+}
+
 function activeLayerChips() {
   const out = [];
   for (const cfg of GIBS_LAYERS) {
     const box = document.querySelector(`#layer-list input[data-id="${cfg.id}"]`);
     if (box && box.checked) {
-      out.push({ box, title: cfg.title, warn: !!state.layers[cfg.id]?.suppressed });
+      out.push({ box, title: cfg.title, warn: !!state.layers[cfg.id]?.suppressed,
+                 shown: chipShownDate(cfg) });
     }
   }
   for (const [id, title] of STATIC_LAYER_CHIPS) {
@@ -7260,7 +7350,17 @@ function updateActiveChips() {
     x.title = `Turn off ${c.title}`;
     x.setAttribute("aria-label", `Turn off ${c.title}`);
     x.addEventListener("click", () => turnOffLayer(c.box));
-    el.append(label, x);
+    el.append(label);
+    if (c.shown) {
+      // its own element, so the label stays exactly the layer's title
+      const when = document.createElement("span");
+      when.className = "chip-when";
+      when.textContent = c.shown;
+      when.title = `Showing ${c.shown} — the newest whole data this layer has on or before ` +
+        `${state.date}. Tap the globe for its age.`;
+      el.append(when);
+    }
+    el.append(x);
     host.appendChild(el);
   }
 
@@ -8061,6 +8161,18 @@ function maybeArchiveToast(cfg, { replace = false } = {}) {
         return n >= 1 ? `${n} day${n === 1 ? "" : "s"}` : "under a day";
       })();
 
+    /* The app opens on TODAY, and no archive is that current: a day or two of
+     * publication delay is every layer's normal state, and a toast per layer
+     * saying so would teach people to dismiss the one that matters (the
+     * true-colour layer sat fifteen days behind under exactly this toast,
+     * unread). So the ordinary delay — a request within the last two days,
+     * answered with something at most two days older — is carried by the
+     * chip's date and the tap read-out instead, and the toast is kept for a
+     * layer that has really fallen behind, a closed archive, or a hole. */
+    if (!cfg.monthly && !cfg.endTime &&
+        domainMs(asked) >= domainMs(settledDate()) &&
+        domainMs(asked) - domainMs(shown) <= 2 * 864e5) return;
+
     let html;
     if (cfg.endTime && atEdge) {
       html = `<strong>${cfg.title}</strong>: its tile archive ends ` +
@@ -8692,7 +8804,8 @@ function buildLayerPanel() {
   });
 
   // Quick date stepping: real calendar arithmetic (−1m from Mar 31 → Feb 28,
-  // −1y from Feb 29 → Feb 28), clamped to [layer availability, most recent].
+  // −1y from Feb 29 → Feb 28), clamped to [layer availability, today]. Today
+  // is today (UTC); each layer answers it with the newest data it has.
   document.getElementById("date-steps").addEventListener("click", (e) => {
     const step = e.target.getAttribute?.("data-step");
     if (!step) return;
@@ -16389,6 +16502,14 @@ document.addEventListener("visibilitychange", () => {
   if (document.visibilityState === "visible" && Date.now() - lastBuildCheck > 30000) {
     checkForNewBuild();
   }
+  // Coming back to the app is when a newer day may have been published:
+  // re-measure the archives of the layers that are on (ensureGibsDomain asks
+  // only for one that is stale, and rebuilds the layer only if its date moved).
+  if (document.visibilityState === "visible") {
+    for (const e of Object.values(state.layers)) {
+      if (e.layer || e.suppressed) ensureGibsDomain(e.cfg);
+    }
+  }
 });
 setInterval(() => {
   if (document.visibilityState === "visible") checkForNewBuild();
@@ -19816,6 +19937,7 @@ window.__earth = {
   // already exported below — it is the input to all of these)
   whenOfGibs,
   gibsLayerName, mergeEraDomains, overpassOf, isPhotoLayer, topProbeLayer,
+  isWholeDayLayer, gibsDomainStale, lastWholeDay, settledDate,
   whenOfGrid,
   whenOfLayer,
   whenAge,

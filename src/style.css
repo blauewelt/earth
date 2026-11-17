@@ -390,7 +390,15 @@ footer a { color: var(--fg-dim); }
  * measures fine still reads as cramped. 18px left against a 15px radius is
  * the value that finally looked right at 12px type. */
 .chip-label { padding: 8px 6px 8px 18px; white-space: nowrap; }
+/* A chip never outgrows the chip bar (55% of the globe — about 225 px on a
+ * phone). When it carries a date the TITLE gives way, with an ellipsis, so
+ * the date and the × are never the part that is clipped. */
+.chip { max-width: 100%; }
+.chip .chip-label { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.chip .chip-when, .chip .chip-x { flex: none; }
 .chip-label:hover { color: var(--accent); }
+/* the date a layer is really showing, when it is not the selector's */
+.chip-when { padding: 8px 2px 8px 0; color: #e0a94a; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .chip-x {
   padding: 8px 15px 8px 7px; color: var(--fg-dim) !important;
   font-size: 14px !important;
@@ -740,6 +748,8 @@ footer a { color: var(--fg-dim); }
 .chip-play { border-color: var(--accent); }
 .chip-play .chip-label { padding-right: 18px; color: var(--accent); cursor: default; }
 .chip-play .chip-label:hover { color: var(--accent); }
+/* the date a layer is really showing, when it is not the selector's */
+.chip-when { padding: 8px 2px 8px 0; color: #e0a94a; font-variant-numeric: tabular-nums; white-space: nowrap; }
 
 /* ---- Cones tab (E-069). Same primitives as Tides and Play (.stat-row,
  * .control-row, .td-btn, .hint); the only things this panel needs of its own
