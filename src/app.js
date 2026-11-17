@@ -2628,7 +2628,12 @@ function spreadColor(s) {
 class SSTEnsembleProvider {
   constructor(members, date, mode) {
     this._members = members;
-    this._date = date;
+    /* The members must be read at the SAME day — a mean of three analyses of
+     * different days is not a mean, and their spread would be weather. They
+     * are three products with three publication delays and no measured domain
+     * here, so the ensemble keeps the conservative rule the whole app used to
+     * have: never newer than two days ago, the day all three safely serve. */
+    this._date = date > settledDate() ? settledDate() : date;
     this._mode = mode; // "mean" | "spread"
     this.tilingScheme = new GIBSGeographicTilingScheme();
     this.rectangle = this.tilingScheme.rectangle;
@@ -2896,14 +2901,22 @@ function deltaColor(d, range = DELTA_RANGE) {
  * ending at `endDate` (always the same interval length, independent of the
  * calendar month). windowDays === 1 → the single day. Averaging these samples
  * approximates the mean field over the window from daily GIBS tiles. */
-function windowSampleDates(endDate, windowDays) {
+/* With `cfg`, the samples are the tile times the layer will actually read,
+ * deduplicated: two calendar days that snap onto the same served day are ONE
+ * observation and must weigh once in a mean. That used to matter only for a
+ * lagging archive; with the selector on today it is every window's first two
+ * samples (today and yesterday both read yesterday's map). Every consumer of
+ * a window — the painted mean, the difference, the ratio and the probe —
+ * passes cfg, so the read-out and the pixel under it average the same days. */
+function windowSampleDates(endDate, windowDays, cfg = null) {
+  const snap = (dates) => (cfg ? [...new Set(dates.map((d) => gibsTime(cfg, d)))] : dates);
   const w = Math.max(1, Math.round(windowDays));
-  if (w <= 1) return [endDate];
+  if (w <= 1) return snap([endDate]);
   const samples = Math.min(12, w);
   const step = (w - 1) / (samples - 1);
   const out = [];
   for (let i = 0; i < samples; i++) out.push(addDays(endDate, -Math.round(i * step)));
-  return [...new Set(out)];
+  return snap([...new Set(out)]);
 }
 
 // Zoom cap: single day → full detail; any averaged window fetches ~12 tiles per
@@ -3090,7 +3103,7 @@ class AggregateProvider {
     // Snap sample dates to what the layer can actually serve (monthly layers →
     // first-of-month) and dedupe, so a 60-day window over a monthly product
     // averages 2-3 distinct months instead of re-counting the same composite.
-    this._dates = [...new Set(windowSampleDates(endDate, windowDays).map((d) => gibsTime(cfg, d)))];
+    this._dates = windowSampleDates(endDate, windowDays, cfg);
     this._window = windowDays;
     this.tilingScheme = new GIBSGeographicTilingScheme();
     this.rectangle = this.tilingScheme.rectangle;
@@ -3340,8 +3353,8 @@ class DeltaProvider {
     this._cfg = cfg;
     this._range = cfg.deltaRange || DELTA_RANGE;
     this._window = windowDays;
-    this._datesNow = windowSampleDates(dateNow, windowDays);
-    this._datesPast = windowSampleDates(datePast, windowDays);
+    this._datesNow = windowSampleDates(dateNow, windowDays, cfg);
+    this._datesPast = windowSampleDates(datePast, windowDays, cfg);
     this.tilingScheme = new GIBSGeographicTilingScheme();
     this.rectangle = this.tilingScheme.rectangle;
     this.tileWidth = 512;
@@ -3399,8 +3412,8 @@ class RatioProvider {
     this._cfg = cfg;
     this._range = cfg.ratioRange || 4;
     this._window = windowDays;
-    this._datesNow = windowSampleDates(dateNow, windowDays);
-    this._datesPast = windowSampleDates(datePast, windowDays);
+    this._datesNow = windowSampleDates(dateNow, windowDays, cfg);
+    this._datesPast = windowSampleDates(datePast, windowDays, cfg);
     this.tilingScheme = new GIBSGeographicTilingScheme();
     this.rectangle = this.tilingScheme.rectangle;
     this.tileWidth = 512;
@@ -6385,7 +6398,7 @@ function addLayer(cfg) {
   // synchronously, so a value that needs a round-trip cannot appear in it at
   // all — loading here is what lets a saturated pixel read its real departure
   // the moment it is hovered, instead of "≥ 3".
-  if (cfg.id === "sst-anom") ensureSstNormals(state.date);
+  if (cfg.id === "sst-anom") ensureSstNormals(sstAnomDate());
 }
 
 /* ------------------------------------------------------- the fine tier's gate
@@ -6649,7 +6662,7 @@ function refreshTimedLayers({ hold = false, keepPreload = false } = {}) {
   // The date moved, so the normals may be for the wrong month now. Reload in
   // the background if the anomaly layer is on; the stamp check makes this a
   // no-op while the month is unchanged.
-  if (state.layers["sst-anom"]?.layer) ensureSstNormals(state.date);
+  if (state.layers["sst-anom"]?.layer) ensureSstNormals(sstAnomDate());
   // Suppressed entries (hidden because the active window can't average them)
   // must also refresh, so they reappear when the window returns to 1 day.
   for (const [id, entry] of Object.entries(state.layers)) {
@@ -7260,6 +7273,17 @@ const STATIC_LAYER_CHIPS = [
   ["toggle-gbif", "Biodiversity"],
 ];
 
+// The day a GIBS layer really reads for a requested date, as a legend prints it.
+function legendDate(cfg, dateStr) {
+  return cfg.timed && cfg.layer ? String(gibsTime(cfg, dateStr)).slice(0, 10) : dateStr;
+}
+/* The day the SST-anomaly layer is showing: its departure-from-normal
+ * corrections must be computed for THAT day, not for the selector's. */
+function sstAnomDate() {
+  const cfg = GIBS_LAYERS.find((l) => l.id === "sst-anom");
+  return cfg ? String(gibsTime(cfg, state.date)).slice(0, 10) : state.date;
+}
+
 /* The date a raster layer is ACTUALLY showing, when that is not the date in
  * the selector — at the layer's own granularity, so a monthly layer showing
  * this month says nothing. The selector asks for today and every archive
@@ -7857,7 +7881,9 @@ function deltaLegendEl(cfg) {
   div.className = "legend-item";
   const cmp = compareDate();
   const win = state.windowDays > 1 ? `, ${windowLabel(state.windowDays)} mean` : "";
-  div.innerHTML = `<div class="legend-title">Δ ${cfg.title}: ${state.date} minus ${cmp}${win}</div>`;
+  // the dates actually read — the selector asks for today, the archive
+  // answers with its own newest day, and a legend must name the answer
+  div.innerHTML = `<div class="legend-title">Δ ${cfg.title}: ${legendDate(cfg, state.date)} minus ${legendDate(cfg, cmp)}${win}</div>`;
   const wrap = document.createElement("div");
   wrap.className = "legend-bar-wrap";
   const bar = document.createElement("div");
@@ -7900,7 +7926,7 @@ function ratioLegendEl(cfg) {
   div.className = "legend-item";
   const cmp = compareDate();
   const win = windowLabel(state.windowDays);
-  div.innerHTML = `<div class="legend-title">${cfg.title}: ${state.date} ÷ ${cmp} (ratio of ${win} means)</div>`;
+  div.innerHTML = `<div class="legend-title">${cfg.title}: ${legendDate(cfg, state.date)} ÷ ${legendDate(cfg, cmp)} (ratio of ${win} means)</div>`;
   const wrap = document.createElement("div");
   wrap.className = "legend-bar-wrap";
   const bar = document.createElement("div");
@@ -10393,8 +10419,8 @@ async function probeEntryValue(entry, carto) {
     const cmp = compareDate();
     base.whenPast = whenOfGibs(cfg, cmp);
     const [now, past] = await Promise.all([
-      probePixelMean(cfg, windowSampleDates(state.date, win), z, x, y, px, py, vlut.lut),
-      probePixelMean(cfg, windowSampleDates(cmp, win), z, x, y, px, py, vlut.lut),
+      probePixelMean(cfg, windowSampleDates(state.date, win, cfg), z, x, y, px, py, vlut.lut),
+      probePixelMean(cfg, windowSampleDates(cmp, win, cfg), z, x, y, px, py, vlut.lut),
     ]);
     if (now == null || past == null) return { ...base, delta: true, noData: true };
     return { ...base, delta: true, value: now - past };
@@ -10404,8 +10430,8 @@ async function probeEntryValue(entry, carto) {
     const cmp = compareDate();
     base.whenPast = whenOfGibs(cfg, cmp);
     const [now, past, cm] = await Promise.all([
-      probePixelMean(cfg, windowSampleDates(state.date, win), z, x, y, px, py, vlut.lut),
-      probePixelMean(cfg, windowSampleDates(cmp, win), z, x, y, px, py, vlut.lut),
+      probePixelMean(cfg, windowSampleDates(state.date, win, cfg), z, x, y, px, py, vlut.lut),
+      probePixelMean(cfg, windowSampleDates(cmp, win, cfg), z, x, y, px, py, vlut.lut),
       getColormapEntries(cfg.colormap),
     ]);
     if (now == null || past == null) return { ...base, ratio: true, noData: true };
@@ -10413,7 +10439,7 @@ async function probeEntryValue(entry, carto) {
     return { ...base, ratio: true, value: (now + eps) / (past + eps) };
   }
   if (entry.isAggregate) {
-    const v = await probePixelMean(cfg, windowSampleDates(state.date, win), z, x, y, px, py, vlut.lut);
+    const v = await probePixelMean(cfg, windowSampleDates(state.date, win, cfg), z, x, y, px, py, vlut.lut);
     if (v == null) return { ...base, aggregated: true, noData: true };
     return { ...base, aggregated: true, value: v };
   }
@@ -10624,7 +10650,7 @@ let probeSeq = 0;
  * this only ever improves it. On failure it does nothing at all, which leaves
  * exactly the pre-E-040 tooltip. */
 async function upgradeProbeAnomaly(res, turn) {
-  const daily = await sstDailyAnomaly(res.lon, res.lat, state.date).catch(() => null);
+  const daily = await sstDailyAnomaly(res.lon, res.lat, sstAnomDate()).catch(() => null);
   // Second choice, not a placeholder: if the Hub could not answer, the resident
   // monthly figure is still better than a bare bound — but it is a DIFFERENT
   // month at a coarser cell, so it arrives carrying that label rather than
@@ -11386,9 +11412,9 @@ async function showPixelState(carto) {
       // anything. The sentinel is truthy, so the late-source machinery counts
       // this job as answered; the card renders it as absence.
       if (!r || !r.cap) return SST_ANOM_NONE;
-      const daily = await sstDailyAnomaly(lon, lat, state.date).catch(() => null);
+      const daily = await sstDailyAnomaly(lon, lat, sstAnomDate()).catch(() => null);
       if (daily) return daily;
-      await ensureSstNormals(state.date);
+      await ensureSstNormals(sstAnomDate());
       return sstAnomalyAt(lon, lat);   // null now genuinely means "didn't answer"
     }).catch(() => null)],
     // {g, v}, not just v: the grid carries its own observation period/month, and
@@ -17089,7 +17115,7 @@ function playbackPromote(dateStr) {
   // The date moved, so the normals may be for the wrong month now — the same
   // background reload `refreshTimedLayers` does, and for the same reason: the
   // hover probe renders synchronously and cannot await one.
-  if (state.layers["sst-anom"]?.layer) ensureSstNormals(state.date);
+  if (state.layers["sst-anom"]?.layer) ensureSstNormals(sstAnomDate());
 
   let promoted = false;
   for (const rec of held.built) {
